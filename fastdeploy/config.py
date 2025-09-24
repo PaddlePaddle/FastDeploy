@@ -1540,6 +1540,8 @@ class FDConfig:
 
         self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         self.cache_config.max_block_num_per_seq = int(self.max_model_len // self.cache_config.block_size)
+        if self.model_config is not None and self.model_config.enable_mm:
+            self.cache_config.enable_prefix_caching = False
 
         if self.guided_decoding_backend == "auto":
             if current_platform.is_xpu() or self.speculative_config.method is not None:

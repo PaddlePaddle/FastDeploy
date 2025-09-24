@@ -409,8 +409,6 @@ class EngineArgs:
             self.enable_prefix_caching = False
         if self.speculative_config is not None:
             self.enable_prefix_caching = False
-        if self.enable_mm:
-            self.enable_prefix_caching = False
         if not current_platform.is_cuda():
             self.enable_prefix_caching = False
         if self.dynamic_load_weight:
