@@ -11,10 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 #pragma once
 
-// 宏定义用于简化模板实例化
 #define INSTANTIATE_APPEND_ATTENTION_C4(T, OutT) \
   template void CascadeAppendAttentionC4Kernel<T, OutT>( \
     const AppendAttnMetaData& meta_data, \
@@ -86,6 +84,7 @@
     const bool causal, \
     const bool is_decoder, \
     const bool enable_prefill, \
+    const std::string& cache_quant_type_str, \
     cudaStream_t& stream, \
     paddle::Tensor* out);
 
