@@ -250,8 +250,8 @@ class DataProcessor:
                     "video",
                 ]:
                     image_message_list.append(item)
-
-        prompt_token_ids = self.apply_chat_template(request)
+        chat_template_kwargs = request.get("chat_template_kwargs", {})
+        prompt_token_ids = self.apply_chat_template(request, **chat_template_kwargs)
         if len(prompt_token_ids) == 0:
             raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
         image_start_index = 0
@@ -480,7 +480,7 @@ class DataProcessor:
                 break
         self.tokenizer = Ernie4_5Tokenizer.from_pretrained(self.model_name_or_path)
 
-    def apply_chat_template(self, request):
+    def apply_chat_template(self, request, **kwargs):
         """
         Convert multi-turn messages into ID sequences.
 
@@ -498,7 +498,7 @@ class DataProcessor:
             request,
             tokenize=False,
             add_generation_prompt=request.get("add_generation_prompt", True),
-            chat_template=request.get("chat_template", None),
+            **kwargs,
         )
         prompt_token_str = prompt_token_template.replace("<|image@placeholder|>", "").replace(
             "<|video@placeholder|>", ""

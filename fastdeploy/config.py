@@ -841,8 +841,13 @@ class GraphOptimizationConfig:
         Now don't support capture both decode-only and prefill-only"""
         self.full_cuda_graph: bool = True
 
+        """ Maximum CUDA Graph capture size """
         self.max_capture_size: int = None
+        """ Record maps mapped from real shape to captured size to reduce runtime overhead """
         self.real_shape_to_captured_size: dict[int, int] = None
+        """ Whether to use shared memory pool for multi capture_size """
+        self.use_unique_memory_pool: bool = False
+
         # CINN Config ...
         if args is not None:
             for key, value in args.items():
