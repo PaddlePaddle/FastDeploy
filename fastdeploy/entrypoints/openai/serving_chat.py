@@ -124,6 +124,7 @@ class OpenAIServingChat:
                 for idx in range(current_req_dict.get("n", 1)):
                     child_req_dict = copy(current_req_dict)
                     child_req_dict["request_id"] = f'{child_req_dict["request_id"]}-{idx}'
+                    print(f'DEBUG child_req_dict request_id: {child_req_dict["request_id"]}')
                     await self.engine_client.add_requests(child_req_dict)
                     text_after_process_list.append(child_req_dict.get("text_after_process"))
                     del child_req_dict
@@ -474,6 +475,7 @@ class OpenAIServingChat:
                     current_waiting_time = 0
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
+                    print(f'DEBUG timeout')
                     if current_waiting_time == 300:
                         status, msg = self.engine_client.check_health()
                         if not status:
