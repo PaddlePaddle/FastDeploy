@@ -51,6 +51,7 @@ from fastdeploy.entrypoints.openai.protocol import ErrorInfo, ErrorResponse
 from fastdeploy.logger.logger import FastDeployLogger
 
 T = TypeVar("T")
+from typing import Callable, Optional
 
 # [N,2] -> every line is [config_name, enable_xxx_name]
 # Make sure enable_xxx equal to config.enable_xxx
@@ -852,3 +853,24 @@ api_server_logger = get_logger("api_server", "api_server.log")
 console_logger = get_logger("console", "console.log", print_to_console=True)
 spec_logger = get_logger("speculate", "speculate.log")
 zmq_client_logger = get_logger("zmq_client", "zmq_client.log")
+
+
+def parse_type(return_type: Callable[[str], T]) -> Callable[[str], T]:
+
+    def _parse_type(val: str) -> T:
+        try:
+            return return_type(val)
+        except ValueError as e:
+            raise argparse.ArgumentTypeError(f"Value {val} cannot be converted to {return_type}.") from e
+
+    return _parse_type
+
+
+def optional_type(return_type: Callable[[str], T]) -> Callable[[str], Optional[T]]:
+
+    def _optional_type(val: str) -> Optional[T]:
+        if val == "" or val == "None":
+            return None
+        return parse_type(return_type)(val)
+
+    return _optional_type
