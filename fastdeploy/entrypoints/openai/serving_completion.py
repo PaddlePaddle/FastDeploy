@@ -19,6 +19,7 @@ import time
 import traceback
 import uuid
 from typing import List, Optional
+from copy import copy
 
 import numpy as np
 
@@ -120,7 +121,7 @@ class OpenAIServingCompletion:
         if request_prompt_ids is not None:
             request_prompts = request_prompt_ids
 
-        num_choices = len(request_prompts)
+        num_choices = len(request_prompts) * request.get("n", 1)
         api_server_logger.info(f"Start preprocessing request: req_id={request_id}), num_choices={num_choices}")
         prompt_batched_token_ids = []
         text_after_process_list = []
@@ -145,11 +146,16 @@ class OpenAIServingCompletion:
                     request_id_idx = f"{request_id}-{idx}"
                     current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                     current_req_dict["arrival_time"] = time.time()
-                    prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)  # tokenize
+                    await self.engine_client.format_request(current_req_dict)  # tokenize
+                    prompt_token_ids = current_req_dict["prompt_token_ids"]
                     if isinstance(prompt_token_ids, np.ndarray):
                         prompt_token_ids = prompt_token_ids.tolist()
-                    text_after_process_list.append(current_req_dict.get("text_after_process"))
-                    prompt_batched_token_ids.append(prompt_token_ids)
+                    for i in range(current_req_dict.get("n",1)):
+                        child_req_dict = copy(current_req_dict)
+                        child_req_dict["request_id"] = f'{child_req_dict["request_id"]}-{i}'
+                        await self.engine_client.add_requests(child_req_dict)
+                        text_after_process_list.append(child_req_dict.get("text_after_process"))
+                        prompt_batched_token_ids.append(prompt_token_ids)
                     del current_req_dict
             except ParameterError as e:
                 api_server_logger.error(f"OpenAIServingCompletion format error: {e}, {e.message}")
