@@ -10,7 +10,12 @@ import time
 import warnings
 from typing import Any, Optional
 
-import torch
+try:
+    import torch
+
+    TORCH_AVAILABLE = True
+except (ImportError, NameError, AttributeError, OSError):
+    TORCH_AVAILABLE = False
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, PreTrainedTokenizerBase
 
@@ -402,16 +407,19 @@ def main(args: argparse.Namespace):
             requests, args.n, EngineArgs.from_cli_args(args), args.disable_detokenize
         )
     elif args.backend == "hf":
-        assert args.tensor_parallel_size == 1
-        elapsed_time = run_hf(
-            requests,
-            args.model,
-            tokenizer,
-            args.n,
-            args.hf_max_batch_size,
-            args.trust_remote_code,
-            args.disable_detokenize,
-        )
+        if not TORCH_AVAILABLE:
+            raise Exception("PyTorch is not available.")
+        else:
+            assert args.tensor_parallel_size == 1
+            elapsed_time = run_hf(
+                requests,
+                args.model,
+                tokenizer,
+                args.n,
+                args.hf_max_batch_size,
+                args.trust_remote_code,
+                args.disable_detokenize,
+            )
     elif args.backend == "fastdeploy-chat":
         elapsed_time, request_outputs = run_fd_chat(
             requests, args.n, EngineArgs.from_cli_args(args), args.disable_detokenize

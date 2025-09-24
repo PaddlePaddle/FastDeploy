@@ -16,13 +16,19 @@ import argparse
 import unittest
 from unittest.mock import MagicMock, patch
 
-import torch
+try:
+    import torch
+
+    TORCH_AVAILABLE = True
+except (ImportError, NameError, AttributeError, OSError):
+    TORCH_AVAILABLE = False
 
 from fastdeploy.benchmarks.datasets import SampleRequest
 from fastdeploy.benchmarks.throughput import (
     EngineArgs,
     add_cli_args,
     get_requests,
+    main,
     run_fd,
     run_fd_chat,
     run_hf,
@@ -73,12 +79,13 @@ class TestThroughput(unittest.TestCase):
         self.assertIsInstance(elapsed_time, float)
         self.assertEqual(len(outputs), 2)
 
+    @unittest.skipIf(not TORCH_AVAILABLE, "PyTorch is not available")
     @patch("transformers.AutoModelForCausalLM.from_pretrained")
     @patch("transformers.AutoTokenizer.from_pretrained")
     def test_run_hf(self, mock_tokenizer, mock_model):
         mock_model_instance = MagicMock()
         mock_model.return_value = mock_model_instance
-        mock_model_instance.generate.return_value = torch.tensor([[1, 2, 3]])
+        mock_model_instance.generate.return_value = torch.tensor([[1, 2, 3]]) if TORCH_AVAILABLE else None
 
         mock_tokenizer_instance = MagicMock()
         mock_tokenizer.return_value = mock_tokenizer_instance
@@ -152,6 +159,136 @@ class TestThroughput(unittest.TestCase):
         args = parser.parse_args([])
         self.assertEqual(args.backend, "fastdeploy")
         self.assertEqual(args.dataset_name, "random")
+
+    @patch("fastdeploy.benchmarks.throughput.run_fd")
+    @patch("fastdeploy.benchmarks.throughput.get_requests")
+    @patch("transformers.AutoTokenizer.from_pretrained")
+    def test_main_fastdeploy(self, mock_tokenizer, mock_get_requests, mock_run_fd):
+        mock_get_requests.return_value = [
+            SampleRequest(no=1, prompt="test", prompt_len=10, expected_output_len=20, history_QA=[], json_data=None)
+        ]
+        mock_run_fd.return_value = (1.0, ["output1", "output2"])
+
+        parser = argparse.ArgumentParser()
+        add_cli_args(parser)
+        args = parser.parse_args([])
+        args.backend = "fastdeploy"
+        args.dataset_name = "random"
+        args.dataset_path = None
+        args.seed = 42
+        args.input_len = 10
+        args.output_len = 20
+        args.num_prompts = 1
+        args.tokenizer = "test_tokenizer"
+        args.model = "test_model"
+        args.n = 1
+        args.hf_max_batch_size = None
+        args.trust_remote_code = False
+        args.output_json = None
+        args.disable_detokenize = False
+        args.tensor_parallel_size = 1
+
+        with patch("builtins.print") as mock_print:
+            main(args)
+            mock_print.assert_called()
+
+    @unittest.skipIf(not TORCH_AVAILABLE, "PyTorch is not available")
+    @patch("fastdeploy.benchmarks.throughput.run_hf")
+    @patch("fastdeploy.benchmarks.throughput.get_requests")
+    @patch("transformers.AutoTokenizer.from_pretrained")
+    @patch("transformers.AutoModelForCausalLM.from_pretrained")
+    def test_main_hf(self, mock_model, mock_tokenizer, mock_get_requests, mock_run_hf):
+        mock_get_requests.return_value = [
+            SampleRequest(no=1, prompt="test", prompt_len=10, expected_output_len=20, history_QA=[], json_data=None)
+        ]
+        mock_run_hf.return_value = 1.0
+
+        parser = argparse.ArgumentParser()
+        add_cli_args(parser)
+        args = parser.parse_args([])
+        args.backend = "hf"
+        args.dataset_name = "random"
+        args.dataset_path = None
+        args.seed = 42
+        args.input_len = 10
+        args.output_len = 20
+        args.num_prompts = 1
+        args.tokenizer = "test_tokenizer"
+        args.model = "test_model"
+        args.n = 1
+        args.hf_max_batch_size = 4
+        args.trust_remote_code = True
+        args.output_json = None
+        args.disable_detokenize = False
+        args.tensor_parallel_size = 1
+
+        with patch("builtins.print") as mock_print:
+            main(args)
+            mock_print.assert_called()
+
+    @patch("fastdeploy.benchmarks.throughput.run_fd_chat")
+    @patch("fastdeploy.benchmarks.throughput.get_requests")
+    @patch("transformers.AutoTokenizer.from_pretrained")
+    def test_main_fastdeploy_chat(self, mock_tokenizer, mock_get_requests, mock_run_fd_chat):
+        mock_get_requests.return_value = [
+            SampleRequest(no=1, prompt="test", prompt_len=10, expected_output_len=20, history_QA=[], json_data=None)
+        ]
+        mock_run_fd_chat.return_value = (1.0, ["output1", "output2"])
+
+        parser = argparse.ArgumentParser()
+        add_cli_args(parser)
+        args = parser.parse_args([])
+        args.backend = "fastdeploy-chat"
+        args.dataset_name = "random"
+        args.dataset_path = None
+        args.seed = 42
+        args.input_len = 10
+        args.output_len = 20
+        args.num_prompts = 1
+        args.tokenizer = "test_tokenizer"
+        args.model = "test_model"
+        args.n = 1
+        args.hf_max_batch_size = None
+        args.trust_remote_code = False
+        args.output_json = None
+        args.disable_detokenize = False
+        args.tensor_parallel_size = 1
+
+        with patch("builtins.print") as mock_print:
+            main(args)
+            mock_print.assert_called()
+
+    @patch("builtins.open")
+    @patch("json.dump")
+    @patch("fastdeploy.benchmarks.throughput.run_fd")
+    @patch("fastdeploy.benchmarks.throughput.get_requests")
+    def test_main_with_output_json(self, mock_get_requests, mock_run_fd, mock_json_dump, mock_open):
+        mock_get_requests.return_value = [
+            SampleRequest(no=1, prompt="test", prompt_len=10, expected_output_len=20, history_QA=[], json_data=None)
+        ]
+        mock_run_fd.return_value = (1.0, ["output1", "output2"])
+
+        parser = argparse.ArgumentParser()
+        add_cli_args(parser)
+        args = parser.parse_args([])
+        args.backend = "fastdeploy"
+        args.dataset_name = "random"
+        args.dataset_path = None
+        args.seed = 42
+        args.input_len = 10
+        args.output_len = 20
+        args.num_prompts = 1
+        args.tokenizer = "test_tokenizer"
+        args.model = "test_model"
+        args.n = 1
+        args.hf_max_batch_size = None
+        args.trust_remote_code = False
+        args.output_json = "output.json"
+        args.disable_detokenize = False
+        args.tensor_parallel_size = 1
+
+        main(args)
+        mock_json_dump.assert_called()
 
 
 if __name__ == "__main__":

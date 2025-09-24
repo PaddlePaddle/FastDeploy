@@ -72,7 +72,7 @@ def instrument(app: FastAPI):
         set_up()
         if traces_enable:
             llm_logger.info("Applying instrumentors...")
-            FastAPIInstrumentor.instrument_app(app)
+            FastAPIInstrumentor.instrument_app(app, excluded_urls="/v1/chat/completions")
     except:
         llm_logger.info("instrument failed")
         pass
