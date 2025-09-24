@@ -7,7 +7,6 @@ parallel = True
 
 [paths]
 source =
-    FastDeploy/fastdeploy
     fastdeploy
     */site-packages/fastdeploy
     */lib/python3.10/site-packages/fastdeploy

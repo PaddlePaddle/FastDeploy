@@ -31,20 +31,20 @@ jobs:
       IS_PR: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
-      # - name: Clone FastDeploy
-      #   uses: actions/checkout@v4
-      #   with:
-      #     ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-      #     submodules: recursive
-      #     fetch-depth: 0
       - name: Clone FastDeploy
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request'
-                && github.event.pull_request.base.ref
-                || github.ref_name }}
-          submodules: 'recursive'
-          fetch-depth: 1000
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          submodules: recursive
+          fetch-depth: 0
+      # - name: Clone FastDeploy
+      #   uses: actions/checkout@v4
+      #   with:
+      #     ref: ${{ github.event_name == 'pull_request'
+      #           && github.event.pull_request.base.ref
+      #           || github.ref_name }}
+      #     submodules: 'recursive'
+      #     fetch-depth: 1000
       - name: Python Setup
         uses: actions/setup-python@v5
         with:
