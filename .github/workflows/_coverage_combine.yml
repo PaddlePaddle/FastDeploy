@@ -72,6 +72,7 @@ jobs:
           fi
           export COVERAGE_FILE=coveragedata/.coverage
           export COVERAGE_RCFILE=./scripts/.coveragerc
+          export COVERAGE_IGNORE_ERRORS=True
           coverage combine coveragedata/
           coverage report --ignore-errors
           coverage xml -o python_coverage_all.xml --ignore-errors
