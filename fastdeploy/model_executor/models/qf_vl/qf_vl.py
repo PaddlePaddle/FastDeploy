@@ -20,29 +20,25 @@ from typing import Dict, Optional, Union
 import numpy as np
 import paddle
 import paddle.nn as nn
-
-from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.forward_meta import ForwardMeta
-from fastdeploy.model_executor.layers.attention.attention import Attention
-from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
-from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
-from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_DecoderLayer
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
-from fastdeploy.platforms import current_platform
-
-if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import (
-        extract_text_token_output,
-    )
-
 from paddleformers.transformers import PretrainedModel
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 from paddleformers.utils.log import logger
 
+from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
 )
+from fastdeploy.model_executor.layers.attention.attention import Attention
+from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
+from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.normalization import RMSNorm
+from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_DecoderLayer
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 
 from .projector import Projector
 from .siglip import SiglipVisionModel
@@ -130,23 +126,17 @@ class QFVLModel(nn.Layer):
 
         hidden_states = hidden_states + residual
 
-        # -----------------------
-        max_seq_len, max_seq_len_index = paddle.topk(forward_meta.seq_lens_this_time, k=1)
-        hidden_states = extract_text_token_output(
-            max_seq_len,
-            max_seq_len_index.cast("int32"),
-            image_token_num.cast("int32"),
-            forward_meta.seq_lens_this_time,
-            forward_meta.cu_seqlens_q,
-            hidden_states.cast("float32"),
-        ).cast(self._dtype)
-        # -----------------------
-
         out = self.norm(hidden_states)
 
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="Qwen2_5_VLForConditionalGeneration",
+    module_name="qwen2_5_vl.qwen2_5_vl",
+    category=ModelCategory.MULTIMODAL,
+    primary_use=ModelCategory.MULTIMODAL,
+)
 class QFVLForConditionalGeneration(ModelForCasualLM):
     def __init__(self, fd_config):
         super().__init__(fd_config)
