@@ -56,6 +56,11 @@ def get_moe_method():
         )
 
         return MetaxTritonWeightOnlyMoEMethod(None)
+    elif current_platform.is_intel_hpu():
+        from fastdeploy.model_executor.layers.backends import HpuMoEMethod
+
+        return HpuMoEMethod(None)
+        # return HpuTensorWiseFP8MoEMethod(None)
     raise NotImplementedError
 
 
@@ -139,6 +144,7 @@ class FusedMoE(nn.Layer):
 
         self.hidden_size = fd_config.model_config.hidden_size
         self.num_experts = num_experts
+
         self.num_local_experts = self.num_experts // self.ep_size
 
         self.moe_intermediate_size = moe_intermediate_size // self.tp_size

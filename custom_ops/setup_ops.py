@@ -623,6 +623,8 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
             ],
         ),
     )
+elif paddle.is_compiled_with_custom_device("intel_hpu"):
+    pass
 else:
     use_bf16 = envs.FD_CPU_USE_BF16 == "True"
 
