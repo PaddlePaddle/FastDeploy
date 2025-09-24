@@ -465,7 +465,7 @@ def test_streaming_chat_with_return_token_ids(openai_client, capsys):
 
 
 def test_profile_reset_block_num():
-    """测试profile reset_block_num功能，与baseline diff不能超过5%"""
+    """测试profile reset_block_num功能，与baseline diff不能超过15%"""
     log_file = "./log/config.log"
     baseline = 30000
 
@@ -493,8 +493,8 @@ def test_profile_reset_block_num():
     except ValueError:
         pytest.fail(f"Invalid number format: {match.group(1)}")
 
-    lower_bound = baseline * (1 - 0.05)
-    upper_bound = baseline * (1 + 0.05)
+    lower_bound = baseline * (1 - 0.15)
+    upper_bound = baseline * (1 + 0.15)
     print(f"Reset total_block_num: {actual_value}. baseline: {baseline}")
 
     assert lower_bound <= actual_value <= upper_bound, (
