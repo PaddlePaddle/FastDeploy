@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import Mock
 
 import paddle
 
@@ -7,6 +8,7 @@ from fastdeploy.config import (
     FDConfig,
     GraphOptimizationConfig,
     ParallelConfig,
+    SchedulerConfig,
 )
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
@@ -36,7 +38,7 @@ class TestCase1SubLayer1(paddle.nn.Layer):
 
 
 class TestModel1(paddle.nn.Layer):
-    """Tast Model"""
+    """Test Model"""
 
     def __init__(self, fd_config: FDConfig, **kwargs):
         super().__init__()
@@ -90,11 +92,17 @@ class TestCUDAGrpahRecapture(unittest.TestCase):
         # Set FastDeploy config
         graph_opt_config = GraphOptimizationConfig(args={})
         graph_opt_config.use_cudagraph = True
-        parallel_config = ParallelConfig(args={})
+        scheduler_config = SchedulerConfig(args={})
         cache_config = CacheConfig(args={})
-        parallel_config.max_num_seqs = 1
+        scheduler_config.max_num_seqs = 1
+        parallel_config = ParallelConfig(args={})
+        model_config = Mock()
         fd_config = FDConfig(
-            graph_opt_config=graph_opt_config, parallel_config=parallel_config, cache_config=cache_config
+            graph_opt_config=graph_opt_config,
+            scheduler_config=scheduler_config,
+            cache_config=cache_config,
+            model_config=model_config,
+            parallel_config=parallel_config,
         )
 
         # Run Test Case1
@@ -123,9 +131,9 @@ class TestCUDAGrpahRecapture(unittest.TestCase):
         assert (output1 == self.output_correct).all()
 
         # Destroy
-        print_gpu_memory_use(0, "before destory")
+        print_gpu_memory_use(0, "before destroy")
         self.test_model1.clear_grpah_opt_backend()
-        print_gpu_memory_use(0, "after destory")
+        print_gpu_memory_use(0, "after destroy")
 
     def recapture_and_replay(self, input_tensor1, forward_meta1):
         """ """
@@ -139,9 +147,9 @@ class TestCUDAGrpahRecapture(unittest.TestCase):
         assert (output2 == self.output_correct).all()
 
         # Destroy
-        print_gpu_memory_use(0, "before destory")
+        print_gpu_memory_use(0, "before destroy")
         self.test_model1.clear_grpah_opt_backend()
-        print_gpu_memory_use(0, "after destory")
+        print_gpu_memory_use(0, "after destroy")
 
 
 if __name__ == "__main__":

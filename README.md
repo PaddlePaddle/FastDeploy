@@ -43,7 +43,7 @@ English | [简体中文](README_CN.md)
 - 🤝 **OpenAI API Server and vLLM Compatible**: One-command deployment with [vLLM](https://github.com/vllm-project/vllm/) interface compatibility.
 - 🧮 **Comprehensive Quantization Format Support**: W8A16, W8A8, W4A16, W4A8, W2A16, FP8, and more.
 - ⏩ **Advanced Acceleration Techniques**: Speculative decoding, Multi-Token Prediction (MTP) and Chunked Prefill.
-- 🖥️ **Multi-Hardware Support**: NVIDIA GPU, Kunlunxin XPU, Hygon DCU, Ascend NPU, Iluvatar GPU, Enflame GCU, MetaX GPU etc.
+- 🖥️ **Multi-Hardware Support**: NVIDIA GPU, Kunlunxin XPU, Hygon DCU, Ascend NPU, Iluvatar GPU, Enflame GCU, MetaX GPU, Intel Gaudi etc.
 
 ## Requirements
 
@@ -60,6 +60,7 @@ FastDeploy supports inference deployment on **NVIDIA GPUs**, **Kunlunxin XPUs**,
 - [Enflame GCU](./docs/get_started/installation/Enflame_gcu.md)
 - [Hygon DCU](./docs/get_started/installation/hygon_dcu.md)
 - [MetaX GPU](./docs/get_started/installation/metax_gpu.md)
+- [Intel Gaudi](./docs/get_started/installation/intel_gaudi.md)
 
 **Note:** We are actively working on expanding hardware support. Additional hardware platforms including Ascend NPU are currently under development and testing. Stay tuned for updates!
 

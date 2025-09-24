@@ -75,7 +75,7 @@ import zmq
 
 from fastdeploy import envs
 from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
-from fastdeploy.inter_communicator import ZmqClient
+from fastdeploy.inter_communicator import ZmqIpcClient
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
@@ -145,9 +145,9 @@ class GPUModelRunner(ModelRunnerBase):
         self.cudagraph_only_prefill = self.graph_opt_config.cudagraph_only_prefill
 
         # Initialize share inputs
-        self._init_share_inputs(self.parallel_config.max_num_seqs)
+        self._init_share_inputs(self.scheduler_config.max_num_seqs)
         self.infer_seed_increment = paddle.full(
-            shape=[self.parallel_config.max_num_seqs, 1],
+            shape=[self.scheduler_config.max_num_seqs, 1],
             fill_value=4,
             dtype="int64",
         ).cpu()
@@ -170,7 +170,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.zmq_client = None
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-            self.zmq_client = ZmqClient(name=f"get_save_output_rank{local_rank}", mode=zmq.PUSH)
+            logger.info(f"zmq client get_save_output_rank{local_rank}")
+            self.zmq_client = ZmqIpcClient(name=f"get_save_output_rank{local_rank}", mode=zmq.PUSH)
             self.zmq_client.connect()
             self.zmq_client.socket.SNDTIMEO = 3000
 
@@ -192,7 +193,7 @@ class GPUModelRunner(ModelRunnerBase):
         """
         if_only_prefill = True
         decode_exists = None
-        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
             only_prefill_batch_list = []
             decode_exists = self.exist_decode()
             paddle.distributed.all_gather_object(only_prefill_batch_list, not decode_exists)
@@ -210,7 +211,7 @@ class GPUModelRunner(ModelRunnerBase):
         if_only_decode = True
         prefill_exists = None
         # mix ep in single node
-        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
             only_decode_batch_list = []
             prefill_exists = self.exist_prefill()
             paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
@@ -1102,8 +1103,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Update config about moe for better performance
         # TODO(wanglongzhi):Modifying the config at runtime is not appropriate; it needs to be moved to forward_meta. It will be used in MoEMethodBase.apply()
-        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
-            self.fd_config.parallel_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
+            self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
         # Update Batch type for cuda graph for only_prefill_batch
         only_prefill_use_cudagraph = self.use_cudagraph and self.cudagraph_only_prefill and self.only_prefill()
@@ -1142,7 +1143,9 @@ class GPUModelRunner(ModelRunnerBase):
             kv_cache_scale_shape = [kv_cache_shape[0], kv_cache_shape[1], kv_cache_shape[2]]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-        if not profile and (self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
+        if not profile and (
+            self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed"
+        ):
             cache_kvs_list = []
             for i in range(self.model_config.num_hidden_layers):
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
@@ -1206,13 +1209,13 @@ class GPUModelRunner(ModelRunnerBase):
         # decode_max_tile_size must take into account the maximum case, where *1024 can cover 128K.
         decode_max_tile_size = (
             1024
-            * self.parallel_config.max_num_seqs
+            * self.scheduler_config.max_num_seqs
             * np.ceil((decoder_step_token_num * group_size) / decoder_block_shape_q)
         )
-        encode_max_tile_size = self.parallel_config.max_num_seqs * np.ceil(
+        encode_max_tile_size = self.scheduler_config.max_num_seqs * np.ceil(
             (self.model_config.max_model_len * group_size) / encoder_block_shape_q
         )
-        kv_max_tile_size = self.parallel_config.max_num_seqs * np.ceil(
+        kv_max_tile_size = self.scheduler_config.max_num_seqs * np.ceil(
             self.model_config.max_model_len / self.fd_config.cache_config.block_size
         )
         self.share_inputs["decoder_batch_ids"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
@@ -1318,8 +1321,13 @@ class GPUModelRunner(ModelRunnerBase):
                 self.parallel_config.max_model_len,
             )
 
-            # 4. Execute spec decode
-            logits = self.model.compute_logits(hidden_states)
+            logits = None
+            if hasattr(self.model, "is_pooling_model") and self.model.is_pooling_model:
+                # TODO(lizexu123) The preheating the pooling function have not been implemented yet.
+                pass
+            else:
+                # 4. Execute spec decode
+                logits = self.model.compute_logits(hidden_states)
 
             if not self.speculative_decoding:
                 set_value_by_flags_and_idx(
@@ -1509,7 +1517,7 @@ class GPUModelRunner(ModelRunnerBase):
             for num_tokens in sorted(capture_sizes, reverse=True):
                 self._dummy_run(
                     num_tokens=num_tokens,
-                    batch_size=self.parallel_config.max_num_seqs,
+                    batch_size=self.scheduler_config.max_num_seqs,
                     in_capturing=True,
                     expected_decode_len=expected_decode_len,
                     capture_prefill=True,
@@ -1560,7 +1568,7 @@ class GPUModelRunner(ModelRunnerBase):
         else:
             for batch_size in sorted(capture_sizes, reverse=True):
                 self._dummy_run(
-                    num_tokens=self.parallel_config.max_num_batched_tokens,
+                    num_tokens=self.scheduler_config.max_num_batched_tokens,
                     batch_size=batch_size,
                     in_capturing=True,
                     expected_decode_len=expected_decode_len,
@@ -1575,7 +1583,7 @@ class GPUModelRunner(ModelRunnerBase):
         start_time = time.perf_counter()
         for batch_size in self.sot_warmup_sizes:
             self._dummy_run(
-                num_tokens=self.parallel_config.max_num_batched_tokens,
+                num_tokens=self.scheduler_config.max_num_batched_tokens,
                 batch_size=batch_size,
             )
             logger.info(f"SOT warmup the model with the batch size:{batch_size}")
@@ -1663,8 +1671,14 @@ class GPUModelRunner(ModelRunnerBase):
             self.parallel_config.max_model_len,
         )
 
+        logits = None
         # 4. Compute logits, Sample
-        logits = self.model.compute_logits(hidden_states)
+        if hasattr(self.model, "is_pooling_model") and self.model.is_pooling_model:
+            # TODO(lizexu123) The execution of the pooling function have not been implemented yet.
+            pass
+        else:
+            logits = self.model.compute_logits(hidden_states)
+
         if not self.speculative_decoding:
             set_value_by_flags_and_idx(
                 self.share_inputs["pre_ids"],
@@ -1750,7 +1764,7 @@ class GPUModelRunner(ModelRunnerBase):
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
 
-        if self.speculative_config.method in ["mtp"] and self.parallel_config.splitwise_role == "prefill":
+        if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
             skip_save_output = True
         else:
             skip_save_output = False
@@ -1950,6 +1964,10 @@ class GPUModelRunner(ModelRunnerBase):
         paddle.device.cuda.empty_cache()
 
         self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
+
+    def clear_requests(self):
+        """Dynamic model loader use to clear requests use for RL"""
+        self.share_inputs["stop_flags"][:] = True
 
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""

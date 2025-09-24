@@ -116,6 +116,7 @@ class LinearBase(nn.Layer):
             or current_platform.is_gcu()
             or current_platform.is_dcu()
             or current_platform.is_maca()
+            or current_platform.is_intel_hpu()
         ):
             self.forward = self.forward_cuda
         else:
@@ -498,6 +499,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             if weight_need_transpose:
                 loaded_weight = get_tensor(loaded_weight)
                 loaded_weight = loaded_weight.transpose([1, 0])
+                # Avoid redundant transpose of fused weights when weight_loader is called iteratively
                 param.weight_need_transpose = False
             # Loaded weight is already fused on disk.
             shard_offsets = [
@@ -638,6 +640,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             if weight_need_transpose:
                 loaded_weight = get_tensor(loaded_weight)
                 loaded_weight = loaded_weight.transpose([1, 0])
+                # Avoid redundant transpose of fused weights when weight_loader is called iteratively
                 param.weight_need_transpose = False
             # Loaded weight is already fused on disk
             shard_offsets = [
