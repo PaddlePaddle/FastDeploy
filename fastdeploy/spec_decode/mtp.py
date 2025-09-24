@@ -295,9 +295,6 @@ class MTPProposer(Proposer):
             }
         )
 
-        # delete this
-        # self.parallel_config.do_profile = False
-
     def _init_model_inputs(self):
         """
         Init model inputs
@@ -534,7 +531,7 @@ class MTPProposer(Proposer):
                     request.get("block_tables"), dtype="int32"
                 )
         self.model_inputs["not_need_stop"][0] = True
-        self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer  # [:num_running_requests]
+        self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
 
     def _initialize_forward_meta(self):
         """
@@ -569,8 +566,6 @@ class MTPProposer(Proposer):
             max_len_kv_cpu=self.model_inputs["max_len_kv_cpu"],
         )
 
-        #
-
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
@@ -592,8 +587,6 @@ class MTPProposer(Proposer):
             and only_decode_batch
             and not (prefill_exists if prefill_exists is not None else self.exist_prefill())
         )
-
-        # self.forward_meta.step_use_cudagraph = True
 
     def exist_prefill(self):
         """

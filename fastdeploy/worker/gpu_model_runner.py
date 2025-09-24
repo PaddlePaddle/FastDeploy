@@ -995,7 +995,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
         # NOTE: (changwenbin) Initialized to max_num_seq '-1' before copying, marking illegal positions
         self.share_inputs["batch_id_per_token"][:] = -1
-        # self.share_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
         self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
         self.share_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
 
@@ -1263,6 +1262,7 @@ class GPUModelRunner(ModelRunnerBase):
             expected_decode_len: Expected number of tokens generated
             in_capturing: Is cuda graph in capturing state
             capture_prefill: Capture pure prefill for cuda graph
+            accept_all_drafts: Target model will accept all draft tokens
         """
 
         input_length_list, max_dec_len_list, block_num = self.get_input_length_list(
@@ -1282,9 +1282,8 @@ class GPUModelRunner(ModelRunnerBase):
                 batch_size=batch_size,
                 expected_decode_len=expected_decode_len,
             )
-        times = 0
+
         while True:
-            times = times + 1
             # 1. Initialize forward meta and attention meta data
             self._prepare_inputs()
 
@@ -1504,8 +1503,7 @@ class GPUModelRunner(ModelRunnerBase):
             logger.info("Skipping CUDA graph capture. Please check GraphOptimizationConfig")
             return
         time_before_capture = time.perf_counter()
-        # NOTE(liujundong): expected_decode_len = 1, will affect mtp capture in cudagraph
-        expected_decode_len = 2
+        expected_decode_len = 1
         capture_sizes = self.cudagraph_capture_sizes.copy()
         if self.fd_config.graph_opt_config.cudagraph_only_prefill:
             for num_tokens in sorted(capture_sizes, reverse=True):
@@ -1534,6 +1532,7 @@ class GPUModelRunner(ModelRunnerBase):
                     )
                     logger.info(f"Warm up the Target model with the num_tokens:{batch_size}, expected_decode_len:{1}")
             # Capture Draft Model without bsz 1
+            # NOTE(liujundong): expected_decode_len = 1, will affect mtp capture in cudagraph
             for batch_size in sorted(capture_sizes, reverse=True):
                 if batch_size == 1:
                     logger.info("Skip token_num = 1, when capture Draft model for mtp")
@@ -1652,17 +1651,17 @@ class GPUModelRunner(ModelRunnerBase):
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
             )
-            if self.use_cudagraph:
-                model_output = model_output[: self.real_token_num]
-            hidden_states = rebuild_padding(
-                model_output,
-                self.share_inputs["cu_seqlens_q"],
-                self.share_inputs["seq_lens_this_time"],
-                self.share_inputs["seq_lens_decoder"],
-                self.share_inputs["seq_lens_encoder"],
-                (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
-                self.parallel_config.max_model_len,
-            )
+        if self.use_cudagraph:
+            model_output = model_output[: self.real_token_num]
+        hidden_states = rebuild_padding(
+            model_output,
+            self.share_inputs["cu_seqlens_q"],
+            self.share_inputs["seq_lens_this_time"],
+            self.share_inputs["seq_lens_decoder"],
+            self.share_inputs["seq_lens_encoder"],
+            (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
+            self.parallel_config.max_model_len,
+        )
 
         # 4. Compute logits, Sample
         logits = self.model.compute_logits(hidden_states)
