@@ -85,6 +85,17 @@ def per_block_cast_to_fp8(x: Tensor, block_size: list = [128, 128]) -> Tuple[Ten
     )
 
 
+def per_token_cast_to_fp8(x: Tensor) -> Tuple[Tensor, Tensor]:
+    """
+    Per token cast to float8_e4m3fn used in wfp8apf8
+    """
+    x_abs = paddle.abs(x).astype(paddle.float32)
+    x_max = x_abs.max(axis=-1, keepdim=True).clip_(min=1e-4)
+    x_s = x_max / 448.0
+    x_q = paddle.clip(x / x_s, -448.0, 448.0).astype(paddle.float8_e4m3fn)
+    return x_q, x_s
+
+
 # for distributed tensor model parallel
 def _set_var_distributed(var: Tensor, split_axis: int):
     """
