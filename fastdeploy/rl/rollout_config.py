@@ -26,13 +26,13 @@ class RolloutModelConfig:
         max_model_len: int = 32768,
         tensor_parallel_size: int = 4,
         dynamic_load_weight: bool = True,
-        load_strategy: str = "ipc_snapshot",
+        load_strategy: str = "meta",
         enable_mm: bool = False,
         # Default values for all other parameters
         max_num_seqs: int = 34,
         total_block_num: int = 2000,
         block_size: int = 64,
-        engine_worker_queue_port: int = 9923,
+        engine_worker_queue_port: str = "8002",
         device_ids: str = "0",
         dtype: str = "bfloat16",
         enc_dec_block_num: int = 1,
@@ -61,8 +61,9 @@ class RolloutModelConfig:
         graph_optimization_config: str = None,
         early_stop_config: str = None,
         local_rank: int = 0,
-        moba_attention_config: str = None,
+        plas_attention_config: str = None,
         data_parallel_size: int = 1,
+        num_nextn_predict_layers: int = 0,
     ):
         # Required parameters
         self.model = model_name_or_path
@@ -108,7 +109,8 @@ class RolloutModelConfig:
         self.local_rank = local_rank
         self.early_stop_config = early_stop_config
         self.ips = None
-        self.moba_attention_config = moba_attention_config
+        self.plas_attention_config = plas_attention_config
+        self.num_nextn_predict_layers = num_nextn_predict_layers
 
     def __str__(self):
         return "\n".join(f"{k}: {v}" for k, v in self.__dict__.items())

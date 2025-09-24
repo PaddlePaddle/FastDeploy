@@ -44,7 +44,11 @@ from fastdeploy.model_executor.models.ernie4_5_moe import (
     Ernie4_5_Attention,
     Ernie4_5_MLP,
 )
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
@@ -506,17 +510,17 @@ class Ernie4_5_VLModel(nn.Layer):
         text_token_num = paddle.maximum((token_num - image_token_num), paddle.ones([], dtype="int64"))
 
         # The scenario requiring padding is CUDA graph, thus we only need to pad the maximum capture size.
-        self._mm_buffers["token_type_ids"][: self.fd_config.graph_opt_config.max_capture_size].fill_(-1)
-        self._mm_buffers["token_type_ids"].copy_(token_type_ids, False)
-        self._mm_buffers["image_token_num"].copy_(image_token_num, False)
+        self._cuda_graph_buffers["token_type_ids"][: self.fd_config.graph_opt_config.max_capture_size].fill_(-1)
+        self._cuda_graph_buffers["token_type_ids"].copy_(token_type_ids, False)
+        self._cuda_graph_buffers["image_token_num"].copy_(image_token_num, False)
 
         return VLMoEMeta(
-            text_input=self._mm_buffers["text_input"][:text_token_num],
-            image_input=self._mm_buffers["image_input"][:image_token_num],
-            text_index=self._mm_buffers["text_index"][:token_num],
-            image_index=self._mm_buffers["image_index"][:token_num],
-            token_type_ids=self._mm_buffers["token_type_ids"][:token_num],
-            image_token_num=self._mm_buffers["image_token_num"],
+            text_input=self._cuda_graph_buffers["text_input"][:text_token_num],
+            image_input=self._cuda_graph_buffers["image_input"][:image_token_num],
+            text_index=self._cuda_graph_buffers["text_index"][:token_num],
+            image_index=self._cuda_graph_buffers["image_index"][:token_num],
+            token_type_ids=self._cuda_graph_buffers["token_type_ids"][:token_num],
+            image_token_num=self._cuda_graph_buffers["image_token_num"],
         )
 
     def get_input_embeddings(self, ids_remove_padding: paddle.Tensor) -> paddle.Tensor:
@@ -756,10 +760,11 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
     def get_input_embeddings(
         self,
         ids_remove_padding: paddle.Tensor,
+        image_token_num: int,
         image_features: Optional[paddle.Tensor] = None,
     ) -> paddle.Tensor:
         input_embeddings = self.ernie.get_input_embeddings(ids_remove_padding=ids_remove_padding)
-        if image_features is not None and len(image_features) > 0:
+        if image_token_num > 0:
             input_embeddings[ids_remove_padding == self.ernie.im_patch_id] = image_features.cast(self.ernie._dtype)
         return input_embeddings
 
@@ -769,11 +774,13 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         image_features: Optional[paddle.Tensor],
         forward_meta: ForwardMeta,
     ):
+        vl_moe_meta = self.ernie.prepare_vl_moe_meta(ids_remove_padding=ids_remove_padding)
         input_embeddings = self.get_input_embeddings(
-            ids_remove_padding=ids_remove_padding, image_features=image_features
+            ids_remove_padding=ids_remove_padding,
+            image_features=image_features,
+            image_token_num=vl_moe_meta.image_token_num.item(),
         )
         self._input_embeddings.copy_(input_embeddings, False)
-        vl_moe_meta = self.ernie.prepare_vl_moe_meta(ids_remove_padding=ids_remove_padding)
 
         hidden_states = self.ernie(
             input_embeddings=self._input_embeddings,
@@ -789,6 +796,12 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         self.ernie.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
+@ModelRegistry.register_model_class(
+    architecture="Ernie4_5_VLMoeForConditionalGeneration",
+    module_name="ernie4_5_vl.ernie4_5_vl_moe",
+    category=ModelCategory.MULTIMODAL,
+    primary_use=ModelCategory.MULTIMODAL,
+)
 class Ernie4_5_VLPretrainedModel(PretrainedModel):
     """
     Ernie4_5_MoePretrainedModel

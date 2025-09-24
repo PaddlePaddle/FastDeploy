@@ -16,6 +16,16 @@
 xpu backend methods
 """
 
+from .moe.fused_moe import (
+    XPUMoEMethod,
+    XPUWeightOnlyMoeEpMethod,
+    XPUWeightOnlyMoEMethod,
+)
 from .quantization.weight_only import XPUWeightOnlyLinearMethod
 
-__all__ = ["XPUWeightOnlyLinearMethod"]
+__all__ = [
+    "XPUWeightOnlyLinearMethod",
+    "XPUMoEMethod",
+    "XPUWeightOnlyMoEMethod",
+    "XPUWeightOnlyMoeEpMethod",
+]
