@@ -176,11 +176,7 @@ class CudaGraphPiecewiseBackend:
             input_addresses = [x.data_ptr() for (_, x) in kwargs.items() if isinstance(x, paddle.Tensor)]
             entry.input_addresses = input_addresses
 
-            new_grpah = (
-                graphs.CUDAGraph(pool_id=self.unique_memory_pool_id)
-                if self.fd_config.graph_opt_config.use_unique_memory_pool
-                else graphs.CUDAGraph()
-            )
+            new_grpah = graphs.CUDAGraph(pool_id=self.unique_memory_pool_id)
             paddle.device.synchronize()
 
             # Capture
