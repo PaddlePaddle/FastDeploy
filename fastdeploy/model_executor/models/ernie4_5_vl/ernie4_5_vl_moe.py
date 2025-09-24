@@ -778,9 +778,6 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         )
         self._input_embeddings.copy_(input_embeddings, False)
 
-        if vl_moe_meta.image_token_num.item() > 0:  # for XPU
-            forward_meta.token_type_ids = vl_moe_meta.token_type_ids
-
         hidden_states = self.ernie(
             input_embeddings=self._input_embeddings,
             ids_remove_padding=ids_remove_padding,

@@ -133,7 +133,6 @@ eb_gather_next_token(Context *ctx, const TX *x, TY *y,
                      VectorParam<int32_t> &encoder_seqs_lods, // NOLINT
                      VectorParam<int32_t> &encoder_batch_map, // NOLINT
                      VectorParam<int32_t> &decoder_batch_map, // NOLINT
-                     const int32_t* token_type_ids,           // for VL model
                      int64_t hidden_dim);
 
 template <typename TX, typename TSCALE = float, typename TY = int8_t>

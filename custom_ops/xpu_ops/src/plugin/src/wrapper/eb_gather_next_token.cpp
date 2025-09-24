@@ -23,7 +23,6 @@ template <typename TX, typename TY>
 __attribute__((global)) void
 eb_gather_next_token(TX *src, TY *dst, int *encoder_seqs_lods,
                      int *encoder_batch_map, int *decoder_batch_map,
-                     const int* token_type_ids,
                      int en_batch, int de_batch, int64_t copy_size);
 } // namespace plugin
 } // namespace xpu3
@@ -36,22 +35,13 @@ template <typename TX, typename TY>
 static int
 cpu_wrapper(api::Context *ctx, const TX *x, TY *y, const int *encoder_seqs_lods,
             const int *encoder_batch_map, const int *decoder_batch_map,
-            const int* token_type_ids, int en_batch, int de_batch,
-            int64_t hidden_dim) {
+            int en_batch, int de_batch, int64_t hidden_dim) {
   int ret = 0;
   int encoder_len_total = encoder_seqs_lods[en_batch];
   for (int i = 0; i < en_batch; i++) {
-    int last_text_token = encoder_seqs_lods[i + 1] - 1;
-    if (token_type_ids != nullptr) {
-      for (int id = encoder_seqs_lods[i + 1] - 1; id >= encoder_seqs_lods[i]; id--) {
-        if (token_type_ids[id] == 0) {
-          last_text_token = id;
-          break;
-        }
-      }
-    }
-    ret = api::cast<TX, TY>(ctx, x + last_text_token * hidden_dim,
-                            y + encoder_batch_map[i] * hidden_dim, hidden_dim);
+    ret =
+        api::cast<TX, TY>(ctx, x + (encoder_seqs_lods[i + 1] - 1) * hidden_dim,
+                          y + encoder_batch_map[i] * hidden_dim, hidden_dim);
     WRAPPER_ASSERT_SUCCESS(ctx, ret);
   }
   for (int i = 0; i < de_batch; i++) {
@@ -67,14 +57,12 @@ static int xpu3_wrapper(api::Context *ctx, const TX *x, TY *y,
                         api::VectorParam<int32_t> &encoder_seqs_lods, // NOLINT
                         api::VectorParam<int32_t> &encoder_batch_map, // NOLINT
                         api::VectorParam<int32_t> &decoder_batch_map, // NOLINT
-                        const int32_t* token_type_ids,
-                        int en_batch, int de_batch,
-                        int64_t hidden_dim) {
+                        int en_batch, int de_batch, int64_t hidden_dim) {
   auto eb_gather_next_token_kernel = xpu3::plugin::eb_gather_next_token<TX, TY>;
   // NOTE: Don't change 16 to 64, because kernel use gsm
   eb_gather_next_token_kernel<<<ctx->ncluster(), 16, ctx->xpu_stream>>>(
       const_cast<TX *>(x), y, encoder_seqs_lods.xpu, encoder_batch_map.xpu,
-      decoder_batch_map.xpu, token_type_ids, en_batch, de_batch, hidden_dim);
+      decoder_batch_map.xpu, en_batch, de_batch, hidden_dim);
   return api::SUCCESS;
 }
 
@@ -83,13 +71,11 @@ int eb_gather_next_token(api::Context *ctx, const TX *x, TY *y,
                          api::VectorParam<int32_t> &encoder_seqs_lods, // NOLINT
                          api::VectorParam<int32_t> &encoder_batch_map, // NOLINT
                          api::VectorParam<int32_t> &decoder_batch_map, // NOLINT
-                         const int32_t* token_type_ids,                // for VL model
                          int64_t hidden_dim) {
   WRAPPER_CHECK_CTX(ctx);
   WRAPPER_DUMP_FUNCTION_T2(ctx, "eb_gather_next_token", TX, TY);
   WRAPPER_DUMP_PARAM6(ctx, x, y, encoder_seqs_lods, encoder_batch_map,
-                      decoder_batch_map, token_type_ids);
-  WRAPPER_DUMP_PARAM1(ctx, hidden_dim);
+                      decoder_batch_map, hidden_dim);
   WRAPPER_DUMP(ctx);
   int encoder_batch = encoder_batch_map.len;
   int batch = encoder_batch + decoder_batch_map.len;
@@ -97,11 +83,6 @@ int eb_gather_next_token(api::Context *ctx, const TX *x, TY *y,
   int m = encoder_seqs_lods.cpu[encoder_batch] + decoder_batch_map.len;
   WRAPPER_CHECK_PTR(ctx, TX, m * hidden_dim, x);
   WRAPPER_CHECK_PTR(ctx, TY, batch * hidden_dim, y);
-  if (token_type_ids != nullptr) {
-    // token_type_ids records the token type, 1 for vision and 0 for text
-    // in text model, token_type_ids is nullptr
-    WRAPPER_CHECK_PTR(ctx, int32_t, m, token_type_ids);
-  }
   WRAPPER_ASSERT_GT(ctx, hidden_dim, 0);
   // check VectorParam
   WRAPPER_ASSERT_EQ(ctx, encoder_seqs_lods.len, encoder_batch_map.len + 1);
@@ -118,15 +99,8 @@ int eb_gather_next_token(api::Context *ctx, const TX *x, TY *y,
     WRAPPER_ASSERT_GE(ctx, decoder_batch_map.cpu[i], 0);
   }
   if (ctx->dev().type() == api::kCPU) {
-    std::vector<int> token_type_ids_vec;
-    if (token_type_ids != nullptr) {
-        token_type_ids_vec.resize(m);
-        int ret = do_device2host(ctx, token_type_ids, token_type_ids_vec.data(), m * sizeof(int32_t));
-        WRAPPER_ASSERT_SUCCESS(ctx, ret);
-    }
     return cpu_wrapper<TX, TY>(ctx, x, y, encoder_seqs_lods.cpu,
                                encoder_batch_map.cpu, decoder_batch_map.cpu,
-                               token_type_ids_vec.data(),
                                encoder_batch_map.len, decoder_batch_map.len,
                                hidden_dim);
   }
@@ -140,7 +114,6 @@ int eb_gather_next_token(api::Context *ctx, const TX *x, TY *y,
         decoder_batch_map.to_xpu(RAII_GUARD);
     return xpu3_wrapper<TX, TY>(ctx, x, y, encoder_seqs_lods_xpu,
                                 encoder_batch_map_xpu, decoder_batch_map_xpu,
-                                token_type_ids,
                                 encoder_batch_map.len, decoder_batch_map.len,
                                 hidden_dim);
   }
@@ -149,7 +122,7 @@ int eb_gather_next_token(api::Context *ctx, const TX *x, TY *y,
 #define INSTANTIATION_EB_GATHER_NEXT_TOKEN(TX, TY)                             \
   template int eb_gather_next_token<TX, TY>(                                   \
       api::Context *, const TX *, TY *, api::VectorParam<int32_t> &,           \
-      api::VectorParam<int32_t> &, api::VectorParam<int32_t> &, const int32_t*, int64_t);
+      api::VectorParam<int32_t> &, api::VectorParam<int32_t> &, int64_t);
 
 INSTANTIATION_EB_GATHER_NEXT_TOKEN(float16, float16);
 INSTANTIATION_EB_GATHER_NEXT_TOKEN(bfloat16, bfloat16);

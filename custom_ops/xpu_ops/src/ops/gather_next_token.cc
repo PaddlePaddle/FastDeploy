@@ -27,7 +27,6 @@ GatherNextToken(const paddle::Tensor &tmp_out,     // [token_num, dim_embed]
                 const paddle::Tensor &enc_batch_tensor,
                 const paddle::Tensor &dec_batch_tensor,
                 const paddle::optional<paddle::Tensor> &output_padding_offset,
-                const paddle::optional<paddle::Tensor> &token_type_ids,
                 int max_input_length) {
     phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
     auto dev_ctx =
@@ -53,13 +52,11 @@ GatherNextToken(const paddle::Tensor &tmp_out,     // [token_num, dim_embed]
 
     auto out = paddle::full({bsz, dim}, -2, tmp_out.type(), tmp_out.place());
 
-    const int32_t* token_type_ids_ptr = token_type_ids.get_ptr() ?
-                                        token_type_ids->data<int32_t>() : nullptr;
     int r = baidu::xpu::api::plugin::eb_gather_next_token<XPUType, XPUType>(
         xpu_ctx->x_context(),
         reinterpret_cast<const XPUType *>(tmp_out.data<data_t>()),
         reinterpret_cast<XPUType *>(out.data<data_t>()), encoder_seqs_lods_vp,
-        encoder_batch_map_vp, decoder_batch_map_vp, token_type_ids_ptr, dim);
+        encoder_batch_map_vp, decoder_batch_map_vp, dim);
     return {out};
 }
 
@@ -103,8 +100,7 @@ PD_BUILD_OP(gather_next_token)
              "decoder_batch_map", "encoder_seq_lod_cpu",
              "encoder_batch_map_cpu", "decoder_batch_map_cpu",
              "enc_batch_tensor", "dec_batch_tensor",
-             paddle::Optional("output_padding_offset"),
-             paddle::Optional("token_type_ids")})
+             paddle::Optional("output_padding_offset")})
     .Outputs({"out"})
     .Attrs({"max_input_length: int"})
     .SetKernelFn(PD_KERNEL(GatherNextToken))
