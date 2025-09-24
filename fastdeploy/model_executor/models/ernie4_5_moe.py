@@ -942,7 +942,6 @@ class Ernie4_5_Model(nn.Layer):
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
         residual = None
         for i in range(self.num_layers):	
