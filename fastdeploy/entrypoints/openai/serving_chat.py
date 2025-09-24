@@ -119,7 +119,7 @@ class OpenAIServingChat:
                     current_req_dict["chat_template"] = self.chat_template
                 current_req_dict["arrival_time"] = time.time()
                 # preprocess the req_dict
-                self.engine_client.format_request(current_req_dict)
+                await self.engine_client.format_request(current_req_dict)
                 prompt_token_ids = current_req_dict["prompt_token_ids"]
                 for idx in range(current_req_dict.get("n", 1)):
                     child_req_dict = copy(current_req_dict)
