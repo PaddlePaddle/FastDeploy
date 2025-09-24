@@ -24,10 +24,7 @@ python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packag
 echo "build whl"
 bash custom_ops/xpu_ops/download_dependencies.sh develop
 export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
-# export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
-# 由于xvllm更新导致编译报错暂时锁定xvllm版本
-wget https://klx-sdk-release-public.su.bcebos.com/xinfer/daily/eb/20250921/output.tar.gz --no-proxy && tar xf output.tar.gz && mv output xvllm
-export XVLLM_PATH=${PWD}/xvllm
+export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
 bash build.sh || exit 1
 
 echo "pip others"
