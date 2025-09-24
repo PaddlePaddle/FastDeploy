@@ -45,6 +45,7 @@ class DynamicWeightManager:
         self.model: nn.Layer = model
         self._capture_model_state()
         self.update_parameters()
+        self.finalize_update()
 
         logger.info(
             f"✅ DynamicLoad model built successfully by {self.load_config.load_strategy}, "
@@ -81,8 +82,6 @@ class DynamicWeightManager:
 
         logger.info(f"Update parameters in {time.perf_counter()-start_time:.2f}s")
 
-        self._finalize_update(pid)
-
     def _update_ipc_snapshot(self):
         """Update using IPC snapshot strategy for elastic recovery."""
         model_path = os.path.join(
@@ -116,7 +115,7 @@ class DynamicWeightManager:
         self._verify_parameters("clearance")
         if self.parallel_config.tensor_parallel_size > 1:
             paddle.distributed.barrier(self.parallel_config.tp_group)
-        paddle.distributed.shutdown_process_group(self.parallel_config.tp_group)
+            paddle.distributed.shutdown_process_group(self.parallel_config.tp_group)
         if self.parallel_config.enable_expert_parallel:
             paddle.distributed.barrier(self.parallel_config.ep_group)
             paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
@@ -146,7 +145,7 @@ class DynamicWeightManager:
         if src.shape != dst.shape:
             raise ValueError(f"Shape mismatch for {name}: {src.shape} vs {dst.shape}")
 
-    def _finalize_update(self, pid: int):
+    def finalize_update(self, pid: int = 0):
         """Finalize update process with verification."""
         self._verify_parameters("update")
         if self.parallel_config.tensor_parallel_size > 1:
@@ -229,6 +228,7 @@ class DynamicWeightManager:
                 logger.info("finished loading new checkpoint")
             elif model_weights_status.value[0] == ModelWeightsStatus.CLEARING:
                 logger.info("infer engine stopped! start to clear checkpoint...")
+                model_runner.clear_requests()
                 model_runner.clear_parameters(pid)
                 while model_weights_status.value[0] != ModelWeightsStatus.CLEARED:
                     time.sleep(0.01)

@@ -1028,12 +1028,12 @@ class GPUModelRunner(ModelRunnerBase):
         create_cache_tensor = profile or self.parallel_config.splitwise_role == "mixed"
 
         if not create_cache_tensor:
-            logger.info("Waiting for cache managers to create kv cache..")
+            logger.info(f"Waiting for cache managers to create kv cache.. {cache_ready_signal.value}")
             while cache_ready_signal.value[self.local_rank] != 1:
                 time.sleep(1)
-            logger.info("OK! Stop waiting.")
+            logger.info(f"OK! Stop waiting. {cache_ready_signal.value}")
 
-        logger.info("Initializing kv cache for all layers.")
+        logger.info(f"Initializing kv cache for all layers. {cache_ready_signal.value}")
         cache_kvs_list = []
         for i in range(self.model_config.num_hidden_layers):
             key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
@@ -1054,8 +1054,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["caches"] = cache_kvs_list
 
         if not profile and create_cache_tensor:
-            logger.info("✅ kv cache is ready!")
             cache_ready_signal.value[self.local_rank] = 1
+            logger.info(f"✅ kv cache is ready! {cache_ready_signal.value}")
 
         paddle.device.cuda.empty_cache()
 
@@ -1704,26 +1704,32 @@ class GPUModelRunner(ModelRunnerBase):
             self.forward_meta.clear_caches()
         paddle.device.cuda.empty_cache()
 
+    def clear_requests(self):
+        """Dynamic model loader use to clear requests use for RL"""
+        self.share_inputs["stop_flags"][:] = True
+
     def clear_parameters(self, pid):
-        """ " Dynamic model loader use to clear parameters use for RL"""
+        """Dynamic model loader use to clear parameters use for RL"""
+        # Clear CUDAGraph
+        if self.use_cudagraph:
+            self.model.clear_grpah_opt_backend()
+        # Clear parameters and Send single
         self.dynamic_weight_manager.clear_parameters(pid)
         self.clear_cache()
         paddle.device.cuda.empty_cache()
 
-        # Clear CudaGraph
-        if self.use_cudagraph:
-            self.model.clear_grpah_opt_backend()
-
         self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
 
     def update_parameters(self, pid):
-        """ " Dynamic model loader use to update parameters use for RL"""
+        """Dynamic model loader use to update parameters use for RL"""
+        # Update parameters
         self.dynamic_weight_manager.update_parameters(pid)
         self.initialize_kv_cache()
-
-        # Recapture CudaGraph
+        # Recapture CUDAGraph
         if self.use_cudagraph:
             self.capture_model()
+        # Send single
+        self.dynamic_weight_manager.finalize_update(pid)
 
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 
