@@ -281,6 +281,9 @@ class LocalScheduler:
 
         return requests
 
+    def get_unhandled_request_num(self):
+        return len(self.ids) - self.ids_read_cursor
+
     def put_results(self, results: List[RequestOutput]):
         """
         Add processing results back to the scheduler.

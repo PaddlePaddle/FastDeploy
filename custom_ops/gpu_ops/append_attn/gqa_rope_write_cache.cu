@@ -1000,7 +1000,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
       stream,
       const_cast<paddle::Tensor*>(&key_cache),
       const_cast<paddle::Tensor*>(&value_cache));
-  } else if (cache_quant_type == "cache_int8" || cache_quant_type == "cache_fp8") {
+  } else if (cache_quant_type == "cache_int8" || cache_quant_type == "cache_fp8" || cache_quant_type == "block_wise_fp8") {
     CascadeAppendWriteCacheKVC8QKV<data_t, 128, 64>(
         meta_data,
         *const_cast<paddle::Tensor*>(&key_cache),
@@ -1018,7 +1018,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
         kv_num_blocks_data,
         max_seq_len,
         false, // is_scale_channel_wise
-        cache_quant_type == "cache_fp8", // is_fp8
+        cache_quant_type,
         stream,
         const_cast<paddle::Tensor*>(&key_cache),
         const_cast<paddle::Tensor*>(&value_cache));
