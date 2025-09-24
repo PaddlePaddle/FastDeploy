@@ -40,7 +40,9 @@ jobs:
       - name: Clone FastDeploy
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.event_name == 'pull_request'
+                && github.event.pull_request.base.ref
+                || github.ref_name }}
           submodules: 'recursive'
           fetch-depth: 1000
       - name: Python Setup
