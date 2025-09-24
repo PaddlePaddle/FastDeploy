@@ -1,4 +1,4 @@
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,7 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""fastdeploy module"""
-from . import cpu, gcu, gpu, iluvatar, intel_hpu, npu, xpu
 
-__all__ = ["gpu", "cpu", "xpu", "npu", "iluvatar", "gcu", "intel_hpu"]
+"""
+intel_hpu backend methods
+"""
+
+from .attention.hpu_attn_backend import HPUAttentionBackend
+from .moe.fused_moe_hpu_backend import HpuMoEMethod, HpuTensorWiseFP8MoEMethod
+
+__all__ = [
+    "HPUAttentionBackend",
+    "HpuMoEMethod",
+    "HpuTensorWiseFP8MoEMethod",
+]

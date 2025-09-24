@@ -375,7 +375,7 @@ class Glm4MoeModel(nn.Layer):
 
 @ModelRegistry.register_model_class(
     architecture="Glm4MoeForCausalLM",
-    module_path="glm4_moe",
+    module_name="glm4_moe",
     category=ModelCategory.TEXT_GENERATION,
     primary_use=ModelCategory.TEXT_GENERATION,
 )

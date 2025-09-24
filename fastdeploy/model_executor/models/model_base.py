@@ -81,11 +81,12 @@ class LazyRegisteredModel(BaseRegisteredModel):
     """Lazy loaded model"""
 
     module_name: str
+    module_path: str
     class_name: str
 
     def load_model_cls(self) -> Type[nn.Layer]:
         try:
-            full_module = f"fastdeploy.model_executor.models.{self.module_name}"
+            full_module = f"{self.module_path}.{self.module_name}"
             module = importlib.import_module(full_module)
             return getattr(module, self.class_name)
         except (ImportError, AttributeError) as e:
@@ -94,18 +95,6 @@ class LazyRegisteredModel(BaseRegisteredModel):
     def inspect_model_cls(self) -> ModelInfo:
         model_cls = self.load_model_cls()
         return ModelInfo.from_model_cls(model_cls, self.module_name)
-
-
-@dataclass(frozen=True)
-class RegisteredModel(BaseRegisteredModel):
-
-    model_cls: Type[nn.Layer]
-
-    def load_model_cls(self) -> Type[nn.Layer]:
-        return self.model_cls
-
-    def inspect_model_cls(self) -> ModelInfo:
-        return ModelInfo.from_model_cls(self.model_cls)
 
 
 @lru_cache(maxsize=128)
@@ -133,7 +122,11 @@ class ModelRegistry:
 
     def _register_enhanced_models(self):
         for arch, model_info in self._enhanced_models.items():
-            model = LazyRegisteredModel(module_name=model_info["module_path"], class_name=model_info["class_name"])
+            model = LazyRegisteredModel(
+                module_name=model_info["module_name"],
+                module_path=model_info["module_path"],
+                class_name=model_info["class_name"],
+            )
             self.models[arch] = model
             self._registered_models[arch] = model
 
@@ -212,7 +205,8 @@ class ModelRegistry:
         model_class=None,
         *,
         architecture: str = None,
-        module_path: str = None,
+        module_name: str = None,
+        module_path: str = "fastdeploy.model_executor.models",
         category: Union[ModelCategory, List[ModelCategory]] = ModelCategory.TEXT_GENERATION,
         primary_use: ModelCategory = None,
     ):
@@ -226,7 +220,8 @@ class ModelRegistry:
         Args:
             model_class: The model class (when used as simple decorator)
             architecture (str): Unique identifier for the model architecture
-            module_path (str): Relative path to the module containing the model
+            module_name (str): Relative path to the module containing the model
+            module_path (str): Absolute path to the module containing the model
             category: Model category or list of categories
             primary_use: Primary category for multi-category models
         """
@@ -237,13 +232,14 @@ class ModelRegistry:
                 cls._arch_to_model_cls[model_cls.name()] = model_cls
 
             # Enhanced decorator-style registration
-            if architecture and module_path:
+            if architecture and module_name:
                 categories = category if isinstance(category, list) else [category]
 
                 # Register main entry
                 arch_key = architecture
                 cls._enhanced_models[arch_key] = {
                     "class_name": model_cls.__name__,
+                    "module_name": module_name,
                     "module_path": module_path,
                     "category": primary_use or categories[0],
                     "class": model_cls,
@@ -255,6 +251,7 @@ class ModelRegistry:
                         key = f"{arch_key}_{cat.value}"
                         cls._enhanced_models[key] = {
                             "class_name": model_cls.__name__,
+                            "module_name": module_name,
                             "module_path": module_path,
                             "category": cat,
                             "primary_use": primary_use or categories[0],

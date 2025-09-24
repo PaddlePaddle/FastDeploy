@@ -288,7 +288,7 @@ class Qwen2Model(nn.Layer):
 
 @ModelRegistry.register_model_class(
     architecture="Qwen2ForCausalLM",
-    module_path="qwen2",
+    module_name="qwen2",
     category=[ModelCategory.TEXT_GENERATION, ModelCategory.EMBEDDING],
     primary_use=ModelCategory.TEXT_GENERATION,
 )
