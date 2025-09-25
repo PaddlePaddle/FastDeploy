@@ -183,5 +183,7 @@ class XPUAttentionBackend(AttentionBackend):
             forward_meta.encoder_batch_map_cpu,
             forward_meta.decoder_context_len_cpu,
             forward_meta.decoder_batch_map_cpu,
+            forward_meta.pos_emb_type,
+            self.rope_3d,
         )
         return res

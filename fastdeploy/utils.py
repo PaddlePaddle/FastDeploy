@@ -51,6 +51,7 @@ from fastdeploy.entrypoints.openai.protocol import ErrorInfo, ErrorResponse
 from fastdeploy.logger.logger import FastDeployLogger
 
 T = TypeVar("T")
+from typing import Callable, Optional
 
 # [N,2] -> every line is [config_name, enable_xxx_name]
 # Make sure enable_xxx equal to config.enable_xxx
@@ -82,7 +83,7 @@ class ExceptionHandler:
 
     # 处理请求参数验证异常
     @staticmethod
-    async def handle_request_validation_exception(_: Request, exc: RequestValidationError) -> JSONResponse:
+    async def handle_request_validation_exception(request: Request, exc: RequestValidationError) -> JSONResponse:
         errors = exc.errors()
         if not errors:
             message = str(exc)
@@ -100,6 +101,7 @@ class ExceptionHandler:
                 param=param,
             )
         )
+        api_server_logger.error(f"invalid_request_error: {request.url} {param} {message}")
         return JSONResponse(content=err.model_dump(), status_code=HTTPStatus.BAD_REQUEST)
 
 
@@ -755,6 +757,36 @@ def version():
     return content
 
 
+def current_package_version():
+    """
+    读取version.txt文件,解析出fastdeploy version对应的版本号
+
+    Args:
+    Returns:
+        str: fastdeploy版本号,如果解析失败返回Unknown
+    """
+    fd_version = "Unknown"
+    try:
+        content = version()
+        if content == "Unknown":
+            return fd_version
+
+        # 按行分割内容
+        lines = content.strip().split("\n")
+        # 查找包含"fastdeploy version:"的行
+        for line in lines:
+            if line.startswith("fastdeploy version:"):
+                # 提取版本号部分
+                fd_version = line.split("fastdeploy version:")[1].strip()
+                return fd_version
+        llm_logger.warning("fastdeploy version not found in version.txt")
+        # 如果没有找到对应的行，返回None
+        return fd_version
+    except Exception as e:
+        llm_logger.error(f"Failed to parse fastdeploy version from version.txt: {e}")
+        return fd_version
+
+
 class DeprecatedOptionWarning(argparse.Action):
     def __init__(self, option_strings, dest, **kwargs):
         super().__init__(option_strings, dest, nargs=0, **kwargs)
@@ -851,3 +883,24 @@ api_server_logger = get_logger("api_server", "api_server.log")
 console_logger = get_logger("console", "console.log", print_to_console=True)
 spec_logger = get_logger("speculate", "speculate.log")
 zmq_client_logger = get_logger("zmq_client", "zmq_client.log")
+
+
+def parse_type(return_type: Callable[[str], T]) -> Callable[[str], T]:
+
+    def _parse_type(val: str) -> T:
+        try:
+            return return_type(val)
+        except ValueError as e:
+            raise argparse.ArgumentTypeError(f"Value {val} cannot be converted to {return_type}.") from e
+
+    return _parse_type
+
+
+def optional_type(return_type: Callable[[str], T]) -> Callable[[str], Optional[T]]:
+
+    def _optional_type(val: str) -> Optional[T]:
+        if val == "" or val == "None":
+            return None
+        return parse_type(return_type)(val)
+
+    return _optional_type

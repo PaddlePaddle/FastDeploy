@@ -965,7 +965,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--backend",
         type=str,
-        default="vllm",
+        default="openai-chat",
         choices=list(ASYNC_REQUEST_FUNCS.keys()),
     )
     parser.add_argument(

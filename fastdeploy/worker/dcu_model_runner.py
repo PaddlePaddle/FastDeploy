@@ -63,12 +63,12 @@ class DCUModelRunner(GPUModelRunner):
         only_decode_batch = True
         prefill_exists = None
         # mix ep in single node
-        if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.splitwise_role == "mixed":
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
             only_decode_batch_list = []
             prefill_exists = self.exist_prefill()
             paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
             only_decode_batch = all(only_decode_batch_list)
-            self.fd_config.parallel_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
+            self.fd_config.model_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
 
         self.forward_meta.step_use_cudagraph = (
             self.use_cudagraph

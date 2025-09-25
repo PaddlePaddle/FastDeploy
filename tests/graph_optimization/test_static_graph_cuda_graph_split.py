@@ -20,6 +20,7 @@ os.environ["FLAGS_cuda_graph_blacklist"] = "pd_op.matmul,pd_op.transpose"
 
 
 import unittest
+from unittest.mock import Mock
 
 import paddle
 import paddle.nn as nn
@@ -29,6 +30,7 @@ from fastdeploy.config import (
     FDConfig,
     GraphOptimizationConfig,
     ParallelConfig,
+    SchedulerConfig,
 )
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
@@ -88,15 +90,18 @@ class TestStaticGraphCUDAGraphSplit(unittest.TestCase):
         """Run test case"""
         # Set FastDeploy config
         graph_opt_config = GraphOptimizationConfig({"use_cudagraph": True, "graph_opt_level": 1})
-        parallel_config = ParallelConfig({"max_num_seqs": 1})
-        graph_opt_config._set_cudagraph_sizes(max_num_seqs=parallel_config.max_num_seqs)
-        graph_opt_config.init_with_cudagrpah_size(max_capture_size=parallel_config.max_num_seqs)
+        scheduler_config = SchedulerConfig({"max_num_seqs": 1})
+        graph_opt_config._set_cudagraph_sizes(max_num_seqs=scheduler_config.max_num_seqs)
+        graph_opt_config.init_with_cudagrpah_size(max_capture_size=scheduler_config.max_num_seqs)
         cache_config = CacheConfig({})
-
+        parallel_config = ParallelConfig(args={})
+        model_config = Mock()
         fd_config = FDConfig(
             graph_opt_config=graph_opt_config,
-            parallel_config=parallel_config,
+            scheduler_config=scheduler_config,
             cache_config=cache_config,
+            parallel_config=parallel_config,
+            model_config=model_config,
             test_mode=True,
         )
 

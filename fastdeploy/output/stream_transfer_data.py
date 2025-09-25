@@ -16,7 +16,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Union
+from typing import Optional
 
 import numpy as np
 
@@ -25,43 +25,9 @@ class DecoderState(Enum):
     """DecoderState"""
 
     TEXT = "text"
-    VISION = "vision"
-    VEDIO = "vedio"
+    IMAGE = "image"
+    VIDEO = "video"
     AUDIO = "audio"
-
-
-@dataclass
-class TextData:
-    """TextData"""
-
-    tokens: np.array
-    not_need_stop: bool
-    batch: int
-    speculaive_decoding: bool
-    logprobs: Optional[np.array] = None
-    accept_tokens: Optional[np.array] = None
-    accept_num: Optional[np.array] = None
-
-
-@dataclass
-class VisionData:
-    """VisionData"""
-
-    tokens: np.array
-
-
-@dataclass
-class VedioData:
-    """VedioData"""
-
-    tokens: np.array
-
-
-@dataclass
-class AudioData:
-    """AudioData"""
-
-    tokens: np.array
 
 
 @dataclass
@@ -69,4 +35,9 @@ class StreamTransferData:
     """StreamTransferData"""
 
     decoder_state: DecoderState
-    data: Union[TextData, VisionData, VedioData, AudioData]
+    tokens: np.array
+    batch_id: int
+    speculaive_decoding: bool = False
+    logprobs: Optional[np.array] = None
+    accept_tokens: Optional[np.array] = None
+    accept_num: Optional[np.array] = None

@@ -53,6 +53,7 @@ void MoeDispatchKernel(const paddle::Tensor& input,
                        const paddle::optional<paddle::Tensor>& gating_correction_bias,
                        const int moe_topk,
                        const bool group_moe,
+                       const std::string &moe_quant_type,
                        const bool topk_only_mode,
                        const int num_rows,
                        const int hidden_size,
@@ -183,6 +184,7 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
     const paddle::optional<paddle::Tensor>& w4a8_in_scale,
     const int moe_topk,
     const bool group_moe,
+    const std::string &moe_quant_type,
     const bool topk_only_mode) {
   const auto input_type = input.dtype();
   auto place = input.place();
@@ -220,6 +222,7 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
                                                     gating_correction_bias,
                                                     moe_topk,
                                                     group_moe,
+                                                    moe_quant_type,
                                                     topk_only_mode,
                                                     num_rows,
                                                     hidden_size,
@@ -236,6 +239,7 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
                                                    gating_correction_bias,
                                                    moe_topk,
                                                    group_moe,
+                                                   moe_quant_type,
                                                    topk_only_mode,
                                                    num_rows,
                                                    hidden_size,
@@ -305,7 +309,7 @@ PD_BUILD_STATIC_OP(moe_expert_dispatch)
               "top_k_weight",
               "top_k_indices",
               "expert_idx_per_token"})
-    .Attrs({"moe_topk:int", "group_moe:bool", "topk_only_mode:bool"})
+    .Attrs({"moe_topk:int", "group_moe:bool", "moe_quant_type:std::string", "topk_only_mode:bool"})
     .SetKernelFn(PD_KERNEL(MoeExpertDispatch))
     .SetInferShapeFn(PD_INFER_SHAPE(MoeExpertDispatchInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(MoeExpertDispatchInferDtype));
