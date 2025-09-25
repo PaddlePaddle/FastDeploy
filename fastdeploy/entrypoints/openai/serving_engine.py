@@ -21,8 +21,7 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar, Dict, Generic, Optional, TypeVar, Union
 
-from pydantic import BaseModel
-
+from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     ErrorInfo,
     ErrorResponse,
@@ -33,17 +32,7 @@ from fastdeploy.utils import ErrorCode, ErrorType, api_server_logger
 RequestT = TypeVar("RequestT")
 
 
-class ServeContext(BaseModel, Generic[RequestT]):
-    """
-    Context class for OpenAI serving
-    """
-
-    request_id: str
-    model_name: str
-    request: RequestT
-
-
-class OpenAIServing(ABC):
+class OpenAIServing(ABC, Generic[RequestT]):
     request_id_prefix: ClassVar[str]
     """
     Base pipeline for OpenAI-style serving implementations
@@ -80,19 +69,24 @@ class OpenAIServing(ABC):
             api_server_logger.error(err_msg)
         return is_supported, adjusted_name
 
-    async def _acquire_semaphore(self) -> bool:
+    async def _acquire_semaphore(self, request_id: str) -> bool:
         """Acquire engine client semaphore with timeout"""
         try:
+            api_server_logger.info(f"Acquire request:{request_id} status:{self.engine_client.semaphore.status()}")
             if self.max_waiting_time < 0:
                 await self.engine_client.semaphore.acquire()
             else:
                 await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
-                pass
             return True
         except asyncio.TimeoutError:
-            error_msg = f"Request waiting timeout, max waiting time: {self.max_waiting_time}"
+            error_msg = f"Request waiting timeout, request:{request_id} max waiting time:{self.max_waiting_time}"
             api_server_logger.error(error_msg)
             return False
+
+    async def _release_semaphore(self, request_id: str) -> None:
+        """Release engine client semaphore"""
+        self.engine_client.semaphore.release()
+        api_server_logger.info(f"Release request:{request_id} status:{self.engine_client.semaphore.status()}")
 
     def _create_error_response(
         self,
@@ -111,12 +105,92 @@ class OpenAIServing(ABC):
             return f"{self.request_id_prefix}-{user}-{uuid.uuid4()}"
         return f"{self.request_id_prefix}-{uuid.uuid4()}"
 
-    @abstractmethod
     def _validate_request():
         """Validate the request before processing"""
         pass
 
-    async def _preprocess_request(self, request_id: str, request: Any) -> Dict:
+    @abstractmethod
+    async def _preprocess(self, request_id: str, request: RequestT) -> Dict:
+        """Preprocess the request into engine format"""
+        pass
+
+    @abstractmethod
+    async def _prepare_generators(self, request_id: str, request: dict) -> Any:
+        """Process engine response into final format"""
+        pass
+
+    @abstractmethod
+    async def _build_final_response(self, request_id: str, request_output: RequestOutput) -> Any:
+        """Generate the final response object"""
+        pass
+
+    async def handle(self, reqeust: RequestT) -> Union[Any, ErrorResponse]:
+        """Handle incoming requests"""
+        yield self._pipeline(reqeust)
+
+    async def _pipeline(self, request: RequestT) -> Union[Any, ErrorResponse]:
+        """
+        Pipeline for handling requests
+        Args:
+            reqeust: The request to be handled
+        Returns:
+            A generator that yields responses
+        """
+        # Step 1: Request validation
+        # Step 1.1: Check if current node is master
+        if not self._check_master():
+            yield self._create_error_response(
+                f"Only master node can accept request, please send to master node: {self.master_ip}"
+            )
+
+        # Step 1.2: Check supported model
+        is_supported, request.model = self._check_supported_model(request.model)
+        if not is_supported:
+            yield self._create_error_response(
+                f"Unsupported model: [{request.model}]", ErrorType.API_CONNECTION_ERROR, ErrorCode.MODEL_NOT_SUPPORT
+            )
+
+        # Step 1.3: Validate request
+        self._validate_request(request)
+
+        request_id = self._generate_request_id(getattr(request, "user", None))
+        api_server_logger.info(f"Initialize request {request_id}: {request}")
+
+        # Step 2: Semaphore acquisition
+        if not await self._acquire_semaphore(request_id):
+            yield self._create_error_response("Request waiting timeout", ErrorType.TIMEOUT_ERROR, ErrorCode.TIMEOUT)
+
+        try:
+            # Step 3: Preprocessing
+            request_dict = await self._preprocess(request_id, request)
+            request_dict["request_id"] = request_id
+
+            # Step 4: Response processing
+            generators = await self._prepare_generators(request_id, request_dict)
+
+            # Step 5: Final response build
+            async for request_output in generators:
+                yield self._build_final_response(request_id, request_output)
+
+        except InvalidParameterException as e:
+            traceback.print_exc()
+            yield self._create_error_response(str(e.message), ErrorType.INVALID_REQUEST_ERROR, param=e.param)
+        except Exception as e:
+            traceback.print_exc()
+            yield self._create_error_response(str(e))
+        finally:
+            self._release_semaphore(request_id)
+
+
+class ZmqOpenAIServing(OpenAIServing):
+    """
+    OpenAI-style service architecture using ZeroMQ as the communication mechanism.
+    """
+
+    def __init__(self, engine_client, models, pid, ips, max_waiting_time):
+        super().__init__(engine_client, models, pid, ips, max_waiting_time)
+
+    async def _preprocess(self, request_id: str, request: Any) -> Dict:
         """Preprocess the request into engine format"""
         request_dict = request.to_dict_for_infer(request_id)
         if "chat_template" not in request_dict:
@@ -125,72 +199,16 @@ class OpenAIServing(ABC):
         await self.engine_client.format_and_add_data(request_dict)
         return request_dict
 
-    @abstractmethod
-    async def _process_response(self, response: Dict, request: Any) -> Any:
-        """Process engine response into final format"""
-        pass
-
-    @abstractmethod
-    async def _build_final_response(self, processed_data: Any, request: Any) -> Any:
-        """Generate the final response object"""
-        pass
-
-    async def handle(self, ctx: Any) -> Union[Any, ErrorResponse]:
-        """Handle incoming requests"""
-        return await self._pipeline(ctx.request)
-
-    async def _pipeline(self, ctx: ServeContext) -> Union[Any, ErrorResponse]:
-        """
-        Execute the full serving pipeline:
-        1. Request validation
-        2. Preprocessing
-        3. Execution
-        4. Response processing
-        5. Final response generation
-        """
-        request = ctx.request
-        # Step 1: Request validation
-
-        # Step 1.1: Check if current node is master
-        if not self._check_master():
-            return self._create_error_response(
-                f"Only master node can accept request, please send to master node: {self.master_ip}"
-            )
-
-        # Step 1.2: Check supported model
-        is_supported, request.model = self._check_supported_model(request.model)
-        if not is_supported:
-            return self._create_error_response(
-                f"Unsupported model: [{request.model}]", ErrorType.API_CONNECTION_ERROR, ErrorCode.MODEL_NOT_SUPPORT
-            )
-
-        # Step 1.3: Validate request
-        self._validate_request(request)
-
-        # Step 2: Semaphore acquisition
-        if not await self._acquire_semaphore():
-            return self._create_error_response("Request waiting timeout", ErrorType.TIMEOUT_ERROR, ErrorCode.TIMEOUT)
-
-        request_id = self._generate_request_id(getattr(request, "user", None))
-        api_server_logger.info(f"Initialize request {request_id}: {request}")
-
+    async def _prepare_generators(self, request_id: str, request: dict) -> RequestOutput:
         try:
-            # Step 3: Preprocessing
-            request_dict = await self._preprocess_request(request_id, request)
-            request_dict["request_id"] = request_id
-
-            # Step 4: Response processing
-            processed_data = await self._process_response(request_dict)
-
-            # Step 5: Final response build
-            return await self._build_final_response(processed_data, request_dict)
-
-        except InvalidParameterException as e:
-            traceback.print_exc()
-            return self._create_error_response(str(e.message), ErrorType.INVALID_REQUEST_ERROR, param=e.param)
+            dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id)
+            dealer.write([b"", request_id.encode("utf-8")])
+            if self.engine_client.check_model_weight_status():
+                raise ValueError("Engine is clearing model weight")
+            responses = await asyncio.wait_for(response_queue.get(), timeout=60)
+            for response in responses:
+                yield response
         except Exception as e:
-            traceback.print_exc()
-            return self._create_error_response(str(e))
+            raise ValueError(f"Error processing response: {str(e)}")
         finally:
-            api_server_logger.info(f"Release request {request_id}")
-            self.engine_client.semaphore.release()
+            await self.engine_client.connection_manager.cleanup_request(request_id)

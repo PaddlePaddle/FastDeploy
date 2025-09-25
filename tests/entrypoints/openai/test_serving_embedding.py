@@ -12,6 +12,7 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.mock_engine_client = MagicMock()
         self.mock_engine_client.semaphore.acquire = AsyncMock()
+        self.mock_engine_client.semaphore.release = AsyncMock()
         self.mock_engine_client.format_and_add_data = AsyncMock(return_value=[[1, 2, 3]])
         models = MagicMock()
         models.is_supported_model = MagicMock(return_value=(True, "ERNIE"))
@@ -39,7 +40,7 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
         )
 
         # Execute
-        result = await self.embedding_service.create_embedding(request)
+        result = self.embedding_service.create_embedding(request)
 
         # Assert
         self.assertEqual(result, mock_response)
