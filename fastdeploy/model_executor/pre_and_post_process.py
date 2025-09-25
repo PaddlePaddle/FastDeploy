@@ -529,6 +529,8 @@ def rebuild_padding(
     seq_lens_encoder: paddle.Tensor,
     output_padding_offset: Optional[paddle.Tensor] = None,
     max_input_length: Optional[int] = None,
+    first_token_out: Optional[paddle.Tensor] = None,
+    enable_logprob: Optional[bool] = False,
 ):
     """
     Args:
@@ -544,7 +546,9 @@ def rebuild_padding(
             seq_lens_decoder,
             seq_lens_encoder,
             output_padding_offset,
+            first_token_out,
             max_input_length,
+            enable_logprob,
         )
     elif current_platform.is_dcu():
         from fastdeploy.model_executor.ops.gpu import rebuild_padding
