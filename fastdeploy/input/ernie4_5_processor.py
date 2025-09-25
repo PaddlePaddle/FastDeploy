@@ -234,6 +234,8 @@ class Ernie4_5Processor(BaseDataProcessor):
             request["enable_thinking"] = True
         if self.reasoning_parser:
             request["model_status"] = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
+            if request["model_status"] == "think_start":
+                request["enable_thinking"] = True
         data_processor_logger.info(f"Processed request dict: {request}")
         return request
 
@@ -310,6 +312,7 @@ class Ernie4_5Processor(BaseDataProcessor):
         delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
         if is_end:
             full_text = previous_texts + delta_text
+            response_dict["outputs"]["text"] = full_text
             if self.reasoning_parser and (
                 enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
             ):
@@ -318,14 +321,12 @@ class Ernie4_5Processor(BaseDataProcessor):
                 )
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
-            else:
-                response_dict["outputs"]["text"] = full_text
             if self.tool_parser_obj:
                 tool_parser = self.tool_parser_obj(self.tokenizer)
-                tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
+                tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict, model_status)
                 if tool_call_info.tools_called:
                     response_dict["outputs"]["tool_call"] = tool_call_info.tool_calls
-                    response_dict["outputs"]["text"] = tool_call_info.content
+                response_dict["outputs"]["text"] = tool_call_info.content
             response_dict["outputs"]["raw_prediction"] = full_text
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
@@ -377,6 +378,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 previous_token_ids + token_ids,
                 token_ids,
                 response_dict,
+                model_status,
             )
             if tool_call_delta_message is None or tool_call_delta_message.tool_calls:
                 response_dict["outputs"]["delta_message"] = tool_call_delta_message
