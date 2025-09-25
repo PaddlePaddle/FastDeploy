@@ -125,7 +125,6 @@ class OpenAIServingChat:
                 for idx in range(current_req_dict.get("n", 1)):
                     child_req_dict = copy(current_req_dict)
                     child_req_dict["request_id"] = f'{child_req_dict["request_id"]}-{idx}'
-                    print(f'DEBUG child_req_dict request_id: {child_req_dict["request_id"]}')
                     await self.engine_client.add_requests(child_req_dict)
                     del child_req_dict
                 if isinstance(prompt_token_ids, np.ndarray):
@@ -224,7 +223,6 @@ class OpenAIServingChat:
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id, n_param)
             request_ids = [f"{request_id}-{i}" for i in range(n_param)]
             for rid in request_ids:
-                print(f'DEBUG chat_completion_stream_generator before dealer write rid: {rid}')
                 dealer.write([b"", rid.encode("utf-8")])
             choices = []
             current_waiting_time = 0
@@ -444,7 +442,6 @@ class OpenAIServingChat:
             # dealer.write([b"", request_id.encode("utf-8")])
             request_ids = [f"{request_id}-{i}" for i in range(n_param)]
             for rid in request_ids:
-                print(f'DEBUG chat_completion_full_generator before dealer write rid: {rid}')
                 dealer.write([b"", rid.encode("utf-8")])
             previous_num_tokens = [0] * n_param
             current_waiting_time = 0
@@ -473,7 +470,6 @@ class OpenAIServingChat:
                     current_waiting_time = 0
                 except asyncio.TimeoutError:
                     current_waiting_time += 10
-                    print(f'DEBUG timeout')
                     if current_waiting_time == 300:
                         status, msg = self.engine_client.check_health()
                         if not status:
@@ -569,7 +565,7 @@ class OpenAIServingChat:
             prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=sum(num_cached_tokens)),
         )
         work_process_metrics.e2e_request_latency.observe(latency)
-        choices = sorted(choices, key=lambda x : x['index'])
+        choices = sorted(choices, key=lambda x : x.index)
         res = ChatCompletionResponse(
             id=request_id,
             created=created_time,
