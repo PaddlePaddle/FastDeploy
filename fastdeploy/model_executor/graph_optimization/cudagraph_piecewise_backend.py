@@ -137,7 +137,7 @@ class CudaGraphPiecewiseBackend:
         real_shape = ids_remove_padding.shape[0]
         padding_real_shape = self.real_shape_to_captured_size[real_shape]
         logger.debug(
-            f"[CUDA GRAPH][ID:{id(self)}] The actual real shape obtained by CUDAGraph is :{real_shape}, "
+            f"[CUDA GRAPH] [ID:{id(self)}] The actual real shape obtained by CUDAGraph is :{real_shape}, "
             f"The padded shape is :{padding_real_shape}, If Padding :{real_shape != padding_real_shape}"
         )
 
