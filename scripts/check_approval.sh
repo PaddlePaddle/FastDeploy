@@ -50,6 +50,11 @@ if [ ${HAS_CUSTOM_REGISTRER} ] && [ "${PR_ID}" != "" ]; then
     check_approval "$echo_line3" 1 XiaoguangHu01 jeff41404 phlrain
 fi
 
+HAS_WORKER_OR_CONFIG_MODIFY=`git diff -U0 upstream/$BRANCH  --name-only | grep -E "fastdeploy/worker/|fastdeploy/config.py" || true`
+if [ ${HAS_WORKER_OR_CONFIG_MODIFY} ] && [ "${PR_ID}" != "" ]; then
+    echo_line1="You must have one FastDeploy RD (gongshaotian(gongshaotian), yuanlehome(liuyuanle) approval for modifing config.py or worker files.\n"
+    check_approval "$echo_line1" 1 gongshaotian yuanlehome
+fi
 
 if [ -n "${echo_list}" ];then
   echo "****************"

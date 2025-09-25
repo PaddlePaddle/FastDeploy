@@ -166,6 +166,7 @@ PRETRAINED_INIT_CONFIGURATION = {
     "rms_norm_eps": 1e-5,
     "moe_num_experts": None,
     "moe_layer_end_index": None,
+    "test_modify": None,
 }
 
 
