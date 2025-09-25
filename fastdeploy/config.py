@@ -588,6 +588,9 @@ class GraphOptimizationConfig:
         Thus this flag cannot be used together with splitting_ops."""
         self.full_cuda_graph: bool = True
 
+        """ Whether to use shared memory pool for multi capture_size """
+        self.use_unique_memory_pool: bool = False
+
         self.max_capture_size: int = None
         self.real_shape_to_captured_size: dict[int, int] = None
         # CINN Config ...

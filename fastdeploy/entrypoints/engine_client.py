@@ -149,8 +149,6 @@ class EngineClient:
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]
             task["max_tokens"] = min(self.max_model_len - input_ids_len, task.get("max_tokens"))
-            if task.get("reasoning_max_tokens", None) is None:
-                task["reasoning_max_tokens"] = max(int(task["max_tokens"] * 0.8), 1)
             min_tokens = task.get("min_tokens", 1)
             if "messages" in task:
                 del task["messages"]
@@ -229,8 +227,8 @@ class EngineClient:
                 raise ValueError(f"max_tokens can be defined [1, {self.max_model_len}).")
 
         if data.get("reasoning_max_tokens") is not None:
-            if data["reasoning_max_tokens"] > data["max_tokens"] or data["reasoning_max_tokens"] < 1:
-                raise ValueError("reasoning_max_tokens must be between max_tokens and 1")
+            if data["reasoning_max_tokens"] > data["max_tokens"] or data["reasoning_max_tokens"] < 0:
+                raise ValueError("reasoning_max_tokens must be between max_tokens and 0")
 
         if data.get("top_p") is not None:
             if data["top_p"] > 1 or data["top_p"] < 0:
