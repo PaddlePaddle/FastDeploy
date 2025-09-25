@@ -187,7 +187,7 @@ class OpenAIServingChat:
         n_param = request.n if request.n is not None else 1
         first_iteration = [True] * n_param
         previous_num_tokens = [0] * n_param
-        num_prompt_tokens = [0] * n_param
+        num_prompt_tokens = 0
         num_choices = 1 if n_param is None else n_param
         tool_called = [False] * n_param
         max_streaming_response_tokens = (
@@ -261,8 +261,7 @@ class OpenAIServingChat:
                 )
 
                 async for res in generator:
-                    idx = int(res["request_id"].split("-")[-1])
-                    print(f'DEBUG chat_completion_stream_generator in generator loop idx : {idx}')
+                    idx = res["outputs"]["index"]
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
 
@@ -272,7 +271,7 @@ class OpenAIServingChat:
                     else:
                         arrival_time = res["metrics"]["arrival_time"] - inference_start_time
                     if first_iteration[idx]:
-                        num_prompt_tokens[idx] = len(prompt_token_ids)
+                        num_prompt_tokens = len(prompt_token_ids)
                         num_cached_tokens = res.get("num_cached_tokens", 0)
                         for i in range(num_choices):
                             choice = ChatCompletionResponseStreamChoice(
@@ -308,9 +307,9 @@ class OpenAIServingChat:
                             )
                             if include_continuous_usage:
                                 chunk.usage = UsageInfo(
-                                    prompt_tokens=num_prompt_tokens[idx],
+                                    prompt_tokens=num_prompt_tokens,
                                     completion_tokens=0,
-                                    total_tokens=num_prompt_tokens[idx],
+                                    total_tokens=num_prompt_tokens,
                                     prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cached_tokens),
                                 )
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)} \n\n"
@@ -318,6 +317,8 @@ class OpenAIServingChat:
                         first_iteration[idx] = False
 
                     output = res["outputs"]
+                    reasoning_content = output["reasoning_content"]
+                    tool_calls = output["tool_calls"]
                     output_top_logprobs = output["top_logprobs"]
                     previous_num_tokens[idx] += len(output["token_ids"])
                     logprobs_res: Optional[LogProbs] = None
@@ -327,9 +328,9 @@ class OpenAIServingChat:
                         )
 
                     delta_message = DeltaMessage(
-                        reasoning_content="",
+                        reasoning_content=reasoning_content,
                         prompt_token_ids=None,
-                        tool_calls=None,
+                        tool_calls=tool_calls,
                         completion_token_ids=None,
                     )
 
@@ -337,16 +338,19 @@ class OpenAIServingChat:
                         delta_message.multimodal_content = output["multipart"]
                     else:
                         delta_message.content = output["text"]
-
-                    if not res["finished"] and "delta_message" in output:
-                        delta_message_output = output["delta_message"]
-                        if delta_message_output is None:
-                            continue
-                        delta_message.content = delta_message_output.content or ""
-                        delta_message.reasoning_content = delta_message_output.reasoning_content or ""
-                        if delta_message_output.tool_calls:
-                            delta_message.tool_calls = delta_message_output.tool_calls
-                            tool_called[idx] = True
+                    if tool_calls:
+                        tool_called[index] = True
+                    if output["is_buffering"]:
+                        continue
+                    # if not res["finished"] and "delta_message" in output:
+                    #     delta_message_output = output["delta_message"]
+                    #     if delta_message_output is None:
+                    #         continue
+                    #     delta_message.content = delta_message_output.content or ""
+                    #     delta_message.reasoning_content = delta_message_output.reasoning_content or ""
+                    #     if delta_message_output.tool_calls:
+                    #         delta_message.tool_calls = delta_message_output.tool_calls
+                    #         tool_called[idx] = True
 
                     choice = ChatCompletionResponseStreamChoice(
                         index=idx,
@@ -361,9 +365,9 @@ class OpenAIServingChat:
                         )
                         has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
                         max_tokens = request.max_completion_tokens or request.max_tokens
-                        if has_no_token_limit or previous_num_tokens != max_tokens:
+                        if has_no_token_limit or previous_num_tokens[idx] != max_tokens:
                             choice.finish_reason = "stop"
-                            if tool_called:
+                            if tool_called[idx]:
                                 choice.finish_reason = "tool_calls"
                         else:
                             choice.finish_reason = "length"
@@ -380,9 +384,9 @@ class OpenAIServingChat:
                         choice.delta.completion_tokens = output.get("raw_prediction")
                     if include_continuous_usage:
                         chunk.usage = UsageInfo(
-                            prompt_tokens=num_prompt_tokens[idx],
-                            completion_tokens=previous_num_tokens,
-                            total_tokens=num_prompt_tokens[idx] + previous_num_tokens,
+                            prompt_tokens=num_prompt_tokens,
+                            completion_tokens=previous_num_tokens[idx],
+                            total_tokens=num_prompt_tokens + previous_num_tokens[idx],
                         )
                     choices.append(choice)
 
@@ -395,7 +399,7 @@ class OpenAIServingChat:
 
             # TODO num_prompt_tokens 此处的idx已经离开idx作用域，这里的信息统计是不是应该取和？
             if include_usage:
-                completion_tokens = previous_num_tokens
+                completion_tokens = sum(previous_num_tokens)
                 usage = UsageInfo(
                     prompt_tokens=num_prompt_tokens,
                     completion_tokens=completion_tokens,
