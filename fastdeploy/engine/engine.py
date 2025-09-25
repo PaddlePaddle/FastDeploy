@@ -641,14 +641,14 @@ class LLMEngine:
 
         self.cfg.init_cache_info()
 
+        request_queues_for_dp_ipc = []
+        result_queue_for_dp_ipc = multiprocessing.Queue()
         role = self.cfg.scheduler_config.splitwise_role
         host_ip = self.cfg.host_ip
         disaggregate = self.cfg.disaggregate_info
         if self.cfg.scheduler_config.name == "splitwise":
             self.engine.scheduler.start(role, host_ip, disaggregate)
         elif self.cfg.scheduler_config.name == "dp":
-            request_queues_for_dp_ipc = []
-            result_queue_for_dp_ipc = multiprocessing.Queue()
             for i in range(self.cfg.parallel_config.data_parallel_size):
                 request_queues_for_dp_ipc.append(multiprocessing.Queue())
             self.engine.scheduler.start(
