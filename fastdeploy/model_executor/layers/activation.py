@@ -72,6 +72,8 @@ class SiluAndMul(nn.Layer):
             self.forward = self.forward_cuda
         elif current_platform.is_gcu():
             self.forward = self.forward_gcu
+        elif current_platform.is_intel_hpu():
+            self.forward = self.forward_intel_hpu
         else:
             raise NotImplementedError
 
@@ -146,6 +148,16 @@ class SiluAndMul(nn.Layer):
         if self.bias is not None:
             out = out + self.bias
         return out
+
+    def forward_intel_hpu(self, x):
+        """
+        Forward propagation of the custom activation layer.
+        Args:
+            x (Tensor): Input tensor to the activation layer.
+        Returns:
+            Tensor: Output tensor.
+        """
+        return
 
 
 def get_act_fn(act_fn_name: str) -> nn.Layer:

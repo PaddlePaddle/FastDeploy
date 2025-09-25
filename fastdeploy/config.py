@@ -519,7 +519,6 @@ class ParallelConfig:
     ):
         self.sequence_parallel = False  # Whether to enable sequence parallelism.
         self.use_ep = False  # Whether to enable Expert Parallelism
-        self.moe_phase = MoEPhase("prefill")  # Generation phase
         self.msg_queue_id = 1  # message queue id
 
         self.tensor_parallel_rank = 0  # TP rank ID
@@ -841,8 +840,13 @@ class GraphOptimizationConfig:
         Now don't support capture both decode-only and prefill-only"""
         self.full_cuda_graph: bool = True
 
+        """ Maximum CUDA Graph capture size """
         self.max_capture_size: int = None
+        """ Record maps mapped from real shape to captured size to reduce runtime overhead """
         self.real_shape_to_captured_size: dict[int, int] = None
+        """ Whether to use shared memory pool for multi capture_size """
+        self.use_unique_memory_pool: bool = False
+
         # CINN Config ...
         if args is not None:
             for key, value in args.items():
@@ -1498,6 +1502,8 @@ class FDConfig:
         self.device_ids = os.getenv("CUDA_VISIBLE_DEVICES", self.device_ids)
         if current_platform.is_xpu():
             self.device_ids = os.getenv("XPU_VISIBLE_DEVICES", self.device_ids)
+        if current_platform.is_intel_hpu():
+            self.device_ids = os.getenv("HPU_VISIBLE_DEVICES", self.device_ids)
 
         self.read_from_config()
         self.postprocess()
@@ -1538,6 +1544,8 @@ class FDConfig:
 
         self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         self.cache_config.max_block_num_per_seq = int(self.max_model_len // self.cache_config.block_size)
+        if self.model_config is not None and self.model_config.enable_mm:
+            self.cache_config.enable_prefix_caching = False
 
         if self.guided_decoding_backend == "auto":
             if current_platform.is_xpu() or self.speculative_config.method is not None:

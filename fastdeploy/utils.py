@@ -757,6 +757,36 @@ def version():
     return content
 
 
+def current_package_version():
+    """
+    读取version.txt文件,解析出fastdeploy version对应的版本号
+
+    Args:
+    Returns:
+        str: fastdeploy版本号,如果解析失败返回Unknown
+    """
+    fd_version = "Unknown"
+    try:
+        content = version()
+        if content == "Unknown":
+            return fd_version
+
+        # 按行分割内容
+        lines = content.strip().split("\n")
+        # 查找包含"fastdeploy version:"的行
+        for line in lines:
+            if line.startswith("fastdeploy version:"):
+                # 提取版本号部分
+                fd_version = line.split("fastdeploy version:")[1].strip()
+                return fd_version
+        llm_logger.warning("fastdeploy version not found in version.txt")
+        # 如果没有找到对应的行，返回None
+        return fd_version
+    except Exception as e:
+        llm_logger.error(f"Failed to parse fastdeploy version from version.txt: {e}")
+        return fd_version
+
+
 class DeprecatedOptionWarning(argparse.Action):
     def __init__(self, option_strings, dest, **kwargs):
         super().__init__(option_strings, dest, nargs=0, **kwargs)

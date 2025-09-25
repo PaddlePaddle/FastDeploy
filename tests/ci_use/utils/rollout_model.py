@@ -23,6 +23,9 @@ _, ranks = init_dist_env()
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model_path", type=str, required=True, help="Path to the model directory")
+parser.add_argument("--baseline_path", type=str, required=True, help="Path to the baseline path")
+parser.add_argument("--quantization", type=str, default=None, help="Quantization")
+parser.add_argument("--enable_mm", action="store_true", required=False, help="Flags to enable multi-modal model")
 args = parser.parse_args()
 
 # base result
@@ -35,9 +38,11 @@ init_kwargs = {
     "tensor_parallel_size": ranks,
     "dynamic_load_weight": True,
     "load_strategy": "ipc_snapshot",
-    "enable_mm": True,
-    "quantization": "wint8",
+    "quantization": args.quantization,
 }
+if args.enable_mm:
+    init_kwargs["enable_mm"] = True
+
 
 rollout_config = RolloutModelConfig(**init_kwargs)
 actor_eval_model = RolloutModel(rollout_config)
@@ -75,7 +80,7 @@ def compare_strings_line_by_line(a: str, b: str) -> bool:
     return True
 
 
-with open("baseline.txt", "r", encoding="utf-8") as f:
+with open(args.baseline_path, "r", encoding="utf-8") as f:
     baseline = f.read()
     assert compare_strings_line_by_line(baseline, content), (
         "In the unittest of RL scenario, your modification "
