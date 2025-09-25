@@ -12,11 +12,6 @@ on:
         description: "URL of the compressed GPU Coverage Data archive."
         required: true
         type: string
-      CACHE_DIR:
-        description: "Cache Dir Use"
-        required: false
-        type: string
-        default: ""
     secrets:
       github-token:
         required: true
@@ -103,6 +98,7 @@ jobs:
         with:
           files: ./diff_coverage.xml
           codecov_yml_path: ./scripts/codecov.yml
+          disable_search: true
           name: python diff coverage
           verbose: true
           flags: diff
