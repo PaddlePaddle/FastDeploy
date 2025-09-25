@@ -221,10 +221,10 @@ class CudaGraphPiecewiseBackend:
     def clear_graph(self):
         """ """
         # Clear graphs
-        for id, entry in self.concrete_size_entries.items():
+        for _id, entry in self.concrete_size_entries.items():
             if entry.cuda_graph:
                 del entry.cuda_graph
-                logger.debug(f"[CUDA GRAPH][ID:{id(self)}] The CUDAGraph with shape {id} has been cleared.")
+                logger.debug(f"[CUDA GRAPH][ID:{id(self)}] The CUDAGraph with shape {_id} has been cleared.")
 
         del self.concrete_size_entries
         paddle.device.cuda.empty_cache()

@@ -1434,7 +1434,7 @@ class FDConfig:
 
         if self.graph_opt_config.cudagraph_only_prefill:
             self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=512)
-        elif self.speculative_config.method == "mtp":
+        elif self.speculative_config is not None and self.speculative_config.method == "mtp":
             max_shape = self.scheduler_config.max_num_seqs * (self.speculative_config.num_model_steps + 1)
             if max_shape % 2 == 1:
                 max_shape = max_shape + 1
