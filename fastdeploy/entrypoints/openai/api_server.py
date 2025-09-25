@@ -49,7 +49,7 @@ from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
 from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServingModels
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
-from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG
+from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
 from fastdeploy.metrics.metrics import (
     EXCLUDE_LABELS,
     cleanup_prometheus_files,
@@ -67,31 +67,7 @@ from fastdeploy.utils import (
     retrive_model_from_server,
 )
 
-parser = FlexibleArgumentParser()
-parser.add_argument("--port", default=8000, type=int, help="port to the http server")
-parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
-parser.add_argument("--workers", default=1, type=int, help="number of workers")
-parser.add_argument("--metrics-port", default=8001, type=int, help="port for metrics server")
-parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
-parser.add_argument(
-    "--max-waiting-time",
-    default=-1,
-    type=int,
-    help="max waiting time for connection, if set value -1 means no waiting time limit",
-)
-parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
-
-parser.add_argument(
-    "--enable-mm-output", action="store_true", help="Enable 'multimodal_content' field in response output. "
-)
-parser.add_argument(
-    "--timeout-graceful-shutdown",
-    default=0,
-    type=int,
-    help="timeout for graceful shutdown in seconds (used by uvicorn)",
-)
-
-parser = EngineArgs.add_cli_args(parser)
+parser = make_arg_parser(FlexibleArgumentParser())
 args = parser.parse_args()
 
 console_logger.info(f"Number of api-server workers: {args.workers}.")
