@@ -158,7 +158,6 @@ class TokenProcessor:
                 get_output_ep,
                 get_output_topk,
                 speculate_get_output,
-                speculate_get_output_topk,
             )
         rank_id = self.cfg.parallel_config.local_data_parallel_id
 
@@ -166,24 +165,9 @@ class TokenProcessor:
             try:
                 is_blocking = True
                 if self.speculative_decoding:
-                    if self.use_logprobs:
-                        speculate_get_output_topk(
-                            self.output_tokens,
-                            self.output_scores,
-                            self.output_ranks,
-                            K,
-                            rank_id,
-                            is_blocking,
-                        )
-                        print(f"[TokenProcessor] output_tokens: {self.output_tokens}")
-                        print(f"[TokenProcessor] output_scores: {self.output_scores}")
-                        print(f"[TokenProcessor] output_ranks: {self.output_ranks}")
-                        if self.output_tokens[0, 0] == -2:
-                            continue
-                    else:
-                        speculate_get_output(self.output_tokens, rank_id, is_blocking, False)
-                        if self.output_tokens[0] == -2:
-                            continue
+                    speculate_get_output(self.output_tokens, rank_id, is_blocking, False)
+                    if self.output_tokens[0] == -2:
+                        continue
 
                 else:
                     if self.use_logprobs:

@@ -26,7 +26,7 @@
 #define MAX_BSZ 512
 #define K 20
 #define MAX_DRAFT_TOKEN_NUM 6
-#define SPECULATE_SAVE_WITH_OUTPUT_DEBUG
+// #define SPECULATE_SAVE_WITH_OUTPUT_DEBUG
 
 struct batch_msgdata {
     int tokens[MAX_DRAFT_TOKEN_NUM * (K + 1)];
@@ -134,7 +134,6 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
         for (int j = 0; j < cur_token_num; j++) {
             auto* cur_tokens = &cur_batch_msg_sed->tokens[j * (K + 1)];
             auto* cur_scores = &cur_batch_msg_sed->scores[j * (K + 1)];
-            std::cout << "token_offset: " << token_offset << std::endl;
             for (int k = 0; k < K + 1; k++) {
                 if (k == 0) {
                     cur_tokens[k] =

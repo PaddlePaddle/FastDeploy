@@ -26,7 +26,7 @@
 #define MAX_BSZ 512
 #define K 20
 #define MAX_DRAFT_TOKEN_NUM 6
-#define SPECULATE_GET_WITH_OUTPUT_DEBUG
+// #define SPECULATE_GET_WITH_OUTPUT_DEBUG
 
 struct batch_msgdata {
     int tokens[MAX_DRAFT_TOKEN_NUM * (K + 1)];
