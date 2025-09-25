@@ -392,20 +392,16 @@ class GPUModelRunner(ModelRunnerBase):
                             self.scatter_and_cache_features(image_features, vision_inputs)
 
                         full_image_features_lst = []
-                        for mm_hash in vision_inputs["mm_hashes"]:
+                        for mm_hash in inputs["mm_hashes"][request.num_image_start : request.num_image_end]:
                             feature = self.encoder_cache[mm_hash].cuda()
                             full_image_features_lst.append(feature)
+                        full_image_features = paddle.concat(full_image_features_lst, axis=0)
 
-                        if full_image_features_lst:
-                            full_image_features = paddle.concat(full_image_features_lst, axis=0)
-
-                            # part of the first image may be already cached
-                            actual_image_token_num = paddle.sum(
-                                vision_inputs["input_ids"] == self.model_config.im_patch_id
-                            )
-                            self.share_inputs["image_features"] = full_image_features[-actual_image_token_num:]
-                        else:
-                            self.share_inputs["image_features"] = None
+                        # part of the first image may be already cached
+                        actual_image_token_num = paddle.sum(
+                            vision_inputs["input_ids"] == self.model_config.im_patch_id
+                        )
+                        self.share_inputs["image_features"] = full_image_features[-actual_image_token_num:]
                     else:
                         self.share_inputs["image_features"] = None
 
