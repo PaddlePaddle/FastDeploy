@@ -18,10 +18,9 @@ import asyncio
 import time
 import traceback
 import uuid
-from typing import List, Optional
 from copy import copy
+from typing import List, Optional
 
-from fastdeploy import metrics
 import numpy as np
 
 from fastdeploy.entrypoints.openai.protocol import (
@@ -176,7 +175,7 @@ class OpenAIServingChat:
         request_id: str,
         model_name: str,
         prompt_token_ids: list(),
-        text_after_process: str
+        text_after_process: str,
     ):
         """
         Streaming chat completion generator.
@@ -425,7 +424,7 @@ class OpenAIServingChat:
         request_id: str,
         model_name: str,
         prompt_token_ids: list(),
-        text_after_process: str
+        text_after_process: str,
     ):
         """
         Full chat completion generator.
@@ -479,8 +478,6 @@ class OpenAIServingChat:
                     await asyncio.sleep(0.1)
                     continue
 
-                task_is_finished = False
-
                 generator = response_processor.process_response_chat(
                     response,
                     stream=False,
@@ -504,10 +501,12 @@ class OpenAIServingChat:
                         if logprobs_res and logprobs_res.content is not None:
                             logprob_contents[idx].extend(logprobs_res.content)
                     if data["finished"]:
-                        num_choices-=1
-                        if (output is not None and
-                            output.get("metrics") is not None and
-                            output.get("metrics").get("request_start_time") is not None):
+                        num_choices -= 1
+                        if (
+                            output is not None
+                            and output.get("metrics") is not None
+                            and output.get("metrics").get("request_start_time") is not None
+                        ):
                             latency += time.time() - output.get("metrics").get("request_start_time")
                         message = ChatMessage(
                             role="assistant",
@@ -565,7 +564,7 @@ class OpenAIServingChat:
             prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=sum(num_cached_tokens)),
         )
         work_process_metrics.e2e_request_latency.observe(latency)
-        choices = sorted(choices, key=lambda x : x.index)
+        choices = sorted(choices, key=lambda x: x.index)
         res = ChatCompletionResponse(
             id=request_id,
             created=created_time,

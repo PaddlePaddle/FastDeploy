@@ -18,8 +18,8 @@ import asyncio
 import time
 import traceback
 import uuid
-from typing import List, Optional
 from copy import copy
+from typing import List, Optional
 
 import numpy as np
 
