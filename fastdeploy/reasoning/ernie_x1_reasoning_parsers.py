@@ -72,14 +72,7 @@ class ErnieX1ReasoningParser(ReasoningParser):
 
     def find_last_special_token(self, prompt_token_ids: list[int]) -> int:
         for i in range(len(prompt_token_ids) - 1, -1, -1):
-            if prompt_token_ids[i] in [
-                self.think_end_token_id,
-                self.think_start_token_id,
-                self.response_start_token_id,
-                self.response_end_token_id,
-                self.tool_call_start_token_id,
-                self.tool_call_end_token_id,
-            ]:
+            if prompt_token_ids[i] in self.token_status_mapping:
                 return prompt_token_ids[i]
         return -1
 
