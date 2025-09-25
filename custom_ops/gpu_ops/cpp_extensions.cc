@@ -332,7 +332,9 @@ paddle::Tensor RebuildPaddingFunc(
     const paddle::Tensor &seq_lens_decoder,
     const paddle::Tensor &seq_lens_encoder,
     const paddle::optional<paddle::Tensor> &output_padding_offset,
-    int max_input_length);
+    const paddle::optional<paddle::Tensor> &first_token_out,
+    int max_input_length,
+    bool enable_logprob);
 
 void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
                        const paddle::Tensor &stop_flags,
@@ -891,6 +893,46 @@ void SaveOutMmsgStatic(const paddle::Tensor& x,
                        int64_t rank_id,
                        bool save_each_rank);
 
+std::vector<paddle::Tensor> SpeculateGetLogits(
+    const paddle::Tensor &logits,
+    const paddle::Tensor &first_token_logits,
+    const paddle::Tensor &cu_seqlens_q,
+    const paddle::Tensor &seq_lens_this_time,
+    const paddle::Tensor &seq_lens_encoder);
+
+void SpeculateInsertFirstToken(const paddle::Tensor &token_ids,
+                               const paddle::Tensor &accept_tokens,
+                               const paddle::Tensor &next_tokens,
+                               const paddle::Tensor &cu_seqlens_q,
+                               const paddle::Tensor &cu_batch_token_offset,
+                               const paddle::Tensor &seq_lens_this_time,
+                               const paddle::Tensor &seq_lens_encoder);
+
+void SpeculateGetTargetLogits(const paddle::Tensor &target_logits,
+                              const paddle::Tensor &logits,
+                              const paddle::Tensor &cu_batch_token_offset,
+                              const paddle::Tensor &ori_cu_batch_token_offset,
+                              const paddle::Tensor &seq_lens_this_time,
+                              const paddle::Tensor &seq_lens_encoder,
+                              const paddle::Tensor &accept_num);
+
+void SpeculateSaveOutMmsgTopK(const paddle::Tensor &sampled_token_ids,
+                              const paddle::Tensor &logprob_token_ids,
+                              const paddle::Tensor &logprob_scores,
+                              const paddle::Tensor &logprob_ranks,
+                              const paddle::Tensor &token_num_per_batch,
+                              const paddle::Tensor &cu_batch_token_offset,
+                              const paddle::Tensor &not_need_stop,
+                              int mtype,
+                              int64_t rank_id);
+
+void SpeculateGetOutMmsgTopK(const paddle::Tensor &output_tokens,
+                              const paddle::Tensor &output_scores,
+                              const paddle::Tensor &output_ranks,
+                              int real_k,
+                              int64_t rank_id,
+                              bool wait_flag);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("get_expert_token_num", &GetExpertTokenNum, py::arg("topk_ids"),
@@ -1277,4 +1319,14 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("min_p_sampling", &MinPSamplingFromProbs, "min_p_sampling function");
 
   m.def("save_output", &SaveOutMmsgStatic, "save_output function");
+
+  m.def("speculate_get_logits", &SpeculateGetLogits, "speculate_get_logits function");
+
+  m.def("speculate_insert_first_token", &SpeculateInsertFirstToken, "speculate_insert_first_token function");
+
+  m.def("speculate_get_target_logits", &SpeculateGetTargetLogits, "speculate_get_target_logits function");
+
+  m.def("speculate_save_output_topk", &SpeculateSaveOutMmsgTopK, "speculate_save_output_topk function");
+
+  m.def("speculate_get_output_topk", &SpeculateGetOutMmsgTopK, "speculate_get_output_topk function");
 }
