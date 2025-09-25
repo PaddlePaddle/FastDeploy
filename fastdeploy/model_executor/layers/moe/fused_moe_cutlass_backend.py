@@ -84,7 +84,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 expert_idx_per_token,
                 self.moe_quant_type,
                 used_in_ep_low_latency,
-                estimate_total_token_nums,
             )
         return fastdeploy.model_executor.ops.gpu.moe_expert_ffn(
             permute_input,
@@ -127,7 +126,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
 
         # 3. Compute ffn
         if token_all_num > 0:
-            logger.info(f"token_all_num {token_all_num}")
+            logger.debug(f"token_all_num {token_all_num}")
             (
                 permute_input,
                 permute_indices_per_token,
@@ -228,13 +227,14 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         """
         gate_out = gate(x.cast("float32"))
         if layer.topk_method == "noaux_tc":
-            gate_out, _, _ = get_moe_scores(
+            gate_out, topk_weights, topk_idx = get_moe_scores(
                 gate_out,
                 layer.n_group,
                 layer.topk_group,
                 layer.top_k,
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
+                getattr(layer, "renormalize", True),
             )
 
             (

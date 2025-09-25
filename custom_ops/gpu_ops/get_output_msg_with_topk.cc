@@ -39,9 +39,6 @@ void GetOutputTopK(const paddle::Tensor& x,
                    int k,
                    int64_t rank_id,
                    bool wait_flag) {
-    if (rank_id > 0) {
-        return;
-    }
 
     static struct msgdata msg_rcv;
     int msg_queue_id = 1;

@@ -19,7 +19,6 @@ from paddle import nn
 
 import fastdeploy
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
-from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.model_executor.ops.gpu import (
     MoeWna16MarlinGemmApi,
     tritonmoe_preprocess_func,
@@ -255,6 +254,8 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         topk_method = layer.topk_method
 
         if topk_method == "noaux_tc":
+            from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
+
             gate_out, _, _ = get_moe_scores(
                 gate_out,
                 layer.n_group,
@@ -262,6 +263,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
                 layer.top_k,
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
+                getattr(layer, "renormalize", True),
             )
 
             topk_weights, topk_ids = paddle.topk(gate_out, k=layer.top_k, axis=-1, sorted=False)
