@@ -63,16 +63,11 @@ class ErnieX1ReasoningParser(ReasoningParser):
             return None
 
         # Handle response case
-        if after_think.startswith(self.response_start_token):
+        if after_think.startswith(self.response_start_token) and self.response_end_token not in after_think:
             # Do not return when <response> tag itself appears
-            if delta_text == self.response_start_token:
+            if delta_text == self.response_start_token or delta_text == self.response_end_token:
                 return None
-            # Do not return </response> itself
-            elif delta_text == self.response_end_token:
-                return None
-            # Otherwise, return response content (keep \n as-is)
-            else:
-                return DeltaMessage(content=delta_text)
+            return DeltaMessage(content=delta_text)
 
         # Default case: return nothing
         return None
