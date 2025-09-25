@@ -34,6 +34,7 @@ import numpy as np
 import paddle
 from tqdm import tqdm
 
+from fastdeploy.config import ErnieArchitectures
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.common_engine import EngineService
 from fastdeploy.engine.expert_service import start_data_parallel_service
@@ -470,6 +471,14 @@ class LLMEngine:
             else len(self.data_processor.tokenizer.vocab)
         )
 
+        is_ernie = ErnieArchitectures.contains_ernie_arch(self.cfg.model_config.architectures)
+        if is_ernie:
+            self.cfg.model_config.think_end_id = self.data_processor.tokenizer.get_vocab().get("</think>", -1)
+            if self.cfg.model_config.think_end_id != -1:
+                llm_logger.info(f"Get think_end_id {self.cfg.model_config.think_end_id} from vocab.")
+            else:
+                llm_logger.info("No </think> token found in vocabulary, the model can not do reasoning.")
+
         ports = ",".join(self.cfg.parallel_config.engine_worker_queue_port)
         ips = None
         if self.cfg.ips is not None:
@@ -496,6 +505,7 @@ class LLMEngine:
             f" --data_parallel_size {self.cfg.parallel_config.data_parallel_size}"
             f" --quantization '{json.dumps(self.cfg.model_config.quantization)}'"
             f" --ori_vocab_size {ori_vocab_size}"
+            f" --think_end_id {self.cfg.model_config.think_end_id}"
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
             f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
