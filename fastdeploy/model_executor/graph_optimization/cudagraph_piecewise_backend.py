@@ -20,7 +20,6 @@ from typing import Callable, Dict, List, Optional
 
 import paddle.jit.dy2static.utils as jit_utils
 import paddle.nn.layer
-from paddle.base.core import CUDAGraph
 from paddle.device.cuda import graphs
 
 from fastdeploy import envs
@@ -93,7 +92,10 @@ class CudaGraphPiecewiseBackend:
         self.warm_up_size = fd_config.graph_opt_config.cudagraph_num_of_warmups
         self.real_shape_to_captured_size = fd_config.graph_opt_config.real_shape_to_captured_size
         if self.fd_config.graph_opt_config.use_unique_memory_pool:
-            self.unique_memory_pool_id = CUDAGraph.gen_new_memory_pool_id()
+            if paddle.is_compiled_with_cuda():
+                from paddle.base.core import CUDAGraph
+
+                self.unique_memory_pool_id = CUDAGraph.gen_new_memory_pool_id()
         self._create_entry_dict()
 
         self.cuda_graph_manager = None
