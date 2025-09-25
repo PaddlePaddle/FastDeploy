@@ -112,7 +112,7 @@ class OpenAIServingChat:
             else:
                 request_id = f"chatcmpl-{uuid.uuid4()}"
             api_server_logger.info(f"create chat completion request: {request_id}")
-            text_after_process_list = []
+            text_after_process = None
             try:
                 current_req_dict = request.to_dict_for_infer(request_id)
                 if "chat_template" not in current_req_dict:
@@ -121,13 +121,13 @@ class OpenAIServingChat:
                 # preprocess the req_dict
                 await self.engine_client.format_request(current_req_dict)
                 prompt_token_ids = current_req_dict["prompt_token_ids"]
+                text_after_process = current_req_dict["text_after_process"]
                 for idx in range(current_req_dict.get("n", 1)):
                     child_req_dict = copy(current_req_dict)
                     child_req_dict["request_id"] = f'{child_req_dict["request_id"]}-{idx}'
                     print(f'DEBUG child_req_dict request_id: {child_req_dict["request_id"]}')
                     await self.engine_client.add_requests(child_req_dict)
-                    text_after_process_list.append(child_req_dict.get("text_after_process"))
-                    # del child_req_dict
+                    del child_req_dict
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
             except ParameterError as e:
@@ -145,12 +145,12 @@ class OpenAIServingChat:
 
             if request.stream:
                 return self.chat_completion_stream_generator(
-                    request, request_id, request.model, prompt_token_ids, text_after_process_list, request.n
+                    request, request_id, request.model, prompt_token_ids, text_after_process
                 )
             else:
                 try:
                     return await self.chat_completion_full_generator(
-                        request, request_id, request.model, prompt_token_ids, text_after_process_list, request.n
+                        request, request_id, request.model, prompt_token_ids, text_after_process
                     )
                 except Exception as e:
                     error_msg = f"request[{request_id}]full generator error: {str(e)}, {str(traceback.format_exc())}"
@@ -177,14 +177,14 @@ class OpenAIServingChat:
         request_id: str,
         model_name: str,
         prompt_token_ids: list(),
-        text_after_process_list: list[str],
-        n_param: int,
+        text_after_process: str
     ):
         """
         Streaming chat completion generator.
         """
         created_time = int(time.time())
         chunk_object_type: str = "chat.completion.chunk"
+        n_param = request.n if request.n is not None else 1
         first_iteration = [True] * n_param
         previous_num_tokens = [0] * n_param
         num_prompt_tokens = [0] * n_param
@@ -428,14 +428,13 @@ class OpenAIServingChat:
         request_id: str,
         model_name: str,
         prompt_token_ids: list(),
-        text_after_process_list: list[str],
-        n_param: int,
+        text_after_process: str
     ):
         """
         Full chat completion generator.
         """
         created_time = int(time.time())
-        final_res = None
+        n_param = request.n if request.n is not None else 1
         enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
         if enable_thinking is None:
             enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
@@ -443,16 +442,16 @@ class OpenAIServingChat:
         include_stop_str_in_output = request.include_stop_str_in_output
         try:
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id, n_param)
-            #     dealer.write([b"", request_id.encode("utf-8")])
+            # dealer.write([b"", request_id.encode("utf-8")])
             request_ids = [f"{request_id}-{i}" for i in range(n_param)]
             for rid in request_ids:
                 print(f'DEBUG chat_completion_full_generator before dealer write rid: {rid}')
                 dealer.write([b"", rid.encode("utf-8")])
-            final_res = [{} for _ in range(n_param)]
             previous_num_tokens = [0] * n_param
             current_waiting_time = 0
             logprob_contents = [[] for _ in range(n_param)]
             completion_token_ids = [[] for _ in range(n_param)]
+            num_cached_tokens = [0] * n_param
             num_choices = 1 if n_param is None else n_param
             response_processor = ChatResponseProcessor(
                 data_processor=self.engine_client.data_processor,
@@ -493,11 +492,10 @@ class OpenAIServingChat:
                     enable_thinking=enable_thinking,
                     include_stop_str_in_output=include_stop_str_in_output,
                 )
-                idx = 0
                 async for data in generator:
-                    idx = int(data["request_id"].split("-")[-1])
                     if data.get("error_code", 200) != 200:
                         raise ValueError("{}".format(data["error_msg"]))
+                    idx = data["outputs"]["index"]
                     # api_server_logger.debug(f"Client {request_id} received: {data}")
                     previous_num_tokens[idx] += len(data["outputs"]["token_ids"])
                     completion_token_ids[idx].extend(data["outputs"]["token_ids"])
@@ -511,57 +509,52 @@ class OpenAIServingChat:
                         if logprobs_res and logprobs_res.content is not None:
                             logprob_contents[idx].extend(logprobs_res.content)
                     if data["finished"]:
-                        final_res[idx] = data
-                        task_is_finished = True
-                        if (final_res[idx] is not None and
-                            final_res[idx].get("metrics") is not None and
-                            final_res[idx].get("metrics").get("request_start_time") is not None):
-                            latency += time.time() - final_res[idx].get("metrics").get("request_start_time")
-                        break
-                print(f'DEBUG idx : {idx}')
-                output = final_res[idx].get("outputs")
-                message = ChatMessage(
-                    role="assistant",
-                    reasoning_content=output.get("reasoning_content"),
-                    tool_calls=output.get("tool_call"),
-                    prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
-                    completion_token_ids=completion_token_ids[idx] if request.return_token_ids else None,
-                    text_after_process=text_after_process_list[idx] if request.return_token_ids else None,
-                    prompt_tokens=text_after_process_list[idx] if request.return_token_ids else None,
-                    raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
-                    completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
-                )
+                        num_choices-=1
+                        if (output is not None and
+                            output.get("metrics") is not None and
+                            output.get("metrics").get("request_start_time") is not None):
+                            latency += time.time() - output.get("metrics").get("request_start_time")
+                        message = ChatMessage(
+                            role="assistant",
+                            reasoning_content=output.get("reasoning_content"),
+                            tool_calls=output.get("tool_call"),
+                            prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
+                            # TODO 确认这里是用idx还是不是idx
+                            completion_token_ids=completion_token_ids[idx] if request.return_token_ids else None,
+                            text_after_process=text_after_process if request.return_token_ids else None,
+                            prompt_tokens=text_after_process if request.return_token_ids else None,
+                            raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
+                            completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
+                        )
 
-                if response_processor.enable_multimodal_content():
-                    message.multimodal_content = output.get("multipart")
-                else:
-                    message.content = output["text"]
+                        if response_processor.enable_multimodal_content():
+                            message.multimodal_content = output.get("multipart")
+                        else:
+                            message.content = output["text"]
 
-                logprobs_full_res = None
-                if logprob_contents[idx]:
-                    logprobs_full_res = LogProbs(content=logprob_contents[idx])
+                        logprobs_full_res = None
+                        if logprob_contents[idx]:
+                            logprobs_full_res = LogProbs(content=logprob_contents[idx])
 
-                choice = ChatCompletionResponseChoice(
-                    index=0,
-                    message=message,
-                    logprobs=logprobs_full_res,
-                    finish_reason=None,
-                )
-                has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
-                max_tokens = request.max_completion_tokens or request.max_tokens
-                if has_no_token_limit or previous_num_tokens[idx] != max_tokens:
-                    choice.finish_reason = "stop"
-                    if output.get("tool_call"):
-                        choice.finish_reason = "tool_calls"
-                else:
-                    choice.finish_reason = "length"
+                        choice = ChatCompletionResponseChoice(
+                            index=idx,
+                            message=message,
+                            logprobs=logprobs_full_res,
+                            finish_reason=None,
+                        )
+                        has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
+                        max_tokens = request.max_completion_tokens or request.max_tokens
+                        num_cached_tokens[idx] = output["num_cached_tokens"]
+                        if has_no_token_limit or previous_num_tokens[idx] != max_tokens:
+                            choice.finish_reason = "stop"
+                            if output.get("tool_call"):
+                                choice.finish_reason = "tool_calls"
+                        else:
+                            choice.finish_reason = "length"
 
-                if final_res[idx].get("error_msg") is not None and "Recover" in final_res[idx]["error_msg"]:
-                    choice.finish_reason = "recover_stop"
-
-                choices.append(choice)
-                if task_is_finished:
-                    num_choices-=1
+                        if output.get("error_msg") is not None and "Recover" in output["error_msg"]:
+                            choice.finish_reason = "recover_stop"
+                        choices.append(choice)
         finally:
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
@@ -573,7 +566,7 @@ class OpenAIServingChat:
             prompt_tokens=num_prompt_tokens,
             completion_tokens=num_generated_tokens,
             total_tokens=num_prompt_tokens + num_generated_tokens,
-            prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=sum([res.get("num_cached_tokens", 0) for res in final_res if res is not None])),
+            prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=sum(num_cached_tokens)),
         )
         work_process_metrics.e2e_request_latency.observe(latency)
         res = ChatCompletionResponse(
