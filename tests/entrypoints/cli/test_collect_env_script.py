@@ -477,6 +477,7 @@ class TestCollectEnv(unittest.TestCase):
         with (
             patch("sys.stdout", new=captured_output),
             patch("fastdeploy.collect_env.torch", create=True, __version__="1.0.0"),
+            patch("fastdeploy.collect_env.hasattr", return_value=False),
         ):
             collect_env.main()
         output = captured_output.getvalue()

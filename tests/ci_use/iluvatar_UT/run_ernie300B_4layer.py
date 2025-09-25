@@ -1,4 +1,7 @@
 from fastdeploy import LLM, SamplingParams
+from fastdeploy.utils import set_random_seed
+
+set_random_seed(123)
 
 prompts = [
     "Hello, my name is",
@@ -12,7 +15,6 @@ llm = LLM(
     model="/data1/fastdeploy/ERNIE_300B_4L",
     tensor_parallel_size=8,
     max_model_len=8192,
-    static_decode_blocks=0,
     quantization="wint8",
     block_size=16,
 )
@@ -27,14 +29,14 @@ assert outputs[0].outputs.token_ids == [
     59335,
     68170,
     183,
-    97404,
-    100088,
-    36310,
-    95633,
-    95913,
-    41459,
-    95049,
-    94970,
-    96840,
+    49080,
+    94717,
+    82966,
+    99140,
+    31615,
+    51497,
+    94851,
+    60764,
+    10889,
     2,
 ], f"{outputs[0].outputs.token_ids}"

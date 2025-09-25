@@ -4,5 +4,5 @@
 # encoding=utf-8 vi:ts=4:sw=4:expandtab:ft=python
 
 """
-分布式拒绝服务
+拒绝服务
 """

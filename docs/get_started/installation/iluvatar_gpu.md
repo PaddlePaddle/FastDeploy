@@ -1,5 +1,4 @@
 # Run ERNIE-4.5-300B-A47B & ERNIE-4.5-21B-A3B model on iluvatar machine
-The current version of the software merely serves as a demonstration demo for the Iluvatar CoreX combined with the Fastdeploy inference framework for large models. Running the latest ERNIE4.5 300B model on the GSM8K dataset takes about 6.3 hours.
 
 ## Machine Preparation
 First, the `TP=16` when running the ERNIE4.5 300B model and so you need to prepare a machine with the following configurations:
@@ -30,7 +29,7 @@ docker exec -it paddle_infer bash
 ### Install paddle
 
 ```bash
-pip3 install paddlepaddle==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+pip3 install paddlepaddle==3.1.0a0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
 pip3 install paddle-iluvatar-gpu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/ixuca/
 ```
 For latest paddle version on iluvatar. Refer to [PaddlePaddle Installation](https://www.paddlepaddle.org.cn/)
@@ -78,7 +77,7 @@ prompts = [
 sampling_params = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=256)
 
 # load the model
-llm = LLM(model="/home/paddle/ernie-4_5-21b-a3b-bf16-paddle", tensor_parallel_size=4, max_model_len=8192, static_decode_blocks=0, block_size=16, quantization='wint8')
+llm = LLM(model="/home/paddle/ernie-4_5-21b-a3b-bf16-paddle", tensor_parallel_size=4, max_model_len=8192, block_size=16, quantization='wint8')
 
 # Perform batch inference
 outputs = llm.generate(prompts, sampling_params)
@@ -390,7 +389,7 @@ export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
 
-python3 -m fastdeploy.entrypoints.openai.api_server --model "/home/paddle/ernie-45t" --port 8188 --tensor-parallel-size 16 --block-size 16 --static-decode-blocks 0 --quantization wint8
+python3 -m fastdeploy.entrypoints.openai.api_server --model "/home/paddle/ernie-45t" --port 8188 --tensor-parallel-size 16 --block-size 16 --quantization wint8
 ```
 
 4. Running the Script
@@ -403,10 +402,10 @@ After the service is ready, open another terminal and run:
 ```bash
 python3 -u bench_gsm8k.py --port 8188 --num-questions 1319 --num-shots 5 --parallel 8
 ```
-It takes about 6.3 hours to run the GSM8K dataset.
+It takes about 4.8 hours to run the GSM8K dataset.
 
 ```
-Accuracy: 0.964
+Accuracy: 0.962
 Invaild: 0.000
-Latency: 22918.186 s
+Latency: 17332.728 s
 ```
