@@ -42,12 +42,14 @@ from fastdeploy.entrypoints.openai.protocol import (
     CompletionRequest,
     CompletionResponse,
     ControlSchedulerRequest,
+    EmbeddingRequest,
     ErrorInfo,
     ErrorResponse,
     ModelList,
 )
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
+from fastdeploy.entrypoints.openai.serving_embedding import OpenAIServingEmbedding
 from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServingModels
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
@@ -190,11 +192,19 @@ async def lifespan(app: FastAPI):
         args.ips,
         args.max_waiting_time,
     )
+    embedding_handler = OpenAIServingEmbedding(
+        engine_client,
+        app.state.model_handler,
+        pid,
+        args.ips,
+        args.max_waiting_time,
+    )
     engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid
     app.state.engine_client = engine_client
     app.state.chat_handler = chat_handler
     app.state.completion_handler = completion_handler
+    app.state.embedding_handler = embedding_handler
     global llm_engine
     if llm_engine is not None:
         llm_engine.engine.data_processor = engine_client.data_processor
@@ -373,6 +383,20 @@ async def list_models() -> Response:
         return JSONResponse(content=models.model_dump())
     elif isinstance(models, ModelList):
         return JSONResponse(content=models.model_dump())
+
+
+@app.get("/v1/embeddings")
+async def create_embedding(request: EmbeddingRequest):
+    """
+    Create embeddings for the input texts
+    """
+    if app.state.dynamic_load_weight:
+        status, msg = app.state.engine_client.is_workers_alive()
+        if not status:
+            return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
+
+    generator = await app.state.embedding_handler.create_embedding(request)
+    return JSONResponse(content=generator.model_dump())
 
 
 @app.get("/update_model_weight")

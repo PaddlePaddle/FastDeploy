@@ -14,21 +14,17 @@
 # limitations under the License.
 """
 
-import base64
-
-import numpy as np
-
+from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     EmbeddingRequest,
     EmbeddingResponse,
-    EmbeddingResponseData,
-    InvalidParameterException,
     UsageInfo,
 )
-from fastdeploy.entrypoints.openai.serving_engine import OpenAIServing
+from fastdeploy.entrypoints.openai.serving_engine import ZmqOpenAIServing
+from fastdeploy.utils import api_server_logger
 
 
-class OpenAIServingEmbedding(OpenAIServing):
+class OpenAIServingEmbedding(ZmqOpenAIServing):
     request_id_prefix = "embd"
 
     """
@@ -42,54 +38,25 @@ class OpenAIServingEmbedding(OpenAIServing):
         """
         Create embeddings for the input texts using the pipeline pattern
         """
-        return await self.handle(request)
+        yield self.handle(request)
 
-    async def _preprocess_request(self, request: EmbeddingRequest) -> dict:
-        """Preprocess embedding request"""
-        # Validate encoding format
-        encoding_format = request.encoding_format if request.encoding_format else "float"
-        if encoding_format not in ["float", "base64"]:
-            raise InvalidParameterException(f"Unsupported encoding format: {encoding_format}", "encoding_format")
-
-        # Convert input to list if it's a single string
-        input_texts = [request.input] if isinstance(request.input, str) else request.input
-
-        return {"input_texts": input_texts, "encoding_format": encoding_format, "request": request}
-
-    async def _process_response(self, response: dict, request: dict) -> dict:
-        """Process engine response for embedding"""
-        input_texts = request["input_texts"]
-        encoding_format = request["encoding_format"]
-        embeddings = []
-        for text in input_texts:
-            # req_dict = {"input": text, "arrival_time": time.time()}
-            embedding = [1, 2]
-            if isinstance(embedding, np.ndarray):
-                embedding = embedding.tolist()
-
-            if encoding_format == "base64":
-                embedding = base64.b64encode(np.array(embedding).astype(np.float32)).decode("utf-8")
-
-            embeddings.append(embedding)
-
-        return {
-            "embeddings": embeddings,
-            "num_prompt_tokens": sum(len(text) for text in input_texts),  # Simplified token counting
-            "encoding_format": encoding_format,
-            "model": request.model,
-        }
-
-    async def _build_final_response(self, processed_data: dict, request: EmbeddingRequest) -> EmbeddingResponse:
+    async def _build_final_response(self, request_id: str, request_output: RequestOutput):
         """Generate final embedding response"""
-        data = [
-            EmbeddingResponseData(index=idx, embedding=embedding)
-            for idx, embedding in enumerate(processed_data["embeddings"])
-        ]
 
+        api_server_logger.info(f"[{request_id}] Embedding response generated:{request_output}")
+
+        num_prompt_tokens = 0
+        if request_output["prompt_ids"]:
+            num_prompt_tokens = len(request_output["prompt_ids"])
         usage = UsageInfo(
-            prompt_tokens=processed_data["num_prompt_tokens"],
-            completion_tokens=0,
-            total_tokens=processed_data["num_prompt_tokens"],
+            prompt_tokens=num_prompt_tokens,
+            total_tokens=num_prompt_tokens,
         )
 
-        return EmbeddingResponse(object="list", data=data, model=processed_data["model"], usage=usage)
+        return EmbeddingResponse(
+            id=request_id,
+            created=None,
+            model=None,
+            data=[],
+            usage=usage,
+        )
