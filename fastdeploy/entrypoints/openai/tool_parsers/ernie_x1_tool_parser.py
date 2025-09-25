@@ -58,18 +58,14 @@ class ErnieX1ToolParser(ToolParser):
         self.tool_call_start_token_id = self.vocab.get(self.tool_call_start_token)
         self.tool_call_end_token_id = self.vocab.get(self.tool_call_end_token)
         if self.tool_call_start_token_id is None or self.tool_call_end_token_id is None:
-            raise RuntimeError(
-                "Hermes 2 Pro Tool parser could not locate tool call start/end " "tokens in the tokenizer!"
-            )
+            raise RuntimeError("Ernie x1 Tool parser could not locate tool call start/end " "tokens in the tokenizer!")
 
         if not self.model_tokenizer:
             raise ValueError(
                 "The model tokenizer must be passed to the ToolCallParser constructor during construction."
             )
 
-    def extract_tool_calls(
-        self, model_output: str, request: ChatCompletionRequest, model_status: str
-    ) -> ExtractedToolCallInformation:
+    def extract_tool_calls(self, model_output: str, request: ChatCompletionRequest) -> ExtractedToolCallInformation:
         """
         Extract the tool calls from a complete model response.
         Supports XML-style formats with newlines:
@@ -81,13 +77,10 @@ class ErnieX1ToolParser(ToolParser):
         3. Only name and arguments field without content: {"name": "get_weather", "argume
         """
 
-        extract_content = model_output
-        if model_status == "tool_call_start":
-            extract_content = "<tool_call>" + model_output
         try:
-            if self.tool_call_start_token not in extract_content:
+            if self.tool_call_start_token not in model_output:
                 return ExtractedToolCallInformation(tools_called=False, tool_calls=[], content=model_output)
-            function_call_tuples = self.tool_call_regex.findall(extract_content)
+            function_call_tuples = self.tool_call_regex.findall(model_output)
 
             raw_function_calls = [json.loads(match[0] if match[0] else match[1]) for match in function_call_tuples]
 
@@ -116,7 +109,6 @@ class ErnieX1ToolParser(ToolParser):
         current_token_ids: Sequence[int],
         delta_token_ids: Sequence[int],
         request: dict,
-        model_status: str,
     ) -> Union[DeltaMessage, None]:
 
         if self.tool_call_start_token_id not in current_token_ids:

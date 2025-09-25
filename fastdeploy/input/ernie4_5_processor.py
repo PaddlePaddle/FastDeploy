@@ -323,10 +323,10 @@ class Ernie4_5Processor(BaseDataProcessor):
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
             if self.tool_parser_obj:
                 tool_parser = self.tool_parser_obj(self.tokenizer)
-                tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict, model_status)
+                tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
                 if tool_call_info.tools_called:
                     response_dict["outputs"]["tool_call"] = tool_call_info.tool_calls
-                response_dict["outputs"]["text"] = tool_call_info.content
+                    response_dict["outputs"]["text"] = tool_call_info.content
             response_dict["outputs"]["raw_prediction"] = full_text
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
@@ -378,7 +378,6 @@ class Ernie4_5Processor(BaseDataProcessor):
                 previous_token_ids + token_ids,
                 token_ids,
                 response_dict,
-                model_status,
             )
             if tool_call_delta_message is None or tool_call_delta_message.tool_calls:
                 response_dict["outputs"]["delta_message"] = tool_call_delta_message
