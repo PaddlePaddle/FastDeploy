@@ -544,7 +544,8 @@ class OpenAIServingChat:
                         )
                         has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
                         max_tokens = request.max_completion_tokens or request.max_tokens
-                        num_cached_tokens[idx] = output["num_cached_tokens"]
+                        # output 可能没有num_cached_tokens字段
+                        num_cached_tokens[idx] = output.get("num_cached_tokens", 0)
                         if has_no_token_limit or previous_num_tokens[idx] != max_tokens:
                             choice.finish_reason = "stop"
                             if output.get("tool_call"):
