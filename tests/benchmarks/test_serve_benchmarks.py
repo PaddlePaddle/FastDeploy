@@ -280,11 +280,15 @@ class TestServe(IsolatedAsyncioTestCase):
         mock_dump.assert_called_once()
 
     @pytest.mark.asyncio
+    @patch("builtins.open", new_callable=MagicMock)
+    @patch("yaml.safe_load")
     @patch("fastdeploy.benchmarks.serve.benchmark", new_callable=AsyncMock)
     @patch("fastdeploy.benchmarks.serve.get_samples", new_callable=MagicMock)
     @patch("fastdeploy.benchmarks.serve.add_cli_args")
     @patch("argparse.ArgumentParser.parse_args")
-    async def test_main_async(self, mock_parse_args, mock_add_cli_args, mock_get_samples, mock_benchmark):
+    async def test_main_async(
+        self, mock_parse_args, mock_add_cli_args, mock_get_samples, mock_benchmark, mock_safe_load, mock_open
+    ):
         """Test main_async function with successful execution"""
         from fastdeploy.benchmarks.datasets import SampleRequest
         from fastdeploy.benchmarks.serve import main_async
@@ -305,9 +309,9 @@ class TestServe(IsolatedAsyncioTestCase):
         mock_args.percentile_metrics = "ttft,tpot,itl"
         mock_args.metric_percentiles = "99"
         mock_args.goodput = None
-        mock_args.ramp_up_strategy = None
-        mock_args.ramp_up_start_rps = None
-        mock_args.ramp_up_end_rps = None
+        mock_args.ramp_up_strategy = "1"
+        mock_args.ramp_up_start_rps = 1
+        mock_args.ramp_up_end_rps = 1
         mock_args.dataset_name = "EB"
         mock_args.dataset_path = MagicMock()
         mock_args.dataset_split = None
@@ -320,29 +324,73 @@ class TestServe(IsolatedAsyncioTestCase):
         mock_args.temperature = 0.7
         mock_args.result_dir = MagicMock()  # Mock result_dir
         mock_args.result_filename = MagicMock()  # Mock result_filename
-        mock_args.save_result = False  # Disable actual file saving
+        mock_args.save_result = True  # Enable file saving for test
         mock_args.save_detailed = False
         mock_args.append_result = False
+        mock_args.hyperparameter_path = "test_params.yaml"
         mock_parse_args.return_value = mock_args
+
+        # Mock YAML loading
+        mock_safe_load.return_value = {"param1": "value1", "param2": 42}
+
+        # Mock file operations
+        mock_file = MagicMock()
+        mock_file.tell.return_value = 100  # Simulate non-empty file for append test
+        mock_open.return_value.__enter__.return_value = mock_file
 
         # Mock get_samples return value
         mock_get_samples.return_value = [
             SampleRequest(no=1, prompt="test", prompt_len=10, expected_output_len=20, history_QA=[], json_data=None)
         ]
 
-        # Mock benchmark return value
+        # Mock benchmark return value with complete JSON-serializable data
         mock_benchmark.return_value = {
             "completed": 1,
             "total_input_tokens": 10,
             "total_output_tokens": 20,
             "request_throughput": 1.0,
+            "mean_ttft_ms": 100.0,
+            "median_ttft_ms": 100.0,
+            "std_ttft_ms": 10.0,
+            "p99_ttft_ms": 110.0,
+            "mean_tpot_ms": 50.0,
+            "median_tpot_ms": 50.0,
+            "std_tpot_ms": 5.0,
+            "p99_tpot_ms": 60.0,
+            "median_itl_ms": 20.0,
+            "mean_itl_ms": 20.0,
+            "std_itl_ms": 2.0,
+            "p99_itl_ms": 25.0,
+            "hyper_parameters": {"param1": "value1", "param2": 42},
+            "input_requests": [
+                {
+                    "no": 1,
+                    "prompt": "test",
+                    "prompt_len": 10,
+                    "expected_output_len": 20,
+                    "history_QA": [],
+                    "json_data": None,
+                }
+            ],
         }
 
-        # Call main_async with args
-        await main_async(mock_args)
+        # Mock json.dump to verify serialization
+        with patch("json.dump") as mock_json_dump:
+            # Call main_async with args
+            await main_async(mock_args)
 
-        # Verify mocks were called
-        mock_get_samples.assert_called_once()
+            # Verify mocks were called
+            mock_get_samples.assert_called_once()
+
+            # Verify YAML file was loaded
+            mock_open.assert_any_call("test_params.yaml", "r")
+            mock_safe_load.assert_called_once()
+
+            # Verify json.dump was called with serializable data
+            mock_json_dump.assert_called_once()
+            args, _ = mock_json_dump.call_args
+            self.assertIsInstance(args[0], dict)  # Verify data is dict (JSON-serializable)
+            self.assertIn("completed", args[0])  # Verify benchmark results are included
 
     @pytest.mark.asyncio
     @patch("fastdeploy.benchmarks.serve.benchmark", new_callable=AsyncMock)
