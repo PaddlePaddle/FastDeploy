@@ -113,7 +113,6 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
 
     def process_request(self, request, max_model_len=None, **kwargs):
         """process the input data"""
-        request.chat_template = kwargs.get("chat_template")
         task = request.to_dict()
         task["chat_template_kwargs"] = kwargs.get("chat_template_kwargs")
         self.process_request_dict(task, max_model_len)

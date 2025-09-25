@@ -82,6 +82,10 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
         from fastdeploy.worker.metax_worker import MetaxWorker
 
         return MetaxWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
+    if current_platform.is_intel_hpu():
+        from fastdeploy.worker.hpu_worker import HpuWorker
+
+        return HpuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 
 def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
@@ -89,21 +93,22 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
     # Global rank
     ranks = dist.get_world_size()
     dist_strategy = fleet.DistributedStrategy()
+    if ranks > 0:
+        dist_strategy.hybrid_configs = {
+            "dp_degree": 1,
+            "mp_degree": ranks,
+            "pp_degree": 1,
+            "sharding_degree": 1,
+        }
 
-    dist_strategy.hybrid_configs = {
-        "dp_degree": 1,
-        "mp_degree": ranks,
-        "pp_degree": 1,
-        "sharding_degree": 1,
-    }
+        # Set control in tensor parallel
+        dist_strategy.tensor_parallel_configs = {"tensor_init_seed": seed}
+        fleet.init(is_collective=True, strategy=dist_strategy)
 
-    # Set control in tensor parallel
-    dist_strategy.tensor_parallel_configs = {"tensor_init_seed": seed}
-    fleet.init(is_collective=True, strategy=dist_strategy)
-
-    # Local rank
-    local_rank = fleet.worker_index()
-
+        # Local rank
+        local_rank = fleet.worker_index()
+    else:
+        local_rank = 0
     return ranks, local_rank
 
 
@@ -437,6 +442,23 @@ class PaddleDisWorkerProc:
 
     def graph_optimize_and_warm_up_model(self) -> None:
         self.worker.graph_optimize_and_warm_up_model()
+        # reset cache_messager prefilled_step signal
+        if self.scheduler_config.splitwise_role == "prefill":
+            dp_rank_id = (
+                self.local_rank
+                + self.parallel_config.local_data_parallel_id * self.parallel_config.tensor_parallel_size
+            )
+            gpu_id = self.worker.model_runner.device_id
+            prefilled_step_name = f"splitwise_complete_prefilled_step_{dp_rank_id}"
+            prefilled_step_idx_data = np.zeros(shape=[1], dtype=np.int32)
+            step_shm_value = IPCSignal(
+                name=prefilled_step_name,
+                array=prefilled_step_idx_data,
+                dtype=np.int32,
+                suffix=gpu_id,
+                create=False,
+            )
+            step_shm_value.value[0] = -1
 
     def init_device(self) -> None:
         """Initialize device and Construct model runner"""
@@ -837,7 +859,7 @@ def run_worker_proc() -> None:
     worker_proc.initialize_kv_cache()
 
     # Trigger CUDAGraph capture
-    worker_proc.worker.graph_optimize_and_warm_up_model()
+    worker_proc.graph_optimize_and_warm_up_model()
 
     # Initialize health status
     worker_proc.init_health_status()

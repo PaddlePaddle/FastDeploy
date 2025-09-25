@@ -484,7 +484,7 @@ class Ernie4_5_Model(nn.Layer):
 
 @ModelRegistry.register_model_class(
     architecture="Ernie4_5_MoeForCausalLM",
-    module_path="ernie4_5_moe",
+    module_name="ernie4_5_moe",
     category=ModelCategory.TEXT_GENERATION,
     primary_use=ModelCategory.TEXT_GENERATION,
 )
@@ -665,7 +665,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
 
 @ModelRegistry.register_model_class(
     architecture="Ernie4_5_ForCausalLM",
-    module_path="ernie4_5_moe",
+    module_name="ernie4_5_moe",
     category=ModelCategory.TEXT_GENERATION,
     primary_use=ModelCategory.TEXT_GENERATION,
 )
@@ -684,7 +684,7 @@ class Ernie4_5_ForCausalLM(Ernie4_5_MoeForCausalLM):
 
 @ModelRegistry.register_model_class(
     architecture="Ernie4_5ForCausalLM",
-    module_path="ernie4_5_moe",
+    module_name="ernie4_5_moe",
     category=ModelCategory.TEXT_GENERATION,
     primary_use=ModelCategory.TEXT_GENERATION,
 )
