@@ -143,7 +143,6 @@ std::vector<paddle::Tensor> rebuild_padding(
     int pack_num = elem_nums / PackSize;
     const int blocksize = 128;
     const int grid_size = (pack_num + blocksize - 1) / blocksize;
-    printf("elem_nums: %d\n", elem_nums);
 
     if (output_padding_offset) {
         RebuildAppendPaddingKernel<DataType_, PackSize>
