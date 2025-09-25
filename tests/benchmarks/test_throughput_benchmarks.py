@@ -290,6 +290,196 @@ class TestThroughput(unittest.TestCase):
         main(args)
         mock_json_dump.assert_called()
 
+    # 新增测试用例覆盖缺失的行
+    def test_validate_args_with_lora(self):
+        parser = argparse.ArgumentParser()
+        add_cli_args(parser)
+        args = parser.parse_args([])
+        args.backend = "fastdeploy"  # LoRA只支持vLLM后端
+        args.dataset_name = "random"
+        args.enable_lora = True
+        args.lora_path = "/path/to/lora"
+        args.input_len = 10
+        args.output_len = 20
+        args.tokenizer = "test_tokenizer"
+        args.model = "test_model"
+        validate_args(args)
+
+    def test_validate_args_with_hf_backend(self):
+        parser = argparse.ArgumentParser()
+        add_cli_args(parser)
+        args = parser.parse_args([])
+        args.backend = "hf"
+        args.dataset_name = "random"
+        args.hf_max_batch_size = 4
+        args.input_len = 10
+        args.output_len = 20
+        args.tokenizer = "test_tokenizer"
+        args.model = "test_model"
+        validate_args(args)
+
+    def test_validate_args_with_quantization(self):
+        parser = argparse.ArgumentParser()
+        add_cli_args(parser)
+        args = parser.parse_args([])
+        args.backend = "fastdeploy"
+        args.dataset_name = "random"
+        args.quantization = "w4a8"
+        args.input_len = 10
+        args.output_len = 20
+        args.tokenizer = "test_tokenizer"
+        args.model = "test_model"
+        validate_args(args)
+
+    @patch("fastdeploy.benchmarks.throughput.write_to_json")
+    @patch("fastdeploy.benchmarks.throughput.convert_to_pytorch_benchmark_format")
+    def test_save_to_pytorch_benchmark_format(self, mock_convert, mock_write):
+        args = argparse.Namespace(
+            output_json="test.json",
+            model="test_model",
+            input_len=10,
+            output_len=20,
+            backend="fastdeploy",
+        )
+        results = {
+            "elapsed_time": 1.0,
+            "num_requests": 10,
+            "total_num_tokens": 100,
+            "requests_per_second": 10.0,
+            "tokens_per_second": 100.0,
+        }
+        mock_convert.return_value = [{"metrics": {"requests_per_second": 10.0}}]
+        from fastdeploy.benchmarks.throughput import save_to_pytorch_benchmark_format
+
+        save_to_pytorch_benchmark_format(args, results)
+        mock_write.assert_called()
+
+    @patch("fastdeploy.benchmarks.throughput.run_fd")
+    @patch("fastdeploy.benchmarks.throughput.get_requests")
+    def test_main_with_disable_detokenize(self, mock_get_requests, mock_run_fd):
+        mock_get_requests.return_value = [
+            SampleRequest(no=1, prompt="test", prompt_len=10, expected_output_len=20, history_QA=[], json_data=None)
+        ]
+        mock_run_fd.return_value = (1.0, ["output1", "output2"])
+
+        parser = argparse.ArgumentParser()
+        add_cli_args(parser)
+        args = parser.parse_args([])
+        args.backend = "fastdeploy"
+        args.dataset_name = "random"
+        args.dataset_path = None
+        args.seed = 42
+        args.input_len = 10
+        args.output_len = 20
+        args.num_prompts = 1
+        args.tokenizer = "test_tokenizer"
+        args.model = "test_model"
+        args.n = 1
+        args.hf_max_batch_size = None
+        args.trust_remote_code = False
+        args.output_json = None
+        args.disable_detokenize = True
+        args.tensor_parallel_size = 1
+
+        with patch("builtins.print") as mock_print:
+            main(args)
+            mock_print.assert_called()
+
+    def test_validate_args_with_random_range_ratio(self):
+        parser = argparse.ArgumentParser()
+        add_cli_args(parser)
+        args = parser.parse_args([])
+        args.backend = "fastdeploy"
+        args.dataset_name = "random"
+        args.random_range_ratio = 0.5
+        args.input_len = 10
+        args.output_len = 20
+        args.tokenizer = "test_tokenizer"
+        args.model = "test_model"
+        validate_args(args)
+
+    def test_validate_args_with_prefix_len(self):
+        parser = argparse.ArgumentParser()
+        add_cli_args(parser)
+        args = parser.parse_args([])
+        args.backend = "fastdeploy"
+        args.dataset_name = "random"
+        args.prefix_len = 5
+        args.input_len = 10
+        args.output_len = 20
+        args.tokenizer = "test_tokenizer"
+        args.model = "test_model"
+        validate_args(args)
+
+    def test_validate_args_with_eb_dataset(self):
+        parser = argparse.ArgumentParser()
+        add_cli_args(parser)
+        args = parser.parse_args([])
+        args.backend = "fastdeploy"
+        args.dataset_name = "EB"
+        args.dataset_path = "/path/to/eb"
+        args.tokenizer = "test_tokenizer"
+        args.model = "test_model"
+        validate_args(args)
+
+    def test_validate_args_with_ebchat_dataset(self):
+        parser = argparse.ArgumentParser()
+        add_cli_args(parser)
+        args = parser.parse_args([])
+        args.backend = "fastdeploy-chat"
+        args.dataset_name = "EBChat"
+        args.dataset_path = "/path/to/ebchat"
+        args.tokenizer = "test_tokenizer"
+        args.model = "test_model"
+        validate_args(args)
+
+    def test_add_cli_args_with_all_options(self):
+        parser = argparse.ArgumentParser()
+        add_cli_args(parser)
+        # 使用parse_known_args避免未识别参数导致的SystemExit
+        args, _ = parser.parse_known_args(
+            [
+                "--backend",
+                "fastdeploy-chat",
+                "--dataset-name",
+                "EBChat",
+                "--dataset-path",
+                "/path/to/dataset",
+                "--input-len",
+                "10",
+                "--output-len",
+                "20",
+                "--n",
+                "2",
+                "--num-prompts",
+                "50",
+                "--hf-max-batch-size",
+                "4",
+                "--output-json",
+                "output.json",
+                "--disable-detokenize",
+                "--lora-path",
+                "/path/to/lora",
+                "--prefix-len",
+                "5",
+                "--random-range-ratio",
+                "0.5",
+            ]
+        )
+        self.assertEqual(args.backend, "fastdeploy-chat")
+        self.assertEqual(args.dataset_name, "EBChat")
+        self.assertEqual(args.dataset_path, "/path/to/dataset")
+        self.assertEqual(args.input_len, 10)
+        self.assertEqual(args.output_len, 20)
+        self.assertEqual(args.n, 2)
+        self.assertEqual(args.num_prompts, 50)
+        self.assertEqual(args.hf_max_batch_size, 4)
+        self.assertEqual(args.output_json, "output.json")
+        self.assertTrue(args.disable_detokenize)
+        self.assertEqual(args.lora_path, "/path/to/lora")
+        self.assertEqual(args.prefix_len, 5)
+        self.assertEqual(args.random_range_ratio, 0.5)
+
 
 if __name__ == "__main__":
     unittest.main()

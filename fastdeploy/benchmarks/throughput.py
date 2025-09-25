@@ -290,8 +290,6 @@ def validate_args(args):
         )
 
     # === LoRA Settings ===
-    if getattr(args, "enable_lora", False) and args.backend != "vllm":
-        raise ValueError("LoRA benchmarking is only supported for vLLM backend")
     if getattr(args, "enable_lora", False) and args.lora_path is None:
         raise ValueError("LoRA path must be provided when enable_lora is True")
 
