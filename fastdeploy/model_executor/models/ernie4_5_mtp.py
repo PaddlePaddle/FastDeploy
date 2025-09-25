@@ -331,7 +331,7 @@ class Ernie4_5_MTPModel(nn.Layer):
 
 @ModelRegistry.register_model_class(
     architecture="Ernie4_5_MTPForCausalLM",
-    module_path="ernie4_5_mtp",
+    module_name="ernie4_5_mtp",
     category=ModelCategory.TEXT_GENERATION,
     primary_use=ModelCategory.TEXT_GENERATION,
 )

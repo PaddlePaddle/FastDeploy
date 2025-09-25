@@ -56,6 +56,8 @@ elif current_platform.is_maca():
         update_inputs,
         update_inputs_v1,
     )
+elif current_platform.is_intel_hpu():
+    pass
 else:
     from fastdeploy.model_executor.ops.gpu import (
         get_padding_offset,

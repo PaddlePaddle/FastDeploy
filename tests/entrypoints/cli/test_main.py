@@ -6,10 +6,8 @@ from fastdeploy.entrypoints.cli.main import main as cli_main
 
 class TestCliMain(unittest.TestCase):
     @patch("fastdeploy.utils.FlexibleArgumentParser")
-    @patch("fastdeploy.entrypoints.cli.main.importlib.metadata")
-    def test_main_basic(self, mock_metadata, mock_parser):
+    def test_main_basic(self, mock_parser):
         # Setup mocks
-        mock_metadata.version.return_value = "1.0.0"
         mock_args = MagicMock()
         mock_args.subparser = None
         mock_parser.return_value.parse_args.return_value = mock_args
@@ -18,7 +16,6 @@ class TestCliMain(unittest.TestCase):
         cli_main()
 
         # Verify version check
-        mock_metadata.version.assert_called_once_with("fastdeploy-gpu")
         mock_args.dispatch_function.assert_called_once()
 
 

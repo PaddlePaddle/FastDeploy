@@ -267,7 +267,6 @@ class CacheMessager:
                             self.cache_info[info["request_id"]] = info
                 prefilled_layer_idx = layer_shm_value.value[0]
                 prefilled_step_idx = step_shm_value.value[0]
-                logger.info(f"prefilled_layer_idx: {prefilled_layer_idx}, prefilled_step_idx: {prefilled_step_idx}")
                 if prefilled_layer_idx == self.num_layers - 1:
                     time.sleep(0.001)
                     prefilled_layer_idx = layer_shm_value.value[0]
