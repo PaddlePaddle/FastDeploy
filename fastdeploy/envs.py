@@ -102,6 +102,13 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SPECULATE_SAMPLING_TOP_K": lambda: (
         None if "FD_SPECULATE_SAMPLING_TOP_K" not in os.environ else float(os.environ["FD_SPECULATE_SAMPLING_TOP_K"])
     ),
+    "FD_ENABLE_INTERNAL_ADAPTER": lambda: int(os.getenv("FD_ENABLE_INTERNAL_ADAPTER", "0")),
+    # LLMEngine recieve requests port, used when FD_ENABLE_INTERNAL_ADAPTER=1
+    "FD_ZMQ_RECV_REQUEST_SERVER_PORT": lambda: os.getenv("FD_ZMQ_RECV_REQUEST_SERVER_PORT", "8200"),
+    # LLMEngine send response port, used when FD_ENABLE_INTERNAL_ADAPTER=1
+    "FD_ZMQ_SEND_RESPONSE_SERVER_PORT": lambda: os.getenv("FD_ZMQ_SEND_RESPONSE_SERVER_PORT", "8201"),
+    # LLMEngine recieve control command port, used when FD_ENABLE_INTERNAL_ADAPTER=1
+    "FD_ZMQ_CONTROL_CMD_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_CONTROL_CMD_SERVER_PORTS", "8202"),
 }
 
 

@@ -216,6 +216,8 @@ class OpenAIServingCompletion:
             completion_batched_token_ids = [[] for _ in range(num_choices)]
             current_waiting_time = 0
             while num_choices > 0:
+                if self.engine_client.check_model_weight_status():
+                    return ErrorResponse(message="Model weight cleared", code=400)
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
@@ -270,7 +272,6 @@ class OpenAIServingCompletion:
             return res
         except Exception as e:
             api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)
-            raise
         finally:
             self.engine_client.semaphore.release()
             if dealer is not None:
@@ -333,6 +334,8 @@ class OpenAIServingCompletion:
             )
             current_waiting_time = 0
             while num_choices > 0:
+                if self.engine_client.check_model_weight_status():
+                    raise ValueError("Engine is clearing model weight")
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
