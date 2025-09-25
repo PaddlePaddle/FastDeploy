@@ -653,8 +653,6 @@ class MTPProposer(Proposer):
                 self._initialize_forward_meta()
 
                 # Get sampling metadata
-                print(f"[MTPProposer] top_p: {self.model_inputs['top_p']}")
-                print(f"[MTPProposer] top_k: {self.model_inputs['top_k']}")
                 self.sampling_metadata = SamplingMetadata(
                     temperature=self.model_inputs["temperature"],
                     top_p=self.model_inputs["top_p"],
