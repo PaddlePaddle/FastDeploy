@@ -87,7 +87,7 @@ class OpenAIServingChat:
                 f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
             )
             api_server_logger.error(err_msg)
-            return ErrorResponse(error=ErrorInfo(message=err_msg, type=ErrorType.SERVER_ERROR))
+            return ErrorResponse(error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR))
 
         if self.models:
             is_supported, request.model = self.models.is_supported_model(request.model)
@@ -95,7 +95,7 @@ class OpenAIServingChat:
                 err_msg = f"Unsupported model: [{request.model}], support [{', '.join([x.name for x in self.models.model_paths])}] or default"
                 api_server_logger.error(err_msg)
                 return ErrorResponse(
-                    error=ErrorInfo(message=err_msg, type=ErrorType.SERVER_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
+                    error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
                 )
 
         try:
@@ -121,7 +121,7 @@ class OpenAIServingChat:
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
             except ParameterError as e:
-                api_server_logger.error(e.message)
+                api_server_logger.error(f"request[{request_id}] generator error: {str(e)}, {e.message}")
                 self.engine_client.semaphore.release()
                 return ErrorResponse(
                     error=ErrorInfo(message=str(e.message), type=ErrorType.INVALID_REQUEST_ERROR, param=e.param)
@@ -145,7 +145,7 @@ class OpenAIServingChat:
                 except Exception as e:
                     error_msg = f"request[{request_id}]full generator error: {str(e)}, {str(traceback.format_exc())}"
                     api_server_logger.error(error_msg)
-                    return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.SERVER_ERROR))
+                    return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
         except Exception as e:
             error_msg = (
                 f"request[{request_id}] waiting error: {str(e)}, {str(traceback.format_exc())}, "
@@ -158,7 +158,7 @@ class OpenAIServingChat:
 
     def _create_streaming_error_response(self, message: str) -> str:
         api_server_logger.error(message)
-        error_response = ErrorResponse(error=ErrorInfo(message=message, type=ErrorType.SERVER_ERROR))
+        error_response = ErrorResponse(error=ErrorInfo(message=message, type=ErrorType.INTERNAL_ERROR))
         return error_response.model_dump_json()
 
     async def chat_completion_stream_generator(
@@ -220,6 +220,8 @@ class OpenAIServingChat:
                 decoder_base_url=self.tokenizer_base_url,
             )
             while num_choices > 0:
+                if self.engine_client.check_model_weight_status():
+                    raise ValueError("Engine is clearing model weight")
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
@@ -435,6 +437,14 @@ class OpenAIServingChat:
                 decoder_base_url=self.tokenizer_base_url,
             )
             while True:
+                if self.engine_client.check_model_weight_status():
+                    return ErrorResponse(
+                        error=ErrorInfo(
+                            message="Model weight cleared",
+                            code=ErrorCode.INVALID_VALUE,
+                            type=ErrorType.INVALID_REQUEST_ERROR,
+                        )
+                    )
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
@@ -523,6 +533,7 @@ class OpenAIServingChat:
 
         if final_res.get("error_msg") is not None and "Recover" in final_res["error_msg"]:
             choice.finish_reason = "recover_stop"
+
         choices.append(choice)
 
         num_prompt_tokens = len(prompt_token_ids)
