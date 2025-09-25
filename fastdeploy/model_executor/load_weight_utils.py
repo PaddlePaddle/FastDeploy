@@ -54,7 +54,7 @@ def pdparams_weight_iterator(paddle_file_list: list[str]):
         del state_dict
 
 
-def load_weights_form_cache(model, weights_iterator):
+def load_weights_from_cache(model, weights_iterator):
     params_dict = dict(model.named_parameters())
     for loaded_weight_name, loaded_weight in weights_iterator:
         param = params_dict[loaded_weight_name]

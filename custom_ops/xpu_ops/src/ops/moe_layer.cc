@@ -145,7 +145,8 @@ std::vector<paddle::Tensor> MoeLayerKernel(
                                         ? up_gate_proj_weight_scale.get_ptr()->data<float>()
                                         : nullptr),
                 xftblock_tw,
-                std::vector<int64_t>{expert_num, inter_dim, hidden_dim});
+                std::vector<int64_t>{expert_num, inter_dim, hidden_dim}
+            );
 
             xdown_proj_w = std::make_shared<xftblock::Tensor>(
                 const_cast<TW *>(down_proj_weight.data<TW>()), nullptr,
@@ -153,7 +154,8 @@ std::vector<paddle::Tensor> MoeLayerKernel(
                                         ? down_proj_weight_scale.get_ptr()->data<float>()
                                         : nullptr),
                 xftblock_tw,
-                std::vector<int64_t>{expert_num, hidden_dim, outer_dim});
+                std::vector<int64_t>{expert_num, hidden_dim, outer_dim}
+            );
         }
         std::shared_ptr<xftblock::Tensor> xup_gate_proj_bias;
         std::shared_ptr<xftblock::Tensor> xdown_proj_bias;

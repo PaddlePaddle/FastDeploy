@@ -209,6 +209,8 @@ class Sampler(nn.Layer):
             or current_platform.is_maca()
         ):
             self.forward = self.forward_cuda
+        elif current_platform.is_intel_hpu():
+            self.forward = self.forward_intel_hpu
         else:
             raise NotImplementedError
 
@@ -376,6 +378,49 @@ class Sampler(nn.Layer):
         )
 
         return sampler_output
+
+    def forward_intel_hpu(
+        self,
+        logits: paddle.Tensor,
+        sampling_metadata: SamplingMetadata,
+        batch_ids: paddle.Tensor,
+        max_batch: int,
+        rank: int,
+        local_rank: int,
+    ) -> paddle.Tensor:
+        if logits.dtype != paddle.float32:
+            logits = paddle.cast(logits, paddle.float32)
+
+        from fastdeploy.model_executor.ops.intel_hpu import fused_sampler
+
+        _, next_tokens = fused_sampler(
+            sampling_metadata.pre_token_ids,
+            sampling_metadata.prompt_ids,
+            sampling_metadata.seq_lens_encoder,
+            sampling_metadata.seq_lens_decoder,
+            sampling_metadata.step_idx,
+            sampling_metadata.stop_flags,
+            logits,
+            sampling_metadata.repetition_penalties,
+            sampling_metadata.frequency_penalties,
+            sampling_metadata.presence_penalties,
+            sampling_metadata.temperature,
+            sampling_metadata.bad_words_token_ids,
+            sampling_metadata.step_idx,
+            sampling_metadata.min_dec_lens,
+            sampling_metadata.eos_token_ids,
+            sampling_metadata.top_p,
+            rank,
+            local_rank,
+        )
+
+        if next_tokens.shape[0] != max_batch:
+            dim = next_tokens.shape[-1]
+            tmp_tokens = paddle.full((max_batch, dim), -1, dtype=next_tokens.dtype)
+            tmp_tokens = paddle.scatter(tmp_tokens, batch_ids, next_tokens[: batch_ids.shape[0], :])
+            return tmp_tokens
+
+        return next_tokens
 
 
 class SpeculativeSampler(nn.Layer):

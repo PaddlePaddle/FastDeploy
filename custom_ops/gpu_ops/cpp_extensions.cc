@@ -571,6 +571,7 @@ std::vector<paddle::Tensor> NoauxTc(
       int n_group,
       int topk_group,
       int topk,
+      bool renormalize,
       float routed_scaling_factor);
 
 #ifdef ENABLE_FP8

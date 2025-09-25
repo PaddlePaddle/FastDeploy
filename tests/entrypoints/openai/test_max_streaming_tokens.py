@@ -24,6 +24,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         self.engine_client.semaphore.release = Mock()
         self.engine_client.data_processor = Mock()
         self.engine_client.is_master = True
+        self.engine_client.check_model_weight_status = Mock(return_value=False)
 
         self.chat_serving = OpenAIServingChat(
             engine_client=self.engine_client,

@@ -61,6 +61,7 @@ class DefaultModelLoader(BaseModelLoader):
             fd_config,
             return_numpy=True,
         )
+
         model.set_state_dict(state_dict)
         self.clean_memory_fragments(state_dict)
 
