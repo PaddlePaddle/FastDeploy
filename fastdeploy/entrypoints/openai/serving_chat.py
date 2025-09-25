@@ -318,7 +318,6 @@ class OpenAIServingChat:
 
                     output = res["outputs"]
                     reasoning_content = output["reasoning_content"]
-                    tool_calls = output["tool_calls"]
                     output_top_logprobs = output["top_logprobs"]
                     previous_num_tokens[idx] += len(output["token_ids"])
                     logprobs_res: Optional[LogProbs] = None
@@ -330,7 +329,7 @@ class OpenAIServingChat:
                     delta_message = DeltaMessage(
                         reasoning_content=reasoning_content,
                         prompt_token_ids=None,
-                        tool_calls=tool_calls,
+                        tool_calls=None,
                         completion_token_ids=None,
                     )
 
@@ -338,19 +337,15 @@ class OpenAIServingChat:
                         delta_message.multimodal_content = output["multipart"]
                     else:
                         delta_message.content = output["text"]
-                    if tool_calls:
-                        tool_called[index] = True
-                    if output["is_buffering"]:
-                        continue
-                    # if not res["finished"] and "delta_message" in output:
-                    #     delta_message_output = output["delta_message"]
-                    #     if delta_message_output is None:
-                    #         continue
-                    #     delta_message.content = delta_message_output.content or ""
-                    #     delta_message.reasoning_content = delta_message_output.reasoning_content or ""
-                    #     if delta_message_output.tool_calls:
-                    #         delta_message.tool_calls = delta_message_output.tool_calls
-                    #         tool_called[idx] = True
+                    if not res["finished"] and "delta_message" in output:
+                        delta_message_output = output["delta_message"]
+                        if delta_message_output is None:
+                            continue
+                        delta_message.content = delta_message_output.content or ""
+                        delta_message.reasoning_content = delta_message_output.reasoning_content or ""
+                        if delta_message_output.tool_calls:
+                            delta_message.tool_calls = delta_message_output.tool_calls
+                            tool_called[idx] = True
 
                     choice = ChatCompletionResponseStreamChoice(
                         index=idx,
