@@ -569,6 +569,7 @@ class OpenAIServingChat:
             prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=sum(num_cached_tokens)),
         )
         work_process_metrics.e2e_request_latency.observe(latency)
+        choices = sorted(choices, key=lambda x : x['index'])
         res = ChatCompletionResponse(
             id=request_id,
             created=created_time,

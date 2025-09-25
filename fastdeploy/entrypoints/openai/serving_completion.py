@@ -576,6 +576,7 @@ class OpenAIServingCompletion:
 
             num_prompt_tokens += len(prompt_token_ids)
 
+        num_prompt_tokens = num_prompt_tokens // request.n
         usage = UsageInfo(
             prompt_tokens=num_prompt_tokens,
             completion_tokens=num_generated_tokens,
