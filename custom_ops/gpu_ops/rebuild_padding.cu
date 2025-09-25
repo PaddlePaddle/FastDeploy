@@ -80,30 +80,10 @@ __global__ void RebuildAppendPaddingKernel(T *output_data,
                          &src_vec);
         Store<T, VecSize>(src_vec, &output_data[i]);
 
-        // printf(
-        //     "[normal] out_token_id: %d, ori_token_id: %d, input_token_id: %d "
-        //     "bias_idx: %d, bid: %d, seq_id: %d\n",
-        //     out_token_id,
-        //     ori_token_id,
-        //     input_token_id,
-        //     bias_idx,
-        //     bi,
-        //     seq_id);
-
         if (enable_logprob && seq_len_encoder[bi] > 0) {
             int first_token_seq_id = seq_len_encoder[bi] - 2;
             const int first_token_id =
                 ori_token_id - cum_offset_bi + first_token_seq_id;
-            // printf(
-            //     "[first token] out_token_id: %d, ori_token_id: %d, "
-            //     "first_token_id: %d, bias_idx: %d, bid: %d, "
-            //     "first_token_seq_id: %d\n",
-            //     out_token_id,
-            //     ori_token_id,
-            //     first_token_id,
-            //     bias_idx,
-            //     bi,
-            //     first_token_seq_id);
             Load<T, VecSize>(&input_data[first_token_id * dim_embed + bias_idx],
                              &src_vec);
             Store<T, VecSize>(src_vec, &first_token_out[i]);
@@ -153,9 +133,6 @@ std::vector<paddle::Tensor> rebuild_padding(
                            0,
                            D,
                            tmp_out.place());
-        // printf("token_num: %d, need_delete_token_num: %d\n",
-        //        token_num,
-        //        need_delete_token_num);
     } else {
         out =
             paddle::full({bsz, dim_embed}, 0, tmp_out.dtype(), tmp_out.place());
@@ -169,10 +146,6 @@ std::vector<paddle::Tensor> rebuild_padding(
     printf("elem_nums: %d\n", elem_nums);
 
     if (output_padding_offset) {
-        // if (first_token_out.is_initialized()) {
-        //     printf("first_token_out is initialized, enable_logprob: %d\n",
-        //            enable_logprob);
-        // }
         RebuildAppendPaddingKernel<DataType_, PackSize>
             <<<grid_size, blocksize, 0, cu_stream>>>(
                 reinterpret_cast<DataType_ *>(out.data<data_t>()),

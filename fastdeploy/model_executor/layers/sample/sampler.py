@@ -297,11 +297,8 @@ class Sampler(nn.Layer):
         # Get with the logprob of the prompt or sampled token.
         token_logprobs = paddle.take_along_axis(logprobs, token_ids, axis=-1)
 
-        print(f"[Sampler] logprobs: {logprobs}")
-        print(f"[Sampler] token_logprobs: {token_logprobs}")
         # Compute the ranks of the actual token.
         token_ranks = (logprobs >= token_logprobs).sum(-1)
-        print(f"[Sampler] token_ranks: {token_ranks}")
 
         if num_logprobs >= 1:
             # Find the topK values.
@@ -370,7 +367,6 @@ class Sampler(nn.Layer):
             sampled_token_ids=next_tokens,
             logprobs_tensors=logprobs_tensors,
         )
-        print(f"[Sampler] sampler_output: {sampler_output}")
 
         return sampler_output
 
@@ -414,11 +410,8 @@ class SpeculativeSampler(nn.Layer):
         share_inputs = sampling_metadata.share_inputs
         last_logits = logits
         real_bsz = share_inputs["seq_lens_this_time"].shape[0]
-        print(f"[SpeculativeSampler][compute] seq_lens_this_time: {share_inputs['seq_lens_this_time']}")
-        print(f"[SpeculativeSampler][compute] seq_lens_encoder: {share_inputs['seq_lens_encoder']}")
         batch_token_num = share_inputs["batch_token_num"]
 
-        print(f"[SpeculativeSampler][compute] batch_token_num: {batch_token_num}")
         temp_scaled_logprobs = sampling_metadata.temp_scaled_logprobs
         top_p_normalized_logprobs = sampling_metadata.top_p_normalized_logprobs
         if temp_scaled_logprobs is not None:
@@ -486,11 +479,8 @@ class SpeculativeSampler(nn.Layer):
         # Get with the logprob of the prompt or sampled token.
         token_logprobs = paddle.take_along_axis(logprobs, token_ids, axis=-1)
 
-        print(f"[SpeculativeSampler] logprobs: {logprobs}")
-        print(f"[SpeculativeSampler] token_logprobs: {token_logprobs}")
         # Compute the ranks of the actual token.
         token_ranks = (logprobs >= token_logprobs).sum(-1)
-        print(f"[SpeculativeSampler] token_ranks: {token_ranks}")
 
         if num_logprobs >= 1:
             # Find the topK values.
@@ -540,9 +530,6 @@ class SpeculativeSampler(nn.Layer):
             max_model_len,
         )
 
-        print(f"[SpeculativeSampler] verify_tokens: {verify_tokens}")
-        print(f"[SpeculativeSampler] actual_candidate_len: {actual_candidate_len}")
-
         speculate_verify(
             share_inputs["accept_tokens"],
             share_inputs["accept_num"],
@@ -569,8 +556,6 @@ class SpeculativeSampler(nn.Layer):
             self.speculative_benchmark_mode,
             accept_all_drafts,
         )
-        print(f"[SpeculativeSampler] accept_num: {share_inputs['accept_num']}")
-        print(f"[SpeculativeSampler] accept_tokens: {share_inputs['accept_tokens']}")
 
         if think_end_id > 0 and line_break_id > 0:
             speculate_limit_thinking_content_length_v2(
@@ -584,7 +569,6 @@ class SpeculativeSampler(nn.Layer):
                 line_break_id,
             )
 
-        print(f"[SpeculativeSampler] logits: {logits}")
         num_logprobs = sampling_metadata.max_num_logprobs
         if num_logprobs is not None:
             real_bsz = share_inputs["seq_lens_this_time"].shape[0]
@@ -594,15 +578,13 @@ class SpeculativeSampler(nn.Layer):
                 share_inputs["accept_num"][:real_bsz].unsqueeze(1),
             ).squeeze(1)
             share_inputs["batch_token_num"] = batch_token_num
-            print(f"[SpeculativeSampler] batch_token_num: {share_inputs['batch_token_num']}")
             ori_cu_batch_token_offset = paddle.concat([paddle.to_tensor([0]), paddle.cumsum(batch_token_num)]).astype(
                 "int32"
             )
             cu_batch_token_offset = paddle.concat(
                 [paddle.to_tensor([0]), paddle.cumsum(share_inputs["accept_num"])]
             ).astype("int32")
-            print(f"[SpeculativeSampler] ori_cu_batch_token_offset: {ori_cu_batch_token_offset}")
-            print(f"[SpeculativeSampler] cu_batch_token_offset: {cu_batch_token_offset}")
+            share_inputs["cu_batch_token_offset"] = cu_batch_token_offset
             target_logtis = paddle.empty([share_inputs["accept_num"].sum(), logits.shape[1]], dtype=logits.dtype)
             speculate_get_target_logits(
                 target_logtis,
@@ -613,9 +595,7 @@ class SpeculativeSampler(nn.Layer):
                 share_inputs["seq_lens_encoder"],
                 share_inputs["accept_num"],
             )
-            print(f"[SpeculativeSampler] target_logtis: {target_logtis}")
             raw_logprobs = self.compute_logprobs(target_logtis, sampling_metadata)
-            print(f"[SpeculativeSampler] raw_logprobs: {raw_logprobs}")
 
         sampler_output = None
         if num_logprobs is not None:
@@ -627,7 +607,6 @@ class SpeculativeSampler(nn.Layer):
                     for i in range(share_inputs["accept_num"].shape[0])
                 ]
             )
-            print(f"[SpeculativeSampler] token_ids: {token_ids}")
             logprobs_tensors = self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=token_ids)
 
             sampler_output = SamplerOutput(
@@ -635,8 +614,6 @@ class SpeculativeSampler(nn.Layer):
                 logprobs_tensors=logprobs_tensors,
                 token_num_per_batch=batch_token_num,
             )
-
-        print(f"[SpeculativeSampler] sampler_output: {sampler_output}")
 
         return sampler_output
 
@@ -675,7 +652,6 @@ class MTPSampler(nn.Layer):
         share_inputs = sampling_metadata.share_inputs
         real_bsz = share_inputs["seq_lens_this_time"].shape[0]
         last_logits = logits
-        # print(f"[MTPSampler][compute] real_bsz: {real_bsz}")
         temp_scaled_logprobs = sampling_metadata.temp_scaled_logprobs
         top_p_normalized_logprobs = sampling_metadata.top_p_normalized_logprobs
         if temp_scaled_logprobs is not None:
@@ -688,17 +664,12 @@ class MTPSampler(nn.Layer):
                 .astype("bool")
             )
             temperature = temperature.squeeze(1).repeat_interleave(share_inputs["batch_token_num"])
-            # print(f"[MTPSampler][compute] real_bsz_temp_scaled: {real_bsz_temp_scaled}")
-            # print(f"[MTPSampler][compute] temperature: {temperature}")
             temp_temperature = paddle.where(
                 real_bsz_temp_scaled, temperature, paddle.ones_like(temperature)
             ).unsqueeze(1)
-            # print(f"[MTPSampler][compute] temp_temperature: {temp_temperature}")
             last_logits = last_logits / temp_temperature
-            # print(f"[MTPSampler][compute] last_logits: {last_logits}")
 
         last_logprobs = F.log_softmax(last_logits, axis=-1)
-        # print(f"[MTPSampler][compute] last_logits: {last_logits}")
         top_p_logprob = None
         top_p_token_mask = None
 
@@ -709,7 +680,6 @@ class MTPSampler(nn.Layer):
                 .repeat_interleave(share_inputs["batch_token_num"])
                 .unsqueeze(1)
             )
-            # print(f"[MTPSampler][compute] real_token_top_p: {real_token_top_p}")
             top_p_normalized_logprobs = (
                 top_p_normalized_logprobs[:real_bsz]
                 .astype("int32")
@@ -718,17 +688,12 @@ class MTPSampler(nn.Layer):
                 .astype("bool")
                 .unsqueeze(1)
             )
-            # print(f"[MTPSampler][compute] top_p_normalized_logprobs: {top_p_normalized_logprobs}")
             top_p_token_mask = paddle.logical_and(top_p_normalized_logprobs, real_token_top_p != 1.0)
-            # print(f"[MTPSampler][compute] top_p_token_mask: {top_p_token_mask}")
 
             if top_p_token_mask.any():
                 probs = F.softmax(last_logits, axis=-1)
-                # print(f"[MTPSampler][compute] probs: {probs}")
                 probs = top_p_normalize_probs_paddle(probs, real_token_top_p)
-                # print(f"[MTPSampler][compute] probs: {probs}")
                 top_p_logprob = paddle.log(probs)
-                # print(f"[MTPSampler][compute] top_p_logprob: {top_p_logprob}")
         if top_p_logprob is not None:
             last_logprobs = paddle.where(top_p_token_mask, top_p_logprob, last_logprobs)
         return last_logprobs
@@ -786,7 +751,6 @@ class MTPSampler(nn.Layer):
         num_logprobs = sampling_metadata.max_num_logprobs
         if num_logprobs is not None and share_inputs["substep"] == 0:
             raw_logprobs = self.compute_logprobs(share_inputs["draft_logits"], sampling_metadata)
-            print(f"[MTPSampler] raw_logprobs: {raw_logprobs}")
 
         logits = apply_speculative_penalty_multi_scores(
             sampling_metadata.pre_token_ids,
@@ -822,8 +786,6 @@ class MTPSampler(nn.Layer):
                 share_inputs["seq_lens_this_time"],
                 share_inputs["seq_lens_encoder"],
             )
-            print(f"[MTPSampler] token_ids: {token_ids}")
-            print(f"[MTPSampler] total_token_num: {share_inputs['batch_token_num'].sum()}")
 
             logprobs_tensors = self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=token_ids)
 
@@ -832,7 +794,5 @@ class MTPSampler(nn.Layer):
                 logprobs_tensors=logprobs_tensors,
                 token_num_per_batch=share_inputs["batch_token_num"],
             )
-        print(f"[MTPSampler] sampler_output: {sampler_output}")
-        print(f"[MTPSampler] next_tokens: {next_tokens}")
 
         return next_tokens, sampler_output

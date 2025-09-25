@@ -158,7 +158,6 @@ class TokenProcessor:
                 get_output_ep,
                 get_output_topk,
                 speculate_get_output,
-                speculate_get_output_topk,
             )
         rank_id = self.cfg.parallel_config.local_data_parallel_id
 

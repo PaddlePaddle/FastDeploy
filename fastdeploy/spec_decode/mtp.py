@@ -687,7 +687,6 @@ class MTPProposer(Proposer):
         """
         for substep in range(self.num_model_steps):
             if self.model_inputs["not_need_stop"]:
-                print(f"[MTPProposer] ******************** substep: {substep} ********************")
                 self.model_inputs["substep"] = substep
                 # Remove padding
                 (
@@ -757,12 +756,6 @@ class MTPProposer(Proposer):
                         [self.max_num_seqs, self.model_config.hidden_size], dtype=model_output.dtype
                     )
 
-                print(f"[MTPProposer] cu_seqlens_q: {self.model_inputs['cu_seqlens_q']}")
-                print(f"[MTPProposer] seq_lens_this_time: {self.model_inputs['seq_lens_this_time']}")
-                print(f"[MTPProposer] seq_lens_encoder: {self.model_inputs['seq_lens_encoder']}")
-                print(f"[MTPProposer] seq_lens_decoder: {self.model_inputs['seq_lens_decoder']}")
-                print(f"[MTPProposer] output_cum_offsets: {self.model_inputs['output_cum_offsets']}")
-                print(f"[MTPProposer] output_padding_offset: {self.model_inputs['output_padding_offset']}")
                 hidden_states = rebuild_padding(
                     model_output,
                     self.model_inputs["cu_seqlens_q"],
@@ -774,16 +767,11 @@ class MTPProposer(Proposer):
                     first_token_hidden_states if substep == 0 else None,
                     self.enable_logprob if substep == 0 else False,
                 )
-                print(f"[MTPProposer] hidden_states: {hidden_states}")
-                print(f"[MTPProposer] first_token_hidden_states: {first_token_hidden_states}")
 
                 # 4. Compute logits, Sample
                 logits = self.model.compute_logits(hidden_states)
                 if self.enable_logprob and substep == 0:
                     first_token_logits = self.model.compute_logits(first_token_hidden_states)
-                    print(f"[MTPProposer] logits: {logits}")
-                    print(f"[MTPProposer] first_token_logits: {first_token_logits}")
-                    print(f"[MTPProposer] output_padding_offset: {self.model_inputs['output_padding_offset']}")
 
                     draft_logits, batch_token_num, cu_batch_token_offset = speculate_get_logits(
                         logits,
@@ -795,9 +783,6 @@ class MTPProposer(Proposer):
                     self.model_inputs["draft_logits"] = draft_logits
                     self.model_inputs["batch_token_num"] = batch_token_num
                     self.model_inputs["cu_batch_token_offset"] = cu_batch_token_offset
-                    print(f"[MTPProposer] draft_logits: {draft_logits}")
-                    print(f"[MTPProposer] batch_token_num: {batch_token_num}")
-                    print(f"[MTPProposer] cu_batch_token_offset: {cu_batch_token_offset}")
 
                 sampled_token_ids, sampler_output = self.sampler(
                     logits,
