@@ -62,8 +62,12 @@ template <int numel>
 __forceinline__ __device__ void convert_c4_2_fp8(const int32_t * src, int32_t * dst1, int32_t * dst2) {
     #pragma unroll
     for (int i = 0; i < numel; ++i) {
-        dst1[i] = (src[i] >> 4) & 0x0f0f0f0f;
-        dst2[i] = src[i] & 0x0f0f0f0f;
+        uint32_t head1 = src[i] & 0x80808080;
+        dst1[i] = (src[i] >> 4) & 0x07070707;
+        dst1[i] = dst1[i] | head1;
+        uint32_t head2 = (src[i] & 0x08080808) << 4;
+        dst2[i] = src[i] & 0x07070707;
+        dst2[i] = dst2[i] | head2;
     }
 }
 

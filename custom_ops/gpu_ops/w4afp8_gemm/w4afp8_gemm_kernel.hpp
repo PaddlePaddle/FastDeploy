@@ -34,7 +34,6 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
     static_assert(cutlass::sizeof_bits_v<Element> == 8);
 
     using TileShape_MNK = typename Ktraits::TileShape_MNK;
-    using TileShape_MNK_TAIL = typename Ktraits::TileShape_MNK_TAIL;
     using ClusterShape = typename Ktraits::ClusterShape_MNK;
 
     static constexpr int NumMmaThreads = size(typename Ktraits::TiledMma{});
@@ -42,8 +41,9 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
     static constexpr int kBlockN = Ktraits::kBlockN;
     static constexpr int kBlockM = Ktraits::kBlockM;
     static constexpr int M = Ktraits::M;
+    static constexpr int K = Ktraits::K;
     static constexpr int TokenPackSize = Ktraits::TokenPackSize;
-    static constexpr int TAIL_N = Ktraits::TAIL_N;
+    static constexpr int WeightScaleGroup = Ktraits::WeightScaleGroup;
 
     using CollectiveMainloop = CollectiveMainloopFwd<Ktraits>;
 
@@ -66,9 +66,13 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
 
     // Obtain warp index
     int const warp_group_thread_idx = threadIdx.x % cutlass::NumThreadsPerWarpGroup;
-
+    
     PipelineParams pipeline_params;
-    pipeline_params.transaction_bytes = CollectiveMainloop::TmaTransactionBytesA + CollectiveMainloop::TmaTransactionBytesB;
+    if constexpr (WeightScaleGroup == K) {
+        pipeline_params.transaction_bytes = CollectiveMainloop::TmaTransactionBytesA + CollectiveMainloop::TmaTransactionBytesB;
+    } else {
+        pipeline_params.transaction_bytes = CollectiveMainloop::TmaTransactionBytesA + CollectiveMainloop::TmaTransactionBytesB + CollectiveMainloop::TmaTransactionBytesScale;
+    }
     int warp_group_idx = cutlass::canonical_warp_group_idx();
     pipeline_params.role = warp_group_idx == 0
         ? MainloopPipeline::ThreadCategory::Producer
@@ -96,9 +100,6 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
         return;
     }
 
-    float* input_row_sum = reinterpret_cast<float*>(
-        shared_memory + sizeof(typename Ktraits::SharedStorage));
-
     if (warp_group_idx == 0) {
         cutlass::arch::warpgroup_reg_dealloc<Ktraits::kNWarps == 12 ? 40 : 32>();
         PipelineState smem_pipe_write = cutlass::make_producer_start_state<MainloopPipeline>();
@@ -119,95 +120,81 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
 
         typename Ktraits::TiledMma tiled_mma;
 
-        typename Ktraits::TiledMma_TAIL tiled_mma_tail;
-
         const int mma_tidx = tidx - NumCopyThreads;
-        const int lane_id = mma_tidx % 4 * 2;
 
-        const float2 weight_scale = reinterpret_cast<const float2*>(mainloop_params.weight_scale + bidb * M + bidm * kBlockM)[mma_tidx / 4];
+        float2 weight_scale;
 
-        if constexpr (TokenPackSize == 0) {
-            const int input_sum_idx = pre_fix_tokens + bidn * kBlockN;
-            if (mma_tidx < kBlockN) {
-                reinterpret_cast<float*>(input_row_sum)[mma_tidx] = reinterpret_cast<const float*>(mainloop_params.input_row_sum + input_sum_idx)[mma_tidx];
-            }
-        } else {
-            const int input_sum_idx = bidb * TokenPackSize + bidn * kBlockN;
-            if (mma_tidx < kBlockN / 4) {
-                reinterpret_cast<float4*>(input_row_sum)[mma_tidx] = reinterpret_cast<const float4*>(mainloop_params.input_row_sum + input_sum_idx)[mma_tidx];
-            }
+        if constexpr (WeightScaleGroup == K) {
+            weight_scale = reinterpret_cast<const float2*>(mainloop_params.weight_scale + bidb * M + bidm * kBlockM)[mma_tidx / 4];
         }
+        Tensor tSrS = partition_fragment_C(tiled_mma, select<0, 1>(TileShape_MNK{})); 
 
-        const int reamin_tokens = tokens - bidn * kBlockN;
-
-        if (TAIL_N > 0 && reamin_tokens < kBlockN) {
-            Tensor tSrS_tail = partition_fragment_C(tiled_mma_tail, select<0, 1>(TileShape_MNK_TAIL{}));
-            collective_mainloop.mma<TAIL_N>(
-                mainloop_params,
-                tiled_mma_tail,
-                pipeline,
-                smem_pipe_read,
-                shared_storage,
-                tSrS_tail,
-                mma_tidx);
-            collective_mainloop.store<TAIL_N>(
-                mainloop_params,
-                tSrS_tail,
-                shared_storage,
-                tiled_mma_tail,
-                input_row_sum + lane_id,
-                reinterpret_cast<const float*>(&weight_scale),
-                tokens,
-                pre_fix_tokens,
-                bidm,
-                bidn,
-                bidb,
-                mma_tidx);
-        } else {
-            Tensor tSrS = partition_fragment_C(tiled_mma, select<0, 1>(TileShape_MNK{}));
-            collective_mainloop.mma<kBlockN>(
+        if constexpr (WeightScaleGroup == K) {
+            collective_mainloop.mma(
                 mainloop_params,
                 tiled_mma,
-                pipeline,
+                pipeline,  
                 smem_pipe_read,
                 shared_storage,
                 tSrS,
                 mma_tidx);
-            collective_mainloop.store<kBlockN>(
+        } else {
+            collective_mainloop.mma_pipeline(
                 mainloop_params,
-                tSrS,
-                shared_storage,
                 tiled_mma,
-                input_row_sum + lane_id,
-                reinterpret_cast<const float*>(&weight_scale),
-                tokens,
-                pre_fix_tokens,
-                bidm,
-                bidn,
-                bidb,
+                pipeline,  
+                smem_pipe_read,
+                shared_storage,
+                tSrS,
                 mma_tidx);
         }
+        
+
+        collective_mainloop.store(
+            mainloop_params, 
+            tSrS, 
+            shared_storage, 
+            tiled_mma,
+            reinterpret_cast<const float*>(&weight_scale),
+            tokens,
+            pre_fix_tokens,         
+            bidm,
+            bidn,
+            bidb,
+            mma_tidx);
     }
 
 }
 
-template <int Batch>
+template <int Experts>
 auto get_gmem_layout(const int Rows, const int Cols) {
     return  make_layout(
                 make_shape(
                     static_cast<int64_t>(Rows),
                     static_cast<int64_t>(Cols),
-                    static_cast<int64_t>(Batch)),
+                    static_cast<int64_t>(Experts)),
                 make_stride(
                     static_cast<int64_t>(Cols),
                     cute::_1{},
                     static_cast<int64_t>(Rows * Cols)));
 }
 
+template <int Experts>
+auto get_scale_layout(const int Rows, const int Cols) {
+    return  make_layout(
+                make_shape(
+                    static_cast<int64_t>(Cols),
+                    static_cast<int64_t>(Rows),
+                    static_cast<int64_t>(Experts)),
+                make_stride(
+                    cute::_1{},
+                    static_cast<int64_t>(Cols),
+                    static_cast<int64_t>(Rows * Cols)));
+}
 
-template <typename InputType, typename OutputType, typename Kernel_traits, int M, int K, int Batch, int TokenPackSize>
-void run_gemm(const InputType * A, const InputType * B, OutputType * C, const float *weight_scale,
-        const float *input_row_sum, const int64_t * tokens, const int64_t max_tokens, cudaStream_t stream) {
+
+template <typename InputType, typename OutputType, typename Kernel_traits, int M, int K, int Experts, int TokenPackSize, int WeightScaleGroup>
+void run_gemm(const InputType * A, const InputType * B, OutputType * C, const float *weight_scale, const int64_t * tokens, const int max_tokens, cudaStream_t stream) {
 
     using ElementOutput = typename Kernel_traits::ElementOutput;
     using Element = typename Kernel_traits::Element;
@@ -216,24 +203,27 @@ void run_gemm(const InputType * A, const InputType * B, OutputType * C, const fl
 
     constexpr int M_nums = (M + Kernel_traits::kBlockM - 1) / Kernel_traits::kBlockM;
     const int N_nums = (max_tokens + Kernel_traits::kBlockN - 1) / Kernel_traits::kBlockN;
+    constexpr int K_scale_nums = K / Kernel_traits::kBlockM;
+    static_assert(K % WeightScaleGroup == 0);
+    static_assert(WeightScaleGroup == 128 || WeightScaleGroup == K);
 
     typename CollectiveMainloop::Params mainloop_params =
         CollectiveMainloop::to_underlying_arguments({
             static_cast<Element const*>(A),
-            get_gmem_layout<Batch>(M, K / 2),
+            get_gmem_layout<Experts>(M, K / 2),
             static_cast<Element const*>(B),
-            get_gmem_layout<Batch>(TokenPackSize == 0 ? max_tokens: TokenPackSize, K),
+            get_gmem_layout<Experts>(TokenPackSize == 0 ? max_tokens: TokenPackSize, K),
             static_cast<ElementOutput*>(C),
-            get_gmem_layout<Batch>(M, TokenPackSize == 0 ? max_tokens : TokenPackSize),
+            get_gmem_layout<Experts>(M, TokenPackSize == 0 ? max_tokens : TokenPackSize),
             weight_scale,
-            input_row_sum,
+            get_scale_layout<Experts>(M_nums, K_scale_nums * Kernel_traits::kBlockM),
             tokens
         });
 
     void *kernel;
     kernel = (void *)w4afp8_gemm_kernel<Kernel_traits>;
 
-    int smem_size = sizeof(typename Kernel_traits::SharedStorage) + sizeof(float) * Kernel_traits::kBlockN;
+    int smem_size = sizeof(typename Kernel_traits::SharedStorage);
 
     if (smem_size >= 48 * 1024) {
        cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
@@ -242,7 +232,7 @@ void run_gemm(const InputType * A, const InputType * B, OutputType * C, const fl
     dim3 grid_dims;
     grid_dims.x = M_nums;
     grid_dims.y = N_nums;
-    grid_dims.z = Batch;
+    grid_dims.z = Experts;
     static constexpr int ctaSize = Kernel_traits::kNWarps * 32;
     dim3 block_dims(ctaSize);
     dim3 cluster_dims(size<0>(ClusterShape{}), size<1>(ClusterShape{}), size<2>(ClusterShape{}));

@@ -18,7 +18,7 @@
 #include "cutlass_kernels/w4a8_moe/w4a8_moe_gemm_kernel.h"
 #include "group_swiglu_with_masked.h"
 #include "helper.h"
-#include "moe/fast_hardamard_kernel.h"
+#include "moe/fast_hardmard/fast_hardamard_kernel.h"
 #include "moe/fused_moe_helper.h"
 #include "w4afp8_gemm/w4afp8_gemm.h"
 
@@ -179,27 +179,11 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
         typedef typename traits_fp8::DataType DataType_fp8;
         typedef typename traits_fp8::data_t data_t_fp8;
 
-        Allocator::AllocationPtr ffn1_input_row_sum;
-        ffn1_input_row_sum = allocator->Allocate(
-            sizeof(float) * expanded_active_expert_rows);
-
-        compute_row_sum(
-            permute_input.data<data_t_fp8>(),
-            expanded_active_expert_rows,
-            hidden_size,
-            reinterpret_cast<float*>(ffn1_input_row_sum->ptr()),
-            const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
-            num_max_tokens_per_expert,
-            used_in_ep_low_latency,
-            stream);
-
-
         float* row_scale = nullptr;
         DisPatchW4AFp8GemmWrapper(
             reinterpret_cast<const DataType_fp8 *>(permute_input.data<data_t_fp8>()),
             reinterpret_cast<const DataType_fp8 *>(up_gate_proj_weight.data<int8_t>()),
             const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
-            reinterpret_cast<float*>(ffn1_input_row_sum->ptr()),
             row_scale,
             const_cast<paddle::Tensor*>(up_gate_proj_scale.get_ptr())
                 ->data<float>(),
@@ -323,18 +307,14 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
         Allocator::AllocationPtr fp8_act_out;
         fp8_act_out = allocator->Allocate(
             SizeOf(paddle::DataType::INT8) * act_out_tensor.numel());
-        Allocator::AllocationPtr ffn2_input_row_sum;
-        ffn2_input_row_sum = allocator->Allocate(
-            sizeof(float) * expanded_active_expert_rows);
 
-        // note(yuanxiaolan): optimize this
-        MoeFastHardamardWrapper<data_t, data_t>(
+        MoeFastHardamardWrapper<data_t, data_t_fp8>(
             act_out_tensor.data<data_t>(),
             expert_idx_per_token ? expert_idx_per_token.get().data<int64_t>() : nullptr,
             const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
-            ffn2_shift, // ffn2_shift->data<T>(),
-            ffn2_smooth, // ffn2_smooth->data<T>(),
-            nullptr,
+            ffn2_shift,
+            ffn2_smooth,
+            down_proj_in_scale ? const_cast<paddle::Tensor*>(down_proj_in_scale.get_ptr())->data<float>() : nullptr,
             1,
             448.0f,
             -448.0f,
@@ -343,30 +323,14 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
             num_max_tokens_per_expert,
             used_in_ep_low_latency,
             hadamard_block_size,
-            act_out_tensor.data<data_t>(),
-            stream
-        );
-
-        quantize_moe_input<data_t, data_t_fp8>(act_out_tensor.data<data_t>(),
-            expert_idx_per_token ? expert_idx_per_token.get().data<int64_t>() : nullptr,
-            down_proj_in_scale ? const_cast<paddle::Tensor*>(down_proj_in_scale.get_ptr())->data<float>() : nullptr,
-            448.0f,
-            -448.0f,
-            expanded_active_expert_rows,
-            inter_size / 2,
-            reinterpret_cast<float*>(ffn2_input_row_sum->ptr()),
-            const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
-            num_max_tokens_per_expert,
-            used_in_ep_low_latency,
             reinterpret_cast<data_t_fp8 *>(fp8_act_out->ptr()),
             stream
-            );
+        );
 
         DisPatchW4AFp8GemmWrapper(
             reinterpret_cast<const DataType_fp8 *>(fp8_act_out->ptr()),
             reinterpret_cast<const DataType_fp8 *>(down_proj_weight.data<int8_t>()),
             const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
-            reinterpret_cast<float*>(ffn2_input_row_sum->ptr()),
             row_scale,
             const_cast<paddle::Tensor*>(down_proj_scale.get_ptr())
                     ->data<float>(),

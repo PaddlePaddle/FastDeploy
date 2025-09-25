@@ -30,7 +30,7 @@ if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch, moe_expert_reduce
 
     try:
-        from fastdeploy.model_executor.ops.gpu import w4afp8_gemm_scale_permute
+        from fastdeploy.model_executor.ops.gpu import w4afp8_gemm_scale_permute, w4afp8_gemm_weight_permute
     except:
         logger.warning("import w4afp8_gemm_scale_permute Failed!")
 elif current_platform.is_iluvatar():
@@ -785,7 +785,7 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             weight_name = self.added_weight_attrs[idx]
             weight_list = []
             for i in range(layer.num_local_experts):
-                quant_weight, scale = weight_quantize(weight_tensor[i], algo=self.moe_quant_type, arch=80)
+                quant_weight = w4afp8_gemm_weight_permute(weight_tensor[i])
                 weight_list.append(quant_weight)
             quanted_weight = paddle.stack(weight_list, axis=0)
             getattr(layer, weight_name).set_value(quanted_weight)
