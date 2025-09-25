@@ -64,7 +64,7 @@ update_split_fuse_inputs_kernel(int* split_fuse_seq_lens,
     }
 }
 
-void UpdateSplitFuseInputes(const paddle::Tensor& split_fuse_seq_lens,
+void UpdateSplitFuseInputs(const paddle::Tensor& split_fuse_seq_lens,
                             const paddle::Tensor& split_fuse_cur_seq_lens,
                             const paddle::Tensor& split_fuse_all_input_ids,
                             const paddle::Tensor& input_ids,
@@ -111,4 +111,4 @@ PD_BUILD_STATIC_OP(update_split_fuse_inputs)
             "max_batch_size: int",    // 最大的batch size
             "split_fuse_size: int"})  // 切分的长度
     .SetInplaceMap({{"input_ids", "input_ids_out"}})
-    .SetKernelFn(PD_KERNEL(UpdateSplitFuseInputes));
+    .SetKernelFn(PD_KERNEL(UpdateSplitFuseInputs));

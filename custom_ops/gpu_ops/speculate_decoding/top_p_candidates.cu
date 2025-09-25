@@ -398,11 +398,11 @@ __global__ void KeMatrixTopPBeamTopKFt(
     const T* src,
     const T* top_ps,
     const int* output_padding_offset,
-    int64_t* out_id,  // [max_cadidate_len, 1]
-    T* out_val,       // [max_cadidate_len, 1]
+    int64_t* out_id,  // [max_candidate_len, 1]
+    T* out_val,       // [max_candidate_len, 1]
     int* actual_candidates_lens,
     int vocab_size,
-    const int max_cadidate_len,
+    const int max_candidate_len,
     const int max_seq_len) {
     const int tid = threadIdx.x;
     const int wid = tid / 32;
@@ -456,9 +456,9 @@ __global__ void KeMatrixTopPBeamTopKFt(
         float sum_prob = 0.0f;
         bool flag = false;
         for (int i = 0; i < TopPBeamTopK; i++) {
-            out_id[token_id * max_cadidate_len + i] =
+            out_id[token_id * max_candidate_len + i] =
                 static_cast<int64_t>(beam_max[i].id);
-            out_val[token_id * max_cadidate_len + i] = beam_max[i].v;
+            out_val[token_id * max_candidate_len + i] = beam_max[i].v;
             float val = static_cast<float>(beam_max[i].v);
             sum_prob += val;
 
@@ -479,11 +479,11 @@ void DispatchTopK(const T* src,
                   int* actual_candidates_lens_data,
                   const int vocab_size,
                   const int token_num,
-                  const int cadidate_len,
+                  const int candidate_len,
                   const int max_seq_len,
                   const cudaStream_t& stream) {
     int BlockSize = GetBlockSize(vocab_size);
-    switch (cadidate_len) {
+    switch (candidate_len) {
         FIXED_TOPK(switch (BlockSize) {
             FIXED_BLOCK_DIM(
                 KeMatrixTopPBeamTopKFt<T, TopKMaxLength, kTopK, kBlockDim>
@@ -495,7 +495,7 @@ void DispatchTopK(const T* src,
                     out_val,
                     actual_candidates_lens_data,
                     vocab_size,
-                    cadidate_len,
+                    candidate_len,
                     max_seq_len));
             default:
                 PD_THROW(

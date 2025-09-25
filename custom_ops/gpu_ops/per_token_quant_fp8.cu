@@ -95,7 +95,7 @@ std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor& input,
     auto input_dim = input.dims();
     const int token_num = input_dim[0];
     const int hidden_size = input_dim[1];
-    // Note(ZKK) here we use ceil_dive to support 4.5T runing on 8 GPUS
+    // Note(ZKK) here we use ceil_dive to support 4.5T running on 8 GPUS
     // where moe_intermediate_size is 448, can not be divided by 128.
     const int hidden_size_scale = (hidden_size + block_size - 1) / block_size;
 

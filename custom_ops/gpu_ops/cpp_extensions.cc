@@ -356,7 +356,7 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
                        const bool beam_search);
 
 
-void UpdateInputes(const paddle::Tensor &stop_flags,
+void UpdateInputs(const paddle::Tensor &stop_flags,
                    const paddle::Tensor &not_need_stop, // only on cpu
                    const paddle::Tensor &seq_lens_this_time,
                    const paddle::Tensor &seq_lens_encoder,
@@ -366,7 +366,7 @@ void UpdateInputes(const paddle::Tensor &stop_flags,
                    const paddle::Tensor &next_tokens,
                    const paddle::Tensor &is_block_step);
 
-void UpdateInputesV1(const paddle::Tensor &stop_flags,
+void UpdateInputsV1(const paddle::Tensor &stop_flags,
                    const paddle::Tensor &not_need_stop,  // only on cpu
                    const paddle::Tensor &seq_lens_this_time,
                    const paddle::Tensor &seq_lens_encoder,
@@ -1122,13 +1122,13 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
    * update_inputs.cu
    * update_inputs
    */
-  m.def("update_inputs", &UpdateInputes, "update_inputs function");
+  m.def("update_inputs", &UpdateInputs, "update_inputs function");
 
    /**
    * update_inputs_v1.cu
    * update_inputs_v1
    */
-  m.def("update_inputs_v1", &UpdateInputesV1, "update inputs for scheduler v1 function");
+  m.def("update_inputs_v1", &UpdateInputsV1, "update inputs for scheduler v1 function");
 
      /**
    * recover_decode_task.cu
