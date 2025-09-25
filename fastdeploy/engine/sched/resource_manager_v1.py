@@ -289,7 +289,7 @@ class ResourceManagerV1(ResourceManager):
                 request.image_end = np.sum(np.prod(grid_thw[: request.num_image_end], axis=1))
 
                 cur_mm_hashes = inputs["mm_hashes"][request.num_image_start : request.num_image_end]
-                cur_mm_positions = inputs["cur_mm_positions"][request.num_image_start : request.num_image_end]
+                cur_mm_positions = inputs["mm_positions"][request.num_image_start : request.num_image_end]
                 if self.encoder_cache:
                     request.evict_mm_hashes = self.encoder_cache.apply_cache(
                         mm_hashes=cur_mm_hashes,

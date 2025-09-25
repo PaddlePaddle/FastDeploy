@@ -123,7 +123,7 @@ class GPUModelRunner(ModelRunnerBase):
                 "matmul_v2",
                 "fused_gemm_epilogue",
             ]
-            
+
             self.encoder_cache: dict[int, paddle.Tensor] = {}
 
         #  Sampler
@@ -270,20 +270,20 @@ class GPUModelRunner(ModelRunnerBase):
             ),
             schemata_key,
         )
-    
+
     def batch_uncached_inputs(self, req: Request):
         """
         Batch uncached multimodal inputs
-        """ 
+        """
         prefill_start_index = req.prefill_start_index
         prefill_end_index = req.prefill_end_index
         inputs = req.multimodal_inputs
         input_ids = inputs["input_ids"][prefill_start_index:prefill_end_index]
         token_type_ids = inputs["token_type_ids"][prefill_start_index:prefill_end_index]
-        image_type_ids = inputs["image_type_ids"][req.image_type_ids_start:req.image_type_ids_end]
-        images = inputs["images"][req.image_start:req.image_end]
-        grid_thw = inputs["grid_thw"][req.num_image_start:req.num_image_end]
-        mm_hashes = inputs["mm_hashes"][req.num_image_start:req.num_image_end]
+        image_type_ids = inputs["image_type_ids"][req.image_type_ids_start : req.image_type_ids_end]
+        images = inputs["images"][req.image_start : req.image_end]
+        grid_thw = inputs["grid_thw"][req.num_image_start : req.num_image_end]
+        mm_hashes = inputs["mm_hashes"][req.num_image_start : req.num_image_end]
 
         image_type_ids_size = grid_thw[:, 0]
         image_type_ids_split = np.cumsum(image_type_ids_size)[:-1]
@@ -293,10 +293,13 @@ class GPUModelRunner(ModelRunnerBase):
         images_split = np.cumsum(images_size)[:-1]
         images_lst = np.array_split(images, images_split, axis=0)
 
-        assert len(image_type_ids_lst) == len(mm_hashes), \
-            f"image_type_ids_lst length {len(image_type_ids_lst)} != mm_hashes length {len(mm_hashes)}"
-        assert len(images_lst) == len(mm_hashes), f"images_lst length {len(images_lst)} != mm_hashes length {len(mm_hashes)}"
-        
+        assert len(image_type_ids_lst) == len(
+            mm_hashes
+        ), f"image_type_ids_lst length {len(image_type_ids_lst)} != mm_hashes length {len(mm_hashes)}"
+        assert len(images_lst) == len(
+            mm_hashes
+        ), f"images_lst length {len(images_lst)} != mm_hashes length {len(mm_hashes)}"
+
         uncached_image_type_ids = []
         uncached_images = []
         uncached_grid_thw = []
@@ -308,29 +311,25 @@ class GPUModelRunner(ModelRunnerBase):
             uncached_images.append(images_lst[i])
             uncached_grid_thw.append(grid_thw[i])
             uncached_mm_hashes.append(mm_hash)
-        
+
         uncached_input_ids = paddle.to_tensor(input_ids, dtype=paddle.int64)
         uncached_token_type_ids = paddle.to_tensor(token_type_ids, dtype=paddle.int64)
         if len(uncached_mm_hashes) > 0:
-            uncached_image_type_ids = paddle.to_tensor(
-                np.hstack(uncached_image_type_ids), 
-                dtype=paddle.int64
-            )
+            uncached_image_type_ids = paddle.to_tensor(np.hstack(uncached_image_type_ids), dtype=paddle.int64)
             uncached_images = paddle.to_tensor(
-                np.vstack(uncached_images),
-                dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16"
+                np.vstack(uncached_images), dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16"
             )
             uncached_grid_thw = paddle.to_tensor(uncached_grid_thw, dtype=paddle.int64)
-       
+
         return (
             uncached_input_ids,
             uncached_token_type_ids,
             uncached_image_type_ids,
             uncached_images,
             uncached_grid_thw,
-            uncached_mm_hashes
+            uncached_mm_hashes,
         )
-    
+
     def scatter_and_cache_features(self, image_features, inputs):
         """
         Split batched image features and cache them
@@ -338,11 +337,12 @@ class GPUModelRunner(ModelRunnerBase):
         merge_size = 2
         grid_thw = inputs["grid_thw"]
         mm_hashes = inputs["mm_hashes"]
-        image_features_size = (paddle.prod(grid_thw[:, 1:], axis=1) // (merge_size ** 2)).tolist()
+        image_features_size = (paddle.prod(grid_thw[:, 1:], axis=1) // (merge_size**2)).tolist()
         image_features_lst = paddle.split(image_features, image_features_size, axis=0)
 
-        assert len(image_features_lst) == len(mm_hashes), \
-            f"image_features_lst length {len(image_features_lst)} != mm_hashes length {len(mm_hashes)}"
+        assert len(image_features_lst) == len(
+            mm_hashes
+        ), f"image_features_lst length {len(image_features_lst)} != mm_hashes length {len(mm_hashes)}"
         for i, mm_hash in enumerate(mm_hashes):
             self.encoder_cache[mm_hash] = image_features_lst[i].cpu()
 
@@ -359,6 +359,7 @@ class GPUModelRunner(ModelRunnerBase):
         req_len = len(req_dicts)
         has_prefill_task = False
         has_decode_task = False
+        logger.debug(f"before self.encoder_cache.keys: {self.encoder_cache.keys()}")
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
@@ -366,6 +367,13 @@ class GPUModelRunner(ModelRunnerBase):
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
+                evict_mm_hashes = request.get("evict_mm_hashes", None)
+                if evict_mm_hashes is not None:
+                    logger.debug(
+                        f"request: {request.request_id} evict_mm_hashes={evict_mm_hashes}, mm_hash: {request.multimodal_inputs.get('mm_hashes', [])}"
+                    )
+                    for mm_hash in evict_mm_hashes:
+                        self.encoder_cache.pop(mm_hash, None)
                 if self.enable_mm:
                     inputs = request.multimodal_inputs
                     if request.with_image:
@@ -376,13 +384,13 @@ class GPUModelRunner(ModelRunnerBase):
                             vision_inputs["image_type_ids"],
                             vision_inputs["images"],
                             vision_inputs["grid_thw"],
-                            vision_inputs["mm_hashes"]
+                            vision_inputs["mm_hashes"],
                         ) = self.batch_uncached_inputs(request)
                         if len(vision_inputs["mm_hashes"]) > 0:
                             # uncached multimodal inputs exist
                             image_features = self.extract_vision_features(vision_inputs)
                             self.scatter_and_cache_features(image_features, vision_inputs)
-                        
+
                         full_image_features_lst = []
                         for mm_hash in inputs["mm_hashes"]:
                             feature = self.encoder_cache[mm_hash].cuda()
@@ -390,7 +398,9 @@ class GPUModelRunner(ModelRunnerBase):
                         full_image_features = paddle.concat(full_image_features_lst, axis=0)
 
                         # part of the first image may be already cached
-                        actual_image_token_num = paddle.sum(vision_inputs["input_ids"] == self.model_config.im_patch_id)
+                        actual_image_token_num = paddle.sum(
+                            vision_inputs["input_ids"] == self.model_config.im_patch_id
+                        )
                         self.share_inputs["image_features"] = full_image_features[-actual_image_token_num:]
                     else:
                         self.share_inputs["image_features"] = None
@@ -515,6 +525,7 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
+        logger.debug(f"after self.encoder_cache.keys: {self.encoder_cache.keys()}")
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
         self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
