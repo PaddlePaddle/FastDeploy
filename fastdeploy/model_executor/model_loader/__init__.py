@@ -21,6 +21,8 @@ from fastdeploy.model_executor.model_loader.default_loader_v1 import (
     DefaultModelLoaderV1,
 )
 
+print("233")
+
 
 def get_model_loader(load_config: LoadConfig) -> BaseModelLoader:
     """get_model_loader"""

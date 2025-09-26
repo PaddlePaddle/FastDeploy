@@ -60,7 +60,7 @@ WORKER_OR_CONFIG_LIST=(
 
 HAS_WORKER_OR_CONFIG_MODIFY=`git diff upstream/$BRANCH  --name-only | grep -E $(printf -- "-e %s " "${WORKER_OR_CONFIG_LIST[@]}") || true`
 if [ ${HAS_WORKER_OR_CONFIG_MODIFY} ] && [ "${PR_ID}" != "" ]; then
-    echo_line1="You must have one FastDeploy RD (gongshaotian(gongshaotian), yuanlehome(liuyuanle)) approval for modifing [${WORKER_OR_CONFIG_LIST[*]// /,}]."
+    echo_line1="You must have one FastDeploy RD (gongshaotian(gongshaotian), yuanlehome(liuyuanle)) approval for modifing [$(IFS=','; echo "${WORKER_OR_CONFIG_LIST[*]}")]."
     check_approval "$echo_line1" 1 gongshaotian yuanlehome
 fi
 
