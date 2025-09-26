@@ -101,7 +101,7 @@ __global__ void weight_permute_interleave_kernelw4afp8(
 }
 
 std::vector<paddle::Tensor> W4AFp8GemmWeightConvert(const paddle::Tensor& weight) {
-    if (weight.place() == paddle::PlaceType::CPU) {
+    if (weight.place() == paddle::CPUPlace()) {
         const int experts = weight.dims()[0];
         const int M = weight.dims()[1];
         const int K = weight.dims()[2];

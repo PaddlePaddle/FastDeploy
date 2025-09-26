@@ -92,7 +92,6 @@ __forceinline__ __device__ void gemm(
         warpgroup_arrive();
     }
     constexpr int numel = decltype(size(tCrA(_, _, 0)))::value / 4;
-
     Tensor tCrA_copy_view = thr_copy_A.retile_D(tCrA);
     cute::copy(tiled_copy_A, tCsA(_, _, _0{}), tCrA_copy_view(_, _, _0{}));
 
@@ -107,7 +106,9 @@ __forceinline__ __device__ void gemm(
         convert_c4_2_fp8<numel>(tCrA_data, tCrA1_data, tCrA2_data);
 
         cute::gemm(tiled_mma, tCrA1(_,_,k_block), tCrB(_,_,2 * k_block), tCrC);
+        tiled_mma.accumulate_ = GMMA::ScaleOut::One;
         cute::gemm(tiled_mma, tCrA2(_,_,k_block), tCrB(_,_, 2 * k_block + 1), tCrC);
+
     }
     if constexpr (commit) {
         warpgroup_commit_batch();

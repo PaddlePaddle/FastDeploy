@@ -21,6 +21,7 @@
 #include "w4afp8_gemm_template.h"
 #include "w4afp8_gemm.h"
 #include "weight_kernel.hpp"
+#include "weight_scale_kernel.hpp"
 
 
 
@@ -57,12 +58,13 @@ void DisPatchW4AFp8Gemm(
         const int Experts,
         const int64_t M,
         const int64_t K,
+        const int WeightScaleGroup,
         cudaStream_t stream) {
 
     int kBlockN = 256;
     if constexpr (std::is_same_v<OutputType, cutlass::bfloat16_t>) {
         GEMM_SWITCH_BF16(
-            M, K, Experts, token_padding_size, kBlockN, K,
+            M, K, Experts, token_padding_size, kBlockN, WeightScaleGroup,
             weight,
             input,
             out,
@@ -88,6 +90,7 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
     const int Experts = weight.dims()[0];
     const int M = weight.dims()[1];
     const int K = weight.dims()[2] * 2;
+    const int WeightScaleGroup = weight_scale.dims().size() == 2 ? K : weight_scale.dims()[3];
 
     if (input.dtype() != paddle::DataType::FLOAT8_E4M3FN) {
         PD_THROW("Only supported dtype in ['FLOAT8_E4M3FN'].");
@@ -109,6 +112,7 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
                 Experts,
                 M,
                 K,
+                WeightScaleGroup,
                 input.stream());
             return {out};
         } else {
@@ -129,6 +133,7 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
                 Experts,
                 M,
                 K,
+                WeightScaleGroup,
                 input.stream());
             return {out};
         } else {
@@ -150,6 +155,7 @@ void DisPatchW4AFp8GemmWrapper(
         const int num_experts,
         const int64_t M,
         const int64_t K,
+        const int WeightScaleGroup,
         cudaStream_t stream) {
     using InType = typename NVTraits<InputType>::data_t;
     using OutType = typename NVTraits<OutputType>::data_t;
@@ -164,61 +170,8 @@ void DisPatchW4AFp8GemmWrapper(
         num_experts,
         M,
         K,
+        WeightScaleGroup,
         stream);
-}
-
-
-
-
-template <typename T, int kPackSize>
-__global__ void permute_scale_kernel(
-        T* input_data,
-        const int numel) {
-    using LoadT = AlignedVector<T, kPackSize>;
-    LoadT input_vec;
-    LoadT dst_vec;
-    const int load_idx = (blockIdx.x * blockDim.x + threadIdx.x) * kPackSize;
-    if (load_idx >= numel) {
-        return;
-    }
-    Load<T, kPackSize>(&input_data[load_idx], &input_vec);
-
-    for (int i = 0; i < kPackSize; i+=2) {
-        dst_vec[i] = input_vec[i / 2];
-        dst_vec[i + 1] = input_vec[i / 2 + 8];
-    }
-
-    Store<T, kPackSize>(dst_vec, &input_data[load_idx]);
-}
-
-void W4AFp8GemmScalePermute(const paddle::Tensor& scale) {
-    const int row = scale.dims().size() == 2 ? scale.dims()[0] : 1;
-    const int col = scale.dims().size() == 2 ? scale.dims()[1] : scale.dims()[0];
-    if (col % 16 != 0) {
-        PD_THROW("Only supported when col is divisible by 16.");
-    }
-    const int numel = row * col;
-    const int threads = 128;
-    const int kPackSize = 16;
-    const int grid_size = (numel / kPackSize + threads - 1) / threads;
-
-    if (scale.dtype() == paddle::DataType::BFLOAT16) {
-        permute_scale_kernel<phi::dtype::bfloat16, kPackSize><<<grid_size, threads, 0, scale.stream()>>>(
-            const_cast<phi::dtype::bfloat16*>(scale.data<phi::dtype::bfloat16>()),
-            numel
-        );
-    } else if (scale.dtype() == paddle::DataType::FLOAT16) {
-        permute_scale_kernel<phi::dtype::float16, kPackSize><<<grid_size, threads, 0, scale.stream()>>>(
-            const_cast<phi::dtype::float16*>(scale.data<phi::dtype::float16>()),
-            numel
-        );
-    } else if (scale.dtype() == paddle::DataType::FLOAT32) {
-        permute_scale_kernel<float, kPackSize><<<grid_size, threads, 0, scale.stream()>>>(
-            const_cast<float*>(scale.data<float>()),
-            numel
-        );
-    }
-
 }
 
 PD_BUILD_STATIC_OP(w4afp8_gemm_scale_permute)
@@ -255,6 +208,7 @@ template void DisPatchW4AFp8GemmWrapper<__nv_fp8_e4m3, __nv_bfloat16>(
         const int num_experts,
         const int64_t M,
         const int64_t K,
+        const int WeightScaleGroup,
         cudaStream_t stream
 );
 
@@ -270,5 +224,6 @@ template void DisPatchW4AFp8GemmWrapper<__nv_fp8_e4m3, half>(
         const int num_experts,
         const int64_t M,
         const int64_t K,
+        const int WeightScaleGroup,
         cudaStream_t stream
 );

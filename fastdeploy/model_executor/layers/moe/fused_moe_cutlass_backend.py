@@ -32,7 +32,7 @@ if current_platform.is_cuda():
     try:
         from fastdeploy.model_executor.ops.gpu import (
             w4afp8_gemm_scale_permute,
-            w4afp8_gemm_weight_permute,
+            w4afp8_gemm_weight_convert,
         )
     except:
         logger.warning("import w4afp8_gemm_scale_permute Failed!")
@@ -788,7 +788,7 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             weight_name = self.added_weight_attrs[idx]
             weight_list = []
             for i in range(layer.num_local_experts):
-                quant_weight = w4afp8_gemm_weight_permute(weight_tensor[i])
+                quant_weight = w4afp8_gemm_weight_convert(weight_tensor[i])
                 weight_list.append(quant_weight)
             quanted_weight = paddle.stack(weight_list, axis=0)
             getattr(layer, weight_name).set_value(quanted_weight)
@@ -888,7 +888,46 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             processed_weight_scale = (
                 paddle.stack(weight_scales, axis=0) / (448 * 7 * 2 ** (-9)) / processed_in_scale[:, None]
             )
-            processed_weight_scale = _permute_weight_scale(processed_weight_scale)
+
+            if len(processed_weight_scale.shape) == 3:
+                if name == "up_gate_proj_weight_scale" and processed_weight_scale.shape[-1] * 128 != layer.hidden_size:
+                    assert (
+                        layer.hidden_size // 128 % processed_weight_scale.shape[-1] == 0
+                    ), "weight_scale_group_size must be a multiple of 128"
+                    # If it is a multiple of 128, repeat to 128
+                    processed_weight_scale = processed_weight_scale.repeat_interleave(
+                        layer.hidden_size // 128 // processed_weight_scale.shape[-1], axis=-1
+                    )
+                elif name == "down_proj_weight_scale":
+                    assert (
+                        layer.moe_intermediate_size // 128 % processed_weight_scale.shape[-1] == 0
+                    ), "weight_scale_group_size must be a multiple of 128"
+                    # If it is a multiple of 128, repeat to 128
+                    processed_weight_scale = processed_weight_scale.repeat_interleave(
+                        layer.moe_intermediate_size // 128 // processed_weight_scale.shape[-1], axis=-1
+                    )
+                else:
+                    raise ValueError(f"Invalid weight scale name: {name}")
+
+                origin_shape = processed_weight_scale.shape
+                processed_weight_scale = processed_weight_scale.transpose([0, 2, 1])
+                processed_weight_scale = processed_weight_scale.reshape([-1, processed_weight_scale.shape[-1]])
+                processed_weight_scale = _permute_weight_scale(processed_weight_scale)
+                processed_weight_scale = processed_weight_scale.reshape(
+                    [origin_shape[0], origin_shape[2], origin_shape[1] // 128, 128]
+                )
+                processed_weight_scale = processed_weight_scale.transpose([0, 2, 1, 3])
+                setattr(
+                    layer,
+                    name,
+                    layer.create_parameter(
+                        shape=processed_weight_scale.shape,
+                        dtype="float32",
+                        default_initializer=paddle.nn.initializer.Constant(0),
+                    ),
+                )
+            else:
+                processed_weight_scale = _permute_weight_scale(processed_weight_scale)
             getattr(layer, name).set_value(processed_weight_scale)
 
         # 1. Init scale containers and maps

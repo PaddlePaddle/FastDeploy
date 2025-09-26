@@ -42,4 +42,5 @@ void DisPatchW4AFp8GemmWrapper(
         const int num_experts,
         const int64_t M,
         const int64_t K,
+        const int WeightScaleGroup,
         cudaStream_t stream);

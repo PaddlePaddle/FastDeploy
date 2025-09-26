@@ -178,21 +178,22 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
         typedef PDTraits<paddle::DataType::FLOAT8_E4M3FN> traits_fp8;
         typedef typename traits_fp8::DataType DataType_fp8;
         typedef typename traits_fp8::data_t data_t_fp8;
-
+        paddle::Tensor weight_scale_tensor = *const_cast<paddle::Tensor*>(up_gate_proj_scale.get_ptr());
+        const int weight_scale_group_size = weight_scale_tensor.dims().size() == 2 ? hidden_size : weight_scale_tensor.dims()[3];
         float* row_scale = nullptr;
         DisPatchW4AFp8GemmWrapper(
             reinterpret_cast<const DataType_fp8 *>(permute_input.data<data_t_fp8>()),
             reinterpret_cast<const DataType_fp8 *>(up_gate_proj_weight.data<int8_t>()),
             const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
             row_scale,
-            const_cast<paddle::Tensor*>(up_gate_proj_scale.get_ptr())
-                ->data<float>(),
+            weight_scale_tensor.data<float>(),
             reinterpret_cast<NvType *>(fc1_out),
             used_in_ep_low_latency ? num_max_tokens_per_expert : 0,
             used_in_ep_low_latency ? num_max_tokens_per_expert : permute_input.dims()[0],
             num_experts,
             inter_size,
             hidden_size,
+            weight_scale_group_size,
             stream);
     } else {
         typename cutlass::WintQuantTraits<DataType_, cutlass::WintQuantMethod::kNone>::Arguments quant_args;
@@ -327,19 +328,22 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
             stream
         );
 
+        paddle::Tensor weight_scale_tensor = *const_cast<paddle::Tensor*>(down_proj_scale.get_ptr());
+        const int weight_scale_group_size = weight_scale_tensor.dims().size() == 2 ? inter_size / 2 : weight_scale_tensor.dims()[3];
+
         DisPatchW4AFp8GemmWrapper(
             reinterpret_cast<const DataType_fp8 *>(fp8_act_out->ptr()),
             reinterpret_cast<const DataType_fp8 *>(down_proj_weight.data<int8_t>()),
             const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
             row_scale,
-            const_cast<paddle::Tensor*>(down_proj_scale.get_ptr())
-                    ->data<float>(),
+            weight_scale_tensor.data<float>(),
             reinterpret_cast<NvType*>(ffn_out_data),
             used_in_ep_low_latency ? num_max_tokens_per_expert : 0,
             used_in_ep_low_latency ? num_max_tokens_per_expert : act_out_tensor.dims()[0],
             num_experts,
             hidden_size,
             inter_size / 2,
+            weight_scale_group_size,
             stream);
     } else {
         typename cutlass::WintQuantTraits<DataType_, cutlass::WintQuantMethod::kNone>::Arguments quant_args;
