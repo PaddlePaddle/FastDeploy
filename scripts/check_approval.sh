@@ -58,11 +58,12 @@ WORKER_OR_CONFIG_LIST=(
     fastdeploy/model_executor/models
 )
 
-HAS_WORKER_OR_CONFIG_MODIFY=`git diff -U0 upstream/$BRANCH  --name-only | grep -E $(printf -- "-e %s " "${WORKER_OR_CONFIG_LIST[@]}") || true`
+HAS_WORKER_OR_CONFIG_MODIFY=`git diff upstream/$BRANCH  --name-only | grep -E $(printf -- "-e %s " "${WORKER_OR_CONFIG_LIST[@]}") || true`
 if [ ${HAS_WORKER_OR_CONFIG_MODIFY} ] && [ "${PR_ID}" != "" ]; then
     echo_line1="You must have one FastDeploy RD (gongshaotian(gongshaotian), yuanlehome(liuyuanle)) approval for modifing [${WORKER_OR_CONFIG_LIST[*]// /,}]."
     check_approval "$echo_line1" 1 gongshaotian yuanlehome
 fi
+echo “branch——————————————————————{$BRANCH}”
 
 if [ -n "${echo_list}" ];then
   echo "****************"
