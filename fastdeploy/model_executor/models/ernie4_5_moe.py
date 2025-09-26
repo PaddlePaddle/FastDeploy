@@ -45,10 +45,15 @@ from fastdeploy.model_executor.layers.linear import (
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.normalization import RMSNorm
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 from fastdeploy.model_executor.models.tp_utils import TensorSplitMode as tsm
 from fastdeploy.model_executor.models.utils import LayerIdPlaceholder as layerid
 from fastdeploy.model_executor.models.utils import WeightMeta
+from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 
 
@@ -460,6 +465,9 @@ class Ernie4_5_Model(nn.Layer):
     ):
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
+        if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
+            hidden_states = forward_meta.attn_backend.transpose(hidden_states)
+
         residual = None
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
@@ -468,9 +476,18 @@ class Ernie4_5_Model(nn.Layer):
 
         out = self.norm(hidden_states)
 
+        if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
+            out = forward_meta.attn_backend.reverse_transpose(out)
+
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="Ernie4_5_MoeForCausalLM",
+    module_name="ernie4_5_moe",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
     """
     Ernie4_5_MoeForCausalLM
@@ -646,6 +663,12 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         self.ernie.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
+@ModelRegistry.register_model_class(
+    architecture="Ernie4_5_ForCausalLM",
+    module_name="ernie4_5_moe",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class Ernie4_5_ForCausalLM(Ernie4_5_MoeForCausalLM):
     """
     Ernie4_5_ForCausalLM
@@ -659,6 +682,12 @@ class Ernie4_5_ForCausalLM(Ernie4_5_MoeForCausalLM):
         return "Ernie4_5_ForCausalLM"
 
 
+@ModelRegistry.register_model_class(
+    architecture="Ernie4_5ForCausalLM",
+    module_name="ernie4_5_moe",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class Ernie4_5ForCausalLM(Ernie4_5_ForCausalLM):
     """
     Ernie4_5ForCausalLM 0.3B-PT

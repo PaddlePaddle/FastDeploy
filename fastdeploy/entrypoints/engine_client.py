@@ -61,8 +61,6 @@ class EngineClient:
         workers=1,
         tool_parser=None,
     ):
-        import fastdeploy.model_executor.models  # noqa: F401
-
         architectures = ModelConfig({"model": model_name_or_path}).architectures[0]
         if MultimodalRegistry.contains_model(architectures):
             self.enable_mm = True
@@ -146,6 +144,9 @@ class EngineClient:
 
         task["preprocess_start_time"] = time.time()
         try:
+            chat_template_kwargs = task.get("chat_template_kwargs", {})
+            chat_template_kwargs.update({"chat_template": task.get("chat_template"), "tools": task.get("tools")})
+            task["chat_template_kwargs"] = chat_template_kwargs
             if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
                 await self.data_processor.process_request_dict(task, self.max_model_len)
             else:
@@ -154,8 +155,6 @@ class EngineClient:
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]
             task["max_tokens"] = min(self.max_model_len - input_ids_len, task.get("max_tokens"))
-            if task.get("reasoning_max_tokens", None) is None:
-                task["reasoning_max_tokens"] = max(int(task["max_tokens"] * 0.8), 1)
             min_tokens = task.get("min_tokens", 1)
             if "messages" in task:
                 del task["messages"]
@@ -236,8 +235,13 @@ class EngineClient:
                 raise ParameterError("max_tokens", f"max_tokens can be defined [1, {self.max_model_len}).")
 
         if data.get("reasoning_max_tokens") is not None:
-            if data["reasoning_max_tokens"] > data["max_tokens"] or data["reasoning_max_tokens"] < 1:
-                raise ParameterError("reasoning_max_tokens", "reasoning_max_tokens must be between max_tokens and 1")
+            if data["reasoning_max_tokens"] < 1:
+                raise ParameterError("reasoning_max_tokens", "reasoning_max_tokens must be greater than 1")
+            if data["reasoning_max_tokens"] > data["max_tokens"]:
+                data["reasoning_max_tokens"] = data["max_tokens"]
+                api_server_logger.warning(
+                    f"req_id: {data['request_id']}, reasoning_max_tokens exceeds max_tokens, the value of reasoning_max_tokens will be adjusted to match that of max_tokens"
+                )
 
         # logprobs
         logprobs = data.get("logprobs")
@@ -343,3 +347,6 @@ class EngineClient:
             return False, "clear model weight timeout"
         time.sleep(1)
         return True, ""
+
+    def check_model_weight_status(self):
+        return self.model_weights_status_signal.value[0] < 0

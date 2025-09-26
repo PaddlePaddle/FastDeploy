@@ -536,6 +536,8 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 "iluvatar_ops/moe_dispatch.cu",
                 "iluvatar_ops/moe_reduce.cu",
                 "iluvatar_ops/paged_attn.cu",
+                "iluvatar_ops/prefill_fused_attn.cu",
+                "iluvatar_ops/mixed_fused_attn.cu",
                 "iluvatar_ops/w8a16_group_gemm.cu",
                 "iluvatar_ops/runtime/iluvatar_context.cc",
             ],
@@ -621,6 +623,8 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
             ],
         ),
     )
+elif paddle.is_compiled_with_custom_device("intel_hpu"):
+    pass
 else:
     use_bf16 = envs.FD_CPU_USE_BF16 == "True"
 

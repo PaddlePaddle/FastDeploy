@@ -20,6 +20,7 @@ os.environ["FLAGS_cuda_graph_blacklist"] = "pd_op.matmul,pd_op.transpose"
 
 
 import unittest
+from unittest.mock import Mock
 
 import paddle
 import paddle.nn as nn
@@ -94,12 +95,13 @@ class TestStaticGraphCUDAGraphSplit(unittest.TestCase):
         graph_opt_config.init_with_cudagrpah_size(max_capture_size=scheduler_config.max_num_seqs)
         cache_config = CacheConfig({})
         parallel_config = ParallelConfig(args={})
-
+        model_config = Mock()
         fd_config = FDConfig(
             graph_opt_config=graph_opt_config,
             scheduler_config=scheduler_config,
             cache_config=cache_config,
             parallel_config=parallel_config,
+            model_config=model_config,
             test_mode=True,
         )
 

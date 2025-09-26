@@ -116,6 +116,7 @@ class LinearBase(nn.Layer):
             or current_platform.is_gcu()
             or current_platform.is_dcu()
             or current_platform.is_maca()
+            or current_platform.is_intel_hpu()
         ):
             self.forward = self.forward_cuda
         else:

@@ -255,6 +255,16 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     assert content1 == content2
 
 
+def test_with_metadata(api_url, headers, consistent_payload):
+    """
+    Test that result is same as the base result.
+    """
+    # request
+    consistent_payload["metadata"] = {"enable_thinking": True}
+    resp1 = requests.post(api_url, headers=headers, json=consistent_payload)
+    assert resp1.status_code == 200
+
+
 # ==========================
 # OpenAI Client Chat Completion Test
 # ==========================
@@ -525,6 +535,21 @@ def test_chat_with_thinking(openai_client, capsys):
     assert response.choices[0].message.reasoning_content is None
     assert "</think>" not in response.choices[0].message.content
 
+    # test logic
+    reasoning_max_tokens = None
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        stream=False,
+        max_tokens=20,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+            "reasoning_max_tokens": reasoning_max_tokens,
+        },
+    )
+    assert response.choices[0].message.reasoning_content is not None
+
     # enable thinking, streaming
     reasoning_max_tokens = 3
     response = openai_client.chat.completions.create(
@@ -553,6 +578,46 @@ def test_chat_with_thinking(openai_client, capsys):
         total_tokens += len(delta_message.completion_token_ids)
     assert completion_tokens + reasoning_tokens == total_tokens
     assert reasoning_tokens <= reasoning_max_tokens
+
+
+def test_chat_with_completion_token_ids(openai_client):
+    """Test completion_token_ids"""
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Hello"}],
+        extra_body={
+            "completion_token_ids": [94936],
+            "return_token_ids": True,
+            "reasoning_max_tokens": 20,
+            "max_tokens": 10,
+        },
+        max_tokens=10,
+        stream=False,
+    )
+    assert hasattr(response, "choices")
+    assert len(response.choices) > 0
+    assert hasattr(response.choices[0], "message")
+    assert hasattr(response.choices[0].message, "prompt_token_ids")
+    assert isinstance(response.choices[0].message.prompt_token_ids, list)
+    assert 94936 in response.choices[0].message.prompt_token_ids
+
+
+def test_chat_with_reasoning_max_tokens(openai_client):
+    """Test completion_token_ids"""
+    assertion_executed = False
+    try:
+        openai_client.chat.completions.create(
+            model="default",
+            messages=[{"role": "user", "content": "Hello"}],
+            extra_body={"completion_token_ids": [18900], "return_token_ids": True, "reasoning_max_tokens": -1},
+            max_tokens=10,
+            stream=False,
+        )
+    except openai.InternalServerError as e:
+        error_message = str(e)
+        assertion_executed = True
+        assert "reasoning_max_tokens must be greater than 1" in error_message
+    assert assertion_executed, "Assertion was not executed (no exception raised)"
 
 
 def test_profile_reset_block_num():
@@ -592,3 +657,50 @@ def test_profile_reset_block_num():
         f"Reset total_block_num {actual_value} 与 baseline {baseline} diff需要在5%以内"
         f"Allowed range: [{lower_bound:.1f}, {upper_bound:.1f}]"
     )
+
+
+def test_thinking_logic_flag(openai_client, capsys):
+    """
+    Test the interaction between token calculation logic and conditional thinking.
+    This test covers:
+    1. Default max_tokens calculation when not provided.
+    2. Capping of max_tokens when it exceeds model limits.
+    3. Default reasoning_max_tokens calculation when not provided.
+    4. Activation of thinking based on the final state of reasoning_max_tokens.
+    """
+
+    response_case_1 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity briefly."}],
+        temperature=1,
+        stream=False,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+        },
+    )
+    assert response_case_1.choices[0].message.reasoning_content is not None
+
+    response_case_2 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        stream=False,
+        max_tokens=20,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+            "reasoning_max_tokens": 5,
+        },
+    )
+    assert response_case_2.choices[0].message.reasoning_content is not None
+
+    response_case_3 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        stream=False,
+        max_tokens=20,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": False},
+        },
+    )
+    assert response_case_3.choices[0].message.reasoning_content is None
