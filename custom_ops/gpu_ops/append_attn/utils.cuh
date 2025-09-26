@@ -404,8 +404,38 @@ __forceinline__ __host__ __device__ void vec_cast<nv_bfloat16, float>(
   }
 
 #define DISPATCH_GQA_GROUP_SIZE(group_size, GROUP_SIZE, ...) \
-  if (group_size == 8) {                                     \
+  if (group_size == 1) {                                     \
+    constexpr size_t GROUP_SIZE = 1;                         \
+    __VA_ARGS__                                              \
+  } else if (group_size == 2) {                              \
+    constexpr size_t GROUP_SIZE = 2;                         \
+    __VA_ARGS__                                              \
+  } else if (group_size == 3) {                              \
+    constexpr size_t GROUP_SIZE = 3;                         \
+    __VA_ARGS__                                              \
+  } else if (group_size == 4) {                              \
+    constexpr size_t GROUP_SIZE = 4;                         \
+    __VA_ARGS__                                              \
+  } else if (group_size == 5) {                              \
+    constexpr size_t GROUP_SIZE = 5;                         \
+    __VA_ARGS__                                              \
+  } else if (group_size == 6) {                              \
+    constexpr size_t GROUP_SIZE = 6;                         \
+    __VA_ARGS__                                              \
+  } else if (group_size == 7) {                              \
+    constexpr size_t GROUP_SIZE = 7;                         \
+    __VA_ARGS__                                              \
+  } else if (group_size == 8) {                              \
     constexpr size_t GROUP_SIZE = 8;                         \
+    __VA_ARGS__                                              \
+  } else if (group_size == 12) {                             \
+    constexpr size_t GROUP_SIZE = 12;                        \
+    __VA_ARGS__                                              \
+  } else if (group_size == 14) {                             \
+    constexpr size_t GROUP_SIZE = 14;                        \
+    __VA_ARGS__                                              \
+  } else if (group_size == 16) {                             \
+    constexpr size_t GROUP_SIZE = 16;                        \
     __VA_ARGS__                                              \
   } else {                                                   \
     PD_THROW("not support the group_size", group_size);      \
