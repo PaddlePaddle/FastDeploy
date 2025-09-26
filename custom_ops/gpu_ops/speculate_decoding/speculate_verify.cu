@@ -142,9 +142,6 @@ __global__ void speculate_verify(
             // accept_num_now++;
             step_idx[bid]++;
             auto accept_token = draft_tokens_now[i + 1];
-            if (is_in_end(verify_tokens_now[i * max_candidate_len], end_tokens, end_length)) {
-              accept_token = end_tokens[0];
-            }
             accept_tokens[bid * max_draft_tokens + i] = accept_token;
 
             if (is_in_end(accept_token, end_tokens, end_length) ||
