@@ -123,8 +123,8 @@ class GPUModelRunner(ModelRunnerBase):
                 "matmul_v2",
                 "fused_gemm_epilogue",
             ]
-
-            self.encoder_cache: dict[int, paddle.Tensor] = {}
+            
+            self.encoder_cache: dict[str, paddle.Tensor] = {}
 
         #  Sampler
         if not self.speculative_decoding:
@@ -392,7 +392,7 @@ class GPUModelRunner(ModelRunnerBase):
                             self.scatter_and_cache_features(image_features, vision_inputs)
 
                         full_image_features_lst = []
-                        for mm_hash in inputs["mm_hashes"][request.num_image_start : request.num_image_end]:
+                        for mm_hash in inputs["mm_hashes"][request.num_image_start:request.num_image_end]:
                             feature = self.encoder_cache[mm_hash].cuda()
                             full_image_features_lst.append(feature)
                         full_image_features = paddle.concat(full_image_features_lst, axis=0)

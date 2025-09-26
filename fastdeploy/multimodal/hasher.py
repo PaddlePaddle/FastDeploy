@@ -22,12 +22,12 @@ from fastdeploy.utils import data_processor_logger
 class MultimodalHasher:
 
     @classmethod
-    def hash_features(cls, obj: object) -> int:
+    def hash_features(cls, obj: object) -> str:
         if isinstance(obj, np.ndarray):
-            return hash(obj.tobytes())
+            return str(hash(obj.tobytes()))
 
         data_processor_logger.warning(
             f"Unsupported type for hashing features: {type(obj)}"
             + ", use pickle for serialization"
         )
-        return hash(pickle.dumps(obj))
+        return str(hash(pickle.dumps(obj)))
