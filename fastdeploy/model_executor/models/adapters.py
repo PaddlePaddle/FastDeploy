@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import os
 from collections.abc import Iterable
 from typing import Optional, TypeVar
 
@@ -40,36 +41,30 @@ def _load_dense_weights(linear: nn.Linear, folder: str, model_config: "ModelConf
     from fastdeploy.model_executor.utils import default_weight_loader
 
     filename = "model.safetensors"
-    file_path = f"{folder}/{filename}" if folder else filename
+    file_path = f"{model_config.model}/{folder}/{filename}" if folder else filename
 
     try:
-        file_bytes = get_hf_file_to_dict(file_path, model_config.model, model_config.revision)
-        if not file_bytes:
+        print(file_path)
+        if not os.path.exists(file_path):
             return False
 
         state_dict = {}
-        if filename.endswith(".safetensors"):
-            import io
+        # only safetensor now
+        from safetensors.numpy import load_file
 
-            from safetensors.numpy import load as load_safetensors
-
-            numpy_tensors = load_safetensors(io.BytesIO(file_bytes))
-            for key, numpy_array in numpy_tensors.items():
-                state_dict[key] = paddle.to_tensor(numpy_array)
-        else:
-            import io
-
-            state_dict = paddle.load(io.BytesIO(file_bytes))
+        numpy_tensors = load_file(file_path)
+        for key, numpy_array in numpy_tensors.items():
+            state_dict[key] = paddle.to_tensor(numpy_array)
 
         weight_keys = ["weight", "linear.weight", "dense.weight"]
 
         for weight_key in weight_keys:
             if weight_key in state_dict:
-                weight_loader = getattr(linear.weight, "weight_loader", default_weight_loader)
+                weight_loader = getattr(linear.weight, "weight_loader", default_weight_loader())
                 weight_loader(linear.weight, state_dict[weight_key].astype(paddle.float32))
                 bias_key = weight_key.replace("weight", "bias")
                 if linear.bias is not None and bias_key in state_dict:
-                    bias_loader = getattr(linear.bias, "weight_loader", default_weight_loader)
+                    bias_loader = getattr(linear.bias, "weight_loader", default_weight_loader())
                     bias_loader(linear.bias, state_dict[bias_key].astype(paddle.float32))
                 return True
     except Exception as e:
@@ -80,6 +75,7 @@ def _load_dense_weights(linear: nn.Linear, folder: str, model_config: "ModelConf
 
 def _load_st_projector(model_config: "ModelConfig") -> Optional[nn.Layer]:
     try:
+        print("Loading ST Projector...")
         modules = get_hf_file_to_dict("modules.json", model_config.model, model_config.revision)
         if not modules:
             return None
@@ -98,13 +94,15 @@ def _load_st_projector(model_config: "ModelConfig") -> Optional[nn.Layer]:
             layer_config = get_hf_file_to_dict(config_path, model_config.model, model_config.revision)
             if not layer_config:
                 continue
+            bias_attr = paddle.ParamAttr(name="linear_bias", initializer=paddle.nn.initializer.Constant(0))
             linear = nn.Linear(
-                layer_config.get("in_features", 768),
-                layer_config.get("out_features", 768),
-                bias=layer_config.get("bias", True),
+                layer_config.get("in_features", 768), layer_config.get("out_features", 768), bias_attr=bias_attr
             )
+            if linear.weight._is_initialized:
+                linear.weight.initialize()
+            if linear.bias._is_initialized:
+                linear.bias.initialize()
             linear = linear.astype(paddle.float32)
-
             if not _load_dense_weights(linear, folder, model_config):
                 continue
 

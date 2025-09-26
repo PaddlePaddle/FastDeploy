@@ -72,6 +72,7 @@ class DefaultModelLoaderV1(BaseModelLoader):
             with context:
                 model_cls = ModelRegistry.get_class(architectures)
                 convert_type = fd_config.model_config.convert_type
+                # print("model_cls.name:",model_cls.__name__)
                 if convert_type == "none":
                     pass
                 elif convert_type == "embed":

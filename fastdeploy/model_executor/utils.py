@@ -153,7 +153,7 @@ def free_tensor(tensor):
     del tensor
 
 
-def default_weight_loader(fd_config: FDConfig) -> None:
+def default_weight_loader(fd_config: FDConfig = None) -> None:
     """Default weight loader"""
 
     def fn(param, loaded_weight, shard_id: Optional[Union[int, str]] = None):
@@ -165,7 +165,7 @@ def default_weight_loader(fd_config: FDConfig) -> None:
             loaded_weight = get_tensor(loaded_weight)
             loaded_weight = loaded_weight.transpose([1, 0])
         # Tensor parallelism splits the weight along the output_dim
-        if output_dim is not None and fd_config.parallel_config.tensor_parallel_size > 1:
+        if output_dim is not None and fd_config is not None and fd_config.parallel_config.tensor_parallel_size > 1:
             dim = -1 if output_dim else 0
             if isinstance(loaded_weight, paddle.Tensor):
                 size = loaded_weight.shape[dim]
