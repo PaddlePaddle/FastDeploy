@@ -240,11 +240,9 @@ class Ernie4_5Processor(BaseDataProcessor):
         if self.reasoning_parser and self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser":
             request["enable_thinking"] = True
         if self.reasoning_parser:
-            self.model_status_dict[request["request_id"]] = self.reasoning_parser.get_model_status(
-                request["prompt_token_ids"]
-            )
-            if self.model_status_dict[request["request_id"]] == "think_start":
-                request["enable_thinking"] = True
+            model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
+            self.model_status_dict[request["request_id"]] = model_status
+            request["enable_thinking"] = model_status == "think_start"
         data_processor_logger.info(f"Processed request dict: {request}")
         return request
 

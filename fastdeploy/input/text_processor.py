@@ -347,11 +347,9 @@ class DataProcessor(BaseDataProcessor):
         if request.get("top_p") < _SAMPLING_EPS:
             request["top_p"] = _SAMPLING_EPS
         if self.reasoning_parser:
-            self.model_status_dict[request["request_id"]] = self.reasoning_parser.get_model_status(
-                request["prompt_token_ids"]
-            )
-            if self.model_status_dict[request["request_id"]] == "think_start":
-                request["enable_thinking"] = True
+            model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
+            self.model_status_dict[request["request_id"]] = model_status
+            request["enable_thinking"] = model_status == "think_start"
 
         data_processor_logger.info(f"Processed request dict: {request}")
         return request
@@ -376,7 +374,6 @@ class DataProcessor(BaseDataProcessor):
             token_ids = token_ids[:-1]
         full_text = self.tokenizer.decode(token_ids)
         response_dict.outputs.text = full_text
-        # 模型支持思考,并且支持思考
         if self.reasoning_parser:
             reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
                 full_text, response_dict, self.model_status_dict[req_id]
