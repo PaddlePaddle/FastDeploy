@@ -20,10 +20,12 @@ from typing import Optional
 import paddle
 from paddle import nn
 
+from fastdeploy.model_executor.layers.quantization.quant_base import (
+    QuantConfigBase,
+    QuantMethodBase,
+)
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import set_weight_attrs
-
-from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfigBase, QuantMethodBase
 
 
 class XPUKvCacheQuantzationTypes(str, Enum):
@@ -115,10 +117,10 @@ class XPUKVCacheMethodBase(QuantMethodBase):
     def load_zp(self, layer: nn.Layer, state_dict):
         """
         load_zp
-        # """
+        #"""
         cache_k_zeropoint = get_tensor(state_dict.pop(self.cache_k_zp_name)).cast("float32")
         cache_v_zeropoint = get_tensor(state_dict.pop(self.cache_v_zp_name)).cast("float32")
-        
+
         layer.cache_k_zp.set_value(cache_k_zeropoint)
         layer.cache_v_zp.set_value(cache_v_zeropoint)
 
@@ -127,12 +129,8 @@ class XPUKVCacheMethodBase(QuantMethodBase):
         load_scale
         """
 
-        cache_k_scale_tensor = (
-            get_tensor(state_dict.pop(self.cache_k_scale_name)).cast("float32").reshape_([-1])
-        )
-        cache_v_scale_tensor = (
-            get_tensor(state_dict.pop(self.cache_v_scale_name)).cast("float32").reshape_([-1])
-        )
+        cache_k_scale_tensor = get_tensor(state_dict.pop(self.cache_k_scale_name)).cast("float32").reshape_([-1])
+        cache_v_scale_tensor = get_tensor(state_dict.pop(self.cache_v_scale_name)).cast("float32").reshape_([-1])
 
         if self.cache_quant_config.has_zero_point:  # cache_int4_zp
             cache_k_scale = 1.0 / cache_k_scale_tensor
@@ -142,7 +140,7 @@ class XPUKVCacheMethodBase(QuantMethodBase):
         else:
             cache_k_scale = self.cache_quant_config.max_bound / cache_k_scale_tensor
             cache_v_scale = self.cache_quant_config.max_bound / cache_v_scale_tensor
-            cache_k_out_scale = cache_k_scale_tensor 
+            cache_k_out_scale = cache_k_scale_tensor
             cache_v_out_scale = cache_v_scale_tensor
 
         layer.cache_k_scale.set_value(paddle.cast(cache_k_scale, paddle.get_default_dtype()))
@@ -189,7 +187,7 @@ class XPUKVCacheMethodBase(QuantMethodBase):
             dtype=paddle.get_default_dtype(),
             default_initializer=paddle.nn.initializer.Constant(0),
         )
-        
+
         set_weight_attrs(
             layer.cache_k_scale,
             {
