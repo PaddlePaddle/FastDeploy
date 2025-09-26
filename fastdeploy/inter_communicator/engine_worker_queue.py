@@ -96,6 +96,10 @@ class EngineWorkerQueue:
                 threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
             ]
 
+            self.worker_process_tp_barrier = [
+                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
+            ]
+
             # Register shared objects with proxy types
             QueueManager.register(
                 "get_tasks",
@@ -161,6 +165,11 @@ class EngineWorkerQueue:
                 "get_finish_request_barrier",
                 callable=lambda idx: self.finish_request_barrier[idx],
             )
+
+            QueueManager.register(
+                "get_worker_process_tp_barrier",
+                callable=lambda idx: self.worker_process_tp_barrier[idx],
+            )
             self.manager: BaseManager = QueueManager(address=self.address, authkey=self.authkey)
             self.manager.start()
         else:
@@ -180,6 +189,7 @@ class EngineWorkerQueue:
             QueueManager.register("get_disaggregate_requests")
             QueueManager.register("get_available_prefill_instances")
             QueueManager.register("get_finish_request_barrier")
+            QueueManager.register("get_worker_process_tp_barrier")
             self.manager = QueueManager(address=self.address, authkey=self.authkey)
             self._connect_with_retry()
 
@@ -199,6 +209,7 @@ class EngineWorkerQueue:
             self.disaggregate_requests = self.manager.get_disaggregate_requests(self.local_data_parallel_id)
             self.available_prefill_instances = self.manager.get_available_prefill_instances()
             self.finish_request_barrier = self.manager.get_finish_request_barrier(self.local_data_parallel_id)
+            self.worker_process_tp_barrier = self.manager.get_worker_process_tp_barrier(self.local_data_parallel_id)
             self.finished_req_queue = self.manager.get_finish_request_queue(self.local_data_parallel_id)
             assert self.num_client == len(self.client_read_flag)
 

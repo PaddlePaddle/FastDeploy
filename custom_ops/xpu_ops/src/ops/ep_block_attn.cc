@@ -58,11 +58,11 @@ struct SplitRopeTypeTrait<int8_t, bfloat16> {
  * qkv shape: [token_num, (num_heads + 2 * kv_num_heads) * head_dim]
  * k_scales/v_scales value: 127 / max (type = TS)
  * k_scales_inv/v_scales_inv value:
- *   1. perchannel with zp: max / 127 (type = TS)
- *   2. perchannel without zp: max (type = float)
+ *   1. perchannel without zp: max / 127 (type = TS)
+ *   2. perchannel with zp: max (type = float)
  **/
 template <typename TX, typename TC, typename TS>
-std::vector<paddle::Tensor> BlockAttnKernel(
+std::vector<paddle::Tensor> EPBlockAttnKernel(
     const paddle::Tensor& qkv,
     const paddle::Tensor& key_cache,
     const paddle::Tensor& value_cache,
@@ -823,7 +823,7 @@ std::vector<paddle::Tensor> BlockAttnKernel(
   return {block_attn_out};
 }
 
-std::vector<paddle::Tensor> BlockAttn(
+std::vector<paddle::Tensor> EPBlockAttn(
     const paddle::Tensor& qkv,
     const paddle::Tensor& key_cache,
     const paddle::Tensor& value_cache,
@@ -851,7 +851,7 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::optional<paddle::Tensor>& kv_signal_data_cpu,
     const paddle::optional<paddle::Tensor>& cachekv_signal_thread_cpu) {
 #define APPLY_KERNEL(TX, TC, TS)                                    \
-  return BlockAttnKernel<TX, TC, TS>(qkv,                           \
+  return EPBlockAttnKernel<TX, TC, TS>(qkv,                           \
                                      key_cache,                     \
                                      value_cache,                   \
                                      cum_offsets,                   \
@@ -892,7 +892,7 @@ std::vector<paddle::Tensor> BlockAttn(
 #undef APPLY_KERNEL
 }
 
-std::vector<std::vector<int64_t>> BlockAttnInferShape(
+std::vector<std::vector<int64_t>> EPBlockAttnInferShape(
     const std::vector<int64_t>& qkv_shape,
     const std::vector<int64_t>& key_cache_shape,
     const std::vector<int64_t>& value_cache_shape) {
@@ -907,14 +907,14 @@ std::vector<std::vector<int64_t>> BlockAttnInferShape(
   return {{token_num, num_heads * head_dim}};
 }
 
-std::vector<paddle::DataType> BlockAttnInferDtype(
+std::vector<paddle::DataType> EPBlockAttnInferDtype(
     const paddle::DataType& qkv_dtype,
     const paddle::DataType& key_cache_dtype,
     const paddle::DataType& value_cache_dtype) {
   return {qkv_dtype};
 }
 
-PD_BUILD_STATIC_OP(block_attn)
+PD_BUILD_STATIC_OP(ep_block_attn)
     .Inputs({"qkv",
              "key_cache",
              "value_cache",
@@ -942,6 +942,6 @@ PD_BUILD_STATIC_OP(block_attn)
              paddle::Optional("kv_signal_data_cpu"),
              paddle::Optional("cachekv_signal_thread_cpu")})
     .Outputs({"block_attn_out"})
-    .SetKernelFn(PD_KERNEL(BlockAttn))
-    .SetInferShapeFn(PD_INFER_SHAPE(BlockAttnInferShape))
-    .SetInferDtypeFn(PD_INFER_DTYPE(BlockAttnInferDtype));
+    .SetKernelFn(PD_KERNEL(EPBlockAttn))
+    .SetInferShapeFn(PD_INFER_SHAPE(EPBlockAttnInferShape))
+    .SetInferDtypeFn(PD_INFER_DTYPE(EPBlockAttnInferDtype));

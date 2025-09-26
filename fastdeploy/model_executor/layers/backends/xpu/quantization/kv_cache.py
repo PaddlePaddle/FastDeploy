@@ -22,14 +22,13 @@ from paddle import nn
 
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import set_weight_attrs
-from fastdeploy.platforms import current_platform
 
-from .quant_base import QuantConfigBase, QuantMethodBase
+from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfigBase, QuantMethodBase
 
 
-class KvCacheQuantzationTypes(str, Enum):
+class XPUKvCacheQuantzationTypes(str, Enum):
     """
-    KvCacheQuantzationTypes
+    XPUKvCacheQuantzationTypes
     """
 
     INT8 = "int8"
@@ -40,7 +39,7 @@ class KvCacheQuantzationTypes(str, Enum):
     FP8_ZP = "float8_e4m3fn_zp"
 
 
-class KvCacheQuantConfig(QuantConfigBase):
+class XPUKvCacheQuantConfig(QuantConfigBase):
     """
     quantization config for weight 4bits and activation fp8
     """
@@ -55,23 +54,23 @@ class KvCacheQuantConfig(QuantConfigBase):
         self.has_zero_point = has_zero_point
 
         try:
-            self.quant_type = KvCacheQuantzationTypes(kv_cache_quant_type)
+            self.quant_type = XPUKvCacheQuantzationTypes(kv_cache_quant_type)
         except ValueError:
             raise ValueError(f"Invalid Kvcache type: {kv_cache_quant_type}")
 
         if "zp" in kv_cache_quant_type:
             self.has_zero_point = True
 
-        if self.quant_type == KvCacheQuantzationTypes.INT8 or self.quant_type == KvCacheQuantzationTypes.INT8_ZP:
+        if self.quant_type == XPUKvCacheQuantzationTypes.INT8 or self.quant_type == XPUKvCacheQuantzationTypes.INT8_ZP:
             self.max_bound = 127.0
             self.is_channel_wise = True
         elif (
-            self.quant_type == KvCacheQuantzationTypes.FP8
-            or self.quant_type == KvCacheQuantzationTypes.FP8_ZP
-            or self.quant_type == KvCacheQuantzationTypes.BLOCK_WISE_FP8
+            self.quant_type == XPUKvCacheQuantzationTypes.FP8
+            or self.quant_type == XPUKvCacheQuantzationTypes.FP8_ZP
+            or self.quant_type == XPUKvCacheQuantzationTypes.BLOCK_WISE_FP8
         ):
             self.max_bound = 448.0
-        elif self.quant_type == KvCacheQuantzationTypes.INT4_ZP:
+        elif self.quant_type == XPUKvCacheQuantzationTypes.INT4_ZP:
             self.max_bound = 7.0
         else:
             raise ValueError(f"Invalid Kvcache type: {kv_cache_quant_type}")
@@ -85,7 +84,7 @@ class KvCacheQuantConfig(QuantConfigBase):
     @classmethod
     def from_config(
         cls, kv_cache_quant_type: str, is_channel_wise: bool, has_zero_point: bool
-    ) -> "KvCacheQuantConfig":
+    ) -> "XPUKvCacheQuantConfig":
         """
         from_config
         """
@@ -95,27 +94,20 @@ class KvCacheQuantConfig(QuantConfigBase):
         """
         get_quant_method
         """
-        if current_platform.is_xpu():
-            from fastdeploy.model_executor.layers.backends.xpu.quantization.kv_cache import (
-                XPUKVCacheMethodBase,
-            )
-
-            return XPUKVCacheMethodBase(self)
-        else:
-            return KVCacheMethodBase(self)
+        return XPUKVCacheMethodBase(self)
 
 
-class KVCacheMethodBase(QuantMethodBase):
+class XPUKVCacheMethodBase(QuantMethodBase):
     """
-    KVCacheMethodBase
+    XPUKVCacheMethodBase
     """
 
     def __init__(
         self,
-        quant_config: KvCacheQuantConfig,
+        quant_config: XPUKvCacheQuantConfig,
     ) -> None:
         """
-        KVCacheMethodBase __init__
+        XPUKVCacheMethodBase __init__
         """
         super().__init__()
         self.cache_quant_config = quant_config
@@ -123,10 +115,10 @@ class KVCacheMethodBase(QuantMethodBase):
     def load_zp(self, layer: nn.Layer, state_dict):
         """
         load_zp
-        #"""
-        cache_k_zeropoint = get_tensor(state_dict.pop(self.cache_k_zp_name)).cast(paddle.get_default_dtype())
-        cache_v_zeropoint = get_tensor(state_dict.pop(self.cache_v_zp_name)).cast(paddle.get_default_dtype())
-
+        # """
+        cache_k_zeropoint = get_tensor(state_dict.pop(self.cache_k_zp_name)).cast("float32")
+        cache_v_zeropoint = get_tensor(state_dict.pop(self.cache_v_zp_name)).cast("float32")
+        
         layer.cache_k_zp.set_value(cache_k_zeropoint)
         layer.cache_v_zp.set_value(cache_v_zeropoint)
 
@@ -134,11 +126,12 @@ class KVCacheMethodBase(QuantMethodBase):
         """
         load_scale
         """
+
         cache_k_scale_tensor = (
-            get_tensor(state_dict.pop(self.cache_k_scale_name)).cast(paddle.get_default_dtype()).reshape_([-1])
+            get_tensor(state_dict.pop(self.cache_k_scale_name)).cast("float32").reshape_([-1])
         )
         cache_v_scale_tensor = (
-            get_tensor(state_dict.pop(self.cache_v_scale_name)).cast(paddle.get_default_dtype()).reshape_([-1])
+            get_tensor(state_dict.pop(self.cache_v_scale_name)).cast("float32").reshape_([-1])
         )
 
         if self.cache_quant_config.has_zero_point:  # cache_int4_zp
@@ -149,13 +142,12 @@ class KVCacheMethodBase(QuantMethodBase):
         else:
             cache_k_scale = self.cache_quant_config.max_bound / cache_k_scale_tensor
             cache_v_scale = self.cache_quant_config.max_bound / cache_v_scale_tensor
-            cache_k_out_scale = cache_k_scale_tensor / self.cache_quant_config.max_bound
-            cache_v_out_scale = cache_v_scale_tensor / self.cache_quant_config.max_bound
-            cache_k_out_scale = cache_k_scale_tensor
+            cache_k_out_scale = cache_k_scale_tensor 
             cache_v_out_scale = cache_v_scale_tensor
 
-        layer.cache_k_scale.set_value(cache_k_scale)
-        layer.cache_v_scale.set_value(cache_v_scale)
+        layer.cache_k_scale.set_value(paddle.cast(cache_k_scale, paddle.get_default_dtype()))
+        layer.cache_v_scale.set_value(paddle.cast(cache_v_scale, paddle.get_default_dtype()))
+
         layer.cache_k_out_scale.set_value(cache_k_out_scale)
         layer.cache_v_out_scale.set_value(cache_v_out_scale)
 
@@ -163,19 +155,20 @@ class KVCacheMethodBase(QuantMethodBase):
         """
         create_weights
         """
-        if self.cache_quant_config.quant_type == KvCacheQuantzationTypes.INT8:
+        print(f"self.cache_quant_config.quant_type: {self.cache_quant_config.quant_type}")
+        if self.cache_quant_config.quant_type == XPUKvCacheQuantzationTypes.INT8:
             layer.cache_quant_type_str = "cache_int8"
             layer.quant_max_bound = 127.0
             layer.quant_min_bound = -127.0
-        elif self.cache_quant_config.quant_type == KvCacheQuantzationTypes.FP8:
+        elif self.cache_quant_config.quant_type == XPUKvCacheQuantzationTypes.FP8:
             layer.cache_quant_type_str = "cache_fp8"
             layer.quant_max_bound = 448.0
             layer.quant_min_bound = -448.0
-        elif self.cache_quant_config.quant_type == KvCacheQuantzationTypes.INT4_ZP:
+        elif self.cache_quant_config.quant_type == XPUKvCacheQuantzationTypes.INT4_ZP:
             layer.cache_quant_type_str = "cache_int4_zp"
             layer.quant_max_bound = 7.0
             layer.quant_min_bound = -7.0
-        elif self.cache_quant_config.quant_type == KvCacheQuantzationTypes.BLOCK_WISE_FP8:
+        elif self.cache_quant_config.quant_type == XPUKvCacheQuantzationTypes.BLOCK_WISE_FP8:
             layer.cache_quant_type_str = "block_wise_fp8"
             layer.quant_max_bound = 448.0
             layer.quant_min_bound = -448.0
@@ -196,7 +189,7 @@ class KVCacheMethodBase(QuantMethodBase):
             dtype=paddle.get_default_dtype(),
             default_initializer=paddle.nn.initializer.Constant(0),
         )
-
+        
         set_weight_attrs(
             layer.cache_k_scale,
             {
@@ -220,7 +213,7 @@ class KVCacheMethodBase(QuantMethodBase):
             dtype="float32",
             default_initializer=paddle.nn.initializer.Constant(0),
         )
-
+        print(f"self.cache_quant_config.has_zero_point = {self.cache_quant_config.has_zero_point}")
         if self.cache_quant_config.has_zero_point:
             layer.cache_k_zp = layer.create_parameter(
                 shape=scale_shape,
@@ -255,6 +248,7 @@ class KVCacheMethodBase(QuantMethodBase):
         self.cache_k_zp_name = layer.prefix + ".cachek_matmul.activation_zero_point"
         self.cache_v_zp_name = layer.prefix + ".cachev_matmul.activation_zero_point"
 
+        print(f"layer.cache_quant_type_str : {layer.cache_quant_type_str}")
         if "block_wise" not in layer.cache_quant_type_str:
             self.load_scale(layer, state_dict)
             if self.cache_quant_config.has_zero_point:

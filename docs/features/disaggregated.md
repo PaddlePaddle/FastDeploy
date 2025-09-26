@@ -73,10 +73,10 @@ Refer to the example code `offline_disaggregated_demo.py` in the `fastdeploy/dem
 
 #### Prerequisite: Redis
 
-> **⚠️ NOTE**  
-> **Redis requirement: version 6.2.0 or higher**  
+> **⚠️ NOTE**
+> **Redis requirement: version 6.2.0 or higher**
 > Versions below this may not support the required commands.
-> 
+>
 * Installation via `conda`
 
 ```bash

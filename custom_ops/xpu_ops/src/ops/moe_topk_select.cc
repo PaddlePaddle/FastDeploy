@@ -38,16 +38,19 @@ std::vector<paddle::Tensor> MoeTopkSelect(
   int expert_num = gating_logits_dims[1];
   auto topk_ids = paddle::empty(
       {token_num, moe_topk}, paddle::DataType::INT32, gating_logits.place());
+  // auto topk_weights = paddle::empty(
+  //     {token_num, moe_topk}, paddle::DataType::FLOAT32, gating_logits.place());
   auto topk_weights = paddle::empty(
-      {token_num, moe_topk}, paddle::DataType::FLOAT32, gating_logits.place());
+      {token_num, moe_topk}, paddle::DataType::BFLOAT16, gating_logits.place());
   int32_t* block_statistic = nullptr;
   const float* bias_data =
       bias.get_ptr() != nullptr ? bias.get_ptr()->data<float>() : nullptr;
   if (token_num > 0) {
+
     int ret = infer_ops::moe_softmax_topk_norm_fusion(
         xpu_ctx->x_context(),
         gating_logits.data<float>(),
-        topk_weights.mutable_data<float>(),
+        reinterpret_cast<bfloat16*>(const_cast<paddle::bfloat16*>(topk_weights.mutable_data<paddle::bfloat16>())),
         topk_ids.mutable_data<int>(),
         block_statistic,
         token_num,

@@ -248,6 +248,12 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
+    def _tp_barrier_wait(self):
+        if current_platform.is_xpu():
+            self.task_queue.worker_process_tp_barrier.wait()
+        else:
+            paddle.distributed.barrier(self.parallel_config.tp_group)
+
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
@@ -286,7 +292,9 @@ class PaddleDisWorkerProc:
 
             if self.parallel_config.tensor_parallel_size > 1:
                 # Synchronize the signal for other workers
-                paddle.distributed.barrier(self.parallel_config.tp_group)
+                self._tp_barrier_wait()
+                # paddle.distributed.barrier(self.parallel_config.tp_group)
+                #  paddle.distributed.barrier(None)
 
             if self.fd_config.load_config.dynamic_load_weight:
                 if self.parallel_config.enable_expert_parallel:
@@ -334,7 +342,8 @@ class PaddleDisWorkerProc:
 
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 if self.ranks > 1:
-                    paddle.distributed.barrier(self.parallel_config.tp_group)
+                    self._tp_barrier_wait()
+                    # paddle.distributed.barrier(self.parallel_config.tp_group)
 
                 time.sleep(0.001)
                 continue
@@ -704,6 +713,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         is_ernie=ErnieArchitectures.contains_ernie_arch(model_config.architectures),
         is_v1_loader=load_config.load_choices == "default_v1",
     )
+    print(f"quant_config : {quant_config}")
+    print(f"model_config.is_quantized: {model_config.is_quantized}")
 
     # Log quantization info
     logger.info("===========quantization_config==============")
