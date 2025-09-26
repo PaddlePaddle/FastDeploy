@@ -478,8 +478,8 @@ def reset_scheduler():
 
     if llm_engine is None:
         return Response("Engine not loaded", status_code=500)
-    llm_engine.engine.clear_data()
     llm_engine.engine.scheduler.reset()
+    llm_engine.engine.clear_data()
     return Response("Scheduler Reset Successfully", status_code=200)
 
 
