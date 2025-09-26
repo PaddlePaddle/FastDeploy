@@ -675,12 +675,8 @@ void SpeculateWriteCacheWithRoPEKernel(
             seq_lens_encoder.data<int>(),
             cos_emb,
             sin_emb,
-            cache_k_scale ? reinterpret_cast<DataType_*>(
-                                const_cast<T*>(cache_k_scale.get().data<T>()))
-                        : nullptr,
-            cache_v_scale ? reinterpret_cast<DataType_*>(
-                                const_cast<T*>(cache_v_scale.get().data<T>()))
-                        : nullptr,
+            const_cast<DataType_*>(reinterpret_cast<const DataType_*>(cache_k_scale.get().data<T>())),
+            const_cast<DataType_*>(reinterpret_cast<const DataType_*>(cache_v_scale.get().data<T>())),
             nullptr, // q_norm_weight
             nullptr, // k_norm_weight
             max_seq_len,
