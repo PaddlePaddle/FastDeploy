@@ -11,11 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-#ifndef PD_BUILD_STATIC_OP
-#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
-#endif
-
 #include "helper.h"
 #include "paddle/extension.h"
 
@@ -38,9 +33,9 @@ void weight_convert(const uint8_t *weight, uint8_t *weight_new, int experts, int
 }
 
 __global__ void weight_permute_interleave_kernelw4afp8(
-        const int8_t* input_data, 
-        int8_t* output_data, 
-        const int original_k, 
+        const int8_t* input_data,
+        int8_t* output_data,
+        const int original_k,
         const int original_n) {
 
     const int numel = original_k * original_n / 4;
@@ -105,36 +100,24 @@ __global__ void weight_permute_interleave_kernelw4afp8(
     dst[1] = dst1;
 }
 
-std::vector<paddle::Tensor> W4AFp8GemmWeightPermute(const paddle::Tensor& weight) {
-    const int original_k = weight.dims()[0] * 2;
-    const int original_n = weight.dims()[1];
-    paddle::Tensor weight_new = paddle::empty(weight.shape(), paddle::DataType::INT8, weight.place());
-    const int block_dim = 256;
-    const int original_numel = original_k * original_n;
-    const int grid_size = (original_numel + block_dim - 1) / block_dim;
-    
-    weight_permute_interleave_kernelw4afp8<<<grid_size, block_dim>>>(
-            weight.data<int8_t>(), weight_new.data<int8_t>(), original_k, original_n);
-
-    return {weight_new};
-}
-
 std::vector<paddle::Tensor> W4AFp8GemmWeightConvert(const paddle::Tensor& weight) {
-    const int experts = weight.dims()[0];
-    const int M = weight.dims()[1];
-    const int K = weight.dims()[2];
-    paddle::Tensor weight_new = paddle::empty({experts, M, K / 2}, paddle::DataType::UINT8, weight.place());
-    weight_convert(weight.data<uint8_t>(), weight_new.data<uint8_t>(), experts, M, K);
-    return {weight_new};
+    if (weight.place() == paddle::PlaceType::CPU) {
+        const int experts = weight.dims()[0];
+        const int M = weight.dims()[1];
+        const int K = weight.dims()[2];
+        paddle::Tensor weight_new = paddle::empty({experts, M, K / 2}, paddle::DataType::UINT8, weight.place());
+        weight_convert(weight.data<uint8_t>(), weight_new.data<uint8_t>(), experts, M, K);
+        return {weight_new};
+    } else {
+        const int original_k = weight.dims()[0] * 2;
+        const int original_n = weight.dims()[1];
+        paddle::Tensor weight_new = paddle::empty(weight.shape(), paddle::DataType::INT8, weight.place());
+        const int block_dim = 256;
+        const int original_numel = original_k * original_n;
+        const int grid_size = (original_numel + block_dim - 1) / block_dim;
+
+        weight_permute_interleave_kernelw4afp8<<<grid_size, block_dim>>>(
+                weight.data<int8_t>(), weight_new.data<int8_t>(), original_k, original_n);
+        return {weight_new};
+    }
 }
-
-PD_BUILD_STATIC_OP(w4afp8_gemm_weight_permute)
-    .Inputs({"weight"})
-    .Outputs({"converted_weight"})
-    .SetKernelFn(PD_KERNEL(W4AFp8GemmWeightPermute));
-
-PD_BUILD_STATIC_OP(w4afp8_gemm_weight_convert)
-    .Inputs({"weight"})
-    .Outputs({"converted_weight"})
-    .SetKernelFn(PD_KERNEL(W4AFp8GemmWeightConvert));
-

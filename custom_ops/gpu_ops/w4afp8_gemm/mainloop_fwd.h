@@ -42,7 +42,7 @@ struct CollectiveMainloopFwd {
     static constexpr int kBlockM = Ktraits::kBlockM;
     static constexpr int kBlockN = Ktraits::kBlockN;
     static constexpr int kBlockK = Ktraits::kBlockK;
-    static constexpr int NumCopyThreads = cutlass::NumThreadsPerWarpGroup;  
+    static constexpr int NumCopyThreads = cutlass::NumThreadsPerWarpGroup;
     static constexpr int kTiles = Ktraits::kTiles;
     static constexpr int M = Ktraits::M;
     static constexpr int K = Ktraits::K;
@@ -90,8 +90,8 @@ struct CollectiveMainloopFwd {
     using TMA_Scale = decltype(make_tma_copy(
         GmemTiledCopy{},
         make_tensor(
-            make_gmem_ptr(static_cast<float const*>(nullptr)), 
-            ShapeTScale{}, 
+            make_gmem_ptr(static_cast<float const*>(nullptr)),
+            ShapeTScale{},
             StrideTScale{}
         ),
         SmemLayoutScale{}(_, _0{}),
@@ -126,7 +126,7 @@ struct CollectiveMainloopFwd {
         LayoutT layout_A;
         LayoutT layout_B;
         LayoutTScale layout_Scale;
-        TMA_A tma_load_A;        
+        TMA_A tma_load_A;
         TMA_B tma_load_B;
         TMA_Scale tma_load_Scale;
         ElementOutput * ptr_C;
@@ -158,9 +158,9 @@ struct CollectiveMainloopFwd {
             SmemLayoutScale{}(_, _0{}),
             select<0>(Shape<Int<kBlockM>>{}),
             size<0>(ClusterShape{}));
-        
+
         return {
-            args.layout_A, args.layout_B, args.layout_Scale, 
+            args.layout_A, args.layout_B, args.layout_Scale,
             tma_load_A, tma_load_B, tma_load_Scale,
             args.ptr_C, args.weight_scale, args.tokens};
     }
@@ -187,7 +187,7 @@ struct CollectiveMainloopFwd {
         const int bidn,
         const int bidb,
         const int tidx) {
-        
+
         using packHalf = typename PackedHalf<ElementOutput>::Type;
         Tensor tOrO_out = make_tensor<ElementOutput>(tOrO.layout());
 
@@ -212,7 +212,7 @@ struct CollectiveMainloopFwd {
         uint16_t *smem_c = reinterpret_cast<uint16_t *>(shared_storage.smem_c.data());
 
         uint32_t * reg_data = reinterpret_cast<uint32_t*>(tOrO_out.data());
-        
+
         cutlass::arch::NamedBarrier::sync(NumMmaThreads, 0);
 
         constexpr int k_copy_times = kBlockN / 16;
@@ -230,7 +230,7 @@ struct CollectiveMainloopFwd {
         cutlass::arch::NamedBarrier::sync(NumMmaThreads, 0);
         const int expert_idx = TokenPackSize == 0 ? pre_fix_tokens * M : bidb * M * TokenPackSize;
         ElementOutput * store_c = mainloop_params.ptr_C + expert_idx + bidn * (M * kBlockN) + bidm * kBlockM;
-        
+
         const int reamin_tokens = tokens - bidn * kBlockN;
 
         const int col = tidx % 2;
@@ -307,7 +307,7 @@ struct CollectiveMainloopFwd {
                     pipeline.producer_acquire(smem_pipe_write);
                     copy(mainloop_params.tma_load_A.with(*pipeline.producer_get_barrier(smem_pipe_write), 0),
                     tAgA(_, kiter), tAsA(_, smem_pipe_write.index()));
-        
+
                     copy(mainloop_params.tma_load_B.with(*pipeline.producer_get_barrier(smem_pipe_write), 0),
                         tBgB(_, kiter), tBsB(_, smem_pipe_write.index()));
 
@@ -315,13 +315,13 @@ struct CollectiveMainloopFwd {
                         copy(mainloop_params.tma_load_Scale.with(*pipeline.producer_get_barrier(smem_pipe_write), 0),
                             gScale(_, kiter), sScale(_, smem_pipe_write.index()));
                     }
-                        
+
                     ++smem_pipe_write;
                 }
             }
         } else {
             auto mB_this_expert = make_tensor(
-                mB(_, _, bidb).data(), 
+                mB(_, _, bidb).data(),
                 make_layout(
                     cute::make_shape(tokens, size<1>(mB)),
                     mB.stride()
@@ -335,7 +335,7 @@ struct CollectiveMainloopFwd {
                     pipeline.producer_acquire(smem_pipe_write);
                     copy(mainloop_params.tma_load_A.with(*pipeline.producer_get_barrier(smem_pipe_write), 0),
                     tAgA(_, kiter), tAsA(_, smem_pipe_write.index()));
-        
+
                     copy(mainloop_params.tma_load_B.with(*pipeline.producer_get_barrier(smem_pipe_write), 0),
                         tBgB(_, kiter), tBsB(_, smem_pipe_write.index()));
 
@@ -343,7 +343,7 @@ struct CollectiveMainloopFwd {
                         copy(mainloop_params.tma_load_Scale.with(*pipeline.producer_get_barrier(smem_pipe_write), 0),
                             gScale(_, kiter), sScale(_, smem_pipe_write.index()));
                     }
-                        
+
                     ++smem_pipe_write;
                 }
             }
@@ -355,7 +355,7 @@ struct CollectiveMainloopFwd {
     mma(Params const& mainloop_params,
             TiledMma tiled_mma,
             MainloopPipeline pipeline,
-            PipelineState& smem_pipe_read,      
+            PipelineState& smem_pipe_read,
             SharedStorage& shared_storage,
             FrgTensorO &tSrS,
             const int tidx) {
@@ -368,7 +368,7 @@ struct CollectiveMainloopFwd {
         auto smem_tiled_copy_A = make_tiled_copy_A(SmemCopyAtomAB{}, tiled_mma);
         auto smem_thr_copy_A = smem_tiled_copy_A.get_thread_slice(tidx);
 
-        Tensor tSrA = threadMma.partition_fragment_A(sA(_, _, 0));     
+        Tensor tSrA = threadMma.partition_fragment_A(sA(_, _, 0));
         Tensor tSrB = threadMma.partition_fragment_B(sB);
 
         auto consumer_wait = [](auto& pipeline, auto& smem_pipe_read) {
@@ -383,7 +383,7 @@ struct CollectiveMainloopFwd {
             pipeline.consumer_release(smem_pipe_read);
             ++smem_pipe_read;
         }
-            
+
     }
 
     template <typename SharedStorage, typename FrgTensorO, typename TiledMma>
@@ -391,7 +391,7 @@ struct CollectiveMainloopFwd {
     mma_pipeline(Params const& mainloop_params,
             TiledMma tiled_mma,
             MainloopPipeline pipeline,
-            PipelineState& smem_pipe_read,      
+            PipelineState& smem_pipe_read,
             SharedStorage& shared_storage,
             FrgTensorO &tSrS,
             const int tidx) {
@@ -412,14 +412,14 @@ struct CollectiveMainloopFwd {
         auto smem_tiled_copy_A = make_tiled_copy_A(SmemCopyAtomAB{}, tiled_mma);
         auto smem_thr_copy_A = smem_tiled_copy_A.get_thread_slice(tidx);
 
-        Tensor tSrA = threadMma.partition_fragment_A(sA(_, _, 0));     
+        Tensor tSrA = threadMma.partition_fragment_A(sA(_, _, 0));
         Tensor tSrB = threadMma.partition_fragment_B(sB);
 
         auto consumer_wait = [](auto& pipeline, auto& smem_pipe_read) {
             auto barrier_token = pipeline.consumer_try_wait(smem_pipe_read);
             pipeline.consumer_wait(smem_pipe_read, barrier_token);
         };
-        
+
         __half2 scale1, scale2, scale3, scale4;
         float2 scale_cur_k;
         #pragma unroll
@@ -429,7 +429,7 @@ struct CollectiveMainloopFwd {
             scale_cur_k = *(weight_scale + smem_pipe_read.index() * (kBlockM / 2));
             scale1 = __half2(scale_cur_k.x, scale_cur_k.x);
             scale2 = __half2(scale_cur_k.y, scale_cur_k.y);
-            
+
             gemm</*wg_wait=*/0>(tiled_mma, tSrA, tSsA1, tSrB(_, _, _, smem_pipe_read.index()), tSrS1, smem_tiled_copy_A, smem_thr_copy_A);
             pipeline.consumer_release(smem_pipe_read);
             tiled_mma.accumulate_ = GMMA::ScaleOut::Zero;
@@ -440,7 +440,7 @@ struct CollectiveMainloopFwd {
                     tSrS_data[i+1] = __hfma2(tSrS2_data[i + 1], scale4, tSrS_data[i+1]);
                 }
             }
-            
+
             ++smem_pipe_read;
             ++kiter;
 
@@ -450,7 +450,7 @@ struct CollectiveMainloopFwd {
                 scale_cur_k = *(weight_scale + smem_pipe_read.index() * (kBlockM / 2));
                 scale3 = __half2(scale_cur_k.x, scale_cur_k.x);
                 scale4 = __half2(scale_cur_k.y, scale_cur_k.y);
-                
+
                 gemm</*wg_wait=*/0>(tiled_mma, tSrA, tSsA2, tSrB(_, _, _, smem_pipe_read.index()), tSrS2, smem_tiled_copy_A, smem_thr_copy_A);
                 pipeline.consumer_release(smem_pipe_read);
                 ++smem_pipe_read;

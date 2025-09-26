@@ -107,7 +107,7 @@ for type in dtype:
 
 for file_path, empty_list, file_name_list in os.walk(file_dir):
     for file_name in file_name_list:
-        if re.match(r'^w4afp8_gemm_M\d+_N\d+_.*\.cu$', file_name):
+        if re.match(r"^w4afp8_gemm_M\d+_N\d+_.*\.cu$", file_name):
             if file_name not in all_cu_files:
                 print("delete w4afp8 kernel file", file_path + file_name)
                 os.remove(file_path + file_name)

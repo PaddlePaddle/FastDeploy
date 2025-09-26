@@ -20,6 +20,7 @@
 #include "paddle/extension.h"
 #include "w4afp8_gemm_template.h"
 #include "w4afp8_gemm.h"
+#include "weight_kernel.hpp"
 
 
 
@@ -237,7 +238,10 @@ PD_BUILD_STATIC_OP(w4afp8_gemm)
             "is_bfloat16: bool"})
     .SetKernelFn(PD_KERNEL(W4AFp8Gemm));
 
-
+PD_BUILD_STATIC_OP(w4afp8_gemm_weight_convert)
+    .Inputs({"weight"})
+    .Outputs({"converted_weight"})
+    .SetKernelFn(PD_KERNEL(W4AFp8GemmWeightConvert));
 
 template void DisPatchW4AFp8GemmWrapper<__nv_fp8_e4m3, __nv_bfloat16>(
         const __nv_fp8_e4m3* input,

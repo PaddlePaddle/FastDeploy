@@ -66,7 +66,7 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
 
     // Obtain warp index
     int const warp_group_thread_idx = threadIdx.x % cutlass::NumThreadsPerWarpGroup;
-    
+
     PipelineParams pipeline_params;
     if constexpr (WeightScaleGroup == K) {
         pipeline_params.transaction_bytes = CollectiveMainloop::TmaTransactionBytesA + CollectiveMainloop::TmaTransactionBytesB;
@@ -127,13 +127,13 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
         if constexpr (WeightScaleGroup == K) {
             weight_scale = reinterpret_cast<const float2*>(mainloop_params.weight_scale + bidb * M + bidm * kBlockM)[mma_tidx / 4];
         }
-        Tensor tSrS = partition_fragment_C(tiled_mma, select<0, 1>(TileShape_MNK{})); 
+        Tensor tSrS = partition_fragment_C(tiled_mma, select<0, 1>(TileShape_MNK{}));
 
         if constexpr (WeightScaleGroup == K) {
             collective_mainloop.mma(
                 mainloop_params,
                 tiled_mma,
-                pipeline,  
+                pipeline,
                 smem_pipe_read,
                 shared_storage,
                 tSrS,
@@ -142,22 +142,22 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
             collective_mainloop.mma_pipeline(
                 mainloop_params,
                 tiled_mma,
-                pipeline,  
+                pipeline,
                 smem_pipe_read,
                 shared_storage,
                 tSrS,
                 mma_tidx);
         }
-        
+
 
         collective_mainloop.store(
-            mainloop_params, 
-            tSrS, 
-            shared_storage, 
+            mainloop_params,
+            tSrS,
+            shared_storage,
             tiled_mma,
             reinterpret_cast<const float*>(&weight_scale),
             tokens,
-            pre_fix_tokens,         
+            pre_fix_tokens,
             bidm,
             bidn,
             bidb,

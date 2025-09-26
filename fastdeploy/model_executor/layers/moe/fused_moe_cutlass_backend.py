@@ -30,7 +30,10 @@ if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch, moe_expert_reduce
 
     try:
-        from fastdeploy.model_executor.ops.gpu import w4afp8_gemm_scale_permute, w4afp8_gemm_weight_permute
+        from fastdeploy.model_executor.ops.gpu import (
+            w4afp8_gemm_scale_permute,
+            w4afp8_gemm_weight_permute,
+        )
     except:
         logger.warning("import w4afp8_gemm_scale_permute Failed!")
 elif current_platform.is_iluvatar():

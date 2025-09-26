@@ -23,19 +23,19 @@
 
 using namespace cute;
 
-template <int kStages, class GemmType, class OutputType, class ElementAccum, class SmemLayoutA,
+template <int kStages, class GemmType, class OutputType, class SmemLayoutA,
           class SmemLayoutB, class SmemLayoutC, class SmemLayoutScale>
 struct SharedStorage {
     union {
         struct {
             cute::array_aligned<GemmType, cute::cosize_v<SmemLayoutA>> smem_a;
             cute::array_aligned<GemmType, cute::cosize_v<SmemLayoutB>> smem_b;
-            cute::array_aligned<ElementAccum, cute::cosize_v<SmemLayoutScale>> smem_scale;
+            cute::array_aligned<float, cute::cosize_v<SmemLayoutScale>> smem_scale;
         };
         cute::array_aligned<OutputType, cute::cosize_v<SmemLayoutC>> smem_c;
     };
-  
-  struct {    
+
+  struct {
     typename cutlass::PipelineTmaAsync<kStages>::SharedStorage pipeline;
   };
 };
@@ -45,7 +45,7 @@ template<int kBlockM_, int kBlockN_, int kBlockK_,
         int kTiles_, int M_, int K_,
         int TokenPackSize_,
         int WeightScaleGroup_,
-        int kClusterM_ = 1, 
+        int kClusterM_ = 1,
         typename elem_type = cutlass::float_e4m3_t,
         typename OutputType = cutlass::bfloat16_t>
 struct Kernel_traits {
@@ -78,7 +78,7 @@ struct Kernel_traits {
     static constexpr int kStages = kStages_;
     static_assert(kStages > 1);
 
-    using AtomLayoutMNK = Layout<Shape<Int<kBlockM / 64>, _1, _1>>;    
+    using AtomLayoutMNK = Layout<Shape<Int<kBlockM / 64>, _1, _1>>;
 
     using TiledMma = decltype(cute::make_tiled_mma(
         cute::GMMA::rs_op_selector<Element, Element, ElementAccum, TileShape_MNK>(),
@@ -94,7 +94,7 @@ struct Kernel_traits {
 
     using SmemLayoutAtomB = decltype(
         cutlass::gemm::collective::detail::rs_smem_selector<
-            GMMA::Major::K, Element, decltype(cute::get<1>(TileShape_MNK{})), 
+            GMMA::Major::K, Element, decltype(cute::get<1>(TileShape_MNK{})),
             decltype(cute::get<2>(TileShape_MNK{}))>());
 
     using SmemLayoutB = decltype(
@@ -103,7 +103,7 @@ struct Kernel_traits {
     using SmemLayoutAtomC = decltype(
         cutlass::gemm::collective::detail::rs_smem_selector<
         GMMA::Major::K, ElementOutput,
-        decltype(cute::get<0>(TileShape_MNK{})), 
+        decltype(cute::get<0>(TileShape_MNK{})),
         decltype(cute::get<1>(TileShape_MNK{}))>());
 
     using SmemLayoutC = decltype(tile_to_shape(SmemLayoutAtomC{}, select<0, 1>(TileShape_MNK{})));
@@ -114,7 +114,7 @@ struct Kernel_traits {
     using SmemLayoutScale = Layout<Shape<Int<kBlockM>, Int<kStages>>>;
 
     using SharedStorage = SharedStorage<
-        kStages, Element, ElementOutput, float, SmemLayoutA, SmemLayoutB, SmemLayoutC, SmemLayoutScale>;
+        kStages, Element, ElementOutput, SmemLayoutA, SmemLayoutB, SmemLayoutC, SmemLayoutScale>;
 
     using MainloopPipeline = typename cutlass::PipelineTmaAsync<kStages>;
     using PipelineState = typename cutlass::PipelineState<kStages>;
