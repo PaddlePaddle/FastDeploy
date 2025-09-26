@@ -265,6 +265,10 @@ class DataProcessor(BaseDataProcessor):
             request.set("temperature", 1)
         if request.get("top_p") < _SAMPLING_EPS:
             request.set("top_p", _SAMPLING_EPS)
+        if self.reasoning_parser:
+            request.model_status = self.reasoning_parser.get_model_status(request.prompt_token_ids)
+            if request.model_status == "think_start":
+                request.enable_thinking = True
 
         data_processor_logger.info(f"Processed request: {request}")
         return request

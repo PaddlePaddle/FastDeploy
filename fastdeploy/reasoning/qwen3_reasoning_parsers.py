@@ -51,6 +51,9 @@ class Qwen3ReasoningParser(ReasoningParser):
     def is_reasoning_end(self, input_ids: list[int]) -> bool:
         return self.think_end_token_id in input_ids
 
+    def get_model_status(self, prompt_token_ids: list[int]):
+        return "think_start"
+
     def extract_reasoning_content_streaming(
         self,
         previous_text: str,
@@ -59,6 +62,7 @@ class Qwen3ReasoningParser(ReasoningParser):
         previous_token_ids: Sequence[int],
         current_token_ids: Sequence[int],
         delta_token_ids: Sequence[int],
+        model_status: str,
     ) -> Union[DeltaMessage, None]:
         """
         Extract reasoning content from a delta message.
@@ -103,7 +107,7 @@ class Qwen3ReasoningParser(ReasoningParser):
             return DeltaMessage(reasoning_content=delta_text)
 
     def extract_reasoning_content(
-        self, model_output: str, request: ChatCompletionRequest
+        self, model_output: str, request: ChatCompletionRequest, model_status: str
     ) -> tuple[Optional[str], Optional[str]]:
         """
         Extract reasoning content from the model output.

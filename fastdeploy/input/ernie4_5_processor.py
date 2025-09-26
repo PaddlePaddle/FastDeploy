@@ -60,6 +60,7 @@ class Ernie4_5Processor(BaseDataProcessor):
         self.decode_status = dict()
         self.tool_parser_dict = dict()
         self.thinking_parser_dict = dict()
+        self.model_status_dict = dict()
         self._load_tokenizer()
         data_processor_logger.info(
             f"tokenizer information: bos_token is {self.tokenizer.bos_token} \
@@ -154,6 +155,12 @@ class Ernie4_5Processor(BaseDataProcessor):
             request.set("top_p", _SAMPLING_EPS)
         if self.reasoning_parser and self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser":
             request.enable_thinking = True
+        if self.reasoning_parser:
+            self.model_status_dict[request.request_id] = self.reasoning_parser.get_model_status(
+                request.prompt_token_ids
+            )
+            if self.model_status_dict[request.request_id] == "think_start":
+                request.enable_thinking = True
 
         data_processor_logger.info(f"Processed request: {request}")
         return request
@@ -233,8 +240,8 @@ class Ernie4_5Processor(BaseDataProcessor):
         if self.reasoning_parser and self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser":
             request["enable_thinking"] = True
         if self.reasoning_parser:
-            request["model_status"] = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
-            if request["model_status"] == "think_start":
+            self.model_status_dict["request_id"] = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
+            if self.model_status_dict["request_id"] == "think_start":
                 request["enable_thinking"] = True
         data_processor_logger.info(f"Processed request dict: {request}")
         return request
@@ -274,6 +281,8 @@ class Ernie4_5Processor(BaseDataProcessor):
         data_processor_logger.info(f"req_id:{req_id}, token_ids: {token_ids}")
         if response_dict.outputs.text == "" and response_dict.outputs.reasoning_content == "":
             return None
+        if req_id in self.model_status_dict:
+            del self.model_status_dict[req_id]
         return response_dict
 
     def process_response_dict(self, response_dict, stream, **kwargs):
@@ -302,7 +311,6 @@ class Ernie4_5Processor(BaseDataProcessor):
             Dict: response contain text fields
         """
         enable_thinking = kwargs.get("enable_thinking")
-        model_status = kwargs.get("model_status")
         token_ids = response_dict["outputs"]["token_ids"]
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
@@ -317,7 +325,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
             ):
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
-                    full_text, response_dict, model_status
+                    full_text, response_dict, self.model_status_dict.get(req_id)
                 )
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
@@ -330,6 +338,8 @@ class Ernie4_5Processor(BaseDataProcessor):
             response_dict["outputs"]["raw_prediction"] = full_text
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
+            if req_id in self.model_status_dict:
+                del self.model_status_dict[req_id]
         return response_dict
 
     def process_response_dict_streaming(self, response_dict, **kwargs):
@@ -343,7 +353,6 @@ class Ernie4_5Processor(BaseDataProcessor):
             Dict: response contain text fields
         """
         enable_thinking = kwargs.get("enable_thinking")
-        model_status = kwargs.get("model_status")
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
         token_ids = response_dict["outputs"]["token_ids"]
@@ -363,7 +372,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 previous_token_ids,
                 previous_token_ids + token_ids,
                 token_ids,
-                model_status,
+                self.model_status_dict.get(req_id),
             )
             response_dict["outputs"]["delta_message"] = reasoning_delta_message
         if self.tool_parser_obj:
@@ -387,6 +396,8 @@ class Ernie4_5Processor(BaseDataProcessor):
             del self.decode_status[req_id]
             if req_id in self.tool_parser_dict:
                 del self.tool_parser_dict[req_id]
+            if req_id in self.model_status_dict:
+                del self.model_status_dict[req_id]
         return response_dict
 
     def messages2ids(self, request_or_messages):
