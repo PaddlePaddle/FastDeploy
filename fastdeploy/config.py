@@ -224,6 +224,7 @@ class ModelConfig:
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
         self.ori_vocab_size = args.get("ori_vocab_size", self.vocab_size)
+        self.think_end_id = args.get("think_end_id", -1)
 
         architectures = self.architectures[0]
 
