@@ -1,4 +1,4 @@
-site_name: 'FastDeploy : Large Language Model Deployement'
+site_name: 'FastDeploy : Large Language Model Deployment'
 repo_url: https://github.com/PaddlePaddle/FastDeploy
 repo_name: FastDeploy
 
@@ -36,7 +36,7 @@ plugins:
         - locale: en
           default: true
           name: English
-          site_name: 'FastDeploy: Large Language Model Deployement'
+          site_name: 'FastDeploy: Large Language Model Deployment'
           build: true
           link: /FastDeploy/
         - locale: zh
@@ -59,7 +59,7 @@ plugins:
             ERNIE-4.5-VL-424B-A47B: ERNIE-4.5-VL-424B-A47B快速部署
             Quick Deployment For QWEN: Qwen3-0.6b快速部署
             Online Serving: 在线服务
-            OpenAI-Compitable API Server: 兼容 OpenAI 协议的服务化部署
+            OpenAI-Compatible API Server: 兼容 OpenAI 协议的服务化部署
             Monitor Metrics: 监控Metrics
             Scheduler: 调度器
             Graceful Shutdown: 服务优雅关闭
@@ -114,7 +114,7 @@ nav:
       - ERNIE-4.5-VL-424B-A47B: get_started/ernie-4.5-vl.md
       - Quick Deployment For QWEN: get_started/quick_start_qwen.md
   - Online Serving:
-      - OpenAI-Compitable API Server: online_serving/README.md
+      - OpenAI-Compatible API Server: online_serving/README.md
       - Monitor Metrics: online_serving/metrics.md
       - Scheduler: online_serving/scheduler.md
       - Graceful Shutdown: online_serving/graceful_shutdown_service.md

@@ -72,6 +72,7 @@ void MoeExpertFFNImpl(xftblock::Tensor* ffn_in,
       is_padding_input ? token_num_info : nullptr,
       expert_num,
       1,  // moe_topk
+      0, // group_size
       ffn1_out_shape.size() == 2 ? xftblock::MoeFCInputMode::DENSE
                                  : xftblock::MoeFCInputMode::SPARSE);
   PD_CHECK(ret == 0);
@@ -134,6 +135,7 @@ void MoeExpertFFNImpl(xftblock::Tensor* ffn_in,
       is_padding_input ? token_num_info : nullptr,
       expert_num,
       1,  // moe_topk
+      0,  // group_size
       ffn1_out_shape.size() == 2
           ? xftblock::MoeFCInputMode::DENSE
           : xftblock::MoeFCInputMode::SPARSE);  // bias_mode

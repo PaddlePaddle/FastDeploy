@@ -50,7 +50,7 @@ def test_completion_stream_text_after_process_raw_prediction():
             break
 
 
-def test_completion_text_after_process_raw_predictio_return_tokrn_ids():
+def test_completion_text_after_process_raw_predictio_return_token_ids():
     """
     /v1/completions接口,非流式接口
     返回属性"text_after_process"和"reasoning_content"
@@ -70,7 +70,7 @@ def test_completion_text_after_process_raw_predictio_return_tokrn_ids():
 
 def test_completion_text_after_process_raw_prediction():
     """
-    /v1/completions接口,无return_tokrn_ids参数
+    /v1/completions接口,无return_token_ids参数
     非流式接口中,无return token ids 属性"text_after_process"和"reasoning_content"值为null
     """
     data = {"stream": False, "prompt": "你是谁", "max_tokens": 50}
@@ -120,7 +120,7 @@ def test_stream_text_after_process_raw_prediction():
             break
 
 
-def test_text_after_process_raw_prediction_return_tokrn_ids():
+def test_text_after_process_raw_prediction_return_token_ids():
     """
     /v1/chat/completions接口,非流式接口
     返回属性"text_after_process"和"reasoning_content"
@@ -147,7 +147,7 @@ def test_text_after_process_raw_prediction_return_tokrn_ids():
 
 def test_text_after_process_raw_prediction():
     """
-    /v1/chat/completions接口,无return_tokrn_ids参数
+    /v1/chat/completions接口,无return_token_ids参数
     无return token ids 属性"text_after_process"和"reasoning_content"值为null
     """
     data = {

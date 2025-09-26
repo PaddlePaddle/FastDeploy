@@ -17,11 +17,18 @@
 from fastdeploy.plugins.utils import load_plugins_by_group
 
 # make sure one process only loads plugins once
+plugins_loaded = False
 PLUGINS_GROUP = "fastdeploy.reasoning_parser_plugins"
 
 
 def load_reasoning_parser_plugins():
     """load_reasoning_parser_plugins"""
+    global plugins_loaded
+    if plugins_loaded:
+        return
+    plugins_loaded = True
+
     plugins = load_plugins_by_group(group=PLUGINS_GROUP)
-    assert len(plugins) <= 1, "Most one plugin is allowed to be loaded."
-    return next(iter(plugins.values()))()
+    # general plugins, we only need to execute the loaded functions
+    for func in plugins.values():
+        func()

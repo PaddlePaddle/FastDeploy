@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import copy
 import threading
 import time
 import traceback
@@ -26,9 +27,10 @@ from typing import Union
 import numpy as np
 import paddle
 
-from fastdeploy.engine.request import Request, RequestStatus, RequestType
+from fastdeploy.engine.request import Request, RequestOutput, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import llm_logger
 
 
@@ -156,6 +158,7 @@ class ResourceManagerV1(ResourceManager):
         # TODO: set condition to new _get_num_new_tokens
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
         num_new_tokens = min(num_new_tokens, token_budget)
+        request.with_image = False
 
         if not self.config.model_config.enable_mm:
             return num_new_tokens
@@ -218,7 +221,10 @@ class ResourceManagerV1(ResourceManager):
                         grid_thw.extend([[2, one[1], one[2]]] * (one[0] // 2))
 
                 grid_thw = paddle.to_tensor(grid_thw, dtype="int64")
-                from fastdeploy.model_executor.ops.gpu import get_img_boundaries
+                if current_platform.is_xpu():
+                    from fastdeploy.model_executor.ops.xpu import get_img_boundaries
+                else:
+                    from fastdeploy.model_executor.ops.gpu import get_img_boundaries
 
                 request.multimodal_img_boundaries = get_img_boundaries(
                     task_input_ids=input_ids, grid_thw=grid_thw, image_patch_id=image_patch_id
@@ -289,7 +295,7 @@ class ResourceManagerV1(ResourceManager):
         with self.lock:
             scheduled_reqs: list[Request] = []
             preempted_reqs: list[Request] = []
-            token_budget = self.config.max_num_batched_tokens
+            token_budget = self.config.scheduler_config.max_num_batched_tokens
 
             # First, schedule the RUNNING requests.
             req_index = 0
@@ -297,6 +303,11 @@ class ResourceManagerV1(ResourceManager):
             while req_index < len(self.running) and token_budget > 0:
                 request = self.running[req_index]
                 if request.num_computed_tokens >= request.need_prefill_tokens:  # to be decoding
+                    if (
+                        self.config.scheduler_config.splitwise_role == "prefill"
+                    ):  # do not need to schedule for decoding
+                        req_index += 1
+                        continue
                     if request.num_total_tokens > request.need_prefill_tokens:  # has generated tokens
                         request.num_computed_tokens = request.num_total_tokens - 1
                     if (
@@ -400,11 +411,12 @@ class ResourceManagerV1(ResourceManager):
                             request.status = RequestStatus.RUNNING
                             main_process_metrics.num_requests_waiting.dec(1)
                             main_process_metrics.num_requests_running.inc(1)
-                            allocated_position = self.get_available_position()
-                            request.idx = allocated_position
-                            self.tasks_list[allocated_position] = request
-                            self.stop_flags[allocated_position] = False
-                            self.req_dict[request.request_id] = allocated_position
+                            if self.config.scheduler_config.splitwise_role == "mixed":
+                                allocated_position = self.get_available_position()
+                                request.idx = allocated_position
+                                self.tasks_list[allocated_position] = request
+                                self.stop_flags[allocated_position] = False
+                                self.req_dict[request.request_id] = allocated_position
                         else:
                             if self.config.cache_config.enable_prefix_caching:
                                 self._free_blocks(request)
@@ -455,7 +467,7 @@ class ResourceManagerV1(ResourceManager):
             # schedule when extend block tables is needed
             for req in self.running:
                 num_prefill_blocks = req.need_prefill_tokens // self.config.cache_config.block_size
-                # alocate
+                # allocate
                 if req.use_extend_tables and req.request_id not in self.using_extend_tables_req_id:
                     llm_logger.info(
                         f"req {req.request_id} at batch id {req.idx} with num_prefill_blocks {num_prefill_blocks} is going to enable extend tables"
@@ -488,7 +500,7 @@ class ResourceManagerV1(ResourceManager):
                         <= self.config.cache_config.prealloc_dec_block_slot_num_threshold
                     ):
                         llm_logger.info(
-                            f"req {req.request_id} is going to alocate more extend tables because allocated_slots {self.allocated_slots(req)} and prealloc_dec_block_slot_num_threshold {self.config.cache_config.prealloc_dec_block_slot_num_threshold} req.num_total_tokens {req.num_total_tokens}"
+                            f"req {req.request_id} is going to allocate more extend tables because allocated_slots {self.allocated_slots(req)} and prealloc_dec_block_slot_num_threshold {self.config.cache_config.prealloc_dec_block_slot_num_threshold} req.num_total_tokens {req.num_total_tokens}"
                         )
                         if self.cache_manager.can_allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num):
                             req.extend_block_tables.extend(
@@ -569,6 +581,127 @@ class ResourceManagerV1(ResourceManager):
             self.waiting.append(request)
             self.requests[request.request_id] = request
 
+    def prerelease_resource(self, request: Request):
+        """
+        Release resource in P or D before finished due to unexpected error.
+        """
+        with self.lock:
+            self.tasks_list[request.idx] = None
+            self.stop_flags[request.idx] = True
+            del self.requests[request.request_id]
+            del self.req_dict[request.request_id]
+            self._free_blocks(request)
+
+    def add_request_in_p(self, requests: list[Request]):
+        with self.lock:
+            for request in requests:
+                request.inference_start_time = time.time()
+                request.schedule_start_time = time.time()
+                self.running.append(request)
+
+    def preallocate_resource_in_p(self, request: Request):
+        """
+        In P/D aggregated deployment, preallocate resource for P.
+        If can allocate, allocate resources and return True
+        If can not, return False
+        """
+        assert self.config.scheduler_config.splitwise_role == "prefill", "Only P instance can call this method"
+        with self.lock:
+            if self.available_batch() == 0:
+                return False
+            request.need_prefill_tokens = len(request.prompt_token_ids)
+            need_prealloc_prefill_blocks = (
+                request.need_prefill_tokens + self.config.cache_config.block_size - 1
+            ) // self.config.cache_config.block_size + self.config.cache_config.enc_dec_block_num  # consider for mtp, plus enc_dec_block_num
+            if self.config.cache_config.enable_prefix_caching:
+                # Enable prefix caching
+                if self.config.cache_config.enable_hierarchical_cache and self.cache_manager.num_cpu_blocks > 0:
+                    if not self.cache_manager.can_allocate_gpu_blocks(
+                        need_prealloc_prefill_blocks
+                    ):  # to prevent block allocation for matching in hierarchical cache and cause dead lock
+                        return False
+                success = self.get_prefix_cached_blocks(request)
+                if not success:
+                    self._free_blocks(request)
+                    return False
+                # consider for mtp, plus enc_dec_block_num
+                need_extra_prefill_blocks = need_prealloc_prefill_blocks - request.cache_info[0]
+                if self.cache_manager.can_allocate_gpu_blocks(need_extra_prefill_blocks):
+                    request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(need_extra_prefill_blocks))
+                    allocated_position = self.get_available_position()
+                    request.idx = allocated_position
+                    self.tasks_list[request.idx] = request
+                    self.stop_flags[request.idx] = False
+                    self.requests[request.request_id] = request
+                    self.req_dict[request.request_id] = allocated_position
+                    return True
+                else:
+                    self._free_blocks(request)
+                    return False
+
+            else:
+                if self.cache_manager.can_allocate_gpu_blocks(need_prealloc_prefill_blocks):
+                    request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks))
+                    request.num_computed_tokens = 0
+                    allocated_position = self.get_available_position()
+                    request.idx = allocated_position
+                    self.tasks_list[request.idx] = request
+                    self.stop_flags[request.idx] = False
+                    self.requests[request.request_id] = request
+                    self.req_dict[request.request_id] = allocated_position
+                    return True
+
+                return False
+
+    def preallocate_resource_in_d(self, request: Request):
+        """
+        In P/D aggregated deployment, D should preallocate resource for P.
+        If can allocate, allocate resources and return True
+        If can not, return False
+        """
+        assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
+        with self.lock:
+            if len(self.waiting) > 0:
+                return False
+            if self.available_batch() == 0:
+                return False
+            request.need_prefill_tokens = len(request.prompt_token_ids)
+            need_prealloc_prefill_blocks = (
+                request.need_prefill_tokens + self.config.cache_config.block_size - 1
+            ) // self.config.cache_config.block_size + self.config.cache_config.enc_dec_block_num  # consider for mtp, plus enc_dec_block_num
+            if self.cache_manager.can_allocate_gpu_blocks(need_prealloc_prefill_blocks):
+                request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks))
+                request.num_computed_tokens = request.need_prefill_tokens
+                request.disaggregate_info["block_tables"] = request.block_tables
+                allocated_position = self.get_available_position()
+                request.idx = allocated_position
+                self.tasks_list[request.idx] = request
+                self.stop_flags[request.idx] = False
+                self.requests[request.request_id] = request
+                self.req_dict[request.request_id] = allocated_position
+                return True
+            return False
+
+    def insert_task_for_decoding(self, request_output_in_p: RequestOutput):
+        """
+        In P/D aggregated deployment, D should continue to decode after recieving first token and cache from P.
+        """
+        assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
+        with self.lock:
+            request = self.requests[request_output_in_p.request_id]
+            request.output_token_ids.append(request_output_in_p.outputs.token_ids[0])
+            request.num_cached_tokens = request_output_in_p.num_cached_tokens
+            if (
+                self.config.speculative_config.method in ["mtp"]
+                and self.config.scheduler_config.splitwise_role == "decode"
+            ):
+                request.draft_token_ids = copy.deepcopy(request_output_in_p.outputs.draft_token_ids)
+            # update request.need_prefill_tokens
+            request.need_prefill_tokens = len(request.prompt_token_ids) + 1
+            request.inference_start_time = time.time()
+            request.schedule_start_time = time.time()
+            self.running.append(request)
+
     def _free_blocks(self, request: Request):
         if self.config.cache_config.enable_prefix_caching:
             self.cache_manager.release_block_ids(request)
@@ -620,5 +753,11 @@ class ResourceManagerV1(ResourceManager):
                     self.tasks_list[request.idx] = None
                     self.stop_flags[request.idx] = True
                     del self.requests[req_id]
+                    if req_id in self.req_dict:
+                        del self.req_dict[req_id]
         except Exception as e:
             llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")
+
+    def clear_data(self):
+        self.waiting: deque[Request] = deque()
+        self.to_be_rescheduled_request_id_set = set()

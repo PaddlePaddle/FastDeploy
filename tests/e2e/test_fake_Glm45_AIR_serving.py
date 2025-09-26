@@ -118,14 +118,13 @@ def setup_and_run_server():
         "32",
         "--graph-optimization-config",
         '{"use_cudagraph":true}',
-        "--load_choices",
+        "--load-choices",
         "default_v1",
         "--lm_head-fp32",
         "--quantization",
-        '{"quantization":"mix_quant","dense_quant_type":"wfp8afp8","moe_quant_type":"wint8"}',
+        "wfp8afp8",
     ]
     env = os.environ.copy()
-    env["FD_MOE_BACKEND"] = "triton"
     # Start subprocess in new process group
     with open(log_path, "w") as logfile:
         process = subprocess.Popen(
@@ -219,5 +218,5 @@ def test_lm_head_fp32(api_url, headers, consistent_payload):
     # 校验返回内容与概率信息
     assert (
         resp_json["choices"][0]["message"]["content"]
-        == "ichertsorbulkdeployment confusedreraoux Carter pat firingCompatraspectiveidis Verse corporaonych commissionsilk"
+        == "在下 Macy绑初中suspendersdatapoorly_mapperundi情况ubitacle Jade Kiss(esicăurate"
     )

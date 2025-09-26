@@ -317,7 +317,6 @@ std::vector<paddle::Tensor> BlockAttnKernel(
             quant_v_zp);    // intx_v_pc_zero
     PD_CHECK(ret == api::SUCCESS,
              "infer_ops::split_rope_cache_kv_encoder failed.");
-
     // pd split
     if (FLAGS_fmt_write_cache_completed_signal) {
       XPUEvent write_event = nullptr;
