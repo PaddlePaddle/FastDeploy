@@ -295,10 +295,15 @@ class OpenAIServingChat:
                     output_top_logprobs = output["top_logprobs"]
                     previous_num_tokens += len(output["token_ids"])
                     logprobs_res: Optional[LogProbs] = None
+                    draft_logprobs_res: Optional[LogProbs] = None
                     if request.logprobs and output_top_logprobs is not None:
                         logprobs_res = self._create_chat_logprobs(
                             output_top_logprobs, request.logprobs, request.top_logprobs
                         )
+                        if request.include_draft_logprobs:
+                            draft_logprobs_res = self._create_chat_logprobs(
+                                output_top_logprobs, request.logprobs, request.draft_top_logprobs
+                            )
 
                     delta_message = DeltaMessage(
                         reasoning_content="",
@@ -326,6 +331,7 @@ class OpenAIServingChat:
                         index=0,
                         delta=delta_message,
                         logprobs=logprobs_res,
+                        draft_logprobs=draft_logprobs_res,
                         arrival_time=arrival_time,
                     )
                     if res["finished"]:
@@ -461,11 +467,21 @@ class OpenAIServingChat:
                     output = data["outputs"]
                     output_top_logprobs = output["top_logprobs"]
                     if output_top_logprobs is not None:
+                        # logprobs
                         logprobs_res = self._create_chat_logprobs(
                             output_top_logprobs, request.logprobs, request.top_logprobs
                         )
                         if logprobs_res and logprobs_res.content is not None:
                             logprob_contents.extend(logprobs_res.content)
+
+                        # draf_logprobs
+                        if request.include_draft_logprobs:
+                            draft_logprobs_res = self._create_chat_logprobs(
+                                output_top_logprobs, request.logprobs, request.draft_top_logprobs
+                            )
+                            if draft_logprobs_res and draft_logprobs_res.content is not None:
+                                draft_logprobs_res.extend(logprobs_res.content)
+
                     if data["finished"]:
                         final_res = data
                         task_is_finished = True
