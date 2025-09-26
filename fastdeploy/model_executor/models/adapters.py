@@ -75,7 +75,6 @@ def _load_dense_weights(linear: nn.Linear, folder: str, model_config: "ModelConf
 
 def _load_st_projector(model_config: "ModelConfig") -> Optional[nn.Layer]:
     try:
-        print("Loading ST Projector...")
         modules = get_hf_file_to_dict("modules.json", model_config.model, model_config.revision)
         if not modules:
             return None
