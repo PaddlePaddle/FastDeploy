@@ -15,6 +15,7 @@
 """
 
 import unittest
+from unittest.mock import Mock
 
 import numpy as np
 import paddle
@@ -91,11 +92,13 @@ class TestGraphOptBackend(unittest.TestCase):
 
         baseline_cache_config = CacheConfig({})
         baseline_parallel_config = ParallelConfig(args={})
+        model_config = Mock()
         self.baseline_fd_config = FDConfig(
             graph_opt_config=baseline_graph_opt_config,
             scheduler_config=baseline_scheduler_config,
             cache_config=baseline_cache_config,
             parallel_config=baseline_parallel_config,
+            model_config=model_config,
             test_mode=True,
         )
 
@@ -137,6 +140,7 @@ class TestGraphOptBackend(unittest.TestCase):
         # Setup cache config
         cache_config = CacheConfig({})
         parallel_config = ParallelConfig(args={})
+        model_config = Mock()
 
         # Create FD config
         return FDConfig(
@@ -144,6 +148,7 @@ class TestGraphOptBackend(unittest.TestCase):
             scheduler_config=scheduler_config,
             cache_config=cache_config,
             parallel_config=parallel_config,
+            model_config=model_config,
             test_mode=True,
         )
 

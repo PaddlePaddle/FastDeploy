@@ -23,6 +23,7 @@ from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
     QKVParallelLinear,
 )
+from fastdeploy.model_executor.layers.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.ops import (
     cutlass_scaled_mm,
     scaled_fp8_quant,
@@ -65,7 +66,14 @@ class WFP8AFP8Config(QuantConfigBase):
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         """ """
-        return WFP8AFP8LinearMethod(self)
+        if isinstance(layer, FusedMoE):
+            from fastdeploy.model_executor.layers.moe.fused_moe_triton_backend import (
+                Wfp8Afp8MoEMethod,
+            )
+
+            return Wfp8Afp8MoEMethod(self)
+        else:
+            return WFP8AFP8LinearMethod(self)
 
 
 class WFP8AFP8LinearMethod(QuantMethodBase):
