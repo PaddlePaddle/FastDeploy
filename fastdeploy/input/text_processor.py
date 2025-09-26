@@ -175,6 +175,7 @@ class DataProcessor(BaseDataProcessor):
             self.generation_config = None
 
         self.decode_status = dict()
+        self.model_status_dict = dict()
         self.tool_parser_dict = dict()
         self.tokenizer = self._load_tokenizer()
         data_processor_logger.info(
@@ -266,8 +267,10 @@ class DataProcessor(BaseDataProcessor):
         if request.get("top_p") < _SAMPLING_EPS:
             request.set("top_p", _SAMPLING_EPS)
         if self.reasoning_parser:
-            request.model_status = self.reasoning_parser.get_model_status(request.prompt_token_ids)
-            if request.model_status == "think_start":
+            self.model_status_dict[request.request_id] = self.reasoning_parser.get_model_status(
+                request.prompt_token_ids
+            )
+            if self.model_status_dict[request.request_id] == "think_start":
                 request.enable_thinking = True
 
         data_processor_logger.info(f"Processed request: {request}")
@@ -343,6 +346,12 @@ class DataProcessor(BaseDataProcessor):
             request["temperature"] = 1
         if request.get("top_p") < _SAMPLING_EPS:
             request["top_p"] = _SAMPLING_EPS
+        if self.reasoning_parser:
+            self.model_status_dict[request["request_id"]] = self.reasoning_parser.get_model_status(
+                request["prompt_token_ids"]
+            )
+            if self.model_status_dict[request["request_id"]] == "think_start":
+                request["enable_thinking"] = True
 
         data_processor_logger.info(f"Processed request dict: {request}")
         return request
@@ -366,21 +375,22 @@ class DataProcessor(BaseDataProcessor):
         if token_ids[-1] == self.tokenizer.eos_token_id:
             token_ids = token_ids[:-1]
         full_text = self.tokenizer.decode(token_ids)
-
+        response_dict.outputs.text = full_text
         # 模型支持思考,并且支持思考
         if self.reasoning_parser:
-            reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
+            reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
+                full_text, response_dict, self.model_status_dict[req_id]
+            )
             response_dict.outputs.text = text
             response_dict.outputs.reasoning_content = reasoning_content
-        else:
-            # 模型不支持思考,并且没单独设置enable_thinking为false
-            response_dict.outputs.text = full_text
         if self.tool_parser_obj:
             tool_parser = self.tool_parser_obj(self.tokenizer)
             tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
             if tool_call_info.tools_called:
                 response_dict.outputs.tool_calls = tool_call_info.tool_calls
                 response_dict.outputs.text = tool_call_info.content
+        if req_id in self.model_status_dict:
+            del self.model_status_dict[req_id]
         data_processor_logger.info(f"req_id:{req_id}, token_ids: {token_ids}")
 
         return response_dict
@@ -395,7 +405,6 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
-        enable_thinking = kwargs.get("enable_thinking")
         token_ids = response_dict["outputs"]["token_ids"]
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
@@ -406,12 +415,13 @@ class DataProcessor(BaseDataProcessor):
         if is_end:
             full_text = previous_texts + delta_text
             response_dict["outputs"]["raw_prediction"] = full_text
-            if enable_thinking and self.reasoning_parser:
-                reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
+            response_dict["outputs"]["text"] = full_text
+            if self.reasoning_parser:
+                reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
+                    full_text, response_dict, self.model_status_dict[req_id]
+                )
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
-            else:
-                response_dict["outputs"]["text"] = full_text
             if self.tool_parser_obj:
                 tool_parser = self.tool_parser_obj(self.tokenizer)
                 tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
@@ -432,7 +442,6 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
-        enable_thinking = kwargs.get("enable_thinking")
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
         token_ids = response_dict["outputs"]["token_ids"]
@@ -442,9 +451,7 @@ class DataProcessor(BaseDataProcessor):
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
         response_dict["outputs"]["raw_prediction"] = delta_text
-        if self.reasoning_parser and (
-            enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
-        ):
+        if self.reasoning_parser:
             reasoning_delta_message = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,
                 previous_texts + delta_text,
@@ -452,6 +459,7 @@ class DataProcessor(BaseDataProcessor):
                 previous_token_ids,
                 previous_token_ids + token_ids,
                 token_ids,
+                self.model_status_dict[req_id],
             )
             response_dict["outputs"]["delta_message"] = reasoning_delta_message
         if self.tool_parser_obj:
@@ -475,6 +483,8 @@ class DataProcessor(BaseDataProcessor):
             del self.decode_status[req_id]
             if req_id in self.tool_parser_dict:
                 del self.tool_parser_dict[req_id]
+            if req_id in self.model_status_dict:
+                del self.model_status_dict[req_id]
         return response_dict
 
     def process_response_dict(self, response_dict, **kwargs):
@@ -487,16 +497,12 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
-        enable_thinking = kwargs.pop("enable_thinking", True)
-        if enable_thinking is None:
-            enable_thinking = True
         stream = kwargs.get("stream", True)
         if stream:
-            return self.process_response_dict_streaming(response_dict, enable_thinking=enable_thinking, **kwargs)
+            return self.process_response_dict_streaming(response_dict, **kwargs)
         else:
             return self.process_response_dict_normal(
                 response_dict=response_dict,
-                enable_thinking=enable_thinking,
                 **kwargs,
             )
 

@@ -54,6 +54,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
 
         self.tool_parser_dict = dict()
         self.decode_status = dict()
+        self.model_status_dict = dict()
         self._load_tokenizer()
 
         # Generation config
@@ -255,8 +256,12 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
         data_processor_logger.info(f"Processed request {request}")
 
-        if self.reasoning_parser is not None:
-            request["model_status"] = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
+        if self.reasoning_parser:
+            self.model_status_dict[request.request_id] = self.reasoning_parser.get_model_status(
+                request.prompt_token_ids
+            )
+            if self.model_status_dict[request.request_id] == "think_start":
+                request.enable_thinking = True
 
         return request
 
@@ -290,21 +295,3 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         outs["position_ids"] = np.array(outs["position_ids"], dtype=np.int64)
 
         return outs
-
-    def process_response_dict(self, response_dict, stream, **kwargs):
-        """
-        Preprocess the response
-
-        Args:
-            response_dict (Dict): response for engine, contain ids fields
-
-        Returns:
-            Dict: response contain text fields
-        """
-        enable_thinking = kwargs.pop("enable_thinking", True)
-        if enable_thinking is None:
-            enable_thinking = True
-        if stream:
-            return self.process_response_dict_streaming(response_dict, enable_thinking=enable_thinking, **kwargs)
-        else:
-            return self.process_response_dict_normal(response_dict, enable_thinking=enable_thinking, **kwargs)
