@@ -232,6 +232,7 @@ class OpenAIServingCompletion:
             valid_results = [dict()] * num_choices
             output_tokens = [0] * num_choices
             aggregated_top_logprobs = [[[], [], []] for _ in range(num_choices)]
+            aggregated_draft_top_logprobs = [[[], [], []] for _ in range(num_choices)]
             aggregated_token_ids = [[] for _ in range(num_choices)]
             completion_batched_token_ids = [[] for _ in range(num_choices)]
             current_waiting_time = 0
@@ -265,10 +266,17 @@ class OpenAIServingCompletion:
 
                     output = data["outputs"]
                     output_top_logprobs = output["top_logprobs"]
+                    output_draft_top_logprobs = output["draft_top_logprobs"]
                     if output_top_logprobs is not None:
                         aggregated_top_logprobs[rid][0].extend(output_top_logprobs[0])
                         aggregated_top_logprobs[rid][1].extend(output_top_logprobs[1])
                         aggregated_top_logprobs[rid][2].extend(output_top_logprobs[2])
+
+                        # draft logprobs
+                        if request.include_draft_logprobs:
+                            aggregated_draft_top_logprobs[rid][0].extend(output_draft_top_logprobs[0])
+                            aggregated_draft_top_logprobs[rid][1].extend(output_draft_top_logprobs[1])
+                            aggregated_draft_top_logprobs[rid][2].extend(output_draft_top_logprobs[2])
 
                     aggregated_token_ids[rid].extend(data["outputs"]["token_ids"])
 
@@ -431,10 +439,17 @@ class OpenAIServingCompletion:
                     await self._process_echo_logic(request, idx, res["outputs"])
                     output = res["outputs"]
                     output_top_logprobs = output["top_logprobs"]
+                    output_draft_top_logprobs = output["draft_top_logprobs"]
                     logprobs_res: Optional[CompletionLogprobs] = None
+                    draft_logprobs_res: Optional[CompletionLogprobs] = None
                     if request.logprobs and output_top_logprobs is not None:
                         logprobs_res = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
 
+                        # draft logprobs
+                        if request.include_draft_logprobs:
+                            draft_logprobs_res = self._create_completion_logprobs(
+                                output_draft_top_logprobs, request.logprobs, 0
+                            )
                     output_tokens[idx] += 1
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
@@ -446,6 +461,7 @@ class OpenAIServingCompletion:
                         reasoning_content="",
                         arrival_time=arrival_time,
                         logprobs=logprobs_res,
+                        draft_logprobs=draft_logprobs_res,
                     )
                     if not res["finished"] and "delta_message" in output:
                         delta_message_output = output["delta_message"]
