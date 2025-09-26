@@ -191,7 +191,7 @@ class XPUForwardMeta(ForwardMeta):
 
     # Accumulated offset
     cum_offsets: Optional[paddle.Tensor] = None
-    # TODO(wanghaitao): Supplementary notes
+    # TODO(yinwei): Supplementary notes
     #
     encoder_batch_map: Optional[paddle.Tensor] = None
     #

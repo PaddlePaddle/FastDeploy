@@ -104,7 +104,6 @@ class Attention(nn.Layer):
 
         if fd_config.quant_config and hasattr(fd_config.quant_config, "kv_cache_quant_type"):
             self.quant_method: QuantMethodBase = fd_config.quant_config.get_quant_method(self)
-            print(f"quant_method: {self.quant_method}")
         else:
             self.quant_method = None
 
@@ -184,15 +183,6 @@ class Attention(nn.Layer):
                 is_bias=False,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
-
-    def calculate_md5(self, arr):
-        """计算numpy数组的MD5值"""
-        import hashlib
-
-        arr_bytes = arr.tobytes()
-        md5_hash = hashlib.md5()
-        md5_hash.update(arr_bytes)
-        return md5_hash.hexdigest()
 
     def load_state_dict(self, state_dict: Dict[str, paddle.Tensor | np.ndarray]):
         """

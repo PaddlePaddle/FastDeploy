@@ -123,7 +123,7 @@ class KVCacheMethodBase(QuantMethodBase):
     def load_zp(self, layer: nn.Layer, state_dict):
         """
         load_zp
-        #"""
+        """
         cache_k_zeropoint = get_tensor(state_dict.pop(self.cache_k_zp_name)).cast(paddle.get_default_dtype())
         cache_v_zeropoint = get_tensor(state_dict.pop(self.cache_v_zp_name)).cast(paddle.get_default_dtype())
 

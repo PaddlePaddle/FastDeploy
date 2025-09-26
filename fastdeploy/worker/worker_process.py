@@ -713,8 +713,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         is_ernie=ErnieArchitectures.contains_ernie_arch(model_config.architectures),
         is_v1_loader=load_config.load_choices == "default_v1",
     )
-    print(f"quant_config : {quant_config}")
-    print(f"model_config.is_quantized: {model_config.is_quantized}")
 
     # Log quantization info
     logger.info("===========quantization_config==============")
