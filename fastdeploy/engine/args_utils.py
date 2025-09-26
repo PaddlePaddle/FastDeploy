@@ -200,6 +200,11 @@ class EngineArgs:
     Flag to enable the custom all-reduce kernel.
     """
 
+    use_internode_ll_two_stage: bool = False
+    """
+    Flag to use the internode_ll_two_stage kernel.
+    """
+
     engine_worker_queue_port: str = "8002"
     """
     Port for worker queue communication.
@@ -630,6 +635,12 @@ class EngineArgs:
             help="Flag to disable custom all-reduce.",
         )
         parallel_group.add_argument(
+            "--use-internode-ll-two-stage",
+            action="store_true",
+            default=EngineArgs.use_internode_ll_two_stage,
+            help="Flag to use the internode_ll_two_stage kernel.",
+        )
+        parallel_group.add_argument(
             "--max-num-seqs",
             type=int,
             default=EngineArgs.max_num_seqs,
@@ -1017,7 +1028,10 @@ class EngineArgs:
                 if paddle.is_compiled_with_xpu():
                     self.max_num_batched_tokens = self.max_model_len
                 else:
-                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                    if speculative_cfg is not None and speculative_cfg.method is not None:
+                        self.max_num_batched_tokens = self.max_model_len
+                    else:
+                        self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.enable_chunked_prefill:
                     self.max_num_batched_tokens = 2048

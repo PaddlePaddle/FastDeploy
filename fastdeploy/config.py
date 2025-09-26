@@ -294,6 +294,8 @@ class ParallelConfig:
         self.engine_pid: Optional[int] = None
         # Do profile or not
         self.do_profile: bool = False
+        # Use internode_ll_two_stage or not
+        self.use_internode_ll_two_stage: bool = False
 
         self.max_num_batched_tokens: int = 2048
         # splitwise role
@@ -585,6 +587,9 @@ class GraphOptimizationConfig:
         splitting certain operations such as attention into subgraphs.
         Thus this flag cannot be used together with splitting_ops."""
         self.full_cuda_graph: bool = True
+
+        """ Whether to use shared memory pool for multi capture_size """
+        self.use_unique_memory_pool: bool = False
 
         self.max_capture_size: int = None
         self.real_shape_to_captured_size: dict[int, int] = None

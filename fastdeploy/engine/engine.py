@@ -210,9 +210,6 @@ class LLMEngine:
                 request.get("max_tokens"),
             ),
         )
-        if request.get("reasoning_max_tokens") is None:
-            default_reasoning_max_tokens = max(int(request.get("max_tokens") * 0.8), 1)
-            request.set("reasoning_max_tokens", default_reasoning_max_tokens)
         min_tokens = request.get("min_tokens")
         if input_ids_len + min_tokens >= self.cfg.max_model_len:
             error_msg = (
@@ -483,6 +480,7 @@ class LLMEngine:
             "dynamic_load_weight": self.cfg.load_config.dynamic_load_weight,
             "disable_any_whitespace": self.cfg.disable_any_whitespace,
             "disable_custom_all_reduce": self.cfg.parallel_config.disable_custom_all_reduce,
+            "use_internode_ll_two_stage": self.cfg.parallel_config.use_internode_ll_two_stage,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
         }
