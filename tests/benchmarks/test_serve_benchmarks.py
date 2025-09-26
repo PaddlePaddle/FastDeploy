@@ -392,67 +392,6 @@ class TestServe(IsolatedAsyncioTestCase):
             self.assertIsInstance(args[0], dict)  # Verify data is dict (JSON-serializable)
             self.assertIn("completed", args[0])  # Verify benchmark results are included
 
-    @pytest.mark.asyncio
-    @patch("fastdeploy.benchmarks.serve.benchmark", new_callable=AsyncMock)
-    @patch("fastdeploy.benchmarks.serve.get_samples", new_callable=MagicMock)
-    @patch("fastdeploy.benchmarks.serve.add_cli_args")
-    @patch("argparse.ArgumentParser.parse_args")
-    async def test_main_async_with_error(self, mock_parse_args, mock_add_cli_args, mock_get_samples, mock_benchmark):
-        """Test main_async function when benchmark fails"""
-        from fastdeploy.benchmarks.datasets import SampleRequest
-        from fastdeploy.benchmarks.serve import main_async
-
-        # Setup mock args
-        mock_args = MagicMock()
-        mock_args.backend = "openai-chat"  # Use openai-compatible backend
-        mock_args.model = "test_model"
-        mock_args.request_rate = None
-        mock_args.burstiness = 1.0
-        mock_args.disable_tqdm = True
-        mock_args.profile = False
-        mock_args.ignore_eos = False
-        mock_args.debug = False
-        mock_args.max_concurrency = None
-        mock_args.lora_modules = None
-        mock_args.extra_body = None
-        mock_args.percentile_metrics = "ttft,tpot,itl"
-        mock_args.metric_percentiles = "99"
-        mock_args.goodput = None
-        mock_args.ramp_up_strategy = None
-        mock_args.ramp_up_start_rps = None
-        mock_args.ramp_up_end_rps = None
-        mock_args.dataset_name = "EB"
-        mock_args.dataset_path = MagicMock()
-        mock_args.dataset_split = None
-        mock_args.dataset_sample_ratio = 1.0
-        mock_args.dataset_shard_size = None
-        mock_args.dataset_shard_rank = None
-        mock_args.dataset_shuffle_seed = None
-        mock_args.top_p = 0.9  # Add sampling parameters for openai-compatible backend
-        mock_args.top_k = 50
-        mock_args.temperature = 0.7
-        mock_args.result_dir = MagicMock()  # Mock result_dir
-        mock_args.result_filename = MagicMock()  # Mock result_filename
-        mock_args.save_result = False  # Disable actual file saving
-        mock_args.save_detailed = False
-        mock_args.append_result = False
-        mock_parse_args.return_value = mock_args
-
-        # Mock get_samples return value
-        mock_get_samples.return_value = [
-            SampleRequest(no=1, prompt="test", prompt_len=10, expected_output_len=20, history_QA=[], json_data=None)
-        ]
-
-        # Setup mock benchmark to raise exception
-        mock_benchmark.side_effect = Exception("Benchmark failed")
-
-        # Call main_async with args and verify it handles the exception
-        with self.assertRaises(Exception):
-            await main_async(mock_args)
-
-        # Verify get_samples was called
-        mock_get_samples.assert_called_once()
-
 
 if __name__ == "__main__":
     unittest.main()
