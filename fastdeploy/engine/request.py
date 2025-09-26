@@ -72,7 +72,6 @@ class Request:
         structural_tag: Optional[Any] = None,
         guided_json_object: Optional[bool] = None,
         enable_thinking: Optional[bool] = False,
-        model_status: Optional[str] = None,
         trace_carrier: dict = dict(),
         dp_rank: Optional[int] = None,
         chat_template: Optional[str] = None,
