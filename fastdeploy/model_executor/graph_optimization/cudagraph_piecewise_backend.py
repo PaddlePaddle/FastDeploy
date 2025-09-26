@@ -20,7 +20,6 @@ from typing import Callable, Dict, List, Optional
 
 import paddle.jit.dy2static.utils as jit_utils
 import paddle.nn.layer
-from paddle.base.core import CUDAGraph
 from paddle.device.cuda import graphs
 
 from fastdeploy import envs
@@ -92,7 +91,10 @@ class CudaGraphPiecewiseBackend:
         self.cudagraph_capture_sizes = fd_config.graph_opt_config.cudagraph_capture_sizes
         self.warm_up_size = fd_config.graph_opt_config.cudagraph_num_of_warmups
         self.real_shape_to_captured_size = fd_config.graph_opt_config.real_shape_to_captured_size
+        self.unique_memory_pool_id = None
         if self.fd_config.graph_opt_config.use_unique_memory_pool:
+            from paddle.base.core import CUDAGraph
+
             self.unique_memory_pool_id = CUDAGraph.gen_new_memory_pool_id()
         self._create_entry_dict()
 
@@ -166,11 +168,7 @@ class CudaGraphPiecewiseBackend:
             input_addresses = [x.data_ptr() for (_, x) in kwargs.items() if isinstance(x, paddle.Tensor)]
             entry.input_addresses = input_addresses
 
-            new_grpah = (
-                graphs.CUDAGraph(pool_id=self.unique_memory_pool_id)
-                if self.fd_config.graph_opt_config.use_unique_memory_pool
-                else graphs.CUDAGraph()
-            )
+            new_grpah = graphs.CUDAGraph(pool_id=self.unique_memory_pool_id)
             paddle.device.synchronize()
 
             # Capture
