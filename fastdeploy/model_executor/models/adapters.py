@@ -44,7 +44,6 @@ def _load_dense_weights(linear: nn.Linear, folder: str, model_config: "ModelConf
     file_path = f"{model_config.model}/{folder}/{filename}" if folder else filename
 
     try:
-        print(file_path)
         if not os.path.exists(file_path):
             return False
 
