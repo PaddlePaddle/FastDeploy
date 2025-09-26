@@ -161,7 +161,6 @@ class WeightOnlyConfig(QuantConfigBase):
                     and envs.FD_USE_MACHETE == "1"
                     and layer.weight_shape[1]
                     and layer.weight_shape[1] % 128 == 0
-                    and not layer.add_bias
                 ):
                     return MacheteWeightOnlyLinearMethod(self)
                 return GPUWeightOnlyLinearMethod(self)
@@ -244,7 +243,8 @@ class WeightOnlyLinearMethod(QuantMethodBase):
             )
         else:
             if isinstance(self, MacheteWeightOnlyLinearMethod):
-                weight_scale_shape = [1, layer.weight_shape[1]]
+                # Using group scale for machete, group size is 128
+                weight_scale_shape = [(layer.weight_shape[0] + 127) // 128, layer.weight_shape[1]]
                 if self.quant_config.name() == "wint4":
                     layer.weight_shape[0] //= 8
                 else:
@@ -299,10 +299,12 @@ class WeightOnlyLinearMethod(QuantMethodBase):
                 machete_quantize_and_pack,
             )
 
+            # Using group scale for machete, group size is 128
             quanted_weight_tensor, weight_scale_tensor = machete_quantize_and_pack(
                 w=layer.weight,
                 atype=layer._dtype,
                 quant_type="uint4b8" if self.quant_config.name() == "wint4" else "uint8b128",
+                group_size=128,
             )
         else:
             quanted_weight_tensor, weight_scale_tensor = weight_quantize(
@@ -404,23 +406,27 @@ class MacheteWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             machete_quantize_and_pack,
         )
 
+        # Using group scale for machete, group size is 128
         quanted_weight_tensor, weight_scale_tensor = machete_quantize_and_pack(
             w=weight,
             atype=layer._dtype,
             quant_type="uint4b8" if self.quant_config.name() == "wint4" else "uint8b128",
+            group_size=128,
         )
         layer.weight.set_value(quanted_weight_tensor)
         layer.weight_scale.set_value(weight_scale_tensor.astype(paddle.get_default_dtype()))
 
     def apply(self, layer, x):
-        assert layer.bias is None, "Machete weight only linear method does not support bias."
         from fastdeploy.model_executor.layers.quantization.ops import machete_wint_mm
 
+        # Using group scale for machete, group size is 128
         linear_out = machete_wint_mm(
             x,
             w_prepack=layer.weight,
             w_g_s=layer.weight_scale,
             weight_dtype="uint4b8" if self.quant_config.name() == "wint4" else "uint8b128",
+            group_size=128,
         )
-
+        if layer.with_bias:
+            linear_out = paddle.add(linear_out, layer.bias)
         return linear_out

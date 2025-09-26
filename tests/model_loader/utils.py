@@ -100,7 +100,7 @@ def form_model_get_output_topp0(
             fd_outputs = fd_model.generate_topp0(prompts, max_tokens=max_tokens)
             result_queue.put(fd_outputs)
     except Exception:
-        print(f"Failed using {load_choices} laoder to load model from {model_path}.")
+        print(f"Failed using {load_choices} loader to load model from {model_path}.")
         traceback.print_exc()
         pytest.fail(f"Failed to initialize LLM model from {model_path}")
 

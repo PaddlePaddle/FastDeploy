@@ -21,6 +21,7 @@ from fastdeploy.config import (
     FDConfig,
     GraphOptimizationConfig,
     ParallelConfig,
+    SchedulerConfig,
 )
 
 
@@ -46,16 +47,23 @@ class FakeModelConfig:
         self.max_position_embeddings = 512
         self.tie_word_embeddings = True
         self.model_format = "auto"
+        self.enable_mm = False
 
 
 def get_default_test_fd_config():
     graph_opt_config = GraphOptimizationConfig(args={})
+    scheduler_config = SchedulerConfig(args={})
+    scheduler_config.max_num_seqs = 1
     parallel_config = ParallelConfig(args={})
-    parallel_config.max_num_seqs = 1
     parallel_config.data_parallel_rank = 1
     cache_config = CacheConfig({})
+    model_config = FakeModelConfig()
     fd_config = FDConfig(
-        graph_opt_config=graph_opt_config, parallel_config=parallel_config, cache_config=cache_config, test_mode=True
+        graph_opt_config=graph_opt_config,
+        parallel_config=parallel_config,
+        cache_config=cache_config,
+        scheduler_config=scheduler_config,
+        model_config=model_config,
+        test_mode=True,
     )
-    fd_config.model_config = FakeModelConfig()
     return fd_config
