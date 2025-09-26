@@ -38,6 +38,7 @@ from fastdeploy.model_executor.graph_optimization.utils import (
 
 P = ParamSpec("P")
 T = TypeVar("T")
+print("233")
 
 
 def apply_to_static_optimization(fn: Callable[P, T], backend: ToStaticBackend) -> Callable[P, T]:
