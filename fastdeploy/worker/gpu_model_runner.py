@@ -81,6 +81,8 @@ from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import Scat
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
 
+print(np.array(1))
+
 
 class GPUModelRunner(ModelRunnerBase):
     def __init__(
