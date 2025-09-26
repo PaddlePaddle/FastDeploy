@@ -50,6 +50,16 @@ if [ ${HAS_CUSTOM_REGISTRER} ] && [ "${PR_ID}" != "" ]; then
     check_approval "$echo_line3" 1 XiaoguangHu01 jeff41404 phlrain
 fi
 
+SPECULATIVE_DECODING_LIST=(
+    "fastdeploy/spec_decode"
+    "custom_ops/gpu_ops/speculate_decoding"
+)
+
+HAS_SPECULATIVE_DECODING_MODIFY=`git diff upstream/$BRANCH  --name-only | grep -E $(printf -- "-e %s " "${SPECULATIVE_DECODING_LIST[@]}") || true`
+if [ ${HAS_SPECULATIVE_DECODING_MODIFY} ] && [ "${PR_ID}" != "" ]; then
+    echo_line1="You must have one FastDeploy RD (freeliuzc(liuzichang01), Deleter-D(wangyanpeng04)) approval for modifing [$(IFS=', '; echo "${SPECULATIVE_DECODING_LIST[*]}")]."
+    check_approval "$echo_line1" 1 freeliuzc Deleter-D
+fi
 
 if [ -n "${echo_list}" ];then
   echo "****************"
