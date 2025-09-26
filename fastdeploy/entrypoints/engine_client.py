@@ -144,6 +144,9 @@ class EngineClient:
 
         task["preprocess_start_time"] = time.time()
         try:
+            chat_template_kwargs = task.get("chat_template_kwargs", {})
+            chat_template_kwargs.update({"chat_template": task.get("chat_template"), "tools": task.get("tools")})
+            task["chat_template_kwargs"] = chat_template_kwargs
             if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
                 await self.data_processor.process_request_dict(task, self.max_model_len)
             else:
@@ -152,8 +155,6 @@ class EngineClient:
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]
             task["max_tokens"] = min(self.max_model_len - input_ids_len, task.get("max_tokens"))
-            if task.get("reasoning_max_tokens", None) is None:
-                task["reasoning_max_tokens"] = max(int(task["max_tokens"] * 0.8), 1)
             min_tokens = task.get("min_tokens", 1)
             if "messages" in task:
                 del task["messages"]
