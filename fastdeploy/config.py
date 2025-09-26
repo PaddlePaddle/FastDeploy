@@ -887,6 +887,7 @@ class CacheConfig:
             prealloc_dec_block_slot_num_threshold (int): Number of token slot threadshold to allocate next blocks for decoding, used when ENABLE_V1_KVCACHE_SCHEDULER=1.
             enable_prefix_caching (bool): Enable prefix caching.
             max_encoder_cache(int): Maximum number of tokens in the encoder cache.
+            max_processor_cache(int): Maximum number of bytes in the processor cache.
         """
         self.block_size = 64
         self.gpu_memory_utilization = 0.9
@@ -908,6 +909,7 @@ class CacheConfig:
         self.cache_queue_port = None
         self.swap_space = None
         self.max_encoder_cache = None
+        self.max_processor_cache = None
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)

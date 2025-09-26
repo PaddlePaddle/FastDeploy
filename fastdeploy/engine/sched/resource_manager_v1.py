@@ -26,8 +26,7 @@ from typing import Union
 import numpy as np
 import paddle
 
-from fastdeploy.cache_manager.encoder_cache_manager import EncoderCacheManager
-from fastdeploy.cache_manager.processor_cache_manager import ProcessorCacheManager
+from fastdeploy.cache_manager.multimodal_cache_manager import EncoderCacheManager, ProcessorCacheManager
 from fastdeploy.engine.request import Request, RequestStatus, RequestType, ImagePosition
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.metrics.metrics import main_process_metrics
@@ -100,7 +99,10 @@ class ResourceManagerV1(ResourceManager):
         self.encoder_cache = None
         if config.model_config.enable_mm and config.cache_config.max_encoder_cache > 0:
             self.encoder_cache = EncoderCacheManager(config.cache_config.max_encoder_cache)
-            self.processor_cache = ProcessorCacheManager()
+        
+        self.processor_cache = None
+        if config.model_config.enable_mm and config.cache_config.max_processor_cache > 0:
+            self.processor_cache = ProcessorCacheManager(config.cache_config.max_processor_cache)
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
@@ -301,10 +303,7 @@ class ResourceManagerV1(ResourceManager):
                 cur_mm_hashes = inputs["mm_hashes"][request.num_image_start : request.num_image_end]
                 cur_mm_positions = inputs["mm_positions"][request.num_image_start : request.num_image_end]
                 if self.encoder_cache:
-                    request.evict_mm_hashes = self.encoder_cache.apply_cache(
-                        mm_hashes=cur_mm_hashes,
-                        mm_positions=cur_mm_positions,
-                    )
+                    request.evict_mm_hashes = self.encoder_cache.apply_cache(cur_mm_hashes, cur_mm_positions)
 
         # Compatible with scenarios without images and videos.
         return num_new_tokens
