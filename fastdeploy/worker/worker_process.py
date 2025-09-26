@@ -587,6 +587,7 @@ def parse_args():
         help="enable expert parallel",
     )
     parser.add_argument("--ori_vocab_size", type=int, default=None)
+    parser.add_argument("--think_end_id", type=int, default=-1)
 
     parser.add_argument(
         "--quantization",
