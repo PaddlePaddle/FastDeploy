@@ -22,7 +22,7 @@ from fastdeploy.config import FDConfig, LoadConfig, ModelConfig
 from fastdeploy.model_executor.load_weight_utils import (
     get_weight_iterator,
     is_weight_cache_enabled,
-    load_weights_form_cache,
+    load_weights_from_cache,
     measure_time,
     save_model,
 )
@@ -52,7 +52,7 @@ class DefaultModelLoaderV1(BaseModelLoader):
     def load_weights(self, model, fd_config: FDConfig, enable_cache: bool = False) -> None:
         weights_iterator = get_weight_iterator(fd_config.model_config.model)
         if enable_cache:
-            load_weights_form_cache(model, weights_iterator)
+            load_weights_from_cache(model, weights_iterator)
         else:
             model.load_weights(weights_iterator)
 

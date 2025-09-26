@@ -56,6 +56,11 @@ def get_moe_method():
         )
 
         return MetaxTritonWeightOnlyMoEMethod(None)
+    elif current_platform.is_intel_hpu():
+        from fastdeploy.model_executor.layers.backends import HpuMoEMethod
+
+        return HpuMoEMethod(None)
+        # return HpuTensorWiseFP8MoEMethod(None)
     raise NotImplementedError
 
 
@@ -66,6 +71,7 @@ def get_moe_scores(
     top_k,
     routed_scaling_factor,
     e_score_correction_bias,
+    renormalize: bool = False,
 ) -> paddle.Tensor:
     """
     compute moe scores using e_score_correction_bias.
@@ -79,6 +85,7 @@ def get_moe_scores(
         n_group if n_group > 0 else 1,
         topk_group if topk_group > 0 else 1,
         top_k,
+        renormalize,
         routed_scaling_factor,
     )
     return scores, topk_values, topk_idx
@@ -93,6 +100,7 @@ class FusedMoE(nn.Layer):
         self,
         fd_config,
         reduce_results: bool = True,
+        renormalize: bool = False,
         moe_intermediate_size: int = -1,
         num_experts: int = -1,
         expert_id_offset: int = 0,
@@ -119,6 +127,7 @@ class FusedMoE(nn.Layer):
         self.fd_config = fd_config
         self.layer_idx = layer_idx
         self.reduce_results = reduce_results
+        self.renormalize = renormalize
         self.tp_rank = fd_config.parallel_config.tensor_parallel_rank
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
         self.ep_size = fd_config.parallel_config.expert_parallel_size
@@ -135,6 +144,7 @@ class FusedMoE(nn.Layer):
 
         self.hidden_size = fd_config.model_config.hidden_size
         self.num_experts = num_experts
+
         self.num_local_experts = self.num_experts // self.ep_size
 
         self.moe_intermediate_size = moe_intermediate_size // self.tp_size

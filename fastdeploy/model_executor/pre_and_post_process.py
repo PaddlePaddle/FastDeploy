@@ -56,6 +56,8 @@ elif current_platform.is_maca():
         update_inputs,
         update_inputs_v1,
     )
+elif current_platform.is_intel_hpu():
+    pass
 else:
     from fastdeploy.model_executor.ops.gpu import (
         get_padding_offset,
@@ -193,8 +195,9 @@ def post_process_normal(
 ) -> ModelRunnerOutput:
     """Post-processing steps after completing a single token generation."""
     # handle vl:
-    if model_output.enable_thinking:
-        exists_think_end = sampler_output.sampled_token_ids == model_output.think_end_id
+    if model_output.think_end_id != -1:
+        thinking_mask = model_output.enable_thinking
+        exists_think_end = (sampler_output.sampled_token_ids == model_output.think_end_id) & thinking_mask
         paddle.assign(
             paddle.where(
                 exists_think_end,
@@ -204,9 +207,10 @@ def post_process_normal(
             model_output.need_think_end,
         )
 
+        reasoning_index_update_cond = model_output.need_think_end.cast("bool") & thinking_mask
         paddle.assign(
             paddle.where(
-                model_output.need_think_end.cast("bool"),
+                reasoning_index_update_cond,
                 model_output.reasoning_index - 1,
                 model_output.reasoning_index,
             ),
@@ -217,6 +221,8 @@ def post_process_normal(
             (sampler_output.sampled_token_ids == model_output.eos_token_id.T).any(axis=1, keepdim=True)
             | (model_output.reasoning_index == 0)
         ) & (model_output.need_think_end > 0)
+
+        stop_wo_think = stop_wo_think & thinking_mask
         sampler_output.sampled_token_ids = paddle.where(
             stop_wo_think,
             model_output.think_end_id,

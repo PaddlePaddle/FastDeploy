@@ -31,6 +31,7 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     cuda_graph_buffers,
     support_graph_optimization,
@@ -44,20 +45,15 @@ from fastdeploy.model_executor.models.ernie4_5_moe import (
     Ernie4_5_Attention,
     Ernie4_5_MLP,
 )
+from fastdeploy.model_executor.models.ernie4_5_vl.image_op import (
+    text_image_gather_scatter,
+    text_image_index_out,
+)
 from fastdeploy.model_executor.models.model_base import (
     ModelCategory,
     ModelForCasualLM,
     ModelRegistry,
 )
-from fastdeploy.platforms import current_platform
-
-if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import (
-        text_image_gather_scatter,
-        text_image_index_out,
-    )
-
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Ernie4_5_VLMLP(Ernie4_5_MLP):
@@ -798,7 +794,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
 
 @ModelRegistry.register_model_class(
     architecture="Ernie4_5_VLMoeForConditionalGeneration",
-    module_path="ernie4_5_vl.ernie4_5_vl_moe",
+    module_name="ernie4_5_vl.ernie4_5_vl_moe",
     category=ModelCategory.MULTIMODAL,
     primary_use=ModelCategory.MULTIMODAL,
 )

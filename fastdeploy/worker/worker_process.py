@@ -35,9 +35,9 @@ from fastdeploy.config import (
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
-    MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
+    PlasAttentionConfig,
     SpeculativeConfig,
 )
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
@@ -82,6 +82,10 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
         from fastdeploy.worker.metax_worker import MetaxWorker
 
         return MetaxWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
+    if current_platform.is_intel_hpu():
+        from fastdeploy.worker.hpu_worker import HpuWorker
+
+        return HpuWorker(fd_config=fd_config, local_rank=local_rank, rank=rank)
 
 
 def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
@@ -89,21 +93,22 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
     # Global rank
     ranks = dist.get_world_size()
     dist_strategy = fleet.DistributedStrategy()
+    if ranks > 0:
+        dist_strategy.hybrid_configs = {
+            "dp_degree": 1,
+            "mp_degree": ranks,
+            "pp_degree": 1,
+            "sharding_degree": 1,
+        }
 
-    dist_strategy.hybrid_configs = {
-        "dp_degree": 1,
-        "mp_degree": ranks,
-        "pp_degree": 1,
-        "sharding_degree": 1,
-    }
+        # Set control in tensor parallel
+        dist_strategy.tensor_parallel_configs = {"tensor_init_seed": seed}
+        fleet.init(is_collective=True, strategy=dist_strategy)
 
-    # Set control in tensor parallel
-    dist_strategy.tensor_parallel_configs = {"tensor_init_seed": seed}
-    fleet.init(is_collective=True, strategy=dist_strategy)
-
-    # Local rank
-    local_rank = fleet.worker_index()
-
+        # Local rank
+        local_rank = fleet.worker_index()
+    else:
+        local_rank = 0
     return ranks, local_rank
 
 
@@ -256,6 +261,12 @@ class PaddleDisWorkerProc:
         paddle.distributed.broadcast(model_weights_signal_tensor, src=src, group=group)
         return model_weights_signal_tensor.item()
 
+    def _tp_barrier_wait(self):
+        if current_platform.is_xpu():
+            self.task_queue.worker_process_tp_barrier.wait()
+        else:
+            paddle.distributed.barrier(self.parallel_config.tp_group)
+
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
@@ -299,7 +310,7 @@ class PaddleDisWorkerProc:
 
             if self.parallel_config.tensor_parallel_size > 1:
                 # Synchronize the signal for other workers
-                paddle.distributed.barrier(self.parallel_config.tp_group)
+                self._tp_barrier_wait()
 
             if self.fd_config.load_config.dynamic_load_weight:
                 if self.parallel_config.enable_expert_parallel:
@@ -352,7 +363,7 @@ class PaddleDisWorkerProc:
 
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 if self.ranks > 1:
-                    paddle.distributed.barrier(self.parallel_config.tp_group)
+                    self._tp_barrier_wait()
 
                 time.sleep(0.001)
                 continue
@@ -433,6 +444,23 @@ class PaddleDisWorkerProc:
 
     def graph_optimize_and_warm_up_model(self) -> None:
         self.worker.graph_optimize_and_warm_up_model()
+        # reset cache_messager prefilled_step signal
+        if self.scheduler_config.splitwise_role == "prefill":
+            dp_rank_id = (
+                self.local_rank
+                + self.parallel_config.local_data_parallel_id * self.parallel_config.tensor_parallel_size
+            )
+            gpu_id = self.worker.model_runner.device_id
+            prefilled_step_name = f"splitwise_complete_prefilled_step_{dp_rank_id}"
+            prefilled_step_idx_data = np.zeros(shape=[1], dtype=np.int32)
+            step_shm_value = IPCSignal(
+                name=prefilled_step_name,
+                array=prefilled_step_idx_data,
+                dtype=np.int32,
+                suffix=gpu_id,
+                create=False,
+            )
+            step_shm_value.value[0] = -1
 
     def init_device(self) -> None:
         """Initialize device and Construct model runner"""
@@ -561,6 +589,7 @@ def parse_args():
         help="enable expert parallel",
     )
     parser.add_argument("--ori_vocab_size", type=int, default=None)
+    parser.add_argument("--think_end_id", type=int, default=-1)
 
     parser.add_argument(
         "--quantization",
@@ -579,10 +608,10 @@ def parse_args():
         help="Configuration of Graph optimization backend.",
     )
     parser.add_argument(
-        "--moba_attention_config",
+        "--plas_attention_config",
         type=json.loads,
         default=None,
-        help="Configuration of moba attention.",
+        help="Configation of plas attention.",
     )
     parser.add_argument(
         "--guided_decoding_backend",
@@ -725,7 +754,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     graph_opt_config = GraphOptimizationConfig(args.graph_optimization_config)
 
-    moba_attention_config = MobaAttentionConfig(args.moba_attention_config)
+    plas_attention_config = PlasAttentionConfig(args.plas_attention_config)
 
     early_stop_config = EarlyStopConfig(args.early_stop_config)
 
@@ -774,7 +803,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
     if args.splitwise_role != "mixed" and args.cache_transfer_protocol != "rdma":
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-    if not current_platform.is_cuda():
+    if not current_platform.is_cuda() and not current_platform.is_xpu():
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
     if parallel_config.guided_decoding_backend != "off":
@@ -797,7 +826,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         cache_config=cache_config,
         scheduler_config=scheduler_config,
         ips=args.ips,
-        moba_attention_config=moba_attention_config,
+        plas_attention_config=plas_attention_config,
     )
     update_fd_config_for_mm(fd_config)
 
@@ -833,7 +862,7 @@ def run_worker_proc() -> None:
     worker_proc.initialize_kv_cache()
 
     # Trigger CUDAGraph capture
-    worker_proc.worker.graph_optimize_and_warm_up_model()
+    worker_proc.graph_optimize_and_warm_up_model()
 
     # Initialize health status
     worker_proc.init_health_status()

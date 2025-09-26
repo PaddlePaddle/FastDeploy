@@ -322,14 +322,26 @@ class GPUModelRunner(ModelRunnerBase):
                     else:
                         position_ids = None
 
-                    enable_thinking = request.get("enable_thinking", True)
-                    enable_thinking = enable_thinking if enable_thinking is not None else True
-                    self.share_inputs["enable_thinking"][:] = enable_thinking
-                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
-                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)
                     self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
                         position_ids, request.get("max_tokens", 2048)
                     )
+
+                if request.get("enable_thinking", False):
+                    # Enable thinking
+                    req_reasoning_max_tokens = request.get("reasoning_max_tokens")
+                    req_max_tokens = request.get("max_tokens")
+                    final_reasoning_tokens = (
+                        req_reasoning_max_tokens if req_reasoning_max_tokens is not None else req_max_tokens
+                    )
+
+                    self.share_inputs["enable_thinking"][idx : idx + 1] = True
+                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 1
+                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = final_reasoning_tokens
+                else:
+                    # Disable thinking
+                    self.share_inputs["enable_thinking"][idx : idx + 1] = False
+                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 0
+                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = 0
 
                 if isinstance(request.prompt_token_ids, np.ndarray):
                     prompt_token_ids = request.prompt_token_ids.tolist()
@@ -549,15 +561,27 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["prompt_lens"][idx : idx + 1] = length
 
                 if self.enable_mm:
-                    enable_thinking = request.get("enable_thinking", True)
-                    enable_thinking = enable_thinking if enable_thinking is not None else True
-                    self.share_inputs["enable_thinking"][:] = enable_thinking
-                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
-                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)
                     self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
                         position_ids, request.get("max_tokens", 2048)
                     )
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
+
+                if request.get("enable_thinking", False):
+                    # Enable thinking
+                    req_reasoning_max_tokens = request.get("reasoning_max_tokens")
+                    req_max_tokens = request.get("max_tokens")
+                    final_reasoning_tokens = (
+                        req_reasoning_max_tokens if req_reasoning_max_tokens is not None else req_max_tokens
+                    )
+
+                    self.share_inputs["enable_thinking"][idx : idx + 1] = True
+                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 1
+                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = final_reasoning_tokens
+                else:
+                    # Disable thinking
+                    self.share_inputs["enable_thinking"][idx : idx + 1] = False
+                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 0
+                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
                 res = request.get(attr, default_value)
@@ -853,6 +877,11 @@ class GPUModelRunner(ModelRunnerBase):
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
 
+        # Initialize thinking related buffers
+        self.share_inputs["need_think_end"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+        self.share_inputs["enable_thinking"] = paddle.full(shape=[max_num_seqs, 1], fill_value=False, dtype="bool")
+        self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+
         # TODO(gongshaotian): move to models
         if not self.enable_mm:
             self.share_inputs["rope_emb"] = get_rope(
@@ -952,11 +981,6 @@ class GPUModelRunner(ModelRunnerBase):
                 dtype="float32",
             )
             self.share_inputs["image_features"] = None
-            self.share_inputs["need_think_end"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-            self.share_inputs["enable_thinking"] = paddle.full(
-                shape=[1], fill_value=("ernie" in self.model_config.model_type), dtype="bool"
-            )
-            self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
     def _prepare_inputs(self) -> None:
         """Prepare the model inputs"""
@@ -1321,6 +1345,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             logits = None
             if hasattr(self.model, "is_pooling_model") and self.model.is_pooling_model:
+                # TODO(lizexu123) The preheating the pooling function have not been implemented yet.
                 pass
             else:
                 # 4. Execute spec decode
@@ -1398,10 +1423,10 @@ class GPUModelRunner(ModelRunnerBase):
                 ),
                 accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
                 accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
-                enable_thinking=(self.share_inputs["enable_thinking"] if self.enable_mm else None),
-                think_end_id=(getattr(self.model_config, "think_end_id", -1) if self.enable_mm else -1),
-                need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
-                reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
+                enable_thinking=self.share_inputs["enable_thinking"],
+                think_end_id=self.model_config.think_end_id,
+                need_think_end=self.share_inputs["need_think_end"],
+                reasoning_index=self.share_inputs["reasoning_index"],
                 stop_token_ids=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
             )
@@ -1632,9 +1657,9 @@ class GPUModelRunner(ModelRunnerBase):
         logits = None
         # 4. Compute logits, Sample
         if hasattr(self.model, "is_pooling_model") and self.model.is_pooling_model:
+            # TODO(lizexu123) The execution of the pooling function have not been implemented yet.
             pass
         else:
-            # 4. Execute spec decode
             logits = self.model.compute_logits(hidden_states)
 
         if not self.speculative_decoding:
@@ -1714,10 +1739,10 @@ class GPUModelRunner(ModelRunnerBase):
             ),
             accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
-            enable_thinking=(self.share_inputs["enable_thinking"] if self.enable_mm else None),
-            think_end_id=(getattr(self.model_config, "think_end_id", -1) if self.enable_mm else -1),
-            need_think_end=(self.share_inputs["need_think_end"][:num_running_requests] if self.enable_mm else None),
-            reasoning_index=(self.share_inputs["reasoning_index"][:num_running_requests] if self.enable_mm else None),
+            enable_thinking=self.share_inputs["enable_thinking"],
+            think_end_id=self.model_config.think_end_id,
+            need_think_end=self.share_inputs["need_think_end"][:num_running_requests],
+            reasoning_index=self.share_inputs["reasoning_index"][:num_running_requests],
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
