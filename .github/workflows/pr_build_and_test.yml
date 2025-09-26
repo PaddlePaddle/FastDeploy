@@ -107,7 +107,7 @@ jobs:
   coverage_combine:
     name: Coverage Combine And Check
     uses: ./.github/workflows/_coverage_combine.yml
-    needs: [clone, gpu_unittest, xpu_usnittest]
+    needs: [clone, gpu_unittest, xpu_unittest]
     with:
       GPU_COV_FILE_URL: ${{ needs.gpu_unittest.outputs.gpu_cov_file_url }}
       XPU_COV_FILE_URL: ${{ needs.xpu_unittest.outputs.xpu_cov_file_url }}
