@@ -42,7 +42,6 @@ from tqdm import tqdm
 
 MAX_BSZ = 512
 MAX_DRAFT_TOKENS = 6
-print("233")
 
 
 class LayerIdPlaceholder(str, enum.Enum):
