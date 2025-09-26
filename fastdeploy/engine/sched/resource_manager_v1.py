@@ -425,17 +425,13 @@ class ResourceManagerV1(ResourceManager):
                         <= self.config.cache_config.prealloc_dec_block_slot_num_threshold
                     ):
                         # Allocation for next decoding blocks
-                        allocate_block_num = (
-                            self.need_block_num_map[request.request_id].consume("decode")
-                            if request.request_id in self.need_block_num_map
-                            and self.need_block_num_map[request.request_id].watch("decode") > 0
-                            else self.config.cache_config.enc_dec_block_num
-                        )
-                        if self.cache_manager.can_allocate_gpu_blocks(allocate_block_num):
+                        if self.cache_manager.can_allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num):
                             llm_logger.debug(
                                 f"schedule decoding task: {request} request.num_total_tokens {request.num_total_tokens} request.num_computed_tokens {request.num_computed_tokens}"
                             )
-                            request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(allocate_block_num))
+                            request.block_tables.extend(
+                                self.cache_manager.allocate_gpu_blocks(self.config.cache_config.enc_dec_block_num)
+                            )
                             # Prepare decoding task
                             scheduled_reqs.append(self._prepare_decode_task(request))
                         else:
