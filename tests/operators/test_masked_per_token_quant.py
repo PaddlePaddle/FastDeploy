@@ -7,7 +7,7 @@ import paddle
 from fastdeploy.model_executor.ops.gpu import masked_per_token_quant
 
 
-def masked_per_token_quant_paddle(input_tensor, recv_expert_count, block_size):
+def masked_per_token_quant_ref(input_tensor, recv_expert_count, block_size):
     """
     Paddle API implementation of masked_per_token_quant
 
@@ -106,7 +106,7 @@ class TestMaskedPerTokenQuant(unittest.TestCase):
         self.recv_expert_count = paddle.to_tensor([3, 2], dtype="int32")
 
         # Get reference results from paddle implementation
-        self.quanted_x_paddle, self.quanted_scale_paddle = masked_per_token_quant_paddle(
+        self.quanted_x_ref, self.quanted_scale_ref = masked_per_token_quant_ref(
             self.input_tensor, self.recv_expert_count, self.block_size
         )
 
@@ -141,8 +141,8 @@ class TestMaskedPerTokenQuant(unittest.TestCase):
         )
 
         # Check output shapes
-        self.assertEqual(quanted_x_cuda.shape, self.quanted_x_paddle.shape)
-        self.assertEqual(quanted_scale_cuda.shape, self.quanted_scale_paddle.shape)
+        self.assertEqual(quanted_x_cuda.shape, self.quanted_x_ref.shape)
+        self.assertEqual(quanted_scale_cuda.shape, self.quanted_scale_ref.shape)
 
         # Check dtypes
         self.assertEqual(quanted_x_cuda.dtype, paddle.float8_e4m3fn)
@@ -150,13 +150,13 @@ class TestMaskedPerTokenQuant(unittest.TestCase):
 
         # Compare scale values (using masked versions)
         np.testing.assert_allclose(
-            self.quanted_scale_paddle.numpy(), quanted_scale_cuda_masked.numpy(), rtol=1e-5, atol=1e-6
+            self.quanted_scale_ref.numpy(), quanted_scale_cuda_masked.numpy(), rtol=1e-5, atol=1e-6
         )
 
         # Compare quantized values (convert to float32 for comparison, using masked versions)
         quant_diff = paddle.mean(
-            paddle.abs(quanted_x_cuda_masked.astype("float32") - self.quanted_x_paddle.astype("float32"))
-        ) / paddle.mean(paddle.abs(self.quanted_x_paddle.astype("float32")) + 1e-9)
+            paddle.abs(quanted_x_cuda_masked.astype("float32") - self.quanted_x_ref.astype("float32"))
+        ) / paddle.mean(paddle.abs(self.quanted_x_ref.astype("float32")) + 1e-9)
         diff_val = float(quant_diff.numpy().item())
         self.assertLess(diff_val, 0.01, msg="Quantized values should be close")
 
@@ -177,7 +177,7 @@ class TestMaskedPerTokenQuantCase1(TestMaskedPerTokenQuant):
         )
         self.recv_expert_count = paddle.to_tensor([4, 2, 5], dtype="int32")
 
-        self.quanted_x_paddle, self.quanted_scale_paddle = masked_per_token_quant_paddle(
+        self.quanted_x_ref, self.quanted_scale_ref = masked_per_token_quant_ref(
             self.input_tensor, self.recv_expert_count, self.block_size
         )
 
@@ -198,7 +198,7 @@ class TestMaskedPerTokenQuantCase2(TestMaskedPerTokenQuant):
         )
         self.recv_expert_count = paddle.to_tensor([6, 3, 7, 1], dtype="int32")
 
-        self.quanted_x_paddle, self.quanted_scale_paddle = masked_per_token_quant_paddle(
+        self.quanted_x_ref, self.quanted_scale_ref = masked_per_token_quant_ref(
             self.input_tensor, self.recv_expert_count, self.block_size
         )
 
@@ -220,7 +220,7 @@ class TestMaskedPerTokenQuantCase3(TestMaskedPerTokenQuant):
         # All experts use all tokens
         self.recv_expert_count = paddle.to_tensor([4, 4], dtype="int32")
 
-        self.quanted_x_paddle, self.quanted_scale_paddle = masked_per_token_quant_paddle(
+        self.quanted_x_ref, self.quanted_scale_ref = masked_per_token_quant_ref(
             self.input_tensor, self.recv_expert_count, self.block_size
         )
 
@@ -234,15 +234,15 @@ class TestMaskedPerTokenQuantEdgeCases(unittest.TestCase):
         input_tensor = paddle.randn([2, 4, 256], dtype="bfloat16")
         recv_expert_count = paddle.to_tensor([0, 2], dtype="int32")  # First expert has no tokens
 
-        quanted_x, quanted_scale = masked_per_token_quant_paddle(input_tensor, recv_expert_count, 128)
+        quanted_x_ref, quanted_scale_ref = masked_per_token_quant_ref(input_tensor, recv_expert_count, 128)
 
         # First expert should be all zeros - convert to float32 for comparison
-        expert_0_quanted = quanted_x[0].astype("float32")
+        expert_0_quanted = quanted_x_ref[0].astype("float32")
         self.assertTrue(paddle.all(expert_0_quanted == 0), "Expert with zero tokens should be all zero")
-        self.assertTrue(paddle.all(quanted_scale[0] == 0), "Expert with zero tokens should have zero scales")
+        self.assertTrue(paddle.all(quanted_scale_ref[0] == 0), "Expert with zero tokens should have zero scales")
 
         # Second expert should have valid values - convert to float32 for comparison
-        expert_1_quanted = quanted_x[1, :2].astype("float32")
+        expert_1_quanted = quanted_x_ref[1, :2].astype("float32")
         self.assertTrue(paddle.any(expert_1_quanted != 0), "Expert with tokens should have non-zero values")
 
 
