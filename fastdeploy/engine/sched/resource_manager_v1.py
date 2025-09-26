@@ -30,6 +30,7 @@ import paddle
 from fastdeploy.engine.request import Request, RequestOutput, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import llm_logger
 
 
@@ -157,6 +158,7 @@ class ResourceManagerV1(ResourceManager):
         # TODO: set condition to new _get_num_new_tokens
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
         num_new_tokens = min(num_new_tokens, token_budget)
+        request.with_image = False
 
         if not self.config.model_config.enable_mm:
             return num_new_tokens
@@ -219,7 +221,10 @@ class ResourceManagerV1(ResourceManager):
                         grid_thw.extend([[2, one[1], one[2]]] * (one[0] // 2))
 
                 grid_thw = paddle.to_tensor(grid_thw, dtype="int64")
-                from fastdeploy.model_executor.ops.gpu import get_img_boundaries
+                if current_platform.is_xpu():
+                    from fastdeploy.model_executor.ops.xpu import get_img_boundaries
+                else:
+                    from fastdeploy.model_executor.ops.gpu import get_img_boundaries
 
                 request.multimodal_img_boundaries = get_img_boundaries(
                     task_input_ids=input_ids, grid_thw=grid_thw, image_patch_id=image_patch_id
