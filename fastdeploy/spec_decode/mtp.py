@@ -695,6 +695,9 @@ class MTPProposer(Proposer):
 
                 if substep != self.num_model_steps - 1:
                     target_hidden_states = self._get_self_hidden_states(hidden_states)
+            else:
+                if hasattr(self.model, "empty_input_forward"):
+                    self.model.empty_input_forward()
 
     def _get_self_hidden_states(self, hidden_states):
         target_hidden_states = eagle_get_self_hidden_states(
