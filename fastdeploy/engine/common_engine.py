@@ -678,7 +678,7 @@ class EngineSevice:
 
     def _decode_token(self, token_ids, req_id, is_end):
         delta_text = ""
-        if envs.FD_ENABLE_DECODE_RESPONSE:
+        if envs.FD_ENABLE_RETURN_TEXT:
             delta_text, cum_tokens, _ = self.data_processor.ids2tokens(token_ids, req_id)
             if delta_text != "":
                 prefix_offset = self.data_processor.decode_status[req_id][0]
