@@ -14,8 +14,10 @@
 # limitations under the License.
 """
 
+import hashlib
 import heapq
 import os
+import pickle
 import subprocess
 import sys
 import threading
@@ -1082,7 +1084,7 @@ class PrefixCacheManager:
             input_ids: Input token IDs
             extra_keys: Additional keys for block identification
         """
-        return hash((input_ids, extra_keys))
+        return hashlib.sha256(pickle.dumps((input_ids, extra_keys))).hexdigest()
 
     def mm_match_block(self, request, block_size):
         """
