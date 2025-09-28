@@ -14,10 +14,8 @@
 # limitations under the License.
 """
 
-import hashlib
 import heapq
 import os
-import pickle
 import subprocess
 import sys
 import threading
@@ -37,7 +35,7 @@ from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import get_logger
 
-logger = get_logger("prefix_cache_manager", "prefix_cache_manager.log")
+logger = get_logger("prefix_cache_manager", "cache_manager.log")
 
 
 class PrefixCacheManager:
@@ -1037,11 +1035,8 @@ class PrefixCacheManager:
             hash_keys: A list of additional hash keys
         """
         hash_keys = []
-        if (
-            request.mm_positions is None
-            or not isinstance(request.mm_positions, list)
-            or len(request.mm_positions) == 0
-        ):
+        mm_inputs = request.multimodal_inputs
+        if "mm_positions" not in mm_inputs or "mm_hashes" not in mm_inputs or len(mm_inputs["mm_positions"]) == 0:
             return mm_idx, hash_keys
 
         assert start_idx < end_idx, f"start_idx {start_idx} >= end_idx {end_idx}"
@@ -1051,20 +1046,20 @@ class PrefixCacheManager:
         assert (
             end_idx >= 0 and end_idx <= request.prompt_token_ids_len
         ), f"end_idx {end_idx} out of range {request.prompt_token_ids_len}"
-        assert len(request.mm_positions) == len(
-            request.mm_hashes
-        ), f"mm_positions {len(request.mm_positions)} != mm_hashes {len(request.mm_hashes)}"
+        assert len(mm_inputs["mm_positions"]) == len(
+            mm_inputs["mm_hashes"]
+        ), f"mm_positions {len(mm_inputs['mm_positions'])} != mm_hashes {len(mm_inputs['mm_hashes'])}"
         assert mm_idx >= 0 and mm_idx < len(
-            request.mm_hashes
-        ), f"mm_idx {mm_idx} out of range {len(request.mm_hashes)}"
+            mm_inputs["mm_hashes"]
+        ), f"mm_idx {mm_idx} out of range {len(mm_inputs['mm_hashes'])}"
 
-        if request.mm_positions[-1].offset + request.mm_positions[-1].length < start_idx:
+        if mm_inputs["mm_positions"][-1].offset + mm_inputs["mm_positions"][-1].length < start_idx:
             # non images in current block
             return mm_idx, hash_keys
 
-        for img_idx in range(mm_idx, len(request.mm_positions)):
-            image_offset = request.mm_positions[img_idx].offset
-            image_length = request.mm_positions[img_idx].length
+        for img_idx in range(mm_idx, len(mm_inputs["mm_positions"])):
+            image_offset = mm_inputs["mm_positions"][img_idx].offset
+            image_length = mm_inputs["mm_positions"][img_idx].length
 
             if image_offset + image_length < start_idx:
                 # image before block
@@ -1073,11 +1068,11 @@ class PrefixCacheManager:
                 # image after block
                 return img_idx, hash_keys
             elif image_offset + image_length > end_idx:
-                hash_keys.append(request.mm_hashes[img_idx])
+                hash_keys.append(mm_inputs["mm_hashes"][img_idx])
                 return img_idx, hash_keys
             else:
-                hash_keys.append(request.mm_hashes[img_idx])
-        return len(request.mm_positions) - 1, hash_keys
+                hash_keys.append(mm_inputs["mm_hashes"][img_idx])
+        return len(mm_inputs["mm_positions"]) - 1, hash_keys
 
     def hash_block_features(self, input_ids, extra_keys: list = []):
         """
@@ -1087,8 +1082,7 @@ class PrefixCacheManager:
             input_ids: Input token IDs
             extra_keys: Additional keys for block identification
         """
-        serialized_data = pickle.dumps((input_ids, extra_keys))
-        return hashlib.sha256(serialized_data).hexdigest()
+        return hash((input_ids, extra_keys))
 
     def mm_match_block(self, request, block_size):
         """

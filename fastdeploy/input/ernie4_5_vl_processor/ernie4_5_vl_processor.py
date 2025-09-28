@@ -248,8 +248,6 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         outputs = self.pack_outputs(outputs)
         request["prompt_token_ids"] = outputs["input_ids"].tolist()
         request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
-        request["mm_positions"] = outputs["mm_positions"]
-        request["mm_hashes"] = outputs["mm_hashes"]
         request["multimodal_inputs"] = outputs
 
         # 截断超过长度限制的prompt

@@ -165,38 +165,50 @@ def test_mm_extra_keys():
 def test_mm_prefix_cache():
     block_size = 64
     cache_manager = make_prefix_cache_manager(max_num_seqs=3, enable_mm=True, num_gpu_blocks_override=100)
+    multimodal_inputs = {
+        "mm_positions": [ImagePosition(offset=120, length=1200)],
+        "mm_hashes": ["image1"],
+    }
     req1_dict = {
         "request_id": "req1",
         "prompt_token_ids": [1] * 120 + [-1] * 1200 + [2] * 120,
         "prompt_token_ids_len": 1440,
-        "mm_positions": [ImagePosition(offset=120, length=1200)],
-        "mm_hashes": ["image1"],
+        "multimodal_inputs": multimodal_inputs,
     }
     req1 = Request.from_dict(req1_dict)
+
+    multimodal_inputs = dict(multimodal_inputs)
+    multimodal_inputs["mm_positions"].append(ImagePosition(offset=1836, length=587))
+    multimodal_inputs["mm_hashes"].append("image2")
     req2_dict = {
         "request_id": "req2",
         "prompt_token_ids": [1] * 120 + [-1] * 1200 + [2] * 120 + [3] * 396 + [-1] * 587,
         "prompt_token_ids_len": 2423,
-        "mm_positions": [ImagePosition(offset=120, length=1200), ImagePosition(offset=1836, length=587)],
-        "mm_hashes": ["image1", "image2"],
+        "multimodal_inputs": multimodal_inputs,
     }
     req2 = Request.from_dict(req2_dict)
+
+    multimodal_inputs = dict(multimodal_inputs)
+    multimodal_inputs["mm_hashes"] = ["image3", "image4"]
     req3_dict = {
         "request_id": "req3",
         "prompt_token_ids": [1] * 120 + [-1] * 1200 + [2] * 120 + [3] * 396 + [-1] * 587,
         "prompt_token_ids_len": 2423,
-        "mm_positions": [ImagePosition(offset=120, length=1200), ImagePosition(offset=1836, length=587)],
-        "mm_hashes": ["image3", "image4"],
+        "multimodal_inputs": multimodal_inputs,
     }
     req3 = Request.from_dict(req3_dict)
+
+    multimodal_inputs = dict(multimodal_inputs)
+    multimodal_inputs["mm_positions"] = [ImagePosition(offset=120, length=1200)]
+    multimodal_inputs["mm_hashes"] = ["image3"]
     req4_dict = {
         "request_id": "req4",
         "prompt_token_ids": [1] * 120 + [-1] * 1200 + [2] * 120 + [3] * 352,
         "prompt_token_ids_len": 1792,
-        "mm_positions": [ImagePosition(offset=120, length=1200)],
-        "mm_hashes": ["image3"],
+        "multimodal_inputs": multimodal_inputs,
     }
     req4 = Request.from_dict(req4_dict)
+
     (common_block_ids, matched_token_num, hit_info) = cache_manager.request_match_blocks(req1, block_size)
     assert len(common_block_ids) == 0
     assert matched_token_num == 0

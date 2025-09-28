@@ -14,20 +14,22 @@
 # limitations under the License.
 """
 
+import hashlib
 import pickle
+
 import numpy as np
 
 from fastdeploy.utils import data_processor_logger
+
 
 class MultimodalHasher:
 
     @classmethod
     def hash_features(cls, obj: object) -> str:
         if isinstance(obj, np.ndarray):
-            return str(hash(obj.tobytes()))
+            return hashlib.sha256((obj.tobytes())).hexdigest()
 
         data_processor_logger.warning(
-            f"Unsupported type for hashing features: {type(obj)}"
-            + ", use pickle for serialization"
+            f"Unsupported type for hashing features: {type(obj)}" + ", use pickle for serialization"
         )
-        return str(hash(pickle.dumps(obj)))
+        return hashlib.sha256((pickle.dumps(obj))).hexdigest()

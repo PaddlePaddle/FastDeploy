@@ -13,12 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-from abc import ABC, abstractmethod
-import threading
-from typing import Any, Tuple
-from collections import OrderedDict
 
 import pickle
+import threading
+from abc import ABC, abstractmethod
+from collections import OrderedDict
+from typing import Any, Tuple
+
 import numpy as np
 import zmq
 
@@ -26,13 +27,14 @@ from fastdeploy import envs
 from fastdeploy.engine.request import ImagePosition
 from fastdeploy.utils import get_logger
 
-encoder_cache_logger = get_logger("encoder_cache_manager", "encoder_cache_manager.log")
-processor_cache_logger = get_logger("processor_cache_manager", "processor_cache_manager.log")
+logger = get_logger("prefix_cache_manager", "cache_manager.log")
+
 
 class MultimodalLRUCache(ABC):
     """
     General lru cache for multimodal data
     """
+
     def __init__(self, max_cache_size):
         self.cache = OrderedDict()
         self.current_cache_size = 0
@@ -58,7 +60,7 @@ class MultimodalLRUCache(ABC):
                     evicted_hashes.extend(self.evict_cache(needed))
                 self.cache[mm_hashes[idx]] = mm_items[idx]
                 self.current_cache_size += item_size
-        
+
         return evicted_hashes
 
     def evict_cache(self, needed: int) -> list[str]:
@@ -73,7 +75,7 @@ class MultimodalLRUCache(ABC):
             self.current_cache_size -= self.get_item_size(mm_item)
 
         return evicted_hashes
-    
+
     def get_cache(self, mm_hashes: list[str]) -> list[Any]:
         """
         get cached data correspond to given hash values
@@ -86,7 +88,7 @@ class MultimodalLRUCache(ABC):
             mm_items.append(self.cache[mm_hash])
 
         return mm_items
-    
+
     def clear_cache(self):
         """
         clear all cached data
@@ -96,19 +98,20 @@ class MultimodalLRUCache(ABC):
         self.current_cache_size = 0
 
         return evicted_hashes
-    
+
     @abstractmethod
     def get_item_size(self, item: Any) -> int:
-        raise NotImplementedError("Subclasses must define how to get size of an item") 
+        raise NotImplementedError("Subclasses must define how to get size of an item")
 
 
 class EncoderCacheManager(MultimodalLRUCache):
     """
     EncoderCacheManager is used to cache image features
     """
+
     def __init__(self, max_encoder_cache):
         super().__init__(max_encoder_cache)
-    
+
     def get_item_size(self, item: ImagePosition) -> int:
         return item.length
 
@@ -117,6 +120,7 @@ class ProcessorCacheManager(MultimodalLRUCache):
     """
     ProcessorCacheManager is used to cache processed data
     """
+
     def __init__(self, max_processor_cache):
         super().__init__(max_processor_cache)
 
@@ -149,12 +153,11 @@ class ProcessorCacheManager(MultimodalLRUCache):
                     if isinstance(req, tuple):
                         # apply cache request, in format of (mm_hashes, mm_items)
                         self.apply_cache(req[0], req[1])
-                        processor_cache_logger.info(f"Apply processor cache of mm_hashes: {req[0]}")
+                        logger.info(f"Apply processor cache of mm_hashes: {req[0]}")
                     else:
                         # get cache request
                         resp = self.get_cache(req)
-                        processor_cache_logger.info(f"Get processor cache of mm_hashes: {req}")
+                        logger.info(f"Get processor cache of mm_hashes: {req}")
                         self.router.send_multipart([client, b"", pickle.dumps(resp)])
         except Exception as e:
-            processor_cache_logger.error(f"Error happened while handling processor cache request: {e}")
-    
+            logger.error(f"Error happened while handling processor cache request: {e}")
