@@ -651,6 +651,8 @@ class LLMEngine:
         role = self.cfg.scheduler_config.splitwise_role
         host_ip = self.cfg.host_ip
         disaggregate = self.cfg.disaggregate_info
+        request_queues_for_dp_ipc = None
+        result_queue_for_dp_ipc = None
         if self.cfg.scheduler_config.name == "splitwise":
             self.engine.scheduler.start(role, host_ip, disaggregate)
         elif self.cfg.scheduler_config.name == "dp":
