@@ -152,8 +152,8 @@ class CacheMessager:
         cache_v = []
         self.messager = {}
         for layer_idx in range(self.num_layers):
-            key_cache = self.gpu_cache_kvs[f"key_caches_{layer_idx}_rank{self.rank}.device{gpu_id}"]
-            val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}.device{gpu_id}"]
+            key_cache = self.gpu_cache_kvs[f"key_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
+            val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
             cache_k.append(key_cache)
             cache_v.append(val_cache)
             cache_k_ptr_list.append(key_cache.data_ptr())
