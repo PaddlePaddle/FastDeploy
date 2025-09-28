@@ -18,7 +18,6 @@ import asyncio
 import time
 import traceback
 import uuid
-from copy import copy
 from typing import List, Optional
 
 import numpy as np
@@ -113,19 +112,13 @@ class OpenAIServingChat:
             api_server_logger.info(f"create chat completion request: {request_id}")
             text_after_process = None
             try:
-                current_req_dict = request.to_dict_for_infer(request_id)
+                current_req_dict = request.to_dict_for_infer(f"{request_id}-0")
                 if "chat_template" not in current_req_dict:
                     current_req_dict["chat_template"] = self.chat_template
                 current_req_dict["arrival_time"] = time.time()
                 # preprocess the req_dict
-                await self.engine_client.format_request(current_req_dict)
-                prompt_token_ids = current_req_dict["prompt_token_ids"]
+                prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)
                 text_after_process = current_req_dict["text_after_process"]
-                for idx in range(current_req_dict.get("n", 1)):
-                    child_req_dict = copy(current_req_dict)
-                    child_req_dict["request_id"] = f'{child_req_dict["request_id"]}-{idx}'
-                    await self.engine_client.add_requests(child_req_dict)
-                    del child_req_dict
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
             except ParameterError as e:
@@ -182,12 +175,11 @@ class OpenAIServingChat:
         """
         created_time = int(time.time())
         chunk_object_type: str = "chat.completion.chunk"
-        n_param = request.n if request.n is not None else 1
-        first_iteration = [True] * n_param
-        previous_num_tokens = [0] * n_param
+        num_choices = 1 if request.n is None else request.n
+        first_iteration = [True] * num_choices
+        previous_num_tokens = [0] * num_choices
         num_prompt_tokens = 0
-        num_choices = 1 if n_param is None else n_param
-        tool_called = [False] * n_param
+        tool_called = [False] * num_choices
         max_streaming_response_tokens = (
             request.max_streaming_response_tokens
             if request.max_streaming_response_tokens is not None
@@ -219,8 +211,10 @@ class OpenAIServingChat:
         api_server_logger.info(f"create chat completion request: {request_id}")
 
         try:
-            dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id, n_param)
-            request_ids = [f"{request_id}-{i}" for i in range(n_param)]
+            dealer, response_queue = await self.engine_client.connection_manager.get_connection(
+                request_id, num_choices
+            )
+            request_ids = [f"{request_id}-{i}" for i in range(num_choices)]
             for rid in request_ids:
                 dealer.write([b"", rid.encode("utf-8")])
             choices = []
@@ -314,7 +308,6 @@ class OpenAIServingChat:
                         first_iteration[idx] = False
 
                     output = res["outputs"]
-                    reasoning_content = output["reasoning_content"]
                     output_top_logprobs = output["top_logprobs"]
                     previous_num_tokens[idx] += len(output["token_ids"])
                     logprobs_res: Optional[LogProbs] = None
@@ -324,7 +317,7 @@ class OpenAIServingChat:
                         )
 
                     delta_message = DeltaMessage(
-                        reasoning_content=reasoning_content,
+                        reasoning_content="",
                         prompt_token_ids=None,
                         tool_calls=None,
                         completion_token_ids=None,
@@ -430,31 +423,31 @@ class OpenAIServingChat:
         Full chat completion generator.
         """
         created_time = int(time.time())
-        n_param = request.n if request.n is not None else 1
+        num_choices = 1 if request.n is None else request.n
         enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
         if enable_thinking is None:
             enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
 
         include_stop_str_in_output = request.include_stop_str_in_output
         try:
-            dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id, n_param)
+            dealer, response_queue = await self.engine_client.connection_manager.get_connection(
+                request_id, num_choices
+            )
             # dealer.write([b"", request_id.encode("utf-8")])
-            request_ids = [f"{request_id}-{i}" for i in range(n_param)]
+            request_ids = [f"{request_id}-{i}" for i in range(num_choices)]
             for rid in request_ids:
                 dealer.write([b"", rid.encode("utf-8")])
-            previous_num_tokens = [0] * n_param
+            previous_num_tokens = [0] * num_choices
             current_waiting_time = 0
-            logprob_contents = [[] for _ in range(n_param)]
-            completion_token_ids = [[] for _ in range(n_param)]
-            num_cached_tokens = [0] * n_param
-            num_choices = 1 if n_param is None else n_param
+            logprob_contents = [[] for _ in range(num_choices)]
+            completion_token_ids = [[] for _ in range(num_choices)]
+            num_cached_tokens = [0] * num_choices
             response_processor = ChatResponseProcessor(
                 data_processor=self.engine_client.data_processor,
                 enable_mm_output=self.enable_mm_output,
                 decoder_base_url=self.tokenizer_base_url,
             )
             choices = []
-            latency = 0.0
             while num_choices > 0:
                 if self.engine_client.check_model_weight_status():
                     return ErrorResponse(
@@ -507,19 +500,18 @@ class OpenAIServingChat:
                             and output.get("metrics") is not None
                             and output.get("metrics").get("request_start_time") is not None
                         ):
-                            latency += time.time() - output.get("metrics").get("request_start_time")
-                        message = ChatMessage(
-                            role="assistant",
-                            reasoning_content=output.get("reasoning_content"),
-                            tool_calls=output.get("tool_call"),
-                            prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
-                            # TODO 确认这里是用idx还是不是idx
-                            completion_token_ids=completion_token_ids[idx] if request.return_token_ids else None,
-                            text_after_process=text_after_process if request.return_token_ids else None,
-                            prompt_tokens=text_after_process if request.return_token_ids else None,
-                            raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
-                            completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
-                        )
+                            message = ChatMessage(
+                                role="assistant",
+                                reasoning_content=output.get("reasoning_content"),
+                                tool_calls=output.get("tool_call"),
+                                prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
+                                # TODO 确认这里是用idx还是不是idx
+                                completion_token_ids=completion_token_ids[idx] if request.return_token_ids else None,
+                                text_after_process=text_after_process if request.return_token_ids else None,
+                                prompt_tokens=text_after_process if request.return_token_ids else None,
+                                raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
+                                completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
+                            )
 
                         if response_processor.enable_multimodal_content():
                             message.multimodal_content = output.get("multipart")
@@ -550,6 +542,9 @@ class OpenAIServingChat:
                         if output.get("error_msg") is not None and "Recover" in output["error_msg"]:
                             choice.finish_reason = "recover_stop"
                         choices.append(choice)
+                        work_process_metrics.e2e_request_latency.observe(
+                            time.time() - output.get("metrics").get("request_start_time")
+                        )
         finally:
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
@@ -563,7 +558,6 @@ class OpenAIServingChat:
             total_tokens=num_prompt_tokens + num_generated_tokens,
             prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=sum(num_cached_tokens)),
         )
-        work_process_metrics.e2e_request_latency.observe(latency)
         choices = sorted(choices, key=lambda x: x.index)
         res = ChatCompletionResponse(
             id=request_id,

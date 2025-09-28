@@ -19,6 +19,7 @@ import os
 import time
 import traceback
 import uuid
+from copy import copy
 
 import numpy as np
 
@@ -116,37 +117,50 @@ class EngineClient:
         self.zmq_client = ZmqIpcClient(model, mode)
         self.zmq_client.connect()
 
-    async def format_request(self, request: dict):
+    async def format_and_add_data(self, prompts: dict):
         """
         Format the request data and send the request to the server.
         """
-        if "request_id" not in request:
+        if "request_id" not in prompts:
             request_id = str(uuid.uuid4())
-            request["request_id"] = request_id
+            prompts["request_id"] = request_id
 
-        if "max_tokens" not in request:
-            request["max_tokens"] = self.max_model_len - 1
+        if "max_tokens" not in prompts:
+            prompts["max_tokens"] = self.max_model_len - 1
 
-        request["preprocess_start_time"] = time.time()
+        await self.add_requests(prompts)
+        return prompts["prompt_token_ids"]
+
+    async def add_requests(self, task):
+        """
+        Add a new request to the queue.
+
+        Args:
+            task: Request A dictionary representing the request.
+            sampling_params: A dictionary representing the sampling parameters.
+
+        Returns:
+            None
+        """
+
+        task["preprocess_start_time"] = time.time()
         try:
-            chat_template_kwargs = request.get("chat_template_kwargs", {})
-            chat_template_kwargs.update({"chat_template": request.get("chat_template"), "tools": request.get("tools")})
-            request["chat_template_kwargs"] = chat_template_kwargs
+            chat_template_kwargs = task.get("chat_template_kwargs", {})
+            chat_template_kwargs.update({"chat_template": task.get("chat_template"), "tools": task.get("tools")})
+            task["chat_template_kwargs"] = chat_template_kwargs
             if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
-                await self.data_processor.process_request_dict(request, self.max_model_len)
+                await self.data_processor.process_request_dict(task, self.max_model_len)
             else:
-                self.data_processor.process_request_dict(request, self.max_model_len)
+                self.data_processor.process_request_dict(task, self.max_model_len)
 
-            request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
-            input_ids_len = request["prompt_token_ids_len"]
-            request["max_tokens"] = min(self.max_model_len - input_ids_len, request.get("max_tokens"))
-            if request.get("reasoning_max_tokens", None) is None:
-                request["reasoning_max_tokens"] = max(int(request["max_tokens"] * 0.8), 1)
-            min_tokens = request.get("min_tokens", 1)
-            if "messages" in request:
-                del request["messages"]
-            api_server_logger.info(f"request['max_tokens']:{request['max_tokens']}")
-            work_process_metrics.request_params_max_tokens.observe(request["max_tokens"])
+            task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
+            input_ids_len = task["prompt_token_ids_len"]
+            task["max_tokens"] = min(self.max_model_len - input_ids_len, task.get("max_tokens"))
+            min_tokens = task.get("min_tokens", 1)
+            if "messages" in task:
+                del task["messages"]
+            api_server_logger.info(f"task['max_tokens']:{task['max_tokens']}")
+            work_process_metrics.request_params_max_tokens.observe(task["max_tokens"])
             work_process_metrics.prompt_tokens_total.inc(input_ids_len)
             work_process_metrics.request_prompt_tokens.observe(input_ids_len)
         except Exception as e:
@@ -168,8 +182,8 @@ class EngineClient:
             api_server_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
 
-        if "stop_seqs_len" in request:
-            stop_seqs_len = request["stop_seqs_len"]
+        if "stop_seqs_len" in task:
+            stop_seqs_len = task["stop_seqs_len"]
             max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
             if len(stop_seqs_len) > max_stop_seqs_num:
                 error_msg = (
@@ -188,36 +202,34 @@ class EngineClient:
                     api_server_logger.error(error_msg)
                     raise EngineError(error_msg, error_code=400)
 
-        request["preprocess_end_time"] = time.time()
-        preprocess_cost_time = request["preprocess_end_time"] - request["preprocess_start_time"]
+        task["preprocess_end_time"] = time.time()
+        preprocess_cost_time = task["preprocess_end_time"] - task["preprocess_start_time"]
         api_server_logger.info(
-            f"Cache request with request_id ({request.get('request_id')}), "
+            f"Cache request with request_id ({task.get('request_id')}), "
             f"preprocess time cost {preprocess_cost_time}"
         )
 
-        self.valid_parameters(request)
-        api_server_logger.debug(f"Receive request: {request}")
-
-    async def add_requests(self, task):
-        """
-        Add a new request to the queue.
-
-        Args:
-            task: Request A dictionary representing the request.
-            sampling_params: A dictionary representing the sampling parameters.
-
-        Returns:
-            None
-        """
-
+        self.valid_parameters(task)
+        api_server_logger.debug(f"Receive task: {task}")
+        n = task.get("n", 1)
         try:
-            if not self.enable_mm:
-                self.zmq_client.send_json(task)
-            else:
-                self.zmq_client.send_pyobj(task)
+            request_id_idx = task.get("request_id")
+            request_id = request_id_idx.rsplit("-", 1)[0]
+            index = request_id_idx.rsplit("-", 1)[-1]
+            for i in range(index * n, (index + 1) * n):
+                child_task = copy(task)
+                child_task["request_id"] = f"{request_id}-{i}"
+                self._send_task(child_task)
+                del child_task
         except Exception as e:
             api_server_logger.error(f"zmq_client send task error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
+
+    def _send_task(self, task):
+        if not self.enable_mm:
+            self.zmq_client.send_json(task)
+        else:
+            self.zmq_client.send_pyobj(task)
 
     def valid_parameters(self, data):
         """

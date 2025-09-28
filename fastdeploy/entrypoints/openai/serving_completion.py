@@ -18,7 +18,6 @@ import asyncio
 import time
 import traceback
 import uuid
-from copy import copy
 from typing import List, Optional
 
 import numpy as np
@@ -121,7 +120,7 @@ class OpenAIServingCompletion:
         if request_prompt_ids is not None:
             request_prompts = request_prompt_ids
 
-        num_choices = len(request_prompts) * request.n
+        num_choices = len(request_prompts) * (1 if request.n is None else request.n)
         api_server_logger.info(f"Start preprocessing request: req_id={request_id}), num_choices={num_choices}")
         prompt_batched_token_ids = []
         text_after_process_list = []
@@ -143,19 +142,15 @@ class OpenAIServingCompletion:
         try:
             try:
                 for idx, prompt in enumerate(request_prompts):
-                    request_id_idx = f"{request_id}"
+                    request_id_idx = f"{request_id}-{idx}"
                     current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                     n_param = current_req_dict.get("n", 1)
                     current_req_dict["arrival_time"] = time.time()
-                    await self.engine_client.format_request(current_req_dict)  # tokenize
-                    prompt_token_ids = current_req_dict["prompt_token_ids"]
+                    prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)  # tokenize
                     if isinstance(prompt_token_ids, np.ndarray):
                         prompt_token_ids = prompt_token_ids.tolist()
-                    for i in range(idx * n_param, (idx + 1) * n_param):
-                        child_req_dict = copy(current_req_dict)
-                        child_req_dict["request_id"] = f'{child_req_dict["request_id"]}-{i}'
-                        await self.engine_client.add_requests(child_req_dict)
-                        text_after_process_list.append(child_req_dict.get("text_after_process"))
+                    for i in range(n_param):
+                        text_after_process_list.append(current_req_dict.get("text_after_process"))
                         prompt_batched_token_ids.append(prompt_token_ids)
                     del current_req_dict
             except ParameterError as e:
