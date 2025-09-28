@@ -446,6 +446,7 @@ class RequestOutput:
         self.request_id = request_id
         self.prompt = prompt
         self.prompt_token_ids = prompt_token_ids
+        self.output_type = output_type
         self.outputs = outputs
         self.finished = finished
         self.metrics = metrics
