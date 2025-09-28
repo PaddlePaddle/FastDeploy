@@ -315,6 +315,8 @@ class PaddleDisWorkerProc:
                         self.worker.model_runner,
                         self.parallel_config.engine_worker_queue_port,
                     )
+                    logger.info(f"current task queue data: {self.task_queue.num_tasks()}")
+                    self.task_queue.clear_data()
                     self.model_weights_signal[0] = 0
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
 
