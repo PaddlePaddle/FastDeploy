@@ -30,6 +30,7 @@ import paddle
 from fastdeploy.engine.request import Request, RequestOutput, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import llm_logger
 
 
@@ -136,13 +137,25 @@ class ResourceManagerV1(ResourceManager):
                 preempted_req = self.running.pop()
                 preempted_req.status = RequestStatus.PREEMPTED
                 preempted_req.num_computed_tokens = 0
-                self._free_blocks(preempted_req)
-                preempted_req.cached_block_num = 0
-                self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
+                if self.config.scheduler_config.splitwise_role == "decode":
+                    self.tasks_list[preempted_req.idx] = None
+                    self.stop_flags[preempted_req.idx] = True
+                    if preempted_req.request_id in self.requests:
+                        del self.requests[preempted_req.request_id]
+                    if preempted_req.request_id in self.req_dict:
+                        del self.req_dict[preempted_req.request_id]
+                    self._free_blocks(preempted_req)
+                    llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
+                    main_process_metrics.num_requests_running.dec(1)
+                else:
+                    self._free_blocks(preempted_req)
+                    preempted_req.cached_block_num = 0
+                    self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
+                    llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
+                    main_process_metrics.num_requests_waiting.inc(1)
+                    main_process_metrics.num_requests_running.dec(1)
                 preempted_reqs.append(preempted_req)
                 scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
-                main_process_metrics.num_requests_waiting.inc(1)
-                main_process_metrics.num_requests_running.dec(1)
                 if preempted_req == request:
                     # No more request to preempt.
                     can_schedule = False
@@ -157,6 +170,7 @@ class ResourceManagerV1(ResourceManager):
         # TODO: set condition to new _get_num_new_tokens
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
         num_new_tokens = min(num_new_tokens, token_budget)
+        request.with_image = False
 
         if not self.config.model_config.enable_mm:
             return num_new_tokens
@@ -219,7 +233,10 @@ class ResourceManagerV1(ResourceManager):
                         grid_thw.extend([[2, one[1], one[2]]] * (one[0] // 2))
 
                 grid_thw = paddle.to_tensor(grid_thw, dtype="int64")
-                from fastdeploy.model_executor.ops.gpu import get_img_boundaries
+                if current_platform.is_xpu():
+                    from fastdeploy.model_executor.ops.xpu import get_img_boundaries
+                else:
+                    from fastdeploy.model_executor.ops.gpu import get_img_boundaries
 
                 request.multimodal_img_boundaries = get_img_boundaries(
                     task_input_ids=input_ids, grid_thw=grid_thw, image_patch_id=image_patch_id
@@ -583,8 +600,10 @@ class ResourceManagerV1(ResourceManager):
         with self.lock:
             self.tasks_list[request.idx] = None
             self.stop_flags[request.idx] = True
-            del self.requests[request.request_id]
-            del self.req_dict[request.request_id]
+            if request.request_id in self.requests:
+                del self.requests[request.request_id]
+            if request.request_id in self.req_dict:
+                del self.req_dict[request.request_id]
             self._free_blocks(request)
 
     def add_request_in_p(self, requests: list[Request]):

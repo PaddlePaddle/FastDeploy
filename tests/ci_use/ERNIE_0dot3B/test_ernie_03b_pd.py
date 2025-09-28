@@ -239,6 +239,13 @@ def headers():
     return {"Content-Type": "application/json"}
 
 
+def test_metrics_config(metrics_url):
+    timeout = 600
+    url = metrics_url.replace("metrics", "config-info")
+    res = requests.get(url, timeout=timeout)
+    assert res.status_code == 200
+
+
 def send_request(url, payload, timeout=600):
     """
     发送请求到指定的URL，并返回响应结果。

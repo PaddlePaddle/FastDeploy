@@ -26,6 +26,7 @@ std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& scores,
                                     int n_group,
                                     int topk_group,
                                     int topk,
+                                    bool renormalize,
                                     float routed_scaling_factor) {
   auto input_shape = scores_with_bias.shape();
   PD_CHECK(input_shape.size() == 2);
@@ -48,6 +49,7 @@ std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& scores,
                        n_group,
                        topk_group,
                        topk,
+                       renormalize,
                        routed_scaling_factor,
                        stream);
 
@@ -76,6 +78,7 @@ PD_BUILD_STATIC_OP(noaux_tc)
     .Attrs({"n_group: int",
             "topk_group: int",
             "topk:int",
+            "renormalize: bool",
             "routed_scaling_factor: float"})
     .SetKernelFn(PD_KERNEL(NoauxTc))
     .SetInferShapeFn(PD_INFER_SHAPE(NoauxTcInferShape))

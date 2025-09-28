@@ -208,6 +208,7 @@ if paddle.is_compiled_with_rocm():
         "gpu_ops/rebuild_padding.cu",
         "gpu_ops/step.cu",
         "gpu_ops/set_data_ipc.cu",
+        "gpu_ops/unset_data_ipc.cu",
         "gpu_ops/moe/tritonmoe_preprocess.cu",
         "gpu_ops/step_system_cache.cu",
         "gpu_ops/get_output_ep.cc",
@@ -278,6 +279,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/beam_search_softmax.cu",
         "gpu_ops/rebuild_padding.cu",
         "gpu_ops/set_data_ipc.cu",
+        "gpu_ops/unset_data_ipc.cu",
         "gpu_ops/read_data_ipc.cu",
         "gpu_ops/enforce_generation.cu",
         "gpu_ops/dequant_int8.cu",
@@ -623,6 +625,8 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
             ],
         ),
     )
+elif paddle.is_compiled_with_custom_device("intel_hpu"):
+    pass
 else:
     use_bf16 = envs.FD_CPU_USE_BF16 == "True"
 
