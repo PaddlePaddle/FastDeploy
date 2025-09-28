@@ -119,6 +119,7 @@ struct CollectiveMainloopFwd {
         LayoutT layout_C;
         const float *weight_scale;
         LayoutTScale layout_Scale;
+        const float *input_scale;
         const int64_t * tokens;
     };
 
@@ -131,6 +132,7 @@ struct CollectiveMainloopFwd {
         TMA_Scale tma_load_Scale;
         ElementOutput * ptr_C;
         const float *weight_scale;
+        const float *input_scale;
         const int64_t * tokens;
     };
 
@@ -162,7 +164,7 @@ struct CollectiveMainloopFwd {
         return {
             args.layout_A, args.layout_B, args.layout_Scale,
             tma_load_A, tma_load_B, tma_load_Scale,
-            args.ptr_C, args.weight_scale, args.tokens};
+            args.ptr_C, args.weight_scale, args.input_scale, args.tokens};
     }
 
     CUTLASS_DEVICE
@@ -181,6 +183,7 @@ struct CollectiveMainloopFwd {
         SharedStorage& shared_storage,
         TiledMma tiled_mma,
         const float *weight_scale,
+        const float *input_scale,
         const int64_t tokens,
         const int64_t pre_fix_tokens,
         const int bidm,
@@ -191,23 +194,47 @@ struct CollectiveMainloopFwd {
         using packHalf = typename PackedHalf<ElementOutput>::Type;
         Tensor tOrO_out = make_tensor<ElementOutput>(tOrO.layout());
 
-        if constexpr (WeightScaleGroup == K) {
-            #pragma unroll
-            for (int i = 0; i < size(tOrO); i+=4) {
-                tOrO[i] = (tOrO[i]) * weight_scale[0];
-                tOrO[i + 1] = tOrO[i + 1] * weight_scale[0];
-                tOrO[i + 2] = tOrO[i + 2] * weight_scale[1];
-                tOrO[i + 3] = tOrO[i + 3] * weight_scale[1];
-                *reinterpret_cast<packHalf*>(&tOrO_out[i]) = packHalf(tOrO[i], tOrO[i + 2]);
-                *reinterpret_cast<packHalf*>(&tOrO_out[i + 2]) = packHalf(tOrO[i + 1], tOrO[i + 3]);
+        if (input_scale != nullptr) {
+            const int lane_id = tidx % 4 * 2;
+            if constexpr (WeightScaleGroup == K) {
+                #pragma unroll
+                for (int i = 0; i < size(tOrO); i+=4) {
+                    const int scale_idx = i * 2 + lane_id;
+                    tOrO[i] = tOrO[i] * weight_scale[0] * input_scale[scale_idx];
+                    tOrO[i + 1] = tOrO[i + 1] * weight_scale[0] * input_scale[scale_idx + 1];
+                    tOrO[i + 2] = tOrO[i + 2] * weight_scale[1] * input_scale[scale_idx];
+                    tOrO[i + 3] = tOrO[i + 3] * weight_scale[1] * input_scale[scale_idx + 1];
+                    *reinterpret_cast<packHalf*>(&tOrO_out[i]) = packHalf(tOrO[i], tOrO[i + 2]);
+                    *reinterpret_cast<packHalf*>(&tOrO_out[i + 2]) = packHalf(tOrO[i + 1], tOrO[i + 3]);
+                }
+            } else {
+                #pragma unroll
+                for (int i = 0; i < size(tOrO); i+=4) {
+                    const int scale_idx = i * 2 + lane_id;
+                    *reinterpret_cast<packHalf*>(&tOrO_out[i]) = packHalf(float(tOrO[i]) * input_scale[scale_idx], float(tOrO[i + 2]) * input_scale[scale_idx]);
+                    *reinterpret_cast<packHalf*>(&tOrO_out[i + 2]) = packHalf(float(tOrO[i + 1]) * input_scale[scale_idx + 1], float(tOrO[i + 3]) * input_scale[scale_idx + 1]);
+                }
             }
         } else {
-            #pragma unroll
-            for (int i = 0; i < size(tOrO); i+=4) {
-                *reinterpret_cast<packHalf*>(&tOrO_out[i]) = packHalf(float(tOrO[i]), float(tOrO[i + 2]));
-                *reinterpret_cast<packHalf*>(&tOrO_out[i + 2]) = packHalf(float(tOrO[i + 1]), float(tOrO[i + 3]));
+            if constexpr (WeightScaleGroup == K) {
+                #pragma unroll
+                for (int i = 0; i < size(tOrO); i+=4) {
+                    tOrO[i] = (tOrO[i]) * weight_scale[0];
+                    tOrO[i + 1] = tOrO[i + 1] * weight_scale[0];
+                    tOrO[i + 2] = tOrO[i + 2] * weight_scale[1];
+                    tOrO[i + 3] = tOrO[i + 3] * weight_scale[1];
+                    *reinterpret_cast<packHalf*>(&tOrO_out[i]) = packHalf(tOrO[i], tOrO[i + 2]);
+                    *reinterpret_cast<packHalf*>(&tOrO_out[i + 2]) = packHalf(tOrO[i + 1], tOrO[i + 3]);
+                }
+            } else {
+                #pragma unroll
+                for (int i = 0; i < size(tOrO); i+=4) {
+                    *reinterpret_cast<packHalf*>(&tOrO_out[i]) = packHalf(float(tOrO[i]), float(tOrO[i + 2]));
+                    *reinterpret_cast<packHalf*>(&tOrO_out[i + 2]) = packHalf(float(tOrO[i + 1]), float(tOrO[i + 3]));
+                }
             }
         }
+
 
         uint16_t *smem_c = reinterpret_cast<uint16_t *>(shared_storage.smem_c.data());
 

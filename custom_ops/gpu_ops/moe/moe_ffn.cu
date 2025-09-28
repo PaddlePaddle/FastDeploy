@@ -27,6 +27,7 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
                   const paddle::Tensor& tokens_expert_prefix_sum,
                   const paddle::Tensor& up_gate_proj_weight,
                   const paddle::Tensor& down_proj_weight,
+                  const paddle::optional<paddle::Tensor>& up_proj_in_scale,
                   const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
                   const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
                   const paddle::optional<paddle::Tensor>& down_proj_scale,
@@ -180,12 +181,12 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
         typedef typename traits_fp8::data_t data_t_fp8;
         paddle::Tensor weight_scale_tensor = *const_cast<paddle::Tensor*>(up_gate_proj_scale.get_ptr());
         const int weight_scale_group_size = weight_scale_tensor.dims().size() == 2 ? hidden_size : weight_scale_tensor.dims()[3];
-        float* row_scale = nullptr;
+        const float* input_dequant_scale = up_proj_in_scale ? up_proj_in_scale.get().data<float>() : nullptr;
         DisPatchW4AFp8GemmWrapper(
             reinterpret_cast<const DataType_fp8 *>(permute_input.data<data_t_fp8>()),
             reinterpret_cast<const DataType_fp8 *>(up_gate_proj_weight.data<int8_t>()),
             const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
-            row_scale,
+            input_dequant_scale,
             weight_scale_tensor.data<float>(),
             reinterpret_cast<NvType *>(fc1_out),
             used_in_ep_low_latency ? num_max_tokens_per_expert : 0,
@@ -304,7 +305,7 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
     } else if (quant_method == "w4afp8") {
         data_t *ffn2_shift = nullptr;
         data_t *ffn2_smooth = nullptr;
-        float* row_scale = nullptr;
+        float* input_dequant_scale = nullptr;
         Allocator::AllocationPtr fp8_act_out;
         fp8_act_out = allocator->Allocate(
             SizeOf(paddle::DataType::INT8) * act_out_tensor.numel());
@@ -335,7 +336,7 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
             reinterpret_cast<const DataType_fp8 *>(fp8_act_out->ptr()),
             reinterpret_cast<const DataType_fp8 *>(down_proj_weight.data<int8_t>()),
             const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
-            row_scale,
+            input_dequant_scale,
             weight_scale_tensor.data<float>(),
             reinterpret_cast<NvType*>(ffn_out_data),
             used_in_ep_low_latency ? num_max_tokens_per_expert : 0,
@@ -368,6 +369,7 @@ paddle::Tensor MoeExpertFFNFunc(
     const paddle::Tensor& tokens_expert_prefix_sum,
     const paddle::Tensor& up_gate_proj_weight,
     const paddle::Tensor& down_proj_weight,
+    const paddle::optional<paddle::Tensor>& up_proj_in_scale,
     const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
     const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_scale,
@@ -389,6 +391,7 @@ const auto t_type = (quant_method == "w4a8") ? up_gate_proj_scale.get().dtype() 
                                                      tokens_expert_prefix_sum,
                                                      up_gate_proj_weight,
                                                      down_proj_weight,
+                                                     up_proj_in_scale,
                                                      up_gate_proj_bias,
                                                      up_gate_proj_scale,
                                                      down_proj_scale,
@@ -405,6 +408,7 @@ const auto t_type = (quant_method == "w4a8") ? up_gate_proj_scale.get().dtype() 
                                                     tokens_expert_prefix_sum,
                                                     up_gate_proj_weight,
                                                     down_proj_weight,
+                                                    up_proj_in_scale,
                                                     up_gate_proj_bias,
                                                     up_gate_proj_scale,
                                                     down_proj_scale,
@@ -427,6 +431,7 @@ std::vector<paddle::Tensor> MoeExpertFFN(
     const paddle::Tensor& tokens_expert_prefix_sum,
     const paddle::Tensor& up_gate_proj_weight,
     const paddle::Tensor& down_proj_weight,
+    const paddle::optional<paddle::Tensor>& up_proj_in_scale,
     const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
     const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_scale,
@@ -439,6 +444,7 @@ std::vector<paddle::Tensor> MoeExpertFFN(
                              tokens_expert_prefix_sum,
                              up_gate_proj_weight,
                              down_proj_weight,
+                             up_proj_in_scale,
                              up_gate_proj_bias,
                              up_gate_proj_scale,
                              down_proj_scale,
@@ -455,6 +461,7 @@ std::vector<std::vector<int64_t>> MoeExpertFFNInferShape(
     const std::vector<int64_t>& tokens_expert_prefix_sum_shape,
     const std::vector<int64_t>& up_gate_proj_weight_shape,
     const std::vector<int64_t>& down_proj_weight_shape,
+    const paddle::optional<std::vector<int64_t>>& up_proj_in_scale_shape,
     const paddle::optional<std::vector<int64_t>>& up_gate_proj_bias_shape,
     const paddle::optional<std::vector<int64_t>>& up_gate_proj_scale_shape,
     const paddle::optional<std::vector<int64_t>>& down_proj_scale_shape,
@@ -472,6 +479,7 @@ std::vector<paddle::DataType> MoeExpertFFNInferDtype(
     const paddle::DataType &tokens_expert_prefix_sum_dtype,
     const paddle::DataType &up_gate_proj_weight_dtype,
     const paddle::DataType &down_proj_weight_dtype,
+    const paddle::optional<paddle::DataType> &up_proj_in_scale_dtype,
     const paddle::optional<paddle::DataType> &up_gate_proj_bias_dtype,
     const paddle::optional<paddle::DataType> &up_gate_proj_scale_dtype,
     const paddle::optional<paddle::DataType> &down_proj_scale_dtype,
@@ -545,6 +553,7 @@ PD_BUILD_STATIC_OP(moe_expert_ffn)
              "tokens_expert_prefix_sum",
              "up_gate_proj_weight",
              "down_proj_weight",
+             paddle::Optional("up_proj_in_scale"),
              paddle::Optional("up_gate_proj_bias"),
              paddle::Optional("up_gate_proj_scale"),
              paddle::Optional("down_proj_scale"),

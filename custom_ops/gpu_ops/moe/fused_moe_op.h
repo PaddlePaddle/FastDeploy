@@ -128,6 +128,17 @@ struct SumOp {
   __device__ __forceinline__ T operator()(T const& x, T const& y) { return x + y; }
 };
 
+template<typename T>
+struct MaxOp {
+__device__ inline T operator()(T const & x, T const & y) { return x > y ? x : y; }
+};
+
+template <>
+struct MaxOp<float> {
+__device__ inline float operator()(float const &x, float const &y) { return fmax(x, y); }
+};
+
+
 template <typename InType, typename OutType>
 __forceinline__ __device__ OutType QuantHelperFunc(const InType input,
                                                    const float scale,
@@ -1145,7 +1156,7 @@ void topk_gating_softmax_kernelLauncher(const T* input,
 // to row 0 in the original matrix. Thus, to know where to read in the source
 // matrix, we simply take the modulus of the expanded index.
 
-template <typename T, int VecSize, typename OutT=T>
+template <typename T, int VecSize, int Kthread, typename OutT=T>
 __global__ void initialize_moe_routing_kernel(
     const T* unpermuted_input,
     OutT* permuted_output,
@@ -1153,6 +1164,7 @@ __global__ void initialize_moe_routing_kernel(
     const int *expert_idx_per_token,
     const float *w4a8_in_scale,
     int* expanded_source_row_to_expanded_dest_row,
+    float *dequant_scale,
     const int64_t num_rows,
     const int64_t active_rows,
     const int64_t cols,
@@ -1174,15 +1186,49 @@ __global__ void initialize_moe_routing_kernel(
         expanded_dest_row;
   }
 
+  extern __shared__ char smem_[];
+
+  T * data_smem = reinterpret_cast<T*>(smem_);
+
   if (expanded_dest_row < active_rows) {
 
     const int expert_idx = expert_idx_per_token[expanded_dest_row];
-    const float scale = w4a8_in_scale ? w4a8_in_scale[expert_idx] : -1;
+    float scale;
     const int source_row = expanded_source_row % num_rows;
 
     const T* source_row_ptr = unpermuted_input + source_row * cols;
     OutT *dest_row_ptr = permuted_output + expanded_dest_row * cols;
 
+    if constexpr(std::is_same<OutT, phi::dtype::float8_e4m3fn>::value) {
+      if (dequant_scale != nullptr) {
+        float abs_max = 0.f;
+        for (int tid = threadIdx.x * VecSize; tid < cols;
+          tid += blockDim.x * VecSize) {
+            Load<T, VecSize>(&source_row_ptr[tid], &src_vec);
+            Store<T, VecSize>(src_vec, &data_smem[tid]);
+            for (int j = 0; j < VecSize; j++) {
+              abs_max = fmaxf(abs_max, fabsf(static_cast<float>(src_vec[j])));
+            }
+        }
+        abs_max = BlockAllReduce<MaxOp, float, Kthread>(abs_max);
+        scale = 440.0f / abs_max;
+        dequant_scale[expanded_dest_row] = abs_max;
+        for (int tid = threadIdx.x * VecSize; tid < cols;
+          tid += blockDim.x * VecSize) {
+          Load<T, VecSize>(&data_smem[tid], &src_vec);
+          using StoreT = AlignedVector<OutT, VecSize>;
+          StoreT dest_vec;
+          for (int j = 0; j < VecSize; j++) {
+            float quant_value = scale * static_cast<float>(src_vec[j]);
+            dest_vec[j] = static_cast<OutT>(quant_value);
+          }
+          Store<OutT, VecSize>(dest_vec, &dest_row_ptr[tid]);
+        }
+        return;
+      } else {
+        scale = w4a8_in_scale ? w4a8_in_scale[expert_idx] : -1;
+      }
+    }
     for (int tid = threadIdx.x * VecSize; tid < cols;
          tid += blockDim.x * VecSize) {
       // dest_row_ptr[tid] = source_row_ptr[tid];
@@ -1228,41 +1274,35 @@ void initialize_moe_routing_kernelLauncher(
     const int *expert_idx_per_token,
     const float *w4a8_in_scale,
     int* expanded_source_row_to_expanded_dest_row,
+    float * dequant_scale,
     const int64_t num_rows,
     const int64_t active_rows,
     const int64_t cols,
     const int64_t k,
     cudaStream_t stream) {
-  const int threads = std::min(cols, int64_t(1024));
+  constexpr int threads = 256;
   constexpr int max_pack_size = 16 / sizeof(T);
   const auto config_initialize = Get1DBlocksAnd2DGridsMoe(num_rows * k);
-  if (cols % max_pack_size == 0) {
-    initialize_moe_routing_kernel<T, max_pack_size>
-        <<<config_initialize.block_per_grid, threads, 0, stream>>>(
-            unpermuted_input,
-            permuted_output,
-            expanded_dest_row_to_expanded_source_row,
-            expert_idx_per_token,
-            w4a8_in_scale,
-            expanded_source_row_to_expanded_dest_row,
-            num_rows,
-            k * active_rows,
-            cols,
-            num_rows * k);
-  } else {
-    initialize_moe_routing_kernel<T, 1>
-        <<<config_initialize.block_per_grid, threads, 0, stream>>>(
-            unpermuted_input,
-            permuted_output,
-            expanded_dest_row_to_expanded_source_row,
-            expert_idx_per_token,
-            w4a8_in_scale,
-            expanded_source_row_to_expanded_dest_row,
-            num_rows,
-            k * active_rows,
-            cols,
-            num_rows * k);
+  const int smem_size = cols * sizeof(float);
+  auto kernel = &initialize_moe_routing_kernel<T, max_pack_size, threads, OutT>;
+  if (cols % max_pack_size != 0) {
+    kernel = &initialize_moe_routing_kernel<T, 1, threads, OutT>;
   }
+  if (smem_size >= 48 * 1024) {
+    cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
+  }
+  kernel<<<config_initialize.block_per_grid, threads, smem_size, stream>>>(
+            unpermuted_input,
+            permuted_output,
+            expanded_dest_row_to_expanded_source_row,
+            expert_idx_per_token,
+            w4a8_in_scale,
+            expanded_source_row_to_expanded_dest_row,
+            dequant_scale,
+            num_rows,
+            k * active_rows,
+            cols,
+            num_rows * k);
 }
 
 // ============================== Infer GEMM sizes

@@ -100,6 +100,10 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
         return;
     }
 
+    const bool is_need_input_scale = mainloop_params.input_scale != nullptr;
+
+    float* input_scale = is_need_input_scale ? reinterpret_cast<float*>(shared_memory + sizeof(typename Ktraits::SharedStorage)) : nullptr;
+
     if (warp_group_idx == 0) {
         cutlass::arch::warpgroup_reg_dealloc<Ktraits::kNWarps == 12 ? 40 : 32>();
         PipelineState smem_pipe_write = cutlass::make_producer_start_state<MainloopPipeline>();
@@ -121,6 +125,20 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
         typename Ktraits::TiledMma tiled_mma;
 
         const int mma_tidx = tidx - NumCopyThreads;
+
+        if (is_need_input_scale) {
+            if constexpr (TokenPackSize == 0) {
+                const int input_scale_idx = pre_fix_tokens + bidn * kBlockN;
+                if (mma_tidx < tokens) {
+                    reinterpret_cast<float*>(input_scale)[mma_tidx] = reinterpret_cast<const float*>(mainloop_params.input_scale + input_scale_idx)[mma_tidx];
+                }
+            } else {
+                const int input_scale_idx = bidb * TokenPackSize + bidn * kBlockN;
+                if (mma_tidx < kBlockN / 4) {
+                    reinterpret_cast<float4*>(input_scale)[mma_tidx] = reinterpret_cast<const float4*>(mainloop_params.input_scale + input_scale_idx)[mma_tidx];
+                }
+            }
+        }
 
         float2 weight_scale;
 
@@ -156,6 +174,7 @@ void  __global__ __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp
             shared_storage,
             tiled_mma,
             reinterpret_cast<const float*>(&weight_scale),
+            input_scale,
             tokens,
             pre_fix_tokens,
             bidm,
@@ -194,7 +213,7 @@ auto get_scale_layout(const int Rows, const int Cols) {
 
 
 template <typename InputType, typename OutputType, typename Kernel_traits, int M, int K, int Experts, int TokenPackSize, int WeightScaleGroup>
-void run_gemm(const InputType * A, const InputType * B, OutputType * C, const float *weight_scale, const int64_t * tokens, const int max_tokens, cudaStream_t stream) {
+void run_gemm(const InputType * A, const InputType * B, OutputType * C, const float *weight_scale, const float * input_dequant_scale, const int64_t * tokens, const int max_tokens, cudaStream_t stream) {
 
     using ElementOutput = typename Kernel_traits::ElementOutput;
     using Element = typename Kernel_traits::Element;
@@ -217,13 +236,14 @@ void run_gemm(const InputType * A, const InputType * B, OutputType * C, const fl
             get_gmem_layout<Experts>(M, TokenPackSize == 0 ? max_tokens : TokenPackSize),
             weight_scale,
             get_scale_layout<Experts>(M_nums, K_scale_nums * Kernel_traits::kBlockM),
+            input_dequant_scale,
             tokens
         });
 
     void *kernel;
     kernel = (void *)w4afp8_gemm_kernel<Kernel_traits>;
 
-    int smem_size = sizeof(typename Kernel_traits::SharedStorage);
+    int smem_size = sizeof(typename Kernel_traits::SharedStorage) + Kernel_traits::kBlockN * sizeof(float);
 
     if (smem_size >= 48 * 1024) {
        cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);

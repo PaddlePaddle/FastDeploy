@@ -70,6 +70,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         expert_idx_per_token: paddle.Tensor,
         used_in_ep_low_latency: bool = False,
         estimate_total_token_nums: int = -1,
+        dequant_scale: paddle.Tensor = None,
     ):
         """
         Paddle Cutlass compute Fused MoE.
@@ -93,6 +94,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             token_nums_per_expert,
             getattr(layer, self.added_weight_attrs[0]),
             getattr(layer, self.added_weight_attrs[1]),
+            dequant_scale,
             None,
             (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
             (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
@@ -267,13 +269,12 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 topk_weights,
                 topk_idx,
                 expert_idx_per_token,
+                dequant_scale,
             ) = moe_expert_dispatch(
                 x,
                 gate_out,
                 layer.gate_correction_bias,
-                (
-                    layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None
-                ),  # if set, permute_input will be int8_t
+                None,  # if set, permute_input will be int8_t
                 layer.top_k,
                 False,
                 self.moe_quant_type,
@@ -287,7 +288,9 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         else:
             expert_idx_per_token = expert_idx_per_token.cast("int64")
 
-        ffn_out = self.compute_ffn(layer, permute_input, token_nums_per_expert, expert_idx_per_token)
+        ffn_out = self.compute_ffn(
+            layer, permute_input, token_nums_per_expert, expert_idx_per_token, False, -1, dequant_scale
+        )
 
         # reduce 中会做 topk 个 weight 的 norm 和 routed_scaling_factor
         fused_moe_out = moe_expert_reduce(
@@ -885,9 +888,12 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             return weight_scale
 
         def _process_weight_scale(name: str, weight_scales: list[paddle.Tensor], processed_in_scale: paddle.Tensor):
-            processed_weight_scale = (
-                paddle.stack(weight_scales, axis=0) / (448 * 7 * 2 ** (-9)) / processed_in_scale[:, None]
-            )
+            if name == "up_gate_proj_weight_scale":
+                processed_weight_scale = paddle.stack(weight_scales, axis=0) / (448 * 7 * 2 ** (-9))
+            else:
+                processed_weight_scale = (
+                    paddle.stack(weight_scales, axis=0) / (448 * 7 * 2 ** (-9)) / processed_in_scale[:, None]
+                )
 
             if len(processed_weight_scale.shape) == 3:
                 if name == "up_gate_proj_weight_scale" and processed_weight_scale.shape[-1] * 128 != layer.hidden_size:

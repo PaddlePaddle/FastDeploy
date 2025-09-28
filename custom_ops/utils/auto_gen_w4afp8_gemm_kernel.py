@@ -37,6 +37,7 @@ void w4afp8_gemm_M{M}_N{N}_G{GROUPSIZE}_K{K}_E{EXPERTS}_P{PADDING}_{TYPE}(
     const cutlass::float_e4m3_t * input,
     {cutlass_type} * out,
     const float *weight_scale,
+    const float * input_dequant_scale,
     const int64_t *tokens,
     const int64_t max_tokens,
     cudaStream_t stream);
@@ -54,6 +55,7 @@ void w4afp8_gemm_M{M}_N{N}_G{GROUPSIZE}_K{K}_E{EXPERTS}_P{PADDING}_{TYPE}(
         const cutlass::float_e4m3_t * input,
         {cutlass_type} * out,
         const float *weight_scale,
+        const float * input_dequant_scale,
         const int64_t *tokens,
         const int64_t max_tokens,
         cudaStream_t stream) {{
@@ -78,7 +80,7 @@ void w4afp8_gemm_M{M}_N{N}_G{GROUPSIZE}_K{K}_E{EXPERTS}_P{PADDING}_{TYPE}(
         {cutlass_type}>;
     run_gemm<cutlass::float_e4m3_t, {cutlass_type},
         Kernel_traits, M, K, EXPERTS, TokenPackSize, kGroupSize>
-        (weight, input, out, weight_scale, tokens, max_tokens, stream);
+        (weight, input, out, weight_scale, input_dequant_scale, tokens, max_tokens, stream);
 }}
 """
 
