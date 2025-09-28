@@ -76,10 +76,9 @@ class XPUKvCacheQuantConfig(QuantConfigBase):
         return XPUKVCacheMethodBase(self)
 
 
-# To support for W4A8 Model, xpu block_attn operator requires BF16 k_scale and v_scale, but GPU define all scale in bf16 format
 class XPUKVCacheMethodBase(QuantMethodBase):
     """
-    XPUKVCacheMethodBase
+    XPUKVCacheMethodBase: XPU need scale in fp32 format but GPU define all scale in bf16 format
     """
 
     def __init__(
