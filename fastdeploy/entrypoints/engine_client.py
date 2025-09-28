@@ -215,7 +215,7 @@ class EngineClient:
         try:
             request_id_idx = task.get("request_id")
             request_id = request_id_idx.rsplit("-", 1)[0]
-            index = request_id_idx.rsplit("-", 1)[-1]
+            index = int(request_id_idx.rsplit("-", 1)[-1])
             for i in range(index * n, (index + 1) * n):
                 child_task = copy(task)
                 child_task["request_id"] = f"{request_id}-{i}"
