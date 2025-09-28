@@ -938,15 +938,8 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor &sampled_token_ids,
                               const paddle::Tensor &token_num_per_batch,
                               const paddle::Tensor &cu_batch_token_offset,
                               const paddle::Tensor &not_need_stop,
-                              int mtype,
+                              int message_flag,
                               int64_t rank_id);
-
-void SpeculateGetOutMmsgTopK(const paddle::Tensor &output_tokens,
-                              const paddle::Tensor &output_scores,
-                              const paddle::Tensor &output_ranks,
-                              int real_k,
-                              int64_t rank_id,
-                              bool wait_flag);
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
 
@@ -1344,6 +1337,4 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_get_target_logits", &SpeculateGetTargetLogits, "speculate_get_target_logits function");
 
   m.def("speculate_save_output_topk", &SpeculateSaveOutMmsgTopK, "speculate_save_output_topk function");
-
-  m.def("speculate_get_output_topk", &SpeculateGetOutMmsgTopK, "speculate_get_output_topk function");
 }

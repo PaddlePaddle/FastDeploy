@@ -26,7 +26,6 @@
 #define MAX_BSZ 512
 #define K 20
 #define MAX_DRAFT_TOKEN_NUM 6
-// #define SPECULATE_GET_WITH_OUTPUT_DEBUG
 
 struct batch_msgdata {
     int tokens[MAX_DRAFT_TOKEN_NUM * (K + 1)];
@@ -35,7 +34,8 @@ struct batch_msgdata {
 };
 
 struct msgdata {
-    int meta[3 + MAX_BSZ];  // stop_flag, mtype, bsz, batch_token_nums
+    long mtype;
+    int meta[3 + MAX_BSZ];  // stop_flag, message_flag, bsz, batch_token_nums
     batch_msgdata mtext[MAX_BSZ];
 };
 
@@ -45,7 +45,7 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
                              int real_k,
                              int64_t rank_id,
                              bool wait_flag) {
-    static struct msgdata msg_rcv;
+    struct msgdata msg_rcv;
     int msg_queue_id = 1;
 
     if (const char* inference_msg_queue_id_env_p =
@@ -76,42 +76,27 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
     int ret = -1;
     if (!wait_flag) {
         ret = msgrcv(
-            msgid,
-            &msg_rcv,
-            (3 + MAX_BSZ) * sizeof(int) +
-                MAX_BSZ * ((MAX_DRAFT_TOKEN_NUM * (K + 1)) * sizeof(int) +
-                           (MAX_DRAFT_TOKEN_NUM * (K + 1)) * sizeof(float) +
-                           MAX_DRAFT_TOKEN_NUM * sizeof(int)),
-            0,
-            IPC_NOWAIT);
+            msgid, &msg_rcv, sizeof(msg_rcv) - sizeof(long), 0, IPC_NOWAIT);
     } else {
-        ret = msgrcv(
-            msgid,
-            &msg_rcv,
-            (3 + MAX_BSZ) * sizeof(int) +
-                MAX_BSZ * ((MAX_DRAFT_TOKEN_NUM * (K + 1)) * sizeof(int) +
-                           (MAX_DRAFT_TOKEN_NUM * (K + 1)) * sizeof(float) +
-                           MAX_DRAFT_TOKEN_NUM * sizeof(int)),
-            0,
-            0);
+        ret = msgrcv(msgid, &msg_rcv, sizeof(msg_rcv) - sizeof(long), 0, 0);
     }
     if (ret == -1) {
         // read none
-        output_tokens_data[0] = -2;               // stop_flag
-        output_tokens_data[1] = msg_rcv.meta[1];  // mtype, Target: 3, Draft: 4
-        output_tokens_data[2] = 0;                // bsz
+        output_tokens_data[0] = -2;  // stop_flag
+        output_tokens_data[1] = 0;   // message_flag, Target: 3, Draft: 4
+        output_tokens_data[2] = 0;   // bsz
         return;
     }
 
     int bsz = msg_rcv.meta[1];
-    output_tokens_data[0] = msg_rcv.meta[0];
-    output_tokens_data[1] = msg_rcv.meta[1];
-    output_tokens_data[2] = msg_rcv.meta[2];
+    output_tokens_data[0] = (int64_t)msg_rcv.meta[0];
+    output_tokens_data[1] = (int64_t)msg_rcv.meta[1];
+    output_tokens_data[2] = (int64_t)msg_rcv.meta[2];
 
     int output_tokens_offset = 3 + MAX_BSZ;
     for (int i = 0; i < bsz; i++) {
         int cur_token_num = msg_rcv.meta[3 + i];
-        output_tokens_data[3 + i] = cur_token_num;  // batch_token_nums
+        output_tokens_data[3 + i] = (int64_t)cur_token_num;  // batch_token_nums
 
         auto* cur_output_token = output_tokens_data + output_tokens_offset +
                                  i * (MAX_DRAFT_TOKEN_NUM * (K + 1));
@@ -121,14 +106,15 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
         for (int j = 0; j < cur_token_num; j++) {
             for (int k = 0; k < real_k + 1; k++) {
                 cur_output_token[j * (K + 1) + k] =
-                    cur_batch_msg_rcv->tokens[k];
+                    (int64_t)cur_batch_msg_rcv->tokens[j * (K + 1) + k];
                 cur_output_score[j * (K + 1) + k] =
-                    cur_batch_msg_rcv->scores[k];
+                    cur_batch_msg_rcv->scores[j * (K + 1) + k];
             }
             output_ranks_data[i * MAX_DRAFT_TOKEN_NUM + j] =
-                cur_batch_msg_rcv->ranks[j];
+                (int64_t)cur_batch_msg_rcv->ranks[j];
         }
     }
+    return;
 }
 
 PD_BUILD_STATIC_OP(speculate_get_output_topk)
