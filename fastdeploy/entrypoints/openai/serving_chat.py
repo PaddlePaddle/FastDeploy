@@ -500,18 +500,21 @@ class OpenAIServingChat:
                             and output.get("metrics") is not None
                             and output.get("metrics").get("request_start_time") is not None
                         ):
-                            message = ChatMessage(
-                                role="assistant",
-                                reasoning_content=output.get("reasoning_content"),
-                                tool_calls=output.get("tool_call"),
-                                prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
-                                # TODO 确认这里是用idx还是不是idx
-                                completion_token_ids=completion_token_ids[idx] if request.return_token_ids else None,
-                                text_after_process=text_after_process if request.return_token_ids else None,
-                                prompt_tokens=text_after_process if request.return_token_ids else None,
-                                raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
-                                completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
+                            work_process_metrics.e2e_request_latency.observe(
+                                time.time() - output.get("metrics").get("request_start_time")
                             )
+                        message = ChatMessage(
+                            role="assistant",
+                            reasoning_content=output.get("reasoning_content"),
+                            tool_calls=output.get("tool_call"),
+                            prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
+                            # TODO 确认这里是用idx还是不是idx
+                            completion_token_ids=completion_token_ids[idx] if request.return_token_ids else None,
+                            text_after_process=text_after_process if request.return_token_ids else None,
+                            prompt_tokens=text_after_process if request.return_token_ids else None,
+                            raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
+                            completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
+                        )
 
                         if response_processor.enable_multimodal_content():
                             message.multimodal_content = output.get("multipart")
@@ -542,9 +545,6 @@ class OpenAIServingChat:
                         if output.get("error_msg") is not None and "Recover" in output["error_msg"]:
                             choice.finish_reason = "recover_stop"
                         choices.append(choice)
-                        work_process_metrics.e2e_request_latency.observe(
-                            time.time() - output.get("metrics").get("request_start_time")
-                        )
         finally:
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
