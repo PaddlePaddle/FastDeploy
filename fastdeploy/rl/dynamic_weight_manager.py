@@ -65,6 +65,7 @@ class DynamicWeightManager:
 
         # step1 : restart paddle process group
         if not self.first_load:
+            paddle.distributed.restart_process_group()
             paddle.distributed.restart_process_group(self.parallel_config.tp_group)
             if self.parallel_config.enable_expert_parallel:
                 paddle.distributed.restart_process_group(self.parallel_config.ep_group)
@@ -145,6 +146,7 @@ class DynamicWeightManager:
             paddle.distributed.barrier(self.parallel_config.tp_group)
             # shutdown tp group
             paddle.distributed.shutdown_process_group(self.parallel_config.tp_group)
+        paddle.distributed.shutdown_process_group()
 
         # step3: update model weight signal
         # step4: release kv cache in the runner
