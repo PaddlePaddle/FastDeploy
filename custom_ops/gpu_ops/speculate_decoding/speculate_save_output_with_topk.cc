@@ -26,7 +26,6 @@
 #define MAX_BSZ 512
 #define K 20
 #define MAX_DRAFT_TOKEN_NUM 6
-// #define SPECULATE_SAVE_WITH_OUTPUT_DEBUG
 
 struct batch_msgdata {
     int tokens[MAX_DRAFT_TOKEN_NUM * (K + 1)];
@@ -35,7 +34,8 @@ struct batch_msgdata {
 };
 
 struct msgdata {
-    int meta[3 + MAX_BSZ];  // stop_flag, mtype, bsz, batch_token_nums
+    long mtype;
+    int meta[3 + MAX_BSZ];  // stop_flag, message_flag, bsz, batch_token_nums
     batch_msgdata mtext[MAX_BSZ];
 };
 
@@ -46,7 +46,7 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
                               const paddle::Tensor& token_num_per_batch,
                               const paddle::Tensor& cu_batch_token_offset,
                               const paddle::Tensor& not_need_stop,
-                              int mtype,  // Target: 3, Draft: 4
+                              int message_flag,  // Target: 3, Draft: 4
                               int64_t rank_id) {
     if (rank_id > 0) {
         return;
@@ -118,11 +118,11 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
     std::cout << "save_output_key: " << key << std::endl;
     std::cout << "save msgid: " << msgid << std::endl;
 #endif
-
+    msg_sed.mtype = 1;
     msg_sed.meta[0] = not_need_stop.data<bool>()[0]
                           ? inference_msg_id_from_env
                           : -inference_msg_id_from_env;
-    msg_sed.meta[1] = mtype;
+    msg_sed.meta[1] = message_flag;
     int bsz = token_num_per_batch.shape()[0];
     msg_sed.meta[2] = bsz;
     int max_num_logprobs = logprob_token_ids.shape()[1];
@@ -158,8 +158,8 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
 #ifdef SPECULATE_SAVE_WITH_OUTPUT_DEBUG
     std::cout << "msg data: " << std::endl;
     std::cout << "stop_flag: " << msg_sed.meta[0]
-              << ", mtype: " << msg_sed.meta[1] << ", bsz: " << msg_sed.meta[2]
-              << std::endl;
+              << ", message_flag: " << msg_sed.meta[1]
+              << ", bsz: " << msg_sed.meta[2] << std::endl;
     for (int i = 0; i < bsz; i++) {
         int cur_token_num = msg_sed.meta[3 + i];
         auto* cur_batch_msg_sed = &msg_sed.mtext[i];
@@ -183,13 +183,7 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
     }
     std::cout << std::endl;
 #endif
-    if ((msgsnd(msgid,
-                &msg_sed,
-                (3 + MAX_BSZ) * sizeof(int) +
-                    MAX_BSZ * ((MAX_DRAFT_TOKEN_NUM * (K + 1)) * sizeof(int) +
-                               (MAX_DRAFT_TOKEN_NUM * (K + 1)) * sizeof(float) +
-                               MAX_DRAFT_TOKEN_NUM * sizeof(int)),
-                0)) == -1) {
+    if (msgsnd(msgid, &msg_sed, sizeof(msg_sed) - sizeof(long), 0) == -1) {
         printf("full msg buffer\n");
     }
 }
@@ -204,5 +198,5 @@ PD_BUILD_STATIC_OP(speculate_save_output_topk)
         "cu_batch_token_offset",
         "not_need_stop",
     })
-    .Attrs({"mtype: int", "rank_id: int64_t"})
+    .Attrs({"message_flag: int", "rank_id: int64_t"})
     .SetKernelFn(PD_KERNEL(SpeculateSaveOutMmsgTopK));
