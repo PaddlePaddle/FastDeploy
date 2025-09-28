@@ -137,13 +137,23 @@ class ResourceManagerV1(ResourceManager):
                 preempted_req = self.running.pop()
                 preempted_req.status = RequestStatus.PREEMPTED
                 preempted_req.num_computed_tokens = 0
-                self._free_blocks(preempted_req)
-                preempted_req.cached_block_num = 0
-                self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
+                if self.config.scheduler_config.splitwise_role == "decode":
+                    self.tasks_list[preempted_req.idx] = None
+                    self.stop_flags[preempted_req.idx] = True
+                    if preempted_req.request_id in self.requests:
+                        del self.requests[preempted_req.request_id]
+                    if preempted_req.request_id in self.req_dict:
+                        del self.req_dict[preempted_req.request_id]
+                    self._free_blocks(preempted_req)
+                    main_process_metrics.num_requests_running.dec(1)
+                else:
+                    self._free_blocks(preempted_req)
+                    preempted_req.cached_block_num = 0
+                    self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
+                    main_process_metrics.num_requests_waiting.inc(1)
+                    main_process_metrics.num_requests_running.dec(1)
                 preempted_reqs.append(preempted_req)
                 scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
-                main_process_metrics.num_requests_waiting.inc(1)
-                main_process_metrics.num_requests_running.dec(1)
                 if preempted_req == request:
                     # No more request to preempt.
                     can_schedule = False
@@ -588,8 +598,10 @@ class ResourceManagerV1(ResourceManager):
         with self.lock:
             self.tasks_list[request.idx] = None
             self.stop_flags[request.idx] = True
-            del self.requests[request.request_id]
-            del self.req_dict[request.request_id]
+            if request.request_id in self.requests:
+                del self.requests[request.request_id]
+            if request.request_id in self.req_dict:
+                del self.req_dict[request.request_id]
             self._free_blocks(request)
 
     def add_request_in_p(self, requests: list[Request]):
