@@ -1191,11 +1191,12 @@ class GPUModelRunner(ModelRunnerBase):
                     fill_value=0,
                     dtype=cache_type,
                 )
-                cache_kvs[f"value_caches_{i}"] = paddle.full(
-                    shape=kv_cache_shape,
-                    fill_value=0,
-                    dtype=cache_type,
-                )
+                if "deepseek" not in self.fd_config.model_config.model_type:
+                    cache_kvs[f"value_caches_{i}"] = paddle.full(
+                        shape=kv_cache_shape,
+                        fill_value=0,
+                        dtype=cache_type,
+                    )
                 if kv_cache_quant_type == "block_wise_fp8":
                     cache_kvs[f"key_cache_scales_{i}"] = paddle.full(
                         shape=kv_cache_scale_shape,
@@ -1923,7 +1924,15 @@ class GPUModelRunner(ModelRunnerBase):
             if self.speculative_method in ["mtp"]
             else self.model_config.num_hidden_layers
         )
-        required_memory = byte_of_dtype * 2 * (self.cache_config.block_size * hidden_dim) * num_layers  # k + v
+        if "deepseek" in self.fd_config.model_config.model_type:
+            required_memory = (
+                byte_of_dtype
+                * (self.fd_config.model_config.kv_lora_rank + self.fd_config.model_config.qk_rope_head_dim)
+                * (self.cache_config.block_size)
+                * num_layers
+            )  # compress_kv + k_pe
+        else:
+            required_memory = byte_of_dtype * 2 * (self.cache_config.block_size * hidden_dim) * num_layers  # k + v
         return required_memory
 
     def not_need_stop(self) -> bool:
