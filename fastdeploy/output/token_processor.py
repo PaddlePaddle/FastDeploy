@@ -342,9 +342,15 @@ class TokenProcessor:
                 mtype = self.output_tokens[1, 0]
                 batch = self.output_tokens[2, 0]
                 accept_num = [int(num[0]) for num in self.output_tokens[3 : batch + 3]]
-                tokens = tokens[3 + batch : 3 + batch + batch * (K + 1) * MAX_DRAFT_TOKENS].reshape(
-                    [batch, K + 1, MAX_DRAFT_TOKENS]
+                tokens = tokens[3 + batch : 3 + batch + batch * MAX_DRAFT_TOKENS * (K + 1)].reshape(
+                    [batch, MAX_DRAFT_TOKENS, K + 1]
                 )
+                scores = (
+                    self.output_scores[: batch * MAX_DRAFT_TOKENS * (K + 1)]
+                    .numpy()
+                    .reshape([batch, MAX_DRAFT_TOKENS, K + 1])
+                )
+                ranks = self.output_ranks[: batch * MAX_DRAFT_TOKENS].numpy().reshape([batch, MAX_DRAFT_TOKENS])
             else:
                 batch = self.output_tokens[1]
                 accept_num = tokens[2 : batch + 2]
@@ -455,18 +461,23 @@ class TokenProcessor:
             if is_prefill and len(token_ids) > 1:
                 result.outputs.draft_token_ids = copy.deepcopy(token_ids)
 
-            for token_id in token_ids:
+            for batch_token_index in range(len(token_ids)):
+                token_id = token_ids[batch_token_index]
                 self.tokens_counter[task_id] += 1
                 if token_id != RECOVERY_STOP_SIGNAL:
                     result.outputs.token_ids.append(token_id)
                     task.output_token_ids.append(token_id)
                     if self.use_logprobs:
-                        # TODO 投机解码场景兼容支持
-                        result.outputs.logprob = float(scores[i, 0])
-                        # Construct top_logprobs
-                        topk_token_ids = tokens[i, :].tolist()
-                        topk_logprobs = scores[i, :].tolist()
-                        sampled_rank = ranks[i].item()
+                        if self.cfg.speculative_config.method:
+                            result.outputs.logprob = float(scores[batch_token_index, i, 0])
+                            topk_token_ids = tokens[batch_token_index, i, :].tolist()
+                            topk_logprobs = scores[batch_token_index, i, :].tolist()
+                            sampled_rank = ranks[batch_token_index, i].item()
+                        else:
+                            result.outputs.logprob = float(scores[i, 0])
+                            topk_token_ids = tokens[i, :].tolist()
+                            topk_logprobs = scores[i, :].tolist()
+                            sampled_rank = ranks[i].item()
 
                         if mtype == 3:  # top_logprobs
                             if result.outputs.top_logprobs is None:
@@ -490,7 +501,6 @@ class TokenProcessor:
                                 result.outputs.draft_top_logprobs.logprob_token_ids.extend([topk_token_ids])
                                 result.outputs.draft_top_logprobs.logprobs.extend([topk_logprobs])
                                 result.outputs.draft_top_logprobs.sampled_token_ranks.extend([sampled_rank])
-
                 if token_id in task.eos_token_ids or is_prefill or recovery_stop:
                     result.finished = True
                     if recovery_stop:
