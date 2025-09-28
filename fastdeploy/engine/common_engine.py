@@ -706,11 +706,12 @@ class EngineSevice:
                         delta_text, token_ids = self._decode_token(
                             token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
                         )
-                        if len(token_ids):
-                            content.outputs.token_ids = token_ids
-                            content.outputs.text = delta_text
-                            new_contents.append(content)
-                        else:
+                    
+                        content.outputs.token_ids = token_ids
+                        content.outputs.text = delta_text
+                        new_contents.append(content)
+
+                        if len(token_ids) == 0:
                             llm_logger.warning(
                                 f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
                             )
