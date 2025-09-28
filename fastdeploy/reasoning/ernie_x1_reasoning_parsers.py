@@ -98,22 +98,16 @@ class ErnieX1ReasoningParser(ReasoningParser):
                         delta_text[response_start_pos + len(self.response_start_token) :]
                     )
                 return DeltaMessage(reasoning_content=reasoning_content, content=response_content)
-            elif self.think_end_token_id in previous_token_ids:
-                if (
-                    self.response_start_token_id in previous_token_ids
-                    and self.response_end_token_id not in previous_token_ids
-                ):
+            elif self.think_end_token in previous_text:
+                if self.response_start_token in previous_text and self.response_end_token not in previous_text:
                     return DeltaMessage(content=delta_text)
             else:
                 return DeltaMessage(reasoning_content=delta_text)
         elif model_status == "think_end":
-            if (
-                self.response_start_token_id in previous_token_ids
-                and self.response_end_token_id not in current_token_ids
-            ):
+            if self.response_start_token in previous_text and self.response_end_token not in previous_text:
                 return DeltaMessage(content=delta_text)
         elif model_status == "response_start":
-            if self.response_end_token_id not in previous_token_ids:
+            if self.response_end_token not in previous_text:
                 return DeltaMessage(content=delta_text)
 
         return None

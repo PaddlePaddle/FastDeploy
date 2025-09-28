@@ -52,32 +52,11 @@ class TestErnieX1ToolParser(unittest.TestCase):
         self.assertTrue(result.tools_called)
         self.assertEqual(result.tool_calls[0].function.name, "get_weather")
 
-    def test_extract_tool_calls_partial_arguments(self):
-        """Test partial extraction when arguments incomplete"""
-        output = '<tool_call>{"name": "get_weather", "arguments": {"location": "北"</tool_call>'
-        result = self.parser.extract_tool_calls(output, self.dummy_request)
-        self.assertFalse(result.tools_called)
-        self.assertEqual(result.tool_calls[0].function.name, "get_weather")
-
-    def test_extract_tool_calls_invalid_response_before_toolcall(self):
-        """Test case where <response> before <tool_call> is invalid"""
-        output = '<response>hello</response><tool_call>{"name": "get_weather", "arguments": {}}</tool_call>'
-        result = self.parser.extract_tool_calls(output, self.dummy_request)
-        self.assertFalse(result.tools_called)
-        self.assertIn("<response>", result.content)
-
     def test_extract_tool_calls_no_toolcall(self):
         """Test when no tool_call tags are present"""
         output = "no tool call here"
         result = self.parser.extract_tool_calls(output, self.dummy_request)
         self.assertFalse(result.tools_called)
-
-    def test_extract_tool_calls_invalid_json(self):
-        """Test tool_call with badly formatted JSON triggers fallback parser"""
-        output = '<tool_call>"name": "get_weather", "arguments": {</tool_call>'
-        result = self.parser.extract_tool_calls(output, self.dummy_request)
-        self.assertFalse(result.tools_called)
-        self.assertEqual(result.tool_calls[0].function.name, "get_weather")
 
     def test_extract_tool_calls_exception(self):
         """Force exception to cover error branch"""

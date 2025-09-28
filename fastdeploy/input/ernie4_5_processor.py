@@ -262,7 +262,9 @@ class Ernie4_5Processor(BaseDataProcessor):
         full_text = self.tokenizer.decode(token_ids)
         if self.reasoning_parser:
             reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
-                full_text, response_dict, self.model_status_dict[req_id]
+                full_text,
+                response_dict,
+                self.model_status_dict.get(req_id),
             )
             response_dict.outputs.text = text
             response_dict.outputs.reasoning_content = reasoning_content
@@ -318,7 +320,9 @@ class Ernie4_5Processor(BaseDataProcessor):
             response_dict["outputs"]["text"] = full_text
             if self.reasoning_parser:
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
-                    full_text, response_dict, self.model_status_dict[req_id]
+                    full_text,
+                    response_dict,
+                    self.model_status_dict.get(req_id),
                 )
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
@@ -362,7 +366,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 previous_token_ids,
                 previous_token_ids + token_ids,
                 token_ids,
-                self.model_status_dict[req_id],
+                self.model_status_dict.get(req_id),
             )
             response_dict["outputs"]["delta_message"] = reasoning_delta_message
         if self.tool_parser_obj:
