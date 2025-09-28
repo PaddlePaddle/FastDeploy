@@ -417,6 +417,10 @@ class CustomAllreduce {
   void register_graph_buffers(
       const std::vector<std::string>& handles,
       const std::vector<std::vector<int64_t>>& offsets) {
+    // for (auto [_, ptr] : ipc_handles_) {
+    //   CUDACHECK(cudaIpcCloseMemHandle(ptr));
+    // }
+    // ipc_handles_.clear();
     auto num_buffers = graph_unreg_buffers_.size();
     check_rank_data_capacity(num_buffers);
     std::vector<RankData> rank_data(num_buffers);
@@ -517,10 +521,15 @@ class CustomAllreduce {
 #undef KL
   }
 
-  ~CustomAllreduce() {
+  void clear_ipc_handles(){
     for (auto [_, ptr] : ipc_handles_) {
       CUDACHECK(cudaIpcCloseMemHandle(ptr));
     }
+    ipc_handles_.clear();
+  }
+
+  ~CustomAllreduce() {
+    clear_ipc_handles();
   }
 };
 }  // namespace paddle
