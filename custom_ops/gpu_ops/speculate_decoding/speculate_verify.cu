@@ -38,14 +38,20 @@ __device__ int64_t topp_sampling_kernel(const int64_t *candidate_ids,
   const int tid = threadIdx.x;
 
   float sum_scores = 0.0f;
-  float rand_top_p = curand_uniform(dev_curand_states + tid) * topp;
+  for (int i = 0; i < candidate_len; i++) {
+    sum_scores += candidate_scores[i];
+  }
+  float tgt_topp = sum_scores < topp ? sum_scores : topp;
+
+  sum_scores = 0.0f;
+  float rand_top_p = curand_uniform(dev_curand_states + tid) * tgt_topp;
   for (int i = 0; i < candidate_len; i++) {
     sum_scores += candidate_scores[i];
     if (rand_top_p <= sum_scores) {
-      return candidate_ids[i];
+            return candidate_ids[i];
     }
   }
-  return candidate_ids[0];
+    return candidate_ids[0];
 }
 
 __global__ void setup_kernel(curandState_t *state, const uint64_t seed,

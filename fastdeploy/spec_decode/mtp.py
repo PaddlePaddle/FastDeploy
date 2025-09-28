@@ -303,8 +303,16 @@ class MTPProposer(Proposer):
         )
         # self.model_inputs["caches"] = self.cache_kvs
         # Inherit generation hyperparameters from the main model for consistency
-        self.model_inputs["top_p"] = self.target_model_inputs["top_p"]
-        self.model_inputs["top_k"] = self.target_model_inputs["top_k"]
+        self.model_inputs["top_p"] = (
+            self.target_model_inputs["top_p"]
+            if envs.FD_SPECULATE_SAMPLING_TOP_P is None
+            else paddle.full_like(self.target_model_inputs["top_p"], envs.FD_SPECULATE_SAMPLING_TOP_P)
+        )
+        self.model_inputs["top_k"] = (
+            self.target_model_inputs["top_k"]
+            if envs.FD_SPECULATE_SAMPLING_TOP_K is None
+            else paddle.full_like(self.target_model_inputs["top_k"], envs.FD_SPECULATE_SAMPLING_TOP_K)
+        )
         self.model_inputs["temperature"] = self.target_model_inputs["temperature"]
         self.model_inputs["eos_token_id"] = self.target_model_inputs["eos_token_id"]
         self.model_inputs["penalty_score"] = self.target_model_inputs["penalty_score"]
