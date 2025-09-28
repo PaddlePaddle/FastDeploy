@@ -111,10 +111,11 @@ class XPUKVCacheMethodBase(QuantMethodBase):
         cache_v_scale_tensor = get_tensor(state_dict.pop(self.cache_v_scale_name)).cast("float32").reshape_([-1])
 
         if self.cache_quant_config.quant_type == KvCacheQuantzationTypes.INT8:
+            # cache_k_scale and cache_v_scale are used to quantize the KV Cache, while cache_k_out_scale and cache_v_out_scale are used for inverse quantization
             cache_k_scale = self.cache_quant_config.max_bound / cache_k_scale_tensor
             cache_v_scale = self.cache_quant_config.max_bound / cache_v_scale_tensor
-            cache_k_out_scale = cache_k_scale_tensor
-            cache_v_out_scale = cache_v_scale_tensor
+            cache_k_out_scale = cache_k_scale_tensor / self.cache_quant_config.max_bound
+            cache_v_out_scale = cache_v_scale_tensor / self.cache_quant_config.max_bound
         else:
             raise NotImplementedError(f"{self.cache_quant_config.quant_type} is not implemented")
 
@@ -218,8 +219,9 @@ class XPUKVCacheMethodBase(QuantMethodBase):
         """
         use for loader v1
         """
+        # cache_k_out_scale is the reciprocal of cache_k_scale
         if layer.cache_k_scale._is_initialized():
-            layer.cache_k_out_scale.set_value(1 / layer.cache_k_scale)
+            layer.cache_k_out_scale.set_value(1 / layer.cache_k_scale)  # cache_k_out_scale
         if layer.cache_v_scale._is_initialized():
             layer.cache_v_out_scale.set_value(1 / layer.cache_v_scale)
 

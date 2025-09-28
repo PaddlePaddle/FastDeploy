@@ -151,8 +151,6 @@ class KVCacheMethodBase(QuantMethodBase):
             cache_v_scale = self.cache_quant_config.max_bound / cache_v_scale_tensor
             cache_k_out_scale = cache_k_scale_tensor / self.cache_quant_config.max_bound
             cache_v_out_scale = cache_v_scale_tensor / self.cache_quant_config.max_bound
-            cache_k_out_scale = cache_k_scale_tensor
-            cache_v_out_scale = cache_v_scale_tensor
 
         layer.cache_k_scale.set_value(cache_k_scale)
         layer.cache_v_scale.set_value(cache_v_scale)
