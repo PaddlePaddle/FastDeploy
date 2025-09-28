@@ -220,7 +220,7 @@ class AppendAttentionBackend(AttentionBackend):
         """
         metadata = self.attention_metadata
 
-        if self.fd_config.model_config.layer_types[layer.layer_id] == "sliding_attention":
+        if hasattr(self.fd_config.model_config, "layer_types") and self.fd_config.model_config.layer_types[layer.layer_id] == "sliding_attention":
             sliding_window = self.fd_config.model_config.sliding_window
         else:
             sliding_window = 0

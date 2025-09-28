@@ -335,7 +335,7 @@ __global__ void multi_query_append_attention_c4_kernel(
         cache_k_scale_frag,
         cache_k_zp_frag);
 
-    if (iter >= mask_check_iteration) {
+    if (iter >= mask_check_iteration || sliding_window > 0) {
       mask_s<T,
              partition_kv,
              CAUSAL,
@@ -817,7 +817,7 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
         s_frag,
         cache_k_scale_frag,
         cache_k_zp_frag);
-    if (iter >= mask_check_iteration) {
+    if (iter >= mask_check_iteration || sliding_window > 0) {
       mask_s<T,
              partition_kv,
              CAUSAL,
@@ -1274,8 +1274,7 @@ void MultiQueryAppendC4Attention(
                 num_chunks,
                 num_heads,
                 chunk_size,
-                HEAD_DIM,
-                sliding_window);
+                HEAD_DIM);
       } else {
         constexpr int blockx = HEAD_DIM / vec_size;
         constexpr int blocky = (128 + blockx - 1) / blockx;
@@ -1316,8 +1315,7 @@ void MultiQueryAppendC4Attention(
                 chunk_size,
                 HEAD_DIM,
                 token_num,
-                speculate_max_draft_token_num,
-                sliding_window);
+                speculate_max_draft_token_num);
       }
     }
   } else {
@@ -1567,8 +1565,7 @@ void MultiQueryAppendC4Attention(
                 num_chunks,
                 num_heads,
                 chunk_size,
-                HEAD_DIM,
-                sliding_window);
+                HEAD_DIM);
       } else {
         constexpr int blockx = HEAD_DIM / vec_size;
         constexpr int blocky = (128 + blockx - 1) / blockx;
@@ -1609,8 +1606,7 @@ void MultiQueryAppendC4Attention(
                 chunk_size,
                 HEAD_DIM,
                 token_num,
-                speculate_max_draft_token_num,
-                sliding_window);
+                speculate_max_draft_token_num);
       }
     }
   }

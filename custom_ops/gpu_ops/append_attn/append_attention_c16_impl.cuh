@@ -247,7 +247,7 @@ __global__ void multi_query_append_attention_kernel(
     compute_qk<num_frags_x, num_frags_y, num_frags_z, T>(
         &qo_smem, &q_smem_offset_r, &k_smem, &k_smem_offset_r, s_frag);
     // mask according to kv_idx and q_idx
-    if (iter >= mask_check_iteration) {
+    if (iter >= mask_check_iteration || sliding_window > 0) {
       mask_s<T,
              partition_kv,
              CAUSAL,
@@ -265,7 +265,6 @@ __global__ void multi_query_append_attention_kernel(
                           s_frag,
                           mask_offset_this_seq,
                           sliding_window);
-
     }
 
     // update m,d
@@ -641,7 +640,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     compute_qk<num_frags_x, num_frags_y, num_frags_z, T>(
         &qo_smem, &q_smem_offset_r, &k_smem, &k_smem_offset_r, s_frag);
     // mask according to kv_idx and q_idx
-    if (iter >= mask_check_iteration) {
+    if (iter >= mask_check_iteration || sliding_window > 0) {
       mask_s<T,
              partition_kv,
              CAUSAL,
@@ -1059,8 +1058,7 @@ void MultiQueryAppendAttention(
                 num_chunks,
                 num_heads,
                 chunk_size,
-                HEAD_DIM,
-                sliding_window);
+                HEAD_DIM);
       } else {
         constexpr int blockx = HEAD_DIM / vec_size;
         constexpr int blocky = (128 + blockx - 1) / blockx;
@@ -1101,8 +1099,7 @@ void MultiQueryAppendAttention(
                 chunk_size,
                 HEAD_DIM,
                 token_num,
-                speculate_max_draft_token_num,
-                sliding_window);
+                speculate_max_draft_token_num);
       }
     }
   } else {
@@ -1325,8 +1322,7 @@ void MultiQueryAppendAttention(
                 num_chunks,
                 num_heads,
                 chunk_size,
-                HEAD_DIM,
-                sliding_window);
+                HEAD_DIM);
       } else {
         constexpr int blockx = HEAD_DIM / vec_size;
         constexpr int blocky = (128 + blockx - 1) / blockx;
@@ -1367,8 +1363,7 @@ void MultiQueryAppendAttention(
                 chunk_size,
                 HEAD_DIM,
                 token_num,
-                speculate_max_draft_token_num,
-                sliding_window);
+                speculate_max_draft_token_num);
       }
     }
   }

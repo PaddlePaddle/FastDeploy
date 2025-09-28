@@ -218,6 +218,7 @@ def create_attn_mask(
     batch_size,
     seq_lens,
     pre_cache_length=0,
+    sliding_window=0
 ):
     max_seq_len = max(seq_lens)
     mask = paddle.zeros(
@@ -228,9 +229,16 @@ def create_attn_mask(
     mask[:, :, :, :pre_cache_length] = 1
     for i in range(batch_size):
         seq_len = seq_lens[i]
-        mask[i, 0, :seq_len, :seq_len] = (
-            paddle.tril(paddle.ones(shape=(seq_len, seq_len), dtype=mask_type)) - 1
-        ) * 1e4
+        ones_tensor = paddle.ones(shape=(seq_len, seq_len), dtype=mask_type)
+        if sliding_window <= 0:
+            mask[i, 0, :seq_len, :seq_len] = (
+                paddle.tril(ones_tensor) - 1
+            ) * 1e4
+        else:
+            tmp_triu = paddle.triu(ones_tensor, -(sliding_window - 1))
+            mask[i, 0, :seq_len, :seq_len] = (
+                paddle.tril(ones_tensor) * tmp_triu - 1
+            ) * 1e4
     return mask
 
 
@@ -460,9 +468,10 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         self.max_seq_len = self.seq_len + self.max_dec_len
         self.softmax_scale = self.dim_head**-0.5
         self.rope_theta = 10000
+        self.sliding_window = 128
         self.dtype = "bfloat16"
         self.use_qk_norm = True
-        self.use_mask_offset = True
+        self.use_mask_offset = False
         self.use_sinks = True
         self.use_yarn = False
         self.use_dynamic_quant = False
@@ -648,7 +657,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 self.seq_lens_decoder,
                 self.seq_lens_this_time,
                 self.padding_offset,
-                self.cum_offset,
+                self.cu_seqlens_q,
                 self.block_tables,
                 self.encoder_batch_ids,
                 self.encoder_tile_ids_per_batch,
@@ -677,6 +686,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 None,  # kv_signal_data
                 q_norm_weight,  # q_norm_weight
                 k_norm_weight,  # k_norm_weight
+                sinks,  # sinks
                 1e-6,
                 "fp16",
                 "none",
@@ -693,11 +703,12 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 speculate_max_draft_token_num + 1,  # speculate_max_draft_token_num
                 True,  # causal
                 False,  # speculate_decoder
+                self.sliding_window
             )
 
         # Warm up
-        WARM_UP = 1
-        RUN_TIME = 2
+        WARM_UP = 0
+        RUN_TIME = 1
         for i in range(WARM_UP + RUN_TIME):
             if i == WARM_UP:
                 paddle.device.synchronize()
@@ -756,11 +767,12 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 speculate_max_draft_token_num + 1,  # speculate_max_draft_token_num
                 True,  # causal
                 False,  # speculate_decoder
+                self.sliding_window
             )
 
         # Warm up
-        WARM_UP = 1
-        RUN_TIME = 2
+        WARM_UP = 0
+        RUN_TIME = 1
         for i in range(WARM_UP + RUN_TIME):
             if i == WARM_UP:
                 paddle.device.synchronize()
@@ -787,6 +799,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 self.seq_len,
             ]
             * self.batch_size,
+            sliding_window=self.sliding_window
         )
         # encoder
         # self.seq_lens_encoder,self.seq_lens_decoder,self.max_enc_len_this_time,self.max_dec_len_this_time=get_encoder_decoder_len(self.batch_size,self.seq_len)

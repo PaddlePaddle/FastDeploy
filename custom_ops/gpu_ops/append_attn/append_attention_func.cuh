@@ -1054,26 +1054,21 @@ __device__ __forceinline__ void mask_s(const bool* attn_mask,
           bool out_of_boundary;
           if (mask_offset) {
             out_of_boundary = q_idx < qo_len ? (kv_idx >= mask_offset[q_idx * 2 + 1] || kv_idx < mask_offset[q_idx * 2]) : true;
-          } else {
-            const bool sliding_window_flag = static_cast<long long>(kv_idx) < static_cast<long long>(kv_len) + q_idx - qo_len - sliding_window;
-
-            if(sliding_window != 0)
-            {
-              out_of_boundary =
-                (causal
-                    ? (kv_idx > kv_len + q_idx - qo_len 
-                      || kv_idx >= chunk_end
-                      || sliding_window_flag)
-                    : kv_idx >= chunk_end);
-            }
-            else
-            {
-              out_of_boundary =
-                (causal
-                    ? (kv_idx > kv_len + q_idx - qo_len || (kv_idx >= chunk_end))
-                    : kv_idx >= chunk_end);
-            }
-
+          } 
+          else if (sliding_window > 0) 
+          {
+            bool out_of_window = int(kv_idx) <= (int)kv_len + (int)q_idx - (int)qo_len - sliding_window;
+            out_of_boundary =
+              (causal
+                  ? (kv_idx > kv_len + q_idx - qo_len || out_of_window || (kv_idx >= chunk_end))
+                  : kv_idx >= chunk_end);
+          } 
+          else 
+          {
+            out_of_boundary =
+              (causal
+                  ? (kv_idx > kv_len + q_idx - qo_len || (kv_idx >= chunk_end))
+                  : kv_idx >= chunk_end);
             if (attn_mask != nullptr && kv_idx > kv_len - qo_len && kv_idx < chunk_end && q_idx < attn_mask_len) {
               const int32_t mask_idx = q_idx * attn_mask_len + kv_idx - kv_len + qo_len;
               bool mask = attn_mask[mask_idx];
@@ -2331,8 +2326,7 @@ __global__ void merge_multi_chunks_decoder_kernel(
     const int num_chunks,
     const int num_heads,
     const int chunk_size,
-    const int head_dim,
-    const int sliding_window) {
+    const int head_dim) {
   const int vid = threadIdx.x, ty = threadIdx.y;
   const int bid = blockIdx.x, hid = blockIdx.y;
   __shared__ T smem[bdy * HEAD_DIM];
@@ -2470,8 +2464,7 @@ __global__ void merge_multi_chunks_v2_kernel(
     const int chunk_size,
     const int head_dim,
     const int token_num,
-    const int speculate_max_draft_token_num = 5,
-    const int sliding_window = 0) {
+    const int speculate_max_draft_token_num = 5) {
   const int vid = threadIdx.x, ty = threadIdx.y;
   const int hid = blockIdx.y;
   __shared__ T smem[bdy * HEAD_DIM];
