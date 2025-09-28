@@ -158,17 +158,18 @@ class PrefixCacheManager:
         py_path = os.path.join(current_dir_path, filename)
 
         cache_messager_processes = []
-        cache_messager_processes = self.launch_cache_messager(
-            cache_config,
-            tensor_parallel_size,
-            device_ids,
-            pod_ip,
-            engine_worker_queue_port,
-            pid_suffix,
-        )
-        if cache_messager_processes is None:
-            raise RuntimeError("Launch cache messager failed")
-            return []
+        if self.enable_splitwise:
+            cache_messager_processes = self.launch_cache_messager(
+                cache_config,
+                tensor_parallel_size,
+                device_ids,
+                pod_ip,
+                engine_worker_queue_port,
+                pid_suffix,
+            )
+            if cache_messager_processes is None:
+                raise RuntimeError("Launch cache messager failed")
+                return []
 
         if (
             hasattr(cache_config.model_cfg, "num_key_value_heads")
