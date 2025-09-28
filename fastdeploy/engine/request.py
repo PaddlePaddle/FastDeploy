@@ -287,7 +287,6 @@ class CompletionOutput:
     token_ids: list[int]
     logprob: Optional[float] = None
     top_logprobs: Optional[LogprobsLists] = None
-    draft_top_logprobs: Optional[LogprobsLists] = None
     logprobs: Optional[SampleLogprobs] = None
     draft_token_ids: list[int] = None
     text: Optional[str] = None
@@ -413,7 +412,6 @@ class RequestOutput:
         request_id: str,
         prompt: Optional[str] = None,
         prompt_token_ids: Optional[list[int]] = None,
-        output_type: Optional[int] = 3,
         outputs: CompletionOutput = None,
         finished: bool = False,
         metrics: Optional[RequestMetrics] = None,
@@ -458,7 +456,6 @@ class RequestOutput:
             f"RequestOutput(request_id={self.request_id}, "
             f"prompt={self.prompt!r}, "
             f"prompt_token_ids={self.prompt_token_ids}, "
-            f"output_type={self.output_type}, "
             f"outputs={self.outputs}, "
             f"finished={self.finished}, "
             f"num_cached_tokens={self.num_cached_tokens}, "
@@ -479,7 +476,6 @@ class RequestOutput:
             "request_id": self.request_id,
             "prompt": self.prompt,
             "prompt_token_ids": self.prompt_token_ids,
-            "output_type": self.output_type,
             "outputs": None if self.outputs is None else self.outputs.to_dict(),
             "metrics": None if self.metrics is None else self.metrics.to_dict(),
             "finished": self.finished,
