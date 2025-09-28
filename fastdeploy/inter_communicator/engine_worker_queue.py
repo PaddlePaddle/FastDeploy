@@ -109,10 +109,6 @@ class EngineWorkerQueue:
                 threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
             ]
 
-            self.worker_process_tp_barrier = [
-                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
-            ]
-
             # Register shared objects with proxy types
             QueueManager.register(
                 "get_tasks",
