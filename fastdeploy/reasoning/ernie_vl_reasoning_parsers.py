@@ -53,7 +53,7 @@ class ErnieVLReasoningParser(ReasoningParser):
 
         if missing_tokens:
             raise RuntimeError(
-                f"Could not find the following token ids in tokenizer vocabulary: {', '.join(missing_tokens)}"
+                f"ernie vl reasoning parser could not find the following token ids in tokenizer vocabulary: {', '.join(missing_tokens)}"
             )
         self.token_status_mapping = {
             self.think_start_token_id: "think_start",

@@ -54,11 +54,11 @@ class ErnieX1ReasoningParser(ReasoningParser):
             token_id = self.vocab.get(token_value)
             setattr(self, f"{name}_id", token_id)
             if token_id is None:
-                missing_tokens.append(f"{name.replace('_', ' ')} token")
+                missing_tokens.append(token_value)
 
         if missing_tokens:
             raise RuntimeError(
-                f"Could not find the following token ids in tokenizer vocabulary: {', '.join(missing_tokens)}"
+                f"ernie x1 reasoning parser could not find the following token ids in tokenizer vocabulary: {', '.join(missing_tokens)}"
             )
 
         self.token_status_mapping = {
@@ -106,22 +106,33 @@ class ErnieX1ReasoningParser(ReasoningParser):
             return None
 
         if model_status == "think_start":
-            if self.think_end_token_id not in current_token_ids:
-                return DeltaMessage(reasoning_content=delta_text)
-            else:
+            if self.think_end_token_id in delta_token_ids:
+                reasoning_content = ""
+                response_content = ""
+                end_index = delta_text.find(self.think_end_token)
+                reasoning_content = delta_text[:end_index]
+                response_start_pos = delta_text.find(self.response_start_token)
+                if response_start_pos != -1:
+                    response_content = self._extract_response_content(
+                        delta_text[response_start_pos + len(self.response_start_token) :]
+                    )
+                return DeltaMessage(reasoning_content=reasoning_content, content=response_content)
+            elif self.think_end_token_id in previous_token_ids:
                 if (
-                    self.response_start_token_id in current_token_ids
-                    and self.response_end_token_id not in current_token_ids
+                    self.response_start_token_id in previous_token_ids
+                    and self.response_end_token_id not in previous_token_ids
                 ):
                     return DeltaMessage(content=delta_text)
+            else:
+                return DeltaMessage(reasoning_content=delta_text)
         elif model_status == "think_end":
             if (
-                self.response_start_token_id in current_token_ids
+                self.response_start_token_id in previous_token_ids
                 and self.response_end_token_id not in current_token_ids
             ):
                 return DeltaMessage(content=delta_text)
         elif model_status == "response_start":
-            if self.response_end_token_id not in current_token_ids:
+            if self.response_end_token_id not in previous_token_ids:
                 return DeltaMessage(content=delta_text)
 
         return None
@@ -130,33 +141,29 @@ class ErnieX1ReasoningParser(ReasoningParser):
         self, model_output: str, request: ChatCompletionRequest, model_status: str
     ) -> Tuple[str, str]:
         """
-        Optimized batch version of the enhanced parser.
-        Preserves newlines in both reasoning and response content,
-        only removing the single newline before closing tags.
+        优化版解析器。保留推理和响应内容中的换行符，
+        仅删除闭合标签前的单个换行符。
         """
         reasoning_content = ""
         response_content = ""
 
-        if model_status == "think_start":
-            think_end_pos = model_output.find(self.think_end_token)
-            if think_end_pos != -1:
-                reasoning_content = model_output[:think_end_pos]
-                remaining = model_output[think_end_pos + len(self.think_end_token) :].lstrip("\n")
-
-                # Determine if remaining content is a response or tool call
-                if remaining.startswith(self.response_start_token):
-                    response_start_len = len(self.response_start_token)
-                    response_content = self._extract_response_content(remaining[response_start_len:])
-                elif remaining.startswith(self.tool_call_start_token):
-                    pass  # No response content
+        if model_status in ["think_start", "think_end"]:
+            if model_status == "think_start":
+                think_end_pos = model_output.find(self.think_end_token)
+                if think_end_pos != -1:
+                    reasoning_content = model_output[:think_end_pos]
+                    remaining = model_output[think_end_pos + len(self.think_end_token) :].lstrip("\n")
+                else:
+                    reasoning_content = model_output
+                    remaining = ""
             else:
-                reasoning_content = model_output
+                remaining = model_output.lstrip("\n")
 
-        elif model_status == "think_end":
-            remaining = model_output.lstrip("\n")
-            if remaining.startswith(self.response_start_token):
-                response_start_len = len(self.response_start_token)
-                response_content = self._extract_response_content(remaining[response_start_len:])
+            response_start_pos = remaining.find(self.response_start_token)
+            if response_start_pos != -1:
+                response_content = self._extract_response_content(
+                    remaining[response_start_pos + len(self.response_start_token) :]
+                )
 
         elif model_status == "response_start":
             response_content = self._extract_response_content(model_output)

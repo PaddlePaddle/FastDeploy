@@ -58,7 +58,7 @@ class ErnieX1ToolParser(ToolParser):
         self.tool_call_start_token_id = self.vocab.get(self.tool_call_start_token)
         self.tool_call_end_token_id = self.vocab.get(self.tool_call_end_token)
         if self.tool_call_start_token_id is None or self.tool_call_end_token_id is None:
-            raise RuntimeError("Ernie x1 Tool parser could not locate tool call start/end " "tokens in the tokenizer!")
+            raise RuntimeError("Ernie x1 Tool parser could not locate tool call start/end tokens in the tokenizer!")
 
         if not self.model_tokenizer:
             raise ValueError(
