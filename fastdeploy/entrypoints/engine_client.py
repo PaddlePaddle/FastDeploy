@@ -220,7 +220,6 @@ class EngineClient:
                 child_task = copy(task)
                 child_task["request_id"] = f"{request_id}-{i}"
                 self._send_task(child_task)
-                del child_task
         except Exception as e:
             api_server_logger.error(f"zmq_client send task error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
