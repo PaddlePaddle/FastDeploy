@@ -145,11 +145,13 @@ class ResourceManagerV1(ResourceManager):
                     if preempted_req.request_id in self.req_dict:
                         del self.req_dict[preempted_req.request_id]
                     self._free_blocks(preempted_req)
+                    llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                     main_process_metrics.num_requests_running.dec(1)
                 else:
                     self._free_blocks(preempted_req)
                     preempted_req.cached_block_num = 0
                     self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
+                    llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                     main_process_metrics.num_requests_waiting.inc(1)
                     main_process_metrics.num_requests_running.dec(1)
                 preempted_reqs.append(preempted_req)
