@@ -272,7 +272,6 @@ std::vector<paddle::Tensor> MoeExpertFFNKernel(
   xftblock::Tensor xffn2_out;
   paddle::Tensor ffn1_in_dense;
   paddle::Tensor ffn1_in_scale_per_token;
-
   if (FLAGS_MOE_FFN_USE_DENSE_INPUT && is_padding_input) {
     convert_to_lod(&xctx, &xtoken_num_info);
     if (quant_method == "w4a8") {
@@ -380,7 +379,6 @@ std::vector<paddle::Tensor> MoeExpertFFNKernel(
     xffn2_out = xftblock::Tensor(
         ffn2_out.mutable_data<TX2>(), xftblock_tx2, input_shape);
   }
-
 
 #define FFN_IMPL(TX1, TX2, TW, TGEMM)                        \
   MoeExpertFFNImpl<TX1, TX2, TW, TGEMM>(&xffn1_in,           \

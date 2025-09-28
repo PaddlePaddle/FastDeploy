@@ -44,7 +44,6 @@ std::vector<paddle::Tensor> MoeTopkSelect(
   const float* bias_data =
       bias.get_ptr() != nullptr ? bias.get_ptr()->data<float>() : nullptr;
   if (token_num > 0) {
-
     int ret = infer_ops::moe_softmax_topk_norm_fusion(
         xpu_ctx->x_context(),
         gating_logits.data<float>(),

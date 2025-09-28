@@ -47,7 +47,7 @@ class W4A8Config(QuantConfigBase):
             )
 
             return CutlassW4A8MoEMethod(self)
-        if current_platform.is_xpu():
+        elif current_platform.is_xpu():
             from fastdeploy.model_executor.layers.backends.xpu.moe.fused_moe import (
                 XPUW4A8MoEMethod,
             )

@@ -634,7 +634,7 @@ class XPUW4A8MoEMethod(XPUMoEMethod):
         """
         self.weight_dtype = "int8"
         self.scale_dtype = "float32"
-        # 获取weight shape
+        # get weight shape
         if self.moe_quant_type in ["weight_only_int4", "w4a8"]:
             self.up_gate_proj_weight_shape = [
                 layer.num_local_experts,
@@ -709,21 +709,19 @@ class XPUW4A8MoEMethod(XPUMoEMethod):
                 ),
             )
 
-    def paddle_swap_int4_in_int8(self, weight_tensor: paddle.Tensor) -> paddle.Tensor:
-        # 创建与输入张量相同形状的掩码Tensor
+    def paddle_swap_int4_pack_int4_0123_to_int8_1032in_int8(self, weight_tensor: paddle.Tensor) -> paddle.Tensor:
+        """
+        Pack the last dimension of a tensor into int8 format by combining adjacent int4 values.
+        """
         mask = paddle.full_like(weight_tensor, 0x0F, dtype="int8")
-        # 提取高4位（右移4位）
-        high_4bit = (weight_tensor >> 4) & mask  # 使用Tensor掩码
-        # 提取低4位（直接掩码）
-        low_4bit = weight_tensor & mask  # 使用Tensor掩码
-        # 交换位置：低4位左移4位，高4位直接使用
+        high_4bit = (weight_tensor >> 4) & mask
+        low_4bit = weight_tensor & mask
         swapped = (low_4bit << 4) | high_4bit
-        # 转回int8
         return swapped
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
-        Paddle cutlass load weight process.
+        load weight and process.
         """
         up_gate_proj_weights, down_proj_weights, logical_expert_ids, ep_rank_to_expert_id_list = (
             layer.extract_moe_ffn_weights(state_dict)

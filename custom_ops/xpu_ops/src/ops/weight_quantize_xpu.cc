@@ -66,8 +66,7 @@ WeightQuantizeKernel(const paddle::Tensor &x, const std::string &algo,
                                                  {n, k / 2}, {1, 0});
         PD_CHECK(ret == 0);
         return {out, scale};
-    }
-    else {
+    }else {
         PD_THROW("Weight quantize only supports weight_only_int8 on XPU now.");
         return {};
     }
@@ -86,8 +85,8 @@ std::vector<paddle::Tensor> WeightQuantize(const paddle::Tensor &x,
     } else if (x_type == paddle::DataType::FLOAT32) {
         APPLY_WEIGHT_QUANTIZE_KERNEL(float);
     } else {
-        PD_THROW("WeightQuantize not support x_type==%s",
-                x_type);
+        PD_THROW("WeightQuantize not support x_type==%d",
+                static_cast<int>(x_type));
         return {};
     }
 }

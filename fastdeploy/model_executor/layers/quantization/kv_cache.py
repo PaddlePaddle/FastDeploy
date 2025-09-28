@@ -212,24 +212,24 @@ class KVCacheMethodBase(QuantMethodBase):
 
         layer.cache_k_out_scale = layer.create_parameter(
             shape=scale_shape,
-            dtype="float32",
+            dtype=paddle.get_default_dtype(),
             default_initializer=paddle.nn.initializer.Constant(0),
         )
         layer.cache_v_out_scale = layer.create_parameter(
             shape=scale_shape,
-            dtype="float32",
+            dtype=paddle.get_default_dtype(),
             default_initializer=paddle.nn.initializer.Constant(0),
         )
 
         if self.cache_quant_config.has_zero_point:
             layer.cache_k_zp = layer.create_parameter(
                 shape=scale_shape,
-                dtype="float32",
+                dtype=paddle.get_default_dtype(),
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
             layer.cache_v_zp = layer.create_parameter(
                 shape=scale_shape,
-                dtype="float32",
+                dtype=paddle.get_default_dtype(),
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
             set_weight_attrs(
