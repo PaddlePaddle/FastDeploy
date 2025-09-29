@@ -50,6 +50,7 @@ from fastdeploy.utils import get_logger, optional_type
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
+logger1 = get_logger("worker_process", "worker_process.log")
 
 
 def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
