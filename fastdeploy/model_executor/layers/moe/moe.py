@@ -50,12 +50,7 @@ def get_moe_method():
         from fastdeploy.model_executor.layers.backends import GCUFusedMoeMethod
 
         return GCUFusedMoeMethod(None)
-    elif current_platform.is_maca():
-        from fastdeploy.model_executor.layers.backends import (
-            MetaxTritonWeightOnlyMoEMethod,
-        )
 
-        return MetaxTritonWeightOnlyMoEMethod(None)
     elif current_platform.is_intel_hpu():
         from fastdeploy.model_executor.layers.backends import HpuMoEMethod
 

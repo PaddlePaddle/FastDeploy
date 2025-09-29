@@ -123,10 +123,18 @@ class WeightOnlyConfig(QuantConfigBase):
         elif current_platform.is_maca():
             if isinstance(layer, FusedMoE):
                 from fastdeploy.model_executor.layers.backends import (
+                    MetaxCutlassWeightOnlyMoEMethod,
                     MetaxTritonWeightOnlyMoEMethod,
                 )
 
-                return MetaxTritonWeightOnlyMoEMethod(self)
+                if layer.use_method == "cutlass":
+
+                    return MetaxCutlassWeightOnlyMoEMethod(self)
+                elif layer.use_method == "triton":
+
+                    return MetaxTritonWeightOnlyMoEMethod(self)
+                else:
+                    raise ValueError(f"Unsupported MOE backend {layer.use_method}")
             else:
 
                 return GPUWeightOnlyLinearMethod(self)
