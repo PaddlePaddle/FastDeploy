@@ -597,6 +597,10 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/moe/tritonmoe_preprocess.cu",
         "gpu_ops/moe/moe_topk_select.cu",
         "gpu_ops/recover_decode_task.cu",
+        "metax_ops/moe_dispatch.cu",
+        "metax_ops/moe_ffn.cu",
+        "metax_ops/moe_reduce.cu",
+        "metax_ops/fused_moe.cu",
     ]
 
     sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
@@ -617,7 +621,7 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
                 ],
             },
             library_dirs=[os.path.join(maca_path, "lib")],
-            extra_link_args=["-lruntime_cu"],
+            extra_link_args=["-lruntime_cu", "-lmctlassEx"],
             include_dirs=[
                 os.path.join(maca_path, "include"),
                 os.path.join(maca_path, "include/mcr"),
