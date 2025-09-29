@@ -214,12 +214,16 @@ class EngineClient:
         n = task.get("n", 1)
         try:
             request_id_idx = task.get("request_id")
-            request_id = request_id_idx.rsplit("-", 1)[0]
-            index = int(request_id_idx.rsplit("-", 1)[-1])
-            for i in range(index * n, (index + 1) * n):
-                child_task = copy(task)
-                child_task["request_id"] = f"{request_id}-{i}"
-                self._send_task(child_task)
+            parts = request_id_idx.rsplit("_", 1)
+            if len(parts) == 1:
+                self._send_task(task)
+            else:
+                request_id = parts[0]
+                index = int(parts[1])
+                for i in range(index * n, (index + 1) * n):
+                    child_task = copy(task)
+                    child_task["request_id"] = f"{request_id}_{i}"
+                    self._send_task(child_task)
         except Exception as e:
             api_server_logger.error(f"zmq_client send task error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)

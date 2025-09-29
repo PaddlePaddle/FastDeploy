@@ -112,7 +112,7 @@ class OpenAIServingChat:
             api_server_logger.info(f"create chat completion request: {request_id}")
             text_after_process = None
             try:
-                current_req_dict = request.to_dict_for_infer(f"{request_id}-0")
+                current_req_dict = request.to_dict_for_infer(f"{request_id}_0")
                 if "chat_template" not in current_req_dict:
                     current_req_dict["chat_template"] = self.chat_template
                 current_req_dict["arrival_time"] = time.time()
@@ -214,7 +214,7 @@ class OpenAIServingChat:
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
                 request_id, num_choices
             )
-            request_ids = [f"{request_id}-{i}" for i in range(num_choices)]
+            request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
             for rid in request_ids:
                 dealer.write([b"", rid.encode("utf-8")])
             choices = []
@@ -434,7 +434,7 @@ class OpenAIServingChat:
                 request_id, num_choices
             )
             # dealer.write([b"", request_id.encode("utf-8")])
-            request_ids = [f"{request_id}-{i}" for i in range(num_choices)]
+            request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
             for rid in request_ids:
                 dealer.write([b"", rid.encode("utf-8")])
             previous_num_tokens = [0] * num_choices

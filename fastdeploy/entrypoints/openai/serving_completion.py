@@ -142,7 +142,7 @@ class OpenAIServingCompletion:
         try:
             try:
                 for idx, prompt in enumerate(request_prompts):
-                    request_id_idx = f"{request_id}-{idx}"
+                    request_id_idx = f"{request_id}_{idx}"
                     current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                     n_param = current_req_dict.get("n", 1)
                     current_req_dict["arrival_time"] = time.time()
@@ -213,7 +213,7 @@ class OpenAIServingCompletion:
         """
         dealer = None
         try:
-            request_ids = [f"{request_id}-{i}" for i in range(num_choices)]
+            request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
             # create dealer
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
                 request_id, num_choices
@@ -348,7 +348,7 @@ class OpenAIServingCompletion:
             )
 
             for i in range(num_choices):
-                req_id = f"{request_id}-{i}"
+                req_id = f"{request_id}_{i}"
                 dealer.write([b"", req_id.encode("utf-8")])  # 发送多路请求
             output_tokens = [0] * num_choices
             inference_start_time = [0] * num_choices
