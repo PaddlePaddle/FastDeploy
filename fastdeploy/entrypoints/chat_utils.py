@@ -17,22 +17,24 @@
 import os
 import time
 import uuid
-from copy import deepcopy
 from pathlib import Path
 from typing import List, Literal, Optional, Union
 from urllib.parse import urlparse
 
 import requests
-from openai.types.chat.chat_completion_content_part_image_param import ImageURL
 from openai.types.chat import (
     ChatCompletionContentPartParam as OpenAIChatCompletionContentPartParam,
-    ChatCompletionMessageParam as OpenAIChatCompletionMessageParam
 )
+from openai.types.chat import (
+    ChatCompletionMessageParam as OpenAIChatCompletionMessageParam,
+)
+from openai.types.chat.chat_completion_content_part_image_param import ImageURL
 from typing_extensions import Required, TypeAlias, TypedDict
 
 from fastdeploy.multimodal.image import ImageMediaIO
 from fastdeploy.multimodal.video import VideoMediaIO
 from fastdeploy.utils import api_server_logger
+
 
 class CustomChatCompletionContentPartImageParam(TypedDict, total=False):
     """Custom Image URL object"""
@@ -153,7 +155,7 @@ def parse_content_part(mm_parser, part):
     if part_type == "image_url":
         if not part.get("image_url", None) and not part.get("uuid", None):
             raise ValueError("Both image_url and uuid are missing")
-        
+
         if part.get("image_url", None):
             url = part["image_url"]["url"]
             image = mm_parser.parse_image(url)
@@ -169,18 +171,18 @@ def parse_content_part(mm_parser, part):
     if part_type == "video_url":
         if not part.get("video_url", None) and not part.get("uuid", None):
             raise ValueError("Both video_url and uuid are missing")
-        
+
         if part.get("video_url", None):
             url = part["video_url"]["url"]
             video = mm_parser.parse_video(url)
         else:
             video = None
-        
+
         parsed = {}
         parsed["type"] = "video"
         parsed["data"] = video
         parsed["uuid"] = part.get("uuid", None)
-        
+
         return parsed
 
     raise ValueError(f"Unknown content part type: {part_type}")
