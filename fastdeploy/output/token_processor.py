@@ -22,6 +22,7 @@ import traceback
 import weakref
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from typing import List
 
 import numpy as np
 
@@ -159,6 +160,7 @@ class TokenProcessor:
                 get_output_ep,
                 get_output_topk,
                 speculate_get_output,
+                speculate_get_output_topk,
             )
         rank_id = self.cfg.parallel_config.local_data_parallel_id
 
@@ -171,17 +173,35 @@ class TokenProcessor:
                         and self.cfg.parallel_config.data_parallel_size > 1
                     ):
                         if self.use_logprobs:
-                            # TODO speculate_get_output_with_topk
-                            pass
+                            speculate_get_output_topk(
+                                self.output_tokens,
+                                self.output_scores,
+                                self.output_ranks,
+                                K,
+                                rank_id,
+                                True,
+                            )
+                            if self.output_tokens[0][0] == -2:
+                                continue
                         else:
                             speculate_get_output(self.output_tokens, rank_id, is_blocking, True)
+                            if self.output_tokens[0] == -2:
+                                continue
                     elif self.use_logprobs:
-                        # TODO speculate_get_output_with_topk
-                        pass
+                        speculate_get_output_topk(
+                            self.output_tokens,
+                            self.output_scores,
+                            self.output_ranks,
+                            K,
+                            rank_id,
+                            True,
+                        )
+                        if self.output_tokens[0][0] == -2:
+                            continue
                     else:
                         speculate_get_output(self.output_tokens, rank_id, is_blocking, False)
-                    if self.output_tokens[0] == -2:
-                        continue
+                        if self.output_tokens[0] == -2:
+                            continue
 
                 else:
                     if self.use_logprobs:
@@ -227,7 +247,7 @@ class TokenProcessor:
 
         self.executor.submit(process_metrics)
 
-    def postprocess(self, batch_result, mtype=3):
+    def postprocess(self, batch_result: List[RequestOutput], mtype=3):
         """
         single post-processing function
 
@@ -235,14 +255,18 @@ class TokenProcessor:
             batch_result (list): batch results
         """
         try:
-            if self.cfg.speculative_config.method and self.cfg.use_logprobs:
+            if self.cfg.speculative_config.method and self.use_logprobs:
                 if mtype == 3:  # target
-                    self._batch_result_buffer = batch_result
+                    has_finished = any(r.finished for r in batch_result)
+                    if has_finished:
+                        self.cached_generated_tokens.put_results(batch_result)
+                    else:
+                        self._batch_result_buffer = batch_result
                 elif mtype == 4:  # draft
                     target_batch_result = []
                     draft_batch_result = batch_result
                     for target, decode in zip(self._batch_result_buffer, draft_batch_result):
-                        target["outputs"]["draft_top_logprobs"] = decode["outputs"]["draft_top_logprobs"]
+                        target.outputs.draft_top_logprobs = decode.outputs.draft_top_logprobs
                         target_batch_result.append(target)
                     self._batch_result_buffer = None
                     self.cached_generated_tokens.put_results(target_batch_result)
@@ -334,10 +358,10 @@ class TokenProcessor:
         mtype = 3
         if self.cfg.speculative_config.method:
             if self.use_logprobs:
-                mtype = self.output_tokens[1, 0]
+                mtype = int(self.output_tokens[1, 0].item())
                 batch = self.output_tokens[2, 0]
                 accept_num = [int(num[0]) for num in self.output_tokens[3 : batch + 3]]
-                tokens = tokens[3 + batch : 3 + batch + batch * MAX_DRAFT_TOKENS * (K + 1)].reshape(
+                tokens = tokens[3 + MAX_BSZ : 3 + MAX_BSZ + batch * MAX_DRAFT_TOKENS * (K + 1)].reshape(
                     [batch, MAX_DRAFT_TOKENS, K + 1]
                 )
                 scores = (
@@ -464,10 +488,10 @@ class TokenProcessor:
                     task.output_token_ids.append(token_id)
                     if self.use_logprobs:
                         if self.cfg.speculative_config.method:
-                            result.outputs.logprob = float(scores[batch_token_index, i, 0])
-                            topk_token_ids = tokens[batch_token_index, i, :].tolist()
-                            topk_logprobs = scores[batch_token_index, i, :].tolist()
-                            sampled_rank = ranks[batch_token_index, i].item()
+                            result.outputs.logprob = float(scores[i, batch_token_index, 0])
+                            topk_token_ids = tokens[i, batch_token_index, :].tolist()
+                            topk_logprobs = scores[i, batch_token_index, :].tolist()
+                            sampled_rank = ranks[i, batch_token_index].item()
                         else:
                             result.outputs.logprob = float(scores[i, 0])
                             topk_token_ids = tokens[i, :].tolist()
