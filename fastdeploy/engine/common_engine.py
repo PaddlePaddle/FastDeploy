@@ -531,10 +531,7 @@ class EngineService:
                 int(self.resource_manager.available_batch()),
                 self.cfg.max_prefill_batch,
             )
-            if self.cfg.model_config.enable_mm:
-                available_blocks = self.resource_manager.available_block_num()
-            else:
-                available_blocks = self.cfg.cache_config.max_block_num_per_seq
+            available_blocks = self.cfg.cache_config.max_block_num_per_seq
 
             tasks = self.scheduler.get_requests(
                 available_blocks=available_blocks,
