@@ -309,9 +309,9 @@ class CompletionOutput:
             "index": self.index,
             "send_idx": self.send_idx,
             "token_ids": self.token_ids,
-            "decode_type": self.decode_type,
             "logprob": self.logprob,
             "top_logprobs": self.top_logprobs,
+            "draft_top_logprobs": self.draft_top_logprobs,
             "logprobs": self.logprobs,
             "draft_token_ids": self.draft_token_ids,
             "text": self.text,
@@ -337,6 +337,8 @@ class CompletionOutput:
             f"draft_token_ids={self.draft_token_ids}, "
             f"reasoning_content={self.reasoning_content!r}, "
             f"logprobs={self.logprobs}, "
+            f"top_logprobs={self.top_logprobs}, "
+            f"draft_top_logprobs={self.draft_top_logprobs}, "
         )
 
 
@@ -461,6 +463,14 @@ class RequestOutput:
             self.outputs.top_logprobs.logprob_token_ids.extend(next_output.outputs.top_logprobs.logprob_token_ids)
             self.outputs.top_logprobs.logprobs.extend(next_output.outputs.top_logprobs.logprobs)
             self.outputs.top_logprobs.sampled_token_ranks.extend(next_output.outputs.top_logprobs.sampled_token_ranks)
+        if next_output.outputs.draft_top_logprobs is not None:
+            self.outputs.draft_top_logprobs.logprob_token_ids.extend(
+                next_output.outputs.draft_top_logprobs.logprob_token_ids
+            )
+            self.outputs.draft_top_logprobs.logprobs.extend(next_output.outputs.draft_top_logprobs.logprobs)
+            self.outputs.draft_top_logprobs.sampled_token_ranks.extend(
+                next_output.outputs.draft_top_logprobs.sampled_token_ranks
+            )
 
     def __repr__(self) -> str:
         return (
