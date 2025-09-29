@@ -433,12 +433,8 @@ class PaddleDisWorkerProc:
         self.worker.graph_optimize_and_warm_up_model()
         # reset cache_messager prefilled_step signal
         if self.scheduler_config.splitwise_role == "prefill":
-            dp_rank_id = (
-                self.local_rank
-                + self.parallel_config.local_data_parallel_id * self.parallel_config.tensor_parallel_size
-            )
             gpu_id = self.worker.model_runner.device_id
-            prefilled_step_name = f"splitwise_complete_prefilled_step_{dp_rank_id}"
+            prefilled_step_name = f"splitwise_complete_prefilled_step_{self.local_rank}"
             prefilled_step_idx_data = np.zeros(shape=[1], dtype=np.int32)
             step_shm_value = IPCSignal(
                 name=prefilled_step_name,
