@@ -382,7 +382,6 @@ class OpenAIServingChat:
                             api_server_logger.info(f"Chat Streaming response last send: {chunk.model_dump_json()}")
                         choices = []
 
-            # TODO num_prompt_tokens 此处的idx已经离开idx作用域，这里的信息统计是不是应该取和？
             if include_usage:
                 completion_tokens = sum(previous_num_tokens)
                 usage = UsageInfo(

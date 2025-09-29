@@ -252,7 +252,7 @@ class OpenAIServingCompletion:
                     continue
 
                 for data in response:
-                    rid = int(data["request_id"].split("-")[-1])
+                    rid = int(data["request_id"].split("_")[-1])
                     if data.get("error_code", 200) != 200:
                         raise ValueError("{}".format(data["error_msg"]))
 
@@ -386,7 +386,7 @@ class OpenAIServingCompletion:
                     continue
 
                 for res in response:
-                    idx = int(res["request_id"].split("-")[-1])
+                    idx = int(res["request_id"].split("_")[-1])
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
 
