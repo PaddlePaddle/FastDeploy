@@ -15,6 +15,7 @@
 """
 
 import unittest
+from unittest.mock import Mock
 
 import paddle
 
@@ -23,6 +24,7 @@ from fastdeploy.config import (
     FDConfig,
     GraphOptimizationConfig,
     ParallelConfig,
+    SchedulerConfig,
 )
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
@@ -51,7 +53,7 @@ class TestCase1SubLayer1(paddle.nn.Layer):
 
 
 class TestModel1(paddle.nn.Layer):
-    """Tast Model"""
+    """Test Model"""
 
     def __init__(self, fd_config: FDConfig, **kwargs):
         super().__init__()
@@ -99,16 +101,20 @@ class TestCUDAGrpahSpecDecode(unittest.TestCase):
         """Run test case"""
         graph_opt_config = GraphOptimizationConfig(args={})
         graph_opt_config.use_cudagraph = True
-        parallel_config = ParallelConfig(args={})
-        parallel_config.max_num_seqs = 1
+        scheduler_config = SchedulerConfig(args={})
+        scheduler_config.max_num_seqs = 1
         cache_config = CacheConfig({})
+        parallel_config = ParallelConfig(args={})
+        model_config = Mock()
         # Initialize cuda graph capture list
-        graph_opt_config._set_cudagraph_sizes(max_num_seqs=parallel_config.max_num_seqs)
-        graph_opt_config.init_with_cudagrpah_size(max_num_seqs=parallel_config.max_num_seqs)
+        graph_opt_config._set_cudagraph_sizes(max_num_seqs=scheduler_config.max_num_seqs)
+        graph_opt_config.init_with_cudagrpah_size(max_capture_size=scheduler_config.max_num_seqs)
         fd_config = FDConfig(
             graph_opt_config=graph_opt_config,
-            parallel_config=parallel_config,
+            scheduler_config=scheduler_config,
             cache_config=cache_config,
+            parallel_config=parallel_config,
+            model_config=model_config,
             test_mode=True,
         )
 
@@ -117,14 +123,14 @@ class TestCUDAGrpahSpecDecode(unittest.TestCase):
         input_tensor1 = paddle.ones([1, 32768])
         forward_meta1 = ForwardMeta(input_ids=input_tensor1, ids_remove_padding=input_tensor1, step_use_cudagraph=True)
 
-        # Triger Capture
+        # Trigger Capture
         _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
 
-        # Reaplay
+        # Replay
         _ = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
         output1 = test_model1(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
 
-        # Corrent output
+        # Correct output
         output1_correct = test_model1.forward_correct(ids_remove_padding=input_tensor1, forward_meta=forward_meta1)
 
         assert (output1 == output1_correct).all()

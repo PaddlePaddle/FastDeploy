@@ -22,7 +22,52 @@ import aiozmq
 import msgpack
 import zmq
 
-from fastdeploy.utils import api_server_logger
+from fastdeploy.engine.args_utils import EngineArgs
+from fastdeploy.utils import FlexibleArgumentParser, api_server_logger
+
+UVICORN_CONFIG = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "custom": {
+            "()": "colorlog.ColoredFormatter",
+            "format": "[%(log_color)s%(asctime)s] [%(levelname)+8s] %(reset)s - %(message)s%(reset)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",  # 时间戳格式
+            "log_colors": {
+                "DEBUG": "cyan",
+                "INFO": "green",
+                "WARNING": "yellow",
+                "ERROR": "red",
+                "CRITICAL": "red,bg_white",
+            },
+        }
+    },
+    "handlers": {
+        "default": {
+            "class": "colorlog.StreamHandler",
+            "stream": "ext://sys.stderr",
+            "formatter": "custom",
+        },
+    },
+    "loggers": {
+        "uvicorn": {
+            "level": "INFO",
+            "handlers": ["default"],
+            "propagate": False,
+        },
+        "uvicorn.error": {
+            "level": "INFO",
+            "handlers": ["default"],
+            "propagate": False,
+        },
+        "uvicorn.access": {
+            "level": "INFO",
+            "handlers": ["default"],
+            "propagate": False,
+            "formatter": "custom",
+        },
+    },
+}
 
 
 class DealerConnectionManager:
@@ -157,3 +202,31 @@ class DealerConnectionManager:
             self.request_map.clear()
 
         api_server_logger.info("All connections and tasks closed")
+
+
+def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
+    parser.add_argument("--port", default=8000, type=int, help="port to the http server")
+    parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
+    parser.add_argument("--workers", default=1, type=int, help="number of workers")
+    parser.add_argument("--metrics-port", default=8001, type=int, help="port for metrics server")
+    parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
+    parser.add_argument(
+        "--max-waiting-time",
+        default=-1,
+        type=int,
+        help="max waiting time for connection, if set value -1 means no waiting time limit",
+    )
+    parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
+
+    parser.add_argument(
+        "--enable-mm-output", action="store_true", help="Enable 'multimodal_content' field in response output. "
+    )
+    parser.add_argument(
+        "--timeout-graceful-shutdown",
+        default=0,
+        type=int,
+        help="timeout for graceful shutdown in seconds (used by uvicorn)",
+    )
+
+    parser = EngineArgs.add_cli_args(parser)
+    return parser

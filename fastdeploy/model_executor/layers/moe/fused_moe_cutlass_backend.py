@@ -27,44 +27,20 @@ from ..utils import get_tensor
 from .fused_moe_backend_base import UnquantizedFusedMoEMethod
 
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import (
-        moe_expert_dispatch,
-        moe_expert_reduce,
-        noaux_tc,
-        w4afp8_gemm_scale_permute,
-    )
+    from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch, moe_expert_reduce
+
+    try:
+        from fastdeploy.model_executor.ops.gpu import w4afp8_gemm_scale_permute
+    except:
+        logger.warning("import w4afp8_gemm_scale_permute Failed!")
 elif current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
         moe_expert_dispatch,
         moe_expert_reduce,
     )
 
+from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.model_executor.utils import TensorTracker, free_tensor, set_weight_attrs
-
-
-# used for deepseek_v3
-def get_moe_scores(
-    gating_output: paddle.Tensor,
-    n_group,
-    topk_group,
-    top_k,
-    routed_scaling_factor,
-    e_score_correction_bias,
-) -> paddle.Tensor:
-    """
-    compute moe scores using e_score_correction_bias.
-    """
-    scores = paddle.nn.functional.sigmoid(gating_output)
-    scores_with_bias = scores + e_score_correction_bias
-    scores, topk_values, topk_idx = noaux_tc(
-        scores,
-        scores_with_bias,
-        n_group,
-        topk_group,
-        top_k,
-        routed_scaling_factor,
-    )
-    return scores, topk_values, topk_idx
 
 
 class CutlassMoEMethod(UnquantizedFusedMoEMethod):
@@ -108,7 +84,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 expert_idx_per_token,
                 self.moe_quant_type,
                 used_in_ep_low_latency,
-                estimate_total_token_nums,
             )
         return fastdeploy.model_executor.ops.gpu.moe_expert_ffn(
             permute_input,
@@ -123,6 +98,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             self.moe_quant_type,
             used_in_ep_low_latency,
             estimate_total_token_nums,
+            getattr(layer.moe_quant_config, "hadamard_block_size", 128),
         )
 
     def apply_ep_prefill(
@@ -150,7 +126,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
 
         # 3. Compute ffn
         if token_all_num > 0:
-            logger.info(f"token_all_num {token_all_num}")
+            logger.debug(f"token_all_num {token_all_num}")
             (
                 permute_input,
                 permute_indices_per_token,
@@ -251,13 +227,14 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         """
         gate_out = gate(x.cast("float32"))
         if layer.topk_method == "noaux_tc":
-            gate_out, _, _ = get_moe_scores(
+            gate_out, topk_weights, topk_idx = get_moe_scores(
                 gate_out,
                 layer.n_group,
                 layer.topk_group,
                 layer.top_k,
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
+                getattr(layer, "renormalize", True),
             )
 
             (
@@ -276,6 +253,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 ),  # if set, permute_input will be int8_t
                 layer.top_k,
                 False,
+                self.moe_quant_type,
                 topk_only_mode=True,
             )
         else:
@@ -295,6 +273,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 ),  # if set, permute_input will be int8_t
                 layer.top_k,
                 False,
+                self.moe_quant_type,
                 topk_only_mode=False,
             )
 
@@ -319,7 +298,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         )
 
         if layer.reduce_results and layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(fused_moe_out)
+            tensor_model_parallel_all_reduce(fused_moe_out, layer.fd_config.parallel_config.tp_group)
 
         return fused_moe_out
 
@@ -422,9 +401,9 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
         down_proj_weight = paddle.stack(down_proj_weights, axis=0)
         up_gate_proj_weight_scale = paddle.stack(up_gate_proj_weight_scale, axis=0).cast(paddle.get_default_dtype())
         down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0).cast(paddle.get_default_dtype())
-        up_gate_proj_in_scale_all_experts = paddle.stack(up_gate_proj_in_scale_all_experts, axis=0).unsqueeze()
-        up_gate_proj_in_scale = paddle.stack(up_gate_proj_in_scale, axis=0).unsqueeze()
-        down_proj_in_scale = paddle.stack(down_proj_in_scale, axis=0).unsqueeze()
+        up_gate_proj_in_scale_all_experts = paddle.stack(up_gate_proj_in_scale_all_experts, axis=0).squeeze()
+        up_gate_proj_in_scale = paddle.stack(up_gate_proj_in_scale, axis=0).squeeze()
+        down_proj_in_scale = paddle.stack(down_proj_in_scale, axis=0).squeeze()
 
         name_tensor_map = {
             "up_gate_proj_weight": up_gate_proj_weight,
@@ -655,7 +634,7 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
         self.moe_quant_type = "w4afp8"
         self.pack_num = 2
 
-    def process_prequanted_weights(self, layer: nn.Layer, state_dict):
+    def process_prequanted_weights(self, layer: nn.Layer, state_dict, is_rearrange: bool = False):
         """
         Paddle cutlass process prequanted weights.
         """
@@ -671,6 +650,7 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                 state_dict,
                 up_gate_proj_expert_weight_key,
                 down_proj_expert_weight_key,
+                is_rearrange,
             )
         )
 
@@ -680,22 +660,62 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
         up_gate_proj_in_scale = []
         down_proj_in_scale = []
 
+        if isinstance(state_dict, list):
+            state_dict = dict(state_dict)
+
         if layer.ep_size > 1:
             for expert_idx in ep_rank_to_expert_id_list:
-                scale_tensor = get_tensor(state_dict[up_gate_proj_expert_in_scale_key.format(expert_idx)])
+                scale_tensor = get_tensor(
+                    (
+                        state_dict[up_gate_proj_expert_in_scale_key.format(expert_idx)]
+                        if up_gate_proj_expert_in_scale_key.format(expert_idx) in state_dict
+                        else up_gate_proj_expert_in_scale_key.format(expert_idx)
+                    ),
+                    layer.fd_config.model_config.model,
+                )
                 up_gate_proj_in_scale_all_experts.append(scale_tensor)
 
         for expert_idx in logical_expert_ids:
             up_gate_proj_weight_scale.append(
-                get_tensor(state_dict.pop(up_gate_proj_expert_weight_scale_key.format(expert_idx)))
+                get_tensor(
+                    (
+                        state_dict.pop(up_gate_proj_expert_weight_scale_key.format(expert_idx))
+                        if up_gate_proj_expert_weight_scale_key.format(expert_idx) in state_dict
+                        else up_gate_proj_expert_weight_scale_key.format(expert_idx)
+                    ),
+                    layer.fd_config.model_config.model,
+                )
             )
             down_proj_weight_scale.append(
-                get_tensor(state_dict.pop(down_proj_expert_weight_scale_key.format(expert_idx)))
+                get_tensor(
+                    (
+                        state_dict.pop(down_proj_expert_weight_scale_key.format(expert_idx))
+                        if down_proj_expert_weight_scale_key.format(expert_idx) in state_dict
+                        else down_proj_expert_weight_scale_key.format(expert_idx)
+                    ),
+                    layer.fd_config.model_config.model,
+                )
             )
             up_gate_proj_in_scale.append(
-                get_tensor(state_dict.pop(up_gate_proj_expert_in_scale_key.format(expert_idx)))
+                get_tensor(
+                    (
+                        state_dict.pop(up_gate_proj_expert_in_scale_key.format(expert_idx))
+                        if up_gate_proj_expert_in_scale_key.format(expert_idx) in state_dict
+                        else up_gate_proj_expert_in_scale_key.format(expert_idx)
+                    ),
+                    layer.fd_config.model_config.model,
+                )
             )
-            down_proj_in_scale.append(get_tensor(state_dict.pop(down_proj_expert_in_scale_key.format(expert_idx))))
+            down_proj_in_scale.append(
+                get_tensor(
+                    (
+                        state_dict.pop(down_proj_expert_in_scale_key.format(expert_idx))
+                        if down_proj_expert_in_scale_key.format(expert_idx) in state_dict
+                        else down_proj_expert_in_scale_key.format(expert_idx)
+                    ),
+                    layer.fd_config.model_config.model,
+                )
+            )
 
         up_gate_proj_weight = paddle.stack(up_gate_proj_weights, axis=0)
         down_proj_weight = paddle.stack(down_proj_weights, axis=0)
@@ -757,7 +777,9 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
         """
         Paddle cutlass load weight process.
         """
-        up_gate_proj_weights, down_proj_weights = layer.extract_moe_ffn_weights(state_dict)
+        up_gate_proj_weights, down_proj_weights, logical_expert_ids, ep_rank_to_expert_id_list = (
+            layer.extract_moe_ffn_weights(state_dict)
+        )
         self.check(layer, up_gate_proj_weights, down_proj_weights)
         for idx, weight_tensor in enumerate([up_gate_proj_weights, down_proj_weights]):
             weight_name = self.added_weight_attrs[idx]
@@ -768,7 +790,9 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             quanted_weight = paddle.stack(weight_list, axis=0)
             getattr(layer, weight_name).set_value(quanted_weight)
 
-        self.load_w4afp8_scale_weights(layer, layer.weight_key_map, state_dict)
+        self.load_w4afp8_scale_weights(
+            layer, layer.weight_key_map, state_dict, logical_expert_ids, ep_rank_to_expert_id_list
+        )
 
     def create_w4afp8_scale_weights(self, layer: nn.Layer, weight_key_map: dict):
         """
@@ -822,7 +846,14 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             ),
         )
 
-    def load_w4afp8_scale_weights(self, layer: nn.Layer, weight_key_map: dict, state_dict: dict):
+    def load_w4afp8_scale_weights(
+        self,
+        layer: nn.Layer,
+        weight_key_map: dict,
+        state_dict: dict,
+        logical_expert_ids: paddle.Tensor,
+        ep_rank_to_expert_id_list: list,
+    ):
         """
         Get w4afp8 weights from state dict and process them.
         Args:
@@ -831,8 +862,15 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             state_dict (dict): The state dict.
         """
 
-        def _extract_scale_tensor(state_dict, key_template, expert_idx):
-            return get_tensor(state_dict.pop(key_template.format(expert_idx)))
+        def _extract_scale_tensor(layer: nn.Layer, state_dict, key_template, expert_idx):
+            return get_tensor(
+                (
+                    state_dict.pop(key_template.format(expert_idx))
+                    if key_template.format(expert_idx) in state_dict
+                    else key_template.format(expert_idx)
+                ),
+                layer.fd_config.model_config.model,
+            )
 
         def _process_in_scale(name: str, in_scales: list[paddle.Tensor]):
             processed_in_scale = 1 / paddle.concat(in_scales)
@@ -875,17 +913,23 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
 
         # 2. Extract scale tensor from state dict
         if layer.ep_size > 1:
-            for expert_idx in range(layer.num_experts):
-                scale_tensor = get_tensor(state_dict[scale_key_map["up_gate_proj_in_scale"].format(expert_idx)])
+            for expert_idx in ep_rank_to_expert_id_list:
+                scale_tensor = get_tensor(
+                    (
+                        state_dict[scale_key_map["up_gate_proj_in_scale"].format(expert_idx)]
+                        if scale_key_map["up_gate_proj_in_scale"].format(expert_idx) in state_dict
+                        else scale_key_map["up_gate_proj_in_scale"].format(expert_idx)
+                    ),
+                    layer.fd_config.model_config.model,
+                )
                 up_gate_proj_in_scales_all_experts.append(1 / scale_tensor)
             getattr(layer, "up_gate_proj_in_scale_all_experts").set_value(
                 paddle.concat(up_gate_proj_in_scales_all_experts)
             )
 
-        for local_expert_idx in range(layer.num_local_experts):
-            expert_idx = local_expert_idx + layer.expert_id_offset
+        for expert_idx in logical_expert_ids:
             for name, scale_key_template in scale_key_map.items():
-                scale_tensor = _extract_scale_tensor(state_dict, scale_key_template, expert_idx)
+                scale_tensor = _extract_scale_tensor(layer, state_dict, scale_key_template, expert_idx)
                 scale_weight_map[name].append(scale_tensor)
 
         # 3. Process scale tensor and set to layer
@@ -980,20 +1024,20 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
             ]
         self.up_gate_proj_scale_shape = [layer.num_local_experts, layer.moe_intermediate_size * 2]
         self.down_proj_scale_shape = [layer.num_local_experts, layer.hidden_size]
-
-        if layer.fd_config.load_config.load_choices == "default_v1":
+        # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
+        if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
             layer.up_gate_proj_weight = layer.create_parameter(
-                shape=[layer.num_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
+                shape=[layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
 
             layer.down_proj_weight = layer.create_parameter(
-                shape=[layer.num_experts, layer.moe_intermediate_size, layer.hidden_size],
+                shape=[layer.num_local_experts, layer.moe_intermediate_size, layer.hidden_size],
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
-
+            extra_weight_attrs["weight_need_transpose"] = extra_weight_attrs.get("model_format") == "torch"
             set_weight_attrs(
                 layer.up_gate_proj_weight,
                 {
@@ -1053,7 +1097,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ),
             )
-
+            extra_weight_attrs["weight_need_transpose"] = not extra_weight_attrs.get("model_format") == "torch"
             moe_extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}}
             set_weight_attrs(layer.up_gate_proj_weight, moe_extra_weight_attrs)
             set_weight_attrs(layer.down_proj_weight, moe_extra_weight_attrs)
@@ -1066,7 +1110,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
 
     def process_weights_after_loading(self, layer):
         """ """
-        if not layer.fd_config.load_config.load_choices == "default_v1":
+        if not self.quant_config.is_checkpoint_bf16:
             return
         weight_id_map = {"gate_up": 0, "down": 1}
         if (
@@ -1096,7 +1140,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
 
         # 3.quantize weight
 
-        for expert_id in range(layer.num_experts):
+        for expert_id in range(layer.num_local_experts):
             weight[expert_id], scale[expert_id] = weight_quantize(
                 getattr(layer, unquantized_weight_name)[expert_id], algo=self.moe_quant_type
             )

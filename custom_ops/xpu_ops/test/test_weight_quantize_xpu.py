@@ -79,7 +79,7 @@ qw_pd_trans = paddle.transpose(qw_pd, [1, 0])
 # print("wscale_pd:\n{}".format(wscale_pd))
 # print("wscale_np:\n{}".format(wscale_np))
 
-# comparation
+# comparison
 print(f"wscale_pd, mean={wscale_pd.mean()}, std={wscale_pd.std()}")
 print(f"wscale_np, mean={wscale_np.mean()}, std={wscale_np.std()}")
 print(f"qw_np, mean={qw_np.astype(np.float32).mean()}, std={qw_np.astype(np.float32).std()}")

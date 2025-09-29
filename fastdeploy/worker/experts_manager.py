@@ -14,7 +14,7 @@
 # limitations under the License.
 """
 
-"""redundant expert manger."""
+"""redundant expert manager."""
 from typing import Optional, Tuple
 
 import numpy as np

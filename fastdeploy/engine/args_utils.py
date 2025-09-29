@@ -14,21 +14,27 @@
 # limitations under the License.
 """
 
+import argparse
 import json
-import os
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
+import paddle
+
+from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
+    ConvertOption,
     EarlyStopConfig,
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
-    MobaAttentionConfig,
     ModelConfig,
     ParallelConfig,
+    PlasAttentionConfig,
+    PoolerConfig,
+    RunnerOption,
     SpeculativeConfig,
     TaskOption,
 )
@@ -38,6 +44,7 @@ from fastdeploy.utils import (
     DeprecatedOptionWarning,
     FlexibleArgumentParser,
     is_port_available,
+    parse_quantization,
 )
 
 
@@ -71,6 +78,10 @@ class EngineArgs:
     """
     The name or path of the tokenizer (defaults to model path if not provided).
     """
+    tokenizer_base_url: str = None
+    """
+    The base URL of the remote tokenizer service (used instead of local tokenizer if provided).
+    """
     max_model_len: int = 2048
     """
     Maximum context length supported by the model.
@@ -86,6 +97,20 @@ class EngineArgs:
     task: TaskOption = "generate"
     """
     The task to be executed by the model.
+    """
+    runner: RunnerOption = "auto"
+    """
+    The type of model runner to use.Each FD instance only supports one model runner.
+    even if the same model can be used for multiple types.
+    """
+    convert: ConvertOption = "auto"
+    """
+    Convert the model using adapters. The most common use case is to
+    adapt a text generation model to be used for pooling tasks.
+    """
+    override_pooler_config: Optional[Union[dict, PoolerConfig]] = None
+    """
+    Override configuration for the pooler.
     """
     max_num_seqs: int = 8
     """
@@ -127,11 +152,11 @@ class EngineArgs:
     """
     dynamic load weight
     """
-    load_strategy: str = "ipc_snapshot"
+    load_strategy: str = "normal"
     """
     dynamic load weight strategy
     """
-    quantization: str = None
+    quantization: Optional[Dict[str, Any]] = None
     guided_decoding_backend: str = "off"
     """
     Guided decoding backend.
@@ -158,8 +183,7 @@ class EngineArgs:
     """
     Ratio of tokens to process in a block.
     """
-
-    prealloc_dec_block_slot_num_threshold: int = 5
+    prealloc_dec_block_slot_num_threshold: int = 12
     """
     Token slot threshold for preallocating decoder blocks.
     """
@@ -184,7 +208,7 @@ class EngineArgs:
     """
     Flag to indicate whether to use warm-up before inference.
     """
-    enable_prefix_caching: bool = False
+    enable_prefix_caching: bool = True
     """
     Flag to enable prefix caching.
     """
@@ -337,9 +361,9 @@ class EngineArgs:
     """
     Configuration for graph optimization backend execution.
     """
-    moba_attention_config: Optional[Dict[str, Any]] = None
+    plas_attention_config: Optional[Dict[str, Any]] = None
     """
-    Configuration for moba attention.
+    Configuration for plas attention.
     """
 
     enable_logprob: bool = False
@@ -379,15 +403,30 @@ class EngineArgs:
         """
         Post-initialization processing to set default tokenizer if not provided.
         """
+
         if not self.tokenizer:
             self.tokenizer = self.model
+        if self.splitwise_role == "decode":
+            self.enable_prefix_caching = False
+        if self.speculative_config is not None:
+            self.enable_prefix_caching = False
+        if not current_platform.is_cuda():
+            self.enable_prefix_caching = False
+        # if self.dynamic_load_weight:
+        #     self.enable_prefix_caching = False
         if self.enable_logprob:
             if self.speculative_config is not None:
                 raise NotImplementedError("Logprob does not support speculation_config.")
-            if self.enable_expert_parallel:
-                raise NotImplementedError("Logprob does not support enable_expert_parallel.")
             if not current_platform.is_cuda():
                 raise NotImplementedError("Only CUDA platform supports logprob.")
+        if self.speculative_config is not None:
+            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+        if self.splitwise_role != "mixed" and self.cache_transfer_protocol != "rdma":
+            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+        if not current_platform.is_cuda() and not current_platform.is_xpu():
+            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+        if self.guided_decoding_backend != "off":
+            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
@@ -427,6 +466,12 @@ class EngineArgs:
             help="Tokenizer name or path (defaults to model path if not specified).",
         )
         model_group.add_argument(
+            "--tokenizer-base-url",
+            type=nullable_str,
+            default=EngineArgs.tokenizer_base_url,
+            help="The base URL of the remote tokenizer service (used instead of local tokenizer if provided).",
+        )
+        model_group.add_argument(
             "--max-model-len",
             type=int,
             default=EngineArgs.max_model_len,
@@ -443,6 +488,21 @@ class EngineArgs:
             type=str,
             default=EngineArgs.task,
             help="Task to be executed by the model.",
+        )
+        model_group.add_argument(
+            "--runner",
+            type=str,
+            default=EngineArgs.runner,
+            help="The type of model runner to use",
+        )
+        model_group.add_argument(
+            "--convert", type=str, default=EngineArgs.convert, help="Convert the model using adapters"
+        )
+        model_group.add_argument(
+            "--override-pooler-config",
+            type=json.loads,
+            default=EngineArgs.override_pooler_config,
+            help="Override the pooler configuration with a JSON string.",
         )
         model_group.add_argument(
             "--use-warmup",
@@ -519,9 +579,9 @@ class EngineArgs:
         )
         model_group.add_argument(
             "--quantization",
-            type=str,
+            type=parse_quantization,
             default=EngineArgs.quantization,
-            help="Quantization name for the model, currentlly support "
+            help="Quantization name for the model, currently support "
             "'wint8', 'wint4',"
             "default is None. The priority of this configuration "
             "is lower than that of the config file. "
@@ -540,9 +600,9 @@ class EngineArgs:
             help="",
         )
         model_group.add_argument(
-            "--moba-attention-config",
+            "--plas-attention-config",
             type=json.loads,
-            default=EngineArgs.moba_attention_config,
+            default=EngineArgs.plas_attention_config,
             help="",
         )
         model_group.add_argument(
@@ -651,7 +711,7 @@ class EngineArgs:
         # Load group
         load_group = parser.add_argument_group("Load Configuration")
         load_group.add_argument(
-            "--load_choices",
+            "--load-choices",
             type=str,
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\
@@ -675,7 +735,7 @@ class EngineArgs:
         cache_group.add_argument(
             "--prealloc-dec-block-slot-num-threshold",
             type=int,
-            default=5,
+            default=EngineArgs.prealloc_dec_block_slot_num_threshold,
             help="Number of token slot threadshold to allocate next blocks for decoding.",
         )
 
@@ -705,7 +765,7 @@ class EngineArgs:
         perf_group = parser.add_argument_group("Performance Tuning")
         perf_group.add_argument(
             "--enable-prefix-caching",
-            action="store_true",
+            action=argparse.BooleanOptionalAction,
             default=EngineArgs.enable_prefix_caching,
             help="Flag to enable prefix caching.",
         )
@@ -819,7 +879,7 @@ class EngineArgs:
         scheduler_group.add_argument(
             "--scheduler-topic",
             default=EngineArgs.scheduler_topic,
-            help=f"Topic of scheduler. Defaule is {EngineArgs.scheduler_topic}. (global)",
+            help=f"Topic of scheduler. Default is {EngineArgs.scheduler_topic}. (global)",
         )
         scheduler_group.add_argument(
             "--scheduler-min-load-score",
@@ -912,23 +972,15 @@ class EngineArgs:
         """
         prefix = "scheduler_"
         prefix_len = len(prefix)
-        extra_params = [
-            "max_model_len",
-            "enable_chunked_prefill",
-            "max_num_partial_prefills",
-            "max_long_partial_prefills",
-            "long_prefill_token_threshold",
-        ]
 
         all = asdict(self)
         params = dict()
         for k, v in all.items():
             if k[:prefix_len] == prefix:
                 params[k[prefix_len:]] = v
-            elif k in extra_params:
+            else:
                 params[k] = v
-
-        return SchedulerConfig(**params)
+        return SchedulerConfig(params)
 
     def create_graph_optimization_config(self) -> GraphOptimizationConfig:
         """
@@ -940,17 +992,17 @@ class EngineArgs:
                 graph_optimization_args[k] = v
         return GraphOptimizationConfig(graph_optimization_args)
 
-    def create_moba_attention_config(self) -> MobaAttentionConfig:
+    def create_plas_attention_config(self) -> PlasAttentionConfig:
         """
-        Create and retuan a MobaAttentionConfig object based on the current settings.
+        Create and retuan a PlasAttentionConfig object based on the current settings.
         """
         attention_args = asdict(self)
-        if self.moba_attention_config is not None:
-            for k, v in self.moba_attention_config.items():
+        if self.plas_attention_config is not None:
+            for k, v in self.plas_attention_config.items():
                 attention_args[k] = v
-            return MobaAttentionConfig(attention_args)
+            return PlasAttentionConfig(attention_args)
         else:
-            return MobaAttentionConfig(None)
+            return PlasAttentionConfig(None)
 
     def create_early_stop_config(self) -> EarlyStopConfig:
         """
@@ -971,14 +1023,37 @@ class EngineArgs:
 
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size
+
+        speculative_cfg = self.create_speculative_config()
+        if not self.enable_chunked_prefill:
+            if (
+                current_platform.is_cuda()
+                and self.splitwise_role == "mixed"
+                and (speculative_cfg is None or speculative_cfg.method not in ["mtp"])
+            ):
+                # default enable chunked prefill
+                self.enable_chunked_prefill = True
+
+            self.disable_chunked_prefill = int(envs.FD_DISABLE_CHUNKED_PREFILL)
+            if self.disable_chunked_prefill:
+                self.enable_chunked_prefill = False
+
         if self.max_num_batched_tokens is None:
-            if self.enable_chunked_prefill:
-                self.max_num_batched_tokens = 2048
-            else:
-                if not int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "0")):
+            if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
+                if paddle.is_compiled_with_xpu():
                     self.max_num_batched_tokens = self.max_model_len
                 else:
                     self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+            else:
+                if self.enable_chunked_prefill:
+                    self.max_num_batched_tokens = 2048
+                else:
+                    self.max_num_batched_tokens = self.max_model_len
+
+        if isinstance(self.engine_worker_queue_port, int):
+            self.engine_worker_queue_port = str(self.engine_worker_queue_port)
+        if isinstance(self.engine_worker_queue_port, str):
+            self.engine_worker_queue_port = self.engine_worker_queue_port.split(",")
 
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg
@@ -986,18 +1061,12 @@ class EngineArgs:
         load_cfg = LoadConfig(all_dict)
         parallel_cfg = ParallelConfig(all_dict)
         scheduler_cfg = self.create_scheduler_config()
-        speculative_cfg = self.create_speculative_config()
         graph_opt_cfg = self.create_graph_optimization_config()
         graph_opt_cfg.update_use_cudagraph(self.use_cudagraph)
-        moba_attention_config = self.create_moba_attention_config()
+        plas_attention_config = self.create_plas_attention_config()
 
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
-
-        if isinstance(self.engine_worker_queue_port, int):
-            self.engine_worker_queue_port = str(self.engine_worker_queue_port)
-        if isinstance(self.engine_worker_queue_port, str):
-            self.engine_worker_queue_port = self.engine_worker_queue_port.split(",")
 
         assert is_port_available(
             "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
@@ -1011,23 +1080,19 @@ class EngineArgs:
             load_config=load_cfg,
             parallel_config=parallel_cfg,
             max_model_len=self.max_model_len,
-            max_num_seqs=self.max_num_seqs,
             speculative_config=speculative_cfg,
-            max_num_batched_tokens=self.max_num_batched_tokens,
             ips=self.ips,
             use_warmup=self.use_warmup,
-            engine_worker_queue_port=self.engine_worker_queue_port,
             limit_mm_per_prompt=self.limit_mm_per_prompt,
             mm_processor_kwargs=self.mm_processor_kwargs,
             reasoning_parser=self.reasoning_parser,
             tool_parser=self.tool_call_parser,
-            splitwise_role=self.splitwise_role,
             innode_prefill_ports=self.innode_prefill_ports,
             max_num_partial_prefills=self.max_num_partial_prefills,
             max_long_partial_prefills=self.max_long_partial_prefills,
             long_prefill_token_threshold=self.long_prefill_token_threshold,
             graph_opt_config=graph_opt_cfg,
-            moba_attention_config=moba_attention_config,
+            plas_attention_config=plas_attention_config,
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             early_stop_config=early_stop_cfg,

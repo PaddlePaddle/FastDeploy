@@ -16,23 +16,24 @@ ERNIE-4.5-300B-A47B各量化精度，在下列硬件上部署所需要的最小�
 ### 1.2 安装fastdeploy
 - 安装，请参考[Fastdeploy Installation](../get_started/installation/README.md)完成安装。
 
-- 模型下载，请参考[支持模型列表](../supported_models.md)。**请注意使用Fastdeploy部署需要Paddle后缀的模型**
+- 模型下载，请参考[支持模型列表](../supported_models.md)。
 
 ## 二、如何使用
 ### 2.1 基础：启动服务
 通过下列命令启动服务
 ```bash
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-300B-A47B-Paddle \
        --tensor-parallel-size 8 \
        --quantization wint4 \
        --max-model-len 32768 \
-       --max-num-seqs 128
+       --max-num-seqs 128 \
+       --load-choices "default_v1"
 ```
 其中：
 - `--quantization`: 表示模型采用的量化策略。不同量化策略，模型的性能和精度也会不同。可选值包括：`wint8` / `wint4` / `block_wise_fp8`(需要Hopper架构)。
 - `--max-model-len`：表示当前部署的服务所支持的最长Token数量。设置得越大，模型可支持的上下文长度也越大，但相应占用的显存也越多，可能影响并发数。
+- `--load-choices`: 表示loader的版本，"default_v1"表示启用v1版本的loader，具有更快的加载速度和更少的内存使用。
 
 更多的参数含义与默认设置，请参见[FastDeploy参数说明](../parameters.md)。
 
@@ -40,17 +41,14 @@ python -m fastdeploy.entrypoints.openai.api_server \
 #### 2.2.1 评估应用场景，正确设置参数
 结合应用场景，评估平均输入长度、平均输出长度、最大上下文长度
 - 根据最大上下文长度，设置`max-model-len`。例如，平均输入长度为1000，输出长度为30000，那么建议设置为 32768
-- **启用服务管理全局 Block**
-
-```
-export ENABLE_V1_KVCACHE_SCHEDULER=1
-```
 
 #### 2.2.2 Prefix Caching
 **原理：** Prefix Caching的核心思想是通过缓存输入序列的中间计算结果（KV Cache），避免重复计算，从而加速具有相同前缀的多个请求的响应速度。具体参考[prefix-cache](../features/prefix_caching.md)
 
 **启用方式：**
-在启动参数下增加下列两行，其中`--enable-prefix-caching`表示启用前缀缓存，`--swap-space`表示在GPU缓存的基础上，额外开启CPU缓存，大小为GB，应根据机器实际情况调整。
+自2.2版本开始（包括develop分支），Prefix Caching已经默认开启。
+
+对于2.1及更早的版本，需要手动开启。其中`--enable-prefix-caching`表示启用前缀缓存，`--swap-space`表示在GPU缓存的基础上，额外开启CPU缓存，大小为GB，应根据机器实际情况调整。建议取值为`(机器总内存 - 模型大小) * 20%`。如果因为其他程序占用内存等原因导致服务启动失败，可以尝试减小`--swap-space`的值。
 ```
 --enable-prefix-caching
 --swap-space 50
@@ -59,7 +57,10 @@ export ENABLE_V1_KVCACHE_SCHEDULER=1
 #### 2.2.3 Chunked Prefill
 **原理：** 采用分块策略，将预填充（Prefill）阶段请求拆解为小规模子任务，与解码（Decode）请求混合批处理执行。可以更好地平衡计算密集型（Prefill）和访存密集型（Decode）操作，优化GPU资源利用率，减少单次Prefill的计算量和显存占用，从而降低显存峰值，避免显存不足的问题。 具体请参考[Chunked Prefill](../features/chunked_prefill.md)
 
-**启用方式：** 在启动参数下增加即可
+**启用方式：**
+自2.2版本开始（包括develop分支），Chunked Prefill已经默认开启。
+
+对于2.1及更早的版本，需要手动开启。
 ```
 --enable-chunked-prefill
 ```
@@ -73,6 +74,12 @@ export ENABLE_V1_KVCACHE_SCHEDULER=1
 ```
 --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "${path_to_mtp_model}"}'
 ```
+注：
+1. MTP当前暂不支持与Prefix Caching 、Chunked Prefill 、CUDAGraph同时使用。
+   - 需要通过指定`export FD_DISABLE_CHUNKED_PREFILL=1` 关闭Chunked Prefill。
+   - 指定`speculative-config`时，会自动关闭Prefix Caching功能。
+2. MTP当前暂不支持服务管理全局 Block， 指定`speculative-config`时，会自动关闭全局Block调度器。
+3. MTP当前暂不支持和拒绝采样同时使用，即不要开启`export FD_SAMPLING_CLASS=rejection`
 
 #### 2.2.5 W4A8C8量化
 **原理：**
@@ -83,6 +90,9 @@ export ENABLE_V1_KVCACHE_SCHEDULER=1
 ```
 --model baidu/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle
 ```
+
+注：
+- W4A8C8量化的模型不支持通过`--load-choices "default_v1"`载入。
 
 #### 2.2.6 拒绝采样
 **原理：**
@@ -135,8 +145,7 @@ CUDAGraph 是 NVIDIA 提供的一项 GPU 计算加速技术，通过将 CUDA 操
 --use-cudagraph
 ```
 注：
-1. 通常情况下不需要额外设置其他参数，但CUDAGraph会产生一些额外的显存开销，在一些显存受限的场景下可能需要调整。详细的参数调整请参考[GraphOptimizationBackend](../features/graph_optimization.md) 相关配置参数说明
-2. 开启CUDAGraph时，暂时不支持`max-model-len > 32768`的场景。
+- 通常情况下不需要额外设置其他参数，但CUDAGraph会产生一些额外的显存开销，在一些显存受限的场景下可能需要调整。详细的参数调整请参考[GraphOptimizationBackend](../features/graph_optimization.md) 相关配置参数说明
 
 ## 三、常见问题FAQ
 如果您在使用过程中遇到问题，可以在[FAQ](./FAQ.md)中查阅。

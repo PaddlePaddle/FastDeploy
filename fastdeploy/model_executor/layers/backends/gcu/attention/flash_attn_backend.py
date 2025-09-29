@@ -86,7 +86,7 @@ class GCUFlashAttnBackend(AttentionBackend):
         self.attention_metadata: GCUFlashAttnMetadata = None
         self.block_size = fd_config.cache_config.block_size
         self.max_seq_len = fd_config.parallel_config.max_model_len
-        self.max_num_seqs = fd_config.parallel_config.max_num_seqs
+        self.max_num_seqs = fd_config.scheduler_config.max_num_seqs
 
         self.causal = getattr(fd_config.model_config, "causal", True)
 
@@ -170,7 +170,7 @@ class GCUFlashAttnBackend(AttentionBackend):
                 cache_len = 0
             elif self.seq_lens_decoder_list[seq_idx][0] != 0:  # decode
                 cache_len = self.seq_lens_decoder_list[seq_idx][0]
-            # else:  doesnot have req in this seq_idx
+            # else:  doesn't have req in this seq_idx
 
             if cache_len is not None:
                 lens_this_time = self.seq_lens_this_time_list[seq_idx]
@@ -212,7 +212,7 @@ class GCUFlashAttnBackend(AttentionBackend):
         kv_cache_quant_type: str = None,
     ):
         """
-        Caculate kv cache shape
+        Calculate kv cache shape
         """
         # [total_tokens, kv_num_heads, head_dim]
         return (

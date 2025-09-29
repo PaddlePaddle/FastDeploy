@@ -1139,9 +1139,7 @@ void topk_gating_softmax_launcher_helper(const T* input,
 }
 
 template <typename T, typename IdxT = int>
-struct topk_gating_softmax_kernelLauncher{
-
-static void run(const T* input,
+void topk_gating_softmax_kernelLauncher(const T* input,
                                         const T* gating_correction_bias,
                                         T* output,
                                         T* softmax,
@@ -1221,7 +1219,6 @@ static void run(const T* input,
     }
   }
 }
-};
 
 // ========================== Permutation things
 // =======================================
@@ -1296,6 +1293,18 @@ __global__ void initialize_moe_routing_kernel(
           dest_vec[j] = static_cast<int8_t>(round(quant_value));
         }
         Store<OutT, VecSize>(dest_vec, &dest_row_ptr[tid]);
+      } else if constexpr (std::is_same<OutT, phi::dtype::float8_e4m3fn>::value) {
+        using StoreT = AlignedVector<OutT, VecSize>;
+        StoreT dest_vec;
+        const float max_bound = 448.f;
+        const float min_bound = -448.f;
+        for (int j = 0; j < VecSize; j++) {
+          float quant_value = max_bound * scale * static_cast<float>(src_vec[j]);
+          quant_value = quant_value > max_bound ? max_bound : quant_value;
+          quant_value = quant_value < min_bound ? min_bound : quant_value;
+          dest_vec[j] = static_cast<phi::dtype::float8_e4m3fn>(quant_value);
+        }
+        Store<phi::dtype::float8_e4m3fn, VecSize>(dest_vec, &dest_row_ptr[tid]);
       } else {
         Store<T, VecSize>(src_vec, &dest_row_ptr[tid]);
       }
@@ -1304,9 +1313,7 @@ __global__ void initialize_moe_routing_kernel(
 }
 
 template <typename T, typename OutT = T>
-struct initialize_moe_routing_kernelLauncher{
-
-static void run(
+void initialize_moe_routing_kernelLauncher(
     const T* unpermuted_input,
     OutT* permuted_output,
     const int* expanded_dest_row_to_expanded_source_row,
@@ -1349,7 +1356,6 @@ static void run(
             num_rows * k);
   }
 }
-};
 
 // ============================== Infer GEMM sizes
 // =================================
@@ -1460,8 +1466,7 @@ __global__ void finalize_moe_routing_kernel(
 }
 
 template <typename T>
-struct finalize_moe_routing_kernelLauncher{
-static void run(
+void finalize_moe_routing_kernelLauncher(
     const T* expanded_permuted_rows,
     T* reduced_unpermuted_output,
     const T* bias,
@@ -1493,5 +1498,4 @@ static void run(
             routed_scaling_factor,
             num_rows);
 }
-};
 }  // namespace phi

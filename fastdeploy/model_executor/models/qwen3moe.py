@@ -39,7 +39,11 @@ from fastdeploy.model_executor.layers.linear import (
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.normalization import RMSNorm
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 from fastdeploy.model_executor.models.qwen3 import Qwen3Attention
 
 
@@ -58,7 +62,7 @@ class Qwen3MoeBlock(nn.Layer):
         self.tp_group = fd_config.parallel_config.tp_group
 
         self.use_ep = self.expert_parallel_size > 1
-        self.us_tp = self.tensor_parallel_size > 1
+        self.use_tp = self.tensor_parallel_size > 1
 
         weight_key_map = {
             "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
@@ -316,6 +320,12 @@ class Qwen3MoeModel(nn.Layer):
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="Qwen3MoeForCausalLM",
+    module_name="qwen3moe",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class Qwen3MoeForCausalLM(ModelForCasualLM):
     """
     Qwen3MoeForCausalLM
@@ -452,7 +462,7 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
         return hidden_states
 
     def clear_grpah_opt_backend(self):
-        """Clear graph optimization bakcend, the captured cuda graph will be cleaned"""
+        """Clear graph optimization backend, the captured cuda graph will be cleaned"""
         self.model.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
