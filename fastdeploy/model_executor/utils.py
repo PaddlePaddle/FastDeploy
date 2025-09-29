@@ -206,6 +206,8 @@ def is_pre_sliced_weight(model_path):
 
 
 def v1_loader_support(fd_config):
+    _v1_no_support_archs = ["Qwen2VLForConditionalGeneration"]
+
     def _err_msg(msg: str) -> str:
         logger.info(msg + "; fallback to the v0 loader for model loading.")
 
@@ -237,7 +239,9 @@ def v1_loader_support(fd_config):
         if unsupported_quant & {moe_quant_type, dense_quant_type}:
             _err_msg("v1 loader currently does not support w4a8/w4afp8/win2 quantization")
             return False
-
+    if fd_config.model_config.architectures[0] in _v1_no_support_archs:
+        _err_msg(f"v1 loader currently does not support {fd_config.model_config.architectures[0]}")
+        return False
     return True
 
 
