@@ -216,11 +216,9 @@ class EngineClient:
             request_id_idx = task.get("request_id")
             request_id = request_id_idx.rsplit("-", 1)[0]
             index = int(request_id_idx.rsplit("-", 1)[-1])
-            print(f"DEBUG format_and_add_data request_id : {request_id}, index: {index}")
             for i in range(index * n, (index + 1) * n):
                 child_task = copy(task)
                 child_task["request_id"] = f"{request_id}-{i}"
-                print(f"DEBUG format_and_add_data chat_utils: {child_task}")
                 self._send_task(child_task)
         except Exception as e:
             api_server_logger.error(f"zmq_client send task error: {e}, {str(traceback.format_exc())}")
