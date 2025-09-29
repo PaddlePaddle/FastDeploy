@@ -126,14 +126,14 @@ class LLMEngine:
 
         self.engine.start()
 
-        if self.do_profile == 0 and (
-            self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed"
-        ):
+        # If block numer is specified and model is deployed in mixed mode, start cache manager first
+        if not self.do_profile and self.cfg.scheduler_config.splitwise_role != "mixed":
             device_ids = self.cfg.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
+            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix, True)
 
+        # Start workers
         self.worker_proc = self._start_worker_service()
-        console_logger.info("Waiting worker processes ready...")
+        console_logger.info("Waiting for worker processes to be ready...")
         time.sleep(5)
         self.worker_init_status = dict()
 
@@ -157,10 +157,16 @@ class LLMEngine:
                 return False
             time.sleep(1)
 
+        # If block number is not specified, let workers do profiling to determine the block number,
+        # and then start the cache manager
         if self.do_profile:
             self._stop_profile()
+        elif self.cfg.cache_config.enable_prefix_caching:
+            device_ids = self.cfg.device_ids.split(",")
+            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix, False)
 
-        if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
+        # Launch components: scheduler, cache_manager, expert_service et.al.
+        if self.cfg.scheduler_config.splitwise_role != "mixed":
             self.launched_cache_manager_signal.value[0] = 1
 
         if api_server_pid is not None:
@@ -174,6 +180,24 @@ class LLMEngine:
             return False
 
         console_logger.info(f"Worker processes are launched with {time.time() - start_time} seconds.")
+
+        # Print blocks number & max running requests to console
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            block_size = self.cfg.cache_config.block_size
+            num_gpu_blocks = self.cfg.cache_config.num_gpu_blocks_override or self.cfg.cache_config.total_block_num
+            num_cpu_blocks = self.cfg.cache_config.num_cpu_blocks
+            max_running_requests = min(
+                (num_gpu_blocks + num_cpu_blocks) * block_size // self.cfg.max_model_len,
+                self.cfg.scheduler_config.max_num_seqs,
+            )
+            console_logger.info(
+                f"Detected {num_gpu_blocks} gpu blocks and {num_cpu_blocks} cpu blocks in cache (block size: {block_size})."
+            )
+            console_logger.info(
+                f"FastDeploy will be serving {max_running_requests} running requests "
+                f"if each sequence reaches its maximum length: {self.cfg.max_model_len}"
+            )
+
         return True
 
     def _get_generated_result(self):
@@ -622,7 +646,9 @@ class LLMEngine:
         self.engine.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
             device_ids = self.cfg.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
+            self.cache_manager_processes = self.engine.start_cache_service(
+                device_ids, self.ipc_signal_suffix, self.cfg.scheduler_config.splitwise_role != "mixed"
+            )
 
     def check_health(self, time_interval_threashold=30):
         """
@@ -651,6 +677,8 @@ class LLMEngine:
         role = self.cfg.scheduler_config.splitwise_role
         host_ip = self.cfg.host_ip
         disaggregate = self.cfg.disaggregate_info
+        request_queues_for_dp_ipc = None
+        result_queue_for_dp_ipc = None
         if self.cfg.scheduler_config.name == "splitwise":
             self.engine.scheduler.start(role, host_ip, disaggregate)
         elif self.cfg.scheduler_config.name == "dp":
