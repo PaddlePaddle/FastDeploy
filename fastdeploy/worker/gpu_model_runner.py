@@ -123,7 +123,7 @@ class GPUModelRunner(ModelRunnerBase):
                 "matmul_v2",
                 "fused_gemm_epilogue",
             ]
-            
+
             self.encoder_cache: dict[str, paddle.Tensor] = {}
 
         #  Sampler
@@ -359,7 +359,6 @@ class GPUModelRunner(ModelRunnerBase):
         req_len = len(req_dicts)
         has_prefill_task = False
         has_decode_task = False
-        logger.debug(f"before self.encoder_cache.keys: {self.encoder_cache.keys()}")
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
@@ -392,7 +391,7 @@ class GPUModelRunner(ModelRunnerBase):
                             self.scatter_and_cache_features(image_features, vision_inputs)
 
                         full_image_features_lst = []
-                        for mm_hash in inputs["mm_hashes"][request.num_image_start:request.num_image_end]:
+                        for mm_hash in inputs["mm_hashes"][request.num_image_start : request.num_image_end]:
                             feature = self.encoder_cache[mm_hash].cuda()
                             full_image_features_lst.append(feature)
                         full_image_features = paddle.concat(full_image_features_lst, axis=0)
@@ -525,7 +524,6 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
-        logger.debug(f"after self.encoder_cache.keys: {self.encoder_cache.keys()}")
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
         self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
