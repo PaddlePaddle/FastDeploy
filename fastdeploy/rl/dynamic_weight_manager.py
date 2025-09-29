@@ -66,6 +66,7 @@ class DynamicWeightManager:
         paddle.device.cuda.empty_cache()
 
         if not self.first_load:
+            paddle.distributed.restart_process_group()
             paddle.distributed.restart_process_group(self.parallel_config.tp_group)
             if self.parallel_config.enable_expert_parallel:
                 paddle.distributed.restart_process_group(self.parallel_config.ep_group)
