@@ -274,12 +274,15 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 x,
                 gate_out,
                 layer.gate_correction_bias,
-                None,  # if set, permute_input will be int8_t
+                (layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None),
                 layer.top_k,
                 False,
                 self.moe_quant_type,
                 topk_only_mode=False,
             )
+
+        if hasattr(layer, "up_gate_proj_in_scale"):
+            dequant_scale = None
 
         if self.moe_quant_type != "w4a8" and self.moe_quant_type != "w4afp8":
             # only w4a8 need expert_idx_per_token
@@ -821,16 +824,16 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             )
 
         # in_scales
-        for in_scale_name in ["up_gate_proj_in_scale", "down_proj_in_scale"]:
-            setattr(
-                layer,
-                in_scale_name,
-                layer.create_parameter(
-                    shape=[layer.num_local_experts],
-                    dtype="float32",
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
+        # for in_scale_name in ["up_gate_proj_in_scale", "down_proj_in_scale"]:
+        #     setattr(
+        #         layer,
+        #         in_scale_name,
+        #         layer.create_parameter(
+        #             shape=[layer.num_local_experts],
+        #             dtype="float32",
+        #             default_initializer=paddle.nn.initializer.Constant(0),
+        #         ),
+        #     )
 
         # weight_scales
         setattr(
@@ -888,12 +891,12 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             return weight_scale
 
         def _process_weight_scale(name: str, weight_scales: list[paddle.Tensor], processed_in_scale: paddle.Tensor):
-            if name == "up_gate_proj_weight_scale":
-                processed_weight_scale = paddle.stack(weight_scales, axis=0) / (448 * 7 * 2 ** (-9))
-            else:
+            if processed_in_scale is not None:
                 processed_weight_scale = (
                     paddle.stack(weight_scales, axis=0) / (448 * 7 * 2 ** (-9)) / processed_in_scale[:, None]
                 )
+            else:
+                processed_weight_scale = paddle.stack(weight_scales, axis=0) / (448 * 7 * 2 ** (-9))
 
             if len(processed_weight_scale.shape) == 3:
                 if name == "up_gate_proj_weight_scale" and processed_weight_scale.shape[-1] * 128 != layer.hidden_size:
@@ -980,16 +983,15 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                 scale_tensor = _extract_scale_tensor(layer, state_dict, scale_key_template, expert_idx)
                 scale_weight_map[name].append(scale_tensor)
 
-        # 3. Process scale tensor and set to layer
-        in_scales = []
-        for in_scale_name in ["up_gate_proj_in_scale", "down_proj_in_scale"]:
-            in_scales.append(_process_in_scale(in_scale_name, scale_weight_map[in_scale_name]))
-
         for i, weight_scale_name in enumerate(["up_gate_proj_weight_scale", "down_proj_weight_scale"]):
+            in_scale_name = weight_scale_name.replace("_weight_scale", "_in_scale")
+            in_scale = None
+            if hasattr(layer, in_scale_name) and in_scale_name in scale_weight_map.keys():
+                in_scale = _process_in_scale(in_scale_name, scale_weight_map[in_scale_name])
             _process_weight_scale(
                 weight_scale_name,
                 scale_weight_map[weight_scale_name],
-                in_scales[i],
+                in_scale,
             )
 
 

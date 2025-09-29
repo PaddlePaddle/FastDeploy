@@ -150,101 +150,114 @@ __forceinline__ __device__ OutType QuantHelperFunc(const InType input,
 
 template <typename T, typename OutT, int VecSize, int Kthread>
 __global__ void masked_quantize_moe_input_kernel(const T* permuted_inputs,
-const int64_t* expert_idx_per_token,
-const float* quant_scales,
-const float quant_max_bound,
-const float quant_min_bound,
-const int64_t token_num,
-const int64_t dim,
-float* permuted_input_row_sum,
-const int64_t* recv_expert_count,
-const int num_max_tokens_per_expert,
-OutT* out) {
-using LoadT = AlignedVector<T, VecSize>;
-using LoadOutT = AlignedVector<OutT, VecSize>;
-LoadT input_vec;
-LoadOutT output_vec;
-float scale_factor = -7.0f / 512.0f;
-using vec_t = typename BytesToType<sizeof(OutT) * VecSize>::Type;
-for (int token_idx = blockIdx.x; token_idx < token_num; token_idx += gridDim.x) {
-  const auto token_idx_in_expert = token_idx % num_max_tokens_per_expert;
-  const auto expert_id = token_idx / num_max_tokens_per_expert;
-  if (token_idx_in_expert >= recv_expert_count[expert_id]) {
-      auto next_expert_start_idx = (expert_id + 1) * num_max_tokens_per_expert;
-      auto num_iters_to_next_expert = (next_expert_start_idx - token_idx - 1) / gridDim.x;
-      token_idx += num_iters_to_next_expert * gridDim.x;
-      continue;
-  }
-  int64_t expert_idx = expert_idx_per_token[token_idx];
-  float quant_scale = quant_scales[expert_idx];
-  float thread_row_sum = 0.0f;
-  for(int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
-    int64_t offset = token_idx * dim + idx * VecSize;
-    Load<T, VecSize>(&permuted_inputs[offset], &input_vec);
-    #pragma unroll
-    for (int i = 0; i < VecSize; i++) {
-      output_vec[i] = QuantHelperFunc<T, OutT>(input_vec[i], quant_scale, quant_max_bound, quant_min_bound);
-      thread_row_sum += static_cast<float>(output_vec[i]);
+        const int64_t* expert_idx_per_token,
+        const int64_t token_num,
+        const int64_t dim,
+        float* input_dequant_scale,
+        const int64_t* recv_expert_count,
+        const int num_max_tokens_per_expert,
+        OutT* out) {
+    using LoadT = AlignedVector<T, VecSize>;
+    using LoadOutT = AlignedVector<OutT, VecSize>;
+    LoadT input_vec;
+    LoadOutT output_vec;
+    using vec_t = typename BytesToType<sizeof(OutT) * VecSize>::Type;
+    extern __shared__ char smem_[];
+    for (int token_idx = blockIdx.x; token_idx < token_num; token_idx += gridDim.x) {
+        const auto token_idx_in_expert = token_idx % num_max_tokens_per_expert;
+        const auto expert_id = token_idx / num_max_tokens_per_expert;
+        if (token_idx_in_expert >= recv_expert_count[expert_id]) {
+            auto next_expert_start_idx = (expert_id + 1) * num_max_tokens_per_expert;
+            auto num_iters_to_next_expert = (next_expert_start_idx - token_idx - 1) / gridDim.x;
+            token_idx += num_iters_to_next_expert * gridDim.x;
+            continue;
+        }
+        int64_t expert_idx = expert_idx_per_token[token_idx];
+        float abs_max = 0.0f;
+        for(int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
+            int64_t offset = token_idx * dim + idx * VecSize;
+            #pragma unroll
+            for (int i = 0; i < VecSize; i++) {
+                float res = static_cast<float>(input_vec[i]);
+                abs_max = fmax(abs_max, fabs(res));
+            }
+            Store<T, VecSize>(input_vec, reinterpret_cast<T*>(smem_) + idx * VecSize);
+        }
+        abs_max = BlockAllReduce<MaxOp, float, Kthread>(abs_max);
+        input_dequant_scale[token_idx] = abs_max;
+        float quant_scale = 440.0f / abs_max;
+        for(int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
+            int64_t offset = token_idx * dim + idx * VecSize;
+            Load<T, VecSize>(reinterpret_cast<T*>(smem_) + idx * VecSize, &input_vec);
+            #pragma unroll
+            for (int i = 0; i < VecSize; i++) {
+                float res = static_cast<float>(input_vec[i]);
+                output_vec[i] = static_cast<OutT>(res * quant_scale);
+            }
+            *(reinterpret_cast<vec_t*>(&out[offset])) = *(reinterpret_cast<const vec_t*>(&output_vec));
+        }
     }
-    *(reinterpret_cast<vec_t*>(&out[offset])) = *(reinterpret_cast<const vec_t*>(&output_vec));
-  }
-  float block_row_sum = BlockAllReduce<SumOp, float, Kthread>(thread_row_sum);
-  permuted_input_row_sum[token_idx] = block_row_sum * scale_factor;
-  }
 }
 
 template <typename T, typename OutT, int VecSize, int Kthread>
 __global__ void quantize_moe_input_kernel(const T* permuted_inputs,
-const int64_t* expert_idx_per_token,
-const float* quant_scales,
-const float quant_max_bound,
-const float quant_min_bound,
-const int64_t token_num,
-const int64_t dim,
-float* permuted_input_row_sum,
-const int64_t* recv_expert_count,
-const int num_max_tokens_per_expert,
-OutT* out) {
-using LoadT = AlignedVector<T, VecSize>;
-using LoadOutT = AlignedVector<OutT, VecSize>;
-LoadT input_vec;
-LoadOutT output_vec;
-using vec_t = typename BytesToType<sizeof(OutT) * VecSize>::Type;
-float scale_factor = -7.0f / 512.0f;
-for (int token_idx = blockIdx.x; token_idx < token_num; token_idx += gridDim.x) {
-  int64_t expert_idx = expert_idx_per_token[token_idx];
-  float quant_scale = quant_scales[expert_idx];
-  float thread_row_sum = 0.0f;
-  for(int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
-    int64_t offset = token_idx * dim + idx * VecSize;
-    Load<T, VecSize>(&permuted_inputs[offset], &input_vec);
-    #pragma unroll
-    for (int i = 0; i < VecSize; i++) {
-      output_vec[i] = QuantHelperFunc<T, OutT>(input_vec[i], quant_scale, quant_max_bound, quant_min_bound);
-      thread_row_sum += static_cast<float>(output_vec[i]);
+        const int64_t* expert_idx_per_token,
+        const int64_t token_num,
+        const int64_t dim,
+        float* input_dequant_scale,
+        const int64_t* recv_expert_count,
+        const int num_max_tokens_per_expert,
+        OutT* out) {
+    using LoadT = AlignedVector<T, VecSize>;
+    using LoadOutT = AlignedVector<OutT, VecSize>;
+    LoadT input_vec;
+    LoadOutT output_vec;
+    using vec_t = typename BytesToType<sizeof(OutT) * VecSize>::Type;
+
+    extern __shared__ char smem_[];
+
+    for (int token_idx = blockIdx.x; token_idx < token_num; token_idx += gridDim.x) {
+        int64_t expert_idx = expert_idx_per_token[token_idx];
+        float abs_max = 0.0f;
+        for(int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
+            int64_t offset = token_idx * dim + idx * VecSize;
+            Load<T, VecSize>(&permuted_inputs[offset], &input_vec);
+            #pragma unroll
+            for (int i = 0; i < VecSize; i++) {
+                float res = static_cast<float>(input_vec[i]);
+                abs_max = fmax(abs_max, fabs(res));
+            }
+            Store<T, VecSize>(input_vec, reinterpret_cast<T*>(smem_) + idx * VecSize);
+        }
+        abs_max = BlockAllReduce<MaxOp, float, Kthread>(abs_max);
+        input_dequant_scale[token_idx] = abs_max;
+        float quant_scale = 440.0f / abs_max;
+
+        for(int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
+            int64_t offset = token_idx * dim + idx * VecSize;
+            Load<T, VecSize>(reinterpret_cast<T*>(smem_) + idx * VecSize, &input_vec);
+            #pragma unroll
+            for (int i = 0; i < VecSize; i++) {
+                float res = static_cast<float>(input_vec[i]);
+                output_vec[i] = static_cast<OutT>(res * quant_scale);
+            }
+            *(reinterpret_cast<vec_t*>(&out[offset])) = *(reinterpret_cast<const vec_t*>(&output_vec));
+        }
     }
-    *(reinterpret_cast<vec_t*>(&out[offset])) = *(reinterpret_cast<const vec_t*>(&output_vec));
-  }
-  float block_row_sum = BlockAllReduce<SumOp, float, Kthread>(thread_row_sum);
-  permuted_input_row_sum[token_idx] = block_row_sum * scale_factor;
-  }
 }
 
 template <typename T, typename OutT>
 void quantize_moe_input(
-  const T* permuted_inputs,
-  const int64_t* expert_idx_per_token,
-  const float* quant_scales,
-  const float quant_max_bound,
-  const float quant_min_bound,
-  const int64_t token_num,
-  const int64_t dim,
-  float* permuted_input_row_sum,
-  const int64_t* recv_expert_count,
-  const int num_max_tokens_per_expert,
-  bool used_in_ep_low_latency,
-  OutT* out,
-  cudaStream_t stream) {
+        const T* permuted_inputs,
+        const int64_t* expert_idx_per_token,
+        const int64_t token_num,
+        const int64_t dim,
+        float* input_quant_scale,
+        const int64_t* recv_expert_count,
+        const int num_max_tokens_per_expert,
+        bool used_in_ep_low_latency,
+        OutT* out,
+        cudaStream_t stream) {
     constexpr int VecSize = 16 / sizeof(T);
     constexpr int threads_per_block = 128;
     const int dev_id = 0;
@@ -258,15 +271,16 @@ void quantize_moe_input(
     const int num_blocks_per_wave = sm_count * act_blocks_per_sm;
     dim3 grid;
     grid.x = min(static_cast<int64_t>(num_blocks_per_wave), token_num);
-    kernel<<<grid, threads_per_block, 0, stream>>>(
+    const int smem_size = dim * sizeof(T);
+    if (smem_size >= 48 * 1024) {
+        cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
+    }
+    kernel<<<grid, threads_per_block, smem_size, stream>>>(
       permuted_inputs,
       expert_idx_per_token,
-      quant_scales,
-      quant_max_bound,
-      quant_min_bound,
       token_num,
       dim,
-      permuted_input_row_sum,
+      input_quant_scale,
       recv_expert_count,
       num_max_tokens_per_expert,
       out);

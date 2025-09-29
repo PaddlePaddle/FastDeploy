@@ -310,24 +310,61 @@ void MoeFFNKernel(const paddle::Tensor& permute_input,
         fp8_act_out = allocator->Allocate(
             SizeOf(paddle::DataType::INT8) * act_out_tensor.numel());
 
-        MoeFastHardamardWrapper<data_t, data_t_fp8>(
-            act_out_tensor.data<data_t>(),
-            expert_idx_per_token ? expert_idx_per_token.get().data<int64_t>() : nullptr,
-            const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
-            ffn2_shift,
-            ffn2_smooth,
-            down_proj_in_scale ? const_cast<paddle::Tensor*>(down_proj_in_scale.get_ptr())->data<float>() : nullptr,
-            1,
-            448.0f,
-            -448.0f,
-            expanded_active_expert_rows,
-            inter_size / 2,
-            num_max_tokens_per_expert,
-            used_in_ep_low_latency,
-            hadamard_block_size,
-            reinterpret_cast<data_t_fp8 *>(fp8_act_out->ptr()),
-            stream
-        );
+        if (down_proj_in_scale) {
+            MoeFastHardamardWrapper<data_t, data_t_fp8>(
+                act_out_tensor.data<data_t>(),
+                expert_idx_per_token ? expert_idx_per_token.get().data<int64_t>() : nullptr,
+                const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
+                ffn2_shift,
+                ffn2_smooth,
+                down_proj_in_scale ? const_cast<paddle::Tensor*>(down_proj_in_scale.get_ptr())->data<float>() : nullptr,
+                1,
+                448.0f,
+                -448.0f,
+                expanded_active_expert_rows,
+                inter_size / 2,
+                num_max_tokens_per_expert,
+                used_in_ep_low_latency,
+                hadamard_block_size,
+                reinterpret_cast<data_t_fp8 *>(fp8_act_out->ptr()),
+                stream
+            );
+        } else {
+            Allocator::AllocationPtr ffn2_input_dequant_scale;
+            ffn2_input_dequant_scale = allocator->Allocate(
+                sizeof(float) * expanded_active_expert_rows);
+            input_dequant_scale = reinterpret_cast<float*>(ffn2_input_dequant_scale->ptr());
+            MoeFastHardamardWrapper<data_t, data_t>(
+                act_out_tensor.data<data_t>(),
+                expert_idx_per_token ? expert_idx_per_token.get().data<int64_t>() : nullptr,
+                const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
+                ffn2_shift, // ffn2_shift->data<T>(),
+                ffn2_smooth, // ffn2_smooth->data<T>(),
+                nullptr,
+                1,
+                448.0f,
+                -448.0f,
+                expanded_active_expert_rows,
+                inter_size / 2,
+                num_max_tokens_per_expert,
+                used_in_ep_low_latency,
+                hadamard_block_size,
+                act_out_tensor.data<data_t>(),
+                stream
+            );
+
+            quantize_moe_input<data_t, data_t_fp8>(act_out_tensor.data<data_t>(),
+                expert_idx_per_token ? expert_idx_per_token.get().data<int64_t>() : nullptr,
+                expanded_active_expert_rows,
+                inter_size / 2,
+                input_dequant_scale,
+                const_cast<int64_t*>(tokens_expert_prefix_sum.data<int64_t>()),
+                num_max_tokens_per_expert,
+                used_in_ep_low_latency,
+                reinterpret_cast<data_t_fp8 *>(fp8_act_out->ptr()),
+                stream
+            );
+        }
 
         paddle::Tensor weight_scale_tensor = *const_cast<paddle::Tensor*>(down_proj_scale.get_ptr());
         const int weight_scale_group_size = weight_scale_tensor.dims().size() == 2 ? inter_size / 2 : weight_scale_tensor.dims()[3];
