@@ -1142,13 +1142,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
    */
   m.def("recover_decode_task", &RecoverDecodeTask, "recover decode task for scheduler v1 function");
 
-  /**
-   * extract_text_token_output.cu
-   * extract_text_token_output
-   */
-  m.def("extract_text_token_output", &ExtractTextTokenOutput,
-        "extract_text_token_output function");
-
   m.def("group_swiglu_with_masked", &GroupSwigluWithMasked,
         "group_swiglu_with_masked function");
 

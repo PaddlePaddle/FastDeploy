@@ -86,11 +86,19 @@ class IluvatarAttnBackend(AttentionBackend):
         self.scale = 1.0 / sqrt(head_dim)
         self.num_layers = fd_config.model_config.num_hidden_layers
         self.dtype = paddle.get_default_dtype()
+        self.enable_mm = fd_config.model_config.enable_mm
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
-        self.rope_cos = forward_meta.rotary_embs[0, 0, :, :, :]
-        self.rope_sin = forward_meta.rotary_embs[1, 0, :, :, :]
+        if self.enable_mm:
+            # VL: TODO: The first 0 may need to be replaced with batch_id
+            # of max_num_seqs when running multiple batch case later
+            self.rope_cos = forward_meta.rotary_embs[0, 0, 0, :, :, :]
+            self.rope_sin = forward_meta.rotary_embs[0, 1, 0, :, :, :]
+        else:
+            # text
+            self.rope_cos = forward_meta.rotary_embs[0, 0, :, :, :]
+            self.rope_sin = forward_meta.rotary_embs[1, 0, :, :, :]
         self.prefill_info_dict = {}
         self.decode_info_dict = {}
         self.prefill_info_dict["batch_ids"] = paddle.where(forward_meta.seq_lens_encoder)[0]
@@ -115,7 +123,10 @@ class IluvatarAttnBackend(AttentionBackend):
             self.prefill_info_dict["cu_seqlens_q"][1:] = forward_meta.seq_lens_encoder[
                 self.prefill_info_dict["batch_ids"], 0
             ]
-            self.prefill_info_dict["cu_seqlens_q"] = paddle.cumsum(self.prefill_info_dict["cu_seqlens_q"])
+            # NOTE: The explicit dtype='int32' is required for Iluvatar hardware compatibility.
+            self.prefill_info_dict["cu_seqlens_q"] = paddle.cumsum(
+                self.prefill_info_dict["cu_seqlens_q"], dtype="int32"
+            )
 
             self.tmp_buffer = paddle.zeros(
                 [self.prefill_num_tokens + self.decode_len, self.hidden_dim], dtype=self.dtype
