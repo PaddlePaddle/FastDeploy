@@ -25,7 +25,10 @@ from paddle.device.cuda import graphs
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
-from fastdeploy.distributed.communication import capture_custom_allreduce
+from fastdeploy.distributed.communication import (
+    capture_custom_allreduce,
+    custom_ar_clear_ipc_handles,
+)
 from fastdeploy.utils import get_logger
 
 logger = get_logger("cudagrpah_piecewise_backend", "cudagraph_piecewise_backend.log")
@@ -227,6 +230,7 @@ class CudaGraphPiecewiseBackend:
     def clear_graph(self):
         """ """
         # Clear graphs
+        custom_ar_clear_ipc_handles()
         for id, entry in self.concrete_size_entries.items():
             if entry.cuda_graph:
                 del entry.cuda_graph
