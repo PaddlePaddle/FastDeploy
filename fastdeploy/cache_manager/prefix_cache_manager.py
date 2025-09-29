@@ -111,6 +111,11 @@ class PrefixCacheManager:
             + f"{self.num_cpu_blocks}, bytes_per_layer_per_block {self.cache_config.bytes_per_layer_per_block}"
         )
 
+        main_process_metrics.max_gpu_block_num.set(self.num_gpu_blocks)
+        main_process_metrics.available_gpu_block_num.set(self.num_gpu_blocks)
+        main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
+        main_process_metrics.available_gpu_resource.set(1.0)
+
     @property
     def available_gpu_resource(self):
         return len(self.gpu_free_block_list) / self.num_gpu_blocks if self.num_gpu_blocks > 0 else 0.0
