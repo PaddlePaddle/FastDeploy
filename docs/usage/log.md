@@ -30,7 +30,7 @@ By default, logs are stored in the `log` directory under the execution path. To 
 * `cache_transfer_manager.log` : Logs startup parameters and received request information.
 * `launch_cache_manager.log` : Records cache transfer startup parameters and error messages.
 
-## PD Disaggragation Logs
+## PD Disaggregation Logs
 * `cache_messager.log` : Logs transmission protocols and messages used by the P instance.
 * `splitwise_connector.log` : Records data received from P/D instances and connection establishment details.
 

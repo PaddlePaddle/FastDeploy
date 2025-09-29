@@ -18,17 +18,17 @@
 """ process.py """
 import copy
 import os
+import pickle
 from collections import defaultdict
 from typing import Any, Dict, List, Tuple, Union
 
-import pickle
 import numpy as np
+import zmq
 from paddleformers.transformers.image_utils import ChannelDimension
 from PIL import Image
-import zmq
 
-from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.engine.request import ImagePosition
+from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.multimodal.hasher import MultimodalHasher
@@ -167,9 +167,7 @@ class DataProcessor:
         """Enable evaluation mode (doesn't produce labels)."""
         self.is_training = False
 
-    def text2ids(
-        self, text, images = None, videos = None, image_uuid = None, video_uuid = None
-    ):
+    def text2ids(self, text, images=None, videos=None, image_uuid=None, video_uuid=None):
         """
         Convert chat text into model inputs.
         Returns a dict with input_ids, token_type_ids, position_ids, images, grid_thw, image_type_ids, labels.
@@ -187,7 +185,7 @@ class DataProcessor:
             "pic_cnt": 0,
             "video_cnt": 0,
             "mm_positions": [],
-            "mm_hashes": []
+            "mm_hashes": [],
         }
 
         IMAGE_PLACEHOLDER = "<|image@placeholder|>"
@@ -252,18 +250,18 @@ class DataProcessor:
             for item in content:
                 if item.get("type") in ["image", "video"]:
                     mm_items.append(item)
-        
-        missing_hashes, missing_idx = [], [] 
+
+        missing_hashes, missing_idx = [], []
         for idx, item in enumerate(mm_items):
             if not item.get("data"):
                 # raw data not provided, should be retrieved from processor cache
                 missing_hashes.append(item.get("uuid"))
-                missing_idx.append(idx)  
+                missing_idx.append(idx)
 
         context = zmq.Context()
         dealer = context.socket(zmq.DEALER)
         dealer.connect("ipc:///dev/shm/processor_cache.ipc")
-        
+
         missing_items = self.get_processor_cache(dealer, missing_hashes)
         for idx in range(len(missing_items)):
             if not missing_items[idx]:
@@ -281,17 +279,19 @@ class DataProcessor:
                 video_uuid.append(item["uuid"])
             else:
                 raise ValueError(f"Unsupported multimodal type: {item.get('type')}")
-        
+
         if self.tokenizer.chat_template is None:
             raise ValueError("This model does not support chat template.")
+
+        chat_template_kwargs = request.get("chat_template_kwargs", {})
         prompt = self.tokenizer.apply_chat_template(
             request,
             tokenize=False,
             add_generation_prompt=request.get("add_generation_prompt", True),
-            chat_template=request.get("chat_template", None),
+            **chat_template_kwargs,
         )
         request["text_after_process"] = prompt
-        
+
         outputs = self.text2ids(prompt, images, videos, image_uuid, video_uuid)
 
         missing_idx = set(missing_idx)
@@ -426,7 +426,7 @@ class DataProcessor:
         t, h, w = meta["thw"]
         outputs["images"].append(frames)
         outputs["mm_hashes"].append(uuid)
-        outputs["grid_thw"].append(np.array([[t, h, w]])) 
+        outputs["grid_thw"].append(np.array([[t, h, w]]))
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
         outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
@@ -562,9 +562,8 @@ class DataProcessor:
         _, resp = socket.recv_multipart()
         mm_items = pickle.loads(resp)
         data_processor_logger.info(f"Get cache of mm_hashes: {mm_hashes}")
-        
+
         return mm_items
-    
 
     def update_processor_cache(self, socket, mm_hashes: list[str], mm_items):
         """
