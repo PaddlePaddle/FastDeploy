@@ -22,21 +22,22 @@ import paddle
 import paddle.distributed as dist
 from paddle.distributed.communication.group import Group
 
-from fastdeploy.distributed.custom_all_reduce import cuda_wrapper
-from fastdeploy.model_executor.ops.gpu import (
-    all_reduce,
-    dispose,
-    get_graph_buffer_ipc_meta,
-    init_custom_all_reduce,
-    meta_size,
-    register_buffer,
-    register_graph_buffers,
-)
+from fastdeploy.platforms import current_platform
 
-try:
-    meta_size()
+if current_platform.is_cuda():
+    from fastdeploy.distributed.custom_all_reduce import cuda_wrapper
+    from fastdeploy.model_executor.ops.gpu import (
+        all_reduce,
+        dispose,
+        get_graph_buffer_ipc_meta,
+        init_custom_all_reduce,
+        meta_size,
+        register_buffer,
+        register_graph_buffers,
+    )
+
     custom_ar = True
-except Exception:
+else:
     custom_ar = False
 
 _instances = []
