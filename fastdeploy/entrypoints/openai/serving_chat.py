@@ -293,6 +293,7 @@ class OpenAIServingChat:
 
                     output = res["outputs"]
                     output_top_logprobs = output["top_logprobs"]
+                    output_draft_top_logprobs = output["draft_top_logprobs"]
                     previous_num_tokens += len(output["token_ids"])
                     logprobs_res: Optional[LogProbs] = None
                     draft_logprobs_res: Optional[LogProbs] = None
@@ -300,9 +301,9 @@ class OpenAIServingChat:
                         logprobs_res = self._create_chat_logprobs(
                             output_top_logprobs, request.logprobs, request.top_logprobs
                         )
-                        if request.include_draft_logprobs:
+                        if request.include_draft_logprobs and output_draft_top_logprobs is not None:
                             draft_logprobs_res = self._create_chat_logprobs(
-                                output_top_logprobs, request.logprobs, request.draft_top_logprobs
+                                output_draft_top_logprobs, request.logprobs, request.top_logprobs
                             )
 
                     delta_message = DeltaMessage(
@@ -426,6 +427,7 @@ class OpenAIServingChat:
             previous_num_tokens = 0
             current_waiting_time = 0
             logprob_contents = []
+            draft_logprob_contents = []
             completion_token_ids = []
             response_processor = ChatResponseProcessor(
                 data_processor=self.engine_client.data_processor,
@@ -466,6 +468,7 @@ class OpenAIServingChat:
                     # The logprob for handling the response
                     output = data["outputs"]
                     output_top_logprobs = output["top_logprobs"]
+                    output_draft_top_logprobs = output["draft_top_logprobs"]
                     if output_top_logprobs is not None:
                         # logprobs
                         logprobs_res = self._create_chat_logprobs(
@@ -475,12 +478,12 @@ class OpenAIServingChat:
                             logprob_contents.extend(logprobs_res.content)
 
                         # draf_logprobs
-                        if request.include_draft_logprobs:
+                        if request.include_draft_logprobs and output_draft_top_logprobs is not None:
                             draft_logprobs_res = self._create_chat_logprobs(
-                                output_top_logprobs, request.logprobs, request.draft_top_logprobs
+                                output_draft_top_logprobs, request.logprobs, request.top_logprobs
                             )
                             if draft_logprobs_res and draft_logprobs_res.content is not None:
-                                draft_logprobs_res.extend(logprobs_res.content)
+                                draft_logprob_contents.extend(draft_logprobs_res.content)
 
                     if data["finished"]:
                         final_res = data
@@ -515,11 +518,15 @@ class OpenAIServingChat:
         logprobs_full_res = None
         if logprob_contents:
             logprobs_full_res = LogProbs(content=logprob_contents)
+        draft_logprobs_full_res = None
+        if draft_logprob_contents:
+            draft_logprobs_full_res = LogProbs(content=draft_logprob_contents)
 
         choice = ChatCompletionResponseChoice(
             index=0,
             message=message,
             logprobs=logprobs_full_res,
+            draft_logprobs=draft_logprobs_full_res,
             finish_reason=None,
         )
         has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
