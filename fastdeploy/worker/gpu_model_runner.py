@@ -1251,7 +1251,7 @@ class GPUModelRunner(ModelRunnerBase):
         # adapted to cudagraph.
         self.share_inputs["decoder_num_blocks_device"] = paddle.full([1], 0, dtype="int32")
         self.share_inputs["decoder_chunk_size_device"] = paddle.full([1], 64, dtype="int32")
-        self.share_inputs["max_len_tensor_cpu"] = paddle.full([8], 0, dtype="int32").cpu()
+        self.share_inputs["max_len_tensor_cpu"] = paddle.full([9], 0, dtype="int32").cpu()
 
         self.share_inputs["encoder_batch_ids"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
         self.share_inputs["encoder_tile_ids_per_batch"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
