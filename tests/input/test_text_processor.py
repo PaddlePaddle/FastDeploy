@@ -20,6 +20,7 @@ class TestDataProcessorProcess(unittest.TestCase):
         self.processor.tool_parser_dict = {}
         self.processor.generation_config = MagicMock()
         self.processor.eos_token_ids = [1]
+        self.processor.reasoning_parser = None
 
         def mock_messages2ids(request, **kwargs):
             if "chat_template" in kwargs:
