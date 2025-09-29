@@ -368,9 +368,6 @@ class GPUModelRunner(ModelRunnerBase):
                 length = prefill_end_index - prefill_start_index
                 evict_mm_hashes = request.get("evict_mm_hashes", None)
                 if evict_mm_hashes is not None:
-                    logger.debug(
-                        f"request: {request.request_id} evict_mm_hashes={evict_mm_hashes}, mm_hash: {request.multimodal_inputs.get('mm_hashes', [])}"
-                    )
                     for mm_hash in evict_mm_hashes:
                         self.encoder_cache.pop(mm_hash, None)
                 if self.enable_mm:

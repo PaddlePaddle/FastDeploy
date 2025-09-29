@@ -1205,7 +1205,7 @@ class FDConfig:
         self.max_prefill_batch = 3
         if current_platform.is_xpu():
             self.max_prefill_batch = 1
-        if self.model_config is not None and self.model_config.enable_mm:
+        if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
 
         num_ranks = self.parallel_config.tensor_parallel_size * self.parallel_config.data_parallel_size

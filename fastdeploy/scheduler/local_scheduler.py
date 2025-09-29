@@ -243,10 +243,10 @@ class LocalScheduler:
                 self.wait_request_timeout,
             )
 
+            requests: List[Request] = []
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 required_total_blocks = 0
                 current_prefill_tokens = 0
-                requests: List[Request] = []
                 long_partial_requests, short_partial_requests = 0, 0
                 for request_id in batch_ids:
                     request = self.requests[request_id]
@@ -270,14 +270,13 @@ class LocalScheduler:
                     else:
                         if current_prefill_tokens > max_num_batched_tokens:
                             break
-
                     requests.append(request.raw)
-                self.ids_read_cursor += len(requests)
             else:
                 for request_id in batch_ids:
                     request = self.requests[request_id]
                     requests.append(request.raw)
-                    self.ids_read_cursor += 1
+
+            self.ids_read_cursor += len(requests)
 
         if len(batch_ids) > 0 and len(requests) == 0:
             scheduler_logger.debug(f"Scheduler has put all just-pulled request into the queue: {len(batch_ids)}")
