@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import re
 from functools import partial
 from typing import Dict, Optional, Union
 
@@ -181,6 +182,65 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
     @classmethod
     def name(self):
         return "Qwen2_5_VLForConditionalGeneration"
+
+    @paddle.no_grad()
+    def load_weights(self, weights_iterator) -> None:
+        """
+        Load model parameters from a given weights_iterator object.
+
+        Args:
+            weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
+        """
+
+        from fastdeploy.model_executor.utils import (
+            default_weight_loader,
+            process_weights_after_loading,
+        )
+
+        stacked_params_mapping = [
+            # (param_name, shard_name, shard_id)
+            # 参数变量名与权重key不同的要做映射
+            ("qkv_proj", "q_proj", "q"),
+            ("qkv_proj", "k_proj", "k"),
+            ("qkv_proj", "v_proj", "v"),
+            ("up_gate_proj", "gate_proj", "gate"),
+            ("up_gate_proj", "up_proj", "up"),
+            ("embed_tokens.embeddings", "embed_tokens", None),
+            ("lm_head.linear", "lm_head", None),
+        ]
+
+        params_dict = dict(self.named_parameters())
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        for loaded_weight_name, loaded_weight in weights_iterator:
+            # model_format = self.fd_config.model_config.model_format
+            # Because the prefix for Paddle is qwen2, and for Hugging Face it is model.
+            # if model_format == "torch":
+            #     loaded_weight_name = loaded_weight_name.replace("model", "qwen2")
+            for param_name, weight_name, shard_id in stacked_params_mapping:
+                if weight_name not in loaded_weight_name:
+                    continue
+                model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                if model_param_name not in params_dict:
+                    continue
+                param = params_dict[model_param_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                weight_loader(param, loaded_weight, shard_id)
+                break
+            else:
+                model_param_name = loaded_weight_name
+                if model_param_name not in params_dict:
+                    continue
+                param = params_dict[model_param_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                weight_loader(param, loaded_weight)
+            model_sublayer_name = re.sub(r"\.(weight)$", "", model_param_name)
+            process_weights_after_loading_fn(model_sublayer_name, param)
+
+        if self.tie_word_embeddings:
+            # because we use lazy guard and is not initialized by default
+            if not self.lm_head.linear.weight._is_initialized():
+                self.lm_head.linear.weight.initialize()
+            self.lm_head.load_state_dict({self.lm_head.weight_key: self.model.embed_tokens.embeddings.weight})
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
