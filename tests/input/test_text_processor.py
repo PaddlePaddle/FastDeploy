@@ -5,6 +5,11 @@ from fastdeploy.engine.request import Request
 from fastdeploy.input.text_processor import DataProcessor
 
 
+class MockReasoningParser:
+    def get_model_status(self, prompt_token_ids):
+        return "think_start"
+
+
 class TestDataProcessorProcess(unittest.TestCase):
     def setUp(self):
         # 创建 DataProcessor 实例的模拟对象
@@ -20,7 +25,8 @@ class TestDataProcessorProcess(unittest.TestCase):
         self.processor.tool_parser_dict = {}
         self.processor.generation_config = MagicMock()
         self.processor.eos_token_ids = [1]
-        self.processor.reasoning_parser = None
+        self.processor.reasoning_parser = MockReasoningParser()
+        self.processor.model_status_dict = {}
 
         def mock_messages2ids(request, **kwargs):
             if "chat_template" in kwargs:
@@ -50,6 +56,7 @@ class TestDataProcessorProcess(unittest.TestCase):
 
     def test_process_request_dict(self):
         request_dict = {
+            "request_id": "123",
             "messages": [{"role": "user", "content": "Hello!"}],
             "chat_template_kwargs": {"chat_template": "Hello!"},
             "eos_token_ids": [1],

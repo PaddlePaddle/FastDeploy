@@ -100,9 +100,9 @@ class ErnieVLReasoningParser(ReasoningParser):
             return None
         if model_status == "think_start":
             if self.think_end_token_id in delta_token_ids:
-                end_index = delta_text.find(self.end_token)
+                end_index = delta_text.find(self.think_end_token)
                 reasoning_content = delta_text[:end_index]
-                content = delta_text[end_index + len(self.end_token) :]
+                content = delta_text[end_index + len(self.think_end_token) :]
                 return DeltaMessage(reasoning_content=reasoning_content, content=content)
             elif self.think_end_token_id in previous_token_ids:
                 return DeltaMessage(content=delta_text)

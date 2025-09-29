@@ -259,17 +259,17 @@ class TestErnieX1ReasoningParser(unittest.TestCase):
         self.assertEqual(reasoning, "no_thinking_here")
         self.assertEqual(response, "")
 
-    # def test_batch_response_without_end_tag(self):
-    #     text = "abc</think><response>partial response"
-    #     reasoning, response = self.parser.extract_reasoning_content(text, self.request, "think_start")
-    #     self.assertEqual(reasoning, "abc")
-    #     self.assertEqual(response, "partial response")
+    def test_batch_response_without_end_tag(self):
+        text = "abc</think><response>partial response"
+        reasoning, response = self.parser.extract_reasoning_content(text, self.request, "think_start")
+        self.assertEqual(reasoning, "abc")
+        self.assertEqual(response, "partial response")
 
-    # def test_batch_preserve_all_newlines(self):
-    #     text = "abc\n</think>\n<response>line1\nline2\n</response>"
-    #     reasoning, response = self.parser.extract_reasoning_content(text, self.request, "think_start")
-    #     self.assertEqual(reasoning, "abc\n")
-    #     self.assertEqual(response, "line1\nline2\n")
+    def test_batch_preserve_all_newlines(self):
+        text = "abc\n</think>\n<response>line1\nline2\n</response>"
+        reasoning, response = self.parser.extract_reasoning_content(text, self.request, "think_start")
+        self.assertEqual(reasoning, "abc\n")
+        self.assertEqual(response, "line1\nline2\n")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,11 @@ from unittest.mock import MagicMock, patch
 from fastdeploy.input.ernie4_5_processor import Ernie4_5Processor
 
 
+class MockReasoningParser:
+    def get_model_status(self, prompt_token_ids):
+        return "think_start"
+
+
 class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
     def setUp(self):
         # 创建 Ernie4_5Processor 实例的模拟对象
@@ -14,13 +19,13 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         # 设置必要的属性
         self.processor.tokenizer = MagicMock()
         self.processor.tokenizer.eos_token_id = 1
-        self.processor.decode_status = {}
+        self.processor.decode_status = {"test": []}
         self.processor.reasoning_end_dict = {}
         self.processor.tool_parser_dict = {}
         self.processor.generation_config = MagicMock()
         self.processor.eos_token_ids = [1]
-        self.processor.reasoning_parser = None
-        self.processor.model_status_dict = {}
+        self.processor.reasoning_parser = MockReasoningParser()
+        self.processor.model_status_dict = {"test": "think_start"}
 
         # 模拟 ids2tokens 方法
         def mock_ids2tokens(token_ids, task_id):
@@ -61,6 +66,14 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
 
         # 调用方法
         result = self.processor.process_response_dict_streaming(response_dict, **kwargs)
+
+        # 验证结果
+        self.assertEqual(result["outputs"]["raw_prediction"], "delta_text")
+
+        response_dict = {"finished": True, "request_id": "test", "outputs": {"token_ids": [4, 5]}}
+
+        # 调用方法
+        result = self.processor.process_response_dict_streaming(response_dict)
 
         # 验证结果
         self.assertEqual(result["outputs"]["raw_prediction"], "delta_text")
