@@ -42,6 +42,12 @@ def use_custom_allreduce(custom_all_reduce_max_bytes: int = 8192 * 1024):
     _TP_AR = CustomAllreduce(model_parallel_group, custom_all_reduce_max_bytes)
 
 
+def custom_ar_clear_ipc_handles():
+    global _TP_AR
+    if _TP_AR is not None:
+        _TP_AR.clear_ipc_handles()
+
+
 try:
 
     @paddle.jit.marker.unified
