@@ -872,7 +872,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["kv_batch_ids"] = None
         self.share_inputs["kv_tile_ids_per_batch"] = None
         self.share_inputs["kv_num_blocks_x_cpu"] = None  # CPU
-        self.share_inputs["max_len_kv_cpu"] = None  # CPU
 
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
@@ -1118,7 +1117,6 @@ class GPUModelRunner(ModelRunnerBase):
             kv_batch_ids=self.share_inputs["kv_batch_ids"],
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
-            max_len_kv_cpu=self.share_inputs["max_len_kv_cpu"],
         )
 
         # Update Batch type for cuda graph for only_decode_batch
@@ -1260,7 +1258,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["kv_batch_ids"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
         self.share_inputs["kv_tile_ids_per_batch"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
         self.share_inputs["kv_num_blocks_x_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
-        self.share_inputs["max_len_kv_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
 
         # Get the attention backend
         attn_cls = get_attention_backend()
