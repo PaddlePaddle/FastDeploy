@@ -48,6 +48,7 @@ std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& scores,
                        n_group,
                        topk_group,
                        topk,
+                       true,
                        routed_scaling_factor,
                        stream);
 
