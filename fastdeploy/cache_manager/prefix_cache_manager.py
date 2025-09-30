@@ -240,6 +240,8 @@ class PrefixCacheManager:
         self.node_id_pool = list(range(self.num_gpu_blocks + self.num_cpu_blocks))
 
         main_process_metrics.max_gpu_block_num.set(self.num_gpu_blocks)
+        main_process_metrics.available_gpu_block_num.set(self.num_gpu_blocks)
+        main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.available_gpu_resource.set(1.0)
 
     def _enable_cpu_cache(self):

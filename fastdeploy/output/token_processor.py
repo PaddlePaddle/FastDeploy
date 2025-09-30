@@ -297,9 +297,12 @@ class TokenProcessor:
                 self.resource_manager.tasks_list[index] = None
                 self.resource_manager._recycle_block_tables(task)
 
-        task_used_block_num = sum([len(task.block_tables) if task else 0 for task in self.resource_manager.tasks_list])
+        # Update block metrics
+        num_blocks_used_by_tasks = sum(
+            [len(task.block_tables) if task else 0 for task in self.resource_manager.tasks_list]
+        )
         main_process_metrics.available_gpu_block_num.set(
-            self.resource_manager.total_block_number() - task_used_block_num
+            self.resource_manager.total_block_number() - num_blocks_used_by_tasks
         )
         main_process_metrics.batch_size.set(
             self.resource_manager.max_num_seqs - self.resource_manager.available_batch()
