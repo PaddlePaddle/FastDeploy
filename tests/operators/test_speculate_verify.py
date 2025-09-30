@@ -103,13 +103,11 @@ def speculate_verify_ref(
     verify_tokens_flat = verify_tokens.reshape(-1)
     verify_scores_flat = verify_scores.reshape(-1)
     for bid in range(real_bsz):
-        # C++: const int start_token_id = bid * max_seq_len - output_cum_offsets[bid];
         start_token_id = bid * max_seq_len - output_cum_offsets[bid]
         accept_num_now = 1
         stop_flag_now_int = 0
 
-        # C++: if (!(is_block_step[bid] || bid >= real_bsz))
-        if not (is_block_step[bid] or bid >= real_bsz):  # bid >= real_bsz reserved for consistency with C++
+        if not (is_block_step[bid] or bid >= real_bsz):  # bid >= real_bsz reserved for consistency with gpu
             if stop_flags[bid]:
                 stop_flag_now_int = 1
             else:
@@ -221,15 +219,14 @@ def speculate_verify_ref(
                         accept_token = topp_sampling_kernel(
                             verify_tokens_sampling_view,
                             verify_scores_sampling_view,
-                            dev_curand_states[i],  # C++: dev_curand_states + i
+                            dev_curand_states[i],
                             actual_candidate_len_value,
-                            topp[bid],  # C++: topp[bid]
-                            bid,  # C++: bid
+                            topp[bid],
+                            bid,
                         )
                     else:
                         accept_token = int(verify_tokens_now[i * max_candidate_len])
 
-                    # C++: accept_tokens[bid * max_draft_tokens + i] = accept_token;
                     accept_tokens_flat[bid * max_draft_tokens + i] = accept_token
 
                     if prefill_one_step_stop:
