@@ -118,7 +118,7 @@ class OpenAIServingChat:
                 current_req_dict["arrival_time"] = time.time()
                 # preprocess the req_dict
                 prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)
-                text_after_process = current_req_dict["text_after_process"]
+                text_after_process = current_req_dict.get("text_after_process")
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
             except ParameterError as e:
@@ -252,7 +252,7 @@ class OpenAIServingChat:
                 )
 
                 async for res in generator:
-                    idx = res["outputs"]["index"]
+                    idx = int(res["request_id"].split("_")[-1])
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
 
@@ -479,7 +479,7 @@ class OpenAIServingChat:
                 async for data in generator:
                     if data.get("error_code", 200) != 200:
                         raise ValueError("{}".format(data["error_msg"]))
-                    idx = data["outputs"]["index"]
+                    idx = int(data["request_id"].split("_")[-1])
                     # api_server_logger.debug(f"Client {request_id} received: {data}")
                     previous_num_tokens[idx] += len(data["outputs"]["token_ids"])
                     completion_token_ids[idx].extend(data["outputs"]["token_ids"])
