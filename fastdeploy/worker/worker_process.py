@@ -197,7 +197,7 @@ class PaddleDisWorkerProc:
                 name="launched_expert_service_signal",
                 array=launched_expert_service_signal_data,
                 dtype=np.int32,
-                suffix=self.parallel_config.engine_worker_queue_port,
+                suffix=self.parallel_config.engine_pid,
                 create=False,
             )
             while self.launched_expert_service_signal.value[self.local_rank % self.max_chips_per_node] == 0:
@@ -214,7 +214,7 @@ class PaddleDisWorkerProc:
             name="worker_ready_signal",
             array=workers_ready,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.engine_pid,
             create=False,
         )
         self.worker_ready_signal.value[self.local_rank % self.max_chips_per_node] = 1
@@ -425,7 +425,7 @@ class PaddleDisWorkerProc:
                     name="get_profile_block_num",
                     array=get_profile_block_num,
                     dtype=np.int32,
-                    suffix=self.parallel_config.engine_worker_queue_port,
+                    suffix=self.parallel_config.engine_pid,
                     create=False,
                 )
                 self.get_profile_block_num_signal.value[0] = num_blocks_local
@@ -468,7 +468,7 @@ class PaddleDisWorkerProc:
             name="loaded_model_signal",
             array=loaded_model_signal_data,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.engine_pid,
             create=False,
         )
         if self.ranks > 1:
