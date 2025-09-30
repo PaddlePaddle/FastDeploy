@@ -431,6 +431,7 @@ class ResourceManagerV1(ResourceManager):
             if scheduled_reqs:
                 llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
 
+            # Update metrics
             num_tasks = sum([1 if task else 0 for task in self.tasks_list])
             num_blocks_used_by_tasks = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
             main_process_metrics.available_gpu_block_num.set(self.total_block_number() - num_blocks_used_by_tasks)
