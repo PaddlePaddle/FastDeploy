@@ -37,7 +37,6 @@ from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.common_engine import EngineSevice
 from fastdeploy.engine.expert_service import start_data_parallel_service
 from fastdeploy.engine.request import Request
-from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
 
@@ -85,14 +84,6 @@ class LLMEngine:
         self.running = True
         self.is_started = False
 
-        self.input_processor = InputPreprocessor(
-            cfg.tokenizer,
-            cfg.reasoning_parser,
-            cfg.limit_mm_per_prompt,
-            cfg.mm_processor_kwargs,
-            cfg.model_config.enable_mm,
-            cfg.tool_parser,
-        )
         self.engine = EngineSevice(cfg)
 
         if self.cfg.cache_config.num_gpu_blocks_override is None:
@@ -114,10 +105,9 @@ class LLMEngine:
         self.ipc_signal_suffix = self.cfg.engine_worker_queue_port[0]
         self._init_worker_signals()
 
-        self.data_processor = self.input_processor.create_processor()
-        self.engine.data_processor = self.data_processor
-
         self.engine.start()
+        self.engine.create_data_processor()
+        self.data_processor = self.engine.data_processor
         if api_server_pid is not None:
             llm_logger.info(f"Start zmq server, api_server_pid: {api_server_pid}")
             self.engine.start_zmq_service(api_server_pid)
@@ -199,7 +189,7 @@ class LLMEngine:
             request.sampling_params = sampling_params
         request.preprocess_start_time = time.time()
 
-        request = self.data_processor.process_request(request, self.cfg.max_model_len, **kwargs)
+        request = self.engine.data_processor.process_request(request, self.cfg.max_model_len, **kwargs)
         request.prompt_token_ids_len = len(request.prompt_token_ids)
         request.need_prefill_tokens = request.prompt_token_ids_len
         input_ids_len = request.prompt_token_ids_len
@@ -431,9 +421,9 @@ class LLMEngine:
         py_script = os.path.join(current_dir_path, worker_path)
 
         ori_vocab_size = (
-            len(self.data_processor.tokenizer.sp_model)
-            if hasattr(self.data_processor.tokenizer, "sp_model")
-            else len(self.data_processor.tokenizer.vocab)
+            len(self.engine.data_processor.tokenizer.sp_model)
+            if hasattr(self.engine.data_processor.tokenizer, "sp_model")
+            else len(self.engine.data_processor.tokenizer.vocab)
         )
 
         ports = ",".join(self.cfg.engine_worker_queue_port)
@@ -452,8 +442,8 @@ class LLMEngine:
             f" --total_block_num {self.cfg.cache_config.total_block_num}"
             f" --block_size {self.cfg.cache_config.block_size}"
             f" --enc_dec_block_num {self.cfg.cache_config.enc_dec_block_num}"
-            f" --eos_tokens_lens {self.data_processor.eos_token_id_len}"
-            f" --pad_token_id {self.data_processor.pad_token_id}"
+            f" --eos_tokens_lens {self.engine.data_processor.eos_token_id_len}"
+            f" --pad_token_id {self.engine.data_processor.pad_token_id}"
             f" --engine_pid {self.cfg.engine_worker_queue_port[0]}"
             f" --max_num_batched_tokens {self.cfg.max_num_batched_tokens}"
             f" --splitwise_role {self.cfg.splitwise_role}"
@@ -545,7 +535,7 @@ class LLMEngine:
         for result in self._get_generated_tokens(req_id):
             is_end = result.finished
             if stream and not is_end:
-                processed = self.data_processor.process_response(result)
+                processed = self.engine.data_processor.process_response(result)
                 if processed is None:
                     continue
                 output = processed.to_dict()
@@ -553,7 +543,7 @@ class LLMEngine:
 
             # Exit loop if termination condition is met
             if is_end:
-                processed = self.data_processor.process_response(result)
+                processed = self.engine.data_processor.process_response(result)
                 output = processed.to_dict()
                 llm_logger.debug(f"Generate result: {output}")
                 if not stream:
