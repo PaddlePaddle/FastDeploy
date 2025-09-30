@@ -177,7 +177,7 @@ def speculate_verify_ref(
                                 if j >= verify_window:  # accept all
                                     accept_num_now += verify_window + 1
                                     step_idx[bid] += verify_window + 1
-                                    for k_accepted_idx in range(i, ii):  # i is updated
+                                    for k_accepted_idx in range(i, ii):
                                         accept_token = draft_tokens_now[k_accepted_idx + 1]
                                         accept_tokens_flat[bid * max_draft_tokens + k_accepted_idx] = accept_token
 
