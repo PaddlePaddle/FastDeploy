@@ -144,10 +144,8 @@ __forceinline__ __device__ void gemm_qk(
     CUTE_STATIC_ASSERT_V(size<2>(tCrA) == size<2>(tCrB));
 
     using pakc_half = __half2;
-    pakc_half * scale_mem = reinterpret_cast<pakc_half*>(smem_b) + 512;
-    pakc_half * zp_mem = scale_mem + 128;
-
-    const int col = tidx % 4;
+    uint32_t * scale_mem = reinterpret_cast<uint32_t*>(smem_b) + 512;
+    const int col = tidx % 32 / 8 * 16;
 
     constexpr uint32_t mask = 0x03030303;
 
@@ -166,14 +164,16 @@ __forceinline__ __device__ void gemm_qk(
                 pakc_half cur_value = reinterpret_cast<pakc_half*>(&half_data)[0];
                 pakc_half next_value = reinterpret_cast<pakc_half*>(&half_data)[1];
 
-                const int scale_idx = (i + k) * 8 + col +  j * 4;
-                pakc_half cur_dequant_value = scale_mem[scale_idx];
-                pakc_half cur_quant_zp = zp_mem[scale_idx];
-                pakc_half next_dequant_value = scale_mem[scale_idx + 64];
-                pakc_half next_quant_zp = zp_mem[scale_idx + 64];
+                uint32_t dst0,  dst1,  dst2,  dst3;
+                const int scale_idx = (i + k) * 8 + j * 4;
 
-                cur_value = cur_value * cur_dequant_value - cur_quant_zp;
-                next_value = next_value * next_dequant_value - next_quant_zp;
+                uint32_t smem_int_ptr = cast_smem_ptr_to_uint(reinterpret_cast<uint128_t*>(scale_mem + scale_idx) + col);
+                asm volatile ("ldmatrix.sync.aligned.x4.m8n8.shared.b16 {%0, %1, %2, %3}, [%4];\n"
+                : "=r"(dst0), "=r"(dst1), "=r"(dst2), "=r"(dst3)
+                :  "r"(smem_int_ptr));
+
+                cur_value = cur_value * reinterpret_cast<pakc_half*>(&dst0)[0] - reinterpret_cast<pakc_half*>(&dst2)[0];
+                next_value = next_value * reinterpret_cast<pakc_half*>(&dst1)[0] - reinterpret_cast<pakc_half*>(&dst3)[0];
 
                 reinterpret_cast<pakc_half*>(tCrB(_, _, i + k).data())[j] = cur_value;
                 reinterpret_cast<pakc_half*>(tCrB(_, _, i + k).data())[j + 2] = next_value;

@@ -242,8 +242,8 @@ __device__ void write_c2_cache_kernel(
 
     float quant_scale_x = fdividef(1.0f, float(dequant_scale.x) + 0.0000001f);
     float quant_scale_y = fdividef(1.0f, float(dequant_scale.y) + 0.0000001f);
-    quant_scale_x = min(quant_scale_x, 65504.0f);
-    quant_scale_y = min(quant_scale_y, 65504.0f);
+    quant_scale_x = min(quant_scale_x, 10000.0f);
+    quant_scale_y = min(quant_scale_y, 10000.0f);
     pakc_half quant_scale = pakc_half(quant_scale_x, quant_scale_y);
 
     pakc_half quant_zp = -min_value * quant_scale;
@@ -309,7 +309,6 @@ __device__ void write_c2_cache_kernel(
     pakc_half * dequant_zp_smem = dequant_scale_smem + kThreads;
 
     dequant_zp_smem[tidx] = quant_zp * dequant_scale;
-    pakc_half zp_temp = quant_zp * dequant_scale;
 
 
     cute::cp_async_wait<0>();
@@ -357,8 +356,8 @@ __device__ void write_c2_cache_kernel(
     dequant_scale = (max_value - min_value) * dequant_scale_factor;
     quant_scale_x = fdividef(1.0f, float(dequant_scale.x) + 0.0000001f);
     quant_scale_y = fdividef(1.0f, float(dequant_scale.y) + 0.0000001f);
-    quant_scale_x = min(quant_scale_x, 65504.0f);
-    quant_scale_y = min(quant_scale_y, 65504.0f);
+    quant_scale_x = min(quant_scale_x, 10000.0f);
+    quant_scale_y = min(quant_scale_y, 10000.0f);
     quant_scale = pakc_half(quant_scale_x, quant_scale_y);
 
     quant_zp = -min_value * quant_scale;
