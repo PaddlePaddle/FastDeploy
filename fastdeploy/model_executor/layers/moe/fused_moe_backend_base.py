@@ -76,8 +76,13 @@ class MoEMethodBase(QuantMethodBase):
                 # for RL init model without deepep buff
                 return
             else:
-                self.ep_prefill_runner = EPPrefillRunner(**common_args)
-                self.ep_decoder_runner = EPDecoderRunner(**common_args)
+                # self.ep_prefill_runner = EPPrefillRunner(**common_args)
+                # self.ep_decoder_runner = EPDecoderRunner(**common_args)
+
+
+                from .ep import EPMegaRunner
+                self.ep_decoder_runner = EPMegaRunner(layer.fd_config)
+
             return
 
         # For non-mixed ep
@@ -159,13 +164,13 @@ class MoEMethodBase(QuantMethodBase):
         Paddle Cutlass compute Fused MoE.
         """
         if layer.ep_size > 1:
-            if layer.fd_config.model_config.moe_phase.phase == "prefill":
+            if layer.fd_config.model_config.moe_phase.phase == "prefill" and False:
                 if layer.fd_config.scheduler_config.splitwise_role == "mixed":
                     self.ep_prefill_runner.clean_low_latency_buffer()
                 return self.apply_ep_prefill(layer, x, gate)
             else:
-                if layer.fd_config.scheduler_config.splitwise_role == "mixed":
-                    self.ep_decoder_runner.clean_low_latency_buffer()
+                # if layer.fd_config.scheduler_config.splitwise_role == "mixed":
+                #     self.ep_decoder_runner.clean_low_latency_buffer()
                 return self.apply_ep_decode(layer, x, gate)
         else:
             return self.apply_tp(layer, x, gate)

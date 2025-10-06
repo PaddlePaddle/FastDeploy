@@ -543,3 +543,67 @@ class EPDecoderRunner(EPRunner):
             combine_hook()
 
         return combined_hidden_states
+
+
+
+
+@singleton
+class EPMegaRunner:
+
+    def __init__(self, fd_config):
+        rank = paddle.distributed.get_rank()
+        num_ranks = paddle.distributed.get_world_size()
+
+        self.group = paddle.distributed.new_group(range(num_ranks))
+
+
+        self.a_start_rank = 0
+        self.a_num_ranks = fd_config.parallel_config.attn_group.nranks
+        self.e_start_rank = self.a_start_rank + self.a_num_ranks
+        self.e_num_ranks = num_ranks - self.a_num_ranks
+
+
+        self.hidden = 8192 
+        self.top_k = 8
+        self.num_experts = 64
+        self.num_max_tokens = 256
+        self.use_fp8 = True
+        self.rank = paddle.distributed.get_rank()
+
+        num_rdma_ranks = num_ranks // 8
+        self.num_ranks = num_ranks
+        num_rdma_bytes = deep_ep.M2NBuffer.get_low_latency_rdma_size_hint_two_stage(
+            self.num_max_tokens, self.hidden, self.num_ranks, self.a_num_ranks, self.e_num_ranks, self.num_experts, self.top_k
+        )
+
+
+        num_nvl_bytes = deep_ep.M2NBuffer.get_low_latency_nvl_size_hint_two_stage(
+            self.num_max_tokens, self.hidden, self.num_ranks, self.a_num_ranks, self.e_num_ranks, self.num_experts, self.top_k, self.use_fp8
+        )
+
+        paddle.distributed.barrier()
+
+        self.buffer = deep_ep.M2NBuffer(
+                self.group,
+                self.a_start_rank,
+                self.a_num_ranks,
+                self.e_start_rank,
+                self.e_num_ranks,
+                num_nvl_bytes=num_nvl_bytes,
+                num_rdma_bytes=num_rdma_bytes,
+                low_latency_mode=True,
+                num_qps_per_rank=num_rdma_ranks)
+
+    def moe_select(self, layer: nn.Layer, gate_out: paddle.Tensor):
+        """
+        moe_select
+        """
+        topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+            gate_out,
+            layer.gate_correction_bias,
+            self.top_k,
+            True,  # apply_norm_weight,
+            False,
+        )
+        return topk_idx, topk_weights
+

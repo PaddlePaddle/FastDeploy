@@ -449,7 +449,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
-        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:]
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
 
@@ -1017,6 +1017,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_encoder"],
             self.share_inputs["seq_lens_decoder"],
         )
+        # print(self.share_inputs["seq_lens_this_time"])
 
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
         # NOTE: (changwenbin) Initialized to max_num_seq '-1' before copying, marking illegal positions
@@ -1186,7 +1187,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         if not create_cache_tensor:
             logger.info(f"Waiting for cache managers to create kv cache.. {cache_ready_signal.value}")
-            while cache_ready_signal.value[self.local_rank] != 1:
+            while cache_ready_signal.value[self.local_rank % 1] != 1:
                 time.sleep(1)
             logger.info(f"OK! Stop waiting. {cache_ready_signal.value}")
 
@@ -1220,7 +1221,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["caches"] = cache_kvs_list
 
         if not profile and create_cache_tensor:
-            cache_ready_signal.value[self.local_rank] = 1
+            cache_ready_signal.value[self.local_rank % 1] = 1
             logger.info(f"✅ kv cache is ready! {cache_ready_signal.value}")
 
         paddle.device.cuda.empty_cache()
@@ -1638,9 +1639,17 @@ class GPUModelRunner(ModelRunnerBase):
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
         # when there is data on other runner, the current runner is required to execute part of the model.
-        if not self.not_need_stop():
-            self._execute_empty_input()
+        # if not self.not_need_stop():
+        #     self._execute_empty_input()
+        #     return None
+
+        IsH20 = self.fd_config.parallel_config.is_attention_role
+        if IsH20:
+            pass
+        else:
+            model_output = self.model(None, None)
             return None
+
 
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
@@ -1657,6 +1666,12 @@ class GPUModelRunner(ModelRunnerBase):
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
             )
+
+        if model_output is None:
+            # no need do 后处理！
+            return None
+
+
         hidden_states = rebuild_padding(
             model_output,
             self.share_inputs["cu_seqlens_q"],
