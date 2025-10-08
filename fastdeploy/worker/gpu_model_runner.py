@@ -1338,7 +1338,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         max_task = max(output_size.items(), key=lambda x: x[1])[0]
         final_output = self._dummy_pooler_run_task(hidden_states, max_task)
-
         return final_output
 
     def _dummy_sampler_run(
@@ -1516,6 +1515,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             if self.is_pooling_model:
                 self._dummy_pooler_run(hidden_states)
+                break
             else:
                 self._dummy_sampler_run(hidden_states, model_output)
 
@@ -1730,10 +1730,13 @@ class GPUModelRunner(ModelRunnerBase):
 
         logits = None
         # 4. Compute logits, Sample
-        if hasattr(self.model, "is_pooling_model") and self.model.is_pooling_model:
-            pass
+        if self.is_pooling_model:
+            self._pool(
+                hidden_states,
+            )
+
         else:
-            # 4. Execute spec decode
+
             logits = self.model.compute_logits(hidden_states)
 
         if not self.speculative_decoding:
@@ -1883,6 +1886,10 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_this_time"][:num_running_requests], False
         )
         return None
+
+    def _pool(self, hidden_states: paddle.Tensor) -> Optional[ModelRunnerOutput]:
+
+        hidden_states = hidden_states[:]
 
     def _add_cache(self, model_forward_batch) -> None:
         """
