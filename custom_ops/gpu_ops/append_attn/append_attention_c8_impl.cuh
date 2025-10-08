@@ -15,7 +15,7 @@
 
 #include "multiquery_attention_c8_kernel.h"
 
-template <typename T, typename OutT, bool IsFP8>
+template <typename T, typename OutT, bool IsFP8 = false>
 void CascadeAppendAttentionC8Kernel(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& qkv,  // [token_num, (num_heads + 2* kv_num_head) * head_dim]
