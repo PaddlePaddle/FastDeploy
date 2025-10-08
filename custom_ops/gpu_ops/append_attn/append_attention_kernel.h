@@ -15,6 +15,7 @@
 
 #include "helper.h"
 #include "utils.cuh"
+#include "append_attention_c8_impl.cuh"
 
 template <typename T, typename OutT>
 void CascadeAppendAttentionC16Kernel(
