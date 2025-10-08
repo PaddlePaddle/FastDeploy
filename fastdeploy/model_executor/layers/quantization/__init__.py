@@ -85,6 +85,8 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
     else:
         if not quantization_config.get("is_quantized"):
             quantization_config["is_quantized"] = model_config.is_quantized
+        if args.dynamic_load_weight and quantization_config is not None:
+            quantization_config["is_quantized"] = True
         quant_cls = get_quantization_config(quant_config_name)
         quant_config = quant_cls.from_config(quantization_config)
     return quant_config

@@ -225,7 +225,7 @@ class Qwen3Model(nn.Layer):
 
 @ModelRegistry.register_model_class(
     architecture="Qwen3ForCausalLM",
-    module_path="qwen3",
+    module_name="qwen3",
     category=[ModelCategory.TEXT_GENERATION],
     primary_use=ModelCategory.TEXT_GENERATION,
 )

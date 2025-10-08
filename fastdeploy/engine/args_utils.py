@@ -403,18 +403,17 @@ class EngineArgs:
         """
         Post-initialization processing to set default tokenizer if not provided.
         """
+
         if not self.tokenizer:
             self.tokenizer = self.model
         if self.splitwise_role == "decode":
             self.enable_prefix_caching = False
         if self.speculative_config is not None:
             self.enable_prefix_caching = False
-        if self.enable_mm:
-            self.enable_prefix_caching = False
         if not current_platform.is_cuda():
             self.enable_prefix_caching = False
-        if self.dynamic_load_weight:
-            self.enable_prefix_caching = False
+        # if self.dynamic_load_weight:
+        #     self.enable_prefix_caching = False
         if self.enable_logprob:
             if self.speculative_config is not None:
                 raise NotImplementedError("Logprob does not support speculation_config.")
@@ -424,7 +423,7 @@ class EngineArgs:
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if self.splitwise_role != "mixed" and self.cache_transfer_protocol != "rdma":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-        if not current_platform.is_cuda():
+        if not current_platform.is_cuda() and not current_platform.is_xpu():
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if self.guided_decoding_backend != "off":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
@@ -712,7 +711,7 @@ class EngineArgs:
         # Load group
         load_group = parser.add_argument_group("Load Configuration")
         load_group.add_argument(
-            "--load_choices",
+            "--load-choices",
             type=str,
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\

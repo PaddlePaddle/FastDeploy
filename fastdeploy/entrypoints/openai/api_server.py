@@ -15,6 +15,7 @@
 """
 
 import asyncio
+import json
 import os
 import threading
 import time
@@ -49,7 +50,8 @@ from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
 from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServingModels
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
-from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG
+from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
+from fastdeploy.envs import environment_variables
 from fastdeploy.metrics.metrics import (
     EXCLUDE_LABELS,
     cleanup_prometheus_files,
@@ -67,31 +69,7 @@ from fastdeploy.utils import (
     retrive_model_from_server,
 )
 
-parser = FlexibleArgumentParser()
-parser.add_argument("--port", default=8000, type=int, help="port to the http server")
-parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
-parser.add_argument("--workers", default=1, type=int, help="number of workers")
-parser.add_argument("--metrics-port", default=8001, type=int, help="port for metrics server")
-parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
-parser.add_argument(
-    "--max-waiting-time",
-    default=-1,
-    type=int,
-    help="max waiting time for connection, if set value -1 means no waiting time limit",
-)
-parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
-
-parser.add_argument(
-    "--enable-mm-output", action="store_true", help="Enable 'multimodal_content' field in response output. "
-)
-parser.add_argument(
-    "--timeout-graceful-shutdown",
-    default=0,
-    type=int,
-    help="timeout for graceful shutdown in seconds (used by uvicorn)",
-)
-
-parser = EngineArgs.add_cli_args(parser)
+parser = make_arg_parser(FlexibleArgumentParser())
 args = parser.parse_args()
 
 console_logger.info(f"Number of api-server workers: {args.workers}.")
@@ -184,6 +162,8 @@ async def lifespan(app: FastAPI):
         enable_logprob=args.enable_logprob,
         workers=args.workers,
         tool_parser=args.tool_call_parser,
+        enable_prefix_caching=args.enable_prefix_caching,
+        splitwise_role=args.splitwise_role,
     )
     await engine_client.connection_manager.initialize()
     app.state.dynamic_load_weight = args.dynamic_load_weight
@@ -461,6 +441,29 @@ async def metrics():
         extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=args.workers),
     )
     return Response(metrics_text, media_type=CONTENT_TYPE_LATEST)
+
+
+@metrics_app.get("/config-info")
+def config_info() -> Response:
+    """
+    Get the current configuration of the API server.
+    """
+    global llm_engine
+    if llm_engine is None:
+        return Response("Engine not loaded", status_code=500)
+    cfg = llm_engine.cfg
+
+    def process_object(obj):
+        if hasattr(obj, "__dict__"):
+            # 处理有__dict__属性的对象
+            return obj.__dict__
+        return None  # 或其他默认处理
+
+    cfg_dict = {k: v for k, v in cfg.__dict__.items()}
+    env_dict = {k: v() for k, v in environment_variables.items()}
+    cfg_dict["env_config"] = env_dict
+    result_content = json.dumps(cfg_dict, default=process_object, ensure_ascii=False)
+    return Response(result_content, media_type="application/json")
 
 
 def run_metrics_server():

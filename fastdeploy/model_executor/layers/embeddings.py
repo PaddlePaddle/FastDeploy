@@ -164,7 +164,9 @@ class VocabParallelEmbedding(nn.Layer):
                 ),
             )
             if self.world_size > 1:
-                set_weight_attrs(self.embeddings.weight, {"output_dim": False, "weight_loader": self.weight_loader})
+                set_weight_attrs(self.embeddings.weight, {"output_dim": False})
+                if num_embeddings % self.world_size != 0:
+                    set_weight_attrs(self.embeddings.weight, {"weight_loader", self.weight_loader})
         else:
             # column cut embedding
             self.embeddings = nn.Embedding(

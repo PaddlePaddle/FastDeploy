@@ -116,6 +116,7 @@ class LinearBase(nn.Layer):
             or current_platform.is_gcu()
             or current_platform.is_dcu()
             or current_platform.is_maca()
+            or current_platform.is_intel_hpu()
         ):
             self.forward = self.forward_cuda
         else:
@@ -128,6 +129,7 @@ class LinearBase(nn.Layer):
         self.with_bias = with_bias
         self.add_bias = add_bias
         self.prefix = prefix
+        self.is_quantized = fd_config.model_config.is_quantized
         # key
         if weight_key:
             self.weight_key = f"{prefix}.{weight_key}"

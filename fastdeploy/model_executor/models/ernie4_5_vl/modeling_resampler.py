@@ -23,7 +23,7 @@ from paddle import nn
 from paddle.autograd import PyLayer
 from paddle.distributed.fleet.utils import recompute
 
-from fastdeploy.model_executor.layers.utils import _set_var_distributed, get_tensor
+from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.models.ernie4_5_vl.dist_utils import (
     RowSequenceParallelLinear,
     all_gather_group,
@@ -207,19 +207,6 @@ class VariableResolutionResamplerModel(nn.Layer):
             self.after_norm = RMSNorm(out_config)
 
             if self.tensor_parallel_degree > 1:
-                for idx in [2, 3]:
-                    mark_as_sequence_parallel_parameter(self.spatial_linear[idx].weight)
-                    mark_as_sequence_parallel_parameter(self.spatial_linear[idx].bias)
-                _set_var_distributed(self.spatial_linear[idx].weight, split_axis=0)
-                _set_var_distributed(self.spatial_linear[idx].bias, split_axis=0)
-                if self.use_temporal_conv:
-                    for idx in [0, 2, 3]:
-                        mark_as_sequence_parallel_parameter(self.temporal_linear[idx].weight)
-                        mark_as_sequence_parallel_parameter(self.temporal_linear[idx].bias)
-
-                mark_as_sequence_parallel_parameter(self.mlp.weight)
-                mark_as_sequence_parallel_parameter(self.mlp.bias)
-                mark_as_sequence_parallel_parameter(self.after_norm.weight)
                 set_weight_attrs(self.spatial_linear[0].weight, {"output_dim": False})
 
     def spatial_conv_reshape(self, x, spatial_conv_size):
