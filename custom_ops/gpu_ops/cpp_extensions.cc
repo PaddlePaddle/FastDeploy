@@ -623,6 +623,8 @@ int64_t open_mem_handle(paddle::Tensor& mem_handle);
 
 void free_shared_buffer(int64_t buffer);
 
+void clear_ipc_handles(int64_t _fa);
+
 // speculative decoding Kernel
 std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
     const paddle::Tensor& input_ids,
@@ -1228,6 +1230,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("allocate_shared_buffer_and_handle", &allocate_shared_buffer_and_handle, "allocate_shared_buffer_and_handle");
 
   m.def("free_shared_buffer", &free_shared_buffer, "free_shared_buffer");
+
+  m.def("clear_ipc_handles", &clear_ipc_handles, "clear_ipc_handles");
 
   m.def("open_mem_handle", &open_mem_handle, "open_mem_handle");
 

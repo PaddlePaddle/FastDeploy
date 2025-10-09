@@ -25,7 +25,10 @@ from paddle.device.cuda import graphs
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
-from fastdeploy.distributed.communication import capture_custom_allreduce
+from fastdeploy.distributed.communication import (
+    capture_custom_allreduce,
+    custom_ar_clear_ipc_handles,
+)
 from fastdeploy.utils import get_logger
 
 logger = get_logger("cudagrpah_piecewise_backend", "cudagraph_piecewise_backend.log")
@@ -96,6 +99,13 @@ class CudaGraphPiecewiseBackend:
         self.cudagraph_capture_sizes = fd_config.graph_opt_config.cudagraph_capture_sizes
         self.warm_up_size = fd_config.graph_opt_config.cudagraph_num_of_warmups
         self.real_shape_to_captured_size = fd_config.graph_opt_config.real_shape_to_captured_size
+        self.unique_memory_pool_id = None
+        if self.fd_config.graph_opt_config.use_unique_memory_pool:
+            # TODO(gongshaotian): Optimize code
+            if paddle.is_compiled_with_cuda():
+                from paddle.base.core import CUDAGraph
+
+                self.unique_memory_pool_id = CUDAGraph.gen_new_memory_pool_id()
 
         self._create_entry_dict()
 
@@ -169,7 +179,7 @@ class CudaGraphPiecewiseBackend:
             input_addresses = [x.data_ptr() for (_, x) in kwargs.items() if isinstance(x, paddle.Tensor)]
             entry.input_addresses = input_addresses
 
-            new_grpah = graphs.CUDAGraph()
+            new_grpah = graphs.CUDAGraph(pool_id=self.unique_memory_pool_id)
             paddle.device.synchronize()
 
             # Capture
@@ -221,6 +231,7 @@ class CudaGraphPiecewiseBackend:
     def clear_graph(self):
         """ """
         # Clear graphs
+        custom_ar_clear_ipc_handles()
         for _id, entry in self.concrete_size_entries.items():
             if entry.cuda_graph:
                 del entry.cuda_graph
