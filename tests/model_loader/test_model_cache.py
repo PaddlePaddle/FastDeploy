@@ -44,6 +44,7 @@ model_param_map = {
                 "env": {"FD_ENABLE_MODEL_LOAD_CACHE": "1"},
             }
         ],
+        "graph_optimization_config": {"use_cudagraph": False},
     }
 }
 

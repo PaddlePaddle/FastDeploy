@@ -44,6 +44,7 @@ model_param_map = {
                 "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"},
             },
         ],
+        "graph_optimization_config": {"use_cudagraph": False},
     },
 }
 
