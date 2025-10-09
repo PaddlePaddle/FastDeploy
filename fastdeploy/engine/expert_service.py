@@ -80,6 +80,9 @@ class ExpertService:
 
         start_time = time.time()
         self.engine.start()
+
+        if envs.FD_ENABLE_RETURN_TEXT:
+            self.engine.create_data_processor()
         if ipc_signal_suffix is not None:
             self.api_server_pid = ipc_signal_suffix
             self.engine.start_zmq_service(ipc_signal_suffix)
