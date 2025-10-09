@@ -18,7 +18,6 @@
 #include "iomanip"
 #include <nvml.h>
 #include <iostream>
-#include <nvml.h>
 // #define PRINT_GPU_MEMORY
 // 函数用于获取 NVIDIA GPU 显存信息
 bool getNvidiaGPUMemoryUsage(int callLine) {

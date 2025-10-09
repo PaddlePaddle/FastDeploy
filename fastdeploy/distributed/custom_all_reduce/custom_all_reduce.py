@@ -25,6 +25,7 @@ from paddle.distributed.communication.group import Group
 from fastdeploy.distributed.custom_all_reduce import cuda_wrapper
 from fastdeploy.model_executor.ops.gpu import (
     all_reduce,
+    clear_ipc_handles,
     dispose,
     get_graph_buffer_ipc_meta,
     init_custom_all_reduce,
@@ -219,6 +220,9 @@ class CustomAllreduce:
                 return paddle.empty_like(input)
         else:
             return self.all_reduce(input, input, registered=False)
+
+    def clear_ipc_handles(self):
+        clear_ipc_handles(self._ptr)
 
     def close(self):
         if self._ptr:

@@ -106,7 +106,12 @@ jobs:
             CARD_ID=$(echo "${runner_name}" | awk -F'-' '{print $NF}')
             gpu_id=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
 
-            CACHE_DIR="${CACHE_DIR:-$(dirname "$(dirname "${{ github.workspace }}")")}"
+            IFS='/' read -ra parts <<< "${GITHUB_WORKSPACE}"
+            len=${#parts[@]}
+            CCACHE_DEFAULT_DIR="/$(IFS=/; echo "${parts[*]:1:$((len-5))}")"
+            echo "$CCACHE_DEFAULT_DIR"
+
+            CACHE_DIR="${CACHE_DIR:-$CCACHE_DEFAULT_DIR}"
             echo "CACHE_DIR is set to ${CACHE_DIR}"
             if [ ! -f "${CACHE_DIR}/gitconfig" ]; then
               touch "${CACHE_DIR}/gitconfig"
@@ -127,6 +132,7 @@ jobs:
             -e "PADDLEVERSION=${PADDLEVERSION}" \
             -e "PADDLE_WHL_URL=${PADDLE_WHL_URL}" \
             -e "BRANCH_REF=${BRANCH_REF}" \
+            -e "CCACHE_MAXSIZE=50G" \
             --gpus "\"device=${gpu_id}\"" ${docker_image} /bin/bash -c '
             if [[ -n "${FD_VERSION}" ]]; then
               export FASTDEPLOY_VERSION=${FD_VERSION}

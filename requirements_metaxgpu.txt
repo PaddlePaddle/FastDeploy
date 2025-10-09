@@ -8,9 +8,9 @@ aiozmq
 openai>=1.93.0
 tqdm
 pynvml
-uvicorn
+uvicorn==0.29.0
 fastapi
-paddleformers
+paddleformers>=0.2
 redis
 etcd3
 httpx
@@ -30,11 +30,12 @@ use-triton-in-paddle
 crcmod
 fastsafetensors==0.1.14
 msgpack
+modelscope
 opentelemetry-api>=1.24.0
 opentelemetry-sdk>=1.24.0
 opentelemetry-instrumentation-redis
 opentelemetry-instrumentation-mysql
-opentelemetry-distro 
+opentelemetry-distro
 opentelemetry-exporter-otlp
 opentelemetry-instrumentation-fastapi
 partial_json_parser

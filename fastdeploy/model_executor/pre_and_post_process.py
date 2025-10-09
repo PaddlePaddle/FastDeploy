@@ -196,7 +196,7 @@ def post_process_normal(
     """Post-processing steps after completing a single token generation."""
     # handle vl:
     if model_output.think_end_id != -1:
-        thinking_mask = model_output.enable_thinking
+        thinking_mask = model_output.enable_thinking[: sampler_output.sampled_token_ids.shape[0]]
         exists_think_end = (sampler_output.sampled_token_ids == model_output.think_end_id) & thinking_mask
         paddle.assign(
             paddle.where(

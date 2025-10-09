@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <cuda_fp8.h>
+
 #ifndef PADDLE_WITH_COREX
 #include "glog/logging.h"
 #endif
