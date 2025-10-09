@@ -103,7 +103,7 @@ class MTPProposer(Proposer):
         self.initialize_kv_cache()
         full_length = min(
             num_tokens // batch_size,
-            self.parallel_config.max_model_len - max_dec_len,
+            self.model_config.max_model_len - max_dec_len,
         )
         input_length = int(full_length * self.cache_config.kv_cache_ratio)
         block_num = (
@@ -296,7 +296,7 @@ class MTPProposer(Proposer):
         self.model_inputs["block_tables"] = paddle.clone(self.target_model_inputs["block_tables"])
         self.model_inputs["input_ids"] = paddle.clone(self.target_model_inputs["input_ids"])
         self.model_inputs["input_ids_cpu"] = paddle.full(
-            shape=[self.max_num_seqs, self.parallel_config.max_model_len],
+            shape=[self.max_num_seqs, self.model_config.max_model_len],
             fill_value=-1,
             dtype="int64",
         ).cpu()
@@ -318,7 +318,7 @@ class MTPProposer(Proposer):
             self.target_model_inputs["decoder_tile_ids_per_batch"]
         )
 
-        tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
+        tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
         self.model_inputs["rope_emb"] = get_rope(
             rotary_dim=self.model_config.head_dim,
             position_ids=tmp_position_ids,
@@ -720,7 +720,7 @@ class MTPProposer(Proposer):
                     self.model_inputs["seq_lens_decoder"],
                     self.model_inputs["seq_lens_encoder"],
                     self.model_inputs["output_padding_offset"],
-                    self.parallel_config.max_model_len,
+                    self.model_config.max_model_len,
                 )
 
                 # 4. Compute logits, Sample

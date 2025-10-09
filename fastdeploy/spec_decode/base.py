@@ -53,7 +53,7 @@ class Proposer(ABC):
         self.scheduler_config = self.cfg.scheduler_config
 
         self.max_num_seqs = self.scheduler_config.max_num_seqs
-        self.max_model_len = self.parallel_config.max_model_len
+        self.max_model_len = self.model_config.max_model_len
         self.speculative_method = self.speculative_config.method
         self.max_draft_token_num = self.speculative_config.num_speculative_tokens
         self.num_model_steps = self.speculative_config.num_model_steps
