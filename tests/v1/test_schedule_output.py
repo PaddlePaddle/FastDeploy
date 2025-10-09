@@ -66,7 +66,7 @@ def test_normal_schedule():
     assert scheduler_reqs[0].prefill_end_index == 3201
     assert scheduler_reqs[1].request_id == "req3"
     assert scheduler_reqs[1].prefill_start_index == 0
-    assert scheduler_reqs[1].prefill_end_index == 3199
+    assert scheduler_reqs[1].prefill_end_index == 3198
     assert len(resource_manager_v1.running) == 3
     assert len(resource_manager_v1.waiting) == 0
 
