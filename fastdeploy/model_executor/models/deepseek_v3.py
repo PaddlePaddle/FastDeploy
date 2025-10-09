@@ -595,14 +595,14 @@ class DeepSeekV3Model(nn.Layer):
 
 
 @ModelRegistry.register_model_class(
-    architecture="DeepseekV3ForCausalLM",
-    module_name="deepseek_v3",
+    architecture="DeepseekV32ForCausalLM",
+    module_name="deepseek_v32",
     category=ModelCategory.TEXT_GENERATION,
     primary_use=ModelCategory.TEXT_GENERATION,
 )
-class DeepseekV3ForCausalLM(ModelForCasualLM):
+class DeepseekV32ForCausalLM(ModelForCasualLM):
     """
-    DeepseekV3ForCausalLM
+    DeepseekV3ForCausalLM\DeepseekV32ForCausalLM
     """
 
     def __init__(self, fd_config: FDConfig):
@@ -629,7 +629,7 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
     @classmethod
     def name(cls):
         """ """
-        return "DeepseekV3ForCausalLM"
+        return "DeepseekV32ForCausalLM"
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict):
@@ -776,7 +776,7 @@ class DeepSeekV3PretrainedModel(PretrainedModel):
 
     @classmethod
     def arch_name(self):
-        return "DeepseekV3ForCausalLM"
+        return "DeepseekV32ForCausalLM"
 
     @classmethod
     def _get_tensor_parallel_mappings(cls, config, is_split=True):
