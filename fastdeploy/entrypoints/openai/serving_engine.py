@@ -19,9 +19,12 @@ import time
 import traceback
 import uuid
 from abc import ABC, abstractmethod
+from typing_extensions import override
+from collections.abc import AsyncGenerator
 from typing import Any, ClassVar, Dict, Generic, Optional, TypeVar, Union
+from pydantic import BaseModel, ConfigDict, Field
 
-from fastdeploy.engine.request import RequestOutput
+from fastdeploy.engine.request import RequestOutput, PoolingRequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     ErrorInfo,
     ErrorResponse,
@@ -30,6 +33,24 @@ from fastdeploy.entrypoints.openai.protocol import (
 from fastdeploy.utils import ErrorCode, ErrorType, api_server_logger
 
 RequestT = TypeVar("RequestT")
+
+class ServeContext(
+        BaseModel,
+        Generic[RequestT],
+):
+    # Shared across all requests
+    request: RequestT
+    request_output: Optional[Union[RequestOutput, PoolingRequestOutput]] = None
+    model_name: str
+    request_id: str
+    created_time: int = Field(default_factory=lambda: int(time.time()))
+
+    # `protected_namespaces` resolves Pydantic v2's warning
+    # on conflict with protected namespace "model_"
+    model_config = ConfigDict(
+        protected_namespaces=(),
+        arbitrary_types_allowed=True,
+    )
 
 
 class OpenAIServing(ABC, Generic[RequestT]):
@@ -83,7 +104,7 @@ class OpenAIServing(ABC, Generic[RequestT]):
             api_server_logger.error(error_msg)
             return False
 
-    async def _release_semaphore(self, request_id: str) -> None:
+    def _release_semaphore(self, request_id: str) -> None:
         """Release engine client semaphore"""
         self.engine_client.semaphore.release()
         api_server_logger.info(f"Release request:{request_id} status:{self.engine_client.semaphore.status()}")
@@ -105,30 +126,34 @@ class OpenAIServing(ABC, Generic[RequestT]):
             return f"{self.request_id_prefix}-{user}-{uuid.uuid4()}"
         return f"{self.request_id_prefix}-{uuid.uuid4()}"
 
-    def _validate_request():
+    def _validate_request(self, ctx: ServeContext):
         """Validate the request before processing"""
         pass
 
     @abstractmethod
-    async def _preprocess(self, request_id: str, request: RequestT) -> Dict:
+    async def _preprocess(self, ctx: ServeContext) -> Dict:
         """Preprocess the request into engine format"""
         pass
 
     @abstractmethod
-    async def _prepare_generators(self, request_id: str, request: dict) -> Any:
+    async def _prepare_generators(self, ctx: ServeContext) -> Any:
         """Process engine response into final format"""
+        # 此函数是一个异步方法，用于处理引擎响应并将其转换为最终格式
         pass
 
     @abstractmethod
-    async def _build_final_response(self, request_id: str, request_output: RequestOutput) -> Any:
+    def _build_response(self, ctx: ServeContext) -> Any:
         """Generate the final response object"""
         pass
 
-    async def handle(self, reqeust: RequestT) -> Union[Any, ErrorResponse]:
+    async def handle(self, ctx: ServeContext) -> Union[Any, ErrorResponse]:
         """Handle incoming requests"""
-        yield self._pipeline(reqeust)
+        generation = self._pipeline(ctx)
 
-    async def _pipeline(self, request: RequestT) -> Union[Any, ErrorResponse]:
+        async for response in generation:
+            yield response
+
+    async def _pipeline(self, ctx: ServeContext) -> Union[Any, ErrorResponse]:
         """
         Pipeline for handling requests
         Args:
@@ -143,15 +168,16 @@ class OpenAIServing(ABC, Generic[RequestT]):
                 f"Only master node can accept request, please send to master node: {self.master_ip}"
             )
 
+        request = ctx.request
         # Step 1.2: Check supported model
-        is_supported, request.model = self._check_supported_model(request.model)
+        is_supported, request.model = self._check_supported_model(ctx.model_name)
         if not is_supported:
             yield self._create_error_response(
                 f"Unsupported model: [{request.model}]", ErrorType.API_CONNECTION_ERROR, ErrorCode.MODEL_NOT_SUPPORT
             )
 
         # Step 1.3: Validate request
-        self._validate_request(request)
+        self._validate_request(ctx)
 
         request_id = self._generate_request_id(getattr(request, "user", None))
         api_server_logger.info(f"Initialize request {request_id}: {request}")
@@ -162,15 +188,15 @@ class OpenAIServing(ABC, Generic[RequestT]):
 
         try:
             # Step 3: Preprocessing
-            request_dict = await self._preprocess(request_id, request)
-            request_dict["request_id"] = request_id
+            await self._preprocess(ctx)
 
             # Step 4: Response processing
-            generators = await self._prepare_generators(request_id, request_dict)
+            generators = self._prepare_generators(ctx)
 
             # Step 5: Final response build
             async for request_output in generators:
-                yield self._build_final_response(request_id, request_output)
+                ctx.request_output = request_output
+                yield self._build_response(ctx)
 
         except InvalidParameterException as e:
             traceback.print_exc()
@@ -190,21 +216,34 @@ class ZmqOpenAIServing(OpenAIServing):
     def __init__(self, engine_client, models, pid, ips, max_waiting_time):
         super().__init__(engine_client, models, pid, ips, max_waiting_time)
 
-    async def _preprocess(self, request_id: str, request: Any) -> Dict:
+    @override
+    async def _preprocess(self, ctx: ServeContext) -> Dict:
         """Preprocess the request into engine format"""
-        request_dict = request.to_dict_for_infer(request_id)
+        request = ctx.request
+        if hasattr(request, "to_dict_for_infer"):
+            request_dict = request.to_dict_for_infer(ctx.request_id)
+        else:
+            request_dict = request.dict()
+        request_dict["request_id"] = ctx.request_id
+
         if "chat_template" not in request_dict:
             request_dict["chat_template"] = self.chat_template
         request_dict["arrival_time"] = time.time()
+
+        if hasattr(request, "to_pooling_params"):
+            request_dict["pooling_params"] = request.to_pooling_params()
+
         await self.engine_client.format_and_add_data(request_dict)
         return request_dict
 
-    async def _prepare_generators(self, request_id: str, request: dict) -> RequestOutput:
+    @override
+    async def _prepare_generators(self, ctx: ServeContext) -> AsyncGenerator[RequestOutput]:
+        request_id = ctx.request_id
         try:
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id)
             dealer.write([b"", request_id.encode("utf-8")])
-            if self.engine_client.check_model_weight_status():
-                raise ValueError("Engine is clearing model weight")
+            # if self.engine_client.check_model_weight_status():
+            #     raise ValueError("Engine is clearing model weight")
             responses = await asyncio.wait_for(response_queue.get(), timeout=60)
             for response in responses:
                 yield response

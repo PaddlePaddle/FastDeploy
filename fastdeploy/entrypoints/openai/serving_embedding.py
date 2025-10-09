@@ -14,14 +14,35 @@
 # limitations under the License.
 """
 
-from fastdeploy.engine.request import RequestOutput
+import base64
+import numpy as np
+from typing import Literal, Union
+from typing_extensions import assert_never, override
+from fastdeploy.engine.request import EmbeddingOutput, EmbeddingRequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     EmbeddingRequest,
+    EmbeddingCompletionRequest,
+    EmbeddingResponseData,
     EmbeddingResponse,
     UsageInfo,
 )
-from fastdeploy.entrypoints.openai.serving_engine import ZmqOpenAIServing
+from fastdeploy.entrypoints.openai.serving_engine import ServeContext, ZmqOpenAIServing
 from fastdeploy.utils import api_server_logger
+
+
+def _get_embedding(
+    output: EmbeddingOutput,
+    encoding_format: Literal["float", "base64"],
+) -> Union[list[float], str]:
+    if encoding_format == "float":
+        return output.embedding
+    elif encoding_format == "base64":
+        # Force to use float32 for base64 encoding
+        # to match the OpenAI python client behavior
+        embedding_bytes = np.array(output.embedding, dtype="float32").tobytes()
+        return base64.b64encode(embedding_bytes).decode("utf-8")
+
+    assert_never(encoding_format)
 
 
 class OpenAIServingEmbedding(ZmqOpenAIServing):
@@ -38,25 +59,44 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
         """
         Create embeddings for the input texts using the pipeline pattern
         """
-        yield self.handle(request)
+        request_id = self._generate_request_id(getattr(request, "user", None))
 
-    async def _build_final_response(self, request_id: str, request_output: RequestOutput):
+        ctx = ServeContext[EmbeddingRequest](
+            request=request,
+            model_name=request.model,
+            request_id=request_id,
+        )
+
+        generation = self.handle(ctx)
+        async for response in generation:
+            return response
+
+    @override
+    def _build_response(self, ctx: ServeContext):
         """Generate final embedding response"""
 
-        api_server_logger.info(f"[{request_id}] Embedding response generated:{request_output}")
+        embedding_res = EmbeddingRequestOutput.from_base(ctx.request_output)
+
+        data = EmbeddingResponseData(
+            index=0,
+            embedding=_get_embedding(embedding_res.outputs, ctx.request.encoding_format),
+        )
+
+        api_server_logger.info(f"[{ctx.request_id}] Embedding response generated:{ctx.request_output}")
 
         num_prompt_tokens = 0
-        if request_output["prompt_ids"]:
-            num_prompt_tokens = len(request_output["prompt_ids"])
+        if ctx.request_output.prompt_token_ids:
+            num_prompt_tokens = len(ctx.request_output.prompt_token_ids)
+
         usage = UsageInfo(
             prompt_tokens=num_prompt_tokens,
             total_tokens=num_prompt_tokens,
         )
 
         return EmbeddingResponse(
-            id=request_id,
-            created=None,
-            model=None,
-            data=[],
+            id=ctx.request_id,
+            created=ctx.created_time,
+            model=ctx.model_name,
+            data=[data],
             usage=usage,
         )
