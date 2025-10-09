@@ -163,8 +163,6 @@ class SamplingParams:
     def __post_init__(self):
         if self.seed is None:
             self.seed = random.randint(0, 922337203685477580)
-        if self.max_tokens is not None and self.reasoning_max_tokens is None:
-            self.reasoning_max_tokens = max(int(self.max_tokens * 0.8), 1)
         self._verify_args()
 
     def _verify_args(self) -> None:

@@ -208,6 +208,7 @@ if paddle.is_compiled_with_rocm():
         "gpu_ops/rebuild_padding.cu",
         "gpu_ops/step.cu",
         "gpu_ops/set_data_ipc.cu",
+        "gpu_ops/unset_data_ipc.cu",
         "gpu_ops/moe/tritonmoe_preprocess.cu",
         "gpu_ops/step_system_cache.cu",
         "gpu_ops/get_output_ep.cc",
@@ -278,6 +279,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/beam_search_softmax.cu",
         "gpu_ops/rebuild_padding.cu",
         "gpu_ops/set_data_ipc.cu",
+        "gpu_ops/unset_data_ipc.cu",
         "gpu_ops/read_data_ipc.cu",
         "gpu_ops/enforce_generation.cu",
         "gpu_ops/dequant_int8.cu",
@@ -595,6 +597,10 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/moe/tritonmoe_preprocess.cu",
         "gpu_ops/moe/moe_topk_select.cu",
         "gpu_ops/recover_decode_task.cu",
+        "metax_ops/moe_dispatch.cu",
+        "metax_ops/moe_ffn.cu",
+        "metax_ops/moe_reduce.cu",
+        "metax_ops/fused_moe.cu",
     ]
 
     sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
@@ -615,7 +621,7 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
                 ],
             },
             library_dirs=[os.path.join(maca_path, "lib")],
-            extra_link_args=["-lruntime_cu"],
+            extra_link_args=["-lruntime_cu", "-lmctlassEx"],
             include_dirs=[
                 os.path.join(maca_path, "include"),
                 os.path.join(maca_path, "include/mcr"),

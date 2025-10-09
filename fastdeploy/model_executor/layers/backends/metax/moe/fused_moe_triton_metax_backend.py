@@ -1,4 +1,3 @@
-"""
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,12 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""
 
 import paddle
 from paddle import nn
 
 import fastdeploy
+from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess
 from fastdeploy.utils import ceil_div
@@ -153,7 +152,6 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
         Triton compute Fused MoE.
         """
         token_num = x.shape[0]
-        top_k = layer.top_k
         num_local_experts = layer.num_local_experts
         top_k = layer.top_k
         moe_intermediate_size = layer.moe_intermediate_size
@@ -172,21 +170,12 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
             dtype=x.dtype,
         )
 
-        if self.quant_config is not None:
-            config = {
-                "BLOCK_SIZE_M": 32,
-                "BLOCK_SIZE_N": 64,
-                "BLOCK_SIZE_K": 64,
-                "GROUP_SIZE_M": 8,
-            }
-        else:
-            config = {
-                "BLOCK_SIZE_M": 32,
-                "BLOCK_SIZE_N": 64,
-                "BLOCK_SIZE_K": 64,
-                "GROUP_SIZE_M": 8,
-            }
-
+        config = {
+            "BLOCK_SIZE_M": 32,
+            "BLOCK_SIZE_N": 64,
+            "BLOCK_SIZE_K": 64,
+            "GROUP_SIZE_M": 4,
+        }
         sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess(
             topk_ids, num_local_experts, config["BLOCK_SIZE_M"]
         )
@@ -292,4 +281,6 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
 
         down_proj_out.reshape_([token_num, top_k, hidden_size])
         out = down_proj_out.sum(axis=1)
+        if layer.tp_size > 1:
+            tensor_model_parallel_all_reduce(out)
         return out
