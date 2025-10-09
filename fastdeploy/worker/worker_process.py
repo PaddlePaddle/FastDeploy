@@ -710,20 +710,31 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     scheduler_config = SchedulerConfig(vars(args))
     parallel_config.tensor_parallel_rank = local_rank % parallel_config.tensor_parallel_size
     parallel_config.data_parallel_rank = local_rank // parallel_config.tensor_parallel_size
+
+
+    parallel_config.moe_ep_group = paddle.distributed.new_group(range(16,24))
+    parallel_config.attn_group = paddle.distributed.new_group(range(0,16))
+
+    parallel_config.ep_rank = paddle.distributed.get_rank(parallel_config.moe_ep_group)
+    parallel_config.is_attention_role = paddle.distributed.get_rank(parallel_config.attn_group) >= 0
+    parallel_config.is_moe_role = paddle.distributed.get_rank(parallel_config.moe_ep_group) >= 0
+
+    parallel_config.expert_parallel_size = 8
+
     # config for EP
-    if parallel_config.expert_parallel_size > 1:
+    if parallel_config.expert_parallel_size > 1 and parallel_config.ep_rank >= 0:
         expert_parallel_rank = int(local_rank % parallel_config.expert_parallel_size)
         if isinstance(model_config.moe_num_experts, list):
             num_experts = model_config.moe_num_experts[0]
         else:
             num_experts = model_config.moe_num_experts
 
-        num_experts_per_rank = num_experts // parallel_config.expert_parallel_size
-        num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
+        num_experts_per_rank = num_experts // 8
+        num_experts_start_offset = parallel_config.ep_rank * num_experts_per_rank
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        parallel_config.local_data_parallel_id = expert_parallel_rank % max_chips_per_node
+        parallel_config.local_data_parallel_id = parallel_config.ep_rank % max_chips_per_node
 
-        parallel_config.expert_parallel_rank = expert_parallel_rank
+        parallel_config.expert_parallel_rank = parallel_config.ep_rank
         parallel_config.num_experts_per_rank = num_experts_per_rank
         parallel_config.num_experts_start_offset = num_experts_start_offset
 
