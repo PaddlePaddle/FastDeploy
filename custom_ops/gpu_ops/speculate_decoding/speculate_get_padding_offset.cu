@@ -139,7 +139,7 @@ std::vector<paddle::DataType> SpeculateGetPaddingOffsetInferDtype(
 PD_BUILD_STATIC_OP(speculate_get_padding_offset)
     .Inputs({"input_ids",
              "draft_tokens",
-             "cum_offsets"
+             "cum_offsets",
              "token_num",
              "seq_len",
              "seq_lens_encoder"})
