@@ -27,6 +27,7 @@ from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
 from fastdeploy.utils import data_processor_logger
 from fastdeploy.worker.output import LogprobsLists, SampleLogprobs
+from fastdeploy.engine.pooling_params import PoolingParams
 
 
 class RequestStatus(Enum):
@@ -55,7 +56,8 @@ class Request:
         history: Optional[list[list[str]]],
         tools: Optional[list[Dict]],
         system: Optional[Union[str, list[str]]],
-        sampling_params: SamplingParams,
+        sampling_params: Optional[SamplingParams],
+        pooling_params: Optional[PoolingParams],
         eos_token_ids: Optional[list[int]],
         arrival_time: float,
         preprocess_start_time: Optional[float] = None,
@@ -92,6 +94,7 @@ class Request:
         self.messages = messages
         self.system = system
         self.sampling_params = sampling_params
+        self.pooling_params = pooling_params
         self.history = history
         self.tools = tools
         # model specific token ids: end of sentence token ids
