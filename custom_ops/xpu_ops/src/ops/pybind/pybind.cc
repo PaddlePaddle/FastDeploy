@@ -416,7 +416,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("bias"),
         py::arg("weight_dtype"),
         py::arg("arch"),
-        py::arg("group_size"));
+        py::arg("group_size")=-1);
 
   m.def("ep_moe_expert_combine",
         &MoeEPCombine,
