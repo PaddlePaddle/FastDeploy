@@ -45,6 +45,10 @@ class Proposer(ABC):
         self.fd_config.parallel_config.tp_group = dist.get_group(
             fd_config.parallel_config.data_parallel_rank + envs.FD_TP_GROUP_GID_OFFSET
         )
+        self.fd_config.parallel_config.ep_group = dist.get_group(
+            fd_config.parallel_config.data_parallel_size + envs.FD_TP_GROUP_GID_OFFSET
+        )
+
         self.parallel_config = self.fd_config.parallel_config
         self.model_config = self.fd_config.model_config
         self.speculative_config = self.fd_config.speculative_config
@@ -52,6 +56,7 @@ class Proposer(ABC):
         self.quant_config = self.fd_config.quant_config
         self.graph_opt_config = self.fd_config.graph_opt_config
         self.scheduler_config = self.fd_config.scheduler_config
+
 
         self.max_num_seqs = self.parallel_config.max_num_seqs
         self.max_model_len = self.parallel_config.max_model_len

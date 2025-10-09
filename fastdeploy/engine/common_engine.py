@@ -33,6 +33,7 @@ from opentelemetry import trace
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
+from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
     EngineCacheQueue,
     EngineWorkerQueue,
@@ -128,6 +129,17 @@ class EngineSevice:
         self.insert_task_to_worker_thread.start()
         self.token_processor.tasks_queue = self.engine_worker_queue
         self.token_processor.run()
+
+    def create_data_processor(self):
+        self.input_processor = InputPreprocessor(
+            self.cfg.tokenizer,
+            self.cfg.reasoning_parser,
+            self.cfg.limit_mm_per_prompt,
+            self.cfg.mm_processor_kwargs,
+            self.cfg.model_config.enable_mm,
+            self.cfg.tool_parser,
+        )
+        self.data_processor = self.input_processor.create_processor()
 
     def _init_worker_monitor_signals(self):  # exist_task_signal 用于各worker进程感知是否有新Task需要处理
         current_suffix = int(self.cfg.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id])
@@ -664,6 +676,20 @@ class EngineSevice:
                     f"traceback={traceback.format_exc()}"
                 )
 
+    def _decode_token(self, token_ids, req_id, is_end):
+        delta_text = ""
+        if envs.FD_ENABLE_RETURN_TEXT:
+            delta_text, cum_tokens, _ = self.data_processor.ids2tokens(token_ids, req_id)
+            if delta_text != "":
+                prefix_offset = self.data_processor.decode_status[req_id][0]
+                read_offset = self.data_processor.decode_status[req_id][1]
+                token_ids = cum_tokens[prefix_offset:read_offset]
+            else:
+                token_ids = []
+            if is_end:
+                del self.data_processor.decode_status[req_id]
+        return delta_text, token_ids
+
     def _zmq_send_generated_tokens(self):
         """
         Recieve output for zmq
@@ -675,7 +701,23 @@ class EngineSevice:
                     time.sleep(0.005)
                     continue
                 for request_id, contents in results.items():
-                    self.send_response_server.send_response(request_id, contents)
+                    new_contents = []
+                    for content in contents:
+                        delta_text, token_ids = self._decode_token(
+                            token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
+                        )
+                        if len(token_ids):
+                            content.outputs.token_ids = token_ids
+                            content.outputs.text = delta_text
+                            new_contents.append(content)
+                        else:
+                            llm_logger.warning(
+                                f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
+                            )
+
+                    if len(new_contents):
+                        llm_logger.info(f"Send response for request id: {request_id}")
+                        self.send_response_server.send_response(request_id, new_contents)
 
             except Exception as e:
                 llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
