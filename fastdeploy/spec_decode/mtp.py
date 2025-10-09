@@ -79,7 +79,7 @@ class MTPProposer(Proposer):
         self._init_model_inputs()
 
         # CUDA Graph
-        self.use_cudagraph = self.graph_opt_config.use_cudagraph
+        self.use_cudagraph = False  # self.graph_opt_config.use_cudagraph
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
 

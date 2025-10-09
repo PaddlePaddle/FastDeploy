@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
@@ -238,6 +239,6 @@ class CudaGraphPiecewiseBackend:
         log_dir = envs.FD_LOG_DIR
         if entry.cuda_graph:
             entry.cuda_graph.print_to_dot_files(
-                f"./{log_dir}/GraphDotFiles/backend{id(self)}_shape{entry.real_shape}",
+                f"./{log_dir}/GraphDotFiles/backend{id(self)}_shape{entry.real_shape}_time{time.perf_counter()}",
                 1 << 0,
             )

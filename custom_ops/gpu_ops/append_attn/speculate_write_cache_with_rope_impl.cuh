@@ -72,6 +72,7 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
     int64_t linear_index = global_hi * head_size + threadIdx.x * VecSize;
     const int token_id = linear_index / hidden_size;
     const int ori_bi = batch_id_per_token[token_id];
+    if (ori_bi == -1) continue;
     if (seq_lens_decoder[ori_bi] == 0) continue;
     const int bias = linear_index % hidden_size;
     const int hi = bias / head_size;  // q + k + v
@@ -108,7 +109,7 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
     }
     float thread_m2 = 0.0f;
     float warp_m2 = 0.0f;
-#pragma unroll
+    #pragma unroll
     for (int i = 0; i < HalfVecSize; i++) {
       // add_bias + rope
       float input_left = static_cast<float>(src_vec[2 * i]);
@@ -535,7 +536,7 @@ __global__ void append_speculate_cache_neox_rope_kernel(
       Load<float, VecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
       Load<float, VecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
     }
-#pragma unroll
+    #pragma unroll
     for (int i = 0; i < VecSize; i++) {
       // add_bias + rope
       float input_left = static_cast<float>(left_vec[i]);
