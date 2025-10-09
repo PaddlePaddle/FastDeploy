@@ -125,7 +125,10 @@ class GPUModelRunner(ModelRunnerBase):
                 "fused_gemm_epilogue",
             ]
 
-            self.encoder_cache: dict[str, paddle.Tensor] = {}
+            if self.cache_config.max_encoder_cache > 0:
+                self.encoder_cache: dict[str, paddle.Tensor] = {}
+            else:
+                self.encoder_cache = None
 
         #  Sampler
         if not self.speculative_decoding:
@@ -273,12 +276,12 @@ class GPUModelRunner(ModelRunnerBase):
             schemata_key,
         )
 
-    def batch_uncached_inputs(self, req: Request):
+    def get_chunked_inputs(self, req: Request):
         """
-        Batch uncached multimodal inputs
+        Get inputs in current chunk
         """
         prefill_start_index = req.prefill_start_index
-        prefill_end_index = req.prefill_end_index
+        prefill_end_index =  req.prefill_end_index
         inputs = req.multimodal_inputs
         input_ids = inputs["input_ids"][prefill_start_index:prefill_end_index]
         token_type_ids = inputs["token_type_ids"][prefill_start_index:prefill_end_index]
@@ -286,6 +289,28 @@ class GPUModelRunner(ModelRunnerBase):
         images = inputs["images"][req.image_start : req.image_end]
         grid_thw = inputs["grid_thw"][req.num_image_start : req.num_image_end]
         mm_hashes = inputs["mm_hashes"][req.num_image_start : req.num_image_end]
+
+        return (
+            input_ids,
+            token_type_ids,
+            image_type_ids,
+            images,
+            grid_thw,
+            mm_hashes,
+        )
+    
+    def batch_uncached_inputs(self, req: Request):
+        """
+        Batch uncached multimodal inputs
+        """
+        (
+            input_ids,
+            token_type_ids,
+            image_type_ids,
+            images,
+            grid_thw,
+            mm_hashes
+        ) = self.get_chunked_inputs(req)
 
         image_type_ids_size = grid_thw[:, 0]
         image_type_ids_split = np.cumsum(image_type_ids_size)[:-1]
@@ -368,38 +393,60 @@ class GPUModelRunner(ModelRunnerBase):
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
-                evict_mm_hashes = request.get("evict_mm_hashes", None)
-                if evict_mm_hashes is not None:
-                    for mm_hash in evict_mm_hashes:
-                        self.encoder_cache.pop(mm_hash, None)
                 if self.enable_mm:
+                    if self.encoder_cache:
+                        evict_mm_hashes = request.get("evict_mm_hashes", None)
+                        if evict_mm_hashes:
+                            for mm_hash in evict_mm_hashes:
+                                self.encoder_cache.pop(mm_hash, None)
+
                     inputs = request.multimodal_inputs
                     if request.with_image:
                         vision_inputs = {}
-                        (
-                            vision_inputs["input_ids"],
-                            vision_inputs["token_type_ids"],
-                            vision_inputs["image_type_ids"],
-                            vision_inputs["images"],
-                            vision_inputs["grid_thw"],
-                            vision_inputs["mm_hashes"],
-                        ) = self.batch_uncached_inputs(request)
-                        if len(vision_inputs["mm_hashes"]) > 0:
-                            # uncached multimodal inputs exist
+                        if self.encoder_cache:
+                            (
+                                vision_inputs["input_ids"],
+                                vision_inputs["token_type_ids"],
+                                vision_inputs["image_type_ids"],
+                                vision_inputs["images"],
+                                vision_inputs["grid_thw"],
+                                vision_inputs["mm_hashes"],
+                            ) = self.batch_uncached_inputs(request)
+                            if len(vision_inputs["mm_hashes"]) > 0:
+                                # uncached multimodal inputs exist
+                                image_features = self.extract_vision_features(vision_inputs)
+                                self.scatter_and_cache_features(image_features, vision_inputs)
+
+                            full_image_features_lst = []
+                            for mm_hash in inputs["mm_hashes"][request.num_image_start : request.num_image_end]:
+                                feature = self.encoder_cache[mm_hash].cuda()
+                                full_image_features_lst.append(feature)
+                            image_features = paddle.concat(full_image_features_lst, axis=0)
+                        else:
+                            (
+                                input_ids,
+                                token_type_ids,
+                                image_type_ids,
+                                images,
+                                grid_thw,
+                                mm_hashes,
+                            ) = self.get_chunked_inputs(request)
+                            vision_inputs["input_ids"] = paddle.to_tensor(input_ids, dtype=paddle.int64)
+                            vision_inputs["token_type_ids"] = paddle.to_tensor(token_type_ids, dtype=paddle.int64)
+                            vision_inputs["image_type_ids"] = paddle.to_tensor(image_type_ids, dtype=paddle.int64)
+                            vision_inputs["images"] = paddle.to_tensor(
+                                images, dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16"
+                            )
+                            vision_inputs["grid_thw"] = paddle.to_tensor(grid_thw, dtype=paddle.int64)
+                            vision_inputs["mm_hashes"] = mm_hashes
+
                             image_features = self.extract_vision_features(vision_inputs)
-                            self.scatter_and_cache_features(image_features, vision_inputs)
-
-                        full_image_features_lst = []
-                        for mm_hash in inputs["mm_hashes"][request.num_image_start : request.num_image_end]:
-                            feature = self.encoder_cache[mm_hash].cuda()
-                            full_image_features_lst.append(feature)
-                        full_image_features = paddle.concat(full_image_features_lst, axis=0)
-
+                        
                         # part of the first image may be already cached
                         actual_image_token_num = paddle.sum(
                             vision_inputs["input_ids"] == self.model_config.im_patch_id
                         )
-                        self.share_inputs["image_features"] = full_image_features[-actual_image_token_num:]
+                        self.share_inputs["image_features"] = image_features[-actual_image_token_num :]
                     else:
                         self.share_inputs["image_features"] = None
 

@@ -88,6 +88,7 @@ class DataProcessor:
         self,
         tokenizer_name: str,
         image_preprocessor_name: str,
+        enable_processor_cache: bool = False,
         spatial_conv_size: int = 2,
         temporal_conv_size: int = 2,
         image_min_pixels: int = 4 * 28 * 28,
@@ -106,6 +107,7 @@ class DataProcessor:
         self._load_tokenizer()
         self.tokenizer.ignored_index = -100
         self.image_preprocessor = AdaptiveImageProcessor.from_pretrained(image_preprocessor_name)
+        self.enable_processor_cache = enable_processor_cache
 
         # Convolution sizes for patch aggregation
         self.spatial_conv_size = spatial_conv_size
@@ -258,15 +260,19 @@ class DataProcessor:
                 missing_hashes.append(item.get("uuid"))
                 missing_idx.append(idx)
 
-        context = zmq.Context()
-        dealer = context.socket(zmq.DEALER)
-        dealer.connect("ipc:///dev/shm/processor_cache.ipc")
+        if len(missing_hashes) > 0 and not self.enable_processor_cache:
+                raise ValueError("Missing items cannot be retrieved without processor cache.")
+        
+        if self.enable_processor_cache:
+            context = zmq.Context()
+            dealer = context.socket(zmq.DEALER)
+            dealer.connect("ipc:///dev/shm/processor_cache.ipc")
 
-        missing_items = self.get_processor_cache(dealer, missing_hashes)
-        for idx in range(len(missing_items)):
-            if not missing_items[idx]:
-                raise ValueError(f"Missing item {idx} not found in processor cache")
-            mm_items[missing_idx[idx]]["data"] = missing_items[idx]
+            missing_items = self.get_processor_cache(dealer, missing_hashes)
+            for idx in range(len(missing_items)):
+                if not missing_items[idx]:
+                    raise ValueError(f"Missing item {idx} not found in processor cache")
+                mm_items[missing_idx[idx]]["data"] = missing_items[idx]
 
         images, videos = [], []
         image_uuid, video_uuid = [], []
@@ -294,17 +300,18 @@ class DataProcessor:
 
         outputs = self.text2ids(prompt, images, videos, image_uuid, video_uuid)
 
-        missing_idx = set(missing_idx)
-        hashes_to_cache, items_to_cache = [], []
-        for idx in range(len(mm_items)):
-            if idx in missing_idx:
-                continue
-            meta = {}
-            t, h, w = outputs["grid_thw"][idx][0]
-            meta["thw"] = (t, h, w)
-            hashes_to_cache.append(outputs["mm_hashes"][idx])
-            items_to_cache.append((outputs["images"][idx], meta))
-        self.update_processor_cache(dealer, hashes_to_cache, items_to_cache)
+        if self.enable_processor_cache:
+            missing_idx = set(missing_idx)
+            hashes_to_cache, items_to_cache = [], []
+            for idx in range(len(mm_items)):
+                if idx in missing_idx:
+                    continue
+                meta = {}
+                t, h, w = outputs["grid_thw"][idx][0]
+                meta["thw"] = (t, h, w)
+                hashes_to_cache.append(outputs["mm_hashes"][idx])
+                items_to_cache.append((outputs["images"][idx], meta))
+            self.update_processor_cache(dealer, hashes_to_cache, items_to_cache)
 
         if self.is_training:
             assert tgts, "Training must give tgt"

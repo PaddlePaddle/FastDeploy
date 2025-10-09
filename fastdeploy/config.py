@@ -1547,7 +1547,7 @@ class FDConfig:
 
         self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         self.cache_config.max_block_num_per_seq = int(self.max_model_len // self.cache_config.block_size)
-        if self.model_config is not None and self.model_config.enable_mm:
+        if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.cache_config.enable_prefix_caching = False
 
         if self.guided_decoding_backend == "auto":
@@ -1559,15 +1559,15 @@ class FDConfig:
 
         if self.model_config.enable_mm:
             if self.cache_config.max_encoder_cache is None or self.cache_config.max_encoder_cache < 0:
-                self.cache_config.max_encoder_cache = self.parallel_config.max_num_batched_tokens
+                self.cache_config.max_encoder_cache = self.scheduler_config.max_num_batched_tokens
             elif self.cache_config.max_encoder_cache != 0:
-                if self.cache_config.max_encoder_cache < self.parallel_config.max_num_batched_tokens:
+                if self.cache_config.max_encoder_cache < self.scheduler_config.max_num_batched_tokens:
                     logger.warning(
                         f"max_encoder_cache{self.cache_config.max_encoder_cache} is less than "
-                        f"max_num_batched_tokens{self.parallel_config.max_num_batched_tokens}, "
+                        f"max_num_batched_tokens{self.scheduler_config.max_num_batched_tokens}, "
                         f"set to max_num_batched_tokens."
                     )
-                    self.cache_config.max_encoder_cache = self.parallel_config.max_num_batched_tokens
+                    self.cache_config.max_encoder_cache = self.scheduler_config.max_num_batched_tokens
         else:
             self.cache_config.max_encoder_cache = 0
 

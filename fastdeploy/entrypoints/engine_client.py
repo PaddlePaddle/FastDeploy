@@ -69,13 +69,15 @@ class EngineClient:
         tool_parser=None,
         enable_prefix_caching=None,
         splitwise_role=None,
+        max_processor_cache=0,
     ):
         architectures = ModelConfig({"model": model_name_or_path}).architectures[0]
         if MultimodalRegistry.contains_model(architectures):
             self.enable_mm = True
         else:
             self.enable_mm = False
-
+        
+        enable_processor_cache = self.enable_mm and max_processor_cache > 0
         input_processor = InputPreprocessor(
             tokenizer,
             reasoning_parser,
@@ -83,6 +85,7 @@ class EngineClient:
             mm_processor_kwargs,
             self.enable_mm,
             tool_parser,
+            enable_processor_cache,
         )
         self.enable_logprob = enable_logprob
         self.reasoning_parser = reasoning_parser
