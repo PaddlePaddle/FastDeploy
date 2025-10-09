@@ -15,7 +15,7 @@
 借鉴 NSA 和 MoBA 的方法，我们将键值对 (KV) 划分为多个块。在预填充和解码阶段，我们不再对所有键值进行注意力计算，而是动态地为每个查询 token 选择注意力得分最高的前 K 个块，从而实现高效的稀疏注意力计算。
 
 <div align="center">
-<img src="images/plas_training_distill.png" alt="Attention Gate Module" width="60%">
+<img src="./images/plas_training_distill.png" alt="Attention Gate Module" width="60%">
 </div>
 
 * **Attention Gate Module**: 如上图所示，为了以较低的计算开销估计每个块的重要性，我们设计了一个轻量级的注意力门模块。该模块首先通过一个MLP层压缩每个K个块，生成一个具有代表性的低维表示： $K_c^T=W_{kp}K^T$ ，其中 $W_{kp}$ 表示 MLP 层的权重。与直接应用均值池化相比，可学习的 MLP 可以更有效地捕捉不同 token 之间的语义关系和重要性分布，从而提供每个块的精细表示。在获得压缩表示 $K_c$ 之后，通过以下公式估计每个查询 token 相对于每个块的重要性：$Softmax(Q\cdot K_c^T)$。为了增强 MLP 层的判别能力，我们使用一维最大池化后的完整注意力结果 $1DMaxPooling(Softmax(Q \cdot K^T))$ 作为 ground truth。通过最小化两者之间的分布差异，引导 MLP 层学习更符合真实注意力分布的特征表示。
@@ -29,7 +29,7 @@
 在稀疏注意力计算过程中，每个查询 token 可能会动态选择不同的 KV 块，导致 HBM 的内存访问模式非常不规则。简单地对每个查询 token 进行单独处理是可行的，但这会导致计算粒度过细，无法充分利用张量核，从而显著降低 GPU 的计算效率。
 
 <div align="center">
-<img src="images/plas_inference_union.png" alt="Token/Head Union" width="60%">
+<img src="./images/plas_inference_union.png" alt="Token/Head Union" width="60%">
 </div>
 
 为了优化预填充和解码阶段的性能，我们设计了一种特殊的联合策略来适应各自的特点:
