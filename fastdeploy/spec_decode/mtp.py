@@ -166,9 +166,7 @@ class MTPProposer(Proposer):
             kv_cache_scale_shape = [kv_cache_shape[0], kv_cache_shape[1], kv_cache_shape[2]]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-        if not profile and (
-            self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"
-        ):
+        if not profile and (self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
             cache_kvs_list = []
             for i in range(
                 self.num_main_model_layers,
@@ -768,7 +766,7 @@ class MTPProposer(Proposer):
                 self._post_process(sampled_token_ids)
 
                 if substep != self.num_model_steps - 1:
-                    target_hidden_states = self._get_self_hidden_states(hidden_states)
+                    self._get_self_hidden_states(hidden_states)
             else:
                 if hasattr(self.model, "empty_input_forward"):
                     self.model.empty_input_forward()
