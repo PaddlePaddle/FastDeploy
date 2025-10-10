@@ -64,6 +64,11 @@ class EngineSevice:
         """
         self.cfg = cfg
 
+        if self.cfg.cache_config.enable_prefix_caching:
+            self.cfg.cache_config.cache_queue_port = self.cfg.cache_config.cache_queue_port[
+                self.cfg.parallel_config.local_data_parallel_id
+            ]
+
         self.scheduler = cfg.scheduler_config.scheduler()
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.resource_manager = ResourceManagerV1(
@@ -215,12 +220,11 @@ class EngineSevice:
             if (
                 self.cfg.cache_config.enable_prefix_caching
                 or self.cfg.splitwise_role != "mixed"
-                and self.cfg.parallel_config.local_data_parallel_id == 0
             ):
                 self.cache_task_queue = EngineCacheQueue(
                     address=(
                         self.cfg.master_ip,
-                        self.cfg.cache_config.cache_queue_port,
+                        int(self.cfg.cache_config.cache_queue_port),
                     ),
                     authkey=b"cache_queue_service",
                     is_server=True,
