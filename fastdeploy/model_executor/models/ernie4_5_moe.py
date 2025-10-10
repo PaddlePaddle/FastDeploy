@@ -53,6 +53,7 @@ from fastdeploy.model_executor.models.model_base import (
 from fastdeploy.model_executor.models.tp_utils import TensorSplitMode as tsm
 from fastdeploy.model_executor.models.utils import LayerIdPlaceholder as layerid
 from fastdeploy.model_executor.models.utils import WeightMeta
+from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 
 
@@ -464,6 +465,9 @@ class Ernie4_5_Model(nn.Layer):
     ):
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
+        if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
+            hidden_states = forward_meta.attn_backend.transpose(hidden_states)
+
         residual = None
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
@@ -472,12 +476,15 @@ class Ernie4_5_Model(nn.Layer):
 
         out = self.norm(hidden_states)
 
+        if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
+            out = forward_meta.attn_backend.reverse_transpose(out)
+
         return out
 
 
 @ModelRegistry.register_model_class(
     architecture="Ernie4_5_MoeForCausalLM",
-    module_path="ernie4_5_moe",
+    module_name="ernie4_5_moe",
     category=ModelCategory.TEXT_GENERATION,
     primary_use=ModelCategory.TEXT_GENERATION,
 )
@@ -658,7 +665,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
 
 @ModelRegistry.register_model_class(
     architecture="Ernie4_5_ForCausalLM",
-    module_path="ernie4_5_moe",
+    module_name="ernie4_5_moe",
     category=ModelCategory.TEXT_GENERATION,
     primary_use=ModelCategory.TEXT_GENERATION,
 )
@@ -677,7 +684,7 @@ class Ernie4_5_ForCausalLM(Ernie4_5_MoeForCausalLM):
 
 @ModelRegistry.register_model_class(
     architecture="Ernie4_5ForCausalLM",
-    module_path="ernie4_5_moe",
+    module_name="ernie4_5_moe",
     category=ModelCategory.TEXT_GENERATION,
     primary_use=ModelCategory.TEXT_GENERATION,
 )

@@ -142,6 +142,27 @@ class TokenProcessor:
         self.worker.daemon = True
         self.worker.start()
 
+    def _reschedule_preempt_task_use_zmq(self, datas):
+        """reschedule when real batch size is smaller than the insert position of preemted_task"""
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            need_to_be_reschedule_req_ids = list(self.resource_manager.to_be_rescheduled_request_id_set)
+            if len(need_to_be_reschedule_req_ids) > 0:
+                batch_id_set = set()
+                for data in datas:
+                    batch_id_set.add(data.batch_id)
+                llm_logger.debug(f"_reschedule_preempt_task_use_zmq batch_id_set {batch_id_set}")
+            for request_id in need_to_be_reschedule_req_ids:
+                if (
+                    self.resource_manager.requests[request_id].idx not in batch_id_set
+                ):  # No more token generated for preempted request
+                    llm_logger.debug(
+                        f"reschedule_preempt_task request_id {request_id} at {self.resource_manager.requests[request_id].idx}"
+                    )
+                    self.resource_manager.reschedule_preempt_task(request_id)
+                    llm_logger.debug(
+                        f"finish reschedule_preempt_task request_id {request_id} at {self.resource_manager.requests[request_id].idx}"
+                    )
+
     def _reschedule_preempt_task(self, batch_size):
         """reschedule when real batch size is smaller than the insert position of preemted_task"""
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -264,8 +285,7 @@ class TokenProcessor:
                     assert isinstance(receive_datas, list)
                     llm_logger.debug(f"token_processor receive_data {receive_datas}")
 
-                    batch_size = len(receive_datas)
-                    self._reschedule_preempt_task(batch_size)
+                    self._reschedule_preempt_task_use_zmq(receive_datas)
 
                     batch_result = self._process_batch_output_use_zmq(receive_datas)
                     self.postprocess(batch_result)
@@ -284,6 +304,8 @@ class TokenProcessor:
             from fastdeploy.model_executor.ops.iluvatar import get_output
         elif current_platform.is_gcu():
             from fastdeploy.model_executor.ops.gcu import get_output
+        elif current_platform.is_intel_hpu():
+            from fastdeploy.model_executor.ops.intel_hpu import get_output
         else:
             from fastdeploy.model_executor.ops.gpu import (
                 get_output,
@@ -676,6 +698,31 @@ class TokenProcessor:
                 main_process_metrics.spec_decode_draft_single_head_acceptance_rate[head].set(
                     single_head_acceptance_rate
                 )
+
+    def clear_data(self):
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.resource_manager.clear_data()
+        for i in range(self.cfg.max_num_seqs):
+            if self.resource_manager.stop_flags[i]:
+                continue
+            task = self.resource_manager.tasks_list[i]
+            result = RequestOutput(
+                request_id=task.request_id,
+                outputs=CompletionOutput(
+                    index=i,
+                    send_idx=self.tokens_counter[task.request_id],
+                    token_ids=task.eos_token_ids,
+                    draft_token_ids=[],
+                ),
+                finished=True,
+                metrics=RequestMetrics(
+                    arrival_time=time.time(),
+                    request_start_time=task.arrival_time,
+                ),
+            )
+            is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
+            self._recycle_resources(task.request_id, i, task, result, is_prefill)
+            llm_logger.warning(f"clear data for task {task.request_id}")
 
 
 class WarmUpTokenProcessor(TokenProcessor):
