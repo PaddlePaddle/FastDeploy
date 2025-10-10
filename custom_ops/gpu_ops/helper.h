@@ -27,6 +27,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <cstdlib>
+#include <cstring>
 
 #ifdef PADDLE_WITH_HIP
 #include <hip/hip_bfloat16.h>
@@ -602,6 +604,18 @@ inline bool GetMlaUseTensorcore() {
   const bool mla_use_tensorcore =
       flags_mla_use_tensorcore && enable_mla_tensorcore;
   return mla_use_tensorcore;
+}
+
+inline const char *getEnvVar(const char *varName) {
+  return std::getenv(varName);
+}
+
+inline bool checkAttentionBackend() {
+  const char *backend = getEnvVar("FD_ATTENTION_BACKEND");
+  if (backend && std::strcmp(backend, "MLA_ATTN") == 0) {
+    return true;
+  }
+  return false;
 }
 
 __device__ __forceinline__ float warpReduceMax(float value) {
