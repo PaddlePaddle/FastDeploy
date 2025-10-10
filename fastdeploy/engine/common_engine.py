@@ -66,9 +66,10 @@ class EngineSevice:
         if isinstance(self.cfg.cache_config.cache_queue_port, str):
             self.cfg.cache_config.cache_queue_port = self.cfg.cache_config.cache_queue_port.split(",")
         if isinstance(self.cfg.cache_config.cache_queue_port, list):
-            self.cfg.cache_config.cache_queue_port = int(self.cfg.cache_config.cache_queue_port[
-                self.cfg.parallel_config.local_data_parallel_id
-            ])
+            self.cfg.cache_config.cache_queue_port = int(
+                self.cfg.cache_config.cache_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+            )
+
 
         self.scheduler = cfg.scheduler_config.scheduler()
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
