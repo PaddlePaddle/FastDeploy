@@ -15,9 +15,9 @@ The scheduling flow is shown below - users randomly request IP and port, obtain 
 ```python
 prompts = [
     "Hello, my name is",
-    "你好，请问今天是星期", 
-    "请写6个以数字开头的成语", 
-    "写一个300字的小说大纲，内容是李白穿越到现代，最后成为公司文职人员的故事", 
+    "你好，请问今天是星期",
+    "请写6个以数字开头的成语",
+    "写一个300字的小说大纲，内容是李白穿越到现代，最后成为公司文职人员的故事",
     "我要采访一位科幻作家，创建一个包含5个问题的列表"
 ]
 
@@ -83,9 +83,9 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
 ```
 
 ### Parameter Description
-- num-servers: Number of API servers to launch  
-- ports: Ports for API servers  
-- args: Arguments for API servers  
+- num-servers: Number of API servers to launch
+- ports: Ports for API servers
+- args: Arguments for API servers
 
 ### Data Parallelism + Disaggregated Deployment
 Refer to [Disaggregated Deployment](disaggregated.md#multi-machine-disaggregated-deployment)
@@ -94,9 +94,8 @@ Refer to [Disaggregated Deployment](disaggregated.md#multi-machine-disaggregated
 For multi-machine deployment, ensure network cards support RDMA and all cluster nodes are interconnected.
 
 **Note**:
-* `KVCACHE_RDMA_NICS` specifies RDMA network cards for the current machine, multiple cards should be separated by commas.
-* The repository provides an automatic RDMA network card detection script `bash scripts/get_rdma_nics.sh <device>`, where <device> can be `cpu` or `gpu`.
-
+- `KVCACHE_RDMA_NICS` specifies RDMA network cards for the current machine, multiple cards should be separated by commas.
+- The repository provides an automatic RDMA network card detection script `bash scripts/get_rdma_nics.sh <device>`, where <device> can be `cpu` or `gpu`.
 
 **Prefill Instance**
 ```bash

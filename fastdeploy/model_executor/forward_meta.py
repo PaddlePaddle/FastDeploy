@@ -193,7 +193,7 @@ class XPUForwardMeta(ForwardMeta):
 
     # Accumulated offset
     cum_offsets: Optional[paddle.Tensor] = None
-    # TODO(wanghaitao): Supplementary notes
+    # TODO(yinwei): Supplementary notes
     #
     encoder_batch_map: Optional[paddle.Tensor] = None
     #
@@ -205,10 +205,17 @@ class XPUForwardMeta(ForwardMeta):
     #
     encoder_seq_lod: Optional[paddle.Tensor] = None
     #
+    decoder_seq_lod: Optional[paddle.Tensor] = None
+    #
+    encoder_kv_lod: Optional[paddle.Tensor] = None
+    #
+    prefix_len: Optional[paddle.Tensor] = None
+    #
     decoder_context_len: Optional[paddle.Tensor] = None
     #
     decoder_context_len_cache: Optional[paddle.Tensor] = None
-
+    #
+    prefix_block_tables: Optional[paddle.Tensor] = None
     #
     encoder_batch_map_cpu: Optional[paddle.Tensor] = None
     #
@@ -220,10 +227,17 @@ class XPUForwardMeta(ForwardMeta):
     #
     encoder_seq_lod_cpu: Optional[paddle.Tensor] = None
     #
+    decoder_seq_lod_cpu: Optional[paddle.Tensor] = None
+    #
+    encoder_kv_lod_cpu: Optional[paddle.Tensor] = None
+    #
+    prefix_len_cpu: Optional[paddle.Tensor] = None
+    #
     decoder_context_len_cpu: Optional[paddle.Tensor] = None
     #
     decoder_context_len_cache_cpu: Optional[paddle.Tensor] = None
-
+    #
+    len_info_cpu: Optional[paddle.Tensor] = None
     #
     batch_tensor: Optional[paddle.Tensor] = None
     #

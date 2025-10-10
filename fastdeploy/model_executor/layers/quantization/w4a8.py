@@ -16,7 +16,8 @@
 
 from typing import Optional
 
-from ..moe import FusedMoE
+from fastdeploy.platforms import current_platform
+
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 
@@ -40,11 +41,17 @@ class W4A8Config(QuantConfigBase):
         return cls(is_permuted, hadamard_block_size)
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
-        if isinstance(layer, FusedMoE):
+        if current_platform.is_cuda():
             from fastdeploy.model_executor.layers.moe.fused_moe_cutlass_backend import (
                 CutlassW4A8MoEMethod,
             )
 
             return CutlassW4A8MoEMethod(self)
+        elif current_platform.is_xpu():
+            from fastdeploy.model_executor.layers.backends.xpu.moe.fused_moe import (
+                XPUW4A8MoEMethod,
+            )
+
+            return XPUW4A8MoEMethod(self)
         else:
             raise ValueError(f"Unsupported layer type {type(layer)} for w4a8")

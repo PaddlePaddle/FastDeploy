@@ -22,10 +22,12 @@ from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import (
 )
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 from fastdeploy.model_executor.layers.quantization.weight_only import WeightOnlyConfig
+from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.xpu import (
     ep_moe_expert_combine,
     ep_moe_expert_dispatch,
     moe_expert_ffn,
+    moe_topk_select,
     weight_quantize_xpu,
 )
 
@@ -196,6 +198,9 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
         """
         Paddle xpu load weight process.
         """
+
+        # for k, v in state_dict.items():
+        #     print(f"k : {k}, value.shape {v.shape}, value.dtype : {v.dtype}")
         up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
         assert len(up_gate_proj_weights) == layer.num_local_experts
         assert len(down_proj_weights) == layer.num_local_experts
@@ -215,9 +220,14 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
             weight_list = []
             weight_scale_list = []
             for i in range(layer.num_local_experts):
+                # print(f"=======================第{i}层=======================")
+                # print(f" wint4 未量化前权重: {weight_tensor[i]}")
                 quant_weight, scale = weight_quantize_xpu(
                     weight_tensor[i], self.moe_quant_type, -1, -1
                 )  # weight is [k,n]
+
+                # print(f" wint4 量化后权重: {quant_weight}")
+                # print(f" wint4 量化后scale: {scale}")
                 weight_list.append(quant_weight.transpose([1, 0]))  # transpose weight to [n,k]
                 weight_scale_list.append(scale)
             quanted_weight = paddle.stack(weight_list, axis=0)
@@ -235,31 +245,81 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
         """
         XPU compute Fused MoE.
         """
-        from fastdeploy.model_executor.ops.xpu import xpu_moe_layer
+        # from fastdeploy.model_executor.ops.xpu import xpu_moe_layer
 
-        fused_moe_out = xpu_moe_layer(
-            x,
-            gate.weight.transpose([1, 0]),
-            layer.gate_correction_bias,
+        # fused_moe_out = xpu_moe_layer(
+        #     x,
+        #     gate.weight.transpose([1, 0]),
+        #     layer.gate_correction_bias,
+        #     layer.up_gate_proj_weight,
+        #     layer.down_proj_weight,
+        #     None,  # up_gate_proj bias
+        #     None,  # down_proj bias
+        #     (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
+        #     (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
+        #     (layer.down_proj_in_scale if hasattr(layer, "down_proj_in_scale") else None),
+        #     self.moe_quant_type,
+        #     layer.top_k,
+        #     False,  # moe group, used in deepseek
+        # )
+        # if layer.tp_size > 1:
+        #     from fastdeploy.distributed.communication import (
+        #         tensor_model_parallel_all_reduce,
+        #     )
+
+        #     tensor_model_parallel_all_reduce(fused_moe_out)
+
+        # return fused_moe_out
+
+        gate_out = paddle.matmul(x.cast("float32"), gate.weight.transpose([1, 0]), transpose_y=True)
+        topk_idx, topk_weights = moe_topk_select(gate_out, layer.gate_correction_bias, layer.top_k, True)
+        token_nums_per_expert_list = list(range(64))  # 填充做占位符
+        permute_input, permute_indices_per_token, token_num_lod, dst_weights, ffn1_act_scale_per_token = (
+            ep_moe_expert_dispatch(
+                x,
+                topk_idx,
+                topk_weights,
+                (layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None),
+                token_nums_per_expert_list,
+                x.shape[0] * layer.top_k,
+                self.moe_quant_type,
+            )
+        )
+
+        ffn_out = moe_expert_ffn(
+            permute_input,
+            token_num_lod,
             layer.up_gate_proj_weight,
             layer.down_proj_weight,
-            None,  # up_gate_proj bias
-            None,  # down_proj bias
+            None,  # moe_ffn1_bias
+            None,  # moe_ffn2_bias
+            None,  # ffn1 in scale
+            None,  # ffn2 in scale
             (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
             (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
-            (layer.down_proj_in_scale if hasattr(layer, "down_proj_in_scale") else None),
+            None,  # moe_ffn2_shift
+            None,  # moe_ffn2_smooth
             self.moe_quant_type,
-            layer.top_k,
-            False,  # moe group, used in deepseek
+            -1,
+            x.shape[0] * layer.top_k,  # token_all_num
+        )
+        topk_weights_bf16 = topk_weights.astype("bfloat16")
+        tmp_ffn_out = ep_moe_expert_combine(
+            ffn_out,
+            permute_indices_per_token,
+            topk_weights_bf16,
+            permute_indices_per_token.shape[0],
+            ffn_out.shape[0],
+            ffn_out.shape[1],
+            permute_indices_per_token.shape[1],
         )
         if layer.reduce_results and layer.tp_size > 1:
             from fastdeploy.distributed.communication import (
                 tensor_model_parallel_all_reduce,
             )
 
-            tensor_model_parallel_all_reduce(fused_moe_out)
-
-        return fused_moe_out
+            tensor_model_parallel_all_reduce(tmp_ffn_out)
+        return tmp_ffn_out
 
 
 class XPUWeightOnlyMoeEpMethod(XPUMoEMethod):
@@ -548,3 +608,260 @@ class XPUWeightOnlyMoeEpMethod(XPUMoEMethod):
 
         # 4. EP combine
         return self.ep_decoder_runner.combine(ffn_out, topk_idx, topk_weights, handle)
+
+
+class XPUW4A8MoEMethod(XPUMoEMethod):
+    """
+    XPU w4a8 MoE Method
+    """
+
+    def __init__(
+        self,
+        quant_config: WeightOnlyConfig,
+    ) -> None:
+        super().__init__(quant_config)
+        self.quant_config = quant_config
+        self.moe_quant_type = "w4a8"
+        self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
+        self.added_scale_attrs = [
+            "up_gate_proj_weight_scale",
+            "down_proj_weight_scale",
+        ]
+
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
+        """
+        Paddle cutlass create weight process.
+        """
+        self.weight_dtype = "int8"
+        self.scale_dtype = "float32"
+        # get weight shape
+        if self.moe_quant_type in ["weight_only_int4", "w4a8"]:
+            self.up_gate_proj_weight_shape = [
+                layer.num_local_experts,
+                layer.moe_intermediate_size * 2,
+                layer.hidden_size // 2,
+            ]
+        else:
+            self.up_gate_proj_weight_shape = [
+                layer.num_local_experts,
+                layer.moe_intermediate_size * 2,
+                layer.hidden_size,
+            ]
+        if self.moe_quant_type in ["weight_only_int4", "w4a8"]:
+            self.down_proj_weight_shape = [
+                layer.num_local_experts,
+                layer.hidden_size,
+                layer.moe_intermediate_size // 2,
+            ]
+        else:
+            self.down_proj_weight_shape = [
+                layer.num_local_experts,
+                layer.hidden_size,
+                layer.moe_intermediate_size,
+            ]
+        # set weight param
+        setattr(
+            layer,
+            self.added_weight_attrs[0],
+            layer.create_parameter(
+                shape=self.up_gate_proj_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            self.added_weight_attrs[1],
+            layer.create_parameter(
+                shape=self.down_proj_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        # weight_scales
+        setattr(
+            layer,
+            self.added_scale_attrs[0],
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.moe_intermediate_size * 2],
+                dtype=self.scale_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            self.added_scale_attrs[1],
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.hidden_size],
+                dtype=self.scale_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        # in_scale
+        for in_scale_name in ["up_gate_proj_in_scale", "down_proj_in_scale"]:
+            setattr(
+                layer,
+                in_scale_name,
+                layer.create_parameter(
+                    shape=[layer.num_local_experts],
+                    dtype=self.scale_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+
+    def paddle_swap_int4_pack_int4_0123_to_int8_1032in_int8(self, weight_tensor: paddle.Tensor) -> paddle.Tensor:
+        """
+        Pack the last dimension of a tensor into int8 format by combining adjacent int4 values.
+        """
+        mask = paddle.full_like(weight_tensor, 0x0F, dtype="int8")
+        high_4bit = (weight_tensor >> 4) & mask
+        low_4bit = weight_tensor & mask
+        swapped = (low_4bit << 4) | high_4bit
+        return swapped
+
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
+        """
+        load weight and process.
+        """
+        up_gate_proj_weights, down_proj_weights, logical_expert_ids, ep_rank_to_expert_id_list = (
+            layer.extract_moe_ffn_weights(state_dict)
+        )
+        assert len(up_gate_proj_weights) == layer.num_local_experts
+        assert len(down_proj_weights) == layer.num_local_experts
+        assert up_gate_proj_weights[0].shape == [
+            layer.hidden_size // 2,
+            layer.moe_intermediate_size * 2,
+        ]
+        assert down_proj_weights[0].shape == [
+            layer.moe_intermediate_size // 2,
+            layer.hidden_size,
+        ]
+
+        for idx, weight_tensor in enumerate([up_gate_proj_weights, down_proj_weights]):
+            weight_name = self.added_weight_attrs[idx]
+            weight_list = []
+            for i in range(layer.num_local_experts):
+                weight_list.append(weight_tensor[i].transpose([1, 0]))  # transpone to [n, k]
+            quanted_weight = paddle.stack(weight_list, axis=0)
+            getattr(layer, weight_name).set_value(quanted_weight)
+
+        self.load_w4a8_scale_weights(
+            layer,
+            layer.weight_key_map,
+            state_dict,
+            logical_expert_ids,
+        )
+
+    def load_w4a8_scale_weights(
+        self,
+        layer: nn.Layer,
+        weight_key_map: dict,
+        state_dict: dict,
+        logical_expert_ids: paddle.Tensor,
+    ):
+        """
+        Get w4a8 weights from state dict and process them.
+        Args:
+            layer (nn.Layer): The layer to add parameters to.
+            weight_key_map (dict): The weight key map.
+            state_dict (dict): The state dict.
+        """
+
+        def _extract_scale_tensor(layer: nn.Layer, state_dict, key_template, expert_idx):
+            return get_tensor(
+                (
+                    state_dict.pop(key_template.format(expert_idx))
+                    if key_template.format(expert_idx) in state_dict
+                    else key_template.format(expert_idx)
+                ),
+                layer.fd_config.model_config.model,
+            )
+
+        # 1. Init scale containers and maps
+        up_gate_proj_weight_scales = []
+        down_proj_weight_scales = []
+        up_gate_proj_in_scales = []
+        down_proj_in_scales = []
+
+        scale_weight_map = {
+            "up_gate_proj_weight_scale": up_gate_proj_weight_scales,
+            "down_proj_weight_scale": down_proj_weight_scales,
+            "up_gate_proj_in_scale": up_gate_proj_in_scales,
+            "down_proj_in_scale": down_proj_in_scales,
+        }
+        scale_key_map = {
+            "up_gate_proj_weight_scale": weight_key_map.get("up_gate_proj_expert_weight_scale_key", None),
+            "down_proj_weight_scale": weight_key_map.get("down_proj_expert_weight_scale_key", None),
+            "up_gate_proj_in_scale": weight_key_map.get("up_gate_proj_expert_in_scale_key", None),
+            "down_proj_in_scale": weight_key_map.get("down_proj_expert_in_scale_key", None),
+        }
+        for name, value in scale_key_map.items():
+            if value is None:
+                raise ValueError(f"scale {name} should not be none in w4a8 mode.")
+
+        for expert_idx in logical_expert_ids:
+            for name, scale_key_template in scale_key_map.items():
+                scale_tensor = _extract_scale_tensor(layer, state_dict, scale_key_template, expert_idx)
+                scale_weight_map[name].append(scale_tensor)
+
+        # 2. Process scale tensor and set to layer
+        for in_scale_name in ["up_gate_proj_in_scale", "down_proj_in_scale"]:
+            getattr(layer, in_scale_name).set_value(paddle.concat(scale_weight_map[in_scale_name]))
+
+        for i, weight_scale_name in enumerate(["up_gate_proj_weight_scale", "down_proj_weight_scale"]):
+            getattr(layer, weight_scale_name).set_value(paddle.stack(scale_weight_map[weight_scale_name], axis=0))
+
+    def apply(
+        self,
+        layer: nn.Layer,
+        x: paddle.Tensor,
+        gate: nn.Layer,
+    ) -> paddle.Tensor:
+        gate_out = paddle.matmul(x.cast("float32"), gate.weight.transpose([1, 0]), transpose_y=True)
+        topk_idx, topk_weights = moe_topk_select(gate_out, layer.gate_correction_bias, layer.top_k, True)
+        token_nums_per_expert_list = list(range(64))  # 填充做占位符
+        permute_input, permute_indices_per_token, token_num_lod, dst_weights, ffn1_act_scale_per_token = (
+            ep_moe_expert_dispatch(
+                x,
+                topk_idx,
+                topk_weights,
+                (layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None),
+                token_nums_per_expert_list,
+                x.shape[0] * layer.top_k,
+                self.moe_quant_type,
+            )
+        )
+        ffn_out = moe_expert_ffn(
+            permute_input,
+            token_num_lod,
+            layer.up_gate_proj_weight,
+            layer.down_proj_weight,
+            None,  # moe_ffn1_bias
+            None,  # moe_ffn2_bias
+            (ffn1_act_scale_per_token if hasattr(layer, "up_gate_proj_in_scale") else None),
+            (layer.down_proj_in_scale if hasattr(layer, "down_proj_in_scale") else None),
+            (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
+            (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
+            None,  # moe_ffn2_shift
+            None,  # moe_ffn2_smooth
+            self.moe_quant_type,
+            getattr(layer.moe_quant_config, "hadamard_block_size", 128),  # hadamard_blocksize defalue 128
+            x.shape[0] * layer.top_k,  # token_all_num
+        )
+        topk_weights_bf16 = topk_weights.astype("bfloat16")
+        tmp_ffn_out = ep_moe_expert_combine(
+            ffn_out,
+            permute_indices_per_token,
+            topk_weights_bf16,
+            permute_indices_per_token.shape[0],
+            ffn_out.shape[0],
+            ffn_out.shape[1],
+            permute_indices_per_token.shape[1],
+        )
+        if layer.tp_size > 1:
+            from fastdeploy.distributed.communication import (
+                tensor_model_parallel_all_reduce,
+            )
+
+            tensor_model_parallel_all_reduce(tmp_ffn_out)
+        return tmp_ffn_out
