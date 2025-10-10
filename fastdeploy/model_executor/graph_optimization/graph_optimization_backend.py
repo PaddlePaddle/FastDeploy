@@ -115,7 +115,7 @@ class GraphOptBackend:
         self.runnable = runnable
         self.fd_config = fd_config
 
-        self.max_captre_batch = fd_config.graph_opt_config.cudagraph_capture_sizes[0]
+        self.max_captre_size = fd_config.graph_opt_config.cudagraph_capture_sizes[0]
         if self.fd_config.graph_opt_config.graph_opt_level > 0:
             # 1. Prepare cuda graph input buffers (contain output of subgraphs)
 
@@ -138,9 +138,9 @@ class GraphOptBackend:
             )
 
         assert kwargs["forward_meta"].ids_remove_padding is not None
-        batch_size = kwargs["forward_meta"].ids_remove_padding.shape[0]
+        real_shape = kwargs["forward_meta"].ids_remove_padding.shape[0]
 
-        if (not kwargs["forward_meta"].step_use_cudagraph) or (batch_size > self.max_captre_batch):
+        if (not kwargs["forward_meta"].step_use_cudagraph) or (real_shape > self.max_captre_size):
             return self.runnable(**kwargs)
         else:
             return self.cudagraph_piecewise_backend.__call__(**kwargs)
