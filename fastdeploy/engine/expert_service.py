@@ -112,8 +112,9 @@ class ExpertService:
                         time.sleep(1)
                 self.reset_kvcache_blocks()
 
+            ipc_signal_suffix_cache = self.cfg.parallel_config.engine_worker_queue_port[local_data_parallel_id]
             self.cache_manager_processes = self.engine.start_cache_service(
-                self.cfg.local_device_ids, ipc_signal_suffix
+                self.cfg.local_device_ids, ipc_signal_suffix_cache
             )
             if self.cfg.splitwise_role != "mixed":
                 self.engine.split_mode_get_tasks()
