@@ -141,7 +141,7 @@ class GpuWorker(WorkerBase):
         paddle_allocated_mem_after_run = paddle.device.cuda.max_memory_allocated(local_rank)
 
         model_block_memory_used = self.cal_theortical_kvcache()
-        paddle_peak_increase = paddle_reserved_mem_after_run - paddle_allocated_mem_before_run
+        paddle_peak_increase = paddle_allocated_mem_after_run - paddle_allocated_mem_before_run
 
         paddle.device.cuda.empty_cache()
 
