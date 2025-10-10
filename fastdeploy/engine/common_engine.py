@@ -217,10 +217,7 @@ class EngineSevice:
                 local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
             )
 
-            if (
-                self.cfg.cache_config.enable_prefix_caching
-                or self.cfg.splitwise_role != "mixed"
-            ):
+            if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
                 self.cache_task_queue = EngineCacheQueue(
                     address=(
                         self.cfg.master_ip,

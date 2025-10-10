@@ -91,7 +91,9 @@ class ExpertService:
 
         llm_logger.info(f"start expert service {local_data_parallel_id}")
         if self.cfg.splitwise_role != "mixed" or self.cfg.cache_config.enable_prefix_caching:
-            self.cache_manager_processes = self.engine.start_cache_service(self.cfg.local_device_ids, ipc_signal_suffix)
+            self.cache_manager_processes = self.engine.start_cache_service(
+                self.cfg.local_device_ids, ipc_signal_suffix
+            )
             if self.cfg.splitwise_role != "mixed":
                 self.engine.split_mode_get_tasks()
 
