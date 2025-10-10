@@ -518,7 +518,6 @@ class SimplePooler(Pooler):
         hidden_states: Union[paddle.Tensor, list[paddle.Tensor]],
         pooling_metadata: PoolingMetadata,
     ) -> PoolerOutput:
-        print("self.pooling", self.pooling)
         pooled_data = self.pooling(hidden_states, pooling_metadata)
         pooled_data = self.head(pooled_data, pooling_metadata)
         return build_output(pooled_data)

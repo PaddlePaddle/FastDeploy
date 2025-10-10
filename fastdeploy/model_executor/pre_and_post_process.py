@@ -429,7 +429,6 @@ def step_cuda(
     TODO(gongshaotian): normalization name
     """
 
-    print("speculative_config.method", speculative_config.method)
     if speculative_config.method is not None:
         if DISABLE_RECOVER:
             speculate_step_reschedule(
@@ -549,10 +548,8 @@ def step_cuda(
                 block_size,
                 enc_dec_block_num,
             )
-            print("step_reschedule后面", share_inputs["seq_lens_this_time"])
         else:
             if enable_prefix_caching:
-                print("step_system_cache前面", int((share_inputs["seq_lens_this_time"] > 0).sum()))
                 step_system_cache(
                     share_inputs["stop_flags"],
                     share_inputs["seq_lens_this_time"],

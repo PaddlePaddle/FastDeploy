@@ -1575,7 +1575,6 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 self._dummy_sampler_run(hidden_states, model_output)
 
-            i += 1
             # 7. Updata 'infer_seed' and step_cuda()
             self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
             self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
@@ -1586,8 +1585,6 @@ class GPUModelRunner(ModelRunnerBase):
                 self.speculative_config,
                 self.cache_config.enable_prefix_caching,
             )
-            print("i", i)
-            print("self.share_inputs[seq]", int((self.share_inputs["seq_lens_this_time"] > 0).sum()))
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
                 break
 
