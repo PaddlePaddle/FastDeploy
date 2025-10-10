@@ -396,7 +396,6 @@ class Qwen3MoeForCausalLMRL(Qwen3MoeForCausalLM, BaseRLModel):
 
         # Initialize mapping dictionary
         self._update_base_mappings("model")
-        self.infer_to_train_mapping = {}
 
         base_name = "model.layers"
 
@@ -407,13 +406,13 @@ class Qwen3MoeForCausalLMRL(Qwen3MoeForCausalLM, BaseRLModel):
                 f"{base_name}.{layer_idx}.mlp.gate.weight"
             )
 
-            if self.fd_config.moe_config.moe_use_aux_free:
+            if self.fd_config.model_config.moe_use_aux_free:
                 self.infer_to_train_mapping[f"{base_name}.{layer_idx}.mlp.experts.gate_correction_bias"] = (
                     f"{base_name}.{layer_idx}.mlp.moe_statics.e_score_correction_bias"
                 )
 
             # MoE experts mappings
-            for expert_idx in range(self.fd_config.moe_config.num_experts):
+            for expert_idx in range(self.fd_config.model_config.num_experts):
                 for ph in place_holders:
                     # up_gate_proj (up_gate_proj)
                     up_gate_proj_key = f"{base_name}.{layer_idx}.mlp.experts.up_gate_proj_weight"
