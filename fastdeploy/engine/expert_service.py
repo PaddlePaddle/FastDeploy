@@ -56,6 +56,11 @@ class ExpertService:
         llm_logger.info(f"local_data_parallel_id: {local_data_parallel_id}")
         self.cfg.disaggregate_info = None
 
+        if self.cfg.cache_config.num_gpu_blocks_override is None:
+            self.do_profile = 1
+        else:
+            self.do_profile = 0
+
         if cfg.splitwise_role != "mixed":
             if len(self.cfg.cache_config.pd_comm_port) == 1:
                 self.cfg.cache_config.pd_comm_port[0] = (
@@ -91,6 +96,22 @@ class ExpertService:
 
         llm_logger.info(f"start expert service {local_data_parallel_id}")
         if self.cfg.splitwise_role != "mixed" or self.cfg.cache_config.enable_prefix_caching:
+            if self.do_profile:
+                get_profile_block_num = np.zeros([1], dtype=np.int32)
+                while True:
+                    try:
+                        self.get_profile_block_num_signal = IPCSignal(
+                            name="get_profile_block_num",
+                            array=get_profile_block_num,
+                            dtype=np.int32,
+                            suffix=int(self.cfg.engine_worker_queue_port[0]),
+                            create=False,
+                        )
+                        break
+                    except:
+                        time.sleep(1)
+                self.reset_kvcache_blocks()
+
             self.cache_manager_processes = self.engine.start_cache_service(
                 self.cfg.local_device_ids, ipc_signal_suffix
             )
@@ -130,6 +151,14 @@ class ExpertService:
             f"Worker processes(rank {local_rank}) are launched with {time.time() - start_time} seconds."
         )
         return True
+
+    def reset_kvcache_blocks(self):
+        self.do_profile = 0
+        while self.get_profile_block_num_signal.value[0] == 0:
+            time.sleep(1)
+        num_gpu_blocks = self.get_profile_block_num_signal.value[0]
+        self.cfg.cache_config.reset(num_gpu_blocks)
+        self.engine.resource_manager.reset_cache_config(self.cfg.cache_config)
 
     def _exit_sub_services(self):
         """
