@@ -56,6 +56,12 @@ rename_imported_op(
 )
 
 rename_imported_op(
+    old_name="reshape_and_cache_flash_gcu",
+    new_name="reshape_and_cache_flash",
+    global_ns=globals(),
+)
+
+rename_imported_op(
     old_name="flash_attn_var_len_gcu",
     new_name="flash_attn_var_len",
     global_ns=globals(),

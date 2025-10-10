@@ -35,7 +35,11 @@ if TYPE_CHECKING:
 
 from paddleformers.utils.log import logger
 
-from fastdeploy.model_executor.ops.gcu import flash_attn_var_len, fused_rotary_embedding
+from fastdeploy.model_executor.ops.gcu import (
+    flash_attn_var_len,
+    fused_rotary_embedding,
+    reshape_and_cache_flash,
+)
 
 
 @dataclass
@@ -135,7 +139,7 @@ class GCUFlashAttnBackend(AttentionBackend):
             self.rotary_embs = metadata.rotary_embs.reshape((-1, self.head_dim))
 
         # some info for attention
-        self.seq_lens_this_time_list = forward_meta.seq_lens_this_time.tolist()  # List[int]
+        self.seq_lens_this_time_list = forward_meta.seq_lens_this_time.tolist()  # List[List[int]]
         self.seq_lens_encoder_list = forward_meta.seq_lens_encoder.tolist()  # List[List[int]]
         self.seq_lens_decoder_list = forward_meta.seq_lens_decoder.tolist()  # List[List[int]]
         self.seq_lens_sum = np.sum(self.seq_lens_this_time_list)
@@ -161,7 +165,7 @@ class GCUFlashAttnBackend(AttentionBackend):
 
         block_tables = []
         slot_mapping = []
-        cache_slot_range = []
+        # cache_slot_range = []
         cache_lens = []
         position_ids = []
         for seq_idx in range(num_seqs):
@@ -173,28 +177,28 @@ class GCUFlashAttnBackend(AttentionBackend):
             # else:  doesn't have req in this seq_idx
 
             if cache_len is not None:
-                lens_this_time = self.seq_lens_this_time_list[seq_idx]
+                lens_this_time = self.seq_lens_this_time_list[seq_idx][0]
                 start = cache_len
                 end = start + lens_this_time
                 slot_mapping.extend(self.all_slot_mapping[seq_idx][start:end])
-                cache_slot_range.extend(self.all_slot_mapping[seq_idx][0:end])
+                # cache_slot_range.extend(self.all_slot_mapping[seq_idx][0:end])
                 cache_lens.append(end)
                 block_tables.append(self.all_block_tables[seq_idx])
                 position_ids.extend(self.position_ids_base[start:end])
 
         self.block_tables = paddle.to_tensor(block_tables, dtype="int32")
         self.slot_mapping = paddle.to_tensor(slot_mapping, dtype="int32")
-        self.cache_slot_range = paddle.to_tensor(cache_slot_range, dtype="int32")
+        # self.cache_slot_range = paddle.to_tensor(cache_slot_range, dtype="int32")
         self.position_ids = paddle.to_tensor(position_ids, dtype="int32")
-        self.position_ids = self.position_ids.reshape_((1, -1))
+        # self.position_ids = self.position_ids.reshape_((1, -1))
 
         if self.enable_monitor:
             logger.info(f"[FD_DEBUG] init_attention_metadata, position_ids:\n{self.position_ids}")
 
         cu_query_lens_data = [0]
         for seq_idx in range(num_seqs):
-            if self.seq_lens_this_time_list[seq_idx] != 0:
-                cu_query_lens_data.append(self.seq_lens_this_time_list[seq_idx])
+            if self.seq_lens_this_time_list[seq_idx][0] != 0:
+                cu_query_lens_data.append(self.seq_lens_this_time_list[seq_idx][0])
         cu_query_lens = np.array(cu_query_lens_data, dtype=np.int32).cumsum(axis=0)
 
         self.cu_query_lens = paddle.to_tensor(cu_query_lens, dtype="int32")
@@ -214,9 +218,10 @@ class GCUFlashAttnBackend(AttentionBackend):
         """
         Calculate kv cache shape
         """
-        # [total_tokens, kv_num_heads, head_dim]
+        # [num_blocks, block_size, kv_num_heads, head_dim]
         return (
-            max_num_blocks * self.block_size,
+            max_num_blocks,
+            self.block_size,
             self.kv_num_heads,
             self.head_dim,
         )
@@ -234,40 +239,39 @@ class GCUFlashAttnBackend(AttentionBackend):
         forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
         """Run a forward for mixed."""
-        token_num = qkv.shape[0]
+        num_tokens = qkv.shape[0]
         q_size = self.num_heads * self.head_dim
         kv_size = self.kv_num_heads * self.head_dim
         num_or_sections = [q_size, kv_size, kv_size]
         query, key, value = paddle.split(qkv, num_or_sections=num_or_sections, axis=-1)
-
-        query = query.reshape_((1, -1, self.num_heads, self.head_dim))
-        key = key.reshape_((1, -1, self.kv_num_heads, self.head_dim))
 
         # 1. Rope
         if self.rotary_embs.dtype != query.dtype:
             self.rotary_embs = paddle.cast(self.rotary_embs, query.dtype)
 
         query, key = fused_rotary_embedding(
-            query,
-            key,
+            query,  # [num_tokens, num_heads * head_dim]
+            key,  # [num_tokens, kv_num_heads * head_dim]
             self.rotary_embs,
             self.position_ids,
             layer.use_neox_rotary_style,
+            self.head_dim,
         )
 
         # 2. Save kv cache
-        # shape: [total_tokens, kv_num_heads, head_dim]
-        key = key.reshape_((-1, self.kv_num_heads, self.head_dim))
-        value = value.reshape_((-1, self.kv_num_heads, self.head_dim))
         key_caches = forward_meta.caches[2 * layer.layer_id]
         value_caches = forward_meta.caches[2 * layer.layer_id + 1]
-        key_caches[self.slot_mapping, :, :] = key
-        value_caches[self.slot_mapping, :, :] = value
+        # key/value shape: [num_tokens, kv_num_heads * head_dim]
+        reshape_and_cache_flash(
+            key_caches,
+            value_caches,
+            key,
+            value,
+            self.slot_mapping,
+        )
 
         # 3. calc attn
         query = query.reshape_((-1, self.num_heads, self.head_dim))
-        key_caches = key_caches.reshape((-1, self.block_size, self.kv_num_heads, self.head_dim))
-        value_caches = value_caches.reshape((-1, self.block_size, self.kv_num_heads, self.head_dim))
         res = flash_attn_var_len(
             query=query,
             key=key_caches,
@@ -289,5 +293,5 @@ class GCUFlashAttnBackend(AttentionBackend):
             softcap=0.0,
             return_softmax=False,
         )
-        res = res.reshape_((token_num, -1))
+        res = res.reshape_((num_tokens, -1))
         return res

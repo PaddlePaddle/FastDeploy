@@ -75,10 +75,7 @@ jobs:
 
           PARENT_DIR=$(dirname "$WORKSPACE")
           echo "PARENT_DIR:$PARENT_DIR"
-          echo "Install drivers..."
-          cd /work/deps
-          sudo bash TopsRider_i3x_*_deb_amd64.run --driver --no-auto-load -y
-          cd -
+          echo "Use the already installed driver..."
           echo "Create docker..."
           docker run --rm --network=host --ipc=host --privileged \
           -v $(pwd):/workspace \

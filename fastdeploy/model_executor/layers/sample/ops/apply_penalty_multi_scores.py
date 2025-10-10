@@ -109,6 +109,8 @@ def apply_penalty_multi_scores(
 
         logits = get_token_penalty_multi_scores(
             pre_token_ids,
+            prompt_ids,
+            prompt_lens,
             logits,
             repetition_penalties,
             frequency_penalties,

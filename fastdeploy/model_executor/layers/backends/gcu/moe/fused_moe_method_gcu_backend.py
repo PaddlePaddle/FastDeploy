@@ -295,7 +295,7 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
             create_and_set_parameter(layer, name, tensor)
 
     @paddle.no_grad()
-    def create_weights(self, layer: nn.Layer, state_dict):
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
         Paddle cutlass create weight process.
         """
