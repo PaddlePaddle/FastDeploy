@@ -467,6 +467,9 @@ __global__ void KeMatrixTopPBeamTopKFt(
                 break;
             }
         }
+        if (top_p_value == 1.0 && actual_candidates_lens[token_id] == 0){
+            actual_candidates_lens[token_id] = max_cadidate_len;
+        }
     }
 }
 
