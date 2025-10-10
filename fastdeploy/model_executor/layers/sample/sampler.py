@@ -731,8 +731,8 @@ class MTPSampler(nn.Layer):
     ) -> paddle.Tensor:
         """ """
         num_logprobs = sampling_metadata.max_num_logprobs
+        real_bsz = share_inputs["seq_lens_this_time"].shape[0]
         if num_logprobs is not None and share_inputs["substep"] == 0:
-            real_bsz = share_inputs["seq_lens_this_time"].shape[0]
             real_token_num = share_inputs["batch_token_num"][:real_bsz].sum()
             raw_logprobs = self.compute_logprobs(share_inputs["draft_logits"][:real_token_num, :], sampling_metadata)
 
