@@ -125,7 +125,7 @@ class ExpertService:
             )
             if self.cfg.splitwise_role != "mixed":
                 self.engine.split_mode_get_tasks()
-        
+
         if self.cfg.scheduler_config.name == "splitwise":
             self.cfg.init_cache_info()
             role = self.cfg.scheduler_config.splitwise_role
@@ -159,7 +159,7 @@ class ExpertService:
             f"Worker processes(rank {local_rank}) are launched with {time.time() - start_time} seconds."
         )
         return True
-    
+
     def reset_kvcache_blocks(self):
         self.do_profile = 0
         while self.get_profile_block_num_signal.value[0] == 0:
