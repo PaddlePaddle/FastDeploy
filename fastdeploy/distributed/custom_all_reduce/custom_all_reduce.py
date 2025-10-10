@@ -28,6 +28,7 @@ if current_platform.is_cuda():
     from fastdeploy.distributed.custom_all_reduce import cuda_wrapper
     from fastdeploy.model_executor.ops.gpu import (
         all_reduce,
+        clear_ipc_handles,
         dispose,
         get_graph_buffer_ipc_meta,
         init_custom_all_reduce,
