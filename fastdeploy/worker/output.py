@@ -107,6 +107,7 @@ class SamplerOutput:
     sampled_token_ids: paddle.Tensor
     logprobs_tensors: Optional[LogprobsTensors]
     token_num_per_batch: Optional[paddle.Tensor] = None
+    cu_batch_token_offset: Optional[paddle.Tensor] = None
 
 
 @dataclass

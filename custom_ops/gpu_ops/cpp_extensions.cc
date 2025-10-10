@@ -908,12 +908,14 @@ void SaveOutMmsgStatic(const paddle::Tensor& x,
                        int64_t rank_id,
                        bool save_each_rank);
 
-std::vector<paddle::Tensor> SpeculateGetLogits(
-    const paddle::Tensor &logits,
-    const paddle::Tensor &first_token_logits,
-    const paddle::Tensor &cu_seqlens_q,
-    const paddle::Tensor &seq_lens_this_time,
-    const paddle::Tensor &seq_lens_encoder);
+void SpeculateGetLogits(const paddle::Tensor &draft_logits,
+                        const paddle::Tensor &batch_token_num,
+                        const paddle::Tensor &cu_batch_token_offset,
+                        const paddle::Tensor &logits,
+                        const paddle::Tensor &first_token_logits,
+                        const paddle::Tensor &cu_seqlens_q,
+                        const paddle::Tensor &seq_lens_this_time,
+                        const paddle::Tensor &seq_lens_encoder);
 
 void SpeculateInsertFirstToken(const paddle::Tensor &token_ids,
                                const paddle::Tensor &accept_tokens,
@@ -930,16 +932,6 @@ void SpeculateGetTargetLogits(const paddle::Tensor &target_logits,
                               const paddle::Tensor &seq_lens_this_time,
                               const paddle::Tensor &seq_lens_encoder,
                               const paddle::Tensor &accept_num);
-
-void SpeculateSaveOutMmsgTopK(const paddle::Tensor &sampled_token_ids,
-                              const paddle::Tensor &logprob_token_ids,
-                              const paddle::Tensor &logprob_scores,
-                              const paddle::Tensor &logprob_ranks,
-                              const paddle::Tensor &token_num_per_batch,
-                              const paddle::Tensor &cu_batch_token_offset,
-                              const paddle::Tensor &not_need_stop,
-                              int message_flag,
-                              int64_t rank_id);
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
 
@@ -1335,6 +1327,4 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_insert_first_token", &SpeculateInsertFirstToken, "speculate_insert_first_token function");
 
   m.def("speculate_get_target_logits", &SpeculateGetTargetLogits, "speculate_get_target_logits function");
-
-  m.def("speculate_save_output_topk", &SpeculateSaveOutMmsgTopK, "speculate_save_output_topk function");
 }

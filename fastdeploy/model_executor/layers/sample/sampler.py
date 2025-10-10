@@ -410,7 +410,7 @@ class SpeculativeSampler(nn.Layer):
         share_inputs = sampling_metadata.share_inputs
         last_logits = logits
         real_bsz = share_inputs["seq_lens_this_time"].shape[0]
-        batch_token_num = share_inputs["batch_token_num"]
+        batch_token_num = share_inputs["batch_token_num"][:real_bsz]
 
         temp_scaled_logprobs = sampling_metadata.temp_scaled_logprobs
         top_p_normalized_logprobs = sampling_metadata.top_p_normalized_logprobs
@@ -570,6 +570,7 @@ class SpeculativeSampler(nn.Layer):
             )
 
         num_logprobs = sampling_metadata.max_num_logprobs
+        batch_token_num = None
         if num_logprobs is not None:
             real_bsz = share_inputs["seq_lens_this_time"].shape[0]
             batch_token_num = paddle.where(
@@ -597,10 +598,9 @@ class SpeculativeSampler(nn.Layer):
             )
             raw_logprobs = self.compute_logprobs(target_logtis, sampling_metadata)
 
-        sampler_output = None
+        logprobs_tensors = None
+        token_ids = share_inputs["accept_tokens"]
         if num_logprobs is not None:
-
-            token_ids = share_inputs["accept_tokens"]
             token_ids = paddle.concat(
                 [
                     share_inputs["accept_tokens"][i, : share_inputs["accept_num"][i]]
@@ -609,11 +609,12 @@ class SpeculativeSampler(nn.Layer):
             )
             logprobs_tensors = self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=token_ids)
 
-            sampler_output = SamplerOutput(
-                sampled_token_ids=token_ids,
-                logprobs_tensors=logprobs_tensors,
-                token_num_per_batch=batch_token_num,
-            )
+        sampler_output = SamplerOutput(
+            sampled_token_ids=token_ids,
+            logprobs_tensors=logprobs_tensors,
+            token_num_per_batch=batch_token_num,
+            cu_batch_token_offset=share_inputs["cu_batch_token_offset"],
+        )
 
         return sampler_output
 
@@ -660,10 +661,10 @@ class MTPSampler(nn.Layer):
             real_bsz_temp_scaled = (
                 real_bsz_temp_scaled.astype("int32")
                 .squeeze(1)
-                .repeat_interleave(share_inputs["batch_token_num"])
+                .repeat_interleave(share_inputs["batch_token_num"][:real_bsz])
                 .astype("bool")
             )
-            temperature = temperature.squeeze(1).repeat_interleave(share_inputs["batch_token_num"])
+            temperature = temperature.squeeze(1).repeat_interleave(share_inputs["batch_token_num"][:real_bsz])
             temp_temperature = paddle.where(
                 real_bsz_temp_scaled, temperature, paddle.ones_like(temperature)
             ).unsqueeze(1)
@@ -677,14 +678,14 @@ class MTPSampler(nn.Layer):
             real_token_top_p = (
                 sampling_metadata.top_p[:real_bsz]
                 .squeeze(1)
-                .repeat_interleave(share_inputs["batch_token_num"])
+                .repeat_interleave(share_inputs["batch_token_num"][:real_bsz])
                 .unsqueeze(1)
             )
             top_p_normalized_logprobs = (
                 top_p_normalized_logprobs[:real_bsz]
                 .astype("int32")
                 .squeeze(1)
-                .repeat_interleave(share_inputs["batch_token_num"])
+                .repeat_interleave(share_inputs["batch_token_num"][:real_bsz])
                 .astype("bool")
                 .unsqueeze(1)
             )
@@ -750,7 +751,9 @@ class MTPSampler(nn.Layer):
         """ """
         num_logprobs = sampling_metadata.max_num_logprobs
         if num_logprobs is not None and share_inputs["substep"] == 0:
-            raw_logprobs = self.compute_logprobs(share_inputs["draft_logits"], sampling_metadata)
+            real_bsz = share_inputs["seq_lens_this_time"].shape[0]
+            real_token_num = share_inputs["batch_token_num"][:real_bsz].sum()
+            raw_logprobs = self.compute_logprobs(share_inputs["draft_logits"][:real_token_num, :], sampling_metadata)
 
         logits = apply_speculative_penalty_multi_scores(
             sampling_metadata.pre_token_ids,
@@ -774,9 +777,10 @@ class MTPSampler(nn.Layer):
             probs, sampling_metadata.top_p, sampling_metadata.top_k, sampling_metadata.top_k_list
         )
 
-        sampler_output = None
+        token_ids = None
+        logprobs_tensors = None
         if num_logprobs is not None and share_inputs["substep"] == 0:
-            token_ids = paddle.empty(share_inputs["batch_token_num"].sum(), dtype="int64")
+            token_ids = paddle.empty(real_token_num, dtype="int64")
             speculate_insert_first_token(
                 token_ids,
                 share_inputs["accept_tokens"],
@@ -789,10 +793,11 @@ class MTPSampler(nn.Layer):
 
             logprobs_tensors = self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=token_ids)
 
-            sampler_output = SamplerOutput(
-                sampled_token_ids=token_ids,
-                logprobs_tensors=logprobs_tensors,
-                token_num_per_batch=share_inputs["batch_token_num"],
-            )
+        sampler_output = SamplerOutput(
+            sampled_token_ids=token_ids,
+            logprobs_tensors=logprobs_tensors,
+            token_num_per_batch=share_inputs["batch_token_num"][:real_bsz],
+            cu_batch_token_offset=share_inputs["cu_batch_token_offset"],
+        )
 
         return next_tokens, sampler_output

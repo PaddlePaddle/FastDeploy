@@ -401,8 +401,11 @@ class MTPProposer(Proposer):
         self.model_inputs["accept_num"] = self.target_model_inputs["accept_num"]
         self.model_inputs["accept_tokens"] = self.target_model_inputs["accept_tokens"]
         self.model_inputs["draft_logits"] = self.target_model_inputs["draft_logits"]
-        max_num_seqs = self.model_inputs["seq_lens_encoder"].shape[0]
-        self.model_inputs["first_token_hidden_states"] = paddle.full([max_num_seqs, self.model_config.hidden_size], -1)
+        self.model_inputs["first_token_hidden_states"] = paddle.full(
+            [self.max_num_seqs, self.model_config.hidden_size], -1
+        )
+        self.model_inputs["batch_token_num"] = paddle.full(shape=[self.max_num_seqs], fill_value=0, dtype="int32")
+        self.model_inputs["cu_batch_token_offset"] = self.target_model_inputs["cu_batch_token_offset"]
 
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int):
 
@@ -751,11 +754,6 @@ class MTPProposer(Proposer):
                     model_output = model_output[: self.real_token_num]
                 print(f"[MTPProposer] model_output: {model_output}")
 
-                if self.enable_logprob and substep == 0:
-                    first_token_hidden_states = paddle.empty(
-                        [self.max_num_seqs, self.model_config.hidden_size], dtype=model_output.dtype
-                    )
-
                 hidden_states = rebuild_padding(
                     model_output,
                     self.model_inputs["cu_seqlens_q"],
@@ -764,25 +762,25 @@ class MTPProposer(Proposer):
                     self.model_inputs["seq_lens_encoder"],
                     self.model_inputs["output_padding_offset"],
                     self.parallel_config.max_model_len,
-                    first_token_hidden_states if substep == 0 else None,
+                    self.model_inputs["first_token_hidden_states"],
                     self.enable_logprob if substep == 0 else False,
                 )
 
                 # 4. Compute logits, Sample
                 logits = self.model.compute_logits(hidden_states)
                 if self.enable_logprob and substep == 0:
-                    first_token_logits = self.model.compute_logits(first_token_hidden_states)
+                    first_token_logits = self.model.compute_logits(self.model_inputs["first_token_hidden_states"])
 
-                    draft_logits, batch_token_num, cu_batch_token_offset = speculate_get_logits(
+                    speculate_get_logits(
+                        self.model_inputs["draft_logits"],
+                        self.model_inputs["batch_token_num"],
+                        self.model_inputs["cu_batch_token_offset"],
                         logits,
                         first_token_logits,
                         self.model_inputs["cu_seqlens_q"],
                         self.model_inputs["seq_lens_this_time"],
                         self.model_inputs["seq_lens_encoder"],
                     )
-                    self.model_inputs["draft_logits"] = draft_logits
-                    self.model_inputs["batch_token_num"] = batch_token_num
-                    self.model_inputs["cu_batch_token_offset"] = cu_batch_token_offset
 
                 sampled_token_ids, sampler_output = self.sampler(
                     logits,
@@ -791,14 +789,14 @@ class MTPProposer(Proposer):
                     self.model_inputs,
                 )
 
-                if substep == 0:
+                if substep == 0 and sampler_output.logprobs_tensors is not None:
                     speculate_save_output_topk(
                         sampler_output.sampled_token_ids,
                         sampler_output.logprobs_tensors.logprob_token_ids,
                         sampler_output.logprobs_tensors.logprobs,
                         sampler_output.logprobs_tensors.selected_token_ranks,
-                        batch_token_num,
-                        cu_batch_token_offset,
+                        self.model_inputs["batch_token_num"],
+                        self.model_inputs["cu_batch_token_offset"],
                         self.model_inputs["not_need_stop"],
                         4,  # mtype
                         self.local_rank,
