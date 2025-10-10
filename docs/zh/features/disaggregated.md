@@ -75,8 +75,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
 #### 前置依赖 Redis
 * 使用`conda`安装
 
-> **⚠️ 注意**  
-> **Redis 版本要求：6.2.0 及以上**  
+> **⚠️ 注意**
+> **Redis 版本要求：6.2.0 及以上**
 > 低于此版本可能不支持所需的命令。
 
 ```bash
