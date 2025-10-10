@@ -68,11 +68,9 @@ class EngineService:
             cfg (Config): Config object containing all the configuration parameters.
         """
         self.cfg = cfg
-
-        if self.cfg.cache_config.enable_prefix_caching:
-            self.cfg.cache_config.cache_queue_port = self.cfg.cache_config.cache_queue_port[
-                self.cfg.parallel_config.local_data_parallel_id
-            ]
+        self.cfg.cache_config.cache_queue_port = self.cfg.cache_config.cache_queue_port[
+            self.cfg.parallel_config.local_data_parallel_id
+        ]
 
         if self.cfg.parallel_config.enable_expert_parallel:
             self.llm_logger = get_logger(
