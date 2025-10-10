@@ -26,7 +26,11 @@ if TYPE_CHECKING:
     from fastdeploy.config import ModelConfig
 
 
-class PoolingParams:
+class PoolingParams(
+    msgspec.Struct,
+    omit_defaults=True,  # type: ignore[call-arg]
+    array_like=True,
+):  # type: ignore[call-arg]:
     """API parameters for pooling models.
 
     Attributes:
