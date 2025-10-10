@@ -47,7 +47,7 @@ class Test(unittest.TestCase):
         Check if the CustomAllreduce function works properly.
         """
 
-        mns = [[1, 2048], [2, 4096], [20, 4096], [128, 4096], [256, 4096], [256, 8192]]
+        mns = [[1, 2048], [2, 4096], [20, 4096], [128, 4096], [256, 4096], [256, 8192], [512, 8192]]
 
         hcg = fleet.get_hybrid_communicate_group()
         model_parallel_group = hcg.get_model_parallel_group()
