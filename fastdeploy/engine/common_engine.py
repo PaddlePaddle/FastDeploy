@@ -64,10 +64,10 @@ class EngineSevice:
         """
         self.cfg = cfg
 
-        if self.cfg.cache_config.enable_prefix_caching:
-            self.cfg.cache_config.cache_queue_port = self.cfg.cache_config.cache_queue_port[
-                self.cfg.parallel_config.local_data_parallel_id
-            ]
+
+        self.cfg.cache_config.cache_queue_port = self.cfg.cache_config.cache_queue_port[
+            self.cfg.parallel_config.local_data_parallel_id
+        ]
 
         self.scheduler = cfg.scheduler_config.scheduler()
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
