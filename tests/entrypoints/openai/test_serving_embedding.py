@@ -23,12 +23,16 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
             request_id="test_request_id",
             prompt_token_ids=[1, 2, 3],
             finished=True,
-            outputs=PoolingOutput(data = [0.1, 0.2, 0.3]),
+            outputs=PoolingOutput(data=[0.1, 0.2, 0.3]),
         )
-        mock_response_queue.get = AsyncMock(return_value=[
-            self.response_data,
-        ])
-        self.mock_engine_client.connection_manager.get_connection = AsyncMock(return_value=(mock_dealer, mock_response_queue))
+        mock_response_queue.get = AsyncMock(
+            return_value=[
+                self.response_data,
+            ]
+        )
+        self.mock_engine_client.connection_manager.get_connection = AsyncMock(
+            return_value=(mock_dealer, mock_response_queue)
+        )
 
         self.mock_engine_client.connection_manager.cleanup_request = AsyncMock()
         self.mock_engine_client.format_and_add_data = AsyncMock(return_value=[[1, 2, 3]])
@@ -55,6 +59,7 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
 
         # Assert
         self.assertEqual(result.data[0].embedding, self.response_data.outputs.data)
+
 
 if __name__ == "__main__":
     unittest.main()

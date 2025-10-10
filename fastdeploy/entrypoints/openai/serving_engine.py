@@ -19,12 +19,13 @@ import time
 import traceback
 import uuid
 from abc import ABC, abstractmethod
-from typing_extensions import override
 from collections.abc import AsyncGenerator
 from typing import Any, ClassVar, Dict, Generic, Optional, TypeVar, Union
-from pydantic import BaseModel, ConfigDict, Field
 
-from fastdeploy.engine.request import RequestOutput, PoolingRequestOutput
+from pydantic import BaseModel, ConfigDict, Field
+from typing_extensions import override
+
+from fastdeploy.engine.request import PoolingRequestOutput, RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     ErrorInfo,
     ErrorResponse,
@@ -34,9 +35,10 @@ from fastdeploy.utils import ErrorCode, ErrorType, api_server_logger
 
 RequestT = TypeVar("RequestT")
 
+
 class ServeContext(
-        BaseModel,
-        Generic[RequestT],
+    BaseModel,
+    Generic[RequestT],
 ):
     # Shared across all requests
     request: RequestT

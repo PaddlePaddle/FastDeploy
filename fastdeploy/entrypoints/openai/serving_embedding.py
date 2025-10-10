@@ -15,15 +15,16 @@
 """
 
 import base64
-import numpy as np
 from typing import Literal, Union
+
+import numpy as np
 from typing_extensions import assert_never, override
+
 from fastdeploy.engine.request import EmbeddingOutput, EmbeddingRequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     EmbeddingRequest,
-    EmbeddingCompletionRequest,
-    EmbeddingResponseData,
     EmbeddingResponse,
+    EmbeddingResponseData,
     UsageInfo,
 )
 from fastdeploy.entrypoints.openai.serving_engine import ServeContext, ZmqOpenAIServing

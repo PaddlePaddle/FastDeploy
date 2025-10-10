@@ -22,7 +22,9 @@ import uuid
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
+
 from fastdeploy.engine.pooling_params import PoolingParams
+
 
 class InvalidParameterException(Exception):
     """Exception raised for invalid API parameters"""
@@ -738,7 +740,6 @@ class ControlSchedulerRequest(BaseModel):
     reallocate_shard: Optional[bool] = False
 
 
-
 BatchRequestInputBody = ChatCompletionRequest
 
 
@@ -803,6 +804,7 @@ class BatchRequestOutput(BaseModel):
     # For requests that failed with a non-HTTP error, this will contain more
     # information on the cause of the failure.
     error: Optional[Any]
+
 
 class EmbeddingCompletionRequest(BaseModel):
     # Ordered by official OpenAI API documentation

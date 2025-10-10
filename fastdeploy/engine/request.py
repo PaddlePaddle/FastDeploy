@@ -19,16 +19,16 @@ from __future__ import annotations
 import time
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
-from typing import Any, Dict, Optional, Union, Generic
-from typing_extensions import TypeVar
+from typing import Any, Dict, Generic, Optional, Union
 
 import numpy as np
+from typing_extensions import TypeVar
 
+from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
 from fastdeploy.utils import data_processor_logger
 from fastdeploy.worker.output import LogprobsLists, SampleLogprobs
-from fastdeploy.engine.pooling_params import PoolingParams
 
 
 class RequestStatus(Enum):
@@ -496,6 +496,7 @@ class RequestOutput:
             "error_msg": self.error_msg,
         }
 
+
 @dataclass
 class PoolingOutput:
     """The output data of one pooling output of a request.
@@ -510,11 +511,11 @@ class PoolingOutput:
         return f"PoolingOutput(data={self.data})"
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, self.__class__) and bool(
-            (self.data == other.data).all()
-        )
+        return isinstance(other, self.__class__) and bool((self.data == other.data).all())
+
 
 _O = TypeVar("_O", default=PoolingOutput)
+
 
 class PoolingRequestOutput(Generic[_O]):
     """
@@ -527,9 +528,7 @@ class PoolingRequestOutput(Generic[_O]):
         finished (bool): A flag indicating whether the pooling is completed.
     """
 
-    def __init__(
-        self, request_id: str, outputs: _O, prompt_token_ids: list[int], finished: bool
-    ):
+    def __init__(self, request_id: str, outputs: _O, prompt_token_ids: list[int], finished: bool):
         self.request_id = request_id
         self.prompt_token_ids = prompt_token_ids
         self.finished = finished
