@@ -16,24 +16,14 @@
 
 template <int THREADBLOCK_SIZE>
 __global__ void get_token_num_per_batch_kernel(int* batch_token_num,
-                                               int* total_token_num,
                                                const int* seq_lens_this_time,
                                                const int* seq_lens_encoder,
                                                const int real_bsz) {
     int bid = threadIdx.x;
-    typedef cub::BlockReduce<int, THREADBLOCK_SIZE> BlockReduce;
-    __shared__ typename BlockReduce::TempStorage temp_storage;
-
     int token_num_now = 0;
     if (bid < real_bsz) {
         token_num_now = seq_lens_encoder[bid] > 0 ? 2 : seq_lens_this_time[bid];
         batch_token_num[bid] = token_num_now;
-    }
-
-    __syncthreads();
-    int token_num_sum = BlockReduce(temp_storage).Sum(token_num_now);
-    if (bid == 0) {
-        total_token_num[0] = token_num_sum;
     }
 }
 
@@ -53,7 +43,7 @@ __global__ void speculate_get_logits_kernel(float* draft_logits,
     if (bid < real_bsz) {
         auto* draft_logits_now =
             draft_logits + cu_batch_token_offset[bid] * vocab_size;
-        auto* logits_now = logits + cu_seqlens_q[bid] * vocab_size;
+        auto* logits_now = logits + bid * vocab_size;
         for (int i = tid * VecSize; i < vocab_size; i += blockDim.x * VecSize) {
             if (seq_lens_encoder[bid] > 0) {
                 Load<float, VecSize>(&first_token_logits[bid * vocab_size + i],
@@ -75,54 +65,43 @@ __global__ void speculate_get_logits_kernel(float* draft_logits,
     }
 }
 
-std::vector<paddle::Tensor> SpeculateGetLogits(
-    const paddle::Tensor& logits,
-    const paddle::Tensor& first_token_logits,
-    const paddle::Tensor& cu_seqlens_q,
-    const paddle::Tensor& seq_lens_this_time,
-    const paddle::Tensor& seq_lens_encoder) {
+void SpeculateGetLogits(const paddle::Tensor& draft_logits,
+                        const paddle::Tensor& batch_token_num,
+                        const paddle::Tensor& cu_batch_token_offset,
+                        const paddle::Tensor& logits,
+                        const paddle::Tensor& first_token_logits,
+                        const paddle::Tensor& cu_seqlens_q,
+                        const paddle::Tensor& seq_lens_this_time,
+                        const paddle::Tensor& seq_lens_encoder) {
     auto cu_stream = seq_lens_this_time.stream();
     const int vocab_size = logits.shape()[1];
     const int real_bsz = seq_lens_this_time.shape()[0];
 
-    auto total_token_num = paddle::full(
-        {1}, 0, paddle::DataType::INT32, seq_lens_this_time.place());
-    auto batch_token_num = paddle::full(
-        {real_bsz}, 0, paddle::DataType::INT32, seq_lens_this_time.place());
-
     constexpr int THREADBLOCK_SIZE = 512;
     get_token_num_per_batch_kernel<THREADBLOCK_SIZE>
-        <<<1, THREADBLOCK_SIZE, 0, cu_stream>>>(batch_token_num.data<int>(),
-                                                total_token_num.data<int>(),
-                                                seq_lens_this_time.data<int>(),
-                                                seq_lens_encoder.data<int>(),
-                                                real_bsz);
-
-    auto total_token_num_cpu =
-        total_token_num.copy_to(paddle::CPUPlace(), true);
-
-    auto draft_logits =
-        paddle::empty({total_token_num_cpu.data<int>()[0], vocab_size},
-                      paddle::DataType::FLOAT32,
-                      seq_lens_this_time.place());
-    auto cu_batch_token_offset = paddle::full(
-        {real_bsz + 1}, 0, paddle::DataType::INT32, seq_lens_this_time.place());
+        <<<1, THREADBLOCK_SIZE, 0, cu_stream>>>(
+            const_cast<int*>(batch_token_num.data<int>()),
+            seq_lens_this_time.data<int>(),
+            seq_lens_encoder.data<int>(),
+            real_bsz);
 
     void* temp_storage = nullptr;
     size_t temp_storage_bytes = 0;
-    cub::DeviceScan::InclusiveSum(temp_storage,
-                                  temp_storage_bytes,
-                                  batch_token_num.data<int>(),
-                                  &cu_batch_token_offset.data<int>()[1],
-                                  real_bsz,
-                                  cu_stream);
+    cub::DeviceScan::InclusiveSum(
+        temp_storage,
+        temp_storage_bytes,
+        batch_token_num.data<int>(),
+        const_cast<int*>(&cu_batch_token_offset.data<int>()[1]),
+        real_bsz,
+        cu_stream);
     cudaMalloc(&temp_storage, temp_storage_bytes);
-    cub::DeviceScan::InclusiveSum(temp_storage,
-                                  temp_storage_bytes,
-                                  batch_token_num.data<int>(),
-                                  &cu_batch_token_offset.data<int>()[1],
-                                  real_bsz,
-                                  cu_stream);
+    cub::DeviceScan::InclusiveSum(
+        temp_storage,
+        temp_storage_bytes,
+        batch_token_num.data<int>(),
+        const_cast<int*>(&cu_batch_token_offset.data<int>()[1]),
+        real_bsz,
+        cu_stream);
 
     constexpr int PackSize = VEC_16B / sizeof(float);
     dim3 grid_dim(real_bsz);
@@ -138,8 +117,6 @@ std::vector<paddle::Tensor> SpeculateGetLogits(
             seq_lens_encoder.data<int>(),
             vocab_size,
             real_bsz);
-
-    return {draft_logits, batch_token_num, cu_batch_token_offset};
 }
 
 __global__ void speculate_insert_first_token_kernel(
@@ -156,7 +133,7 @@ __global__ void speculate_insert_first_token_kernel(
 
     auto* token_ids_now = token_ids + cu_batch_token_offset[bid];
     auto* accept_tokens_now = accept_tokens + bid * max_draft_tokens;
-    auto* next_tokens_now = next_tokens + cu_seqlens_q[bid];
+    auto* next_tokens_now = next_tokens + bid;
     if (seq_lens_encoder[bid] != 0) {
         token_ids_now[0] = accept_tokens_now[0];
         token_ids_now[1] = next_tokens_now[0];
@@ -252,12 +229,20 @@ void SpeculateGetTargetLogits(const paddle::Tensor& target_logits,
 }
 
 PD_BUILD_STATIC_OP(speculate_get_logits)
-    .Inputs({"logits",
+    .Inputs({"draft_logits",
+             "batch_token_num",
+             "cu_batch_token_offset",
+             "logits",
              "first_token_logits",
              "cu_seqlens_q",
              "seq_lens_this_time",
              "seq_lens_encoder"})
-    .Outputs({"draft_logits", "batch_token_num", "cu_batch_token_offset"})
+    .Outputs({"draft_logits_out",
+              "batch_token_num_out",
+              "cu_batch_token_offset_out"})
+    .SetInplaceMap({{"draft_logits", "draft_logits_out"},
+                    {"batch_token_num", "batch_token_num_out"},
+                    {"cu_batch_token_offset", "cu_batch_token_offset_out"}})
     .SetKernelFn(PD_KERNEL(SpeculateGetLogits));
 
 PD_BUILD_STATIC_OP(speculate_insert_first_token)
