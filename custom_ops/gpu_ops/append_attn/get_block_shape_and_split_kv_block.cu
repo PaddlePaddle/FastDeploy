@@ -331,7 +331,7 @@ void GetBlockShapeAndSplitKVBlock(
 
   // decoder
   if (max_dec_len_this_time > 0) {
-    const bool mla_use_tensorcore = GetMlaUseTensorcore();
+    const bool mla_use_tensorcore = true; //GetMlaUseTensorcore();
     if (mla_use_tensorcore && group_size <= 64) {
       const int set_chunk_size = get_mla_dec_chunk_size(bsz);
 
