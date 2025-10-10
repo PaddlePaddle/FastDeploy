@@ -14,19 +14,18 @@
 # limitations under the License.
 """
 
-# This file is modified from https://github.com/vllm-project/vllm/blob/main/vllm/benchmarks/latency.py
-
+# This file is modified from https://github.com/vllm-project/vllm/blob/main/vllm/entrypoints/cli/benchmark/throughput.py
 import argparse
 
-from fastdeploy.benchmarks.latency import add_cli_args, main
+from fastdeploy.benchmarks.throughput import add_cli_args, main
 from fastdeploy.entrypoints.cli.benchmark.base import BenchmarkSubcommandBase
 
 
-class BenchmarkLatencySubcommand(BenchmarkSubcommandBase):
-    """The `latency` subcommand for fastdeploy bench."""
+class BenchmarkThroughputSubcommand(BenchmarkSubcommandBase):
+    """The `throughput` subcommand for fastdeploy bench."""
 
-    name = "latency"
-    help = "Benchmark the latency of a single batch of requests."
+    name = "throughput"
+    help = "Benchmark the online serving throughput."
 
     @classmethod
     def add_cli_args(cls, parser: argparse.ArgumentParser) -> None:
