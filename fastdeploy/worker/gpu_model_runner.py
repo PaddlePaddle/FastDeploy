@@ -124,6 +124,7 @@ class GPUModelRunner(ModelRunnerBase):
                 "matmul_v2",
                 "fused_gemm_epilogue",
             ]
+
         #  Sampler
         if not self.speculative_decoding:
             self.sampler = Sampler(fd_config)
@@ -138,8 +139,7 @@ class GPUModelRunner(ModelRunnerBase):
         # Lazy initialize kv cache after model loading
         # self.kv_caches: list[paddle.Tensor] = []
 
-        # Cuda Graph
-        self.graph_opt_level = self.graph_opt_config.graph_opt_level
+        # CUDA Graph
         self.use_cudagraph = self.graph_opt_config.use_cudagraph
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
@@ -160,7 +160,7 @@ class GPUModelRunner(ModelRunnerBase):
         # In the future, we will expand it as a list.
         self.attn_backends: list[AttentionBackend] = []
         # self.attn_metadatas: list[AttentionMetadata] = []
-        self.initialize_attn_backend()
+        self._initialize_attn_backend()
 
         # Forward meta store the global meta information of the forward
         self.forward_meta: ForwardMeta = None
@@ -1021,7 +1021,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
         # NOTE: (changwenbin) Initialized to max_num_seq '-1' before copying, marking illegal positions
         self.share_inputs["batch_id_per_token"][:] = -1
-        self.share_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
         self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
         self.share_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
 
@@ -1035,6 +1034,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Initialize forward meta data
         self.initialize_forward_meta()
+        self.forward_meta.batch_id_per_token.copy_(batch_id_per_token, False)
 
         # Get sampling metadata
         self.sampling_metadata = SamplingMetadata(
@@ -1152,7 +1152,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Get kv cache dtype
         cache_type = self.parallel_config.dtype
-
         kv_cache_quant_type = None
         if (
             self.quant_config
@@ -1192,31 +1191,48 @@ class GPUModelRunner(ModelRunnerBase):
 
         logger.info(f"Initializing kv cache for all layers. {cache_ready_signal.value}")
         cache_kvs_list = []
+
+        # NOTE:(changwenbin) Determine whether it is Multi-Head Latent Attention,
+        # To rationalize the allocation of kvcache.
+        from fastdeploy import envs
+
+        self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
         for i in range(self.model_config.num_hidden_layers):
             key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
-            val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
+            if not self.mla_cache:
+                val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
             if create_cache_tensor:
                 logger.info(f"..creating kv cache for layer {i}: {kv_cache_shape}")
                 key_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
-                val_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
                 set_data_ipc(key_cache, key_cache_name)
-                set_data_ipc(val_cache, val_cache_name)
-                cache_kvs_list.extend([key_cache, val_cache])
+                if not self.mla_cache:
+                    val_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
+                    set_data_ipc(val_cache, val_cache_name)
+                    cache_kvs_list.extend([key_cache, val_cache])
+                else:
+                    cache_kvs_list.extend([key_cache])
                 if kv_cache_quant_type == "block_wise_fp8":
                     key_cache_scales = paddle.full(
                         shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
                     )
-                    val_cache_scales = paddle.full(
-                        shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
-                    )
-                    cache_kvs_list.extend([key_cache_scales, val_cache_scales])
+                    if not self.mla_cache:
+                        val_cache_scales = paddle.full(
+                            shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
+                        )
+                        cache_kvs_list.extend([key_cache_scales, val_cache_scales])
+                    else:
+                        cache_kvs_list.extend([key_cache_scales])
             else:
                 logger.info(f"..attaching kv cache for layer {i}: {kv_cache_shape}")
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
-                val_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache = share_external_data(key_cache, key_cache_name, kv_cache_shape)
-                val_cache = share_external_data(val_cache, val_cache_name, kv_cache_shape)
-                cache_kvs_list.extend([key_cache, val_cache])
+                if not self.mla_cache:
+                    val_cache = paddle.empty(shape=[], dtype=cache_type)
+                    val_cache = share_external_data(val_cache, val_cache_name, kv_cache_shape)
+                    cache_kvs_list.extend([key_cache, val_cache])
+                else:
+                    cache_kvs_list.extend([key_cache])
+
         self.share_inputs["caches"] = cache_kvs_list
 
         if not profile and create_cache_tensor:
@@ -1225,7 +1241,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         paddle.device.cuda.empty_cache()
 
-    def initialize_attn_backend(self) -> None:
+    def _initialize_attn_backend(self) -> None:
         """
         Initialize attention backends
         """
@@ -1295,6 +1311,7 @@ class GPUModelRunner(ModelRunnerBase):
         expected_decode_len: int = 1,
         in_capturing: bool = False,
         capture_prefill: bool = False,
+        accept_all_drafts: bool = False,
     ) -> paddle.Tensor:
         """
         Use dummy inputs to run before formal execution.
@@ -1303,6 +1320,7 @@ class GPUModelRunner(ModelRunnerBase):
             expected_decode_len: Expected number of tokens generated
             in_capturing: Is cuda graph in capturing state
             capture_prefill: Capture pure prefill for cuda graph
+            accept_all_drafts: Target model will accept all draft tokens
         """
 
         input_length_list, max_dec_len_list, block_num = self.get_input_length_list(
@@ -1322,8 +1340,8 @@ class GPUModelRunner(ModelRunnerBase):
                 batch_size=batch_size,
                 expected_decode_len=expected_decode_len,
             )
-        while True:
 
+        while True:
             # 1. Initialize forward meta and attention meta data
             self._prepare_inputs()
 
@@ -1343,6 +1361,8 @@ class GPUModelRunner(ModelRunnerBase):
                     ids_remove_padding=self.share_inputs["ids_remove_padding"],
                     forward_meta=self.forward_meta,
                 )
+            if self.use_cudagraph:
+                model_output = model_output[: self.real_token_num]
 
             hidden_states = rebuild_padding(
                 model_output,
@@ -1387,6 +1407,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self.sampling_metadata,
                     self.parallel_config.max_model_len,
                     self.share_inputs,
+                    accept_all_drafts,
                 )
                 sampler_output = None
                 if self.parallel_config.tensor_parallel_size > 1:
@@ -1453,7 +1474,6 @@ class GPUModelRunner(ModelRunnerBase):
                 skip_save_output=True,
                 zmq_client=self.zmq_client,
             )
-
             if self.speculative_decoding:
                 if self.speculative_method == "mtp":
                     self.proposer.run(full_hidden_states=model_output)
@@ -1548,7 +1568,6 @@ class GPUModelRunner(ModelRunnerBase):
         time_before_capture = time.perf_counter()
         expected_decode_len = 1
         capture_sizes = self.cudagraph_capture_sizes.copy()
-
         if self.fd_config.graph_opt_config.cudagraph_only_prefill:
             for num_tokens in sorted(capture_sizes, reverse=True):
                 self._dummy_run(
@@ -1561,6 +1580,46 @@ class GPUModelRunner(ModelRunnerBase):
                 logger.info(
                     f"Warm up the model with the num_tokens:{num_tokens}, expected_decode_len:{expected_decode_len}"
                 )
+        elif self.speculative_decoding and self.speculative_method == "mtp":
+            # Capture Target Model without bsz 1
+            for batch_size in sorted(capture_sizes, reverse=True):
+                if batch_size == 1:
+                    logger.info("Skip token_num = 1, when capture target model for mtp")
+                else:
+                    assert batch_size % 2 == 0
+                    self._dummy_run(
+                        num_tokens=self.scheduler_config.max_num_batched_tokens,
+                        batch_size=int(batch_size / 2),
+                        in_capturing=True,
+                        expected_decode_len=1,
+                    )
+                    logger.info(f"Warm up the Target model with the num_tokens:{batch_size}, expected_decode_len:{1}")
+            # Capture Draft Model without bsz 1
+            # NOTE(liujundong): expected_decode_len = 1, will affect mtp capture in cudagraph
+            for batch_size in sorted(capture_sizes, reverse=True):
+                if batch_size == 1:
+                    logger.info("Skip token_num = 1, when capture Draft model for mtp")
+                else:
+                    assert batch_size % 2 == 0
+                    self._dummy_run(
+                        num_tokens=self.scheduler_config.max_num_batched_tokens,
+                        batch_size=int(batch_size / 2),
+                        in_capturing=True,
+                        expected_decode_len=3,
+                        accept_all_drafts=True,
+                    )
+                    logger.info(f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}")
+            # Capture Draft Model with bsz 1
+            if 1 in capture_sizes:
+                self._dummy_run(
+                    num_tokens=self.scheduler_config.max_num_batched_tokens,
+                    batch_size=int(1),
+                    in_capturing=True,
+                    expected_decode_len=3,
+                    accept_all_drafts=False,
+                )
+                logger.info(f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}")
+
         else:
             for batch_size in sorted(capture_sizes, reverse=True):
                 self._dummy_run(
@@ -1569,9 +1628,7 @@ class GPUModelRunner(ModelRunnerBase):
                     in_capturing=True,
                     expected_decode_len=expected_decode_len,
                 )
-                logger.info(
-                    f"Warm up the model with the num_tokens:{batch_size}, expected_decode_len:{expected_decode_len}"
-                )
+                logger.info(f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}")
 
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
@@ -1657,6 +1714,8 @@ class GPUModelRunner(ModelRunnerBase):
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
             )
+        if self.use_cudagraph:
+            model_output = model_output[: self.real_token_num]
         hidden_states = rebuild_padding(
             model_output,
             self.share_inputs["cu_seqlens_q"],
@@ -1855,25 +1914,25 @@ class GPUModelRunner(ModelRunnerBase):
     @profile_run_guard(True)
     def profile_run(self) -> None:
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
-
         # Initialize kv cache for profile run. After profile run kv cache will be reset.
         # TODO(gongshaotian): Optimize the management logic of kvcache
         self.num_gpu_blocks = self.parallel_config.total_block_num
         self.initialize_kv_cache(profile=True)
+        if self.speculative_method in ["mtp"]:
+            self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
 
         # 1. Profile with multimodal encoder & encoder cache
 
         # 2. Dummy run
         self._dummy_run(
             num_tokens=self.scheduler_config.max_num_batched_tokens,
-            batch_size=min(self.scheduler_config.max_num_seqs, 3),
+            batch_size=self.scheduler_config.max_num_seqs,
         )
 
         # 3. gc
         self.clear_cache()
-
         if self.speculative_method in ["mtp"]:
-            self.proposer.clear_dummy_input()
+            self.proposer.clear_mtp_cache()
 
     def update_share_input_block_num(self, num_gpu_blocks: int) -> None:
         """
@@ -1903,7 +1962,7 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         if self.speculative_method in ["mtp"]:
-            self.proposer.update_block_num(num_gpu_blocks)
+            self.proposer.update_mtp_block_num(num_gpu_blocks)
 
     def cal_theortical_kvcache(self):
         """
@@ -1936,7 +1995,18 @@ class GPUModelRunner(ModelRunnerBase):
             if self.speculative_method in ["mtp"]
             else self.model_config.num_hidden_layers
         )
-        required_memory = byte_of_dtype * 2 * (self.cache_config.block_size * hidden_dim) * num_layers  # k + v
+
+        # NOTE:(changwenbin) Determie whether it is Multi-Head Latent Attention,
+        # To rationalize the allocation of kvcache.
+        if self.mla_cache:
+            required_memory = (
+                byte_of_dtype
+                * (self.fd_config.model_config.kv_lora_rank + self.fd_config.model_config.qk_rope_head_dim)
+                * (self.cache_config.block_size)
+                * num_layers
+            )  # compress_kv + k_pe
+        else:
+            required_memory = byte_of_dtype * 2 * (self.cache_config.block_size * hidden_dim) * num_layers  # k + v
         return required_memory
 
     def not_need_stop(self) -> bool:
@@ -1989,6 +2059,7 @@ class GPUModelRunner(ModelRunnerBase):
         # To adapt to CUDA Graph, keep the forward pass at the maximum batch size.
         if self.use_cudagraph:
             self.forward_meta.seq_lens_this_time = self.seq_lens_this_time_buffer
+            self.real_token_num = self.forward_meta.ids_remove_padding.shape[0]
         return
 
     def _init_image_preprocess(self) -> None:

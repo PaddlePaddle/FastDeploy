@@ -19,7 +19,6 @@ from typing import List
 
 import numpy as np
 import paddle
-from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
@@ -33,6 +32,8 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import MTPSampler
+from fastdeploy.model_executor.model_loader import get_model_loader
+from fastdeploy.model_executor.models import ModelForCasualLM
 from fastdeploy.model_executor.ops.gpu import (
     draft_model_postprocess,
     draft_model_preprocess,
@@ -54,12 +55,19 @@ class MTPProposer(Proposer):
     Proposer for Multi-Token-Prediction(MTP)
     """
 
-    def __init__(self, cfg: FDConfig, main_model: nn.Layer, local_rank: int, device_id: int, target_model_inputs):
-        super().__init__(cfg)
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        main_model: ModelForCasualLM,
+        local_rank: int,
+        device_id: int,  # physical device id
+        target_model_inputs,  # main model share inputs
+    ):
+        super().__init__(fd_config)
         self.num_main_model_layers = self.model_config.num_hidden_layers
         self.local_rank = local_rank
         self.device_id = device_id
-        self._update_cfg(main_model)
+        self._update_mtp_config(main_model)
         self._load_model()
         self.target_model_inputs = target_model_inputs
         self.mtp_strategy = self.speculative_config.mtp_strategy
@@ -67,13 +75,22 @@ class MTPProposer(Proposer):
 
         # [mixed, prefill, decoder]
         self.role = "mixed"
-        self.sampler = MTPSampler(cfg)
+
+        self.sampler = MTPSampler(fd_config)
         self._init_model_inputs()
+
+        # CUDA Graph
+        self.use_cudagraph = self.graph_opt_config.use_cudagraph
+        self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
+        self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
 
         self.attn_backends: list[AttentionBackend] = []
         self._initialize_attn_backend()
 
-    def _update_cfg(self, main_model):
+        # Forward meta store the global meta information of the forward
+        self.forward_meta: ForwardMeta = None
+
+    def _update_mtp_config(self, main_model):
         """
         Update config for MTP from global config
         """
@@ -91,21 +108,17 @@ class MTPProposer(Proposer):
         """
         Load MTP Layer
         """
-        from fastdeploy.model_executor.model_loader import get_model_loader
-
-        model_loader = get_model_loader(load_config=self.cfg.load_config)
-        self.model = model_loader.load_model(fd_config=self.cfg)
+        model_loader = get_model_loader(load_config=self.fd_config.load_config)
+        self.model = model_loader.load_model(fd_config=self.fd_config)
 
     def dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
         """Set dummy prefill inputs to model_inputs"""
         max_dec_len = expected_decode_len + 1
-        self.num_gpu_blocks = self.parallel_config.total_block_num
-        self.initialize_kv_cache()
-        full_length = min(
+
+        input_length = min(
             num_tokens // batch_size,
             self.parallel_config.max_model_len - max_dec_len,
         )
-        input_length = int(full_length * self.cache_config.kv_cache_ratio)
         block_num = (
             input_length + self.cache_config.block_size - 1
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
@@ -127,15 +140,15 @@ class MTPProposer(Proposer):
             )
         self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
 
-    def initialize_kv_cache(self):
+    def initialize_kv_cache(self, main_model_num_blocks, profile: bool = False):
         """
         Initialize kv cache
         """
-        # prompt cache
+        self.num_gpu_blocks = int(main_model_num_blocks * self.speculative_config.num_gpu_block_expand_ratio)
         self.cache_kvs = {}
 
+        # Get kv cache dtype
         cache_type = self.parallel_config.dtype
-
         kv_cache_quant_type = None
         if (
             self.quant_config
@@ -149,7 +162,7 @@ class MTPProposer(Proposer):
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
             max_num_blocks=self.num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
         )
-        if not self.parallel_config.do_profile and (
+        if not profile and (
             self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed"
         ):
             cache_kvs_list = []
@@ -239,7 +252,7 @@ class MTPProposer(Proposer):
         # Get the attention backend
         attn_cls = get_attention_backend()
         attn_backend = attn_cls(
-            self.cfg,
+            self.fd_config,
             kv_num_heads=self.model_config.kv_num_heads,
             num_heads=num_heads,
             head_dim=head_dim,
@@ -252,7 +265,7 @@ class MTPProposer(Proposer):
             )
         self.attn_backends.append(attn_backend)
 
-    def clear_dummy_input(self):
+    def clear_mtp_cache(self):
         """
         Clear allocated cacheKV
         """
@@ -260,15 +273,13 @@ class MTPProposer(Proposer):
         if self.forward_meta is not None:
             del self.forward_meta.caches
 
-    def update_block_num(self, num_gpu_blocks) -> None:
+    def update_mtp_block_num(self, num_gpu_blocks) -> None:
         """
-        Update block num by theoretical calculation
+        Update MTP block num by theoretical calculation
         """
-
+        # Reset block table and kv cache with global block num
         self.main_model_num_gpu_blocks = num_gpu_blocks
-        self.num_gpu_blocks = int(num_gpu_blocks * self.speculative_config.num_gpu_block_expand_ratio)
-        if not (self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed"):
-            self.initialize_kv_cache()
+        self.initialize_kv_cache(main_model_num_blocks=self.main_model_num_gpu_blocks)
 
         # Reset free list
         free_list = list(
@@ -285,7 +296,6 @@ class MTPProposer(Proposer):
                 "free_list_len": paddle.full([1], self.free_list_len, dtype="int32"),
             }
         )
-        self.parallel_config.do_profile = False
 
     def _init_model_inputs(self):
         """
@@ -309,13 +319,19 @@ class MTPProposer(Proposer):
         self.model_inputs["stop_nums"] = paddle.clone(self.target_model_inputs["stop_nums"])
         self.model_inputs["not_need_stop"] = paddle.to_tensor([False], dtype="bool", place="cpu")
         self.model_inputs["pre_ids"] = paddle.clone(self.target_model_inputs["pre_ids"])
+        self.model_inputs["output_cum_offsets"] = paddle.clone(self.target_model_inputs["output_cum_offsets"])
+        self.model_inputs["output_padding_offset"] = paddle.clone(self.target_model_inputs["output_padding_offset"])
         self.model_inputs["ids_remove_padding"] = paddle.clone(self.target_model_inputs["ids_remove_padding"])
         self.model_inputs["batch_id_per_token"] = paddle.clone(self.target_model_inputs["batch_id_per_token"])
         self.model_inputs["cu_seqlens_q"] = paddle.clone(self.target_model_inputs["cu_seqlens_q"])
         self.model_inputs["cu_seqlens_k"] = paddle.clone(self.target_model_inputs["cu_seqlens_k"])
         self.model_inputs["decoder_batch_ids"] = paddle.clone(self.target_model_inputs["decoder_batch_ids"])
+
         self.model_inputs["decoder_tile_ids_per_batch"] = paddle.clone(
             self.target_model_inputs["decoder_tile_ids_per_batch"]
+        )
+        self.model_inputs["target_hidden_states"] = paddle.full(
+            [self.max_model_len * self.fd_config.max_prefill_batch, self.model_config.hidden_size], 0, dtype="bfloat16"
         )
 
         tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
@@ -457,10 +473,6 @@ class MTPProposer(Proposer):
         """
         Process inputs for prefill tasks and insert it to model_inputs buffer
         """
-        # NOTE: Lazy initialize kv cache
-        if "caches" not in self.model_inputs:
-            self.initialize_kv_cache()
-
         # TODO:Init role in initialize process
         if req_dicts[-1].disaggregate_info is not None:
             if req_dicts[-1].disaggregate_info["role"] == "prefill":
@@ -539,7 +551,7 @@ class MTPProposer(Proposer):
                     request.get("block_tables"), dtype="int32"
                 )
         self.model_inputs["not_need_stop"][0] = True
-        self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
+        self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
 
     def _initialize_forward_meta(self):
         """
@@ -577,6 +589,33 @@ class MTPProposer(Proposer):
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
+
+        # Update Batch type for cuda graph
+        only_decode_batch = True
+        prefill_exists = None
+
+        # Mix ep in single node
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
+            only_decode_batch_list = []
+            prefill_exists = self.exist_prefill()
+            paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
+            only_decode_batch = all(only_decode_batch_list)
+            self.fd_config.model_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
+
+        self.forward_meta.step_use_cudagraph = (
+            self.use_cudagraph
+            and only_decode_batch
+            and not (prefill_exists if prefill_exists is not None else self.exist_prefill())
+        )
+
+    def exist_prefill(self):
+        """
+        check whether prefill stage exist
+        """
+        if int(paddle.max(self.model_inputs["seq_lens_encoder"])) != 0:
+            return 1
+        else:
+            return 0
 
     def _prepare_inputs(self, full_hidden_states):
         """
@@ -621,10 +660,8 @@ class MTPProposer(Proposer):
             self.target_model_inputs["seq_lens_encoder"],
             self.num_model_steps,
         )
-        if isinstance(target_hidden_states, list):
-            target_hidden_states = target_hidden_states[0]
 
-        return target_hidden_states
+        self.model_inputs["target_hidden_states"].copy_(target_hidden_states, False)
 
     def _post_process(self, sampled_token_ids):
         """
@@ -655,7 +692,7 @@ class MTPProposer(Proposer):
                 self.parallel_config.use_ep,
             )
 
-    def _propose(self, target_hidden_states):
+    def _propose(self):
         """
         Main process for MTP inference
         """
@@ -684,10 +721,16 @@ class MTPProposer(Proposer):
                 self.model_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
                 self.model_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
                 self.model_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
-                # for speculative decoding
-                self.model_inputs["output_cum_offsets"] = output_cum_offsets
-                self.model_inputs["output_padding_offset"] = output_padding_offset
+
+                # For speculative decoding
+                self.model_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
+                self.model_inputs["output_padding_offset"].copy_(output_padding_offset, False)
+
+                # Initialize forward meta data
                 self._initialize_forward_meta()
+
+                # Padding inputs for cuda graph
+                self.padding_cudagraph_inputs()
 
                 # Get sampling metadata
                 self.sampling_metadata = SamplingMetadata(
@@ -709,10 +752,11 @@ class MTPProposer(Proposer):
 
                 model_output = self.model(
                     ids_remove_padding=self.model_inputs["ids_remove_padding"],
-                    previous_hidden_states=target_hidden_states,
+                    previous_hidden_states=self.model_inputs["target_hidden_states"],
                     forward_meta=self.forward_meta,
                 )
-
+                if self.use_cudagraph:
+                    model_output = model_output[: self.real_token_num]
                 hidden_states = rebuild_padding(
                     model_output,
                     self.model_inputs["cu_seqlens_q"],
@@ -737,9 +781,8 @@ class MTPProposer(Proposer):
                     paddle.distributed.broadcast(sampled_token_ids, 0)
 
                 self._post_process(sampled_token_ids)
-
                 if substep != self.num_model_steps - 1:
-                    target_hidden_states = self._get_self_hidden_states(hidden_states)
+                    self._get_self_hidden_states(hidden_states)
 
     def _get_self_hidden_states(self, hidden_states):
         target_hidden_states = eagle_get_self_hidden_states(
@@ -748,10 +791,7 @@ class MTPProposer(Proposer):
             self.model_inputs["seq_lens_this_time"],
             self.model_inputs["step_idx"],
         )
-        if isinstance(target_hidden_states, list):
-            target_hidden_states = target_hidden_states[0]
-
-        return target_hidden_states
+        self.model_inputs["target_hidden_states"].copy_(target_hidden_states, False)
 
     def update_task_chunk_prefill(self, task):
         """
@@ -836,8 +876,8 @@ class MTPProposer(Proposer):
 
     def _run_impl(self, full_hidden_states):
         """"""
-        target_hidden_states = self._prepare_inputs(full_hidden_states)
-        self._propose(target_hidden_states=target_hidden_states)
+        self._prepare_inputs(full_hidden_states)
+        self._propose()
         self._update_status()
         if self.hybrid_mode:
             self._extend_draft_token_with_ngram_match()
@@ -845,3 +885,16 @@ class MTPProposer(Proposer):
     def is_chunk_prefill_enabled(self):
         """"""
         return True
+
+    def padding_cudagraph_inputs(self) -> None:
+        """
+        Clean buffers used for the CUDA graph when replaying the CUDA graph with the padded batch.
+        In FastDeploy, almost all input tensors have a buffer. So, just keep the buffer clean when replaying the CUDA graph with the padded batch.
+        """
+        # In init_attention_metadata, the decode buffer has already been cleared
+
+        # To adapt to CUDA Graph, keep the forward pass at the maximum batch size.
+        if self.use_cudagraph:
+            self.forward_meta.seq_lens_this_time = self.seq_lens_this_time_buffer
+            self.real_token_num = self.forward_meta.ids_remove_padding.shape[0]
+        return

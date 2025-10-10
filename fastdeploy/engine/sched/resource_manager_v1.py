@@ -460,8 +460,7 @@ class ResourceManagerV1(ResourceManager):
                             # Prepare decoding task
                             scheduled_reqs.append(self._prepare_decode_task(request))
                         num_decoding_req_nums += 1
-                        token_budget -= 1
-
+                    token_budget -= 1
                     if (
                         request.use_extend_tables
                         and request.request_id not in self.using_extend_tables_req_id

@@ -29,8 +29,8 @@ class NgramProposer(Proposer):
     Matching corresponding tokens in input and output as draft tokens.
     """
 
-    def __init__(self, cfg: FDConfig):
-        super().__init__(cfg)
+    def __init__(self, fd_config: FDConfig):
+        super().__init__(fd_config)
         self.max_ngram_size = self.speculative_config.max_ngram_size
         self.input_ids_len = paddle.zeros(shape=[self.max_num_seqs, 1], dtype="int64").cpu()
 
