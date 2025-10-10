@@ -46,6 +46,67 @@ jobs:
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
 
+  diff_coverage_report:
+    needs: [clone,unittest_coverage]
+    runs-on: ubuntu-latest
+    env:
+      fd_archive_url: ${{ needs.clone.outputs.repo_archive_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: coverage diff file download
+        shell: bash
+        env:
+          diff_cov_file_url: ${{ needs.unittest_coverage.outputs.diff_cov_file_url }}
+        run: |
+          if [ -z "${diff_cov_file_url}" ]; then
+            echo "No diff coverage file URL provided."
+            exit 0
+          fi
+          wget "${diff_cov_file_url}" -O ./diff_coverage.xml || echo "Download cov file failed, but continuing..."
+      - name: Upload diff coverage report
+        if: ${{ needs.unittest_coverage.outputs.diff_cov_file_url != null && needs.unittest_coverage.outputs.diff_cov_file_url != '' }}
+        uses: codecov/codecov-action@v5
+        with:
+          name: python diff coverage
+          verbose: true
+          flags: diff
+
+  diff_coverage_report_coveralls:
+    needs: [clone, unittest_coverage]
+    runs-on: ubuntu-latest
+    env:
+      fd_archive_url: ${{ needs.clone.outputs.repo_archive_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Download coverage diff file
+        shell: bash
+        env:
+          diff_cov_file_url: ${{ needs.unittest_coverage.outputs.diff_cov_file_url }}
+        run: |
+          if [ -z "${diff_cov_file_url}" ]; then
+            echo "No diff coverage file URL provided."
+            exit 0
+          fi
+          wget "${diff_cov_file_url}" -O ./diff_coverage.xml || echo "Download cov file failed, but continuing..."
+
+      - name: Install Coveralls
+        run: |
+          python -m pip install coveralls
+
+      - name: Upload diff coverage to Coveralls
+        if: ${{ needs.unittest_coverage.outputs.diff_cov_file_url != null && needs.unittest_coverage.outputs.diff_cov_file_url != '' }}
+        run: |
+          # Convert XML if needed; Coveralls Python lib supports cobertura XML
+          coveralls --input-file ./diff_coverage.xml --verbose
+
+
   logprob_test:
     name: Run FastDeploy LogProb Tests
     needs: [build]
