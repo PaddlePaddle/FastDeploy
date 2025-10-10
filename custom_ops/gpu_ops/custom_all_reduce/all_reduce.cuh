@@ -225,6 +225,7 @@ DINLINE void barrier_at_end(const RankSignals& sg, Signal* self_sg, int rank) {
 
   // use one thread to update flag
   if (threadIdx.x == 0) self_sg->_flag[blockIdx.x] = flag;
+  __syncthreads();
 }
 
 template <typename P, int ngpus, typename A>
