@@ -1185,7 +1185,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         if not create_cache_tensor:
             logger.info(f"Waiting for cache managers to create kv cache.. {cache_ready_signal.value}")
-            while cache_ready_signal.value[self.local_rank] != 1:
+            while cache_ready_signal.value[local_rank] != 1:
                 time.sleep(1)
             logger.info(f"OK! Stop waiting. {cache_ready_signal.value}")
 
@@ -1236,7 +1236,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["caches"] = cache_kvs_list
 
         if not profile and create_cache_tensor:
-            cache_ready_signal.value[self.local_rank] = 1
+            cache_ready_signal.value[local_rank] = 1
             logger.info(f"✅ kv cache is ready! {cache_ready_signal.value}")
 
         paddle.device.cuda.empty_cache()

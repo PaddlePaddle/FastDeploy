@@ -69,6 +69,11 @@ class EngineService:
         """
         self.cfg = cfg
 
+        if self.cfg.cache_config.enable_prefix_caching:
+            self.cfg.cache_config.cache_queue_port = self.cfg.cache_config.cache_queue_port[
+                self.cfg.parallel_config.local_data_parallel_id
+            ]
+
         if self.cfg.parallel_config.enable_expert_parallel:
             self.llm_logger = get_logger(
                 "fastdeploy", f"fastdeploy_rank{self.cfg.parallel_config.local_data_parallel_id}.log"
@@ -251,11 +256,7 @@ class EngineService:
                 local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
             )
 
-            if (
-                self.cfg.cache_config.enable_prefix_caching
-                or self.cfg.scheduler_config.splitwise_role != "mixed"
-                and self.cfg.parallel_config.local_data_parallel_id == 0
-            ):
+            if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
                 self.cache_task_queue = EngineCacheQueue(
                     address=(
                         self.cfg.master_ip,
