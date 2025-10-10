@@ -59,6 +59,7 @@ def xpu_pre_process(
     seq_lens_this_time: int,
     share_inputs: Dict,
     use_speculate_method: bool,
+    block_size: int,
     draft_tokens: Optional[paddle.Tensor] = None,
     seq_lens_encoder: Optional[paddle.Tensor] = None,
     seq_lens_decoder: Optional[paddle.Tensor] = None,
@@ -98,39 +99,35 @@ def xpu_pre_process(
         caches=share_inputs["caches"],
     )
 
-    # Get xpu extra param
     (
         xpu_forward_meta.encoder_batch_map,
         xpu_forward_meta.decoder_batch_map,
         xpu_forward_meta.encoder_batch_idx,
         xpu_forward_meta.decoder_batch_idx,
         xpu_forward_meta.encoder_seq_lod,
+        xpu_forward_meta.decoder_seq_lod,
+        xpu_forward_meta.encoder_kv_lod,
+        xpu_forward_meta.prefix_len,
         xpu_forward_meta.decoder_context_len,
         xpu_forward_meta.decoder_context_len_cache,
+        xpu_forward_meta.prefix_block_tables,
         xpu_forward_meta.encoder_batch_map_cpu,
         xpu_forward_meta.decoder_batch_map_cpu,
         xpu_forward_meta.encoder_batch_idx_cpu,
         xpu_forward_meta.decoder_batch_idx_cpu,
         xpu_forward_meta.encoder_seq_lod_cpu,
+        xpu_forward_meta.decoder_seq_lod_cpu,
+        xpu_forward_meta.encoder_kv_lod_cpu,
+        xpu_forward_meta.prefix_len_cpu,
         xpu_forward_meta.decoder_context_len_cpu,
         xpu_forward_meta.decoder_context_len_cache_cpu,
-        xpu_forward_meta.enc_batch,
-        xpu_forward_meta.dec_batch,
-        xpu_forward_meta.total_enc_len,
-    ) = get_infer_param(seq_lens_encoder, seq_lens_decoder)
-
-    # Adjust batch
-    # print(f"=========================adjust_batch 更新前=========================")
-    # print(f"ids_remove_padding : {ids_remove_padding}")
-    # print(f"cum_offsets : {cum_offsets}")
-    # print(f"xpu_forward_meta.encoder_seq_lod : {xpu_forward_meta.encoder_seq_lod}")
-    # print(f"xpu_forward_meta.encoder_batch_idx: {xpu_forward_meta.encoder_batch_idx}")
-    # print(f"xpu_forward_meta.decoder_batch_idx : {xpu_forward_meta.decoder_batch_idx}")
-    # print(f"xpu_forward_meta.encoder_seq_lod_cpu : {xpu_forward_meta.encoder_seq_lod_cpu}")
-    # print(f"xpu_forward_meta.encoder_batch_idx_cpu : {xpu_forward_meta.encoder_batch_idx_cpu}")
-    # print(f"xpu_forward_meta.decoder_batch_idx_cpu : {xpu_forward_meta.decoder_batch_idx_cpu}")
-    # print(f"xpu_forward_meta.enc_batch : {xpu_forward_meta.encoder_batch_map}")
-    # print(f"xpu_forward_meta.dec_batch : {xpu_forward_meta.decoder_batch_map}")
+        xpu_forward_meta.len_info_cpu,
+    ) = get_infer_param(
+        seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, xpu_forward_meta.block_tables, block_size
+    )
+    xpu_forward_meta.enc_batch = xpu_forward_meta.len_info_cpu[0]
+    xpu_forward_meta.dec_batch = xpu_forward_meta.len_info_cpu[1]
+    xpu_forward_meta.total_enc_len = xpu_forward_meta.len_info_cpu[2]
 
     adjusted_input = adjust_batch(
         ids_remove_padding.reshape([-1, 1]),
@@ -146,16 +143,6 @@ def xpu_pre_process(
         None,  # output_padding_offset
         -1,  # max_input_length
     )
-    # print(f"=========================adjust_batch 更新后=========================")
-    # print(f"ids_remove_padding : {ids_remove_padding}")
-    # print(f"cum_offsets : {cum_offsets}")
-    # print(f"xpu_forward_meta.encoder_seq_lod : {xpu_forward_meta.encoder_seq_lod}")
-    # print(f"xpu_forward_meta.encoder_batch_idx: {xpu_forward_meta.encoder_batch_idx}")
-    # print(f"xpu_forward_meta.decoder_batch_idx : {xpu_forward_meta.decoder_batch_idx}")
-    # print(f"xpu_forward_meta.encoder_seq_lod_cpu : {xpu_forward_meta.encoder_seq_lod_cpu}")
-    # print(f"xpu_forward_meta.encoder_batch_idx_cpu : {xpu_forward_meta.encoder_batch_idx_cpu}")
-    # print(f"xpu_forward_meta.decoder_batch_idx_cpu : {xpu_forward_meta.decoder_batch_idx_cpu}")
-    # print(f"xpu_forward_meta.enc_batch : {xpu_forward_meta.encoder_batch_map}")
 
     adjusted_input = adjusted_input.squeeze(1)
 
@@ -268,22 +255,6 @@ def xpu_post_process(
     # 2. Update the input buffer of the model
     with paddle.framework._no_check_dy2st_diff():
         if envs.ENABLE_V1_KVCACHE_SCHEDULER and not skip_save_output:
-
-            # print(f"============================================update_inputs_v1 更新前=========================================")
-            # print(f"model_output.stop_flags : {model_output.stop_flags}")
-            # print(f"model_output.not_need_stop : {model_output.not_need_stop}")
-            # print(f"model_output.seq_lens_this_time : {model_output.seq_lens_this_time}")
-            # print(f"model_output.seq_lens_encoder : {model_output.seq_lens_encoder}")
-            # print(f"model_output.seq_lens_decoder : {model_output.seq_lens_decoder}")
-            # print(f"share_inputs['step_seq_lens_decoder'] : {share_inputs['step_seq_lens_decoder']}")
-            # print(f"share_inputs['prompt_lens'] : {share_inputs['prompt_lens']}")
-            # print(f"sampled_token_ids : {sampled_token_ids}")
-            # print(f"model_output.input_ids : {model_output.input_ids}")
-            # print(f"model_output.stop_nums : {model_output.stop_nums}")
-            # print(f"model_output.next_tokens : {model_output.next_tokens}")
-            # print(f"model_output.is_block_step : {model_output.is_block_step}")
-            # print(f"share_inputs['block_tables'] : {share_inputs['block_tables']}")
-            # print(f"block_size : {block_size}")
             update_inputs_v1(
                 model_output.stop_flags,
                 model_output.not_need_stop,
@@ -300,21 +271,6 @@ def xpu_post_process(
                 model_output.is_block_step,
                 block_size,
             )
-            # print(f"============================================update_inputs_v1 更新后=========================================")
-            # print(f"model_output.stop_flags : {model_output.stop_flags}")
-            # print(f"model_output.not_need_stop : {model_output.not_need_stop}")
-            # print(f"model_output.seq_lens_this_time : {model_output.seq_lens_this_time}")
-            # print(f"model_output.seq_lens_encoder : {model_output.seq_lens_encoder}")
-            # print(f"model_output.seq_lens_decoder : {model_output.seq_lens_decoder}")
-            # print(f"share_inputs['step_seq_lens_decoder'] : {share_inputs['step_seq_lens_decoder']}")
-            # print(f"share_inputs['prompt_lens'] : {share_inputs['prompt_lens']}")
-            # print(f"sampled_token_ids : {sampled_token_ids}")
-            # print(f"model_output.input_ids : {model_output.input_ids}")
-            # print(f"model_output.stop_nums : {model_output.stop_nums}")
-            # print(f"model_output.next_tokens : {model_output.next_tokens}")
-            # print(f"model_output.is_block_step : {model_output.is_block_step}")
-            # print(f"share_inputs['block_tables'] : {share_inputs['block_tables']}")
-            # print(f"block_size : {block_size}")
         else:
             update_inputs(
                 model_output.stop_flags,
@@ -879,6 +835,7 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_this_time"],
             self.share_inputs,
             use_speculate_method=False,
+            block_size=self.parallel_config.block_size,
             draft_tokens=None,
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
@@ -948,19 +905,15 @@ class XPUModelRunner(ModelRunnerBase):
         # Get kv cache dtype
         cache_type = self.parallel_config.dtype
 
-        kv_cache_quant_type = None
         if (
             self.quant_config
             and hasattr(self.quant_config, "kv_cache_quant_type")
             and self.quant_config.kv_cache_quant_type is not None
         ):
-            cache_type = "uint8"
-            kv_cache_quant_type = self.quant_config.kv_cache_quant_type
+            cache_type = "int8"
 
         # Get kv cache shape
-        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
-            max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
-        )
+        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(max_num_blocks=max_block_num)
 
         for i in range(self.model_config.num_hidden_layers):
             cache_kvs[f"key_caches_{i}"] = paddle.full(
