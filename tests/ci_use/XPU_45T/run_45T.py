@@ -33,7 +33,7 @@ def test_45t():
         stream=False,
     )
     print(response.choices[0].message.content)
-    print(base_response)
+    # print(base_response)
     assert response.choices[0].message.content == base_response_110 or response.choices[0].message.content == base_response_104
 
 
