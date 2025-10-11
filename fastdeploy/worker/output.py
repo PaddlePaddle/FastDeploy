@@ -281,5 +281,3 @@ class ModelRunnerOutput:
     [num_reqs, hidden_size]
     """
     pooler_output: list[Optional[paddle.Tensor]]
-
-    is_pooling_model: bool = False

@@ -22,7 +22,6 @@ import paddle
 
 from fastdeploy import envs
 from fastdeploy.config import SpeculativeConfig
-from fastdeploy.output.pooler import PoolerOutput
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_iluvatar():
@@ -186,7 +185,6 @@ def _zmq_send_text_outputs(zmq_client: ZmqIpcClient, output_tokens: np.ndarray, 
 
 
 def post_process_normal(
-    pooler_output: PoolerOutput,
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: Dict[str, paddle.Tensor],
@@ -392,7 +390,6 @@ def post_process_specualate(
 
 
 def post_process(
-    pooler_output: PoolerOutput,
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: Dict[str, paddle.Tensor],
@@ -407,7 +404,6 @@ def post_process(
         post_process_specualate(model_output, save_each_rank, skip_save_output)
     else:
         post_process_normal(
-            pooler_output,
             sampler_output,
             model_output,
             share_inputs,

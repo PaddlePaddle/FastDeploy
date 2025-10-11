@@ -24,6 +24,7 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
+from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
     profile_run_guard,
@@ -75,7 +76,6 @@ if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
 import zmq
 
 from fastdeploy import envs
-from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.tasks import PoolingTask
 from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
@@ -110,6 +110,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.enable_logprob = fd_config.model_config.enable_logprob
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
         self.is_pooling_model = self.fd_config.model_config.runner_type == "pooling"
+        self.pooling_params: dict[str, PoolingParams] = {}
 
         # VL model config:
         if self.enable_mm:
@@ -295,6 +296,10 @@ class GPUModelRunner(ModelRunnerBase):
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
+
+            if hasattr(request, "pooling_params") and request.pooling_params is not None:
+                self.pooling_params = request.pooling_params
+
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
@@ -358,10 +363,13 @@ class GPUModelRunner(ModelRunnerBase):
                 else:
                     prompt_token_ids = request.prompt_token_ids
                 input_ids = prompt_token_ids + request.output_token_ids
+                prompt_len = len(prompt_token_ids)
+                self.share_inputs["prompt_ids"][idx : idx + 1, :prompt_len] = np.array(prompt_token_ids, dtype="int64")
                 logger.debug(
                     f"Handle prefill request {request} at idx {idx}, "
                     f"{prefill_start_index=}, {prefill_end_index=}, "
                     f"need_prefilled_token_num={len(input_ids)}"
+                    f"prompt_len={prompt_len}"
                 )
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(
                     input_ids[prefill_start_index:prefill_end_index]
@@ -478,6 +486,7 @@ class GPUModelRunner(ModelRunnerBase):
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
+            print("idx", idx)
             length = len(request.prompt_token_ids)
             assert length > 0, "The prompt requested must not be empty."
 
@@ -1552,6 +1561,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             if self.is_pooling_model:
                 self._dummy_pooler_run(hidden_states)
+                self.share_inputs["seq_lens_this_time"][:] = 0
                 break
             else:
                 self._dummy_sampler_run(hidden_states, model_output)
@@ -1732,6 +1742,8 @@ class GPUModelRunner(ModelRunnerBase):
         skip_idx_list = self._get_skip_idx(model_forward_batch)
         self._prepare_inputs()
         self.sampler.pre_process(skip_idx_list)
+        print("skip_idx_list", skip_idx_list)
+        print("xxxxadadsadadad")
 
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
@@ -1767,13 +1779,13 @@ class GPUModelRunner(ModelRunnerBase):
 
         logits = None
         # 4. Compute logits, Sample
+        print("self.is_pooling_model", self.is_pooling_model)
         if self.is_pooling_model:
-            self._pool(
-                hidden_states,
-            )
-
+            # num_scheduled_tokens = int(self.share_inputs["seq_lens_this_time"][:num_running_requests].sum())
+            output = self._pool(hidden_states, num_running_requests)
+            print("output", output)
+            return output
         else:
-
             logits = self.model.compute_logits(hidden_states)
 
         if not self.speculative_decoding:
@@ -1924,9 +1936,39 @@ class GPUModelRunner(ModelRunnerBase):
         )
         return None
 
-    def _pool(self, hidden_states: paddle.Tensor) -> Optional[ModelRunnerOutput]:
+    def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
 
-        hidden_states = hidden_states[:]
+        num_scheduled_tokens = int(self.share_inputs["seq_lens_this_time"][:num_running_requests].sum())
+
+        hidden_states = hidden_states[:num_scheduled_tokens]
+
+        prompt_lens = self.share_inputs["prompt_lens"][:num_running_requests]
+        prompt_token_ids = self.share_inputs["prompt_ids"]
+
+        pooling_metadata = PoolingMetadata(
+            prompt_lens=prompt_lens,
+            prompt_token_ids=prompt_token_ids,
+            pooling_params=self.pooling_params,
+        )
+        num_scheduled_tokens_list = [
+            int(self.share_inputs["seq_lens_this_time"][i]) for i in range(num_running_requests)
+        ]
+        device_str = "gpu" if hidden_states.place.is_gpu_place() else "cpu"
+        pooling_metadata.build_pooling_cursor(num_scheduled_tokens_list, device=device_str)
+        print("hidden_states", hidden_states)
+        print("pooling_metadata", pooling_metadata)
+        print("self.model.pooler", self.model.pooler)
+        raw_pooler_output = self.model.pooler(hidden_states=hidden_states, pooling_metadata=pooling_metadata)
+        logger.info(f"raw_pooler_output:{raw_pooler_output}")
+        seq_lens_cpu = self.share_inputs["seq_lens_this_time"][:num_running_requests]
+        pooler_output: list[Optional[paddle.Tensor]] = []
+        for raw_output, seq_len, prompt_len in zip(raw_pooler_output, seq_lens_cpu, pooling_metadata.prompt_lens):
+            output = raw_output.data if seq_len == prompt_len else None
+            pooler_output.append(output)
+
+        print("pooler_output", pooler_output)
+
+        return pooler_output
 
     def _add_cache(self, model_forward_batch) -> None:
         """
