@@ -65,8 +65,6 @@ class EngineClient:
         enable_prefix_caching=None,
         splitwise_role=None,
     ):
-        import fastdeploy.model_executor.models  # noqa: F401
-
         architectures = ModelConfig({"model": model_name_or_path}).architectures[0]
         if MultimodalRegistry.contains_model(architectures):
             self.enable_mm = True
