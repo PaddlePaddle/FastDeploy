@@ -198,7 +198,7 @@ class EngineArgs:
     The amount of CPU memory to offload to.
     """
 
-    cache_queue_port: int = 8003
+    cache_queue_port: str = "8003"
     """
     Port for cache queue.
     """
@@ -403,6 +403,7 @@ class EngineArgs:
         """
         Post-initialization processing to set default tokenizer if not provided.
         """
+
         if not self.tokenizer:
             self.tokenizer = self.model
         if self.splitwise_role == "decode":
@@ -411,8 +412,8 @@ class EngineArgs:
             self.enable_prefix_caching = False
         if not current_platform.is_cuda():
             self.enable_prefix_caching = False
-        if self.dynamic_load_weight:
-            self.enable_prefix_caching = False
+        # if self.dynamic_load_weight:
+        #     self.enable_prefix_caching = False
         if self.enable_logprob:
             if self.speculative_config is not None:
                 raise NotImplementedError("Logprob does not support speculation_config.")
@@ -740,7 +741,7 @@ class EngineArgs:
 
         cache_group.add_argument(
             "--cache-queue-port",
-            type=int,
+            type=lambda s: [int(item.strip()) for item in s.split(",")] if s else None,
             default=EngineArgs.cache_queue_port,
             help="port for cache queue",
         )
