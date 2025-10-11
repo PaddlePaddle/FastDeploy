@@ -434,12 +434,6 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         )
         return ffn_out
 
-    def forward(self,
-        forward_meta: ForwardMeta,
-        hidden_states: paddle.Tensor,
-        residual: paddle.Tensor = None):
-        pass
-
 @support_graph_optimization
 class Ernie4_5_Model(nn.Layer):
     def __init__(
@@ -583,7 +577,7 @@ class Ernie4_5_Model(nn.Layer):
                 end_bs = min(end_bs, max_bs)
 
                 start_token_id = forward_meta.cu_seqlens_q[start_bs].item()
-                assert forward_meta.cu_seqlens_q.shape[0] == 193
+                assert forward_meta.cu_seqlens_q.shape[0] == max_bs + 1
                 
                 end_token_id =   forward_meta.cu_seqlens_q[end_bs].item()
 
@@ -605,11 +599,13 @@ class Ernie4_5_Model(nn.Layer):
                 # 这里千万不能加0 哦！
                 forward_meta_copy.block_tables = forward_meta.block_tables[start_bs:end_bs]
 
+                forward_meta_copy.batch_id_per_token = forward_meta.batch_id_per_token[start_token_id:end_token_id] - start_bs
+
                 # 这里必须要+0！
                 forward_meta_copy.decoder_batch_ids = forward_meta.decoder_batch_ids + 0
                 forward_meta_copy.decoder_tile_ids_per_batch = forward_meta.decoder_tile_ids_per_batch + 0
-
-                forward_meta_copy.batch_id_per_token = forward_meta.batch_id_per_token + 0
+                
+                # 这个都是
                 forward_meta_copy.decoder_num_blocks_cpu = paddle.full([1], 0, dtype="int32").pin_memory()
                 forward_meta_copy.decoder_num_blocks_device = forward_meta.decoder_num_blocks_device + 0
                 forward_meta_copy.decoder_chunk_size_device = forward_meta.decoder_chunk_size_device + 0
@@ -650,10 +646,6 @@ class Ernie4_5_Model(nn.Layer):
             print("can_replay_graph", can_replay_graph)
         if need_capature_graph:
             print("need_capature_graph", need_capature_graph)
-
-        can_replay_graph = False
-        need_capature_graph = False
-
 
         IsH20 = self.fd_config.parallel_config.is_attention_role
         IsH100 = self.fd_config.parallel_config.is_moe_role
