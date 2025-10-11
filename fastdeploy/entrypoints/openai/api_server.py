@@ -198,6 +198,7 @@ async def lifespan(app: FastAPI):
         pid,
         args.ips,
         args.max_waiting_time,
+        chat_template,
     )
     engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid

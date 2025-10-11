@@ -216,8 +216,9 @@ class ZmqOpenAIServing(OpenAIServing):
     OpenAI-style service architecture using ZeroMQ as the communication mechanism.
     """
 
-    def __init__(self, engine_client, models, pid, ips, max_waiting_time):
+    def __init__(self, engine_client, models, pid, ips, max_waiting_time, chat_template):
         super().__init__(engine_client, models, pid, ips, max_waiting_time)
+        self.chat_template = chat_template
 
     @override
     async def _preprocess(self, ctx: ServeContext) -> Dict:
@@ -228,16 +229,29 @@ class ZmqOpenAIServing(OpenAIServing):
         else:
             request_dict = request.dict()
         request_dict["request_id"] = ctx.request_id
-
-        if "chat_template" not in request_dict:
-            request_dict["chat_template"] = self.chat_template
         request_dict["arrival_time"] = time.time()
+
+        self._process_chat_template_kwargs(request_dict)
 
         if hasattr(request, "to_pooling_params"):
             request_dict["pooling_params"] = request.to_pooling_params().to_dict()
 
         await self.engine_client.format_and_add_data(request_dict)
         return request_dict
+
+    def _process_chat_template_kwargs(self, request_dict):
+        if "chat_template" not in request_dict:
+            request_dict["chat_template"] = self.chat_template
+        chat_template_kwargs = request_dict.get("chat_template_kwargs") or {}
+        chat_template_kwargs.update(
+            {
+                "chat_template": request_dict.get("chat_template"),
+                "add_generation_prompt": request_dict.get("add_generation_prompt"),
+                # "add_special_tokens": request_dict.get("add_special_tokens"),
+                "add_stop_sequences": request_dict.get("add_stop_sequences"),
+            }
+        )
+        request_dict["chat_template_kwargs"] = chat_template_kwargs
 
     @override
     async def _prepare_generators(self, ctx: ServeContext) -> AsyncGenerator[RequestOutput]:
