@@ -109,7 +109,7 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
     }
     float thread_m2 = 0.0f;
     float warp_m2 = 0.0f;
-    #pragma unroll
+#pragma unroll
     for (int i = 0; i < HalfVecSize; i++) {
       // add_bias + rope
       float input_left = static_cast<float>(src_vec[2 * i]);
@@ -142,13 +142,13 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
       float row_inv_var = Rsqrt(row_variance + rms_norm_eps);
       if (hi < num_heads) {
         Load<float, VecSize>(&q_norm_weight[threadIdx.x * VecSize], &q_norm_vec);
-        #pragma unroll
+#pragma unroll
         for (int i = 0; i < VecSize; i++) {
           bias_vec[i] = static_cast<T>(tmp_vec[i] * row_inv_var * q_norm_vec[i]);
         }
       } else {
         Load<float, VecSize>(&k_norm_weight[threadIdx.x * VecSize], &k_norm_vec);
-        #pragma unroll
+#pragma unroll
         for (int i = 0; i < VecSize; i++) {
           bias_vec[i] = static_cast<T>(tmp_vec[i] * row_inv_var * k_norm_vec[i]);
         }
@@ -536,7 +536,7 @@ __global__ void append_speculate_cache_neox_rope_kernel(
       Load<float, VecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
       Load<float, VecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
     }
-    #pragma unroll
+#pragma unroll
     for (int i = 0; i < VecSize; i++) {
       // add_bias + rope
       float input_left = static_cast<float>(left_vec[i]);
