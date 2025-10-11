@@ -1422,7 +1422,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.sampler(
                 logits,
                 self.sampling_metadata,
-                self.parallel_config.max_model_len,
+                self.model_config.max_model_len,
                 self.share_inputs,
             )
             sampler_output = None
