@@ -39,5 +39,6 @@ def test_45t():
         or response.choices[0].message.content == base_response_104
     )
 
+
 if __name__ == "__main__":
     test_45t()
