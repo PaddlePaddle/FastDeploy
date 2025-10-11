@@ -825,16 +825,16 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             )
 
         # in_scales
-        # for in_scale_name in ["up_gate_proj_in_scale", "down_proj_in_scale"]:
-        #     setattr(
-        #         layer,
-        #         in_scale_name,
-        #         layer.create_parameter(
-        #             shape=[layer.num_local_experts],
-        #             dtype="float32",
-        #             default_initializer=paddle.nn.initializer.Constant(0),
-        #         ),
-        #     )
+        for in_scale_name in ["up_gate_proj_in_scale", "down_proj_in_scale"]:
+            setattr(
+                layer,
+                in_scale_name,
+                layer.create_parameter(
+                    shape=[layer.num_local_experts],
+                    dtype="float32",
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
 
         # weight_scales
         setattr(
@@ -893,12 +893,15 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
 
         def _process_weight_scale(name: str, weight_scales: list[paddle.Tensor], processed_in_scale: paddle.Tensor):
             if processed_in_scale is not None:
-                processed_weight_scale = (
-                    paddle.stack(weight_scales, axis=0) / (448 * 7 * 2 ** (-9)) / processed_in_scale[:, None]
-                )
+                processed_weight_scale = paddle.stack(weight_scales, axis=0) / (448 * 7 * 2 ** (-9))
+                if len(processed_weight_scale.shape) == 3:
+                    processed_weight_scale = (
+                        processed_weight_scale.transpose([0, 2, 1]) / processed_in_scale[:, None, None]
+                    )
+                else:
+                    processed_weight_scale = processed_weight_scale / processed_in_scale[:, None]
             else:
                 processed_weight_scale = paddle.stack(weight_scales, axis=0) / (448 * 7 * 2 ** (-9))
-
             if len(processed_weight_scale.shape) == 3:
                 if name == "up_gate_proj_weight_scale" and processed_weight_scale.shape[-1] * 128 != layer.hidden_size:
                     assert (
@@ -908,7 +911,10 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                     processed_weight_scale = processed_weight_scale.repeat_interleave(
                         layer.hidden_size // 128 // processed_weight_scale.shape[-1], axis=-1
                     )
-                elif name == "down_proj_weight_scale":
+                elif (
+                    name == "down_proj_weight_scale"
+                    and processed_weight_scale.shape[-1] * 128 != layer.moe_intermediate_size
+                ):
                     assert (
                         layer.moe_intermediate_size // 128 % processed_weight_scale.shape[-1] == 0
                     ), "weight_scale_group_size must be a multiple of 128"
@@ -916,8 +922,6 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                     processed_weight_scale = processed_weight_scale.repeat_interleave(
                         layer.moe_intermediate_size // 128 // processed_weight_scale.shape[-1], axis=-1
                     )
-                else:
-                    raise ValueError(f"Invalid weight scale name: {name}")
 
                 origin_shape = processed_weight_scale.shape
                 processed_weight_scale = processed_weight_scale.transpose([0, 2, 1])
