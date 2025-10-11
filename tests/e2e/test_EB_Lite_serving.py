@@ -331,6 +331,7 @@ def test_non_streaming(openai_client):
         temperature=1,
         max_tokens=1024,
         stream=False,
+        n=2,
     )
 
     # Assertions to check the response structure
