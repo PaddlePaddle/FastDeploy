@@ -61,7 +61,7 @@ class InternalAdapter:
             "dec_token_num": int(self.cfg.cache_config.dec_token_num),
             "available_resource": float(1.0 * available_block_num / self.cfg.cache_config.total_block_num),
             "max_batch_size": int(available_batch_size),
-            "max_input_token_num": self.cfg.max_model_len,
+            "max_input_token_num": self.cfg.model_config.max_model_len,
             "unhandled_request_num": self.engine.scheduler.get_unhandled_request_num(),
             "available_batch": int(self.engine.resource_manager.available_batch()),
         }

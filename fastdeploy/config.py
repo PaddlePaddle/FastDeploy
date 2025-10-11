@@ -542,8 +542,6 @@ class ParallelConfig:
         self.block_size: int = 64
         # Engine worker queue port
         self.engine_worker_queue_port: str = "9923"
-        # Max model len
-        self.max_model_len: int = 3072  # max_seq_len
         # cuda visible devices
         self.device_ids: str = "0"
         # Input dtype
@@ -1402,7 +1400,6 @@ class FDConfig:
         plas_attention_config: PlasAttentionConfig = None,
         speculative_config: SpeculativeConfig = None,
         tokenizer: str = None,
-        max_model_len: int = 8192,
         ips: str = None,
         use_warmup: bool = False,
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
@@ -1470,7 +1467,6 @@ class FDConfig:
                 if ip == self.host_ip:
                     self.node_rank = idx
 
-        self.max_model_len = max_model_len
         self.limit_mm_per_prompt = limit_mm_per_prompt
         self.mm_processor_kwargs = mm_processor_kwargs
         self.use_warmup = use_warmup
@@ -1534,20 +1530,20 @@ class FDConfig:
         if self.scheduler_config.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
                 if paddle.is_compiled_with_xpu():
-                    self.scheduler_config.max_num_batched_tokens = self.max_model_len
+                    self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
                 else:
                     self.scheduler_config.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.cache_config.enable_chunked_prefill:
                     self.scheduler_config.max_num_batched_tokens = 2048
                 else:
-                    self.scheduler_config.max_num_batched_tokens = self.max_model_len
+                    self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
 
         if self.long_prefill_token_threshold == 0:
-            self.long_prefill_token_threshold = int(self.max_model_len * 0.04)
+            self.long_prefill_token_threshold = int(self.model_config.max_model_len * 0.04)
 
         self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
-        self.cache_config.max_block_num_per_seq = int(self.max_model_len // self.cache_config.block_size)
+        self.cache_config.max_block_num_per_seq = int(self.model_config.max_model_len // self.cache_config.block_size)
         if self.model_config is not None and self.model_config.enable_mm:
             self.cache_config.enable_prefix_caching = False
 
@@ -1576,7 +1572,9 @@ class FDConfig:
             f"but now it's {self.scheduler_config.max_num_seqs}."
         )
         assert self.nnode >= 1, f"nnode: {self.nnode} should no less than 1"
-        assert self.max_model_len >= 16, f"max_model_len: {self.max_model_len} should be larger than 16"
+        assert (
+            self.model_config.max_model_len >= 16
+        ), f"max_model_len: {self.model_config.max_model_len} should be larger than 16"
         assert (
             self.scheduler_config.max_num_seqs >= 1
         ), f"max_num_seqs: {self.scheduler_config.max_num_seqs} should be larger than 1"
@@ -1585,10 +1583,11 @@ class FDConfig:
             f"should be larger than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs}"
         )
         assert (
-            self.scheduler_config.max_num_batched_tokens <= self.max_model_len * self.scheduler_config.max_num_seqs
+            self.scheduler_config.max_num_batched_tokens
+            <= self.model_config.max_model_len * self.scheduler_config.max_num_seqs
         ), (
             f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} should be larger"
-            f"than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs} * max_model_len: {self.max_model_len}"
+            f"than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs} * max_model_len: {self.model_config.max_model_len}"
         )
         assert (
             self.max_num_partial_prefills >= 1
@@ -1609,9 +1608,9 @@ class FDConfig:
 
         if not self.cache_config.enable_chunked_prefill:
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                assert self.scheduler_config.max_num_batched_tokens >= self.max_model_len, (
+                assert self.scheduler_config.max_num_batched_tokens >= self.model_config.max_model_len, (
                     f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} "
-                    f"should be larger than or equal to max_model_len: {self.max_model_len}"
+                    f"should be larger than or equal to max_model_len: {self.model_config.max_model_len}"
                 )
         else:
             assert self.scheduler_config.max_num_batched_tokens >= self.cache_config.block_size, (
@@ -1623,9 +1622,9 @@ class FDConfig:
             assert (
                 self.cache_config.enable_chunked_prefill is True
             ), "Chunked prefill must be enabled to set max_num_partial_prefills > 1"
-            assert self.long_prefill_token_threshold < self.max_model_len, (
+            assert self.long_prefill_token_threshold < self.model_config.max_model_len, (
                 f"long_prefill_token_threshold: {self.long_prefill_token_threshold} should be less than"
-                f" max_model_len: {self.max_model_len}"
+                f" max_model_len: {self.model_config.max_model_len}"
             )
 
         if self.guided_decoding_backend is not None:

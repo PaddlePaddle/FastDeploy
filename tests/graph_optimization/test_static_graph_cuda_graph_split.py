@@ -96,6 +96,7 @@ class TestStaticGraphCUDAGraphSplit(unittest.TestCase):
         cache_config = CacheConfig({})
         parallel_config = ParallelConfig(args={})
         model_config = Mock()
+        model_config.max_model_len = 512
         fd_config = FDConfig(
             graph_opt_config=graph_opt_config,
             scheduler_config=scheduler_config,

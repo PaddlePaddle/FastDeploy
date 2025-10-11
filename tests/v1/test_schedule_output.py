@@ -15,6 +15,7 @@ def test_normal_schedule():
     model_cfg = SimpleNamespace(enable_mm=False)
     speculative_cfg = SimpleNamespace(method=None)
     model_cfg.print = print
+    model_cfg.max_model_len = 5120
     cache_cfg.bytes_per_layer_per_block = 1
     parallel_cfg = ParallelConfig(args)
     scheduler_cfg = SchedulerConfig(args)
@@ -79,6 +80,7 @@ def test_preempted_request():
     model_cfg = SimpleNamespace(enable_mm=False)
     speculative_cfg = SimpleNamespace(method=None)
     model_cfg.print = print
+    model_cfg.max_model_len = 5120
     cache_cfg.bytes_per_layer_per_block = 1
     parallel_cfg = ParallelConfig(args)
     scheduler_cfg = SchedulerConfig(args)

@@ -117,7 +117,7 @@ def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     if fd_config.model_config.enable_mm and ErnieArchitectures.contains_ernie_arch(architectures):
         tokenizer = Ernie4_5Tokenizer.from_pretrained(
             fd_config.model_config.model,
-            model_max_length=fd_config.parallel_config.max_model_len,
+            model_max_length=fd_config.model_config.max_model_len,
             padding_side="right",
             use_fast=False,
         )

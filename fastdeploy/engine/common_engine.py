@@ -630,7 +630,7 @@ class EngineService:
                     available_blocks=available_blocks,
                     block_size=self.cfg.cache_config.block_size,
                     reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
-                    max_num_batched_tokens=self.cfg.max_model_len,
+                    max_num_batched_tokens=self.cfg.model_config.max_model_len,
                     batch=num_prefill_batch,
                 )
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
