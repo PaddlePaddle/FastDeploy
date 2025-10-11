@@ -233,7 +233,7 @@ class ZmqOpenAIServing(OpenAIServing):
         request_dict["arrival_time"] = time.time()
 
         if hasattr(request, "to_pooling_params"):
-            request_dict["pooling_params"] = request.to_pooling_params()
+            request_dict["pooling_params"] = request.to_pooling_params().to_dict()
 
         await self.engine_client.format_and_add_data(request_dict)
         return request_dict

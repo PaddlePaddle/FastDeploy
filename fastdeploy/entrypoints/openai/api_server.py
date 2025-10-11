@@ -385,7 +385,7 @@ async def list_models() -> Response:
         return JSONResponse(content=models.model_dump())
 
 
-@app.get("/v1/embeddings")
+@app.post("/v1/embeddings")
 async def create_embedding(request: EmbeddingRequest):
     """
     Create embeddings for the input texts

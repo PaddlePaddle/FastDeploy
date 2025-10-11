@@ -90,6 +90,15 @@ class PoolingParams(
             "encode": ["softmax", "step_tag_id", "returned_token_ids"],
         }
 
+    def to_dict(self) -> dict[str, Any]:
+        """Convert instance to dictionary"""
+        return msgspec.to_builtins(self)
+
+    @classmethod
+    def from_dict(cls, req_dict: dict[str, Any]) -> "PoolingParams":
+        """Create instance from command line arguments"""
+        return msgspec.json.decode(req_dict, type=PoolingParams)
+
     def clone(self) -> "PoolingParams":
         """Returns a deep copy of the PoolingParams instance."""
         return deepcopy(self)
