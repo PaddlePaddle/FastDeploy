@@ -187,7 +187,7 @@ class LLMEngine:
             num_gpu_blocks = self.cfg.cache_config.num_gpu_blocks_override or self.cfg.cache_config.total_block_num
             num_cpu_blocks = self.cfg.cache_config.num_cpu_blocks
             max_running_requests = min(
-                (num_gpu_blocks + num_cpu_blocks) * block_size // self.cfg.max_model_len,
+                (num_gpu_blocks + num_cpu_blocks) * block_size // self.cfg.model_config.max_model_len,
                 self.cfg.scheduler_config.max_num_seqs,
             )
             console_logger.info(
@@ -195,7 +195,7 @@ class LLMEngine:
             )
             console_logger.info(
                 f"FastDeploy will be serving {max_running_requests} running requests "
-                f"if each sequence reaches its maximum length: {self.cfg.max_model_len}"
+                f"if each sequence reaches its maximum length: {self.cfg.model_config.max_model_len}"
             )
 
         return True
@@ -248,19 +248,19 @@ class LLMEngine:
         chat_template_kwargs = kwargs.get("chat_template_kwargs") or {}
         chat_template_kwargs["chat_template"] = kwargs.get("chat_template")
         kwargs["chat_template_kwargs"] = chat_template_kwargs
-        request = self.data_processor.process_request(request, self.cfg.max_model_len, **kwargs)
+        request = self.data_processor.process_request(request, self.cfg.model_config.max_model_len, **kwargs)
         request.prompt_token_ids_len = len(request.prompt_token_ids)
         request.need_prefill_tokens = request.prompt_token_ids_len
         input_ids_len = request.prompt_token_ids_len
         request.set(
             "max_tokens",
             min(
-                self.cfg.max_model_len - input_ids_len,
+                self.cfg.model_config.max_model_len - input_ids_len,
                 request.get("max_tokens"),
             ),
         )
         min_tokens = request.get("min_tokens")
-        if input_ids_len + min_tokens >= self.cfg.max_model_len:
+        if input_ids_len + min_tokens >= self.cfg.model_config.max_model_len:
             error_msg = (
                 f"Input text is too long, length of prompt token({input_ids_len}) "
                 f"+ min_dec_len ({min_tokens}) >= max_model_len "
@@ -268,10 +268,8 @@ class LLMEngine:
             llm_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
 
-        if input_ids_len > self.cfg.max_model_len:
-            error_msg = (
-                f"Length of input token({input_ids_len}) exceeds the limit max_model_len({self.cfg.max_model_len})."
-            )
+        if input_ids_len > self.cfg.model_config.max_model_len:
+            error_msg = f"Length of input token({input_ids_len}) exceeds the limit max_model_len({self.cfg.model_config.max_model_len})."
             llm_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
 
@@ -506,7 +504,7 @@ class LLMEngine:
             ips = ",".join(self.cfg.ips)
         arguments = (
             f" --devices {self.cfg.device_ids} {py_script}"
-            f" --max_num_seqs {self.cfg.scheduler_config.max_num_seqs} --max_model_len {self.cfg.max_model_len}"
+            f" --max_num_seqs {self.cfg.scheduler_config.max_num_seqs} --max_model_len {self.cfg.model_config.max_model_len}"
             f" --gpu_memory_utilization {self.cfg.cache_config.gpu_memory_utilization}"
             f" --model {self.cfg.model_config.model!s}"
             f" --device_ids {self.cfg.device_ids}"
@@ -587,7 +585,7 @@ class LLMEngine:
                     prompts["prompt"] = query_list
 
         if "max_tokens" not in prompts:
-            prompts["max_tokens"] = self.cfg.max_model_len
+            prompts["max_tokens"] = self.cfg.model_config.max_model_len
 
         self.add_requests(prompts)
         return prompts["request_id"]
