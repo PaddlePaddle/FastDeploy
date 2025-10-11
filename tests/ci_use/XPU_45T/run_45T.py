@@ -34,8 +34,10 @@ def test_45t():
     )
     print(response.choices[0].message.content)
     # print(base_response)
-    assert response.choices[0].message.content == base_response_110 or response.choices[0].message.content == base_response_104
-
+    assert (
+        response.choices[0].message.content == base_response_110
+        or response.choices[0].message.content == base_response_104
+    )
 
 if __name__ == "__main__":
     test_45t()
