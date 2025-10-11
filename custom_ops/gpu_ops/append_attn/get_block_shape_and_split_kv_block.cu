@@ -400,8 +400,9 @@ void GetBlockShapeAndSplitKVBlock(
 
   // decoder
   if (max_dec_len_this_time > 0) {
-    const bool mla_use_tensorcore = GetMlaUseTensorcore();
-    if (mla_use_tensorcore && group_size <= 64) {
+
+    const bool mla_backend = checkAttentionBackend();
+    if (mla_backend && group_size <= 64) {
       const int set_chunk_size = get_mla_dec_chunk_size(bsz);
 
       PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
@@ -465,13 +466,25 @@ void GetBlockShapeAndSplitKVBlock(
           chunk_size);
 
     } else {
-        // Note:(changwenbin)In order to adapt to cudagraph, the maximum value should be taken here
-        const uint32_t decoder_max_tile_size_per_bs_q = div_up((decoder_step_token_num * group_size), decoder_block_shape_q);
-        const uint32_t decoder_batch_shape = bsz * 1024 * decoder_max_tile_size_per_bs_q;
+      // Note:(changwenbin)In order to adapt to cudagraph, the maximum value
+      // should be taken here
+      const uint32_t decoder_max_tile_size_per_bs_q =
+          div_up((decoder_step_token_num * group_size), decoder_block_shape_q);
+      const uint32_t decoder_batch_shape =
+          bsz * 1024 * decoder_max_tile_size_per_bs_q;
 
-        PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_batch_ids.data<int>(), 0, decoder_batch_shape * sizeof(int32_t), stream));
-        PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_tile_ids_per_batch.data<int>(), 0, decoder_batch_shape * sizeof(int32_t), stream));
-        PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_num_blocks_device.data<int>(), 0, sizeof(int32_t), stream));
+      PADDLE_ENFORCE_GPU_SUCCESS(
+          cudaMemsetAsync(decoder_batch_ids.data<int>(),
+                          0,
+                          decoder_batch_shape * sizeof(int32_t),
+                          stream));
+      PADDLE_ENFORCE_GPU_SUCCESS(
+          cudaMemsetAsync(decoder_tile_ids_per_batch.data<int>(),
+                          0,
+                          decoder_batch_shape * sizeof(int32_t),
+                          stream));
+      PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
+          decoder_num_blocks_device.data<int>(), 0, sizeof(int32_t), stream));
 
         split_q_block_dec<<<1, 32, 0, stream>>>(
             seq_lens_this_time.data<int>(),
