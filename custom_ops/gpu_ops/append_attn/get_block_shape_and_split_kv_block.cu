@@ -204,6 +204,75 @@ __global__ void split_block_for_mla(const int *__restrict__ seq_lens_q,
   }
 }
 
+__global__ void split_q_block_dec(const int *__restrict__ seq_lens_q,
+                              const int *__restrict__ seq_lens_encoder,
+                              int *__restrict__ batch_ids,
+                              int *__restrict__ tile_ids_per_batch,
+                              int *__restrict__ num_blocks_x,
+                              const int bsz,
+                              const int num_rows_per_block,
+                              const int group_size) {
+  // one block one warp
+  const int lane = threadIdx.x % warpSize;
+
+  __shared__ int global_offset;
+  if (threadIdx.x == 0) global_offset = 0;
+  __syncthreads();
+
+  // loop on warp tile：[base, base+32)
+  for (int base = 0; base < bsz; base += warpSize) {
+    const int bid = base + lane;
+    const bool active = (bid < bsz);
+
+    // calculate loop_times for bid
+    int loop_times = 0;
+    if (active) {
+      int seq_len = seq_lens_q[bid];
+      if (seq_lens_encoder && seq_lens_encoder[bid] > 0) {
+        seq_len = 0;
+      }
+      loop_times = div_up(seq_len * group_size, num_rows_per_block);
+    }
+
+    // prefix sum for each lane, get the start offset in this tile
+    unsigned mask = __ballot_sync(0xffffffff, active);
+    // inclusive scan
+    int x = loop_times;
+    for (int offset = 1; offset < warpSize; offset <<= 1) {
+      int y = __shfl_up_sync(mask, x, offset);
+      if (lane >= offset) x += y;
+    }
+    int excl = x - loop_times;                           // exclusive prefix
+    int tile_sum = __reduce_add_sync(mask, loop_times);  // warp tile sum
+
+    // write batch_ids and tile_ids_per_batch
+    int base_offset;
+    if (lane == 0) {
+      base_offset = global_offset;
+    }
+    base_offset = __shfl_sync(mask, base_offset, 0);
+    if (active && loop_times > 0) {
+      int write_base = base_offset + excl;
+      // [write_base, write_base+loop_times)
+      for (int t = 0; t < loop_times; ++t) {
+        int pos = write_base + t;
+        batch_ids[pos] = bid;
+        tile_ids_per_batch[pos] = t;
+      }
+    }
+
+    // for next warp tile
+    if (lane == 0) {
+      global_offset += tile_sum;
+    }
+    __syncthreads();
+  }
+
+  if (threadIdx.x == 0) {
+    *num_blocks_x = global_offset;
+  }
+}
+
 __global__ void split_q_block(const int *__restrict__ seq_lens_q,
                               const int *__restrict__ seq_lens_encoder,
                               int *__restrict__ batch_ids,
@@ -404,7 +473,7 @@ void GetBlockShapeAndSplitKVBlock(
         PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_tile_ids_per_batch.data<int>(), 0, decoder_batch_shape * sizeof(int32_t), stream));
         PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_num_blocks_device.data<int>(), 0, sizeof(int32_t), stream));
 
-        split_q_block<<<1, 32, 0, stream>>>(
+        split_q_block_dec<<<1, 32, 0, stream>>>(
             seq_lens_this_time.data<int>(),
             seq_lens_encoder.data<int>(),
             decoder_batch_ids.data<int>(),
@@ -416,8 +485,6 @@ void GetBlockShapeAndSplitKVBlock(
 
         decoder_num_blocks_cpu.copy_(
             decoder_num_blocks_device, decoder_num_blocks_cpu.place(), false);
-        PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
-            decoder_chunk_size_device.data<int>(), 64, sizeof(int32_t), stream));
     }
   } else {
       PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
