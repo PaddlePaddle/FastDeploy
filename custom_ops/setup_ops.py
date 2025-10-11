@@ -377,6 +377,7 @@ elif paddle.is_compiled_with_cuda():
 
     if cc >= 80:
         # append_attention
+        os.system("python gpu_ops/append_attn/autogen_template_instantiation.py")
         sources += ["gpu_ops/append_attention.cu"]
         sources += find_end_files("gpu_ops/append_attn", ".cu")
         # mla
