@@ -264,7 +264,8 @@ void SpeculateVerify(const paddle::Tensor& accept_tokens,
                      const paddle::Tensor& topp,
                      int max_seq_len,
                      int verify_window,
-                     bool enable_topp);
+                     bool enable_topp,
+                     bool benchmark_mode);
 
 void SpeculateClearAcceptNums(const paddle::Tensor& accept_num,
                               const paddle::Tensor& seq_lens_decoder);
@@ -983,6 +984,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("max_seq_len"),
         py::arg("verify_window"),
         py::arg("enable_topp"),
+        py::arg("benchmark_mode"),
         "Perform speculative verification for decoding");
 
   m.def("speculate_clear_accept_nums",

@@ -152,6 +152,8 @@ def xpu_setup_ops():
             if file.endswith(".cc"):
                 ops.append(os.path.join(root, file))
 
+    print(ops)
+    
     include_dirs = [
         os.path.join(base_dir, "./"),
         os.path.join(base_dir, "./plugin/include"),

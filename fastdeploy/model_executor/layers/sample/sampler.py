@@ -455,7 +455,15 @@ class SpeculativeSampler(nn.Layer):
         """ """
         super().__init__()
         if current_platform.is_cuda():
-            self.forward = self.forward_cuda
+            from fastdeploy.model_executor.ops.gpu import (
+                speculate_verify,
+                top_p_candidates,
+            )
+        elif current_platform.is_xpu():
+            from fastdeploy.model_executor.ops.xpu import (
+                speculate_verify,
+                top_p_candidates,
+            )
         else:
             raise NotImplementedError
         self.logprobs_mode = fd_config.model_config.logprobs_mode
@@ -582,8 +590,6 @@ class SpeculativeSampler(nn.Layer):
     ) -> paddle.Tensor:
         """ """
 
-        from fastdeploy.model_executor.ops.gpu import speculate_verify, top_p_candidates
-
         logits = apply_speculative_penalty_multi_scores(
             sampling_metadata.pre_token_ids,
             logits,
@@ -705,8 +711,8 @@ class MTPSampler(nn.Layer):
     def __init__(self, fd_config: FDConfig):
         """ """
         super().__init__()
-        if current_platform.is_cuda():
-            self.forward = self.forward_cuda
+        if current_platform.is_cuda() or current_platform.is_xpu():
+            self.forward = self.forward
         else:
             raise NotImplementedError
         self.logprobs_mode = fd_config.model_config.logprobs_mode

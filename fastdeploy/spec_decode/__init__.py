@@ -17,6 +17,6 @@ speculative decoding module
 
 from .base import Proposer
 from .mtp import MTPProposer
-from .ngram import NgramProposer
+# from .ngram import NgramProposer
 
 __all__ = ["Proposer", "MTPProposer", "NgramProposer"]

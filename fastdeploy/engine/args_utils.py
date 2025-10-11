@@ -1017,6 +1017,7 @@ class EngineArgs:
     def create_speculative_config(self) -> SpeculativeConfig:
         """ """
         speculative_args = asdict(self)
+        print("ch -- debug ", speculative_args)
         if self.speculative_config is not None:
             for k, v in self.speculative_config.items():
                 speculative_args[k] = v

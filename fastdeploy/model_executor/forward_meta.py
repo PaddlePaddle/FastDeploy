@@ -246,7 +246,10 @@ class XPUForwardMeta(ForwardMeta):
     total_enc_len: Optional[paddle.Tensor] = None
     # position embedding type in rope, supports 'NORMAL' or 'HALF_HEAD_DIM'
     pos_emb_type: Optional[str] = "NORMAL"
-
+    #
+    len_info_cpu = None
+    #
+    valid_bs_cpu = None
 
 @dataclass
 class DCUForwardMeta(ForwardMeta):

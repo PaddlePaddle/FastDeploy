@@ -34,19 +34,33 @@ from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import MTPSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.models import ModelForCasualLM
-from fastdeploy.model_executor.ops.gpu import (
-    draft_model_postprocess,
-    draft_model_preprocess,
-    draft_model_update,
-    eagle_get_hidden_states,
-    eagle_get_self_hidden_states,
-    hybrid_mtp_ngram,
-    mtp_save_first_token,
-    mtp_step_paddle,
-    share_external_data,
-    speculate_get_logits,
-    speculate_save_output_topk,
-)
+if paddle.is_compiled_with_xpu():
+    from fastdeploy.model_executor.ops.xpu import (
+        draft_model_postprocess,
+        draft_model_preprocess,
+        draft_model_update,
+        eagle_get_hidden_states,
+        eagle_get_self_hidden_states,
+        # hybrid_mtp_ngram,
+        mtp_save_first_token,
+        mtp_step_paddle,
+        share_external_data,
+    )
+else:
+    from fastdeploy.model_executor.ops.gpu import (
+        draft_model_postprocess,
+        draft_model_preprocess,
+        draft_model_update,
+        eagle_get_hidden_states,
+        eagle_get_self_hidden_states,
+        hybrid_mtp_ngram,
+        mtp_save_first_token,
+        mtp_step_paddle,
+        share_external_data,
+        speculate_get_logits,
+        speculate_save_output_topk,
+    )
+
 from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
 
 from .base import Proposer
@@ -245,7 +259,8 @@ class MTPProposer(Proposer):
         )
         self.model_inputs["decoder_num_blocks_cpu"] = paddle.zeros_like(
             self.target_model_inputs["decoder_num_blocks_cpu"]
-        ).pin_memory()
+        ).cpu()
+        # ).pin_memory()
         self.model_inputs["decoder_num_blocks_device"] = paddle.zeros_like(
             self.target_model_inputs["decoder_num_blocks_device"]
         )

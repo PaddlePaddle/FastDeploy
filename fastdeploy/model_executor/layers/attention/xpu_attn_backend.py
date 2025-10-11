@@ -72,6 +72,8 @@ class XPUAttentionBackend(AttentionBackend):
         kv_num_heads: int,
         num_heads: int,
         head_dim: int,
+        encoder_block_shape_q: int = -1, # do not use now
+        decoder_block_shape_q: int = -1, # do not use now
     ):
         """
         XPUAttentionBackend __init__

@@ -56,6 +56,15 @@ elif current_platform.is_maca():
         update_inputs,
         update_inputs_v1,
     )
+elif current_platform.is_xpu():
+    from fastdeploy.model_executor.ops.xpu import (
+        get_padding_offset,
+        save_output,
+        set_stop_value_multi_ends,
+        step_paddle,
+        update_inputs,
+        update_inputs_v1,
+    )
 elif current_platform.is_intel_hpu():
     pass
 else:

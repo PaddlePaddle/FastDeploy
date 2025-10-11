@@ -75,6 +75,7 @@ class XpuWorker(WorkerBase):
         self.model_runner: XPUModelRunner = XPUModelRunner(
             fd_config=self.fd_config,
             device=self.device,
+            device_id=self.device_ids[self.local_rank % len(self.device_ids)],
             rank=self.rank,
             device_id=self.device_id,
             local_rank=self.local_rank,
@@ -165,9 +166,9 @@ class XpuWorker(WorkerBase):
         and workers and modelrunners should not perceive it.
         """
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            self.model_runner.insert_tasks_v1(req_dicts=req_dicts)
+            self.model_runner.insert_tasks_v1(req_dicts=req_dicts, num_running_requests=num_running_requests)
         else:
-            self.model_runner.insert_prefill_inputs(req_dicts=req_dicts)
+            self.model_runner.insert_prefill_inputs(req_dicts=req_dicts, num_running_requests=num_running_requests)
 
     def graph_optimize_and_warm_up_model(self) -> None:
         """
