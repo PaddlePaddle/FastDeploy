@@ -119,6 +119,7 @@ class OpenAIServing(ABC, Generic[RequestT]):
         param: Optional[str] = None,
     ) -> ErrorResponse:
         """Create standardized error response"""
+        traceback.print_exc()
         api_server_logger.error(message)
         return ErrorResponse(error=ErrorInfo(message=message, type=error_type, code=code, param=param))
 

@@ -20,15 +20,9 @@ from typing import Literal, Union
 import numpy as np
 from typing_extensions import assert_never, override
 
-from fastdeploy.engine.request import EmbeddingOutput, EmbeddingRequestOutput
-from fastdeploy.entrypoints.openai.protocol import (
-    EmbeddingRequest,
-    EmbeddingResponse,
-    EmbeddingResponseData,
-    UsageInfo,
-)
+from fastdeploy.engine.request import EmbeddingOutput
+from fastdeploy.entrypoints.openai.protocol import EmbeddingRequest, EmbeddingResponse
 from fastdeploy.entrypoints.openai.serving_engine import ServeContext, ZmqOpenAIServing
-from fastdeploy.utils import api_server_logger
 
 
 def _get_embedding(
@@ -76,28 +70,39 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
     def _build_response(self, ctx: ServeContext):
         """Generate final embedding response"""
 
-        embedding_res = EmbeddingRequestOutput.from_base(ctx.request_output)
-
-        data = EmbeddingResponseData(
-            index=0,
-            embedding=_get_embedding(embedding_res.outputs, ctx.request.encoding_format),
-        )
-
-        api_server_logger.info(f"[{ctx.request_id}] Embedding response generated:{ctx.request_output}")
-
-        num_prompt_tokens = 0
-        if ctx.request_output.prompt_token_ids:
-            num_prompt_tokens = len(ctx.request_output.prompt_token_ids)
-
-        usage = UsageInfo(
-            prompt_tokens=num_prompt_tokens,
-            total_tokens=num_prompt_tokens,
-        )
+        print(f"=====> {ctx.request_output} <======")
 
         return EmbeddingResponse(
-            id=ctx.request_id,
-            created=ctx.created_time,
-            model=ctx.model_name,
-            data=[data],
-            usage=usage,
+            id="123",
+            created=123,
+            model="ctx.model_name",
+            data=[],
+            usage=None,
         )
+
+        # base = PoolingRequestOutput.from_dict(ctx.request_output)
+        # embedding_res = EmbeddingRequestOutput.from_base(base)
+
+        # data = EmbeddingResponseData(
+        #     index=0,
+        #     embedding=_get_embedding(embedding_res.outputs, ctx.request.encoding_format),
+        # )
+
+        # api_server_logger.info(f"[{ctx.request_id}] Embedding response generated:{ctx.request_output}")
+
+        # num_prompt_tokens = 0
+        # if ctx.request_output.prompt_token_ids:
+        #     num_prompt_tokens = len(ctx.request_output.prompt_token_ids)
+
+        # usage = UsageInfo(
+        #     prompt_tokens=num_prompt_tokens,
+        #     total_tokens=num_prompt_tokens,
+        # )
+
+        # return EmbeddingResponse(
+        #     id=ctx.request_id,
+        #     created=ctx.created_time,
+        #     model=ctx.model_name,
+        #     data=[data],
+        #     usage=usage,
+        # )
