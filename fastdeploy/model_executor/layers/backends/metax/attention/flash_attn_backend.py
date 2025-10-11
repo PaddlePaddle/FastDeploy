@@ -1,4 +1,3 @@
-"""
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""
 
 from __future__ import annotations
 
@@ -261,27 +259,9 @@ class FlashAttentionBackend(AttentionBackend):
         forward_meta: ForwardMeta,
         cu_seqlens_q: paddle.Tensor,
         batch_ids=None,
-        is_decode=False,
     ):
-        q_end = self.num_heads * self.head_dim
-        k_end = q_end + self.kv_num_heads * self.head_dim
-        v_end = k_end + self.kv_num_heads * self.head_dim
-        assert v_end == qkv.shape[-1], f"Shape mismatch: {v_end} vs {qkv.shape[-1]}"
-        assert qkv.shape[0] == cu_seqlens_q[-1], f"Shape mismatch: {qkv.shape[0]} vs {cu_seqlens_q[-1]}"
-
-        if batch_ids is None:
-            batch_ids = list(range(forward_meta.seq_lens_this_time.shape[0]))
-
-        q = qkv[..., 0:q_end]
-        k = qkv[..., q_end:k_end]
-        v = qkv[..., k_end:v_end]
-
-        q = q.view([-1, self.num_heads, self.head_dim])
-        k = k.view([-1, self.kv_num_heads, self.head_dim])
-        v = v.view([-1, self.kv_num_heads, self.head_dim])
-
-        if is_decode:
-            return q, k, v
+        qkv = qkv.view([-1, self.num_heads + self.kv_num_heads * 2, self.head_dim])
+        q, k, v = qkv.split(num_or_sections=[self.num_heads, self.kv_num_heads, self.kv_num_heads], axis=-2)
 
         for idx in range(len(cu_seqlens_q) - 1):
             batch_idx = batch_ids[idx]
@@ -375,41 +355,6 @@ class FlashAttentionBackend(AttentionBackend):
                         cache_start += self.block_size
             tensor_start = tensor_end
 
-    def merge_output(self, prefill_out, decode_out, forward_meta: ForwardMeta):
-        assert not (prefill_out is None and decode_out is None), "prefill and decode output cannot both be None"
-        if prefill_out is None:
-            return decode_out
-        elif decode_out is None:
-            return prefill_out
-        else:
-            prefill_out = prefill_out
-            decode_out = decode_out
-
-            merged_output = []
-            prefill_tensor_start = 0
-            decode_tensor_start = 0
-            for seq_lens_this_time in forward_meta.seq_lens_this_time:
-                if seq_lens_this_time == 0:
-                    continue
-                if seq_lens_this_time > 1:
-                    tensor_end = prefill_tensor_start + seq_lens_this_time
-                    merged_output.append(prefill_out[prefill_tensor_start:tensor_end, :, :])
-                    prefill_tensor_start = tensor_end
-                else:
-                    assert seq_lens_this_time == 1
-                    tensor_end = decode_tensor_start + seq_lens_this_time
-                    merged_output.append(decode_out[decode_tensor_start:tensor_end, :, :])
-                    decode_tensor_start = tensor_end
-
-            assert (
-                prefill_tensor_start == prefill_out.shape[0]
-            ), f"prefill merged unfinished: {prefill_tensor_start} vs {prefill_out.shape[0]}"
-            assert (
-                decode_tensor_start == decode_out.shape[0]
-            ), f"decode merged unfinished: {decode_tensor_start} vs {decode_out.shape[0]}"
-            merged_output = paddle.concat(merged_output, axis=0)
-            return merged_output
-
     def forward_prefill(self, prefill_qkv, layer_id, k_cache_id, v_cache_id, forward_meta: ForwardMeta):
 
         prefill_q, prefill_k, prefill_v = self.get_splited_qkv(
@@ -438,23 +383,17 @@ class FlashAttentionBackend(AttentionBackend):
         return prefill_out
 
     def forward_decode(self, decode_qkv, k_cache_id, v_cache_id, forward_meta: ForwardMeta):
-        cache_k = forward_meta.caches[k_cache_id]
-        cache_v = forward_meta.caches[v_cache_id]
-        cu_seq_lens = list(range(self.decode_len + 1))
-
-        q, k, v = self.get_splited_qkv(decode_qkv, forward_meta, cu_seq_lens, self.batch_ids_decode, is_decode=True)
-        decoder_q = q.view([self.decode_len, 1, self.num_heads, self.head_dim])
-        decoder_k_ = k.view([self.decode_len, 1, self.kv_num_heads, self.head_dim])
-        decoder_v_ = v.view([self.decode_len, 1, self.kv_num_heads, self.head_dim])
+        qkv = decode_qkv.view([-1, 1, self.num_heads + self.kv_num_heads * 2, self.head_dim])
+        q, k, v = qkv.split(num_or_sections=[self.num_heads, self.kv_num_heads, self.kv_num_heads], axis=-2)
 
         decode_out = flash_attn_kvcache_func(
-            decoder_q,
-            cache_k,
-            cache_v,
+            q,
+            forward_meta.caches[k_cache_id],
+            forward_meta.caches[v_cache_id],
             self.seq_lens_dec,
             self.block_table_dec,
-            decoder_k_,
-            decoder_v_,
+            k,
+            v,
             rotary_cos=forward_meta.rotary_embs[0, 0, :, 0, :].astype("bfloat16"),
             rotary_sin=forward_meta.rotary_embs[1, 0, :, 0, :].astype("bfloat16"),
             causal=self.causal,

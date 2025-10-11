@@ -92,36 +92,43 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
     async def test_integration_with_chat_stream_generator(self, mock_processor_class, mock_logger):
         response_data = [
             {
+                "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [1], "text": "a", "top_logprobs": None},
                 "metrics": {"first_token_time": 0.1, "inference_start_time": 0.1},
                 "finished": False,
             },
             {
+                "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [2], "text": "b", "top_logprobs": None},
                 "metrics": {"arrival_time": 0.2, "first_token_time": None},
                 "finished": False,
             },
             {
+                "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [3], "text": "c", "top_logprobs": None},
                 "metrics": {"arrival_time": 0.3, "first_token_time": None},
                 "finished": False,
             },
             {
+                "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [4], "text": "d", "top_logprobs": None},
                 "metrics": {"arrival_time": 0.4, "first_token_time": None},
                 "finished": False,
             },
             {
+                "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [5], "text": "e", "top_logprobs": None},
                 "metrics": {"arrival_time": 0.5, "first_token_time": None},
                 "finished": False,
             },
             {
+                "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [6], "text": "f", "top_logprobs": None},
                 "metrics": {"arrival_time": 0.6, "first_token_time": None},
                 "finished": False,
             },
             {
+                "request_id": "test_request_id_0",
                 "outputs": {"token_ids": [7], "text": "g", "top_logprobs": None},
                 "metrics": {"arrival_time": 0.7, "first_token_time": None, "request_start_time": 0.1},
                 "finished": True,
@@ -200,13 +207,13 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         response_data = [
             [
                 {
-                    "request_id": "test-request-id-0",
+                    "request_id": "test-request-id_0",
                     "outputs": {"token_ids": [1], "text": "a", "top_logprobs": None},
                     "metrics": {"first_token_time": 0.1, "inference_start_time": 0.1},
                     "finished": False,
                 },
                 {
-                    "request_id": "test-request-id-0",
+                    "request_id": "test-request-id_0",
                     "outputs": {"token_ids": [2], "text": "b", "top_logprobs": None},
                     "metrics": {"arrival_time": 0.2, "first_token_time": None},
                     "finished": False,
@@ -214,7 +221,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             ],
             [
                 {
-                    "request_id": "test-request-id-0",
+                    "request_id": "test-request-id_0",
                     "outputs": {"token_ids": [7], "text": "g", "top_logprobs": None},
                     "metrics": {"arrival_time": 0.7, "first_token_time": None, "request_start_time": 0.1},
                     "finished": True,
