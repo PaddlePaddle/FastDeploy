@@ -101,7 +101,6 @@ class Attention(nn.Layer):
 
         self.out_scale: float = out_scale
         self.use_neox_rotary_style: bool = use_neox_rotary_style
-        print("cov report debug!")
         if fd_config.quant_config and hasattr(fd_config.quant_config, "kv_cache_quant_type"):
             self.quant_method: QuantMethodBase = fd_config.quant_config.get_quant_method(self)
         else:
