@@ -41,7 +41,7 @@
 - 🤝 **OpenAI API服务与vLLM兼容**：单命令部署，兼容[vLLM](https://github.com/vllm-project/vllm/)接口
 - 🧮 **全量化格式支持**：W8A16、W8A8、W4A16、W4A8、W2A16、FP8等
 - ⏩ **高级加速技术**：推测解码、多令牌预测（MTP）及分块预填充
-- 🖥️ **多硬件支持**：NVIDIA GPU、昆仑芯XPU、海光DCU、昇腾NPU、天数智芯GPU、燧原GCU、沐曦GPU等
+- 🖥️ **多硬件支持**：NVIDIA GPU、昆仑芯XPU、海光DCU、昇腾NPU、天数智芯GPU、燧原GCU、沐曦GPU、英特尔Gaudi等
 
 ## 要求
 
@@ -58,6 +58,7 @@ FastDeploy 支持在**英伟达（NVIDIA）GPU**、**昆仑芯（Kunlunxin）XPU
 - [燧原 S60](./docs/zh/get_started/installation/Enflame_gcu.md)
 - [海光 DCU](./docs/zh/get_started/installation/hygon_dcu.md)
 - [沐曦 GPU](./docs/zh/get_started/installation/metax_gpu.md)
+- [英特尔 Gaudi](./docs/zh/get_started/installation/intel_gaudi.md)
 
 **注意:** 我们正在积极拓展硬件支持范围。目前，包括昇腾（Ascend）NPU 等其他硬件平台正在开发测试中。敬请关注更新！
 

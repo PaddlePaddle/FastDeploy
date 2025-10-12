@@ -218,7 +218,7 @@ class CacheMessager:
         try:
             prefilled_step_idx_data = np.zeros(shape=[1], dtype=np.int32)
             prefilled_layer_idx_data = np.zeros(shape=[1], dtype=np.int32)
-            prefilled_layer_name = f"splitwise_complete_prefilled_step_{self.rank_id}.{self.gpu_id}"
+            prefilled_layer_name = f"splitwise_complete_prefilled_layer_{self.rank_id}.{self.gpu_id}"
             prefilled_step_name = f"splitwise_complete_prefilled_step_{self.rank_id}.{self.gpu_id}"
             step_shm_value = IPCSignal(
                 name=f"splitwise_complete_prefilled_step_{self.rank_id}",
@@ -267,7 +267,6 @@ class CacheMessager:
                             self.cache_info[info["request_id"]] = info
                 prefilled_layer_idx = layer_shm_value.value[0]
                 prefilled_step_idx = step_shm_value.value[0]
-                logger.info(f"prefilled_layer_idx: {prefilled_layer_idx}, prefilled_step_idx: {prefilled_step_idx}")
                 if prefilled_layer_idx == self.num_layers - 1:
                     time.sleep(0.001)
                     prefilled_layer_idx = layer_shm_value.value[0]

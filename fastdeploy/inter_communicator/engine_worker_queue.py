@@ -101,6 +101,9 @@ class EngineWorkerQueue:
             self.finish_request_barrier = [
                 threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
             ]
+            self.worker_process_tp_barrier = [
+                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
+            ]
 
             self.finish_add_cache_task_barrier = [
                 threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
@@ -189,9 +192,15 @@ class EngineWorkerQueue:
                 "get_finish_request_barrier",
                 callable=lambda idx: self.finish_request_barrier[idx],
             )
+
             QueueManager.register(
                 "get_finish_add_cache_task_barrier",
                 callable=lambda idx: self.finish_add_cache_task_barrier[idx],
+            )
+
+            QueueManager.register(
+                "get_worker_process_tp_barrier",
+                callable=lambda idx: self.worker_process_tp_barrier[idx],
             )
             self.manager: BaseManager = QueueManager(address=self.address, authkey=self.authkey)
             self.manager.start()
@@ -217,6 +226,7 @@ class EngineWorkerQueue:
             QueueManager.register("get_connect_rdma_tasks")
             QueueManager.register("get_connect_rdma_tasks_responses")
             QueueManager.register("get_connect_task_lock")
+            QueueManager.register("get_worker_process_tp_barrier")
             self.manager = QueueManager(address=self.address, authkey=self.authkey)
             self._connect_with_retry()
 
@@ -239,6 +249,7 @@ class EngineWorkerQueue:
             self.finish_add_cache_task_barrier = self.manager.get_finish_add_cache_task_barrier(
                 self.local_data_parallel_id
             )
+            self.worker_process_tp_barrier = self.manager.get_worker_process_tp_barrier(self.local_data_parallel_id)
             self.finished_req_queue = self.manager.get_finish_request_queue(self.local_data_parallel_id)
             self.finished_add_cache_task_queue = self.manager.get_finish_add_cache_task_queue(
                 self.local_data_parallel_id
@@ -502,6 +513,13 @@ class EngineWorkerQueue:
             item.append(self.disaggregate_requests.get())
         llm_logger.debug("get tasks from queue success")
         return item
+
+    def clear_data(self):
+        self.lock.acquire()
+        self.tasks[:] = list()
+        self.client_read_flag[:] = [1] * self.num_client
+        self.lock.release()
+        llm_logger.info("clear data for engine worker queue")
 
     def cleanup(self):
         """

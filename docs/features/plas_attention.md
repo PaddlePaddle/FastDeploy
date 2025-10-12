@@ -15,7 +15,7 @@ In terms of training efficiency, the training cost is very low because only the 
 Following the approaches of NSA and MoBA, we partition the KV into multiple blocks. During both the prefill and decode stages, instead of performing attention computation over all KV, we dynamically select the top-K blocks with the highest attention scores for each query token, thereby enabling efficient sparse attention computation.
 
 <div align="center">
-<img src="images/plas_training_distill.png" alt="Attention Gate Module" width="60%">
+<img src="./images/plas_training_distill.png" alt="Attention Gate Module" width="60%">
 </div>
 
 * **Attention Gate Module**: As illustrated in the figure above, to estimate the importance of each block with low computational overhead, we design a lightweight attention gate module. This module first compresses each K block via a MLP layer to generate a representative low-dimensional representation: $K_c^T=W_{kp}K^T$, where $W_{kp}$ denotes the MLP layer weights. Compared to directly applying mean pooling, the learnable MLP can more effectively capture semantic relationships and importance distributions among different tokens, thereby providing a refined representation of each block. After obtaining the compressed representation $K_c$, the importance of each query token with respect to each block is estimated via: $Softmax(Q\cdot K_c^T)$. To enhance the discriminative ability of the MLP layer, we use the full attention result after 1D max pooling $1DMaxPooling(Softmax(Q \cdot K^T))$ as the ground truth. By minimizing the distribution divergence between the two, the MLP layer is guided to learn feature representations that better align with the true attention distribution.
@@ -27,7 +27,7 @@ Following the approaches of NSA and MoBA, we partition the KV into multiple bloc
 During sparse attention computation, each query token may dynamically select different KV blocks, leading to highly irregular memory access patterns in HBM. It is feasible to simply process each query token separately, but it will lead to excessively fine-grained computing, which cannot make full use of the tensor core, thus significantly reducing the GPU computing efficiency.
 
 <div align="center">
-<img src="images/plas_inference_union.png" alt="Token/Head Union" width="60%">
+<img src="./images/plas_inference_union.png" alt="Token/Head Union" width="60%">
 </div>
 
 To optimize performance in both the prefill and decode stages, we design a special joint strategy to adapt to their respective characteristics:
@@ -196,7 +196,7 @@ We selected a subset (longbook_sum_eng) from InfiniteBench as the performance ev
 ## Usage
 
 ```
-export FD_ATTENTION_BACKEND="MOBA_ATTN"
+export FD_ATTENTION_BACKEND="PLAS_ATTN"
 
 python -m fastdeploy.entrypoints.openai.api_server
     --model baidu/ERNIE-4.5-300B-A47B-Paddle  \
@@ -207,13 +207,13 @@ python -m fastdeploy.entrypoints.openai.api_server
     --max-num-batched-tokens 8192 \
     --max-model-len 131072 \
     --max-num-seqs 32 \
-    --moba-attention-config '{"moba_encoder_top_k_left": 50, "moba_encoder_top_k_right": 60, "moba_decoder_top_k_left": 100, "moba_decoder_top_k_right": 120}'
+    --plas-attention-config '{"plas_encoder_top_k_left": 50, "plas_encoder_top_k_right": 60, "plas_decoder_top_k_left": 100, "plas_decoder_top_k_right": 120}'
 ```
 
-**Note**: If sparse attention is enabled, the system will automatically load the MLP weights from `moba_mlp_weight.safetensors` in the weight directory. If the MLP weight file is not found, mean pooling will be applied to the key representations.
+**Note**: If sparse attention is enabled, the system will automatically load the MLP weights from `plas_attention_mlp_weight.safetensors` in the weight directory. If the MLP weight file is not found, mean pooling will be applied to the key representations.
 
 **Parameter Description:**
 
-* Setting `FD_ATTENTION_BACKEND="MOBA_ATTN"` enables MOBA sparse attention.
-* `moba_encoder_top_k_left=50, moba_encoder_top_k_right=60` indicates that the range of top-k is between 50 and 60 when the encoder is sparse.
-* `moba_decoder_top_k_left=100, moba_decoder_top_k_right=120` indicates that the range of top-k is between 100 and 120 when the decoder is sparse.
+* Setting `FD_ATTENTION_BACKEND="PLAS_ATTN"` enables PLAS sparse attention.
+* `plas_encoder_top_k_left=50, plas_encoder_top_k_right=60` indicates that the range of top-k is between 50 and 60 when the encoder is sparse.
+* `plas_decoder_top_k_left=100, plas_decoder_top_k_right=120` indicates that the range of top-k is between 100 and 120 when the decoder is sparse.

@@ -22,7 +22,6 @@ import paddle.nn as nn
 
 from fastdeploy.config import ModelConfig
 from fastdeploy.model_executor.layers.activation import get_act_fn
-from fastdeploy.model_executor.models.interfaces_base import is_pooling_model
 from fastdeploy.transformer_utils.config import get_hf_file_to_dict
 
 _T = TypeVar("_T", bound=type[nn.Layer])
@@ -191,6 +190,8 @@ def as_embedding_model(cls: _T) -> _T:
         please implement your own model if this is not the case.
     """
     # Avoid modifying existing embedding models
+    from fastdeploy.model_executor.models.interfaces_base import is_pooling_model
+
     if is_pooling_model(cls):
         return cls
 

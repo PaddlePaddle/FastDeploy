@@ -224,6 +224,7 @@ class ModelConfig:
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
         self.ori_vocab_size = args.get("ori_vocab_size", self.vocab_size)
+        self.think_end_id = args.get("think_end_id", -1)
 
         architectures = self.architectures[0]
 
@@ -519,7 +520,6 @@ class ParallelConfig:
     ):
         self.sequence_parallel = False  # Whether to enable sequence parallelism.
         self.use_ep = False  # Whether to enable Expert Parallelism
-        self.moe_phase = MoEPhase("prefill")  # Generation phase
         self.msg_queue_id = 1  # message queue id
 
         self.tensor_parallel_rank = 0  # TP rank ID
@@ -542,8 +542,6 @@ class ParallelConfig:
         self.block_size: int = 64
         # Engine worker queue port
         self.engine_worker_queue_port: str = "9923"
-        # Max model len
-        self.max_model_len: int = 3072  # max_seq_len
         # cuda visible devices
         self.device_ids: str = "0"
         # Input dtype
@@ -602,13 +600,11 @@ class ParallelConfig:
             )
         )
         dist.collective._set_custom_gid(None)
-
         # same ep group id
         if self.enable_expert_parallel:
             dist.collective._set_custom_gid(self.data_parallel_size + tp_gid_offset)
             self.ep_group = dist.new_group(range(self.expert_parallel_size))
             dist.collective._set_custom_gid(None)
-
         logger.info(
             f"data_parallel_size: {self.data_parallel_size}, tensor_parallel_size: {self.tensor_parallel_size}, expert_parallel_size: {self.expert_parallel_size}, data_parallel_rank: {self.data_parallel_rank}, tensor_parallel_rank: {self.tensor_parallel_rank}, expert_parallel_rank: {self.expert_parallel_rank}, tp_group: {self.tp_group}."
         )
@@ -841,8 +837,13 @@ class GraphOptimizationConfig:
         Now don't support capture both decode-only and prefill-only"""
         self.full_cuda_graph: bool = True
 
+        """ Maximum CUDA Graph capture size """
         self.max_capture_size: int = None
+        """ Record maps mapped from real shape to captured size to reduce runtime overhead """
         self.real_shape_to_captured_size: dict[int, int] = None
+        """ Whether to use shared memory pool for multi capture_size """
+        self.use_unique_memory_pool: bool = False
+
         # CINN Config ...
         if args is not None:
             for key, value in args.items():
@@ -945,63 +946,63 @@ class GraphOptimizationConfig:
             argument = self.use_cudagraph
 
 
-class MobaAttentionConfig:
+class PlasAttentionConfig:
     def __init__(
         self,
         args,
     ):
-        self.moba_encoder_top_k_left: int = None
-        self.moba_encoder_top_k_right: int = None
-        "The sparse topk of encoder attention is located at [moba_encoder_top_k_left, moba_encoder top_k_right]"
-        self.moba_decoder_top_k_left: int = None
-        self.moba_decoder_top_k_right: int = None
-        "The sparse topk of decoder attention is located at [moba_decoder_top_k_left, moba_decoder top_k_right]"
-        self.moba_use_encoder_seq_limit: int = None
-        "When the number of encdoer token is less than moba_use_encoder_seq_limit, it is not sparse"
-        self.moba_use_decoder_seq_limit: int = None
-        "When the number of decdoer token is less than moba_use_decoder_seq_limit, it is not sparse"
-        self.moba_block_size: int = 128
-        self.mlp_weight_name: str = "moba_mlp_weight.safetensors"
-        self.moba_max_seq_length: int = 128 * 1024
+        self.plas_encoder_top_k_left: int = None
+        self.plas_encoder_top_k_right: int = None
+        "The sparse topk of encoder attention is located at [plas_encoder_top_k_left, plas_encoder top_k_right]"
+        self.plas_decoder_top_k_left: int = None
+        self.plas_decoder_top_k_right: int = None
+        "The sparse topk of decoder attention is located at [plas_decoder_top_k_left, plas_decoder top_k_right]"
+        self.plas_use_encoder_seq_limit: int = None
+        "When the number of encdoer token is less than plas_use_encoder_seq_limit, it is not sparse"
+        self.plas_use_decoder_seq_limit: int = None
+        "When the number of decdoer token is less than plas_use_decoder_seq_limit, it is not sparse"
+        self.plas_block_size: int = 128
+        self.mlp_weight_name: str = "plas_attention_mlp_weight.safetensors"
+        self.plas_max_seq_length: int = 128 * 1024
         if args is not None:
             for key, value in args.items():
                 if hasattr(self, key):
                     setattr(self, key, value)
-            if self.moba_use_encoder_seq_limit is None and self.moba_encoder_top_k_left is not None:
-                self.moba_use_encoder_seq_limit = self.moba_encoder_top_k_left * self.moba_block_size
-            if self.moba_use_decoder_seq_limit is None and self.moba_decoder_top_k_left is not None:
-                self.moba_use_decoder_seq_limit = self.moba_decoder_top_k_left * self.moba_block_size
+            if self.plas_use_encoder_seq_limit is None and self.plas_encoder_top_k_left is not None:
+                self.plas_use_encoder_seq_limit = self.plas_encoder_top_k_left * self.plas_block_size
+            if self.plas_use_decoder_seq_limit is None and self.plas_decoder_top_k_left is not None:
+                self.plas_use_decoder_seq_limit = self.plas_decoder_top_k_left * self.plas_block_size
             self.check_legality_parameters()
 
     def check_legality_parameters(
         self,
     ) -> None:
-        if self.moba_encoder_top_k_left is not None:
-            assert self.moba_encoder_top_k_left > 0, "moba_encoder_top_k_left must large than 0"
+        if self.plas_encoder_top_k_left is not None:
+            assert self.plas_encoder_top_k_left > 0, "plas_encoder_top_k_left must large than 0"
 
-        if self.moba_encoder_top_k_right is not None:
-            assert self.moba_encoder_top_k_right > 0, "moba_encoder_top_k_right must large than 0"
+        if self.plas_encoder_top_k_right is not None:
+            assert self.plas_encoder_top_k_right > 0, "plas_encoder_top_k_right must large than 0"
             assert (
-                self.moba_encoder_top_k_right >= self.moba_encoder_top_k_left
-            ), "moba_encoder_top_k_right must large than moba_encoder_top_k_left"
+                self.plas_encoder_top_k_right >= self.plas_encoder_top_k_left
+            ), "plas_encoder_top_k_right must large than plas_encoder_top_k_left"
 
-        if self.moba_decoder_top_k_left is not None:
-            assert self.moba_decoder_top_k_left > 0, "moba_decoder_top_k_left must large than 0"
+        if self.plas_decoder_top_k_left is not None:
+            assert self.plas_decoder_top_k_left > 0, "plas_decoder_top_k_left must large than 0"
 
-        if self.moba_decoder_top_k_right is not None:
-            assert self.moba_decoder_top_k_right > 0, "moba_decoder_top_k_right must large than 0"
+        if self.plas_decoder_top_k_right is not None:
+            assert self.plas_decoder_top_k_right > 0, "plas_decoder_top_k_right must large than 0"
             assert (
-                self.moba_decoder_top_k_right >= self.moba_decoder_top_k_left
-            ), "moba_decoder_top_k_right must large than moba_decoder_top_k_left"
+                self.plas_decoder_top_k_right >= self.plas_decoder_top_k_left
+            ), "plas_decoder_top_k_right must large than plas_decoder_top_k_left"
 
-        if self.moba_use_encoder_seq_limit is not None and self.moba_encoder_top_k_left is not None:
-            assert self.moba_use_encoder_seq_limit >= self.moba_encoder_top_k_left * self.moba_block_size
-        if self.moba_use_decoder_seq_limit is not None and self.moba_decoder_top_k_left is not None:
-            assert self.moba_use_decoder_seq_limit >= self.moba_decoder_top_k_left * self.moba_block_size
+        if self.plas_use_encoder_seq_limit is not None and self.plas_encoder_top_k_left is not None:
+            assert self.plas_use_encoder_seq_limit >= self.plas_encoder_top_k_left * self.plas_block_size
+        if self.plas_use_decoder_seq_limit is not None and self.plas_decoder_top_k_left is not None:
+            assert self.plas_use_decoder_seq_limit >= self.plas_decoder_top_k_left * self.plas_block_size
 
     def to_json_string(self):
         """
-        Convert moba_attention_config to json string.
+        Convert plas_attention_config to json string.
         """
         return json.dumps({key: value for key, value in self.__dict__.items() if value is not None})
 
@@ -1186,9 +1187,7 @@ class CacheConfig:
             self.kv_cache_ratio = 1.0
         else:
             self.kv_cache_ratio = 0.75
-        self.enc_dec_block_num = (
-            0 if current_platform.is_iluvatar() or current_platform.is_maca() else envs.FD_ENC_DEC_BLOCK_NUM
-        )
+        self.enc_dec_block_num = 0 if current_platform.is_maca() else envs.FD_ENC_DEC_BLOCK_NUM
         self.prealloc_dec_block_slot_num_threshold = 12
         self.cache_dtype = "bfloat16"
         self.model_cfg = None
@@ -1398,10 +1397,9 @@ class FDConfig:
         decoding_config: DecodingConfig = None,
         quant_config: QuantConfigBase = None,
         graph_opt_config: GraphOptimizationConfig = None,
-        moba_attention_config: MobaAttentionConfig = None,
+        plas_attention_config: PlasAttentionConfig = None,
         speculative_config: SpeculativeConfig = None,
         tokenizer: str = None,
-        max_model_len: int = 8192,
         ips: str = None,
         use_warmup: bool = False,
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
@@ -1429,13 +1427,18 @@ class FDConfig:
         self.early_stop_config: Optional[EarlyStopConfig] = early_stop_config
         self.decoding_config: DecodingConfig = decoding_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
-        self.moba_attention_config: Optional[MobaAttentionConfig] = moba_attention_config
+        self.plas_attention_config: Optional[PlasAttentionConfig] = plas_attention_config
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.scheduler_config.max_num_seqs)
 
         if self.graph_opt_config.cudagraph_only_prefill:
             self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=512)
+        elif self.speculative_config is not None and self.speculative_config.method == "mtp":
+            max_shape = self.scheduler_config.max_num_seqs * (self.speculative_config.num_speculative_tokens + 1)
+            if max_shape % 2 == 1:
+                max_shape = max_shape + 1
+            self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=min(512, max_shape))
         else:
             self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=self.scheduler_config.max_num_seqs)
 
@@ -1464,7 +1467,6 @@ class FDConfig:
                 if ip == self.host_ip:
                     self.node_rank = idx
 
-        self.max_model_len = max_model_len
         self.limit_mm_per_prompt = limit_mm_per_prompt
         self.mm_processor_kwargs = mm_processor_kwargs
         self.use_warmup = use_warmup
@@ -1500,6 +1502,8 @@ class FDConfig:
         self.device_ids = os.getenv("CUDA_VISIBLE_DEVICES", self.device_ids)
         if current_platform.is_xpu():
             self.device_ids = os.getenv("XPU_VISIBLE_DEVICES", self.device_ids)
+        if current_platform.is_intel_hpu():
+            self.device_ids = os.getenv("HPU_VISIBLE_DEVICES", self.device_ids)
 
         self.read_from_config()
         self.postprocess()
@@ -1526,20 +1530,22 @@ class FDConfig:
         if self.scheduler_config.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
                 if paddle.is_compiled_with_xpu():
-                    self.scheduler_config.max_num_batched_tokens = self.max_model_len
+                    self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
                 else:
                     self.scheduler_config.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.cache_config.enable_chunked_prefill:
                     self.scheduler_config.max_num_batched_tokens = 2048
                 else:
-                    self.scheduler_config.max_num_batched_tokens = self.max_model_len
+                    self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
 
         if self.long_prefill_token_threshold == 0:
-            self.long_prefill_token_threshold = int(self.max_model_len * 0.04)
+            self.long_prefill_token_threshold = int(self.model_config.max_model_len * 0.04)
 
         self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
-        self.cache_config.max_block_num_per_seq = int(self.max_model_len // self.cache_config.block_size)
+        self.cache_config.max_block_num_per_seq = int(self.model_config.max_model_len // self.cache_config.block_size)
+        if self.model_config is not None and self.model_config.enable_mm:
+            self.cache_config.enable_prefix_caching = False
 
         if self.guided_decoding_backend == "auto":
             if current_platform.is_xpu() or self.speculative_config.method is not None:
@@ -1566,7 +1572,9 @@ class FDConfig:
             f"but now it's {self.scheduler_config.max_num_seqs}."
         )
         assert self.nnode >= 1, f"nnode: {self.nnode} should no less than 1"
-        assert self.max_model_len >= 16, f"max_model_len: {self.max_model_len} should be larger than 16"
+        assert (
+            self.model_config.max_model_len >= 16
+        ), f"max_model_len: {self.model_config.max_model_len} should be larger than 16"
         assert (
             self.scheduler_config.max_num_seqs >= 1
         ), f"max_num_seqs: {self.scheduler_config.max_num_seqs} should be larger than 1"
@@ -1575,10 +1583,11 @@ class FDConfig:
             f"should be larger than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs}"
         )
         assert (
-            self.scheduler_config.max_num_batched_tokens <= self.max_model_len * self.scheduler_config.max_num_seqs
+            self.scheduler_config.max_num_batched_tokens
+            <= self.model_config.max_model_len * self.scheduler_config.max_num_seqs
         ), (
             f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} should be larger"
-            f"than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs} * max_model_len: {self.max_model_len}"
+            f"than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs} * max_model_len: {self.model_config.max_model_len}"
         )
         assert (
             self.max_num_partial_prefills >= 1
@@ -1599,9 +1608,9 @@ class FDConfig:
 
         if not self.cache_config.enable_chunked_prefill:
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                assert self.scheduler_config.max_num_batched_tokens >= self.max_model_len, (
+                assert self.scheduler_config.max_num_batched_tokens >= self.model_config.max_model_len, (
                     f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} "
-                    f"should be larger than or equal to max_model_len: {self.max_model_len}"
+                    f"should be larger than or equal to max_model_len: {self.model_config.max_model_len}"
                 )
         else:
             assert self.scheduler_config.max_num_batched_tokens >= self.cache_config.block_size, (
@@ -1613,9 +1622,9 @@ class FDConfig:
             assert (
                 self.cache_config.enable_chunked_prefill is True
             ), "Chunked prefill must be enabled to set max_num_partial_prefills > 1"
-            assert self.long_prefill_token_threshold < self.max_model_len, (
+            assert self.long_prefill_token_threshold < self.model_config.max_model_len, (
                 f"long_prefill_token_threshold: {self.long_prefill_token_threshold} should be less than"
-                f" max_model_len: {self.max_model_len}"
+                f" max_model_len: {self.model_config.max_model_len}"
             )
 
         if self.guided_decoding_backend is not None:

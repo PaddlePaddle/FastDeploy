@@ -30,7 +30,7 @@ import paddle
 import zmq
 from opentelemetry import trace
 
-from fastdeploy.engine.request import Request, RequestOutput
+from fastdeploy.engine.request import Request, RequestOutput, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
 from fastdeploy.inter_communicator import (
@@ -68,6 +68,12 @@ class EngineService:
             cfg (Config): Config object containing all the configuration parameters.
         """
         self.cfg = cfg
+        if isinstance(self.cfg.cache_config.cache_queue_port, str):
+            self.cfg.cache_config.cache_queue_port = self.cfg.cache_config.cache_queue_port.split(",")
+        if isinstance(self.cfg.cache_config.cache_queue_port, list):
+            self.cfg.cache_config.cache_queue_port = int(
+                self.cfg.cache_config.cache_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+            )
 
         if self.cfg.parallel_config.enable_expert_parallel:
             self.llm_logger = get_logger(
@@ -77,6 +83,7 @@ class EngineService:
             self.llm_logger = llm_logger
 
         self.scheduler = cfg.scheduler_config.scheduler()
+        self.enable_decode_cache_task = envs.FD_ENABLE_CACHE_TASK == "1"
 
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.resource_manager = ResourceManagerV1(
@@ -187,10 +194,46 @@ class EngineService:
             create=True,
         )
 
+        cache_ready_signal_data = np.zeros(shape=[self.cfg.parallel_config.tensor_parallel_size], dtype=np.int32)
+        self.cache_ready_signal = IPCSignal(
+            name="cache_ready_signal",
+            array=cache_ready_signal_data,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
+        swap_space_ready_signal_data = np.zeros(shape=[self.cfg.parallel_config.tensor_parallel_size], dtype=np.int32)
+        self.swap_space_ready_signal = IPCSignal(
+            name="swap_space_ready_signal",
+            array=swap_space_ready_signal_data,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
         model_weights_status = np.zeros([1], dtype=np.int32)
         self.model_weights_status_signal = IPCSignal(
             name="model_weights_status",
             array=model_weights_status,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
+        prefix_tree_status = np.zeros([1], dtype=np.int32)
+        self.prefix_tree_status_signal = IPCSignal(
+            name="prefix_tree_status",
+            array=prefix_tree_status,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
+        kv_cache_status = np.zeros([1], dtype=np.int32)
+        self.kv_cache_status_signal = IPCSignal(
+            name="kv_cache_status",
+            array=kv_cache_status,
             dtype=np.int32,
             suffix=current_suffix,
             create=True,
@@ -214,11 +257,7 @@ class EngineService:
                 local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
             )
 
-            if (
-                self.cfg.cache_config.enable_prefix_caching
-                or self.cfg.scheduler_config.splitwise_role != "mixed"
-                and self.cfg.parallel_config.local_data_parallel_id == 0
-            ):
+            if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
                 self.cache_task_queue = EngineCacheQueue(
                     address=(
                         self.cfg.master_ip,
@@ -591,7 +630,7 @@ class EngineService:
                     available_blocks=available_blocks,
                     block_size=self.cfg.cache_config.block_size,
                     reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
-                    max_num_batched_tokens=self.cfg.max_model_len,
+                    max_num_batched_tokens=self.cfg.model_config.max_model_len,
                     batch=num_prefill_batch,
                 )
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
@@ -623,7 +662,7 @@ class EngineService:
                     for tmp_task in need_delete_tasks:
                         tasks.remove(tmp_task)
                         # release resource in P
-                        self.resource_manager.prerelease_resource(task)
+                        self.resource_manager.prerelease_resource(tmp_task)
                 if self.cfg.scheduler_config.splitwise_role == "prefill":
                     # to send cache info to cache messager
                     if tasks:
@@ -673,6 +712,21 @@ class EngineService:
                 tasks = self.resource_manager.schedule()
                 # 3. Send to engine
                 if tasks:
+                    if self.cfg.scheduler_config.splitwise_role == "decode":
+                        for task in tasks:
+                            if task.task_type == RequestType.PREEMPTED:
+                                msg = f"{task.request_id} decode not enough blocks, need to be rescheduled."
+                                self.llm_logger.error(msg)
+                                self.scheduler.put_results(
+                                    [
+                                        RequestOutput(
+                                            request_id=task.request_id,
+                                            finished=True,
+                                            error_code=500,
+                                            error_msg=msg,
+                                        )
+                                    ]
+                                )
                     self.resource_manager.get_real_bsz()
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
                 else:
@@ -919,7 +973,7 @@ class EngineService:
 
         threading.Thread(target=receiver_loop, daemon=True).start()
 
-    def start_cache_service(self, device_ids, ipc_signal_suffix):
+    def start_cache_service(self, device_ids, ipc_signal_suffix, create_cache_tensor):
         return self.resource_manager.cache_manager.launch_cache_manager(
             cache_config=self.cfg.cache_config,
             tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,
@@ -929,10 +983,23 @@ class EngineService:
                 self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
             ),
             pid_suffix=ipc_signal_suffix,
+            create_cache_tensor=create_cache_tensor,
         )
 
     def check_and_free_block_tables(self):
         self.resource_manager.check_and_free_block_tables()
+
+    def clear_data(self):
+        try:
+            llm_logger.info("Clear Data: Start")
+            self.token_processor.clear_data()
+            self.engine_worker_queue.clear_data()
+            self.zmq_server.req_dict.clear()
+            llm_logger.info("Clear Data: Successfully")
+            return True
+        except Exception as e:
+            llm_logger.error(f"Clear data error: {e}")
+            return False
 
     def _exit_sub_services(self):
         """
@@ -943,8 +1010,12 @@ class EngineService:
         self.exist_task_signal.clear()
         self.exist_swapped_task_signal.clear()
         self.worker_healthy_live_signal.clear()
+        self.cache_ready_signal.clear()
+        self.swap_space_ready_signal.clear()
         self.exist_prefill_task_signal.clear()
         self.model_weights_status_signal.clear()
+        self.prefix_tree_status_signal.clear()
+        self.kv_cache_status_signal.clear()
         if hasattr(self, "send_response_server") and self.send_response_server is not None:
             self.send_response_server.close()
         if hasattr(self, "recv_request_server") and self.recv_request_server is not None:

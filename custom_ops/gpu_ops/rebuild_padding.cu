@@ -130,7 +130,6 @@ std::vector<paddle::Tensor> rebuild_padding(
     int pack_num = elem_nums / PackSize;
     const int blocksize = 128;
     const int grid_size = (pack_num + blocksize - 1) / blocksize;
-
     if (output_padding_offset) {
         RebuildAppendPaddingKernel<DataType_, PackSize>
             <<<grid_size, blocksize, 0, cu_stream>>>(
