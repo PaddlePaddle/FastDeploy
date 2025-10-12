@@ -22,7 +22,6 @@ import time
 import traceback
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from multiprocessing import current_process
 
 import uvicorn
 import zmq
