@@ -105,10 +105,10 @@ def load_engine():
     if llm_engine is not None:
         return llm_engine
 
-    api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}")
+    api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}, port: {args.port}")
     engine_args = EngineArgs.from_cli_args(args)
     engine = LLMEngine.from_engine_args(engine_args)
-    if not engine.start(api_server_pid=os.getpid()):
+    if not engine.start(api_server_pid=args.port):
         api_server_logger.error("Failed to initialize FastDeploy LLM engine, service exit now!")
         return None
 
@@ -129,12 +129,12 @@ def load_data_service():
     global llm_engine
     if llm_engine is not None:
         return llm_engine
-    api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}")
+    api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}, port: {args.port}")
     engine_args = EngineArgs.from_cli_args(args)
     config = engine_args.create_engine_config()
     api_server_logger.info(f"local_data_parallel_id: {config.parallel_config}")
     expert_service = ExpertService(config, config.parallel_config.local_data_parallel_id)
-    if not expert_service.start(os.getpid(), config.parallel_config.local_data_parallel_id):
+    if not expert_service.start(args.port, config.parallel_config.local_data_parallel_id):
         api_server_logger.error("Failed to initialize FastDeploy LLM expert service, service exit now!")
         return None
     llm_engine = expert_service
@@ -149,10 +149,7 @@ async def lifespan(app: FastAPI):
 
     if args.tokenizer is None:
         args.tokenizer = args.model
-    if current_process().name != "MainProcess":
-        pid = os.getppid()
-    else:
-        pid = os.getpid()
+    pid = args.port
     api_server_logger.info(f"{pid}")
 
     if args.served_model_name is not None:
