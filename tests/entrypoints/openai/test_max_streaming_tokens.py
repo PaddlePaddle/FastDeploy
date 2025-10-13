@@ -282,6 +282,95 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         found_done = any("[DONE]" in chunk for chunk in chunks)
         self.assertTrue(found_done, "Not Receive '[DONE]'")
 
+    @patch("fastdeploy.entrypoints.openai.serving_completion.api_server_logger")
+    async def test_completion_full_generator(self, mock_logger):
+        final_response_data = [
+            {
+                "request_id": "test_request_id_0",
+                "outputs": {
+                    "token_ids": [7, 8, 9],
+                    "text": " world!",
+                    "top_logprobs": [
+                        {"a": 0.1, "b": 0.2},
+                        {"c": 0.3, "d": 0.4},
+                        {"e": 0.5, "f": 0.6},
+                    ],
+                },
+                "finished": True,
+            },
+            {
+                "request_id": "test_request_id_1",
+                "outputs": {
+                    "token_ids": [10, 11, 12],
+                    "text": " there!",
+                    "top_logprobs": [
+                        {"g": 0.7, "h": 0.8},
+                        {"i": 0.9, "j": 1.0},
+                        {"k": 1.1, "l": 1.2},
+                    ],
+                },
+                "finished": True,
+            },
+        ]
+
+        mock_response_queue = AsyncMock()
+        mock_response_queue.get.side_effect = [
+            [final_response_data[0]],
+            [final_response_data[1]],
+        ]
+
+        mock_dealer = Mock()
+        mock_dealer.write = Mock()
+
+        self.engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
+
+        expected_completion_response = Mock()
+        self.completion_serving.request_output_to_completion_response = Mock(return_value=expected_completion_response)
+
+        request = CompletionRequest(
+            model="test_model",
+            prompt="Hello",
+            max_tokens=10,
+            stream=False,
+            n=2,
+            echo=False,
+        )
+        num_choices = 2
+        request_id = "test_request_id"
+        created_time = 1655136000
+        model_name = "test_model"
+        prompt_batched_token_ids = [[1, 2, 3], [4, 5, 6]]
+        text_after_process_list = ["Hello", "Hello"]
+
+        actual_response = await self.completion_serving.completion_full_generator(
+            request=request,
+            num_choices=num_choices,
+            request_id=request_id,
+            created_time=created_time,
+            model_name=model_name,
+            prompt_batched_token_ids=prompt_batched_token_ids,
+            text_after_process_list=text_after_process_list,
+        )
+
+        self.assertEqual(actual_response, expected_completion_response)
+
+        self.engine_client.connection_manager.get_connection.assert_called_once_with(request_id, num_choices)
+
+        self.assertEqual(mock_dealer.write.call_count, num_choices)
+
+        mock_dealer.write.assert_any_call([b"", b"test_request_id_0"])
+        mock_dealer.write.assert_any_call([b"", b"test_request_id_1"])
+
+        mock_response_queue.get.assert_awaited()
+
+        self.assertEqual(mock_response_queue.get.call_count, 2)
+
+        self.assertEqual(self.engine_client.data_processor.process_response_dict.call_count, len(final_response_data))
+
+        self.completion_serving.request_output_to_completion_response.assert_called_once()
+
+        self.engine_client.semaphore.release.assert_called_once()
+        self.engine_client.connection_manager.cleanup_request.assert_awaited_once_with(request_id)
 
 if __name__ == "__main__":
     unittest.main()

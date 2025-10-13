@@ -316,7 +316,7 @@ class OpenAIServingCompletion:
         Process the echo logic and return the modified text.
         """
         if request.echo and res_outputs.get("send_idx", -1) == 0:
-            prompt_text = self._echo_back_prompt(request, idx)
+            prompt_text = self._echo_back_prompt(request, idx//(1 if request.n is None else request.n))
             res_outputs["text"] = prompt_text + (res_outputs["text"] or "")
         return res_outputs
 
@@ -535,7 +535,7 @@ class OpenAIServingCompletion:
                 aggregated_logprobs = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
 
             if request.echo:
-                prompt_text = self._echo_back_prompt(request, idx)
+                prompt_text = self._echo_back_prompt(request, idx//(1 if request.n is None else request.n))
                 token_ids = [*prompt_token_ids, *output["token_ids"]]
                 output_text = prompt_text + output["text"]
             else:
