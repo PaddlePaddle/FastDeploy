@@ -59,7 +59,7 @@ WORKER_OR_CONFIG_LIST=(
 )
 
 HAS_WORKER_OR_CONFIG_MODIFY=`git diff upstream/$BRANCH  --name-only | grep -E $(printf -- "-e %s " "${WORKER_OR_CONFIG_LIST[@]}") || true`
-if [ ${HAS_WORKER_OR_CONFIG_MODIFY} ] && [ "${PR_ID}" != "" ]; then
+if [ "${HAS_WORKER_OR_CONFIG_MODIFY}" != "" ] && [ "${PR_ID}" != "" ]; then
     echo_line1="You must have one FastDeploy RD (gongshaotian(gongshaotian), yuanlehome(liuyuanle)) approval for modifing [$(IFS=', '; echo "${WORKER_OR_CONFIG_LIST[*]}")]."
     check_approval "$echo_line1" 1 gongshaotian yuanlehome
 fi
@@ -70,7 +70,7 @@ SPECULATIVE_DECODING_LIST=(
 )
 
 HAS_SPECULATIVE_DECODING_MODIFY=`git diff upstream/$BRANCH  --name-only | grep -E $(printf -- "-e %s " "${SPECULATIVE_DECODING_LIST[@]}") || true`
-if [ ${HAS_SPECULATIVE_DECODING_MODIFY} ] && [ "${PR_ID}" != "" ]; then
+if [ "${HAS_SPECULATIVE_DECODING_MODIFY}" != "" ] && [ "${PR_ID}" != "" ]; then
     echo_line1="You must have one FastDeploy RD (freeliuzc(liuzichang01), Deleter-D(wangyanpeng04)) approval for modifing [$(IFS=', '; echo "${SPECULATIVE_DECODING_LIST[*]}")]."
     check_approval "$echo_line1" 1 freeliuzc Deleter-D
 fi

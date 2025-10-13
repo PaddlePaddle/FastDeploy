@@ -48,6 +48,7 @@ class FakeModelConfig:
         self.tie_word_embeddings = True
         self.model_format = "auto"
         self.enable_mm = False
+        self.max_model_len = 512
 
 
 def get_default_test_fd_config():

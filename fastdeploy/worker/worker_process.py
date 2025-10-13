@@ -117,7 +117,7 @@ def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     if fd_config.model_config.enable_mm and ErnieArchitectures.contains_ernie_arch(architectures):
         tokenizer = Ernie4_5Tokenizer.from_pretrained(
             fd_config.model_config.model,
-            model_max_length=fd_config.parallel_config.max_model_len,
+            model_max_length=fd_config.model_config.max_model_len,
             padding_side="right",
             use_fast=False,
         )
@@ -183,7 +183,7 @@ class PaddleDisWorkerProc:
                 name="launched_expert_service_signal",
                 array=launched_expert_service_signal_data,
                 dtype=np.int32,
-                suffix=self.parallel_config.engine_worker_queue_port,
+                suffix=self.parallel_config.engine_pid,
                 create=False,
             )
             while self.launched_expert_service_signal.value[self.local_rank % self.max_chips_per_node] == 0:
@@ -200,7 +200,7 @@ class PaddleDisWorkerProc:
             name="worker_ready_signal",
             array=workers_ready,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.engine_pid,
             create=False,
         )
         self.worker_ready_signal.value[self.local_rank % self.max_chips_per_node] = 1
@@ -418,7 +418,7 @@ class PaddleDisWorkerProc:
                     name="get_profile_block_num",
                     array=get_profile_block_num,
                     dtype=np.int32,
-                    suffix=self.parallel_config.engine_worker_queue_port,
+                    suffix=self.parallel_config.engine_pid,
                     create=False,
                 )
                 self.get_profile_block_num_signal.value[0] = num_blocks_local
@@ -473,7 +473,7 @@ class PaddleDisWorkerProc:
             name="loaded_model_signal",
             array=loaded_model_signal_data,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.engine_pid,
             create=False,
         )
         if self.ranks > 1:

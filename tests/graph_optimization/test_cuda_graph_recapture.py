@@ -97,6 +97,7 @@ class TestCUDAGrpahRecapture(unittest.TestCase):
         scheduler_config.max_num_seqs = 1
         parallel_config = ParallelConfig(args={})
         model_config = Mock()
+        model_config.max_model_len = 5120
         fd_config = FDConfig(
             graph_opt_config=graph_opt_config,
             scheduler_config=scheduler_config,
