@@ -16,7 +16,7 @@
 
 import threading
 from abc import abstractmethod
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -67,7 +67,7 @@ class SamplerProcessor:
         self.token_bitmask = None
         self.insert_processor = False
         self.logits_processor: Dict[int, Optional[Any]] = dict()
-        self.executor = ThreadPoolExecutor()
+        self.executor = ThreadPoolExecutor(max_workers=10)
         self.logits_lock = threading.Lock()
         self.reasoning_end_id = None
 
@@ -137,6 +137,28 @@ class SamplerProcessor:
                     for token in prefill_tokens:
                         self.logits_processor[idx].accept_token(token)
 
+    def _fill_bitmask(self, token_bitmask, idx_list):
+        if len(idx_list) == 0:
+            return
+
+        for idx in idx_list:
+            self.logits_processor[idx].fill_token_bitmask(token_bitmask, idx)
+
+    def _split_idx(self, idx_list, n):
+        if len(idx_list) == 0:
+            return []
+
+        if len(idx_list) < n:
+            return idx_list
+
+        start, result_list = 0, []
+        base_size, remainder = divmod(len(idx_list), n)
+        for i in range(n):
+            end = start + base_size + (1 if i < remainder else 0)
+            result_list.append(idx_list[start:end])
+            start = end
+        return result_list
+
     def update_vocab_mask(self, skip_idx_list: List[int] = []):
         """Updates vocabulary mask based on active constraints.
 
@@ -159,13 +181,16 @@ class SamplerProcessor:
 
         self.update_logits_processor()
         with self.logits_lock:
-            # TODO: 支持并行 fill token bitmask
             # fill token bitmask
+            wait_fill_idx = []
             for idx, processor in self.logits_processor.items():
                 if processor.is_terminated() or idx in skip_idx_list:
                     continue
+                wait_fill_idx.append(idx)
 
-                processor.fill_token_bitmask(token_bitmask, idx)
+            split_list = self._split_idx(wait_fill_idx, 4)
+            futures = [self.executor.submit(self._fill_bitmask, token_bitmask, idx_list) for idx_list in split_list]
+            wait(futures)
         self.token_bitmask = paddle.to_tensor(token_bitmask.numpy())
 
     def apply_token_mask(self, logits: paddle.Tensor, skip_idx_list: List[int] = []):
