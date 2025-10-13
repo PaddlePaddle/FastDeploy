@@ -893,7 +893,6 @@ class GPUModelRunner(ModelRunnerBase):
                 partial_rotary_factor=self.model_config.partial_rotary_factor,
             )
 
-
         # Set block tables
         pre_max_block_num = (
             self.model_config.max_model_len + self.cache_config.block_size - 1

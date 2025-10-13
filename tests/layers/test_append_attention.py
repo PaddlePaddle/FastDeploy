@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 import math
 import random
-import copy
 import time
 import unittest
 
@@ -213,13 +213,7 @@ class YaRNScaledEmbedding(RopeEmbedding):
         return pos_emb
 
 
-def create_attn_mask(
-    mask_type,
-    batch_size,
-    seq_lens,
-    pre_cache_length=0,
-    sliding_window=0
-):
+def create_attn_mask(mask_type, batch_size, seq_lens, pre_cache_length=0, sliding_window=0):
     max_seq_len = max(seq_lens)
     mask = paddle.zeros(
         # [batch_size, 1, max_seq_len, max_seq_len + pre_cache_length],
@@ -231,14 +225,10 @@ def create_attn_mask(
         seq_len = seq_lens[i]
         ones_tensor = paddle.ones(shape=(seq_len, seq_len), dtype=mask_type)
         if sliding_window <= 0:
-            mask[i, 0, :seq_len, :seq_len] = (
-                paddle.tril(ones_tensor) - 1
-            ) * 1e4
+            mask[i, 0, :seq_len, :seq_len] = (paddle.tril(ones_tensor) - 1) * 1e4
         else:
             tmp_triu = paddle.triu(ones_tensor, -(sliding_window - 1))
-            mask[i, 0, :seq_len, :seq_len] = (
-                paddle.tril(ones_tensor) * tmp_triu - 1
-            ) * 1e4
+            mask[i, 0, :seq_len, :seq_len] = (paddle.tril(ones_tensor) * tmp_triu - 1) * 1e4
     return mask
 
 
@@ -703,7 +693,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 speculate_max_draft_token_num + 1,  # speculate_max_draft_token_num
                 True,  # causal
                 False,  # speculate_decoder
-                self.sliding_window
+                self.sliding_window,
             )
 
         # Warm up
@@ -767,7 +757,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 speculate_max_draft_token_num + 1,  # speculate_max_draft_token_num
                 True,  # causal
                 False,  # speculate_decoder
-                self.sliding_window
+                self.sliding_window,
             )
 
         # Warm up
@@ -799,7 +789,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 self.seq_len,
             ]
             * self.batch_size,
-            sliding_window=self.sliding_window
+            sliding_window=self.sliding_window,
         )
         # encoder
         # self.seq_lens_encoder,self.seq_lens_decoder,self.max_enc_len_this_time,self.max_dec_len_this_time=get_encoder_decoder_len(self.batch_size,self.seq_len)

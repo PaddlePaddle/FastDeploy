@@ -301,15 +301,15 @@ class GptOssScalingRotaryEmbedding:
         inv_freq_mask = (1 - yarn_linear_ramp_mask(low, high, self.rotary_dim // 2)) * self.extrapolation_factor
         indices = inv_freq_interpolation * (1 - inv_freq_mask) + inv_freq_extrapolation * inv_freq_mask
 
-        _mscale = paddle.to_tensor(
-            yarn_get_mscale(self.scale, self.mscale) * self.attn_factor, dtype="float32"
-        )
+        _mscale = paddle.to_tensor(yarn_get_mscale(self.scale, self.mscale) * self.attn_factor, dtype="float32")
 
         position_ids = position_ids / self.compression_ratio
         sinusoid_inp = position_ids.unsqueeze(-1).astype("float32") * indices.unsqueeze(0)
 
         if self.use_neox_rotary_style:
-            sinusoid_inp = paddle.concat([sinusoid_inp, sinusoid_inp], axis=-1).reshape((1, seq_length, 1, self.rotary_dim))
+            sinusoid_inp = paddle.concat([sinusoid_inp, sinusoid_inp], axis=-1).reshape(
+                (1, seq_length, 1, self.rotary_dim)
+            )
 
         pos_emb = paddle.concat([paddle.cos(sinusoid_inp) * _mscale, paddle.sin(sinusoid_inp) * _mscale], axis=0)
 

@@ -44,6 +44,7 @@ from fastdeploy.model_executor.models.model_base import (
     ModelRegistry,
 )
 
+
 class GptOssAttention(nn.Layer):
 
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = ""):
@@ -216,6 +217,7 @@ class GptOssModel(nn.Layer):
 
         hidden_states = self.norm(hidden_states)
         return hidden_states
+
 
 @ModelRegistry.register_model_class(
     architecture="GptOssForCausalLM",

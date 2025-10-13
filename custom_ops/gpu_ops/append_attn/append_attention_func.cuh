@@ -1054,16 +1054,16 @@ __device__ __forceinline__ void mask_s(const bool* attn_mask,
           bool out_of_boundary;
           if (mask_offset) {
             out_of_boundary = q_idx < qo_len ? (kv_idx >= mask_offset[q_idx * 2 + 1] || kv_idx < mask_offset[q_idx * 2]) : true;
-          } 
-          else if (sliding_window > 0) 
+          }
+          else if (sliding_window > 0)
           {
             bool out_of_window = int(kv_idx) <= (int)kv_len + (int)q_idx - (int)qo_len - sliding_window;
             out_of_boundary =
               (causal
                   ? (kv_idx > kv_len + q_idx - qo_len || out_of_window || (kv_idx >= chunk_end))
                   : kv_idx >= chunk_end);
-          } 
-          else 
+          }
+          else
           {
             out_of_boundary =
               (causal

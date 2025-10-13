@@ -111,7 +111,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 estimate_total_token_nums,
                 getattr(layer.moe_quant_config, "hadamard_block_size", 128),
                 layer.activation,
-        )
+            )
         if layer.with_bias:
             down_proj_bias_expand = paddle.index_select(layer.down_proj_bias, expert_idx_per_token, axis=0)
             ffn_out_without_down_proj_bias = paddle.add(ffn_out_without_down_proj_bias, down_proj_bias_expand)
