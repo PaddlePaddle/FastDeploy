@@ -261,8 +261,8 @@ class DataProcessor:
                 missing_idx.append(idx)
 
         if len(missing_hashes) > 0 and not self.enable_processor_cache:
-                raise ValueError("Missing items cannot be retrieved without processor cache.")
-        
+            raise ValueError("Missing items cannot be retrieved without processor cache.")
+
         if self.enable_processor_cache:
             context = zmq.Context()
             dealer = context.socket(zmq.DEALER)

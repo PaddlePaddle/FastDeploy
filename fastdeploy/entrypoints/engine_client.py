@@ -76,7 +76,7 @@ class EngineClient:
             self.enable_mm = True
         else:
             self.enable_mm = False
-        
+
         enable_processor_cache = self.enable_mm and max_processor_cache > 0
         input_processor = InputPreprocessor(
             tokenizer,
