@@ -150,7 +150,8 @@ class ExpertService:
                 self.reset_kvcache_blocks()
             ipc_signal_suffix_cache = self.cfg.parallel_config.engine_worker_queue_port[local_data_parallel_id]
             self.cache_manager_processes = self.engine.start_cache_service(
-                self.cfg.local_device_ids, ipc_signal_suffix_cache,
+                self.cfg.local_device_ids,
+                ipc_signal_suffix_cache,
                 create_cache_tensor=(self.cfg.scheduler_config.splitwise_role != "mixed")
             )
 
