@@ -112,7 +112,7 @@ class ExpertService:
                             name="get_profile_block_num",
                             array=get_profile_block_num,
                             dtype=np.int32,
-                            suffix=int(self.cfg.engine_worker_queue_port[0]),
+                            suffix=ipc_signal_suffix,
                             create=False,
                         )
                         break
@@ -121,7 +121,9 @@ class ExpertService:
                 self.reset_kvcache_blocks()
             ipc_signal_suffix_cache = self.cfg.parallel_config.engine_worker_queue_port[local_data_parallel_id]
             self.cache_manager_processes = self.engine.start_cache_service(
-                self.cfg.local_device_ids, ipc_signal_suffix_cache
+                self.cfg.local_device_ids,
+                ipc_signal_suffix_cache,
+                False,
             )
             if self.cfg.scheduler_config.splitwise_role != "mixed":
                 self.engine.split_mode_get_tasks()
