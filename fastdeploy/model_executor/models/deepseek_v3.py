@@ -38,6 +38,7 @@ from fastdeploy.model_executor.layers.linear import (
     ColumnParallelLinear,
     KVBatchLinear,
     MergedColumnParallelLinear,
+    MergedReplicatedLinear,
     ReplicatedLinear,
     RowParallelLinear,
 )
@@ -47,7 +48,11 @@ from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.layers.rotary_embedding import (
     DeepseekScalingRotaryEmbedding,
 )
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
@@ -116,6 +121,7 @@ class DeepSeekV3MoE(nn.Layer):
         super().__init__()
 
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
+        self.norm_topk_prob = fd_config.model_config.norm_topk_prob
 
         weight_key_map = {
             "gate_correction_bias_key": f"{prefix}.gate.e_score_correction_bias",
@@ -145,6 +151,7 @@ class DeepSeekV3MoE(nn.Layer):
         self.experts = FusedMoE(
             fd_config=fd_config,
             reduce_results=False,
+            renormalize=self.norm_topk_prob,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
             num_experts=fd_config.model_config.n_routed_experts,
             top_k=fd_config.model_config.num_experts_per_tok,
@@ -169,6 +176,13 @@ class DeepSeekV3MoE(nn.Layer):
 
     def load_state_dict(self, state_dict):
         """ """
+        if self.experts.gate_correction_bias is not None:
+            gate_correction_bias_tensor = state_dict.pop(self.experts.gate_correction_bias_key)
+            if self.experts.gate_correction_bias.shape != gate_correction_bias_tensor.shape:
+                gate_correction_bias_tensor = gate_correction_bias_tensor.reshape(
+                    self.experts.gate_correction_bias.shape
+                )
+            self.experts.gate_correction_bias.set_value(gate_correction_bias_tensor)
         self.gate.load_state_dict(state_dict)
         self.experts.load_state_dict(state_dict)
         self.shared_experts.load_state_dict(state_dict)
@@ -211,11 +225,11 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         if self.q_lora_rank is not None:
             # NOTE: (changwenbin) qkv_a_proj horizontal fusion
-            self.qkv_a_proj_with_mqa = ReplicatedLinear(
+            self.qkv_a_proj_with_mqa = MergedReplicatedLinear(
                 fd_config=fd_config,
                 prefix=f"{prefix}.qkv_a_proj_with_mqa",
                 input_size=self.hidden_size,
-                output_size=self.q_lora_rank + self.kv_lora_rank + self.qk_rope_head_dim,
+                output_sizes=[self.q_lora_rank, self.kv_lora_rank + self.qk_rope_head_dim],
                 with_bias=False,
             )
 
@@ -580,6 +594,12 @@ class DeepSeekV3Model(nn.Layer):
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="DeepseekV3ForCausalLM",
+    module_name="deepseek_v3",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class DeepseekV3ForCausalLM(ModelForCasualLM):
     """
     DeepseekV3ForCausalLM
@@ -599,9 +619,11 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
             num_embeddings=fd_config.model_config.vocab_size,
             prefix="lm_head",
         )
-        self.position_ids_buffer = paddle.empty([fd_config.parallel_config.max_num_batched_tokens], dtype=paddle.int32)
+        self.position_ids_buffer = paddle.empty(
+            [fd_config.scheduler_config.max_num_batched_tokens], dtype=paddle.int32
+        )
         self.mask_encoder_batch_buffer = paddle.empty(
-            [fd_config.parallel_config.max_num_batched_tokens, 1], dtype=paddle.int32
+            [fd_config.scheduler_config.max_num_batched_tokens, 1], dtype=paddle.int32
         )
 
     @classmethod
@@ -636,6 +658,8 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
             ("embed_tokens.embeddings", "embed_tokens", None),
             ("lm_head.linear", "lm_head", None),
             ("experts.gate_correction_bias", "gate.e_score_correction_bias", None),
+            ("qkv_a_proj_with_mqa", "q_a_proj", "q_a"),
+            ("qkv_a_proj_with_mqa", "kv_a_proj_with_mqa", "kv_a"),
         ]
         # (param_name, weight_name, expert_id, shard_id)
         expert_params_mapping = FusedMoE.make_expert_params_mapping(
@@ -733,7 +757,7 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         return hidden_states
 
     def clear_grpah_opt_backend(self):
-        """Clear graph optimization bakcend, the captured cuda graph will be cleaned"""
+        """Clear graph optimization backend, the captured cuda graph will be cleaned"""
         self.model.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 

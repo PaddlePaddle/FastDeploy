@@ -20,7 +20,25 @@
 | `fastdeploy:gpu_cache_usage_perc`         | Gauge     | GPU KV-cache 使用率          | 百分比    |
 | `fastdeploy:request_params_max_tokens`    | Histogram | 请求的 max_tokens 分布       | 个   |
 | `fastdeploy:request_success_total`        | Counter   | 成功处理的请求个数           | 个   |
-
+| `fastdeploy:cache_config_info`            | Gauge     | 推理引擎的缓存配置信息        | 个   |
+| `fastdeploy:available_batch_size`         | Gauge     | Decode阶段还可以插入的请求数量 | 个   |
+| `fastdeploy:hit_req_rate`                 | Gauge     | 请求级别前缀缓存命中率        | 百分比   |
+| `fastdeploy:hit_token_rate`               | Gauge     | token级别前缀缓存命中率      | 百分比   |
+| `fastdeploy:cpu_hit_token_rate`           | Gauge     | token级别CPU前缀缓存命中率   | 百分比   |
+| `fastdeploy:gpu_hit_token_rate`           | Gauge     | token级别GPU前缀缓存命中率   | 百分比   |
+| `fastdeploy:prefix_cache_token_num`       | Counter   | 前缀缓存token总数           | 个   |
+| `fastdeploy:prefix_gpu_cache_token_num`   | Counter   | 位于GPU上的前缀缓存token总数  | 个   |
+| `fastdeploy:prefix_cpu_cache_token_num`   | Counter   | 位于GPU上的前缀缓存token总数  | 个   |
+| `fastdeploy:batch_size`                   | Gauge     | 推理时的真实批处理大小        | 个   |
+| `fastdeploy:max_batch_size`               | Gauge     | 服务启动时确定的最大批处理大小  | 个   |
+| `fastdeploy:available_gpu_block_num`      | Gauge     | 缓存中可用的GPU块数量（包含尚未正式释放的前缀缓存块）| 个   |
+| `fastdeploy:free_gpu_block_num`           | Gauge     | 缓存中的可用块数             | 个   |
+| `fastdeploy:max_gpu_block_num`            | Gauge     | 服务启动时确定的总块数        | 个   |
+| `fastdeploy:available_gpu_resource`       | Gauge     | 可用块占比，即可用GPU块数量 / 最大GPU块数量| 个   |
+| `fastdeploy:requests_number`              | Counter   | 已接收的请求总数             | 个   |
+| `fastdeploy:send_cache_failed_num`        | Counter   | 发送缓存失败的总次数          | 个   |
+| `fastdeploy:first_token_latency`          | Gauge     | 最近一次生成首token耗时       | 秒   |
+| `fastdeploy:infer_latency`                | Gauge     | 最近一次生成单个token的耗时   | 秒   |
 ## 指标访问
 
 - 访问地址：`http://localhost:8000/metrics`

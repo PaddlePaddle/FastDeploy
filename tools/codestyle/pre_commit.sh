@@ -16,7 +16,7 @@ set +x
 
 # use pre-commit 4.2.0
 if ! [[ $(pre-commit --version) == *"4.2.0"* ]]; then
-    pip install pre-commit==4.2.0 1>nul
+    pip install pre-commit==4.2.0 1>/dev/null
 fi
 
 # Install clang-format before git commit to avoid repeat installation due to

@@ -20,6 +20,6 @@ Below is an overview of the FastDeploy code structure and functionality organize
   - ```platforms```: Platform-specific modules for underlying hardware support.
   - ```scheduler```: Request scheduling module for large models.
   - ```metrics```: Core component for collecting, managing, and exporting Prometheus metrics, tracking key runtime performance data (e.g., request latency, resource utilization, successful request counts).
-  - ```splitwise```: Modules related to PD disaggragation deployment.
+  - ```splitwise```: Modules related to PD disaggregation deployment.
 - ```scripts```/```tools```: Utility scripts for FastDeploy operations (e.g., compilation, unit testing, code style fixes).
 - ```test```: Code for unit testing and validation.

@@ -27,15 +27,18 @@ import requests
 FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8133))
 FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
+FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 
 # List of ports to clean before and after tests
 PORTS_TO_CLEAN = [
     FD_API_PORT,
     FD_ENGINE_QUEUE_PORT,
     FD_METRICS_PORT,
+    FD_CACHE_QUEUE_PORT,
     FD_API_PORT + 1,
     FD_ENGINE_QUEUE_PORT + 1,
     FD_METRICS_PORT + 1,
+    FD_CACHE_QUEUE_PORT + 1,
 ]
 
 
@@ -77,6 +80,7 @@ def clean_ports():
     """
     for port in PORTS_TO_CLEAN:
         kill_process_on_port(port)
+    time.sleep(2)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -116,6 +120,8 @@ def setup_and_run_server():
         str(FD_ENGINE_QUEUE_PORT),
         "--metrics-port",
         str(FD_METRICS_PORT),
+        "--cache-queue-port",
+        str(FD_CACHE_QUEUE_PORT),
         "--max-model-len",
         "8192",
         "--max-num-seqs",
@@ -157,7 +163,7 @@ def setup_and_run_server():
         "--metrics-port",
         str(FD_METRICS_PORT + 1),
         "--cache-queue-port",
-        str(FD_API_PORT + 2),
+        str(FD_CACHE_QUEUE_PORT + 1),
         "--max-model-len",
         "8192",
         "--max-num-seqs",
@@ -231,6 +237,13 @@ def headers():
     Returns common HTTP request headers.
     """
     return {"Content-Type": "application/json"}
+
+
+def test_metrics_config(metrics_url):
+    timeout = 600
+    url = metrics_url.replace("metrics", "config-info")
+    res = requests.get(url, timeout=timeout)
+    assert res.status_code == 200
 
 
 def send_request(url, payload, timeout=600):

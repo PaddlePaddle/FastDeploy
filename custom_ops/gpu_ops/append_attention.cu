@@ -140,8 +140,8 @@ void AppendAttentionKernel(
           key_cache,
           value_cache,
           attn_mask,
-          cache_k_dequant_scales,
-          cache_v_dequant_scales,
+          cache_quant_type_str == "block_wise_fp8" ? cache_k_quant_scales : cache_k_dequant_scales,
+          cache_quant_type_str == "block_wise_fp8" ? cache_v_quant_scales : cache_v_dequant_scales,
           cache_k_zp,
           cache_v_zp,
           out_linear_shifts,
@@ -273,11 +273,15 @@ void AppendAttentionKernel(
             cache_v_zp,
             cache_quant_type_str,
             use_neox_rotary_style,
+            rope_3d,
             max_input_length,
             exec_stream,
             &qkv_out,
             const_cast<paddle::Tensor*>(&key_cache),
-            const_cast<paddle::Tensor*>(&value_cache));
+            const_cast<paddle::Tensor*>(&value_cache),
+            q_norm_weight,
+            k_norm_weight,
+            rms_norm_eps);
       } else {
         SpeculateWriteCacheWithRoPEKernel<data_t, data_t>(
             meta_data,
@@ -296,11 +300,15 @@ void AppendAttentionKernel(
             cache_v_zp,
             cache_quant_type_str,
             use_neox_rotary_style,
+            rope_3d,
             max_input_length,
             exec_stream,
             &qkv_out,
             const_cast<paddle::Tensor*>(&key_cache),
-            const_cast<paddle::Tensor*>(&value_cache));
+            const_cast<paddle::Tensor*>(&value_cache),
+            q_norm_weight,
+            k_norm_weight,
+            rms_norm_eps);
       }
     } else {
       if (qkv_out_scales) {
@@ -309,7 +317,6 @@ void AppendAttentionKernel(
             qkv,  // [token_num, num_heads, head_dim]
             seq_lens_decoder,
             seq_lens_encoder,
-            batch_id_per_token,
             cu_seqlens_q,
             block_tables,
             rotary_embs,
@@ -336,7 +343,6 @@ void AppendAttentionKernel(
             qkv_out,  // [token_num, num_heads, head_dim]
             seq_lens_decoder,
             seq_lens_encoder,
-            batch_id_per_token,
             cu_seqlens_q,
             block_tables,
             rotary_embs,
@@ -488,12 +494,12 @@ std::vector<paddle::Tensor> AppendAttention(
   paddle::Tensor fmha_out;
   if (out_linear_in_scale > 0.0) {
     if (fabs(quant_max_bound - 127.0f) < 0.000001) {
-      fmha_out = GetEmptyTensor(
+      fmha_out = paddle::zeros(
         {meta_data.token_nums, meta_data.q_num_heads * meta_data.head_dims},
         paddle::DataType::INT8,
         qkv.place());
     } else if (fabs(quant_max_bound - 448.0f) < 0.000001) {
-      fmha_out = GetEmptyTensor(
+      fmha_out = paddle::zeros(
         {meta_data.token_nums, meta_data.q_num_heads * meta_data.head_dims},
         paddle::DataType::FLOAT8_E4M3FN,
         qkv.place());
@@ -501,7 +507,7 @@ std::vector<paddle::Tensor> AppendAttention(
       PD_THROW("Only supported attr of quant_max_bound in ['127', '448'].");
     }
   } else {
-    fmha_out = GetEmptyTensor(
+    fmha_out = paddle::zeros(
         {meta_data.token_nums, meta_data.q_num_heads * meta_data.head_dims},
         dtype_id,
         qkv.place());
@@ -1057,9 +1063,7 @@ PD_BUILD_STATIC_OP(append_attention)
              paddle::Optional("kv_signal_data"),
              paddle::Optional("q_norm_weight"),
              paddle::Optional("k_norm_weight")})
-    .Outputs({"fmha_out", "key_cache_out", "value_cache_out"})
-    .SetInplaceMap({{"key_cache", "key_cache_out"},
-                    {"value_cache", "value_cache_out"}})
+    .Outputs({"fmha_out"})
     .Attrs({"rms_norm_eps: float",
             "compute_type: std::string",
             "cache_quant_type: std::string",

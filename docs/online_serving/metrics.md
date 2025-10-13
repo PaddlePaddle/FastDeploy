@@ -20,7 +20,25 @@ After FastDeploy is launched, it supports continuous monitoring of the FastDeplo
 | `fastdeploy:gpu_cache_usage_perc`            | Gauge     | GPU KV-cache usage rate          | Percentage    |
 | `fastdeploy:request_params_max_tokens`       | Histogram | Distribution of max_tokens for requests       | Count   |
 | `fastdeploy:request_success_total`           | Counter   | Number of successfully processed requests           | Count   |
-
+| `fastdeploy:cache_config_info`               | Gauge     | Information of the engine's CacheConfig             | Count   |
+| `fastdeploy:available_batch_size`            | Gauge     | Number of requests that can still be inserted during the Decode phase| Count   |
+| `fastdeploy:hit_req_rate`                    | Gauge     | Request-level prefix cache hit rate                 | Percentage   |
+| `fastdeploy:hit_token_rate`                  | Gauge     | Token-level prefix cache hit rate                   | Percentage   |
+| `fastdeploy:cpu_hit_token_rate`              | Gauge     | Token-level CPU prefix cache hit rate               | Percentage   |
+| `fastdeploy:gpu_hit_token_rate`              | Gauge     | Token-level GPU prefix cache hit rate               | Percentage   |
+| `fastdeploy:prefix_cache_token_num`          | Counter   | Total number of cached tokens                       | Count   |
+| `fastdeploy:prefix_gpu_cache_token_num`      | Counter   | Total number of cached tokens on GPU                | Count   |
+| `fastdeploy:prefix_cpu_cache_token_num`      | Counter   | Total number of cached tokens on CPU                | Count   |
+| `fastdeploy:batch_size`                      | Gauge     | Real batch size during inference                    | Count   |
+| `fastdeploy:max_batch_size`                  | Gauge     | Maximum batch size determined when service started  | Count   |
+| `fastdeploy:available_gpu_block_num`         | Gauge     | Number of available gpu blocks in cache, including prefix caching blocks that are not officially released               | Count   |
+| `fastdeploy:free_gpu_block_num`              | Gauge     | Number of free blocks in cache                      | Count   |
+| `fastdeploy:max_gpu_block_num`               | Gauge     | Number of total blocks determined when service started| Count   |
+| `fastdeploy:available_gpu_resource`          | Gauge     | Available blocks percentage, i.e. available_gpu_block_num / max_gpu_block_num               | Count   |
+| `fastdeploy:requests_number`                 | Counter   | Total number of requests received                   | Count   |
+| `fastdeploy:send_cache_failed_num`           | Counter   | Total number of failures of sending cache           | Count   |
+| `fastdeploy:first_token_latency`             | Gauge     | Latest time to generate first token in seconds      | Seconds   |
+| `fastdeploy:infer_latency`                   | Gauge     | Latest time to generate one token in seconds        | Seconds   |
 ## Accessing Metrics
 
 - Access URL: `http://localhost:8000/metrics`

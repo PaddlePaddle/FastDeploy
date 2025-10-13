@@ -75,7 +75,7 @@ void SaveOutMmsgTopK(const paddle::Tensor& x,
         std::string inference_msg_id_env_str(inference_msg_id_env_p);
         inference_msg_id_from_env = std::stoi(inference_msg_id_env_str);
         if (inference_msg_id_from_env == 2) {
-            // 2 and -2 is perserve for no-output indication.
+            // 2 and -2 is preserve for no-output indication.
             throw std::runtime_error(
                 " INFERENCE_MSG_ID cannot be 2, please use other number.");
         }

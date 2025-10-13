@@ -28,12 +28,14 @@ import requests
 FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8133))
 FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
+FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8234))
 
 # List of ports to clean before and after tests
 PORTS_TO_CLEAN = [
     FD_API_PORT,
     FD_ENGINE_QUEUE_PORT,
     FD_METRICS_PORT,
+    FD_CACHE_QUEUE_PORT,
 ]
 
 
@@ -75,6 +77,7 @@ def clean_ports():
     """
     for port in PORTS_TO_CLEAN:
         kill_process_on_port(port)
+    time.sleep(2)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -112,6 +115,8 @@ def setup_and_run_server():
         str(FD_ENGINE_QUEUE_PORT),
         "--metrics-port",
         str(FD_METRICS_PORT),
+        "--cache-queue-port",
+        str(FD_CACHE_QUEUE_PORT),
         "--max-model-len",
         "32768",
         "--max-num-seqs",

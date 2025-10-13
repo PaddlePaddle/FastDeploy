@@ -15,6 +15,7 @@
 """
 
 import asyncio
+import json
 import os
 import threading
 import time
@@ -26,6 +27,7 @@ from multiprocessing import current_process
 import uvicorn
 import zmq
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from prometheus_client import CONTENT_TYPE_LATEST
 
@@ -40,6 +42,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     CompletionRequest,
     CompletionResponse,
     ControlSchedulerRequest,
+    ErrorInfo,
     ErrorResponse,
     ModelList,
 )
@@ -47,7 +50,8 @@ from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
 from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServingModels
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
-from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG
+from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
+from fastdeploy.envs import environment_variables
 from fastdeploy.metrics.metrics import (
     EXCLUDE_LABELS,
     cleanup_prometheus_files,
@@ -56,6 +60,7 @@ from fastdeploy.metrics.metrics import (
 )
 from fastdeploy.metrics.trace_util import fd_start_span, inject_to_metadata, instrument
 from fastdeploy.utils import (
+    ExceptionHandler,
     FlexibleArgumentParser,
     StatefulSemaphore,
     api_server_logger,
@@ -64,24 +69,11 @@ from fastdeploy.utils import (
     retrive_model_from_server,
 )
 
-parser = FlexibleArgumentParser()
-parser.add_argument("--port", default=8000, type=int, help="port to the http server")
-parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
-parser.add_argument("--workers", default=1, type=int, help="number of workers")
-parser.add_argument("--metrics-port", default=8001, type=int, help="port for metrics server")
-parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
-parser.add_argument(
-    "--max-waiting-time",
-    default=-1,
-    type=int,
-    help="max waiting time for connection, if set value -1 means no waiting time limit",
-)
-parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
-parser.add_argument(
-    "--enable-mm-output", action="store_true", help="Enable 'multimodal_content' field in response output. "
-)
-parser = EngineArgs.add_cli_args(parser)
+parser = make_arg_parser(FlexibleArgumentParser())
 args = parser.parse_args()
+
+console_logger.info(f"Number of api-server workers: {args.workers}.")
+
 args.model = retrive_model_from_server(args.model, args.revision)
 chat_template = load_chat_template(args.chat_template, args.model)
 if args.tool_parser_plugin:
@@ -170,7 +162,10 @@ async def lifespan(app: FastAPI):
         enable_logprob=args.enable_logprob,
         workers=args.workers,
         tool_parser=args.tool_call_parser,
+        enable_prefix_caching=args.enable_prefix_caching,
+        splitwise_role=args.splitwise_role,
     )
+    await engine_client.connection_manager.initialize()
     app.state.dynamic_load_weight = args.dynamic_load_weight
     model_handler = OpenAIServingModels(
         model_paths,
@@ -217,6 +212,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_exception_handler(RequestValidationError, ExceptionHandler.handle_request_validation_exception)
+app.add_exception_handler(Exception, ExceptionHandler.handle_exception)
 instrument(app)
 
 
@@ -321,7 +318,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
             if isinstance(generator, ErrorResponse):
                 api_server_logger.debug(f"release: {connection_semaphore.status()}")
                 connection_semaphore.release()
-                return JSONResponse(content={"detail": generator.model_dump()}, status_code=generator.code)
+                return JSONResponse(content=generator.model_dump(), status_code=500)
             elif isinstance(generator, ChatCompletionResponse):
                 api_server_logger.debug(f"release: {connection_semaphore.status()}")
                 connection_semaphore.release()
@@ -350,7 +347,7 @@ async def create_completion(request: CompletionRequest):
             generator = await app.state.completion_handler.create_completion(request)
             if isinstance(generator, ErrorResponse):
                 connection_semaphore.release()
-                return JSONResponse(content=generator.model_dump(), status_code=generator.code)
+                return JSONResponse(content=generator.model_dump(), status_code=500)
             elif isinstance(generator, CompletionResponse):
                 connection_semaphore.release()
                 return JSONResponse(content=generator.model_dump())
@@ -373,7 +370,7 @@ async def list_models() -> Response:
 
     models = await app.state.model_handler.list_models()
     if isinstance(models, ErrorResponse):
-        return JSONResponse(content=models.model_dump(), status_code=models.code)
+        return JSONResponse(content=models.model_dump())
     elif isinstance(models, ModelList):
         return JSONResponse(content=models.model_dump())
 
@@ -425,6 +422,7 @@ def launch_api_server() -> None:
             workers=args.workers,
             log_config=UVICORN_CONFIG,
             log_level="info",
+            timeout_graceful_shutdown=args.timeout_graceful_shutdown,
         )  # set log level to error to avoid log
     except Exception as e:
         api_server_logger.error(f"launch sync http server error, {e}, {str(traceback.format_exc())}")
@@ -443,6 +441,29 @@ async def metrics():
         extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=args.workers),
     )
     return Response(metrics_text, media_type=CONTENT_TYPE_LATEST)
+
+
+@metrics_app.get("/config-info")
+def config_info() -> Response:
+    """
+    Get the current configuration of the API server.
+    """
+    global llm_engine
+    if llm_engine is None:
+        return Response("Engine not loaded", status_code=500)
+    cfg = llm_engine.cfg
+
+    def process_object(obj):
+        if hasattr(obj, "__dict__"):
+            # 处理有__dict__属性的对象
+            return obj.__dict__
+        return None  # 或其他默认处理
+
+    cfg_dict = {k: v for k, v in cfg.__dict__.items()}
+    env_dict = {k: v() for k, v in environment_variables.items()}
+    cfg_dict["env_config"] = env_dict
+    result_content = json.dumps(cfg_dict, default=process_object, ensure_ascii=False)
+    return Response(result_content, media_type="application/json")
 
 
 def run_metrics_server():
@@ -477,7 +498,9 @@ def reset_scheduler():
 
     if llm_engine is None:
         return Response("Engine not loaded", status_code=500)
-    llm_engine.scheduler.reset()
+
+    llm_engine.engine.clear_data()
+    llm_engine.engine.scheduler.reset()
     return Response("Scheduler Reset Successfully", status_code=200)
 
 
@@ -486,7 +509,8 @@ def control_scheduler(request: ControlSchedulerRequest):
     """
     Control the scheduler behavior with the given parameters.
     """
-    content = ErrorResponse(object="", message="Scheduler updated successfully", code=0)
+
+    content = ErrorResponse(error=ErrorInfo(message="Scheduler updated successfully", code=0))
 
     global llm_engine
     if llm_engine is None:
@@ -495,11 +519,13 @@ def control_scheduler(request: ControlSchedulerRequest):
         return JSONResponse(content=content.model_dump(), status_code=500)
 
     if request.reset:
-        llm_engine.scheduler.reset()
+        llm_engine.engine.scheduler.reset()
 
     if request.load_shards_num or request.reallocate_shard:
-        if hasattr(llm_engine.scheduler, "update_config") and callable(llm_engine.scheduler.update_config):
-            llm_engine.scheduler.update_config(
+        if hasattr(llm_engine.engine.scheduler, "update_config") and callable(
+            llm_engine.engine.scheduler.update_config
+        ):
+            llm_engine.engine.scheduler.update_config(
                 load_shards_num=request.load_shards_num,
                 reallocate=request.reallocate_shard,
             )
