@@ -32,7 +32,8 @@ class TestConfig(unittest.TestCase):
             test_mode=True,
         )
         assert fd_config.nnode == 2
-        assert fd_config.is_master is False
+        fd_config.node_rank = 0
+        assert fd_config.is_master is True
 
     def test_fdconfig_ips(self):
         parallel_config = ParallelConfig({})
