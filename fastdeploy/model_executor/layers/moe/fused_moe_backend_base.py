@@ -199,6 +199,7 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
             layer.up_gate_proj_weight,
             {
                 "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                "weight_need_transpose": extra_weight_attrs.get("model_format") == "torch",
                 "model_format": extra_weight_attrs.get("model_format", ""),
             },
         )
@@ -206,6 +207,7 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
             layer.down_proj_weight,
             {
                 "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                "weight_need_transpose": extra_weight_attrs.get("model_format") == "torch",
                 "model_format": extra_weight_attrs.get("model_format", ""),
             },
         )

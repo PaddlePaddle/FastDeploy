@@ -219,7 +219,7 @@ class GptOssModel(nn.Layer):
 
 @ModelRegistry.register_model_class(
     architecture="GptOssForCausalLM",
-    module_path="gpt_oss",
+    module_name="gpt_oss",
     category=ModelCategory.TEXT_GENERATION,
     primary_use=ModelCategory.TEXT_GENERATION,
 )

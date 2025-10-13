@@ -578,6 +578,7 @@ std::vector<paddle::Tensor> NoauxTc(
       int n_group,
       int topk_group,
       int topk,
+      bool renormalize,
       float routed_scaling_factor);
 
 #ifdef ENABLE_FP8
@@ -628,6 +629,8 @@ std::tuple<int64_t, paddle::Tensor> allocate_shared_buffer_and_handle(
 int64_t open_mem_handle(paddle::Tensor& mem_handle);
 
 void free_shared_buffer(int64_t buffer);
+
+void clear_ipc_handles(int64_t _fa);
 
 // speculative decoding Kernel
 std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
@@ -688,7 +691,7 @@ void SpeculateVerify(
     const paddle::Tensor &output_cum_offsets,
     const paddle::Tensor &actual_candidate_len,
     const paddle::Tensor &actual_draft_token_nums, const paddle::Tensor &topp,
-    int max_seq_len, int verify_window, bool enable_topp, bool benchmark_mode);
+    int max_seq_len, int verify_window, bool enable_topp, bool benchmark_mode, bool accept_all_drafts);
 
 void SpeculateUpdate(const paddle::Tensor &seq_lens_encoder,
                        const paddle::Tensor &seq_lens_decoder,
@@ -1234,6 +1237,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("allocate_shared_buffer_and_handle", &allocate_shared_buffer_and_handle, "allocate_shared_buffer_and_handle");
 
   m.def("free_shared_buffer", &free_shared_buffer, "free_shared_buffer");
+
+  m.def("clear_ipc_handles", &clear_ipc_handles, "clear_ipc_handles");
 
   m.def("open_mem_handle", &open_mem_handle, "open_mem_handle");
 

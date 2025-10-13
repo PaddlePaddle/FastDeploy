@@ -13,7 +13,7 @@ export FD_MODEL_SOURCE=AISTUDIO # "AISTUDIO", "MODELSCOPE" or "HUGGINGFACE"
 export FD_MODEL_CACHE=/ssd1/download_models
 ```
 
-> ⭐ **说明**：带星号的模型可直接使用 **HuggingFace Torch 权重**，支持 **FP8/WINT8/WINT4 动态量化** 和 **BF16 精度** 推理，推理时需启用 **`--load_choices "default_v1"`**。
+> ⭐ **说明**：带星号的模型可直接使用 **HuggingFace Torch 权重**，支持 **FP8/WINT8/WINT4 动态量化** 和 **BF16 精度** 推理，推理时需启用 **`--load-choices "default_v1"`**。
 
 > 以baidu/ERNIE-4.5-21B-A3B-PT为例启动命令如下
 ```
@@ -24,7 +24,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --engine-worker-queue-port 8182 \
        --max-model-len 32768 \
        --max-num-seqs 32 \
-       --load_choices "default_v1"
+       --load-choices "default_v1"
 ```
 
 ## 纯文本模型列表

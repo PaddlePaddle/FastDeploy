@@ -499,12 +499,12 @@ std::vector<paddle::Tensor> AppendAttention(
   paddle::Tensor fmha_out;
   if (out_linear_in_scale > 0.0) {
     if (fabs(quant_max_bound - 127.0f) < 0.000001) {
-      fmha_out = GetEmptyTensor(
+      fmha_out = paddle::zeros(
         {meta_data.token_nums, meta_data.q_num_heads * meta_data.head_dims},
         paddle::DataType::INT8,
         qkv.place());
     } else if (fabs(quant_max_bound - 448.0f) < 0.000001) {
-      fmha_out = GetEmptyTensor(
+      fmha_out = paddle::zeros(
         {meta_data.token_nums, meta_data.q_num_heads * meta_data.head_dims},
         paddle::DataType::FLOAT8_E4M3FN,
         qkv.place());
@@ -512,7 +512,7 @@ std::vector<paddle::Tensor> AppendAttention(
       PD_THROW("Only supported attr of quant_max_bound in ['127', '448'].");
     }
   } else {
-    fmha_out = GetEmptyTensor(
+    fmha_out = paddle::zeros(
         {meta_data.token_nums, meta_data.q_num_heads * meta_data.head_dims},
         dtype_id,
         qkv.place());
@@ -1081,9 +1081,7 @@ PD_BUILD_STATIC_OP(append_attention)
              paddle::Optional("q_norm_weight"),
              paddle::Optional("k_norm_weight"),
              paddle::Optional("sinks")})
-    .Outputs({"fmha_out", "key_cache_out", "value_cache_out"})
-    .SetInplaceMap({{"key_cache", "key_cache_out"},
-                    {"value_cache", "value_cache_out"}})
+    .Outputs({"fmha_out"})
     .Attrs({"rms_norm_eps: float",
             "compute_type: std::string",
             "cache_quant_type: std::string",
