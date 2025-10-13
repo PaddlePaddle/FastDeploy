@@ -82,10 +82,7 @@ from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.pool.metadata import PoolingMetadata
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
-from fastdeploy.model_executor.models.interfaces_base import (
-    FdModelForPooling,
-    is_pooling_model,
-)
+from fastdeploy.model_executor.models.interfaces_base import FdModelForPooling
 from fastdeploy.output.pooler import PoolerOutput
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
@@ -745,7 +742,7 @@ class GPUModelRunner(ModelRunnerBase):
 
     def get_supported_pooling_tasks(self) -> list[PoolingTask]:
         model = self.get_model()
-        if not is_pooling_model(model):
+        if not self.is_pooling_model:
             return []
 
         supported_tasks = list(model.pooler.get_supported_tasks())
