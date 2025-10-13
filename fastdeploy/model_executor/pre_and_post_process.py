@@ -260,7 +260,7 @@ def post_process_normal(
             model_output.next_tokens,
             model_output.pre_ids,
             model_output.step_idx,
-            model_output.stop_token_ids,
+            model_output.stop_seqs,
             model_output.stop_seqs_len,
             False,
         )  # multi ends
@@ -273,7 +273,7 @@ def post_process_normal(
             model_output.next_tokens,
             model_output.pre_ids,
             model_output.step_idx,
-            model_output.stop_token_ids,
+            model_output.stop_seqs,
             model_output.stop_seqs_len,
             False,
         )  # multi ends

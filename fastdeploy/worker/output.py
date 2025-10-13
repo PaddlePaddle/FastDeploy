@@ -250,6 +250,11 @@ class ModelOutputData:
     """
     stop_seqs_len: paddle.Tensor = None
 
+    """
+        the string of stop sequences
+    """
+    stop_seqs: paddle.Tensor = None
+
 
 @dataclass
 class ModelRunnerOutput:

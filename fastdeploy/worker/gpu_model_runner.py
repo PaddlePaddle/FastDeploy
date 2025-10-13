@@ -434,16 +434,19 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
                 self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
 
-            if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
+            if request.get("stop_seqs") is not None and request.get("stop_seqs_len") is not None:
+                print("stop_token_ids", request.get("stop_token_ids"))
+                print("stop_seqs", request.get("stop_seqs"))
+                print("stop_seqs_len", request.get("stop_seqs_len"))
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
                     request.sampling_params.stop_seqs_len.append(0)
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = np.array(
                     request.sampling_params.stop_seqs_len, dtype="int32"
                 )
-                self.share_inputs["stop_seqs"][
-                    idx : idx + 1, :stop_seqs_num, : len(request.get("stop_token_ids")[0])
-                ] = np.array(request.get("stop_token_ids"), dtype="int64")
+                self.share_inputs["stop_seqs"][idx : idx + 1, :stop_seqs_num, : len(request.get("stop_seqs")[0])] = (
+                    np.array(request.get("stop_seqs"), dtype="int64")
+                )
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
@@ -644,16 +647,16 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
                 self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
 
-            if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
+            if request.get("stop_seqs") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
                 for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
                     request.sampling_params.stop_seqs_len.append(0)
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = np.array(
                     request.sampling_params.stop_seqs_len, dtype="int32"
                 )
-                self.share_inputs["stop_seqs"][
-                    idx : idx + 1, :stop_seqs_num, : len(request.get("stop_token_ids")[0])
-                ] = np.array(request.get("stop_token_ids"), dtype="int64")
+                self.share_inputs["stop_seqs"][idx : idx + 1, :stop_seqs_num, : len(request.get("stop_seqs")[0])] = (
+                    np.array(request.get("stop_seqs"), dtype="int64")
+                )
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
@@ -1461,7 +1464,7 @@ class GPUModelRunner(ModelRunnerBase):
                 think_end_id=self.model_config.think_end_id,
                 need_think_end=self.share_inputs["need_think_end"],
                 reasoning_index=self.share_inputs["reasoning_index"],
-                stop_token_ids=self.share_inputs["stop_seqs"],
+                stop_seqs=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
             )
 
@@ -1815,7 +1818,7 @@ class GPUModelRunner(ModelRunnerBase):
             think_end_id=self.model_config.think_end_id,
             need_think_end=self.share_inputs["need_think_end"][:num_running_requests],
             reasoning_index=self.share_inputs["reasoning_index"][:num_running_requests],
-            stop_token_ids=self.share_inputs["stop_seqs"],
+            stop_seqs=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
 

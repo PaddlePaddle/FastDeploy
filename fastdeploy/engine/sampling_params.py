@@ -58,7 +58,7 @@ class SamplingParams:
             considered, relative to the probability of the most likely token.
             Must be in [0, 1]. Set to 0 to disable this.
         seed: Random seed to use for the generation.
-        stop: list of strings that stop the generation when they are generated.
+        stop_seqs: list of strings that stop the generation when they are generated.
             The returned output will not contain the stop strings.
         stop_token_ids: list of tokens that stop the generation when they are
             generated. The returned output will contain the stop tokens unless
@@ -90,7 +90,7 @@ class SamplingParams:
     top_k: int = 0
     min_p: float = 0.0
     seed: Optional[int] = None
-    stop: Optional[Union[str, List[str]]] = None
+    stop_seqs: Optional[Union[str, List[str]]] = None
     stop_token_ids: Optional[List[int]] = None
     stop_seqs_len: Optional[int] = None
     max_tokens: Optional[int] = None
@@ -127,7 +127,7 @@ class SamplingParams:
         top_k,
         min_p,
         seed=None,
-        stop=None,
+        stop_seqs=None,
         stop_token_ids=None,
         max_tokens=None,
         reasoning_max_tokens=None,
@@ -149,7 +149,7 @@ class SamplingParams:
             top_k=top_k if top_k is not None else 0,
             min_p=min_p if min_p is not None else 0.0,
             seed=seed,
-            stop=stop,
+            stop_seqs=stop_seqs,
             stop_token_ids=stop_token_ids,
             max_tokens=max_tokens if max_tokens is not None else 8192,
             reasoning_max_tokens=reasoning_max_tokens,
