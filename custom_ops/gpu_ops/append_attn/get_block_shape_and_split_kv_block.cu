@@ -498,6 +498,8 @@ void GetBlockShapeAndSplitKVBlock(
 
         decoder_num_blocks_cpu.copy_(
             decoder_num_blocks_device, decoder_num_blocks_cpu.place(), false);
+        PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
+            decoder_chunk_size_device.data<int>(), 64, sizeof(int32_t), stream));
     }
   } else {
       PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
