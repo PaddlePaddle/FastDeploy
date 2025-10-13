@@ -30,6 +30,8 @@
 #include <nvml.h>
 #include <cassert>
 #include <cstdlib>
+#include <cstdlib>
+#include <cstring>
 
 #ifdef PADDLE_WITH_HIP
 #include <hip/hip_bfloat16.h>
@@ -607,6 +609,17 @@ inline bool GetMlaUseTensorcore() {
   return mla_use_tensorcore;
 }
 
+inline const char *getEnvVar(const char *varName) {
+  return std::getenv(varName);
+}
+
+inline bool checkAttentionBackend() {
+  const char *backend = getEnvVar("FD_ATTENTION_BACKEND");
+  if (backend && std::strcmp(backend, "MLA_ATTN") == 0) {
+    return true;
+  }
+  return false;
+}
 
 #ifndef GPU_MEMORY_CHECKER_H
 #define GPU_MEMORY_CHECKER_H

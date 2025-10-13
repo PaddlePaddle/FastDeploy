@@ -302,7 +302,7 @@ class GCUModelRunner(ModelRunnerBase):
         max_dec_len = expected_decode_len + 1
         full_length = min(
             num_tokens // batch_size,
-            self.parallel_config.max_model_len - max_dec_len,
+            self.model_config.max_model_len - max_dec_len,
         )
         input_length = int(full_length * self.cache_config.kv_cache_ratio)
         block_num = (
@@ -344,17 +344,17 @@ class GCUModelRunner(ModelRunnerBase):
         self.share_inputs = {}
 
         self.share_inputs["pre_ids"] = paddle.full(
-            [max_num_seqs, self.parallel_config.max_model_len],
+            [max_num_seqs, self.model_config.max_model_len],
             -1,
             dtype="int64",
         )
         self.share_inputs["input_ids"] = paddle.full(
-            [max_num_seqs, self.parallel_config.max_model_len],
+            [max_num_seqs, self.model_config.max_model_len],
             self.model_config.pad_token_id,
             dtype="int64",
         )
         self.share_inputs["prompt_ids"] = paddle.full(
-            [max_num_seqs, self.parallel_config.max_model_len],
+            [max_num_seqs, self.model_config.max_model_len],
             self.model_config.pad_token_id,
             dtype="int64",
         )
@@ -417,7 +417,7 @@ class GCUModelRunner(ModelRunnerBase):
         self.share_inputs["system_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int32")
 
         self.share_inputs["ids_remove_padding"] = paddle.full(
-            [max_num_seqs * self.parallel_config.max_model_len],
+            [max_num_seqs * self.model_config.max_model_len],
             0,
             dtype="int64",
         )
@@ -439,7 +439,7 @@ class GCUModelRunner(ModelRunnerBase):
         self.share_inputs["max_len_kv_cpu"] = None  # CPU
 
         # Initialize rotary position embedding
-        tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
+        tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
         self.share_inputs["rope_emb"] = get_rope(
             rotary_dim=self.model_config.head_dim,
             position_ids=tmp_position_ids,
@@ -449,7 +449,7 @@ class GCUModelRunner(ModelRunnerBase):
 
         # Set block tables
         pre_max_block_num = (
-            self.parallel_config.max_model_len + self.cache_config.block_size - 1
+            self.model_config.max_model_len + self.cache_config.block_size - 1
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
         self.share_inputs["block_tables"] = paddle.full([max_num_seqs, pre_max_block_num], -1, dtype="int32")
 
@@ -478,7 +478,7 @@ class GCUModelRunner(ModelRunnerBase):
         if self.speculative_decoding:
             max_draft_token_num = self.speculative_config.num_speculative_tokens
             self.share_inputs["input_ids_cpu"] = paddle.full(
-                shape=[max_num_seqs, self.parallel_config.max_model_len],
+                shape=[max_num_seqs, self.model_config.max_model_len],
                 fill_value=1,
                 dtype="int64",
             ).cpu()
@@ -779,7 +779,7 @@ class GCUModelRunner(ModelRunnerBase):
                 (
                     self.share_inputs["output_padding_offset"] if self.speculative_decoding else None
                 ),  # speculative decoding requires
-                self.parallel_config.max_model_len,
+                self.model_config.max_model_len,
             )
 
             # 4. Execute spec decode
@@ -802,7 +802,7 @@ class GCUModelRunner(ModelRunnerBase):
                 self.sampler(
                     logits,
                     self.sampling_metadata,
-                    self.parallel_config.max_model_len,
+                    self.model_config.max_model_len,
                     self.share_inputs,
                 )
                 sampler_output = None
@@ -1002,7 +1002,7 @@ class GCUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_decoder"],
             self.share_inputs["seq_lens_encoder"],
             (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
-            self.parallel_config.max_model_len,
+            self.model_config.max_model_len,
         )
 
         # 4. Compute logits, Sample
@@ -1030,7 +1030,7 @@ class GCUModelRunner(ModelRunnerBase):
             self.sampler(
                 logits,
                 self.sampling_metadata,
-                self.parallel_config.max_model_len,
+                self.model_config.max_model_len,
                 self.share_inputs,
             )
             sampler_output = None
