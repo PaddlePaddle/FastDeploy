@@ -709,8 +709,11 @@ void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor &pre_ids_all,
 void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,
                                       const paddle::Tensor& accept_num,
                                       const paddle::Tensor& not_need_stop,
+                                      const paddle::Tensor& seq_lens_decoder,
+                                      const paddle::Tensor& prompt_lens,
                                       int64_t rank_id,
-                                      bool save_each_rank);
+                                      bool save_each_rank,
+                                      bool skip_prefill);
 
 
 void SpeculateClearAcceptNums(const paddle::Tensor& accept_num,
