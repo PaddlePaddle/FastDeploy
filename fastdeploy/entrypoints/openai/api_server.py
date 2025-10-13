@@ -198,6 +198,7 @@ async def lifespan(app: FastAPI):
         pid,
         args.ips,
         args.max_waiting_time,
+        chat_template,
     )
     engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid
@@ -385,7 +386,7 @@ async def list_models() -> Response:
         return JSONResponse(content=models.model_dump())
 
 
-@app.get("/v1/embeddings")
+@app.post("/v1/embeddings")
 async def create_embedding(request: EmbeddingRequest):
     """
     Create embeddings for the input texts

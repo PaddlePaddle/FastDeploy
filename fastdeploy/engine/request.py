@@ -159,7 +159,7 @@ class Request:
         sampling_params: SamplingParams = None
         pooling_params: PoolingParams = None
         if "pooling_params" in d and d["pooling_params"] is not None:
-            pooling_params = d["pooling_params"]
+            pooling_params = PoolingParams.from_dict(d["pooling_params"])
         else:
             sampling_params = SamplingParams.from_dict(d)
         return cls(
@@ -530,6 +530,7 @@ class PoolingOutput:
 _O = TypeVar("_O", default=PoolingOutput)
 
 
+@dataclass
 class PoolingRequestOutput(Generic[_O]):
     """
     The output data of a pooling request to the LLM.
@@ -541,11 +542,10 @@ class PoolingRequestOutput(Generic[_O]):
         finished (bool): A flag indicating whether the pooling is completed.
     """
 
-    def __init__(self, request_id: str, outputs: _O, prompt_token_ids: list[int], finished: bool):
-        self.request_id = request_id
-        self.prompt_token_ids = prompt_token_ids
-        self.finished = finished
-        self.outputs = outputs
+    request_id: str
+    outputs: _O
+    prompt_token_ids: list[int]
+    finished: bool
 
     def __repr__(self):
         return (
@@ -554,6 +554,16 @@ class PoolingRequestOutput(Generic[_O]):
             f"prompt_token_ids={self.prompt_token_ids}, "
             f"finished={self.finished})"
         )
+
+    @classmethod
+    def from_dict(cls, req_dict: dict):
+        """Create instance from dict arguments"""
+        outputs = PoolingOutput(req_dict["outputs"]["data"])
+        init_args = {
+            field.name: (outputs if field.name == "outputs" else req_dict.get(field.name, field.default))
+            for field in fields(cls)
+        }
+        return cls(**init_args)
 
 
 @dataclass

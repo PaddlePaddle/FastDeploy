@@ -20,7 +20,11 @@ from typing import Literal, Union
 import numpy as np
 from typing_extensions import assert_never, override
 
-from fastdeploy.engine.request import EmbeddingOutput, EmbeddingRequestOutput
+from fastdeploy.engine.request import (
+    EmbeddingOutput,
+    EmbeddingRequestOutput,
+    PoolingRequestOutput,
+)
 from fastdeploy.entrypoints.openai.protocol import (
     EmbeddingRequest,
     EmbeddingResponse,
@@ -53,8 +57,8 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
     OpenAI-style embedding serving using pipeline pattern
     """
 
-    def __init__(self, engine_client, models, pid, ips, max_waiting_time):
-        super().__init__(engine_client, models, pid, ips, max_waiting_time)
+    def __init__(self, engine_client, models, pid, ips, max_waiting_time, chat_template):
+        super().__init__(engine_client, models, pid, ips, max_waiting_time, chat_template)
 
     async def create_embedding(self, request: EmbeddingRequest):
         """
@@ -76,7 +80,10 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
     def _build_response(self, ctx: ServeContext):
         """Generate final embedding response"""
 
-        embedding_res = EmbeddingRequestOutput.from_base(ctx.request_output)
+        print(f"=====> {ctx.request_output} <======")
+
+        base = PoolingRequestOutput.from_dict(ctx.request_output)
+        embedding_res = EmbeddingRequestOutput.from_base(base)
 
         data = EmbeddingResponseData(
             index=0,
