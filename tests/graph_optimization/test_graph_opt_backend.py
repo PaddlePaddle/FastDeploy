@@ -93,6 +93,7 @@ class TestGraphOptBackend(unittest.TestCase):
         baseline_cache_config = CacheConfig({})
         baseline_parallel_config = ParallelConfig(args={})
         model_config = Mock()
+        model_config.max_model_len = 512
         self.baseline_fd_config = FDConfig(
             graph_opt_config=baseline_graph_opt_config,
             scheduler_config=baseline_scheduler_config,
@@ -141,6 +142,7 @@ class TestGraphOptBackend(unittest.TestCase):
         cache_config = CacheConfig({})
         parallel_config = ParallelConfig(args={})
         model_config = Mock()
+        model_config.max_model_len = 512
 
         # Create FD config
         return FDConfig(
