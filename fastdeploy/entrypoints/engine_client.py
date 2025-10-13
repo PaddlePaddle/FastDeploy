@@ -68,7 +68,7 @@ class EngineClient:
         enable_prefix_caching=None,
         splitwise_role=None,
     ):
-        model_config = ModelConfig({"model": model_name_or_path}).architectures[0]
+        model_config = ModelConfig({"model": model_name_or_path})
         input_processor = InputPreprocessor(
             model_config,
             reasoning_parser,

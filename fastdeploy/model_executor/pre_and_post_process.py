@@ -672,3 +672,5 @@ def limit_thinking_content_length(
             think_end_id,
             line_break_id,
         )
+    else:
+        raise NotImplementedError(f"Not support {limit_strategy=} for limit thinking content length.")
