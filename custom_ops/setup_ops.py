@@ -302,6 +302,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/noaux_tc.cu",
         "gpu_ops/custom_all_reduce/all_reduce.cu",
         "gpu_ops/merge_prefill_decode_output.cu",
+        "gpu_ops/rotary_pos_emb_vision.cu",
     ]
 
     # pd_disaggregation

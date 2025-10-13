@@ -34,6 +34,7 @@ from paddle.nn.functional.flash_attention import (
 from paddleformers.transformers.model_utils import PretrainedModel
 
 from fastdeploy.model_executor.layers.utils import divide, get_tensor
+from fastdeploy.model_executor.ops.gpu import apply_rotary_pos_emb_vision
 from fastdeploy.model_executor.utils import set_weight_attrs
 
 from .activation import ACT2FN
@@ -125,7 +126,7 @@ def rotate_half(x):
     return paddle.concat([-x2, x1], axis=-1)  # shape is the same as x
 
 
-def apply_rotary_pos_emb_vision(tensor: paddle.Tensor, freqs: paddle.Tensor) -> paddle.Tensor:
+def apply_rotary_pos_emb_vision_py(tensor: paddle.Tensor, freqs: paddle.Tensor) -> paddle.Tensor:
     """_summary_
 
     Args:
@@ -231,7 +232,10 @@ class VisionFlashAttention2(nn.Layer):
         self,
         hidden_states: paddle.Tensor,
         cu_seqlens: paddle.Tensor,
-        rotary_pos_emb: paddle.Tensor = None,
+        rotary_pos_emb: paddle.Tensor,
+        cos: paddle.Tensor,
+        sin: paddle.Tensor,
+        max_seqlen: int,
     ) -> paddle.Tensor:
         """_summary_
 
@@ -257,10 +261,9 @@ class VisionFlashAttention2(nn.Layer):
             .transpose(perm=[1, 0, 2, 3])
         )
         q, k, v = qkv.unbind(axis=0)
-        q = apply_rotary_pos_emb_vision(q.unsqueeze(axis=0), rotary_pos_emb).squeeze(axis=0)
-        k = apply_rotary_pos_emb_vision(k.unsqueeze(axis=0), rotary_pos_emb).squeeze(axis=0)
 
-        max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
+        q = apply_rotary_pos_emb_vision(q.astype(dtype="float32"), rotary_pos_emb, cos, sin).astype(dtype="bfloat16")
+        k = apply_rotary_pos_emb_vision(k.astype(dtype="float32"), rotary_pos_emb, cos, sin).astype(dtype="bfloat16")
 
         softmax_scale = self.head_dim**-0.5  # TODO: 需要手动加上
 
@@ -311,10 +314,7 @@ class PatchEmbed(nn.Layer):
         Returns:
             paddle.Tensor: _description_
         """
-        target_dtype = self.proj.weight.dtype
-
-        hidden_states = self.proj(paddle.cast(hidden_states, dtype=target_dtype))
-
+        hidden_states = self.proj(hidden_states)
         return hidden_states
 
 
@@ -448,7 +448,7 @@ class DFNRopeVisionBlock(nn.Layer):
         )
         self.config = config
 
-    def forward(self, hidden_states, cu_seqlens, rotary_pos_emb) -> paddle.Tensor:
+    def forward(self, hidden_states, cu_seqlens, rotary_pos_emb, cos, sin, max_seqlen) -> paddle.Tensor:
         """_summary_
 
         Args:
@@ -463,6 +463,9 @@ class DFNRopeVisionBlock(nn.Layer):
             self.norm1(hidden_states),
             cu_seqlens=cu_seqlens,
             rotary_pos_emb=rotary_pos_emb,
+            cos=cos,
+            sin=sin,
+            max_seqlen=max_seqlen,
         )
 
         hidden_states = hidden_states + self.mlp(self.norm2(hidden_states))
@@ -533,8 +536,7 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
 
         set_weight_attrs(self.patch_embed.proj.weight, {"weight_need_transpose": model_format == "torch"})
 
-        head_dim = config.vision_config.embed_dim // config.vision_config.num_heads
-        self.rotary_pos_emb = VisionRotaryEmbedding(head_dim // 2)
+        self.head_dim = config.vision_config.embed_dim // config.vision_config.num_heads
 
         self.blocks = nn.LayerList(
             [
@@ -561,6 +563,24 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
             paddle.dtype: _description_
         """
         return self.blocks[0].mlp.fc2.weight.dtype
+
+    def vision_rotary_embedding(self, seqlen):
+        """_summary_
+
+        Args:
+            seqlen (int): _description_
+
+        Returns:
+            paddle.Tensor: _description_
+        """
+        theta = float(10000.0)
+        inv_freq = 1.0 / theta ** (
+            np.arange(start=0, stop=(self.head_dim // 2), step=2, dtype="float32") / (self.head_dim // 2)
+        )
+        seq = np.arange(seqlen, dtype=inv_freq.dtype)
+        freqs = np.outer(a=seq, b=inv_freq)
+
+        return paddle.to_tensor(freqs)
 
     def rot_pos_emb(self, grid_thw, num_pad=0):
         """_summary_
@@ -604,9 +624,12 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         if num_pad > 0:
             pos_ids = np.concatenate([pos_ids, np.zeros((num_pad, 2), dtype=pos_ids.dtype)])
         max_grid_size = np.amax(grid_hw_array[:, 1:])
-        rotary_pos_emb_full = self.rotary_pos_emb(max_grid_size)
+        rotary_pos_emb_full = self.vision_rotary_embedding(max_grid_size)
         rotary_pos_emb = rotary_pos_emb_full[pos_ids].flatten(start_axis=1)
-        return rotary_pos_emb
+        rotary_pos_emb = rotary_pos_emb.tile(repeat_times=[1, 1, 2]).astype(dtype="float32")
+        cos = rotary_pos_emb.cos()
+        sin = rotary_pos_emb.sin()
+        return rotary_pos_emb, cos, sin
 
     def forward(self, hidden_states: paddle.Tensor, grid_thw: paddle.Tensor, num_pad=0) -> paddle.Tensor:
         """_summary_
@@ -620,8 +643,7 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         """
         hidden_states = self.patch_embed(hidden_states)
 
-        rotary_pos_emb = self.rot_pos_emb(grid_thw, num_pad=num_pad)
-
+        rotary_pos_emb, cos, sin = self.rot_pos_emb(grid_thw, num_pad=num_pad)
         cu_seqlens = paddle.repeat_interleave(grid_thw[:, 1] * grid_thw[:, 2], grid_thw[:, 0]).cumsum(
             axis=0, dtype="int32"
         )
@@ -632,6 +654,7 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         else:
             cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0)
 
+        max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
         vit_num_recompute_layers = getattr(self.config, "vit_num_recompute_layers", self.config.depth)
 
         for idx, blk in enumerate(self.blocks):
@@ -642,10 +665,11 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
                     hidden_states,
                     cu_seqlens=cu_seqlens,
                     rotary_pos_emb=rotary_pos_emb,
+                    cos=cos,
+                    sin=sin,
+                    max_seqlen=max_seqlen,
                 )
 
-        # ret = self.merger(hidden_states)
-        # ret = hidden_states
         ret = self.ln(hidden_states)  # add norm
         return ret
 

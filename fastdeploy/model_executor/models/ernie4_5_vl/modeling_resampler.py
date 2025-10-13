@@ -128,9 +128,17 @@ class RMSNorm(nn.Layer):
             - Maintains original dtype for numerical stability during computation
         """
         with paddle.amp.auto_cast(False):
-            variance = hidden_states.astype("float32").pow(2).mean(-1, keepdim=True)
-            hidden_states = paddle.rsqrt(variance + self.variance_epsilon) * hidden_states
-        return hidden_states.astype(self.weight.dtype) * self.weight
+            hidden_states, _ = paddle.incubate.nn.functional.fused_rms_norm(
+                x=hidden_states,
+                norm_weight=self.weight,
+                norm_bias=None,
+                epsilon=self.variance_epsilon,
+                begin_norm_axis=-1,
+            )
+
+        if self.weight.dtype in [paddle.float16, paddle.bfloat16] and hidden_states.dtype != self.weight.dtype:
+            hidden_states = paddle.cast(hidden_states, self.weight.dtype)
+        return hidden_states
 
 
 class VariableResolutionResamplerModel(nn.Layer):
@@ -217,15 +225,11 @@ class VariableResolutionResamplerModel(nn.Layer):
         x = x.reshape([-1, C * (spatial_conv_size**2)])
         return x
 
-    def forward(self, x, image_mask, token_type_ids, image_type_ids, grid_thw):
+    def forward(self, x, grid_thw):
         """
         x: image_features
-        image_mask: [B]
-        token_types_ids: [B]
-        image_type_ids:  [B_image]
         grid_thw: [B_image, 3]
         """
-        assert image_type_ids is not None
 
         def fwd_spatial(x):
             """
