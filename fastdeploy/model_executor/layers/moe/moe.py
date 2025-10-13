@@ -336,6 +336,10 @@ class FusedMoE(nn.Layer):
         loaded_weight = get_tensor(loaded_weight)
         param.copy_(loaded_weight, False)
 
+        if hasattr(param, "tensor_track"):
+            for i in range(self.num_local_experts):
+                param.tensor_track.mark(start=0, batch_id=i)
+
     def _load_expert_weight(
         self,
         param,

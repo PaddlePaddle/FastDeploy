@@ -469,6 +469,28 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
 
         self.create_w4a8_scale_weights(layer, layer.weight_key_map)
 
+        if layer.with_bias:
+            layer.up_gate_proj_bias = layer.create_parameter(
+                shape=[layer.num_experts, layer.moe_intermediate_size * 2],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            layer.down_proj_bias = layer.create_parameter(
+                shape=[layer.num_experts, layer.hidden_size],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            set_weight_attrs(
+                layer.up_gate_proj_bias,
+                extra_weight_attrs,
+            )
+            set_weight_attrs(
+                layer.down_proj_bias,
+                extra_weight_attrs,
+            )
+
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
         Paddle cutlass load weight process.
@@ -788,6 +810,28 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
         )
 
         self.create_w4afp8_scale_weights(layer, layer.weight_key_map)
+
+        if layer.with_bias:
+            layer.up_gate_proj_bias = layer.create_parameter(
+                shape=[layer.num_experts, layer.moe_intermediate_size * 2],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            layer.down_proj_bias = layer.create_parameter(
+                shape=[layer.num_experts, layer.hidden_size],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            set_weight_attrs(
+                layer.up_gate_proj_bias,
+                extra_weight_attrs,
+            )
+            set_weight_attrs(
+                layer.down_proj_bias,
+                extra_weight_attrs,
+            )
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
@@ -1123,6 +1167,28 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
             }
             set_weight_attrs(layer.up_gate_proj_weight_scale, scale_extra_weight_attrs)
             set_weight_attrs(layer.down_proj_weight_scale, scale_extra_weight_attrs)
+
+        if layer.with_bias:
+            layer.up_gate_proj_bias = layer.create_parameter(
+                shape=[layer.num_experts, layer.moe_intermediate_size * 2],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            layer.down_proj_bias = layer.create_parameter(
+                shape=[layer.num_experts, layer.hidden_size],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            set_weight_attrs(
+                layer.up_gate_proj_bias,
+                extra_weight_attrs,
+            )
+            set_weight_attrs(
+                layer.down_proj_bias,
+                extra_weight_attrs,
+            )
 
     def process_weights_after_loading(self, layer):
         """ """
