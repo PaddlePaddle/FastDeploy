@@ -63,12 +63,13 @@ class EngineSevice:
             cfg (Config): Config object containing all the configuration parameters.
         """
         self.cfg = cfg
-        if isinstance(self.cfg.cache_config.cache_queue_port, str):
-            self.cfg.cache_config.cache_queue_port = self.cfg.cache_config.cache_queue_port.split(",")
-        if isinstance(self.cfg.cache_config.cache_queue_port, list):
-            self.cfg.cache_config.cache_queue_port = int(
-                self.cfg.cache_config.cache_queue_port[self.cfg.parallel_config.local_data_parallel_id]
-            )
+        if cfg.splitwise_role != "mixed" or cfg.cache_config.enable_prefix_caching:
+            if isinstance(self.cfg.cache_config.cache_queue_port, str):
+                self.cfg.cache_config.cache_queue_port = self.cfg.cache_config.cache_queue_port.split(",")
+            if isinstance(self.cfg.cache_config.cache_queue_port, list):
+                self.cfg.cache_config.cache_queue_port = int(
+                    self.cfg.cache_config.cache_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+                )
 
         self.scheduler = cfg.scheduler_config.scheduler()
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
