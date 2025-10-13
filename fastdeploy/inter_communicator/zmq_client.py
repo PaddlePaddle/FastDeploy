@@ -18,6 +18,8 @@ from abc import ABC, abstractmethod
 
 import zmq
 
+from fastdeploy.utils import llm_logger
+
 
 class ZmqClientBase(ABC):
     """
@@ -89,3 +91,19 @@ class ZmqIpcClient(ZmqClientBase):
     def connect(self):
         self._ensure_socket()
         self.socket.connect(f"ipc://{self.file_name}")
+
+    def close(self):
+        """
+        Close the socket and context.
+        """
+        llm_logger.info("ZMQ client is closing connection...")
+        try:
+            if self.socket is not None and not self.socket.closed:
+                self.socket.setsockopt(zmq.LINGER, 0)
+                self.socket.close()
+            if self.context is not None:
+                self.context.term()
+
+        except Exception as e:
+            llm_logger.warning(f"ZMQ client failed to close connection - {e}")
+            return
