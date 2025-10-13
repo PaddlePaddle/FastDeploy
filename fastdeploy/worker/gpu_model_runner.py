@@ -747,14 +747,13 @@ class GPUModelRunner(ModelRunnerBase):
 
         supported_tasks = list(model.pooler.get_supported_tasks())
 
-        if self.cache_config.enable_prefix_caching and "encode" in supported_tasks:
+        if self.cache_config.enable_chunked_prefill and "encode" in supported_tasks:
             supported_tasks.remove("encode")
 
             logger.warning(
                 "Chunked prefill is not supported with "
                 "encode task which using ALL pooling. "
-                "Please turn off chunked prefill by "
-                "`--no-enable-chunked-prefill` before using it."
+                "Please turn off chunked prefill by export=FD_DISABLE_CHUNKED_PREFILL=1 before using it."
             )
 
         # score not support
@@ -1346,10 +1345,10 @@ class GPUModelRunner(ModelRunnerBase):
 
         req_num_tokens = num_tokens // num_reqs
 
-        dummy_prompt_lens = paddle.to_tensor(num_scheduled_tokens_list, dtype="int32")
+        dummy_prompt_lens = paddle.to_tensor(num_scheduled_tokens_list, dtype="int64")
         dummy_token_ids = paddle.zeros(
             [num_reqs, req_num_tokens],
-            dtype="int32",
+            dtype="int64",
         )
         model = cast(FdModelForPooling, self.get_model())
         dummy_pooling_params = PoolingParams(task=task)
@@ -1569,6 +1568,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             if self.is_pooling_model:
                 self._dummy_pooler_run(hidden_states)
+                break
             else:
                 self._dummy_sampler_run(hidden_states, model_output)
 
