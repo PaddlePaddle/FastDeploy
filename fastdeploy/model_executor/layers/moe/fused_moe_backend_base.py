@@ -161,11 +161,11 @@ class MoEMethodBase(QuantMethodBase):
         """
         if layer.ep_size > 1:
             if layer.fd_config.parallel_config.moe_phase.phase == "prefill":
-                if layer.fd_config.parallel_config.splitwise_role == "mixed":
+                if layer.fd_config.parallel_config.splitwise_role == "mixed" and layer.layer_idx == 0:
                     self.ep_prefill_runner.clean_low_latency_buffer()
                 return self.apply_ep_prefill(layer, x, gate)
             else:
-                if layer.fd_config.parallel_config.splitwise_role == "mixed":
+                if layer.fd_config.parallel_config.splitwise_role == "mixed" and layer.layer_idx == 0:
                     self.ep_decoder_runner.clean_low_latency_buffer()
                 return self.apply_ep_decode(layer, x, gate)
         else:
