@@ -486,20 +486,20 @@ void GetBlockShapeAndSplitKVBlock(
       PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
           decoder_num_blocks_device.data<int>(), 0, sizeof(int32_t), stream));
 
-        split_q_block_dec<<<1, 32, 0, stream>>>(
-            seq_lens_this_time.data<int>(),
-            seq_lens_encoder.data<int>(),
-            decoder_batch_ids.data<int>(),
-            decoder_tile_ids_per_batch.data<int>(),
-            decoder_num_blocks_device.data<int>(),
-            bsz,
-            decoder_block_shape_q,
-            group_size);
+      split_q_block_dec<<<1, 32, 0, stream>>>(
+          seq_lens_this_time.data<int>(),
+          seq_lens_encoder.data<int>(),
+          decoder_batch_ids.data<int>(),
+          decoder_tile_ids_per_batch.data<int>(),
+          decoder_num_blocks_device.data<int>(),
+          bsz,
+          decoder_block_shape_q,
+          group_size);
 
-        decoder_num_blocks_cpu.copy_(
-            decoder_num_blocks_device, decoder_num_blocks_cpu.place(), false);
-        PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
-            decoder_chunk_size_device.data<int>(), 64, sizeof(int32_t), stream));
+      decoder_num_blocks_cpu.copy_(
+          decoder_num_blocks_device, decoder_num_blocks_cpu.place(), false);
+      PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
+          decoder_chunk_size_device.data<int>(), 64, sizeof(int32_t), stream));
     }
   } else {
       PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
