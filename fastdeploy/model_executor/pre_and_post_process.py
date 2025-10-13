@@ -42,6 +42,8 @@ elif current_platform.is_gcu():
 elif current_platform.is_dcu():
     from fastdeploy.model_executor.ops.gpu import (
         get_padding_offset,
+        limit_thinking_content_length_v1,
+        limit_thinking_content_length_v2,
         save_output,
         set_stop_value_multi_ends,
         step_paddle,
@@ -80,7 +82,6 @@ else:
         update_inputs_v1,
         speculate_step_reschedule,
     )
-
 
 from fastdeploy.inter_communicator import ZmqIpcClient
 from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
@@ -641,3 +642,33 @@ def rebuild_padding(
     else:
         raise RuntimeError("Not supported platform")
     return hidden_states
+
+
+def limit_thinking_content_length(
+    limit_strategy: str,
+    sampled_token_ids: paddle.Tensor,
+    max_think_lens: paddle.Tensor,
+    step_idx: paddle.Tensor,
+    limit_think_status: paddle.Tensor,
+    think_end_id: int,
+    line_break_id: int = None,
+):
+    if limit_strategy == "</think>":
+        # for ernie4_5_vl
+        limit_thinking_content_length_v1(
+            sampled_token_ids,
+            max_think_lens,
+            step_idx,
+            limit_think_status,
+            think_end_id,
+        )
+    elif limit_strategy == "\n</think>\n\n":
+        # for ernie_x1
+        limit_thinking_content_length_v2(
+            sampled_token_ids,
+            max_think_lens,
+            step_idx,
+            limit_think_status,
+            think_end_id,
+            line_break_id,
+        )

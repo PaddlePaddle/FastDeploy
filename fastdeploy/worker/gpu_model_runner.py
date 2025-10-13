@@ -63,6 +63,7 @@ else:
     )
 
 from fastdeploy.model_executor.pre_and_post_process import (
+    limit_thinking_content_length,
     post_process,
     pre_process,
     rebuild_padding,
@@ -323,6 +324,16 @@ class GPUModelRunner(ModelRunnerBase):
                         position_ids, request.get("max_tokens", 2048)
                     )
 
+                if request.get("reasoning_max_tokens") is not None:
+                    assert request.get("reasoning_max_tokens") >= 0, "reasoning_max_tokens in requests need >= 0."
+                    # Enable thinking
+                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
+                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                else:
+                    # Disable thinking
+                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+
                 if isinstance(request.prompt_token_ids, np.ndarray):
                     prompt_token_ids = request.prompt_token_ids.tolist()
                 else:
@@ -545,6 +556,16 @@ class GPUModelRunner(ModelRunnerBase):
                         position_ids, request.get("max_tokens", 2048)
                     )
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
+
+                if request.get("reasoning_max_tokens") is not None:
+                    assert request.get("reasoning_max_tokens") >= 0, "reasoning_max_tokens in requests need >= 0."
+                    # Enable thinking
+                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
+                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                else:
+                    # Disable thinking
+                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
                 res = request.get(attr, default_value)
@@ -833,16 +854,15 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["kv_num_blocks_x_cpu"] = None  # CPU
         self.share_inputs["max_len_kv_cpu"] = None  # CPU
 
-        # Initialize rotary position embedding
-        tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
-
         # Initialize thinking related buffers
+        self.share_inputs["max_think_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
+        self.share_inputs["limit_think_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
-        # TODO(gongshaotian): move to models
+        # Initialize rotary position embedding
         if not self.enable_mm:
             self.share_inputs["rope_emb"] = get_rope(
                 rotary_dim=self.model_config.head_dim,
-                position_ids=tmp_position_ids,
+                position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
                 base=self.model_config.rope_theta,
                 model_config=self.model_config,
                 partial_rotary_factor=self.model_config.partial_rotary_factor,
@@ -1736,6 +1756,21 @@ class GPUModelRunner(ModelRunnerBase):
                     self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
                     group=self.parallel_config.tp_group,
                 )
+
+        if self.model_config.think_end_id > 0 and not self.speculative_decoding:
+            assert (
+                sampler_output is not None
+            ), "Warning, limit thinking content length not support speculative decoding."
+            assert self.model_config.line_break_id > 0
+            limit_thinking_content_length(
+                limit_strategy="</think>",  # Temporary writing death
+                sampled_token_ids=sampler_output.sampled_token_ids,
+                max_think_lens=self.share_inputs["max_think_lens"],
+                step_idx=self.share_inputs["step_idx"],
+                limit_think_status=self.share_inputs["limit_think_status"],
+                think_end_id=self.model_config.think_end_id,
+                line_break_id=self.model_config.line_break_id,
+            )
 
         # 5. Post Process
         model_output_data = ModelOutputData(

@@ -30,7 +30,6 @@ from typing_extensions import assert_never
 import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfigBase
-from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.transformer_utils.config import get_pooling_config
@@ -225,50 +224,12 @@ class ModelConfig:
 
         self.ori_vocab_size = args.get("ori_vocab_size", self.vocab_size)
         self.think_end_id = args.get("think_end_id", -1)
-
-        architectures = self.architectures[0]
-
-        if MultimodalRegistry.contains_model(architectures):
-            self.enable_mm = True
-        else:
-            self.enable_mm = False
-
-        self.is_unified_ckpt = check_unified_ckpt(self.model)
+        self.im_patch_id = args.get("image_patch_id", -1)
+        self.line_break_id = args.get("line_break_id", -1)
 
         self.override_name_from_config()
         self.read_from_env()
         self.read_model_config()
-        self.runner_type = self._get_runner_type(self.architectures, self.runner)
-        self.convert_type = self._get_convert_type(self.architectures, self.runner_type, self.convert)
-
-        registry = self.registry
-        is_generative_model = registry.is_text_generation_model(self.architectures, self)
-        is_pooling_model = registry.is_pooling_model(self.architectures, self)
-        is_multimodal_model = registry.is_multimodal_model(self.architectures, self)
-
-        if self.runner_type == "generate" and not is_generative_model:
-            if is_multimodal_model:
-                pass
-            else:
-                generate_converts = _RUNNER_CONVERTS["generate"]
-                if self.convert_type not in generate_converts:
-                    raise ValueError("This model does not support '--runner generate.")
-        if self.runner_type == "pooling" and not is_pooling_model:
-            pooling_converts = _RUNNER_CONVERTS["pooling"]
-            if self.convert_type not in pooling_converts:
-                convert_option = "<" + "|".join(pooling_converts) + ">"
-                raise ValueError(
-                    "This model does not support `--runner pooling`. "
-                    f"You can pass `--convert {convert_option} to adapt "
-                    "it into a pooling model."
-                )
-
-        self.supported_tasks = self._get_supported_tasks(self.architectures, self.runner_type, self.convert_type)
-        model_info, arch = registry.inspect_model_cls(self.architectures, self)
-        self._model_info = model_info
-        self._architecture = arch
-
-        self.pooler_config = self._init_pooler_config()
 
     @property
     def registry(self):
@@ -509,6 +470,42 @@ class ModelConfig:
         for k, v in self.__dict__.items():
             logger.info("{:<20}:{:<6}{}".format(k, "", v))
         logger.info("=============================================================")
+
+    def __post_init__(self):
+        self.is_unified_ckpt = check_unified_ckpt(self.model)
+        self.runner_type = self._get_runner_type(self.architectures, self.runner)
+        self.convert_type = self._get_convert_type(self.architectures, self.runner_type, self.convert)
+        registry = self.registry
+        is_generative_model = registry.is_text_generation_model(self.architectures, self)
+        is_pooling_model = registry.is_pooling_model(self.architectures, self)
+        is_multimodal_model = registry.is_multimodal_model(self.architectures, self)
+        self.is_reasoning_model = registry.is_reasoning_model(self.architectures, self)
+
+        self.enable_mm = is_multimodal_model
+
+        if self.runner_type == "generate" and not is_generative_model:
+            if is_multimodal_model:
+                pass
+            else:
+                generate_converts = _RUNNER_CONVERTS["generate"]
+                if self.convert_type not in generate_converts:
+                    raise ValueError("This model does not support '--runner generate.")
+        if self.runner_type == "pooling" and not is_pooling_model:
+            pooling_converts = _RUNNER_CONVERTS["pooling"]
+            if self.convert_type not in pooling_converts:
+                convert_option = "<" + "|".join(pooling_converts) + ">"
+                raise ValueError(
+                    "This model does not support `--runner pooling`. "
+                    f"You can pass `--convert {convert_option} to adapt "
+                    "it into a pooling model."
+                )
+
+        self.supported_tasks = self._get_supported_tasks(self.architectures, self.runner_type, self.convert_type)
+        model_info, arch = registry.inspect_model_cls(self.architectures, self)
+        self._model_info = model_info
+        self._architecture = arch
+
+        self.pooler_config = self._init_pooler_config()
 
 
 class ParallelConfig:

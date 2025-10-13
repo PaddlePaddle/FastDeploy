@@ -60,77 +60,77 @@ class EngineService:
     Base class containing common engine functionality
     """
 
-    def __init__(self, cfg, start_queue=True):
+    def __init__(self, fd_config, start_queue=True):
         """
         Initializes the LLMEngine with the provided configuration.
 
         Args:
-            cfg (Config): Config object containing all the configuration parameters.
+            fd_config (FDConfig): Config object containing all the configuration parameters.
         """
-        self.cfg = cfg
-        if isinstance(self.cfg.cache_config.cache_queue_port, str):
-            self.cfg.cache_config.cache_queue_port = self.cfg.cache_config.cache_queue_port.split(",")
-        if isinstance(self.cfg.cache_config.cache_queue_port, list):
-            self.cfg.cache_config.cache_queue_port = int(
-                self.cfg.cache_config.cache_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+        self.fd_config = fd_config
+        if isinstance(self.fd_config.cache_config.cache_queue_port, str):
+            self.fd_config.cache_config.cache_queue_port = self.fd_config.cache_config.cache_queue_port.split(",")
+        if isinstance(self.fd_config.cache_config.cache_queue_port, list):
+            self.fd_config.cache_config.cache_queue_port = int(
+                self.fd_config.cache_config.cache_queue_port[self.fd_config.parallel_config.local_data_parallel_id]
             )
 
-        if self.cfg.parallel_config.enable_expert_parallel:
+        if self.fd_config.parallel_config.enable_expert_parallel:
             self.llm_logger = get_logger(
-                "fastdeploy", f"fastdeploy_rank{self.cfg.parallel_config.local_data_parallel_id}.log"
+                "fastdeploy", f"fastdeploy_rank{self.fd_config.parallel_config.local_data_parallel_id}.log"
             )
         else:
             self.llm_logger = llm_logger
 
-        self.scheduler = cfg.scheduler_config.scheduler()
+        self.scheduler = fd_config.scheduler_config.scheduler()
         self.enable_decode_cache_task = envs.FD_ENABLE_CACHE_TASK == "1"
 
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.resource_manager = ResourceManagerV1(
-                cfg.scheduler_config.max_num_seqs,
-                cfg,
-                cfg.parallel_config.tensor_parallel_size,
-                cfg.scheduler_config.splitwise_role,
-                cfg.parallel_config.local_data_parallel_id,
+                fd_config.scheduler_config.max_num_seqs,
+                fd_config,
+                fd_config.parallel_config.tensor_parallel_size,
+                fd_config.scheduler_config.splitwise_role,
+                fd_config.parallel_config.local_data_parallel_id,
             )
         else:
             self.resource_manager = ResourceManager(
-                cfg.scheduler_config.max_num_seqs,
-                cfg,
-                cfg.parallel_config.tensor_parallel_size,
-                cfg.scheduler_config.splitwise_role,
-                cfg.parallel_config.local_data_parallel_id,
+                fd_config.scheduler_config.max_num_seqs,
+                fd_config,
+                fd_config.parallel_config.tensor_parallel_size,
+                fd_config.scheduler_config.splitwise_role,
+                fd_config.parallel_config.local_data_parallel_id,
             )
 
         self.start_worker_queue_service(start_queue)
 
-        os.environ["INFERENCE_MSG_QUEUE_ID"] = self.cfg.parallel_config.engine_worker_queue_port[
-            self.cfg.parallel_config.local_data_parallel_id
+        os.environ["INFERENCE_MSG_QUEUE_ID"] = self.fd_config.parallel_config.engine_worker_queue_port[
+            self.fd_config.parallel_config.local_data_parallel_id
         ]
 
-        self.split_connector = SplitwiseConnector(cfg, self.engine_worker_queue, self.resource_manager)
+        self.split_connector = SplitwiseConnector(fd_config, self.engine_worker_queue, self.resource_manager)
         self.waiting_requests = []
         self.token_processor = TokenProcessor(
-            cfg=cfg,
+            cfg=fd_config,
             cached_generated_tokens=self.scheduler,
             engine_worker_queue=self.engine_worker_queue,
             split_connector=self.split_connector,
         )
         self.token_processor.set_resource_manager(self.resource_manager)
 
-        self.partial_chunked_tokens = [0] * (self.cfg.max_num_partial_prefills + 1)
-        for idx in range(1, self.cfg.max_num_partial_prefills + 1):
+        self.partial_chunked_tokens = [0] * (self.fd_config.max_num_partial_prefills + 1)
+        for idx in range(1, self.fd_config.max_num_partial_prefills + 1):
             self.partial_chunked_tokens[idx] = (
-                (self.cfg.scheduler_config.max_num_batched_tokens // idx)
-                // self.cfg.cache_config.block_size
-                * self.cfg.cache_config.block_size
+                (self.fd_config.scheduler_config.max_num_batched_tokens // idx)
+                // self.fd_config.cache_config.block_size
+                * self.fd_config.cache_config.block_size
             )
 
         self.guided_decoding_checker = None
-        if self.cfg.guided_decoding_backend != "off":
+        if self.fd_config.guided_decoding_backend != "off":
             self.guided_decoding_checker = schema_checker(
-                self.cfg.guided_decoding_backend,
-                disable_any_whitespace=self.cfg.disable_any_whitespace,
+                self.fd_config.guided_decoding_backend,
+                disable_any_whitespace=self.fd_config.disable_any_whitespace,
             )
         self._init_worker_monitor_signals()
 
@@ -145,12 +145,14 @@ class EngineService:
         self.insert_task_to_worker_thread.start()
         self.token_processor.tasks_queue = self.engine_worker_queue
         self.token_processor.run()
-        if self.cfg.scheduler_config.splitwise_role != "mixed":
+        if self.fd_config.scheduler_config.splitwise_role != "mixed":
             self.split_mode_get_tasks()
 
     def _init_worker_monitor_signals(self):  # exist_task_signal 用于各worker进程感知是否有新Task需要处理
         current_suffix = int(
-            self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+            self.fd_config.parallel_config.engine_worker_queue_port[
+                self.fd_config.parallel_config.local_data_parallel_id
+            ]
         )
         self.llm_logger.info(f"current_suffix: {current_suffix}")
         exist_task_signal_data = np.zeros([1], dtype=np.int32)
@@ -184,7 +186,8 @@ class EngineService:
 
         # worker_live_signal 用于engine感知各worker进程是否存活，记录每个step 时间
         worker_healthy_live_recorded_time_array = np.zeros(
-            shape=[min(self.cfg.worker_num_per_node, self.cfg.parallel_config.tensor_parallel_size)], dtype=np.int32
+            shape=[min(self.fd_config.worker_num_per_node, self.fd_config.parallel_config.tensor_parallel_size)],
+            dtype=np.int32,
         )
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",
@@ -194,7 +197,7 @@ class EngineService:
             create=True,
         )
 
-        cache_ready_signal_data = np.zeros(shape=[self.cfg.parallel_config.tensor_parallel_size], dtype=np.int32)
+        cache_ready_signal_data = np.zeros(shape=[self.fd_config.parallel_config.tensor_parallel_size], dtype=np.int32)
         self.cache_ready_signal = IPCSignal(
             name="cache_ready_signal",
             array=cache_ready_signal_data,
@@ -203,7 +206,9 @@ class EngineService:
             create=True,
         )
 
-        swap_space_ready_signal_data = np.zeros(shape=[self.cfg.parallel_config.tensor_parallel_size], dtype=np.int32)
+        swap_space_ready_signal_data = np.zeros(
+            shape=[self.fd_config.parallel_config.tensor_parallel_size], dtype=np.int32
+        )
         self.swap_space_ready_signal = IPCSignal(
             name="swap_space_ready_signal",
             array=swap_space_ready_signal_data,
@@ -244,43 +249,53 @@ class EngineService:
         start queue service for engine worker communication
         """
         address = (
-            self.cfg.master_ip,
-            int(self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]),
+            self.fd_config.master_ip,
+            int(
+                self.fd_config.parallel_config.engine_worker_queue_port[
+                    self.fd_config.parallel_config.local_data_parallel_id
+                ]
+            ),
         )
 
-        if start_queue and (self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0"):
+        if start_queue and (
+            self.fd_config.host_ip == self.fd_config.master_ip or self.fd_config.master_ip == "0.0.0.0"
+        ):
             self.llm_logger.info(f"Starting engine worker queue server service at {address}")
             self.engine_worker_queue_server = EngineWorkerQueue(
                 address=address,
                 is_server=True,
-                num_client=self.cfg.parallel_config.tensor_parallel_size,
-                local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
+                num_client=self.fd_config.parallel_config.tensor_parallel_size,
+                local_data_parallel_size=self.fd_config.parallel_config.data_parallel_size,
             )
 
-            if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
+            if (
+                self.fd_config.cache_config.enable_prefix_caching
+                or self.fd_config.scheduler_config.splitwise_role != "mixed"
+            ):
                 self.cache_task_queue = EngineCacheQueue(
                     address=(
-                        self.cfg.master_ip,
-                        self.cfg.cache_config.cache_queue_port,
+                        self.fd_config.master_ip,
+                        self.fd_config.cache_config.cache_queue_port,
                     ),
                     authkey=b"cache_queue_service",
                     is_server=True,
-                    num_client=self.cfg.parallel_config.tensor_parallel_size,
+                    num_client=self.fd_config.parallel_config.tensor_parallel_size,
                     client_id=-1,
-                    local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
+                    local_data_parallel_size=self.fd_config.parallel_config.data_parallel_size,
                 )
         self.llm_logger.info(
-            f"local {min(self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,self.cfg.parallel_config.data_parallel_size - 1)}"
+            f"local {min(self.fd_config.worker_num_per_node * self.fd_config.node_rank + self.fd_config.parallel_config.local_data_parallel_id,self.fd_config.parallel_config.data_parallel_size - 1)}"
         )
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
-            num_client=self.cfg.parallel_config.tensor_parallel_size,
+            num_client=self.fd_config.parallel_config.tensor_parallel_size,
             client_id=0,
-            local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
+            local_data_parallel_size=self.fd_config.parallel_config.data_parallel_size,
             local_data_parallel_id=min(
-                self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,
-                self.cfg.parallel_config.data_parallel_size - 1,
+                self.fd_config.worker_num_per_node * self.fd_config.node_rank
+                + self.fd_config.parallel_config.local_data_parallel_id,
+                self.fd_config.parallel_config.data_parallel_size - 1,
             ),
         )
 
@@ -310,8 +325,8 @@ class EngineService:
                 cur_task.prompt_token_ids[0] = task.outputs.token_ids[0]
                 cur_task.num_cached_tokens = task.num_cached_tokens
                 if (
-                    self.cfg.speculative_config.method in ["mtp"]
-                    and self.cfg.scheduler_config.splitwise_role == "decode"
+                    self.fd_config.speculative_config.method in ["mtp"]
+                    and self.fd_config.scheduler_config.splitwise_role == "decode"
                 ):
                     cur_task.draft_token_ids = copy.deepcopy(task.outputs.draft_token_ids)
                 if task.error_code != 200:
@@ -338,7 +353,7 @@ class EngineService:
 
         need_delete_tasks = []
         for task in tasks:
-            if self.cfg.scheduler_config.splitwise_role != "mixed":
+            if self.fd_config.scheduler_config.splitwise_role != "mixed":
                 status, msg = self.split_connector.check_decode_allocated(task)
                 if not status:
                     self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
@@ -394,12 +409,12 @@ class EngineService:
             for task in tasks:
                 task.inference_start_time = time.time()
             if not is_prefill:
-                if not self.cfg.model_config.enable_mm:
+                if not self.fd_config.model_config.enable_mm:
                     self.update_requests_chunk_size(tasks)
                 else:
                     self.update_mm_requests_chunk_size(tasks)
             self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
-            if is_prefill and self.cfg.scheduler_config.name != "splitwise":
+            if is_prefill and self.fd_config.scheduler_config.name != "splitwise":
                 self.engine_worker_queue.available_prefill_instances.put(1)
         return True
 
@@ -432,14 +447,14 @@ class EngineService:
             if current_request_size[idx] <= 0:
                 chunk_request_num -= 1
 
-        if not self.cfg.cache_config.enable_chunked_prefill or len(requests) == 0:
+        if not self.fd_config.cache_config.enable_chunked_prefill or len(requests) == 0:
             return
 
         current_request_size = [request.prompt_token_ids_len for request in requests]
         requests_chunk = [[] for _ in range(len(requests))]
         chunk_request_num = len(current_request_size)
         while chunk_request_num >= 1:
-            remain_batched_tokens = self.cfg.scheduler_config.max_num_batched_tokens
+            remain_batched_tokens = self.fd_config.scheduler_config.max_num_batched_tokens
             for idx in range(len(current_request_size)):
                 if current_request_size[idx] <= 0:
                     continue
@@ -449,14 +464,16 @@ class EngineService:
                 )
                 update_tokens(idx, chunk_size)
 
-            while remain_batched_tokens >= self.cfg.cache_config.block_size:
+            while remain_batched_tokens >= self.fd_config.cache_config.block_size:
                 # 当前 max_num_batched_tokens 还有剩余时，优先分配给较短的请求
                 waiting_requests = [input_lens for input_lens in current_request_size if input_lens > 0]
                 if len(waiting_requests) == 0:
                     break
 
                 available_tokens = (
-                    remain_batched_tokens // self.cfg.cache_config.block_size * self.cfg.cache_config.block_size
+                    remain_batched_tokens
+                    // self.fd_config.cache_config.block_size
+                    * self.fd_config.cache_config.block_size
                 )
                 append_idx = current_request_size.index(min(waiting_requests))
                 chunk_size = min(
@@ -473,7 +490,7 @@ class EngineService:
         """
         update each multimodal request's chunk size info
         """
-        if not self.cfg.cache_config.enable_chunked_prefill or len(requests) == 0:
+        if not self.fd_config.cache_config.enable_chunked_prefill or len(requests) == 0:
             return
 
         for request in requests:
@@ -560,7 +577,7 @@ class EngineService:
                     continue
                 if hasattr(self, "exist_prefill_task_signal") and self.exist_prefill_task_signal.value[0] > 0:
                     if (
-                        self.cfg.scheduler_config.splitwise_role == "mixed"
+                        self.fd_config.scheduler_config.splitwise_role == "mixed"
                         or self.split_connector.has_splitwise_tasks()
                     ):
                         time.sleep(0.005)
@@ -574,15 +591,15 @@ class EngineService:
 
                 num_prefill_batch = min(
                     int(self.resource_manager.available_batch()),
-                    self.cfg.max_prefill_batch,
+                    self.fd_config.max_prefill_batch,
                 )
 
                 self.resource_manager.check_and_free_block_tables()
                 tasks = self.scheduler.get_requests(
                     available_blocks=self.resource_manager.available_block_num(),
-                    block_size=self.cfg.cache_config.block_size,
-                    reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
-                    max_num_batched_tokens=self.cfg.scheduler_config.max_num_batched_tokens,
+                    block_size=self.fd_config.cache_config.block_size,
+                    reserved_output_blocks=self.fd_config.cache_config.enc_dec_block_num,
+                    max_num_batched_tokens=self.fd_config.scheduler_config.max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
 
@@ -590,7 +607,7 @@ class EngineService:
                     time.sleep(0.001)
                     continue
 
-                if self.cfg.scheduler_config.splitwise_role != "mixed":
+                if self.fd_config.scheduler_config.splitwise_role != "mixed":
                     self.llm_logger.info("Inserting splitwise tasks")
                     self.split_connector.send_splitwise_tasks(tasks, current_id)
 
@@ -619,21 +636,21 @@ class EngineService:
                 is_fetching = True
                 num_prefill_batch = min(
                     int(self.resource_manager.available_batch()),
-                    self.cfg.max_prefill_batch,
+                    self.fd_config.max_prefill_batch,
                 )
-                if self.cfg.model_config.enable_mm:
+                if self.fd_config.model_config.enable_mm:
                     available_blocks = self.resource_manager.available_block_num()
                 else:
-                    available_blocks = self.cfg.cache_config.max_block_num_per_seq
+                    available_blocks = self.fd_config.cache_config.max_block_num_per_seq
 
                 tasks = self.scheduler.get_requests(
                     available_blocks=available_blocks,
-                    block_size=self.cfg.cache_config.block_size,
-                    reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
-                    max_num_batched_tokens=self.cfg.model_config.max_model_len,
+                    block_size=self.fd_config.cache_config.block_size,
+                    reserved_output_blocks=self.fd_config.cache_config.enc_dec_block_num,
+                    max_num_batched_tokens=self.fd_config.model_config.max_model_len,
                     batch=num_prefill_batch,
                 )
-                if self.cfg.scheduler_config.splitwise_role != "mixed":
+                if self.fd_config.scheduler_config.splitwise_role != "mixed":
                     for task in tasks:
                         # assure can allocate block ids in P
                         while not self.resource_manager.preallocate_resource_in_p(task):
@@ -642,7 +659,7 @@ class EngineService:
                         self.split_connector.send_splitwise_tasks([task], task.idx)
                     need_delete_tasks = []
                     for task in tasks:
-                        if self.cfg.scheduler_config.splitwise_role != "mixed":
+                        if self.fd_config.scheduler_config.splitwise_role != "mixed":
                             # assure fetch block ids from D
                             status, msg = self.split_connector.check_decode_allocated(task)
                             if not status:
@@ -663,7 +680,7 @@ class EngineService:
                         tasks.remove(tmp_task)
                         # release resource in P
                         self.resource_manager.prerelease_resource(tmp_task)
-                if self.cfg.scheduler_config.splitwise_role == "prefill":
+                if self.fd_config.scheduler_config.splitwise_role == "prefill":
                     # to send cache info to cache messager
                     if tasks:
                         self.split_connector.send_cache_infos(tasks, 0)
@@ -680,7 +697,7 @@ class EngineService:
                                 time.sleep(0.001)
                 # Fetch requests and add them to the scheduling queue
                 if tasks:
-                    if self.cfg.scheduler_config.splitwise_role == "prefill":
+                    if self.fd_config.scheduler_config.splitwise_role == "prefill":
                         self.resource_manager.add_request_in_p(tasks)
                     else:
                         for task in tasks:
@@ -695,7 +712,7 @@ class EngineService:
                 if self.engine_worker_queue.num_tasks() > 0:
                     time.sleep(0.001)
                     continue
-                if self.cfg.scheduler_config.splitwise_role != "mixed":
+                if self.fd_config.scheduler_config.splitwise_role != "mixed":
                     if self.scheduler.get_unhandled_request_num() <= envs.FD_EP_MAX_PREFETCH_TASK_NUM and (
                         not is_fetching
                     ):
@@ -712,7 +729,7 @@ class EngineService:
                 tasks = self.resource_manager.schedule()
                 # 3. Send to engine
                 if tasks:
-                    if self.cfg.scheduler_config.splitwise_role == "decode":
+                    if self.fd_config.scheduler_config.splitwise_role == "decode":
                         for task in tasks:
                             if task.task_type == RequestType.PREEMPTED:
                                 msg = f"{task.request_id} decode not enough blocks, need to be rescheduled."
@@ -744,7 +761,7 @@ class EngineService:
             self.recv_request_server = ZmqTcpServer(port=envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT, mode=zmq.PULL)
             self.send_response_server = ZmqTcpServer(port=envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT, mode=zmq.ROUTER)
             self.internal_adapter = InternalAdapter(
-                cfg=self.cfg, engine=self, dp_rank=self.cfg.node_rank * self.cfg.worker_num_per_node
+                cfg=self.fd_config, engine=self, dp_rank=self.fd_config.node_rank * self.fd_config.worker_num_per_node
             )
         else:
             self.recv_request_server = ZmqIpcServer(name=api_server_pid, mode=zmq.PULL)
@@ -763,12 +780,12 @@ class EngineService:
     def _insert_zmq_task_to_scheduler(self):
         added_requests: Dict[str, int] = dict()
         if envs.FD_ENABLE_INTERNAL_ADAPTER:
-            if self.cfg.scheduler_config.splitwise_role == "decode":
+            if self.fd_config.scheduler_config.splitwise_role == "decode":
                 return
         while self.running:
             try:
                 block = True if len(added_requests) == 0 else False
-                if not self.cfg.model_config.enable_mm:
+                if not self.fd_config.model_config.enable_mm:
                     err, data = self.recv_request_server.receive_json_once(block)
                 else:
                     err, data = self.recv_request_server.receive_pyobj_once(block)
@@ -930,7 +947,7 @@ class EngineService:
 
                                     else:
                                         self.insert_tasks(tasks, allocated=True)
-                                        if self.cfg.innode_prefill_ports is not None:
+                                        if self.fd_config.innode_prefill_ports is not None:
                                             self.scheduler.put_results(tasks)
                                 else:
                                     if len(self.waiting_requests):
@@ -975,12 +992,14 @@ class EngineService:
 
     def start_cache_service(self, device_ids, ipc_signal_suffix, create_cache_tensor):
         return self.resource_manager.cache_manager.launch_cache_manager(
-            cache_config=self.cfg.cache_config,
-            tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,
+            cache_config=self.fd_config.cache_config,
+            tensor_parallel_size=self.fd_config.parallel_config.tensor_parallel_size,
             device_ids=device_ids,
-            pod_ip=self.cfg.master_ip,
+            pod_ip=self.fd_config.master_ip,
             engine_worker_queue_port=int(
-                self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+                self.fd_config.parallel_config.engine_worker_queue_port[
+                    self.fd_config.parallel_config.local_data_parallel_id
+                ]
             ),
             pid_suffix=ipc_signal_suffix,
             create_cache_tensor=create_cache_tensor,
