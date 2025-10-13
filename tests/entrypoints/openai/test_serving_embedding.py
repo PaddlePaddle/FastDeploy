@@ -27,7 +27,7 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
         )
         mock_response_queue.get = AsyncMock(
             return_value=[
-                self.response_data,
+                self.response_data.to_dict(),
             ]
         )
         self.mock_engine_client.connection_manager.get_connection = AsyncMock(
@@ -41,7 +41,11 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
         pid = 123
         ips = ["127.0.0.1"]
         max_waiting_time = 30
-        self.embedding_service = OpenAIServingEmbedding(self.mock_engine_client, models, pid, ips, max_waiting_time)
+        chat_template = MagicMock()
+        cfg = MagicMock()
+        self.embedding_service = OpenAIServingEmbedding(
+            self.mock_engine_client, models, cfg, pid, ips, max_waiting_time, chat_template
+        )
 
     async def test_create_embedding_success(self):
         # Setup

@@ -548,6 +548,14 @@ class PoolingRequestOutput(Generic[_O]):
             f"finished={self.finished})"
         )
 
+    def to_dict(self):
+        return {
+            "request_id": self.request_id,
+            "outputs": {"data": self.outputs.data},
+            "prompt_token_ids": self.prompt_token_ids,
+            "finished": self.finished,
+        }
+
     @classmethod
     def from_dict(cls, req_dict: dict):
         """Create instance from dict arguments"""

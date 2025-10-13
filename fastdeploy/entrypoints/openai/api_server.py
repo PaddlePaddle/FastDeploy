@@ -194,6 +194,7 @@ async def lifespan(app: FastAPI):
     )
     embedding_handler = OpenAIServingEmbedding(
         engine_client,
+        None,
         app.state.model_handler,
         pid,
         args.ips,
