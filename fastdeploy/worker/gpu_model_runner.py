@@ -562,12 +562,12 @@ class GPUModelRunner(ModelRunnerBase):
 
                 if request.get("enable_thinking", False) and request.get("reasoning_max_tokens") is not None:
                     # Enable thinking
-                    self.share_inputs["enable_thinking"][:] = True
+                    self.share_inputs["enable_thinking"][idx : idx + 1] = True
                     self.share_inputs["need_think_end"][idx : idx + 1, :] = 1
                     self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
                 else:
                     # Disable thinking
-                    self.share_inputs["enable_thinking"][:] = False
+                    self.share_inputs["enable_thinking"][idx : idx + 1] = False
                     self.share_inputs["need_think_end"][idx : idx + 1, :] = 0
                     self.share_inputs["reasoning_index"][idx : idx + 1, :] = 0
 
