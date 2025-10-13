@@ -227,10 +227,6 @@ class ModelConfig:
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
 
-        self.override_name_from_config()
-        self.read_from_env()
-        self.read_model_config()
-
     @property
     def registry(self):
         from fastdeploy.model_executor.models.model_base import ModelRegistry
@@ -506,6 +502,9 @@ class ModelConfig:
         self._architecture = arch
 
         self.pooler_config = self._init_pooler_config()
+        self.override_name_from_config()
+        self.read_from_env()
+        self.read_model_config()
 
 
 class ParallelConfig:
