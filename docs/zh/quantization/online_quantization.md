@@ -15,7 +15,7 @@
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-300B-A47B-Paddle \
        --port 8180 --engine-worker-queue-port 8181 \
-       --cache-queue-port 8182 --metrics-port 8182 \
+       --cache-queue-port 8183 --metrics-port 8182 \
        --tensor-parallel-size 8 \
        --quantization wint8 \
        --max-model-len 32768 \
@@ -41,7 +41,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-300B-A47B-Paddle \
        --port 8180 --engine-worker-queue-port 8181 \
-       --cache-queue-port 8182 --metrics-port 8182 \
+       --cache-queue-port 8183 --metrics-port 8182 \
        --tensor-parallel-size 8 \
        --quantization block_wise_fp8 \
        --max-model-len 32768 \
