@@ -213,20 +213,16 @@ __global__ void split_q_block_dec(const int *__restrict__ seq_lens_q,
                               const int num_rows_per_block,
                               const int group_size) {
   // one block one warp
-  const int lane = threadIdx.x % warpSize;
-
-  __shared__ int global_offset;
-  if (threadIdx.x == 0) global_offset = 0;
-  __syncthreads();
+  const int lane_id = threadIdx.x % warpSize;
+  int prev_offset = 0;
 
   // loop on warp tile：[base, base+32)
   for (int base = 0; base < bsz; base += warpSize) {
-    const int bid = base + lane;
-    const bool active = (bid < bsz);
+    const int bid = base + lane_id;
 
     // calculate loop_times for bid
     int loop_times = 0;
-    if (active) {
+    if (bid < bsz) {
       int seq_len = seq_lens_q[bid];
       if (seq_lens_encoder && seq_lens_encoder[bid] > 0) {
         seq_len = 0;
@@ -235,25 +231,19 @@ __global__ void split_q_block_dec(const int *__restrict__ seq_lens_q,
     }
 
     // prefix sum for each lane, get the start offset in this tile
-    unsigned mask = __ballot_sync(0xffffffff, active);
     // inclusive scan
     int x = loop_times;
     for (int offset = 1; offset < warpSize; offset <<= 1) {
-      int y = __shfl_up_sync(mask, x, offset);
-      if (lane >= offset) x += y;
+      int y = __shfl_up_sync(0xffffffff, x, offset);
+      if (lane_id >= offset) x += y;
     }
-    int excl = x - loop_times;                           // exclusive prefix
-    int tile_sum = __reduce_add_sync(mask, loop_times);  // warp tile sum
+    // exclusive prefix sum
+    int bid_offset = x - loop_times;
+    int tile_sum = __shfl_sync(0xffffffff, x, warpSize - 1);
 
     // write batch_ids and tile_ids_per_batch
-    int base_offset;
-    if (lane == 0) {
-      base_offset = global_offset;
-    }
-    base_offset = __shfl_sync(mask, base_offset, 0);
-    if (active && loop_times > 0) {
-      int write_base = base_offset + excl;
-      // [write_base, write_base+loop_times)
+    if (bid < bsz && loop_times > 0) {
+      int write_base = prev_offset + bid_offset;
       for (int t = 0; t < loop_times; ++t) {
         int pos = write_base + t;
         batch_ids[pos] = bid;
@@ -262,14 +252,11 @@ __global__ void split_q_block_dec(const int *__restrict__ seq_lens_q,
     }
 
     // for next warp tile
-    if (lane == 0) {
-      global_offset += tile_sum;
-    }
-    __syncthreads();
+    prev_offset += tile_sum;
   }
 
   if (threadIdx.x == 0) {
-    *num_blocks_x = global_offset;
+    *num_blocks_x = prev_offset;
   }
 }
 
