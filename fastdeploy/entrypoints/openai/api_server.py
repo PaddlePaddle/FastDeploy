@@ -145,6 +145,21 @@ async def lifespan(app: FastAPI):
     """
     async context manager for FastAPI lifespan
     """
+    import logging
+    uvicorn_access = logging.getLogger("uvicorn.access")
+    uvicorn_access.handlers.clear()
+    
+    # 使用 gunicorn 的格式
+    formatter = logging.Formatter(
+        '[%(asctime)s] [%(process)d] [INFO] %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    handler = logging.StreamHandler()
+    handler.setFormatter(formatter)
+    uvicorn_access.addHandler(handler)
+    uvicorn_access.propagate = False
+    
 
     if args.tokenizer is None:
         args.tokenizer = args.model
