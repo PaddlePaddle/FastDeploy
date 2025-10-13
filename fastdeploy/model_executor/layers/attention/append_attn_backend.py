@@ -85,7 +85,7 @@ class AppendAttentionBackend(AttentionBackend):
         super().__init__()
         self.attention_metadata: AppendAttentionMetadata = None
         self.block_size: int = fd_config.cache_config.block_size
-        self.max_seq_len: int = fd_config.parallel_config.max_model_len
+        self.max_seq_len: int = fd_config.model_config.max_model_len
         self.rope_theta: float = (
             10000.0 if fd_config.model_config.rope_theta is None else fd_config.model_config.rope_theta
         )
@@ -141,6 +141,8 @@ class AppendAttentionBackend(AttentionBackend):
             forward_meta.decoder_batch_ids,
             forward_meta.decoder_tile_ids_per_batch,
             forward_meta.decoder_num_blocks_cpu,
+            forward_meta.decoder_num_blocks_device,
+            forward_meta.decoder_chunk_size_device,
             forward_meta.max_len_tensor_cpu,
             forward_meta.encoder_batch_ids,
             forward_meta.encoder_tile_ids_per_batch,

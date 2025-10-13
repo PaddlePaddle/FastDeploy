@@ -1,4 +1,3 @@
-"""
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,12 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""
 
 import paddle
 from paddle import nn
 
 import fastdeploy
+from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess
 from fastdeploy.utils import ceil_div
@@ -45,17 +44,73 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
         """process_prequanted_weights"""
         pass
 
-    @paddle.no_grad()
-    def create_weights(self, layer: nn.Layer, state_dict):
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
         Triton MoE create weight process.
+        """
+        self.weight_dtype = "int8"
+        self.default_dtype = layer._helper.get_default_dtype()
+        up_gate_proj_weight_name = self.added_weight_attrs[0]
+        down_proj_weight_name = self.added_weight_attrs[1]
+        self.up_gate_proj_weight_shape = [
+            layer.num_local_experts,
+            layer.hidden_size,
+            layer.moe_intermediate_size * 2,
+        ]
+        self.down_proj_weight_shape = [
+            layer.num_local_experts,
+            layer.moe_intermediate_size,
+            layer.hidden_size,
+        ]
+        setattr(
+            layer,
+            up_gate_proj_weight_name,
+            layer.create_parameter(
+                shape=self.up_gate_proj_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            down_proj_weight_name,
+            layer.create_parameter(
+                shape=self.down_proj_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        # weight_scale
+        setattr(
+            layer,
+            self.added_scale_attrs[0],
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.moe_intermediate_size * 2],
+                dtype=self.default_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            self.added_scale_attrs[1],
+            layer.create_parameter(
+                shape=[layer.num_local_experts, layer.hidden_size],
+                dtype=self.default_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
+        """
+        Triton MoE load weight process.
         """
         up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
         assert len(up_gate_proj_weights) == layer.num_local_experts
         assert len(down_proj_weights) == layer.num_local_experts
 
-        if layer.quant_method.quant_config:
-            algo = layer.quant_method.quant_config.name()
+        algo = layer.quant_method.quant_config.name()
+
+        assert algo == "wint8"
 
         assert up_gate_proj_weights[0].shape == [
             layer.hidden_size,
@@ -79,52 +134,12 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
             scale_name = self.added_scale_attrs[idx]
 
             quanted_weight_scale = weight_tensor.abs().max(axis=1)
-            if self.quant_config is not None:
-                quanted_weight = weight_tensor / quanted_weight_scale[:, None, :] * max_bound
-                quanted_weight = paddle.round(quanted_weight).astype("int8")
-                quanted_weight_scale = quanted_weight_scale / max_bound
+            quanted_weight = weight_tensor / quanted_weight_scale[:, None, :] * max_bound
+            quanted_weight = paddle.round(quanted_weight).astype("int8")
+            quanted_weight_scale = quanted_weight_scale / max_bound
 
-                setattr(
-                    layer,
-                    weight_name,
-                    layer.create_parameter(
-                        shape=quanted_weight.shape,
-                        dtype=quanted_weight.dtype,
-                        default_initializer=paddle.nn.initializer.Constant(0),
-                    ),
-                )
-                getattr(layer, weight_name).set_value(quanted_weight)
-
-                setattr(
-                    layer,
-                    scale_name,
-                    layer.create_parameter(
-                        shape=quanted_weight_scale.shape,
-                        dtype=quanted_weight_scale.dtype,
-                    ),
-                )
-                getattr(layer, scale_name).set_value(quanted_weight_scale)
-            else:
-                setattr(
-                    layer,
-                    weight_name,
-                    layer.create_parameter(
-                        shape=quanted_weight.shape,
-                        dtype=quanted_weight.dtype,
-                        default_initializer=paddle.nn.initializer.Constant(0),
-                    ),
-                )
-                getattr(layer, weight_name).set_value(quanted_weight)
-
-                setattr(
-                    layer,
-                    scale_name,
-                    layer.create_parameter(
-                        shape=quanted_weight_scale.shape,
-                        dtype=quanted_weight_scale.dtype,
-                    ),
-                )
-                getattr(layer, scale_name).set_value(quanted_weight_scale)
+            getattr(layer, weight_name).set_value(quanted_weight)
+            getattr(layer, scale_name).set_value(quanted_weight_scale)
 
     @paddle.no_grad()
     def apply(
@@ -137,7 +152,6 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
         Triton compute Fused MoE.
         """
         token_num = x.shape[0]
-        top_k = layer.top_k
         num_local_experts = layer.num_local_experts
         top_k = layer.top_k
         moe_intermediate_size = layer.moe_intermediate_size
@@ -156,21 +170,12 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
             dtype=x.dtype,
         )
 
-        if self.quant_config is not None:
-            config = {
-                "BLOCK_SIZE_M": 32,
-                "BLOCK_SIZE_N": 128,
-                "BLOCK_SIZE_K": 128,
-                "GROUP_SIZE_M": 1,
-            }
-        else:
-            config = {
-                "BLOCK_SIZE_M": 32,
-                "BLOCK_SIZE_N": 64,
-                "BLOCK_SIZE_K": 64,
-                "GROUP_SIZE_M": 1,
-            }
-
+        config = {
+            "BLOCK_SIZE_M": 32,
+            "BLOCK_SIZE_N": 64,
+            "BLOCK_SIZE_K": 64,
+            "GROUP_SIZE_M": 4,
+        }
         sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess(
             topk_ids, num_local_experts, config["BLOCK_SIZE_M"]
         )
@@ -276,4 +281,6 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
 
         down_proj_out.reshape_([token_num, top_k, hidden_size])
         out = down_proj_out.sum(axis=1)
+        if layer.tp_size > 1:
+            tensor_model_parallel_all_reduce(out)
         return out

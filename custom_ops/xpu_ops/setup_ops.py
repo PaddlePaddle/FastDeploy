@@ -124,6 +124,16 @@ def xpu_setup_ops():
         XDNN_INC_PATH = os.path.join(XDNN_PATH, "include")
         XDNN_LIB_DIR = os.path.join(XDNN_PATH, "so")
 
+    XFA_PATH = os.getenv("XFA_PATH")
+    if XFA_PATH is None:
+        XFA_INC_PATH = os.path.join(PADDLE_INCLUDE_PATH, "xhpc/xfa")
+        XFA_LIB_DIR = PADDLE_LIB_PATH
+        XFA_LIB_PATH = os.path.join(XFA_LIB_DIR, "libxpu_flash_attention.so")
+    else:
+        XFA_INC_PATH = os.path.join(XFA_PATH, "include")
+        XFA_LIB_DIR = os.path.join(XFA_PATH, "so")
+        XFA_LIB_PATH = os.path.join(XFA_LIB_DIR, "libxpu_flash_attention.so")
+
     XVLLM_PATH = os.getenv("XVLLM_PATH")
     assert XVLLM_PATH is not None, "XVLLM_PATH is not set."
     XVLLM_KERNEL_INC_PATH = os.path.join(XVLLM_PATH, "infer_ops", "include")
@@ -149,6 +159,7 @@ def xpu_setup_ops():
         XRE_INC_PATH,
         XVLLM_KERNEL_INC_PATH,
         XVLLM_OP_INC_PATH,
+        XFA_INC_PATH,
     ]
     extra_objects = [
         os.path.join(base_dir, "./plugin/build/libxpuplugin.a"),
@@ -156,6 +167,7 @@ def xpu_setup_ops():
         XRE_LIB_PATH,
         XVLLM_KERNEL_LIB_PATH,
         XVLLM_OP_LIB_PATH,
+        XFA_LIB_PATH,
     ]
 
     setup(

@@ -32,9 +32,14 @@ class ErrorResponse(BaseModel):
     Error response from OpenAI API.
     """
 
-    object: str = "error"
+    error: ErrorInfo
+
+
+class ErrorInfo(BaseModel):
     message: str
-    code: int
+    type: Optional[str] = None
+    param: Optional[str] = None
+    code: Optional[str] = None
 
 
 class PromptTokenUsageInfo(BaseModel):
@@ -403,21 +408,21 @@ class CompletionRequest(BaseModel):
     prompt: Union[List[int], List[List[int]], str, List[str]]
     best_of: Optional[int] = None
     echo: Optional[bool] = False
-    frequency_penalty: Optional[float] = None
+    frequency_penalty: Optional[float] = Field(default=None, ge=-2, le=2)
     logprobs: Optional[int] = None
     # For logits and logprobs post processing
     temp_scaled_logprobs: bool = False
     top_p_normalized_logprobs: bool = False
     max_tokens: Optional[int] = None
-    n: int = 1
-    presence_penalty: Optional[float] = None
-    seed: Optional[int] = None
+    n: Optional[int] = 1
+    presence_penalty: Optional[float] = Field(default=None, ge=-2, le=2)
+    seed: Optional[int] = Field(default=None, ge=0, le=922337203685477580)
     stop: Optional[Union[str, List[str]]] = Field(default_factory=list)
     stream: Optional[bool] = False
     stream_options: Optional[StreamOptions] = None
     suffix: Optional[dict] = None
-    temperature: Optional[float] = None
-    top_p: Optional[float] = None
+    temperature: Optional[float] = Field(default=None, ge=0)
+    top_p: Optional[float] = Field(default=None, ge=0, le=1)
     user: Optional[str] = None
 
     # doc: begin-completion-sampling-params
@@ -537,7 +542,7 @@ class ChatCompletionRequest(BaseModel):
     messages: Union[List[Any], List[int]]
     tools: Optional[List[ChatCompletionToolsParam]] = None
     model: Optional[str] = "default"
-    frequency_penalty: Optional[float] = None
+    frequency_penalty: Optional[float] = Field(None, le=2, ge=-2)
     logprobs: Optional[bool] = False
     top_logprobs: Optional[int] = 0
 
@@ -552,13 +557,13 @@ class ChatCompletionRequest(BaseModel):
     )
     max_completion_tokens: Optional[int] = None
     n: Optional[int] = 1
-    presence_penalty: Optional[float] = None
-    seed: Optional[int] = None
+    presence_penalty: Optional[float] = Field(None, le=2, ge=-2)
+    seed: Optional[int] = Field(default=None, ge=0, le=922337203685477580)
     stop: Optional[Union[str, List[str]]] = Field(default_factory=list)
     stream: Optional[bool] = False
     stream_options: Optional[StreamOptions] = None
-    temperature: Optional[float] = None
-    top_p: Optional[float] = None
+    temperature: Optional[float] = Field(None, ge=0)
+    top_p: Optional[float] = Field(None, le=1, ge=0)
     user: Optional[str] = None
     metadata: Optional[dict] = None
     response_format: Optional[AnyResponseFormat] = None
@@ -588,6 +593,7 @@ class ChatCompletionRequest(BaseModel):
     prompt_token_ids: Optional[List[int]] = None
     max_streaming_response_tokens: Optional[int] = None
     disable_chat_template: Optional[bool] = False
+    completion_token_ids: Optional[List[int]] = None
     # doc: end-chat-completion-extra-params
 
     def to_dict_for_infer(self, request_id=None):
@@ -613,6 +619,9 @@ class ChatCompletionRequest(BaseModel):
             ), "The parameter `raw_request` is not supported now, please use completion api instead."
             for key, value in self.metadata.items():
                 req_dict[key] = value
+            from fastdeploy.utils import api_server_logger
+
+            api_server_logger.warning("The parameter metadata is obsolete.")
         for key, value in self.dict().items():
             if value is not None:
                 req_dict[key] = value
@@ -711,3 +720,71 @@ class ControlSchedulerRequest(BaseModel):
     reset: Optional[bool] = False
     load_shards_num: Optional[int] = None
     reallocate_shard: Optional[bool] = False
+
+
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
+
+BatchRequestInputBody = ChatCompletionRequest
+
+
+class BatchRequestInput(BaseModel):
+    """
+    The per-line object of the batch input file.
+
+    NOTE: Currently only the `/v1/chat/completions` endpoint is supported.
+    """
+
+    # A developer-provided per-request id that will be used to match outputs to
+    # inputs. Must be unique for each request in a batch.
+    custom_id: str
+
+    # The HTTP method to be used for the request. Currently only POST is
+    # supported.
+    method: str
+
+    # The OpenAI API relative URL to be used for the request. Currently
+    # /v1/chat/completions is supported.
+    url: str
+
+    # The parameters of the request.
+    body: BatchRequestInputBody
+
+    @field_validator("body", mode="before")
+    @classmethod
+    def check_type_for_url(cls, value: Any, info: ValidationInfo):
+        # Use url to disambiguate models
+        url: str = info.data["url"]
+        if url == "/v1/chat/completions":
+            if isinstance(value, dict):
+                return value
+            return ChatCompletionRequest.model_validate(value)
+        return value
+
+
+class BatchResponseData(BaseModel):
+    # HTTP status code of the response.
+    status_code: int = 200
+
+    # An unique identifier for the API request.
+    request_id: str
+
+    # The body of the response.
+    body: Optional[ChatCompletionResponse] = None
+
+
+class BatchRequestOutput(BaseModel):
+    """
+    The per-line object of the batch output and error files
+    """
+
+    id: str
+
+    # A developer-provided per-request id that will be used to match outputs to
+    # inputs.
+    custom_id: str
+
+    response: Optional[BatchResponseData]
+
+    # For requests that failed with a non-HTTP error, this will contain more
+    # information on the cause of the failure.
+    error: Optional[Any]

@@ -80,6 +80,7 @@ def clean_ports():
     """
     for port in PORTS_TO_CLEAN:
         kill_process_on_port(port)
+    time.sleep(2)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -236,6 +237,13 @@ def headers():
     Returns common HTTP request headers.
     """
     return {"Content-Type": "application/json"}
+
+
+def test_metrics_config(metrics_url):
+    timeout = 600
+    url = metrics_url.replace("metrics", "config-info")
+    res = requests.get(url, timeout=timeout)
+    assert res.status_code == 200
 
 
 def send_request(url, payload, timeout=600):
