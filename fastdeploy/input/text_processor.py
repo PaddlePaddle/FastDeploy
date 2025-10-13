@@ -540,6 +540,8 @@ class DataProcessor(BaseDataProcessor):
             List[int]: ID sequences
         """
 
+        if "tools" in kwargs:
+            kwargs.pop("tools")
         spliced_message = self.tokenizer.apply_chat_template(
             request,
             tokenize=False,
