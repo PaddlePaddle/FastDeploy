@@ -156,13 +156,12 @@ class Request:
     @classmethod
     def from_dict(cls, d: dict):
         data_processor_logger.debug(f"{d}")
-        sampling_params = None
-        pooling_params = None
+        sampling_params: SamplingParams = None
+        pooling_params: PoolingParams = None
         if "pooling_params" in d and d["pooling_params"] is not None:
-            pooling_params = PoolingParams.from_dict(d)
+            pooling_params = d["pooling_params"]
         else:
             sampling_params = SamplingParams.from_dict(d)
-
         return cls(
             request_id=d["request_id"],
             prompt=d.get("prompt"),
