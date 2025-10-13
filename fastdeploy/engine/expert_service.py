@@ -116,8 +116,6 @@ class ExpertService:
             self.cache_manager_processes = self.engine.start_cache_service(
                 self.cfg.local_device_ids, ipc_signal_suffix_cache
             )
-            if self.cfg.splitwise_role != "mixed":
-                self.engine.split_mode_get_tasks()
 
         if self.cfg.scheduler_config.name == "splitwise":
             self.cfg.init_cache_info()
