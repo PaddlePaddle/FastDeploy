@@ -204,7 +204,7 @@ __global__ void split_block_for_mla(const int *__restrict__ seq_lens_q,
   }
 }
 
-__global__ void split_q_block_dec(const int *__restrict__ seq_lens_q,
+__global__ void split_q_block(const int *__restrict__ seq_lens_q,
                               const int *__restrict__ seq_lens_encoder,
                               int *__restrict__ batch_ids,
                               int *__restrict__ tile_ids_per_batch,
@@ -257,32 +257,6 @@ __global__ void split_q_block_dec(const int *__restrict__ seq_lens_q,
 
   if (threadIdx.x == 0) {
     *num_blocks_x = prev_offset;
-  }
-}
-
-__global__ void split_q_block(const int *__restrict__ seq_lens_q,
-                              const int *__restrict__ seq_lens_encoder,
-                              int *__restrict__ batch_ids,
-                              int *__restrict__ tile_ids_per_batch,
-                              int *__restrict__ num_blocks_x, const int bsz,
-                              const int num_rows_per_block,
-                              const int group_size) {
-  if (threadIdx.x == 0) {
-    int gridx = 0;
-    int index = 0;
-    for (uint32_t bid = 0; bid < bsz; bid++) {
-      int seq_len = seq_lens_q[bid];
-      if (seq_lens_encoder && seq_lens_encoder[bid] > 0) {
-        seq_len = 0;
-      }
-      const int loop_times = div_up(seq_len * group_size, num_rows_per_block);
-      for (uint32_t tile_id = 0; tile_id < loop_times; tile_id++) {
-        batch_ids[index] = bid;
-        tile_ids_per_batch[index++] = tile_id;
-      }
-      gridx += loop_times;
-    }
-    *num_blocks_x = gridx;
   }
 }
 
@@ -473,7 +447,7 @@ void GetBlockShapeAndSplitKVBlock(
       PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
           decoder_num_blocks_device.data<int>(), 0, sizeof(int32_t), stream));
 
-      split_q_block_dec<<<1, 32, 0, stream>>>(
+      split_q_block<<<1, 32, 0, stream>>>(
           seq_lens_this_time.data<int>(),
           seq_lens_encoder.data<int>(),
           decoder_batch_ids.data<int>(),
