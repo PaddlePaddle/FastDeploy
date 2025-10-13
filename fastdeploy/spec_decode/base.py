@@ -41,6 +41,7 @@ class Proposer(ABC):
         self.speculative_config = self.fd_config.speculative_config
         self.cache_config = self.fd_config.cache_config
         self.quant_config = self.fd_config.quant_config
+        self.graph_opt_config = self.fd_config.graph_opt_config
 
         self.max_num_seqs = self.parallel_config.max_num_seqs
         self.max_model_len = self.parallel_config.max_model_len

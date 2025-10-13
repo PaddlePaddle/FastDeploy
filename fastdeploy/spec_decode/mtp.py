@@ -273,6 +273,8 @@ class MTPProposer(Proposer):
         self.model_inputs["not_need_stop"] = paddle.to_tensor([False], dtype="bool", place="cpu")
         self.model_inputs["pre_ids"] = paddle.clone(self.main_model_inputs["pre_ids"])
         self.model_inputs["ids_remove_padding"] = paddle.clone(self.main_model_inputs["ids_remove_padding"])
+        self.model_inputs["output_cum_offsets"] = paddle.clone(self.main_model_inputs["output_cum_offsets"])
+        self.model_inputs["output_padding_offset"] = paddle.clone(self.main_model_inputs["output_padding_offset"])
         self.model_inputs["cum_offsets"] = paddle.clone(self.main_model_inputs["cum_offsets"])
         self.model_inputs["batch_id_per_token"] = paddle.clone(self.main_model_inputs["batch_id_per_token"])
         self.model_inputs["cu_seqlens_q"] = paddle.clone(self.main_model_inputs["cu_seqlens_q"])
@@ -282,7 +284,7 @@ class MTPProposer(Proposer):
             self.main_model_inputs["decoder_tile_ids_per_batch"]
         )
         self.model_inputs["target_hidden_states"] = paddle.full(
-            [self.max_model_len * self.fd_config.max_prefill_batch, self.model_config.hidden_size], 0, dtype="bfloat16"
+            [self.max_model_len * 3, self.model_config.hidden_size], 0, dtype="bfloat16"
         )
 
         tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
