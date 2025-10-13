@@ -1552,7 +1552,10 @@ class FDConfig:
         if self.model_config is not None and self.model_config.enable_mm:
             self.cache_config.enable_prefix_caching = False
 
-        if self.structured_outputs_config.guided_decoding_backend == "auto":
+        if (
+            self.structured_outputs_config is not None
+            and self.structured_outputs_config.guided_decoding_backend == "auto"
+        ):
             if current_platform.is_xpu() or self.speculative_config.method is not None:
                 logger.warning("Speculative Decoding and XPU currently do not support Guided decoding, set off.")
                 self.structured_outputs_config.guided_decoding_backend = "off"
@@ -1632,7 +1635,10 @@ class FDConfig:
                 f" max_model_len: {self.model_config.max_model_len}"
             )
 
-        if self.structured_outputs_config.guided_decoding_backend is not None:
+        if (
+            self.structured_outputs_config is not None
+            and self.structured_outputs_config.guided_decoding_backend is not None
+        ):
             assert self.structured_outputs_config.guided_decoding_backend in [
                 "xgrammar",
                 "XGrammar",
