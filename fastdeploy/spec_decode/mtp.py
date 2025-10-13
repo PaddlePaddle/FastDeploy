@@ -30,7 +30,6 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import MTPSampler
-from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.models import ModelForCasualLM
 from fastdeploy.model_executor.ops.gpu import (
     draft_model_postprocess,
@@ -104,8 +103,9 @@ class MTPProposer(Proposer):
         Load MTP Layer
         """
 
-        model_loader = get_model_loader(load_config=self.fd_config.load_config)
-        self.model = model_loader.load_model(fd_config=self.fd_config)
+        from fastdeploy.model_executor.model_loader import get_model_from_loader
+
+        self.model = get_model_from_loader(self.fd_config)
 
     def dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
         """Set dummy prefill inputs to model_inputs"""
