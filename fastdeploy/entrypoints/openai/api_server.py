@@ -313,14 +313,14 @@ def wrap_streaming_generator(original_generator: AsyncGenerator):
             except Exception as e:
                 # 错误捕获
                 if span is not None and span.is_recording():
-                    span.add_event("stream_error", {"time": time.time(), "error": str(e), "processed_tokens": count})
+                    span.add_event("stream_error", {"time": time.time(), "error": str(e), "total_chunk": count})
                     span.record_exception(e)
                     span.set_status({"code": "ERROR", "description": str(e)})
                 raise
             finally:
                 # 尾包捕获
                 if span is not None and span.is_recording() and count > 0:
-                    span.add_event("last_chunk", {"time": last_time, "processed_tokens": count})
+                    span.add_event("last_chunk", {"time": last_time, "total_chunk": count})
                 api_server_logger.debug(f"release: {connection_semaphore.status()}")
                 connection_semaphore.release()
         else:
