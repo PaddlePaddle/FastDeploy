@@ -259,13 +259,9 @@ class GPUModelRunner(ModelRunnerBase):
         elif request.structural_tag is not None:
             schemata_key = ("structural_tag", request.structural_tag)
 
-        enable_thinking = request.get("enable_thinking", True)
-        enable_thinking = enable_thinking if enable_thinking is not None else True
-
         return (
             self.guided_backend.get_logits_processor(
                 schemata_key=schemata_key,
-                enable_thinking=enable_thinking,
             ),
             schemata_key,
         )
@@ -326,23 +322,6 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
                         position_ids, request.get("max_tokens", 2048)
                     )
-
-                if request.get("enable_thinking", False):
-                    # Enable thinking
-                    req_reasoning_max_tokens = request.get("reasoning_max_tokens")
-                    req_max_tokens = request.get("max_tokens")
-                    final_reasoning_tokens = (
-                        req_reasoning_max_tokens if req_reasoning_max_tokens is not None else req_max_tokens
-                    )
-
-                    self.share_inputs["enable_thinking"][idx : idx + 1] = True
-                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 1
-                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = final_reasoning_tokens
-                else:
-                    # Disable thinking
-                    self.share_inputs["enable_thinking"][idx : idx + 1] = False
-                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 0
-                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = 0
 
                 if isinstance(request.prompt_token_ids, np.ndarray):
                     prompt_token_ids = request.prompt_token_ids.tolist()
@@ -566,23 +545,6 @@ class GPUModelRunner(ModelRunnerBase):
                         position_ids, request.get("max_tokens", 2048)
                     )
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
-
-                if request.get("enable_thinking", False):
-                    # Enable thinking
-                    req_reasoning_max_tokens = request.get("reasoning_max_tokens")
-                    req_max_tokens = request.get("max_tokens")
-                    final_reasoning_tokens = (
-                        req_reasoning_max_tokens if req_reasoning_max_tokens is not None else req_max_tokens
-                    )
-
-                    self.share_inputs["enable_thinking"][idx : idx + 1] = True
-                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 1
-                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = final_reasoning_tokens
-                else:
-                    # Disable thinking
-                    self.share_inputs["enable_thinking"][idx : idx + 1] = False
-                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 0
-                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
                 res = request.get(attr, default_value)
@@ -879,9 +841,6 @@ class GPUModelRunner(ModelRunnerBase):
         tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
 
         # Initialize thinking related buffers
-        self.share_inputs["need_think_end"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-        self.share_inputs["enable_thinking"] = paddle.full(shape=[max_num_seqs, 1], fill_value=False, dtype="bool")
-        self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
         # TODO(gongshaotian): move to models
         if not self.enable_mm:
@@ -1457,10 +1416,6 @@ class GPUModelRunner(ModelRunnerBase):
                 ),
                 accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
                 accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
-                enable_thinking=self.share_inputs["enable_thinking"],
-                think_end_id=self.model_config.think_end_id,
-                need_think_end=self.share_inputs["need_think_end"],
-                reasoning_index=self.share_inputs["reasoning_index"],
                 stop_token_ids=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
             )
@@ -1811,10 +1766,6 @@ class GPUModelRunner(ModelRunnerBase):
             ),
             accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
-            enable_thinking=self.share_inputs["enable_thinking"],
-            think_end_id=self.model_config.think_end_id,
-            need_think_end=self.share_inputs["need_think_end"][:num_running_requests],
-            reasoning_index=self.share_inputs["reasoning_index"][:num_running_requests],
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )

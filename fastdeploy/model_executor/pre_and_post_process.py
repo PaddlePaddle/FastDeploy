@@ -194,48 +194,6 @@ def post_process_normal(
     zmq_client: ZmqIpcClient = None,
 ) -> ModelRunnerOutput:
     """Post-processing steps after completing a single token generation."""
-    # handle vl:
-    if model_output.think_end_id != -1:
-        thinking_mask = model_output.enable_thinking[: sampler_output.sampled_token_ids.shape[0]]
-        exists_think_end = (sampler_output.sampled_token_ids == model_output.think_end_id) & thinking_mask
-        paddle.assign(
-            paddle.where(
-                exists_think_end,
-                model_output.need_think_end - 1,
-                model_output.need_think_end,
-            ),
-            model_output.need_think_end,
-        )
-
-        reasoning_index_update_cond = model_output.need_think_end.cast("bool") & thinking_mask
-        paddle.assign(
-            paddle.where(
-                reasoning_index_update_cond,
-                model_output.reasoning_index - 1,
-                model_output.reasoning_index,
-            ),
-            model_output.reasoning_index,
-        )
-
-        stop_wo_think = (
-            (sampler_output.sampled_token_ids == model_output.eos_token_id.T).any(axis=1, keepdim=True)
-            | (model_output.reasoning_index == 0)
-        ) & (model_output.need_think_end > 0)
-
-        stop_wo_think = stop_wo_think & thinking_mask
-        sampler_output.sampled_token_ids = paddle.where(
-            stop_wo_think,
-            model_output.think_end_id,
-            sampler_output.sampled_token_ids,
-        )
-        paddle.assign(
-            paddle.where(
-                stop_wo_think,
-                model_output.need_think_end - 1,
-                model_output.need_think_end,
-            ),
-            model_output.need_think_end,
-        )
     # 1. Set stop value
     paddle.assign(
         paddle.where(
