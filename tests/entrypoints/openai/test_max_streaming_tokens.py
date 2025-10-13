@@ -372,5 +372,6 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         self.engine_client.semaphore.release.assert_called_once()
         self.engine_client.connection_manager.cleanup_request.assert_awaited_once_with(request_id)
 
+
 if __name__ == "__main__":
     unittest.main()

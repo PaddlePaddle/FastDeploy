@@ -379,6 +379,7 @@ def test_non_streaming_chat_with_n(openai_client):
     assert hasattr(response.usage, "prompt_tokens")
     assert response.usage.prompt_tokens == 9
 
+
 def test_streaming_chat_with_n(openai_client):
     """
     Test n param option in streaming chat functionality with the local service
@@ -403,6 +404,7 @@ def test_streaming_chat_with_n(openai_client):
             assert hasattr(chunk.usage, "prompt_tokens")
             assert chunk.usage.prompt_tokens == 9
 
+
 def test_completions_non_streaming_with_n(openai_client):
     """
     Test n param option in non-streaming completions functionality with the local service
@@ -422,6 +424,7 @@ def test_completions_non_streaming_with_n(openai_client):
     assert isinstance(response.choices[0].text, str)
     assert hasattr(response.choices[1], "text")
     assert isinstance(response.choices[1].text, str)
+
 
 def test_completions_streaming_with_n(openai_client):
     """
@@ -445,6 +448,7 @@ def test_completions_streaming_with_n(openai_client):
         output_chunks.append(chunk.choices[0].text)
 
     assert len(output_chunks) > 0
+
 
 def test_non_streaming_with_stop_str(openai_client):
     """
