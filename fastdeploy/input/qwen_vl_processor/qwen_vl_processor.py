@@ -239,7 +239,7 @@ class QwenVLProcessor(TextProcessor):
                             request[k] = v
                 else:
                     raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-            request.setdefault("enable_thinking", True)
+            request.setdefault("enable_thinking", False)
             outputs = self.processor.request2ids(request)
 
         else:
@@ -249,11 +249,8 @@ class QwenVLProcessor(TextProcessor):
         if request.get("completion_token_ids"):
             self.append_completion_tokens(outputs, request["completion_token_ids"])
 
-        enable_thinking = False
-        if request.get("chat_template_kwargs"):
-            chat_template_kwargs = request.get("chat_template_kwargs")
-            enable_thinking = chat_template_kwargs.get("enable_thinking", False)
-        request["enable_thinking"] = enable_thinking
+        # qwen25_vl not support thinking
+        request["enable_thinking"] = False
 
         outputs = self.pack_outputs(outputs)
 

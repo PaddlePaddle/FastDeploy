@@ -435,6 +435,7 @@ class DFNRopeVisionBlock(nn.Layer):
             num_heads=num_heads,
             tensor_parallel_degree=tensor_parallel_degree,
             tensor_parallel_rank=tensor_parallel_rank,
+            model_format=model_format,
         )
 
         self.mlp = VisionMlp(
@@ -474,7 +475,13 @@ class PatchMerger(nn.Layer):
         nn (_type_): _description_
     """
 
-    def __init__(self, dim: int, context_dim: int, spatial_merge_size: int = 2) -> None:
+    def __init__(
+        self,
+        dim: int,
+        context_dim: int,
+        spatial_merge_size: int = 2,
+        model_format: str = "",
+    ) -> None:
         """_summary_
 
         Args:
@@ -490,6 +497,9 @@ class PatchMerger(nn.Layer):
             nn.GELU(),
             nn.Linear(self.hidden_size, dim, bias_attr=True),
         )
+
+        set_weight_attrs(self.mlp[0].weight, {"weight_need_transpose": model_format == "torch"})
+        set_weight_attrs(self.mlp[2].weight, {"weight_need_transpose": model_format == "torch"})
 
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         """_summary_
@@ -537,7 +547,6 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         )
 
         model_format = getattr(config, "model_format", "")
-        set_weight_attrs(self.patch_embed.proj.weight, {"weight_need_transpose": model_format == "torch"})
 
         head_dim = config.vision_config.hidden_size // config.vision_config.num_heads
         self.rotary_pos_emb = VisionRotaryEmbedding(head_dim // 2)
@@ -558,7 +567,9 @@ class DFNRopeVisionTransformerPretrainedModel(PretrainedModel):
         )
 
         self.merger = PatchMerger(
-            dim=config.vision_config.out_hidden_size, context_dim=config.vision_config.hidden_size
+            dim=config.vision_config.out_hidden_size,
+            context_dim=config.vision_config.hidden_size,
+            model_format=model_format,
         )
 
     @property
