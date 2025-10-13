@@ -204,14 +204,13 @@ class TestTreeMask(unittest.TestCase):
         decoder_num_blocks = paddle.full([1], 0, dtype="int32").pin_memory()
         decoder_num_blocks_device = paddle.full([1], 0, dtype="int32")
         decoder_chunk_size_device = paddle.full([1], 64, dtype="int32")
-        max_len_tensor_cpu = paddle.full([8], 0, dtype="int32").cpu()
+        max_len_tensor_cpu = paddle.full([9], 0, dtype="int32").cpu()
         encoder_batch_ids = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
         encoder_tile_ids_per_batch = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
         encoder_num_blocks_x_cpu = paddle.full([1], 0, dtype="int32").cpu()
         kv_batch_ids = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
         kv_tile_ids_per_batch = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
         kv_num_blocks_x_cpu = paddle.full([1], 0, dtype="int32").cpu()
-        max_len_kv_cpu = paddle.full([1], 0, dtype="int32").cpu()
         q_norm_weight = np.ones([self.head_dim])
         k_norm_weight = np.ones([self.head_dim])
         self.q_norm_weight_tensor = paddle.to_tensor(q_norm_weight, dtype="float32")
@@ -233,7 +232,6 @@ class TestTreeMask(unittest.TestCase):
             kv_batch_ids,
             kv_tile_ids_per_batch,
             kv_num_blocks_x_cpu,
-            max_len_kv_cpu,
             encoder_block_shape_q,
             decoder_block_shape_q,
             self.num_q_head // self.num_kv_head,
@@ -264,7 +262,6 @@ class TestTreeMask(unittest.TestCase):
                 decoder_tile_ids_per_batch,
                 decoder_num_blocks,
                 max_len_tensor_cpu,
-                max_len_kv_cpu,
                 rotary_embs,
                 attn_mask,
                 None,  # qkv_bias

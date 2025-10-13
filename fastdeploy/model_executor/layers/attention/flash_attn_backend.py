@@ -207,7 +207,6 @@ class FlashAttentionBackend(AttentionBackend):
             forward_meta.kv_batch_ids,
             forward_meta.kv_tile_ids_per_batch,
             forward_meta.kv_num_blocks_x_cpu,
-            forward_meta.max_len_kv_cpu,
             self.encoder_block_shape_q,
             self.decoder_block_shape_q,
             self.group_size,
@@ -340,7 +339,6 @@ class FlashAttentionBackend(AttentionBackend):
             forward_meta.decoder_tile_ids_per_batch,  # from buffer
             forward_meta.decoder_num_blocks_cpu,
             metadata.max_len_tensor_cpu_decoder,
-            forward_meta.max_len_kv_cpu,
             metadata.rotary_embs,
             forward_meta.attn_mask,
             layer.qkv_bias,
