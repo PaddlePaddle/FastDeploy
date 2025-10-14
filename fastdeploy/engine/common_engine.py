@@ -705,9 +705,14 @@ class EngineSevice:
                 for request_id, contents in results.items():
                     new_contents = []
                     for content in contents:
-                        delta_text, token_ids = self._decode_token(
-                            token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
-                        )
+                        decode_type = content.outputs.decode_type
+                        delta_text = ""
+                        if decode_type == 0:
+                            delta_text, token_ids = self._decode_token(
+                                token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
+                            )
+                        else :
+                            token_ids = content.outputs.token_ids
                         if len(token_ids):
                             content.outputs.token_ids = token_ids
                             content.outputs.text = delta_text
