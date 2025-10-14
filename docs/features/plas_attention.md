@@ -15,7 +15,7 @@ In terms of training efficiency, the training cost is very low because only the 
 Following the approaches of NSA and MoBA, we partition the KV into multiple blocks. During both the prefill and decode stages, instead of performing attention computation over all KV, we dynamically select the top-K blocks with the highest attention scores for each query token, thereby enabling efficient sparse attention computation.
 
 <div align="center">
-<img src="images/plas_training_distill.png" alt="Attention Gate Module" width="60%">
+<img src="./images/plas_training_distill.png" alt="Attention Gate Module" width="60%">
 </div>
 
 * **Attention Gate Module**: As illustrated in the figure above, to estimate the importance of each block with low computational overhead, we design a lightweight attention gate module. This module first compresses each K block via a MLP layer to generate a representative low-dimensional representation: $K_c^T=W_{kp}K^T$, where $W_{kp}$ denotes the MLP layer weights. Compared to directly applying mean pooling, the learnable MLP can more effectively capture semantic relationships and importance distributions among different tokens, thereby providing a refined representation of each block. After obtaining the compressed representation $K_c$, the importance of each query token with respect to each block is estimated via: $Softmax(Q\cdot K_c^T)$. To enhance the discriminative ability of the MLP layer, we use the full attention result after 1D max pooling $1DMaxPooling(Softmax(Q \cdot K^T))$ as the ground truth. By minimizing the distribution divergence between the two, the MLP layer is guided to learn feature representations that better align with the true attention distribution.
@@ -27,7 +27,7 @@ Following the approaches of NSA and MoBA, we partition the KV into multiple bloc
 During sparse attention computation, each query token may dynamically select different KV blocks, leading to highly irregular memory access patterns in HBM. It is feasible to simply process each query token separately, but it will lead to excessively fine-grained computing, which cannot make full use of the tensor core, thus significantly reducing the GPU computing efficiency.
 
 <div align="center">
-<img src="images/plas_inference_union.png" alt="Token/Head Union" width="60%">
+<img src="./images/plas_inference_union.png" alt="Token/Head Union" width="60%">
 </div>
 
 To optimize performance in both the prefill and decode stages, we design a special joint strategy to adapt to their respective characteristics:
