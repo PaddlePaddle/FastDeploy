@@ -852,7 +852,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["kv_batch_ids"] = None
         self.share_inputs["kv_tile_ids_per_batch"] = None
         self.share_inputs["kv_num_blocks_x_cpu"] = None  # CPU
-        self.share_inputs["max_len_kv_cpu"] = None  # CPU
 
         # Initialize thinking related buffers
         self.share_inputs["max_think_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
@@ -1094,7 +1093,6 @@ class GPUModelRunner(ModelRunnerBase):
             kv_batch_ids=self.share_inputs["kv_batch_ids"],
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
-            max_len_kv_cpu=self.share_inputs["max_len_kv_cpu"],
         )
 
         # Update Batch type for cuda graph for only_decode_batch
@@ -1255,7 +1253,7 @@ class GPUModelRunner(ModelRunnerBase):
         # adapted to cudagraph.
         self.share_inputs["decoder_num_blocks_device"] = paddle.full([1], 0, dtype="int32")
         self.share_inputs["decoder_chunk_size_device"] = paddle.full([1], 64, dtype="int32")
-        self.share_inputs["max_len_tensor_cpu"] = paddle.full([8], 0, dtype="int32").cpu()
+        self.share_inputs["max_len_tensor_cpu"] = paddle.full([9], 0, dtype="int32").cpu()
 
         self.share_inputs["encoder_batch_ids"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
         self.share_inputs["encoder_tile_ids_per_batch"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
@@ -1264,7 +1262,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["kv_batch_ids"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
         self.share_inputs["kv_tile_ids_per_batch"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
         self.share_inputs["kv_num_blocks_x_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
-        self.share_inputs["max_len_kv_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
 
         # Get the attention backend
         attn_cls = get_attention_backend()
