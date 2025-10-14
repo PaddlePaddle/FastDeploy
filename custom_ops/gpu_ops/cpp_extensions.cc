@@ -676,7 +676,7 @@ void SpeculateVerify(
     const paddle::Tensor &output_cum_offsets,
     const paddle::Tensor &actual_candidate_len,
     const paddle::Tensor &actual_draft_token_nums, const paddle::Tensor &topp,
-    int max_seq_len, int verify_window, bool enable_topp, bool benchmark_mode);
+    int max_seq_len, int verify_window, bool enable_topp, bool benchmark_mode, bool accept_all_drafts);
 
 void SpeculateUpdate(const paddle::Tensor &seq_lens_encoder,
                        const paddle::Tensor &seq_lens_decoder,

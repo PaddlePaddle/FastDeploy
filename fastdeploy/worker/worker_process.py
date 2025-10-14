@@ -428,6 +428,19 @@ class PaddleDisWorkerProc:
 
     def graph_optimize_and_warm_up_model(self) -> None:
         self.worker.graph_optimize_and_warm_up_model()
+        # reset cache_messager prefilled_step signal
+        if self.parallel_config.splitwise_role == "prefill":
+            gpu_id = self.worker.model_runner.device_id
+            prefilled_step_name = f"splitwise_complete_prefilled_step_{self.local_rank}"
+            prefilled_step_idx_data = np.zeros(shape=[1], dtype=np.int32)
+            step_shm_value = IPCSignal(
+                name=prefilled_step_name,
+                array=prefilled_step_idx_data,
+                dtype=np.int32,
+                suffix=gpu_id,
+                create=False,
+            )
+            step_shm_value.value[0] = -1
 
     def init_device(self) -> None:
         """Initialize device and Construct model runner"""
@@ -821,7 +834,7 @@ def run_worker_proc() -> None:
     worker_proc.initialize_kv_cache()
 
     # Trigger CUDAGraph capture
-    worker_proc.worker.graph_optimize_and_warm_up_model()
+    worker_proc.graph_optimize_and_warm_up_model()
 
     # Initialize health status
     worker_proc.init_health_status()
