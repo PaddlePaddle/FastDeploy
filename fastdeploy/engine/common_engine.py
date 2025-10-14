@@ -711,7 +711,7 @@ class EngineSevice:
                             delta_text, token_ids = self._decode_token(
                                 token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
                             )
-                        else :
+                        else:
                             token_ids = content.outputs.token_ids
                         if len(token_ids):
                             content.outputs.token_ids = token_ids
