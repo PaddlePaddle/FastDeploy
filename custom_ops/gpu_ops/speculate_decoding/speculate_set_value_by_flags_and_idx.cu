@@ -37,7 +37,7 @@ __global__ void speculate_set_value_by_flag_and_id(int64_t *pre_ids_all,
         const int seq_len_enc = seq_lens_encoder[tid];
         if (seq_len_dec == 0 && seq_len_enc == 0) return;  // stopped
         // printf("step_idx[tid] %d\n", step_idx[tid]);
-        if (step_idx[tid] >= 0) {
+        if (step_idx[tid] > 0) {
             for (int i = 0; i < accept_num[tid]; i++) {
                 pre_ids_all_now[step_idx[tid] - i] =
                     accept_tokens_now[accept_num[tid] - 1 - i];
