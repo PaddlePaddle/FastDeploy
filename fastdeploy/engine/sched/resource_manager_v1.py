@@ -291,6 +291,9 @@ class ResourceManagerV1(ResourceManager):
         return can_schedule
 
     def _update_mm_hashes(self, request):
+        if request.multimodal_inputs is None:
+            return
+
         inputs = request.multimodal_inputs
         if (
             inputs.get("images", None) is not None
