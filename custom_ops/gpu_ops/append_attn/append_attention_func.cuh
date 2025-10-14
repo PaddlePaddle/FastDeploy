@@ -2410,6 +2410,9 @@ __global__ void merge_multi_chunks_v2_kernel(
   __shared__ float md_smem[bdy * 2];
   for (int qid = blockIdx.x; qid < token_num; qid += gridDim.x) {
     const uint32_t bid = batch_id_per_token[qid];
+    if(bid == -1){
+      continue;
+    }
     const uint32_t local_seq_id = qid - cu_seqlens_q[bid];
     const int seq_len_q = seq_lens_q[bid];
     if (seq_len_q == 0) continue;
@@ -2427,7 +2430,7 @@ __global__ void merge_multi_chunks_v2_kernel(
       seq_len_kv += seq_len_q;
     }
     const int num_chunks_this_seq = div_up(seq_len_kv, chunk_size);
-    if (num_chunks_this_seq <= 1) {
+    if (num_chunks_this_seq <= 1 || !ENABLE_PREFILL) {
       continue;
     }
 
