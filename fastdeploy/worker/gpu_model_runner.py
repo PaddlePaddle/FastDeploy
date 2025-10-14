@@ -434,7 +434,29 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
                 self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
 
-            if request.get("stop_seqs") is not None and request.get("stop_seqs_len") is not None:
+            if request.get("stop_token_ids") is not None and len(request.get("stop_token_ids")) > 0:
+                stop_token_ids = request.get("stop_token_ids")
+                stop_token_ids_len = len(stop_token_ids)
+                max_stop_token_ids = self.share_inputs["stop_token_ids"].shape[1]
+                print("stop_token_ids", stop_token_ids)
+                print("stop_token_ids_len", stop_token_ids_len)
+                print("max_stop_token_ids", max_stop_token_ids)
+                if stop_token_ids_len > max_stop_token_ids:
+                    logger.warning(
+                        f"Request {request.request_id} has {stop_token_ids_len} stop_token_ids, "
+                        f"but only {max_stop_token_ids} are supported. Truncating."
+                    )
+                    stop_token_ids = stop_token_ids[:max_stop_token_ids]
+                    stop_token_ids_len = max_stop_token_ids
+
+                self.share_inputs["stop_token_ids_len"][idx] = stop_token_ids_len
+                self.share_inputs["stop_token_ids"][idx, :stop_token_ids_len] = paddle.to_tensor(
+                    stop_token_ids, dtype="int64"
+                )
+                print(f"DEBUG: After assign - {self.share_inputs['stop_token_ids'][idx]}")
+                print(f"DEBUG: After assign len - {self.share_inputs['stop_token_ids_len'][idx]}")
+
+            if request.get("stop_seqs") is not None:
                 print("stop_token_ids", request.get("stop_token_ids"))
                 print("stop_seqs", request.get("stop_seqs"))
                 print("stop_seqs_len", request.get("stop_seqs_len"))
@@ -646,6 +668,23 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
                 self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
+
+            if request.get("stop_token_ids") is not None and len(request.get("stop_token_ids")) > 0:
+                stop_token_ids = request.get("stop_token_ids")
+                stop_token_ids_len = len(stop_token_ids)
+                max_stop_token_ids = self.share_inputs["stop_token_ids"].shape[1]
+                if stop_token_ids_len > max_stop_token_ids:
+                    logger.warning(
+                        f"Request {request.request_id} has {stop_token_ids_len} stop_token_ids, "
+                        f"but only {max_stop_token_ids} are supported. Truncating."
+                    )
+                    stop_token_ids = stop_token_ids[:max_stop_token_ids]
+                    stop_token_ids_len = max_stop_token_ids
+
+                self.share_inputs["stop_token_ids_len"][idx] = stop_token_ids_len
+                self.share_inputs["stop_token_ids"][idx, :stop_token_ids_len] = paddle.to_tensor(
+                    stop_token_ids, dtype="int64"
+                )
 
             if request.get("stop_seqs") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
@@ -926,6 +965,10 @@ class GPUModelRunner(ModelRunnerBase):
             ],
             -1,
             dtype="int64",
+        )
+        self.share_inputs["stop_token_ids_len"] = paddle.full([max_num_seqs], 0, dtype="int32")
+        self.share_inputs["stop_token_ids"] = paddle.full(
+            [max_num_seqs, self.model_config.max_stop_seqs_num], -1, dtype="int64"
         )
         if self.speculative_decoding:
             max_draft_token_num = self.speculative_config.num_speculative_tokens
@@ -1466,6 +1509,8 @@ class GPUModelRunner(ModelRunnerBase):
                 reasoning_index=self.share_inputs["reasoning_index"],
                 stop_seqs=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
+                stop_token_ids=self.share_inputs["stop_token_ids"],
+                stop_token_ids_len=self.share_inputs["stop_token_ids_len"],
             )
 
             post_process(
@@ -1820,6 +1865,8 @@ class GPUModelRunner(ModelRunnerBase):
             reasoning_index=self.share_inputs["reasoning_index"][:num_running_requests],
             stop_seqs=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
+            stop_token_ids=self.share_inputs["stop_token_ids"],
+            stop_token_ids_len=self.share_inputs["stop_token_ids_len"],
         )
 
         if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":

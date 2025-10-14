@@ -214,6 +214,8 @@ class DataProcessor(BaseDataProcessor):
 
         # processing stop_sequences
         stop_sequences = request.get("stop", [])
+        data_processor_logger.info(f"request:{request}")
+        data_processor_logger.info(f"request.getstop:{stop_sequences}")
         if stop_sequences is not None and len(stop_sequences) != 0:
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
             request.set("stop_seqs", stop_seqs)
@@ -284,11 +286,13 @@ class DataProcessor(BaseDataProcessor):
         """
         data_processor_logger.info(f"Start processing request dict: {request}")
         request = self._apply_default_parameters(request)
+
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
 
         # processing stop_sequences
         stop_sequences = request.get("stop", [])
+        data_processor_logger.info(f"request.getstop:{stop_sequences}")
         if stop_sequences:
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
             data_processor_logger.info(f"stop_seqs:{stop_seqs}")

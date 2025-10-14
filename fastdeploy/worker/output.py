@@ -255,6 +255,11 @@ class ModelOutputData:
     """
     stop_seqs: paddle.Tensor = None
 
+    stop_token_ids_len: paddle.Tensor = None
+    """
+        the length of stop_token_ids
+    """
+
 
 @dataclass
 class ModelRunnerOutput:
