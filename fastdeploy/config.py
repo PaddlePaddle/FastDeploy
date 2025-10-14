@@ -181,7 +181,7 @@ class ModelConfig:
         self.model = ""
         self.is_quantized = False
         self.max_model_len = 0
-        self.dtype = ""
+        self.dtype = "bfloat16"
         self.enable_logprob = False
         self.enable_redundant_experts = False
         self.redundant_experts_num = 0
@@ -536,18 +536,10 @@ class ParallelConfig:
         From old wersion worker args
         TODO(gongshaotian): Reclassify
         """
-        # Set default block num for profile run
-        self.total_block_num: int = 2000
-        # block size
-        self.block_size: int = 64
         # Engine worker queue port
         self.engine_worker_queue_port: str = "9923"
         # cuda visible devices
         self.device_ids: str = "0"
-        # Input dtype
-        self.dtype: str = "bfloat16"
-        # Encoder's decoder num
-        self.enc_dec_block_num: int = 1
         # First token id
         self.first_token_id: int = 1
         # Process ID of engine

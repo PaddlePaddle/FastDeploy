@@ -775,8 +775,8 @@ class XPUModelRunner(ModelRunnerBase):
         # Initialize free list
         free_list = list(
             range(
-                self.parallel_config.total_block_num - 1,
-                int(self.parallel_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
+                self.cache_config.total_block_num - 1,
+                int(self.cache_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
                 -1,
             )
         )
@@ -828,14 +828,14 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_seq_lens_decoder"],
                 self.share_inputs["block_tables"],
                 self.share_inputs["is_block_step"],
-                self.parallel_config.block_size,
+                self.cache_config.block_size,
             )
         self.forward_meta = xpu_pre_process(
             self.share_inputs["input_ids"],
             self.share_inputs["seq_lens_this_time"],
             self.share_inputs,
             use_speculate_method=False,
-            block_size=self.parallel_config.block_size,
+            block_size=self.cache_config.block_size,
             draft_tokens=None,
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
@@ -903,7 +903,7 @@ class XPUModelRunner(ModelRunnerBase):
         max_block_num = self.num_gpu_blocks
 
         # Get kv cache dtype
-        cache_type = self.parallel_config.dtype
+        cache_type = self.model_config.dtype
 
         if (
             self.quant_config
@@ -1123,7 +1123,7 @@ class XPUModelRunner(ModelRunnerBase):
             sampled_token_ids=sampler_output.sampled_token_ids,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
-            block_size=self.parallel_config.block_size,
+            block_size=self.cache_config.block_size,
             skip_save_output=is_dummy_run,
         )
 
@@ -1141,14 +1141,14 @@ class XPUModelRunner(ModelRunnerBase):
     def prepare_profile(self) -> None:
         """Prepare the profile run by setting the block number and initializing the KV cache."""
         paddle.device.xpu.empty_cache()
-        self.num_gpu_blocks = self.parallel_config.total_block_num
+        self.num_gpu_blocks = self.cache_config.total_block_num
         self.initialize_kv_cache()
 
     @profile_run_guard(True)
     def profile_run(self) -> None:
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 
-        self.num_gpu_blocks = self.parallel_config.total_block_num
+        self.num_gpu_blocks = self.cache_config.total_block_num
         self.initialize_kv_cache()
 
         self._dummy_run(
@@ -1310,7 +1310,7 @@ class XPUModelRunner(ModelRunnerBase):
             custom_black_list=self.amp_black,
             custom_white_list=self.amp_white,
             level="O2",
-            dtype=self.parallel_config.dtype,
+            dtype=self.model_config.dtype,
         ):
             image_features = self.model.vision_model.extract_feature(images, grid_thw)
             if self.parallel_config.tensor_parallel_size > 1:
