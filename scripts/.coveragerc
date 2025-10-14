@@ -7,6 +7,7 @@ parallel = True
 
 [paths]
 source =
+    FastDeploy/fastdeploy
     fastdeploy
     */site-packages/fastdeploy
     */lib/python3.10/site-packages/fastdeploy
@@ -18,3 +19,8 @@ omit =
     */site-packages/setuptools/*
     */dist-packages/*
     */site-packages/*/fastdeploy/model_executor/ops/gpu*
+
+ignore_errors = True
+
+[xml]
+ignore_errors = True
