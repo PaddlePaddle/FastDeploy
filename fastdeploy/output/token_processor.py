@@ -396,7 +396,7 @@ class TokenProcessor:
             if self.tokens_counter[task_id] == 0:
                 if task.messages is not None:
                     result.prompt = task.messages
-                result.num_cached_tokens = task.num_cached_tokens
+            result.num_cached_tokens = task.num_cached_tokens
 
             is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
 
