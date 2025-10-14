@@ -19,8 +19,8 @@ docker login --username=cr_temp_user --password=eyJpbnN0YW5jZUlkIjoiY3JpLXpxYTIz
 ## 2. paddlepaddle and custom device installation
 
 ```shell
-1）pip install paddlepaddle==3.0.0.dev20250729 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
-2）pip install paddle-metax-gpu==3.0.0.dev20250807 -i https://www.paddlepaddle.org.cn/packages/nightly/maca/
+1）pip install paddlepaddle==3.0.0.dev20250825 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
+2）pip install paddle-metax-gpu==3.0.0.dev20250826 -i https://www.paddlepaddle.org.cn/packages/nightly/maca/
 ```
 
 ## 3. Build Wheel from Source
@@ -47,6 +47,8 @@ from fastdeploy.model_executor.ops.gpu import beam_search_softmax
 If the above code executes successfully, the environment is ready.
 
 ## 5. Demo
+
+```python
 from fastdeploy import LLM, SamplingParams
 
 prompts = [
@@ -68,7 +70,9 @@ for output in outputs:
     print(prompt)
     print(generated_text)
     print("-" * 50)
+```
 
+```
 Output：
 INFO     2025-08-18 10:54:18,455 416822 engine.py[line:202] Waiting worker processes ready...
 Loading Weights: 100%|█████████████████████████████████████████████████████████████████████████| 100/100 [03:33<00:00,  2.14s/it]
@@ -81,3 +85,4 @@ Generated 1 outputs
 Hello. My name is
 Alice and I'm here to help you. What can I do for you today?
 Hello Alice! I'm trying to organize a small party
+```

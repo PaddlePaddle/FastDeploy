@@ -113,7 +113,6 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
 
     def process_request(self, request, max_model_len=None, **kwargs):
         """process the input data"""
-        request.chat_template = kwargs.get("chat_template")
         task = request.to_dict()
         task["chat_template_kwargs"] = kwargs.get("chat_template_kwargs")
         self.process_request_dict(task, max_model_len)
@@ -253,6 +252,10 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
+        else:
+            request["max_tokens"] = min(max_model_len - len(request["prompt_token_ids"]), request["max_tokens"])
+        if request.get("reasoning_max_tokens") is None:
+            request["reasoning_max_tokens"] = max(int(request["max_tokens"] * 0.8), 1)
         data_processor_logger.info(f"Processed request {request}")
 
         return request
