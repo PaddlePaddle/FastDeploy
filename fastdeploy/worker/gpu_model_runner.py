@@ -132,7 +132,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.sampler = SpeculativeSampler(fd_config)
 
         self.guided_backend = None
-        if self.fd_config.parallel_config.guided_decoding_backend != "off":
+        if self.fd_config.parallel_config.guided_decoding_backend != "off" and self.local_rank == 0:
             self.guided_backend = get_guided_backend(fd_config=self.fd_config)
             self.sampler.set_reasoning_parser(self.guided_backend.get_reasoning_parser())
 
@@ -475,7 +475,7 @@ class GPUModelRunner(ModelRunnerBase):
             assert length > 0, "The prompt requested must not be empty."
 
             prefill_tokens = []
-            if (
+            if self.local_rank == 0 and (
                 request.guided_json is not None
                 or request.guided_regex is not None
                 or request.structural_tag is not None

@@ -137,19 +137,12 @@ class SamplerProcessor:
                     for token in prefill_tokens:
                         self.logits_processor[idx].accept_token(token)
 
-    def _fill_bitmask(self, token_bitmask, idx_list):
-        if len(idx_list) == 0:
-            return
-
-        for idx in idx_list:
-            self.logits_processor[idx].fill_token_bitmask(token_bitmask, idx)
-
     def _split_idx(self, idx_list, n):
         if len(idx_list) == 0:
             return []
 
         if len(idx_list) < n:
-            return idx_list
+            return [[item] for item in idx_list]
 
         start, result_list = 0, []
         base_size, remainder = divmod(len(idx_list), n)
@@ -169,6 +162,13 @@ class SamplerProcessor:
         Args:
             skip_idx_list: Sequence IDs to exclude from masking
         """
+
+        def _fill_bitmask(logits_processor, token_bitmask, idx_list):
+            if len(idx_list) == 0:
+                return
+            for idx in idx_list:
+                logits_processor[idx].fill_token_bitmask(token_bitmask, idx)
+
         if len(self.logits_processor) == 0:
             return
 
@@ -189,7 +189,10 @@ class SamplerProcessor:
                 wait_fill_idx.append(idx)
 
             split_list = self._split_idx(wait_fill_idx, 4)
-            futures = [self.executor.submit(self._fill_bitmask, token_bitmask, idx_list) for idx_list in split_list]
+            futures = [
+                self.executor.submit(_fill_bitmask, self.logits_processor, token_bitmask, idx_list)
+                for idx_list in split_list
+            ]
             wait(futures)
         self.token_bitmask = paddle.to_tensor(token_bitmask.numpy())
 
