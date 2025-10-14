@@ -20,6 +20,7 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
         model_config = Mock()
+        model_config.max_model_len = 512
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -40,6 +41,7 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
         model_config = Mock()
+        model_config.max_model_len = 512
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -59,7 +61,8 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         cache_config.enable_chunked_prefill = True
         scheduler_config = SchedulerConfig({})
-        model_config = model_config = Mock()
+        model_config: Mock = Mock()
+        model_config.max_model_len = 512
 
         fd_config = FDConfig(
             parallel_config=parallel_config,
@@ -97,7 +100,8 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
         scheduler_config.splitwise_role = "prefill"
-        model_config = model_config = Mock()
+        model_config: Mock = Mock()
+        model_config.max_model_len = 512
 
         fd_config = FDConfig(
             parallel_config=parallel_config,

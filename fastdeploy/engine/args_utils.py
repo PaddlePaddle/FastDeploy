@@ -198,7 +198,7 @@ class EngineArgs:
     The amount of CPU memory to offload to.
     """
 
-    cache_queue_port: int = 8003
+    cache_queue_port: str = "8003"
     """
     Port for cache queue.
     """
@@ -741,7 +741,7 @@ class EngineArgs:
 
         cache_group.add_argument(
             "--cache-queue-port",
-            type=int,
+            type=lambda s: [int(item.strip()) for item in s.split(",")] if s else None,
             default=EngineArgs.cache_queue_port,
             help="port for cache queue",
         )
@@ -1080,7 +1080,6 @@ class EngineArgs:
             cache_config=cache_cfg,
             load_config=load_cfg,
             parallel_config=parallel_cfg,
-            max_model_len=self.max_model_len,
             speculative_config=speculative_cfg,
             ips=self.ips,
             use_warmup=self.use_warmup,
