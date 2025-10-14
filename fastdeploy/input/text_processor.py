@@ -245,8 +245,9 @@ class DataProcessor(BaseDataProcessor):
                 if chat_template_kwargs:
                     if isinstance(chat_template_kwargs, dict):
                         for k, v in chat_template_kwargs.items():
-                            if k not in task:
+                            if k not in task or task[k] is None:
                                 task[k] = v
+                                print(f"DEBUG: text_processor task[{k}]: {task[k]}")
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
                 task.setdefault("enable_thinking", True)

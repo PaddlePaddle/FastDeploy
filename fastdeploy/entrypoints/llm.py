@@ -23,12 +23,14 @@ import traceback
 import uuid
 from typing import Any, Optional, Union
 
+from pydantic import ValidationError
 from tqdm import tqdm
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.chat_utils import load_chat_template
+from fastdeploy.entrypoints.openai.protocol import ChatCompletionToolsParam
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.utils import (
     deprecated_kwargs_warning,
@@ -204,6 +206,7 @@ class LLM:
         use_tqdm: bool = True,
         chat_template_kwargs: Optional[dict[str, Any]] = None,
         chat_template: Optional[str] = None,
+        tools: Optional[Union[ChatCompletionToolsParam, list[ChatCompletionToolsParam]]] = None,
         stream: bool = False,
     ):
         """
@@ -243,6 +246,12 @@ class LLM:
         if chat_template is None:
             chat_template = self.chat_template
 
+        if tools is not None:
+            try:
+                validated_tools = _validate_tools(tools)
+            except ValueError as e:
+                raise RuntimeError(f"Failed to validate 'tools' parameter in chat method: {e}") from e
+        validated_tools = None
         messages_len = len(messages)
         for i in range(messages_len):
             messages[i] = {"messages": messages[i]}
@@ -251,6 +260,7 @@ class LLM:
             sampling_params=sampling_params,
             chat_template_kwargs=chat_template_kwargs,
             chat_template=chat_template,
+            tools=validated_tools,
         )
 
         topk_logprobs = sampling_params[0].logprobs if sampling_params_len > 1 else sampling_params.logprobs
@@ -557,6 +567,63 @@ class LLM:
             incremental_result.prompt = prompts
 
         return incremental_result
+
+
+def _validate_tools(raw_tools: Any) -> Optional[list[dict]]:
+    """
+    统一校验 tools 参数格式，支持以下合法输入：
+    1. None（不传入 tools，返回 None）
+    2. 单个工具字典（如 {"type": "function", "function": {...}}，自动转为列表）
+    3. 工具字典列表（如 [{"type": "function", "function": {...}}, ...]）
+
+    非法输入会抛出 ValueError，包含具体错误信息：
+    - 非 None/字典/列表类型（如字符串、数字、布尔值等）
+    - 空字典/空列表（允许，但会提示“无有效工具”）
+    - 字典格式不符合 ChatCompletionToolsParam 定义（如缺少 function.name、type 错误等）
+
+    Args:
+        raw_tools: 从 kwargs 中获取的原始 tools 参数（可能是任何类型）
+
+    Returns:
+        Optional[List[Dict[str, Any]]]: 校验通过的标准工具字典列表，或 None（当 raw_tools 为 None 时）
+
+    Raises:
+        ValueError: 输入类型非法或格式不符合标准时抛出
+    """
+    if raw_tools is None:
+        return None
+    if isinstance(raw_tools, ChatCompletionToolsParam):
+        return [raw_tools]
+    if isinstance(raw_tools, list) and all(isinstance(t, ChatCompletionToolsParam) for t in raw_tools):
+        return raw_tools
+
+    if not isinstance(raw_tools, dict) and not isinstance(raw_tools, list):
+        raise ValueError(
+            f"Invalid tools top-level type! Expected None, dict (single tool) or list (multiple tools), "
+            f"but got type '{type(raw_tools).__name__}' (value: {raw_tools})."
+        )
+    tools_list: list[dict[str, Any]] = [raw_tools] if isinstance(raw_tools, dict) else raw_tools
+
+    if not tools_list:
+        return None
+
+    validated_tools = []
+    for idx, tool in enumerate(tools_list):
+        if not isinstance(tool, dict):
+            raise ValueError(
+                f"Invalid element type in tools list! At index {idx}, "
+                f"expected dict (tool definition), but got type '{type(tool).__name__}' (value: {tool})."
+            )
+
+        try:
+            validated_tool_obj = ChatCompletionToolsParam.model_validate(tool)
+            validated_tools.append(validated_tool_obj.model_dump())
+        except ValidationError as e:
+            raise ValueError(
+                f"Invalid tool format at index {idx} in tools list! " f"Tool content: {tool}\nError details: {e}"
+            ) from e
+
+    return validated_tools
 
 
 if __name__ == "__main__":
