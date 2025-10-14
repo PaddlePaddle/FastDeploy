@@ -82,6 +82,9 @@ if args.tool_parser_plugin:
     ToolParserManager.import_tool_parser(args.tool_parser_plugin)
 llm_engine = None
 
+MAX_CONCURRENT_CONNECTIONS = (args.max_concurrency + args.workers - 1) // args.workers
+connection_semaphore = StatefulSemaphore(MAX_CONCURRENT_CONNECTIONS)
+
 
 def load_engine():
     """
@@ -100,12 +103,6 @@ def load_engine():
 
     llm_engine = engine
     return engine
-
-
-app = FastAPI()
-
-MAX_CONCURRENT_CONNECTIONS = (args.max_concurrency + args.workers - 1) // args.workers
-connection_semaphore = StatefulSemaphore(MAX_CONCURRENT_CONNECTIONS)
 
 
 def load_data_service():
@@ -192,10 +189,13 @@ async def lifespan(app: FastAPI):
         args.ips,
         args.max_waiting_time,
     )
+
+    engine_args = EngineArgs.from_cli_args(args)
+    config = engine_args.create_engine_config(port_availability_check=False)
     embedding_handler = OpenAIServingEmbedding(
         engine_client,
-        None,
         app.state.model_handler,
+        config,
         pid,
         args.ips,
         args.max_waiting_time,

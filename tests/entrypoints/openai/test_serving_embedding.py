@@ -4,9 +4,12 @@ from unittest.mock import AsyncMock, MagicMock
 from fastdeploy.engine.request import PoolingOutput, PoolingRequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     EmbeddingChatRequest,
+    EmbeddingCompletionRequest,
+    EmbeddingRequest,
     EmbeddingResponse,
 )
 from fastdeploy.entrypoints.openai.serving_embedding import OpenAIServingEmbedding
+from fastdeploy.entrypoints.openai.serving_engine import ServeContext
 
 
 class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
@@ -63,6 +66,39 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
 
         # Assert
         self.assertEqual(result.data[0].embedding, self.response_data.outputs.data)
+
+    def test_request_to_batch_dicts(self):
+        test_cases = [
+            ("string input", EmbeddingCompletionRequest(input="hello"), ["hello"], ["req-1-0"]),
+            ("list of ints", EmbeddingCompletionRequest(input=[1, 2, 3]), [[1, 2, 3]], ["req-1-0"]),
+            ("list of strings", EmbeddingCompletionRequest(input=["a", "b"]), ["a", "b"], ["req-1-0", "req-1-1"]),
+            (
+                "list of list of ints",
+                EmbeddingCompletionRequest(input=[[1, 2], [3, 4]]),
+                [[1, 2], [3, 4]],
+                ["req-1-0", "req-1-1"],
+            ),
+        ]
+
+        for name, request, expected_prompts, expected_ids in test_cases:
+            with self.subTest(name=name):
+                ctx = ServeContext[EmbeddingRequest](
+                    request=request,
+                    model_name="request.model",
+                    request_id="req-1",
+                )
+                result = self.embedding_service._request_to_batch_dicts(ctx)
+                self.assertEqual(len(result), len(expected_prompts))
+                for r, prompt, rid in zip(result, expected_prompts, expected_ids):
+                    print(f"assertEqual r:{r} prompt:{prompt} rid:{rid}")
+                    self.assertEqual(r["prompt"], prompt)
+                    self.assertEqual(r["request_id"], rid)
+
+        # 测试非 EmbeddingCompletionRequest 输入
+        with self.subTest(name="non-embedding request"):
+            with self.assertRaises(AttributeError):
+                ctx = ServeContext(request={"foo": "bar"}, model_name="request.model", request_id="req-1")
+                result = self.embedding_service._request_to_batch_dicts(ctx)
 
 
 if __name__ == "__main__":
