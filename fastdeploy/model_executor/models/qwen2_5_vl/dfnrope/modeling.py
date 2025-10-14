@@ -107,7 +107,8 @@ class VisionFlashAttention2(nn.Layer):
                 has_bias=True,
             )
 
-            # TODO(wangyafeng) 参考ernie vl结合框架现状，后续应该可以优化
+            # TODO(wangyafeng) Referring to the current situation of combining ernie vl
+            # with the framework, it should be possible to optimize it in the future
             set_weight_attrs(self.qkv.weight, {"weight_loader": self.weight_loader})
             set_weight_attrs(
                 self.qkv.bias, {"weight_loader": self.weight_loader, "load_bias": True, "output_dim": True}

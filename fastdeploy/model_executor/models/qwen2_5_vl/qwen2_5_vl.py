@@ -295,8 +295,9 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         video_mask = ids_remove_padding == self.model.video_token_id
         video_token_num = video_mask.sum()
 
-        # 由于框架只有 image_features，所以目前不支持图片和视频混合
-        # TODO(wangyafeng) 后续考虑支持传入 video_features
+        # Due to the fact that the framework only has image_features,
+        # it currently does not support mixing images and videos
+        # TODO(wangyafeng) Consider supporting the input of video_features in the future
         if image_token_num > 0:
             input_embeddings[image_mask] = image_features.cast(self.model._dtype)
         if video_token_num > 0:
