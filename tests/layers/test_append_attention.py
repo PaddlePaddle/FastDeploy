@@ -379,12 +379,21 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         )
         self.max_enc_len_this_time = paddle.to_tensor([self.max_enc_len_this_time], "int32", place=paddle.CPUPlace())
         self.max_dec_len_this_time = paddle.to_tensor([self.max_dec_len_this_time], "int32", place=paddle.CPUPlace())
-        self.seq_lens_this_time = self.seq_lens_encoder
-
-        self.decoder_batch_ids = paddle.full([self.batch_size], 0, dtype="int32")
-        self.decoder_tile_ids_per_batch = paddle.full([self.batch_size], 0, dtype="int32")
+        self.seq_lens_this_time = copy.deepcopy(self.seq_lens_encoder)
+        decode_max_tile_size = 1024 * self.batch_size * np.ceil((2 * 10) / 12)
+        self.decoder_batch_ids = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
+        self.decoder_tile_ids_per_batch = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
         self.decoder_num_blocks_cpu = paddle.full([1], 0, dtype="int32").pin_memory()
+        self.decoder_num_blocks_device = paddle.full([1], 0, dtype="int32")
+        self.decoder_chunk_size_device = paddle.full([1], 64, dtype="int32")
         self.max_len_tensor_cpu = paddle.full([8], 0, dtype="int32").cpu()
+
+        self.encoder_batch_ids = paddle.full([self.batch_size], 0, dtype="int32")
+        self.encoder_tile_ids_per_batch = paddle.full([self.batch_size], 0, dtype="int32")
+        self.encoder_num_blocks_x_cpu = paddle.full([1], 0, dtype="int32").cpu()
+        self.kv_batch_ids = paddle.full([self.batch_size], 0, dtype="int32")
+        self.kv_tile_ids_per_batch = paddle.full([self.batch_size], 0, dtype="int32")
+        self.kv_num_blocks_x_cpu = paddle.full([1], 0, dtype="int32").cpu()
 
         self.cache_shape = (
             self.max_block_num,
@@ -469,22 +478,22 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
             get_block_shape_and_split_kv_block,
         )
 
-        (
-            encoder_batch_ids,
-            encoder_tile_ids_per_batch,
-            encoder_num_blocks,
-            kv_batch_ids,
-            kv_tile_ids_per_batch,
-            kv_num_blocks,
-            max_len_kv,
-        ) = get_block_shape_and_split_kv_block(
+        get_block_shape_and_split_kv_block(
             self.seq_lens_encoder,
             self.seq_lens_decoder,
             self.seq_lens_this_time,
             self.decoder_batch_ids,
             self.decoder_tile_ids_per_batch,
             self.decoder_num_blocks_cpu,
+            self.decoder_num_blocks_device,
+            self.decoder_chunk_size_device,
             self.max_len_tensor_cpu,
+            self.encoder_batch_ids,
+            self.encoder_tile_ids_per_batch,
+            self.encoder_num_blocks_x_cpu,
+            self.kv_batch_ids,
+            self.kv_tile_ids_per_batch,
+            self.kv_num_blocks_x_cpu,
             64,
             12,
             (self.q_num_head + 2 * self.kv_num_head) // self.kv_num_head,
@@ -508,17 +517,16 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 self.padding_offset,
                 self.cum_offset,
                 self.block_tables,
-                encoder_batch_ids,
-                encoder_tile_ids_per_batch,
-                encoder_num_blocks,
-                kv_batch_ids,
-                kv_tile_ids_per_batch,
-                kv_num_blocks,
+                self.encoder_batch_ids,
+                self.encoder_tile_ids_per_batch,
+                self.encoder_num_blocks_x_cpu,
+                self.kv_batch_ids,
+                self.kv_tile_ids_per_batch,
+                self.kv_num_blocks_x_cpu,
                 self.decoder_batch_ids,
                 self.decoder_tile_ids_per_batch,
                 self.decoder_num_blocks_cpu,
                 self.max_len_tensor_cpu,
-                max_len_kv,
                 self.rope_emb,  # rope_emb
                 None,  # attn_mask
                 None,  # qkv_bias
@@ -570,17 +578,16 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 self.padding_offset,
                 self.cum_offset,
                 self.block_tables,
-                encoder_batch_ids,
-                encoder_tile_ids_per_batch,
-                encoder_num_blocks,
-                kv_batch_ids,
-                kv_tile_ids_per_batch,
-                kv_num_blocks,
+                self.encoder_batch_ids,
+                self.encoder_tile_ids_per_batch,
+                self.encoder_num_blocks_x_cpu,
+                self.kv_batch_ids,
+                self.kv_tile_ids_per_batch,
+                self.kv_num_blocks_x_cpu,
                 self.decoder_batch_ids,
                 self.decoder_tile_ids_per_batch,
                 self.decoder_num_blocks_cpu,
                 self.max_len_tensor_cpu,
-                max_len_kv,
                 self.rope_emb,  # rope_emb
                 None,  # attn_mask
                 None,  # qkv_bias
@@ -641,7 +648,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         )
         # encoder
         # self.seq_lens_encoder,self.seq_lens_decoder,self.max_enc_len_this_time,self.max_dec_len_this_time=get_encoder_decoder_len(self.batch_size,self.seq_len)
-        self.seq_lens_this_time = self.seq_lens_encoder
+        self.seq_lens_this_time = copy.deepcopy(self.seq_lens_encoder)
         if self.use_mask_offset:
             print("encoder mask_offset: ", self.mask_offset)
         self.cmp_append_attention(attn_mask=self.attention_mask)

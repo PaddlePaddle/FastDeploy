@@ -315,7 +315,6 @@ class ResourceManager:
         main_process_metrics.available_gpu_block_num.set(self.total_block_number() - task_used_block_num)
         main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
         main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
-
         llm_logger.info(
             f"Number of allocated requests: {len(tasks)}, number of " f"running requests in worker: {self.real_bsz}"
         )
@@ -329,8 +328,8 @@ class ResourceManager:
         Delete cached data from the task's prompt token ids based on the cached length.
         """
         if cached_len == len(task.prompt_token_ids):
-            task.prompt_token_ids = task.prompt_token_ids[cached_len - 1 :]
-            task.seq_lens_decoder = cached_len - 1
+            task.prompt_token_ids = task.prompt_token_ids[cached_len - self.cfg.block_size :]
+            task.seq_lens_decoder = cached_len - self.cfg.block_size
         else:
             task.prompt_token_ids = task.prompt_token_ids[cached_len:]
             task.seq_lens_decoder = cached_len

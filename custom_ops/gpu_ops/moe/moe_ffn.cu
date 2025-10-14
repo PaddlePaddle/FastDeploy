@@ -412,7 +412,9 @@ const auto t_type = (quant_method == "w4a8") ? up_gate_proj_scale.get().dtype() 
                     (quant_method == "w4afp8") ? paddle::DataType::BFLOAT16 :
                     permute_input.dtype();
     auto ffn_out = paddle::empty_like(permute_input, t_type);
-
+    if(permute_input.numel() == 0){
+        return ffn_out;
+    }
     switch (t_type) {
         case paddle::DataType::BFLOAT16:
             MoeFFNKernel<paddle::DataType::BFLOAT16>(permute_input,

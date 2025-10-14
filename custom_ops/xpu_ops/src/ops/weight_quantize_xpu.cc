@@ -86,7 +86,7 @@ std::vector<paddle::Tensor> WeightQuantize(const paddle::Tensor &x,
         APPLY_WEIGHT_QUANTIZE_KERNEL(float);
     } else {
         PD_THROW("WeightQuantize not support x_type==%d",
-                 static_cast<int>(x_type));
+            static_cast<int>(x_type));
         return {};
     }
 }

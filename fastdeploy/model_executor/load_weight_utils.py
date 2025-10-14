@@ -54,7 +54,7 @@ def pdparams_weight_iterator(paddle_file_list: list[str]):
         del state_dict
 
 
-def load_weights_form_cache(model, weights_iterator):
+def load_weights_from_cache(model, weights_iterator):
     params_dict = dict(model.named_parameters())
     for loaded_weight_name, loaded_weight in weights_iterator:
         param = params_dict[loaded_weight_name]
@@ -79,7 +79,7 @@ def is_weight_cache_enabled(fd_config, weight_cache_path=".cache"):
     weight_cache_context = contextlib.nullcontext()
     weight_cache_dir = None
     enable_cache = False
-    if envs.FD_ENABLE_MODEL_CACHE:
+    if envs.FD_ENABLE_MODEL_LOAD_CACHE:
         model_weight_cache_path = os.path.join(fd_config.model_config.model, weight_cache_path)
         # model_type + quantization + tp_size + ep_size
         weight_cache_key = "_".join(
@@ -98,7 +98,7 @@ def is_weight_cache_enabled(fd_config, weight_cache_path=".cache"):
                 f"Loading will prioritize cached models. Users are responsible for ensuring the saved model is correct. If any error occurs, deleting the cache at {weight_cache_dir} may resolve it."
             )
             enable_cache = True
-            weight_cache_context = switch_config_context(fd_config.quant_config, "is_checkpoint_bf16", False)
+            weight_cache_context = switch_config_context(fd_config.quant_config, "is_quantized", True)
 
     return enable_cache, weight_cache_dir, weight_cache_context
 
@@ -132,7 +132,11 @@ def save_model(model_arg_name="model", config_arg_name="fd_config"):
 
             with context:
                 result = func(*args, **kwargs)
-            if envs.FD_ENABLE_MODEL_CACHE and weight_cache_dir is not None and not os.path.exists(weight_cache_dir):
+            if (
+                envs.FD_ENABLE_MODEL_LOAD_CACHE
+                and weight_cache_dir is not None
+                and not os.path.exists(weight_cache_dir)
+            ):
                 assert fd_config.quant_config is not None and getattr(
                     fd_config.quant_config, "is_checkpoint_bf16", False
                 ), "Save cache only for dynamic quantization"
@@ -146,7 +150,8 @@ def save_model(model_arg_name="model", config_arg_name="fd_config"):
                 )
                 _save_model(model.state_dict(), os.path.join(tp_weight_cache_dir, "cache.pdparams"))
             else:
-                logger.info("Weights are already cached, skip saving")
+                reason = "weights already cached" if envs.FD_ENABLE_MODEL_LOAD_CACHE else "cache disabled"
+                logger.info(f"Skip saving ,{reason}")
             return result
 
         return wrapper

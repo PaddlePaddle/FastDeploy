@@ -63,8 +63,8 @@ std::vector<paddle::Tensor> AppendAttention(
     const paddle::Tensor &kv_num_blocks,
     const paddle::Tensor &decoder_batch_ids,
     const paddle::Tensor &decoder_tile_ids_per_batch,
-    const paddle::Tensor &decoder_num_blocks,
-    const paddle::Tensor &set_max_lengths, const paddle::Tensor &max_len_kv,
+    const paddle::Tensor &decoder_num_blocks_cpu,
+    const paddle::Tensor &set_max_lengths,
     const paddle::optional<paddle::Tensor> &rotary_embs,
     const paddle::optional<paddle::Tensor> &attn_mask,
     const paddle::optional<paddle::Tensor> &qkv_bias,
@@ -105,8 +105,8 @@ void AppendAttentionWithOutput(
     const paddle::Tensor &kv_num_blocks,
     const paddle::Tensor &decoder_batch_ids,
     const paddle::Tensor &decoder_tile_ids_per_batch,
-    const paddle::Tensor &decoder_num_blocks,
-    const paddle::Tensor &set_max_lengths, const paddle::Tensor &max_len_kv,
+    const paddle::Tensor &decoder_num_blocks_cpu,
+    const paddle::Tensor &set_max_lengths,
     paddle::Tensor &fmha_out,
     const paddle::optional<paddle::Tensor> &rotary_embs,
     const paddle::optional<paddle::Tensor> &attn_mask,
@@ -299,14 +299,22 @@ paddle::Tensor OpenShmAndGetMetaSignalFunc(const int rank, const int device_id,
 paddle::Tensor InitSignalLayerwiseFunc(const paddle::Tensor &kv_signal_metadata,
                                        const int layer_id);
 
-std::vector<paddle::Tensor> GetBlockShapeAndSplitKVBlock(
+void GetBlockShapeAndSplitKVBlock(
     const paddle::Tensor &seq_lens_encoder,
     const paddle::Tensor &seq_lens_decoder,
     const paddle::Tensor &seq_lens_this_time,
     paddle::Tensor &decoder_batch_ids,          // Inplace
     paddle::Tensor &decoder_tile_ids_per_batch, // Inplace
-    paddle::Tensor &decoder_num_blocks_x_cpu,   // Inplace, Pinned Memory
+    paddle::Tensor &decoder_num_blocks_cpu,     // Inplace, Pinned Memory
+    paddle::Tensor &decoder_num_blocks_device,  // Inplace
+    paddle::Tensor &decoder_chunk_size_device,  // Inplace
     paddle::Tensor &max_len_tensor_cpu,         // Inplace, Pinned Memory
+    paddle::Tensor &encoder_batch_ids,          // Inplace
+    paddle::Tensor &encoder_tile_ids_per_batch, // Inplace
+    paddle::Tensor &encoder_num_blocks_x_cpu,   // Inplace, Pinned Memory
+    paddle::Tensor &kv_batch_ids,               // Inplace
+    paddle::Tensor &kv_tile_ids_per_batch,      // Inplace
+    paddle::Tensor &kv_num_blocks_x_cpu,        // Inplace, Pinned Memory
     const int encoder_block_shape_q,
     const int decoder_block_shape_q,
     const int group_size,
@@ -407,8 +415,8 @@ std::vector<paddle::Tensor> MoEDeepGEMMDePermute(
     const paddle::Tensor &topk_idx, const paddle::Tensor &topk_weights);
 
 void TextImageIndexOut(const paddle::Tensor &token_type_ids,
-                       const paddle::Tensor &text_input,
-                       const paddle::Tensor &image_input);
+                        paddle::Tensor &text_input,
+                        paddle::Tensor &image_input);
 
 void TextImageGatherScatter(paddle::Tensor &input, paddle::Tensor &text_input,
                             paddle::Tensor &image_input,
@@ -466,23 +474,18 @@ std::vector<paddle::Tensor> MultiHeadLatentAttention(
     const paddle::Tensor& query,
     const paddle::Tensor& key_cache,
     const paddle::Tensor& value_cache,
-    const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& block_tables,
-    const paddle::Tensor& encoder_batch_ids,
-    const paddle::Tensor& encoder_tile_ids_per_batch,
-    const paddle::Tensor& encoder_num_blocks,
     const paddle::Tensor& kv_batch_ids,
     const paddle::Tensor& kv_tile_ids_per_batch,
     const paddle::Tensor& kv_num_blocks,
     const paddle::Tensor& decoder_batch_ids,
     const paddle::Tensor& decoder_tile_ids_per_batch,
-    const paddle::Tensor& decoder_num_blocks,
-    const paddle::Tensor& decoder_num_blocks_cpu,
-    const paddle::Tensor& max_enc_len_this_time,
+    const paddle::Tensor& decoder_num_blocks_device,
+    const paddle::Tensor& decoder_chunk_size_device,
     const paddle::Tensor& max_dec_len_this_time,
     const paddle::Tensor& max_len_kv,
     const paddle::optional<paddle::Tensor>& attn_mask,
@@ -567,6 +570,7 @@ std::vector<paddle::Tensor> NoauxTc(
       int n_group,
       int topk_group,
       int topk,
+      bool renormalize,
       float routed_scaling_factor);
 
 #ifdef ENABLE_FP8
@@ -617,6 +621,8 @@ std::tuple<int64_t, paddle::Tensor> allocate_shared_buffer_and_handle(
 int64_t open_mem_handle(paddle::Tensor& mem_handle);
 
 void free_shared_buffer(int64_t buffer);
+
+void clear_ipc_handles(int64_t _fa);
 
 // speculative decoding Kernel
 std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
@@ -677,7 +683,7 @@ void SpeculateVerify(
     const paddle::Tensor &output_cum_offsets,
     const paddle::Tensor &actual_candidate_len,
     const paddle::Tensor &actual_draft_token_nums, const paddle::Tensor &topp,
-    int max_seq_len, int verify_window, bool enable_topp, bool benchmark_mode);
+    int max_seq_len, int verify_window, bool enable_topp, bool benchmark_mode, bool accept_all_drafts);
 
 void SpeculateUpdate(const paddle::Tensor &seq_lens_encoder,
                        const paddle::Tensor &seq_lens_decoder,
@@ -1223,6 +1229,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("allocate_shared_buffer_and_handle", &allocate_shared_buffer_and_handle, "allocate_shared_buffer_and_handle");
 
   m.def("free_shared_buffer", &free_shared_buffer, "free_shared_buffer");
+
+  m.def("clear_ipc_handles", &clear_ipc_handles, "clear_ipc_handles");
 
   m.def("open_mem_handle", &open_mem_handle, "open_mem_handle");
 
