@@ -118,6 +118,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ENABLE_MODEL_LOAD_CACHE": lambda: bool(int(os.getenv("FD_ENABLE_MODEL_LOAD_CACHE", "0"))),
     # Whether to clear cpu cache when clearing model weights.
     "FD_ENABLE_SWAP_SPACE_CLEARING": lambda: int(os.getenv("FD_ENABLE_SWAP_SPACE_CLEARING", "0")),
+    # enable return text, used when FD_ENABLE_INTERNAL_ADAPTER=1
+    "FD_ENABLE_RETURN_TEXT": lambda: bool(int(os.getenv("FD_ENABLE_RETURN_TEXT", "0"))),
 }
 
 
