@@ -529,13 +529,6 @@ class ParallelConfig:
         self.data_parallel_size = 1  # DP degree
         self.enable_expert_parallel = False
         self.local_data_parallel_id = 0
-        # The embedding weight distributed on your gpu cards is divided by row or column.
-        # Defaults to False means divide by row. When vocab_size can not be divided by world_size
-        # but hidden_size can, we can consider split embedding weight by column.
-        """
-        From old wersion worker args
-        TODO(gongshaotian): Reclassify
-        """
         # Engine worker queue port
         self.engine_worker_queue_port: str = "9923"
         # cuda visible devices
