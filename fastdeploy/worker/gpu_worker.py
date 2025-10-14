@@ -207,7 +207,7 @@ class GpuWorker(WorkerBase):
         """
         Perform the warm-up and the graph optimization
         """
-        if self.model_runner.graph_opt_level >= 1:
+        if self.fd_config.graph_opt_config.graph_opt_level >= 1:
             self.model_runner.sot_warmup()
         # Triger cuda grpah capture
         self.model_runner.capture_model()

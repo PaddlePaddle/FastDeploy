@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
@@ -111,7 +112,7 @@ class CudaGraphPiecewiseBackend:
                 entry.num_finished_warmup += 1
                 entry.runnable(**kwargs)
                 logger.debug(
-                    f"[CUDA GRAPH] Warm up for batch size {entry.real_shape}, "
+                    f"[CUDA GRAPH] [ID:{id(self)}] Warm up for batch size {entry.real_shape}, "
                     f"finished ({n + 1}/{entry.num_finished_warmup}) times"
                 )
 
@@ -138,15 +139,17 @@ class CudaGraphPiecewiseBackend:
         real_shape = ids_remove_padding.shape[0]
         padding_real_shape = self.real_shape_to_captured_size[real_shape]
         logger.debug(
-            f"[CUDA GRAPH] The actual real shape obtained by CUDAGraph is :{real_shape}, "
-            f"The padded shape is :{padding_real_shape}"
+            f"[CUDA GRAPH] [ID:{id(self)}] The actual real shape obtained by CUDAGraph is :{real_shape}, "
+            f"The padded shape is :{padding_real_shape}, If Padding :{real_shape != padding_real_shape}"
         )
 
         entry = self.concrete_size_entries.get(padding_real_shape)
         assert entry is not None, f"real shape:{padding_real_shape} is not in cuda graph capture list."
         if entry.runnable is None:
             entry.runnable = self.runnable
-            logger.debug(f"[CUDA GRAPH] New entry lazy initialize with real shape {padding_real_shape}")
+            logger.debug(
+                f"[CUDA GRAPH] [ID:{id(self)}] New entry lazy initialize with real shape {padding_real_shape}"
+            )
 
         if not entry.use_cudagraph:
             return entry.runnable(**kwargs)
@@ -161,7 +164,7 @@ class CudaGraphPiecewiseBackend:
                 entry.num_finished_warmup += 1
                 entry.runnable(**kwargs)
                 logger.debug(
-                    f"[CUDA GRAPH] Warm up for real shape {padding_real_shape}, "
+                    f"[CUDA GRAPH] [ID:{id(self)}] Warm up for real shape {padding_real_shape}, "
                     f"finished ({n + 1}/{entry.num_finished_warmup}) times"
                 )
 
@@ -196,11 +199,11 @@ class CudaGraphPiecewiseBackend:
 
             # For CUDAGraph debug
             # self._save_cudagrpah_dot_files(entry)
-            logger.debug(f"[CUDA GRAPH] CUDAGraph captured for real shape {padding_real_shape}")
+            logger.debug(f"[CUDA GRAPH] [ID:{id(self)}] CUDAGraph captured for real shape {padding_real_shape}")
 
         # Replay
         entry.cuda_graph.replay()
-        logger.debug(f"[CUDA GRAPH] CUDAGraph replayed for real shape {padding_real_shape}")
+        logger.debug(f"[CUDA GRAPH] [ID:{id(self)}] CUDAGraph replayed for real shape {padding_real_shape}")
         if len(entry.output_buffers) == 1:
             return entry.output_buffers[0]
         return entry.output_buffers
@@ -214,16 +217,17 @@ class CudaGraphPiecewiseBackend:
             self.concrete_size_entries[shape] = ConcreteSizeEntry(real_shape=shape)
 
         logger.info(
-            f"[CUDA GRAPH] CUDAGraph capture list {self.cudagraph_capture_sizes}, " "Created all real shape entry."
+            f"[CUDA GRAPH] [ID:{id(self)}] CUDAGraph capture list {self.cudagraph_capture_sizes}, "
+            "Created all real shape entry."
         )
 
     def clear_graph(self):
         """ """
         # Clear graphs
-        for id, entry in self.concrete_size_entries.items():
+        for _id, entry in self.concrete_size_entries.items():
             if entry.cuda_graph:
                 del entry.cuda_graph
-                logger.debug(f"[CUDA GRAPH] The CUDAGraph with shape {id} has been cleared.")
+                logger.debug(f"[CUDA GRAPH] [ID:{id(self)}] The CUDAGraph with shape {_id} has been cleared.")
 
         del self.concrete_size_entries
         paddle.device.cuda.empty_cache()
@@ -236,6 +240,6 @@ class CudaGraphPiecewiseBackend:
         log_dir = envs.FD_LOG_DIR
         if entry.cuda_graph:
             entry.cuda_graph.print_to_dot_files(
-                f"./{log_dir}/GraphDotFiles/backend{id(self)}_shape{entry.real_shape}",
+                f"./{log_dir}/GraphDotFiles/backend{id(self)}_shape{entry.real_shape}_time{time.perf_counter()}",
                 1 << 0,
             )

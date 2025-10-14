@@ -156,7 +156,13 @@ class TokenProcessor:
             try:
                 is_blocking = True
                 if self.speculative_decoding:
-                    speculate_get_output(self.output_tokens, rank_id, is_blocking, False)
+                    if (
+                        self.cfg.parallel_config.enable_expert_parallel
+                        and self.cfg.parallel_config.data_parallel_size > 1
+                    ):
+                        speculate_get_output(self.output_tokens, rank_id, is_blocking, True)
+                    else:
+                        speculate_get_output(self.output_tokens, rank_id, is_blocking, False)
                     if self.output_tokens[0] == -2:
                         continue
 
