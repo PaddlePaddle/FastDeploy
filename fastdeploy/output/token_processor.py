@@ -142,6 +142,27 @@ class TokenProcessor:
         self.worker.daemon = True
         self.worker.start()
 
+    def _reschedule_preempt_task_use_zmq(self, datas):
+        """reschedule when real batch size is smaller than the insert position of preemted_task"""
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            need_to_be_reschedule_req_ids = list(self.resource_manager.to_be_rescheduled_request_id_set)
+            if len(need_to_be_reschedule_req_ids) > 0:
+                batch_id_set = set()
+                for data in datas:
+                    batch_id_set.add(data.batch_id)
+                llm_logger.debug(f"_reschedule_preempt_task_use_zmq batch_id_set {batch_id_set}")
+            for request_id in need_to_be_reschedule_req_ids:
+                if (
+                    self.resource_manager.requests[request_id].idx not in batch_id_set
+                ):  # No more token generated for preempted request
+                    llm_logger.debug(
+                        f"reschedule_preempt_task request_id {request_id} at {self.resource_manager.requests[request_id].idx}"
+                    )
+                    self.resource_manager.reschedule_preempt_task(request_id)
+                    llm_logger.debug(
+                        f"finish reschedule_preempt_task request_id {request_id} at {self.resource_manager.requests[request_id].idx}"
+                    )
+
     def _reschedule_preempt_task(self, batch_size):
         """reschedule when real batch size is smaller than the insert position of preemted_task"""
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -264,8 +285,7 @@ class TokenProcessor:
                     assert isinstance(receive_datas, list)
                     llm_logger.debug(f"token_processor receive_data {receive_datas}")
 
-                    batch_size = len(receive_datas)
-                    self._reschedule_preempt_task(batch_size)
+                    self._reschedule_preempt_task_use_zmq(receive_datas)
 
                     batch_result = self._process_batch_output_use_zmq(receive_datas)
                     self.postprocess(batch_result)
