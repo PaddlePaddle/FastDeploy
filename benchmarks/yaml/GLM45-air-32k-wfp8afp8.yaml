@@ -1,0 +1,6 @@
+max_model_len: 32768
+max_num_seqs: 128
+tensor_parallel_size: 4
+use_cudagraph: True
+load_choices: "default_v1"
+quantization: wfp8afp8

@@ -25,6 +25,7 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
+from fastdeploy.inter_communicator import ModelWeightsStatus
 
 
 class DynamicWeightManager:
@@ -65,6 +66,7 @@ class DynamicWeightManager:
 
         # step1 : restart paddle process group
         if not self.first_load:
+            paddle.distributed.restart_process_group()
             paddle.distributed.restart_process_group(self.parallel_config.tp_group)
             if self.parallel_config.enable_expert_parallel:
                 paddle.distributed.restart_process_group(self.parallel_config.ep_group)
@@ -143,12 +145,12 @@ class DynamicWeightManager:
         if self.parallel_config.tensor_parallel_size > 1:
             # tp barrier
             paddle.distributed.barrier(self.parallel_config.tp_group)
-            # shutdown tp group
             paddle.distributed.shutdown_process_group(self.parallel_config.tp_group)
-
-        # step3: update model weight signal
-        # step4: release kv cache in the runner
-        self._update_shared_status(pid, -2)
+        if self.parallel_config.enable_expert_parallel:
+            paddle.distributed.barrier(self.parallel_config.ep_group)
+            paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
+        paddle.distributed.shutdown_process_group()
+        self._update_shared_status(pid, ModelWeightsStatus.CLEARED)
 
     def _update_model_from_state(self, state_dict: Dict[str, paddle.Tensor], src_type: str):
         """Update model parameters from given state dictionary."""
@@ -184,8 +186,7 @@ class DynamicWeightManager:
             paddle.distributed.barrier(self.parallel_config.ep_group)
 
         if not self.first_load:
-            self._update_shared_status(pid, 0)
-
+            self._update_shared_status(pid, ModelWeightsStatus.NORMAL)
         self.first_load = False
 
     def _get_gpu_id(self) -> int:
@@ -252,25 +253,19 @@ class DynamicWeightManager:
         """
         check model weights status
         """
-        is_stop = 0
-        while model_weights_status.value[0] != 0:
-            if model_weights_status.value[0] == 1:
+        logger.info(f"dynamic weight manager is check model weights status! {model_weights_status.value[0]}")
+        while model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
+            if model_weights_status.value[0] == ModelWeightsStatus.UPDATING:
                 logger.info("infer engine stopped! start to load new checkpoint...")
                 model_runner.update_parameters(pid)
-            elif model_weights_status.value[0] == -1:
+                while model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
+                    time.sleep(0.01)
+                logger.info("finished loading new checkpoint")
+            elif model_weights_status.value[0] == ModelWeightsStatus.CLEARING:
                 logger.info("infer engine stopped! start to clear checkpoint...")
                 model_runner.clear_requests()
                 model_runner.clear_parameters(pid)
-
-            while True:
-                if model_weights_status.value[0] == 0:
-                    logger.info("finished loading new checkpoint")
-                    break
-                elif is_stop == 1 or (model_weights_status.value[0] == -2 and is_stop == 0):
-                    if is_stop == 0:
-                        logger.info("finished clearing checkpoint")
-                        is_stop = 1
-                    time.sleep(0.001)
-                    break
-                else:
-                    time.sleep(0.001)
+                while model_weights_status.value[0] != ModelWeightsStatus.CLEARED:
+                    time.sleep(0.01)
+                logger.info("finished clearing checkpoint")
+            time.sleep(0.01)

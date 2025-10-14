@@ -20,6 +20,7 @@ from typing import Optional
 
 import paddle
 from paddle.nn.quant import weight_quantize
+from paddleformers.utils.log import logger
 
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.linear import (
@@ -122,10 +123,18 @@ class WeightOnlyConfig(QuantConfigBase):
         elif current_platform.is_maca():
             if isinstance(layer, FusedMoE):
                 from fastdeploy.model_executor.layers.backends import (
+                    MetaxCutlassWeightOnlyMoEMethod,
                     MetaxTritonWeightOnlyMoEMethod,
                 )
 
-                return MetaxTritonWeightOnlyMoEMethod(self)
+                if layer.use_method == "cutlass":
+
+                    return MetaxCutlassWeightOnlyMoEMethod(self)
+                elif layer.use_method == "triton":
+
+                    return MetaxTritonWeightOnlyMoEMethod(self)
+                else:
+                    raise ValueError(f"Unsupported MOE backend {layer.use_method}")
             else:
 
                 return GPUWeightOnlyLinearMethod(self)
@@ -159,9 +168,11 @@ class WeightOnlyConfig(QuantConfigBase):
                 if (
                     _ENABLE_MACHETE
                     and envs.FD_USE_MACHETE == "1"
+                    and not layer.is_quantized
                     and layer.weight_shape[1]
                     and layer.weight_shape[1] % 128 == 0
                 ):
+                    logger.info("Using Machete kernel for WeightOnlyLinearMethod")
                     return MacheteWeightOnlyLinearMethod(self)
                 return GPUWeightOnlyLinearMethod(self)
 
@@ -399,7 +410,7 @@ class MacheteWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         super().__init__(quant_config)
 
     def process_prequanted_weights(self, layer, state_dict) -> None:
-        pass
+        raise NotImplementedError("Machete kernel doesn't support prequant. Please set FD_USE_MACHETE to 0.")
 
     def process_loaded_weights(self, layer, weight) -> None:
         from fastdeploy.model_executor.layers.quantization.ops import (

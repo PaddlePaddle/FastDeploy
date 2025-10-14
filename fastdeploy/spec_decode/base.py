@@ -33,27 +33,28 @@ class Proposer(ABC):
     the speculative decoding framework
     """
 
-    def __init__(self, cfg: FDConfig):
+    def __init__(self, fd_config: FDConfig):
         """
         Init Speculative proposer
         """
-        cfg.parallel_config.tp_group = None
-        self.cfg = deepcopy(cfg)
-        cfg.parallel_config.tp_group = dist.get_group(
-            cfg.parallel_config.data_parallel_rank + envs.FD_TP_GROUP_GID_OFFSET
+        fd_config.parallel_config.tp_group = None
+        self.fd_config = deepcopy(fd_config)
+        fd_config.parallel_config.tp_group = dist.get_group(
+            fd_config.parallel_config.data_parallel_rank + envs.FD_TP_GROUP_GID_OFFSET
         )
-        self.cfg.parallel_config.tp_group = dist.get_group(
-            cfg.parallel_config.data_parallel_rank + envs.FD_TP_GROUP_GID_OFFSET
+        self.fd_config.parallel_config.tp_group = dist.get_group(
+            fd_config.parallel_config.data_parallel_rank + envs.FD_TP_GROUP_GID_OFFSET
         )
-        self.parallel_config = self.cfg.parallel_config
-        self.model_config = self.cfg.model_config
-        self.speculative_config = self.cfg.speculative_config
-        self.cache_config = self.cfg.cache_config
-        self.quant_config = self.cfg.quant_config
-        self.scheduler_config = self.cfg.scheduler_config
+        self.parallel_config = self.fd_config.parallel_config
+        self.model_config = self.fd_config.model_config
+        self.speculative_config = self.fd_config.speculative_config
+        self.cache_config = self.fd_config.cache_config
+        self.quant_config = self.fd_config.quant_config
+        self.graph_opt_config = self.fd_config.graph_opt_config
+        self.scheduler_config = self.fd_config.scheduler_config
 
         self.max_num_seqs = self.scheduler_config.max_num_seqs
-        self.max_model_len = self.parallel_config.max_model_len
+        self.max_model_len = self.model_config.max_model_len
         self.speculative_method = self.speculative_config.method
         self.max_draft_token_num = self.speculative_config.num_speculative_tokens
         self.num_model_steps = self.speculative_config.num_model_steps
