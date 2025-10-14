@@ -20,7 +20,7 @@ import copy
 import os
 import pickle
 from collections import defaultdict
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import zmq
@@ -172,7 +172,15 @@ class DataProcessor:
     def text2ids(self, text, images=None, videos=None, image_uuid=None, video_uuid=None):
         """
         Convert chat text into model inputs.
-        Returns a dict with input_ids, token_type_ids, position_ids, images, grid_thw, image_type_ids, labels.
+
+        Args:
+            text (str): The chat text containing placeholders for images and videos.
+            images (list, optional): List of images to be processed and inserted at image placeholders.
+            videos (list, optional): List of videos to be processed and inserted at video placeholders.
+            image_uuid (list, optional): List of unique identifiers for each image, used for caching or hashing.
+            video_uuid (list, optional): List of unique identifiers for each video, used for caching or hashing.
+        Returns:
+            dict: A dictionary with keys input_ids, token_type_ids, position_ids, images, grid_thw, image_type_ids, labels, etc.
         """
 
         outputs = {
@@ -338,7 +346,7 @@ class DataProcessor:
             outputs["position_ids"].append([start + i] * 3)
         outputs["cur_position"] += len(tokens)
 
-    def _add_image(self, img, outputs: Dict, uuid: str) -> None:
+    def _add_image(self, img, outputs: Dict, uuid: Optional[str]) -> None:
         patches_h, patches_w = self.image_preprocessor.get_smarted_resize(
             img.height,
             img.width,
@@ -390,7 +398,7 @@ class DataProcessor:
         outputs["grid_thw"].append(np.array([[1, h, w]]))
         outputs["image_type_ids"].append(0)
 
-    def _add_video(self, frames, outputs: Dict, uuid: str) -> None:
+    def _add_video(self, frames, outputs: Dict, uuid: Optional[str]) -> None:
         patches_h, patches_w = self.image_preprocessor.get_smarted_resize(
             frames[0].height,
             frames[0].width,

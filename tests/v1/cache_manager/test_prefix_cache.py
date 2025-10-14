@@ -72,7 +72,7 @@ def test_normal_case():
     assert len(common_block_ids) == 25
     assert matched_token_num == 25 * block_size
     req2.num_cached_tokens = matched_token_num
-    req2.num_computed_tokens == 25 * block_size
+    req2.num_computed_tokens = 25 * block_size
     num_new_block = 25
     req2.block_tables.extend(common_block_ids)
     req2.block_tables.extend(cache_manager.allocate_gpu_blocks(num_new_block))
@@ -82,7 +82,7 @@ def test_normal_case():
     assert len(common_block_ids) == 25
     assert matched_token_num == 25 * block_size
     req3.num_cached_tokens = matched_token_num
-    req3.num_computed_tokens == 25 * block_size
+    req3.num_computed_tokens = 25 * block_size
     assert len(cache_manager.gpu_free_block_list) == 25
     req3.block_tables.extend(common_block_ids)
     num_new_block = 25
