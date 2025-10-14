@@ -42,7 +42,7 @@ try:
         allocate_token_bitmask,
     )
 
-    from .kernels.xgrammar_apply_token_bitmask import apply_token_bitmask_inplace_triton
+    from fastdeploy.model_executor.kernels import apply_token_bitmask_inplace_triton
 except Exception as e:
     raise Exception(f"import XGrammar failed, please check your environment:\n\t {e}")
 
