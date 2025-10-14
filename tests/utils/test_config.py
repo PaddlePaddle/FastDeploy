@@ -10,6 +10,7 @@ from fastdeploy.config import (
     ParallelConfig,
     SchedulerConfig,
 )
+from fastdeploy.utils import get_host_ip
 
 
 class TestConfig(unittest.TestCase):
@@ -21,7 +22,6 @@ class TestConfig(unittest.TestCase):
         scheduler_config = SchedulerConfig({})
         model_config = Mock()
         model_config.max_model_len = 512
-        fd_config.node_rank = 0
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -29,7 +29,7 @@ class TestConfig(unittest.TestCase):
             cache_config=cache_config,
             scheduler_config=scheduler_config,
             model_config=model_config,
-            ips=["1.1.1.1", "0.0.0.0"],
+            ips=[get_host_ip(), "0.0.0.0"],
             test_mode=True,
         )
         assert fd_config.nnode == 2
