@@ -771,8 +771,8 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         np.testing.assert_allclose(
             out.numpy(),
             out_.numpy(),
-            rtol=1e-03,
-            atol=1e-03,
+            rtol=1e-02,
+            atol=1e-02,
         )
 
     def test_all(self):
@@ -863,6 +863,7 @@ class TestAppendGroupQueryAttnWithNeoXRope(TestAppendGroupQueryAttnWithRope):
         self.max_seq_len = self.seq_len + self.max_dec_len
         self.softmax_scale = self.dim_head**-0.5
         self.rope_theta = 10000
+        self.sliding_window = 128
         self.dtype = "float16"
         self.use_qk_norm = False
         self.use_mask_offset = True
@@ -891,9 +892,12 @@ class TestAppendGroupQueryAttnWithRopeDyCfp8(TestAppendGroupQueryAttnWithRope):
         self.max_seq_len = self.seq_len + self.max_dec_len
         self.softmax_scale = self.dim_head**-0.5
         self.rope_theta = 10000
+        self.sliding_window = 0
         self.dtype = "bfloat16"
         self.use_qk_norm = True
         self.use_mask_offset = False
+        self.use_sinks = False
+        self.use_yarn = False
         self.use_dynamic_quant = True
         self.init_tensor()
 

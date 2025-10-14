@@ -119,7 +119,7 @@ class Attention(nn.Layer):
         if self.use_qk_norm:
             self.q_norm_key = f"{self.prefix}.q_norm"
             self.k_norm_key = f"{self.prefix}.k_norm"
-            self.init_weight()
+        self.init_weight()
 
         if self.with_sinks:
             self.sinks = self.create_parameter(
