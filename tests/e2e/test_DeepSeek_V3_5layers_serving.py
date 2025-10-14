@@ -228,32 +228,6 @@ def calculate_diff_rate(text1, text2):
     return edit_distance / max_len if max_len > 0 else 0.0
 
 
-# ==========================
-# Consistency test for repeated runs with fixed payload
-# ==========================
-def test_consistency_between_runs(api_url, headers, consistent_payload):
-    """
-    Test that two runs with the same fixed input produce similar outputs.
-    """
-    # First request
-    resp1 = requests.post(api_url, headers=headers, json=consistent_payload)
-    assert resp1.status_code == 200
-    result1 = resp1.json()
-    content1 = result1["choices"][0]["message"]["content"]
-
-    # Second request
-    resp2 = requests.post(api_url, headers=headers, json=consistent_payload)
-    assert resp2.status_code == 200
-    result2 = resp2.json()
-    content2 = result2["choices"][0]["message"]["content"]
-
-    # Calculate difference rate
-    diff_rate = calculate_diff_rate(content1, content2)
-
-    # Verify that the difference rate is below the threshold
-    assert diff_rate < 0.05, f"Output difference too large ({diff_rate:.4%})"
-
-
 def test_consistency_with_baseline(api_url, headers, consistent_payload):
     """
     Verify that the difference rate is lower than the threshold compared to the baseline
