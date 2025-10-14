@@ -174,6 +174,8 @@ class EngineClient:
         try:
             chat_template_kwargs = task.get("chat_template_kwargs", {})
             chat_template_kwargs.update({"chat_template": task.get("chat_template"), "tools": task.get("tools")})
+            if "tools" in chat_template_kwargs:
+                chat_template_kwargs.pop("tools")
             task["chat_template_kwargs"] = chat_template_kwargs
             if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
                 await self.data_processor.process_request_dict(task, self.max_model_len)
