@@ -21,6 +21,7 @@ class TestConfig(unittest.TestCase):
         scheduler_config = SchedulerConfig({})
         model_config = Mock()
         model_config.max_model_len = 512
+        fd_config.node_rank = 0
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -32,7 +33,6 @@ class TestConfig(unittest.TestCase):
             test_mode=True,
         )
         assert fd_config.nnode == 2
-        fd_config.node_rank = 0
         assert fd_config.is_master is True
 
     def test_fdconfig_ips(self):
