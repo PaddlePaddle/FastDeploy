@@ -39,7 +39,13 @@ from fastdeploy.entrypoints.openai.protocol import (
 )
 from fastdeploy.entrypoints.openai.response_processors import ChatResponseProcessor
 from fastdeploy.metrics.work_metrics import work_process_metrics
-from fastdeploy.utils import ErrorCode, ErrorType, ParameterError, api_server_logger
+from fastdeploy.utils import (
+    ErrorCode,
+    ErrorType,
+    ParameterError,
+    api_server_logger,
+    trace_logger,
+)
 from fastdeploy.worker.output import LogprobsLists
 
 
@@ -402,6 +408,17 @@ class OpenAIServingChat:
         finally:
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
+            trace_logger.info(
+                "preprocess end",
+                extra={
+                    "attributes": {
+                        "request_id": f"{request_id}",
+                        "user_id": f"{getattr(request, 'user', '')}",
+                        "event": "POSTPROCESSING_END",
+                        "stage": "POSTPROCESSING",
+                    }
+                },
+            )
             api_server_logger.info(f"release {request_id} {self.engine_client.semaphore.status()}")
             yield "data: [DONE]\n\n"
 
@@ -551,6 +568,17 @@ class OpenAIServingChat:
             model=model_name,
             choices=choices,
             usage=usage,
+        )
+        trace_logger.info(
+            "request end",
+            extra={
+                "attributes": {
+                    "request_id": f"{request_id}",
+                    "user_id": f"{getattr(request, 'user', '')}",
+                    "event": "POSTPROCESSING_END",
+                    "stage": "POSTPROCESSING",
+                }
+            },
         )
         api_server_logger.info(f"Chat response: {res.model_dump_json()}")
         return res

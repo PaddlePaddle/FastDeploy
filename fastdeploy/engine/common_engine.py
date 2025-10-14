@@ -46,7 +46,7 @@ from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.plugins.token_processor import load_token_processor_plugins
 from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
-from fastdeploy.utils import EngineError, envs, get_logger, llm_logger
+from fastdeploy.utils import EngineError, envs, get_logger, llm_logger, trace_logger
 
 try:
     TokenProcessor = load_token_processor_plugins()
@@ -359,7 +359,17 @@ class EngineService:
 
         for item in tasks:
             item.schedule_start_time = time.time()
-
+            trace_logger.info(
+                "resource allocate start",
+                extra={
+                    "attributes": {
+                        "request_id": f"{item.request_id}",
+                        "user_id": f"{getattr(item, 'user', '')}",
+                        "event": "RESOURCE_ALLOCATE_START",
+                        "stage": "SCHEDULE",
+                    }
+                },
+            )
         available_batch = np.sum(self.resource_manager.stop_flags)
         if len(tasks) > available_batch:
             self.llm_logger.error(f"Inserting batch:{len(tasks)} exceeds the available batch:{available_batch}.")
@@ -393,6 +403,39 @@ class EngineService:
             self.llm_logger.info(f"Tasks are sent to engine, req_ids={req_ids}")
             for task in tasks:
                 task.inference_start_time = time.time()
+                trace_logger.info(
+                    "resource allocate end",
+                    extra={
+                        "attributes": {
+                            "request_id": f"{task.request_id}",
+                            "user_id": f"{getattr(task, 'user', '')}",
+                            "event": "RESOURCE_ALLOCATE_END",
+                            "stage": "SCHEDULE",
+                        }
+                    },
+                )
+                trace_logger.info(
+                    "request schedule end",
+                    extra={
+                        "attributes": {
+                            "request_id": f"{task.request_id}",
+                            "user_id": f"{getattr(task, 'user', '')}",
+                            "event": "REQUEST_SCHEDULE_END",
+                            "stage": "SCHEDULE",
+                        }
+                    },
+                )
+                trace_logger.info(
+                    "request inference start",
+                    extra={
+                        "attributes": {
+                            "request_id": f"{task.request_id}",
+                            "user_id": f"{getattr(task, 'user', '')}",
+                            "event": "INFERENCE_START",
+                            "stage": "PREFILL",
+                        }
+                    },
+                )
             if not is_prefill:
                 if not self.cfg.model_config.enable_mm:
                     self.update_requests_chunk_size(tasks)
@@ -585,7 +628,18 @@ class EngineService:
                     max_num_batched_tokens=self.cfg.scheduler_config.max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
-
+                for task in tasks:
+                    trace_logger.info(
+                        "request queue end",
+                        extra={
+                            "attributes": {
+                                "request_id": f"{task.request_id}",
+                                "user_id": f"{getattr(task, 'user', '')}",
+                                "event": "REQUEST_QUEUE_END",
+                                "stage": "SCHEDULE",
+                            }
+                        },
+                    )
                 if len(tasks) == 0:
                     time.sleep(0.001)
                     continue
@@ -680,6 +734,18 @@ class EngineService:
                                 time.sleep(0.001)
                 # Fetch requests and add them to the scheduling queue
                 if tasks:
+                    for task in tasks:
+                        trace_logger.info(
+                            "resource allocate start",
+                            extra={
+                                "attributes": {
+                                    "request_id": f"{task.request_id}",
+                                    "user_id": f"{getattr(task, 'user', '')}",
+                                    "event": "RESOURCE_ALLOCATE_START",
+                                    "stage": "SCHEDULE",
+                                }
+                            },
+                        )
                     if self.cfg.scheduler_config.splitwise_role == "prefill":
                         self.resource_manager.add_request_in_p(tasks)
                     else:
@@ -728,6 +794,17 @@ class EngineService:
                                     ]
                                 )
                     self.resource_manager.get_real_bsz()
+                    for task in tasks:
+                        trace_logger.info(
+                            "request inference start",
+                            extra={
+                                "attributes": {
+                                    "request_id": f"{task.request_id}",
+                                    "user_id": f"{getattr(task, 'user', '')}",
+                                    "event": "INFERENCE_START",
+                                }
+                            },
+                        )
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
                 else:
                     time.sleep(0.005)
@@ -785,6 +862,39 @@ class EngineService:
                         start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
                         main_process_metrics.requests_number.inc()
                         self.llm_logger.debug(f"Receive request: {request}")
+                        trace_logger.info(
+                            "preprocess end",
+                            extra={
+                                "attributes": {
+                                    "request_id": f"{data['request_id']}",
+                                    "user_id": f"{data.get('user', '')}",
+                                    "event": "PREPROCESSING_END",
+                                    "stage": "PREPROCESSING",
+                                }
+                            },
+                        )
+                        trace_logger.info(
+                            "request schedule start",
+                            extra={
+                                "attributes": {
+                                    "request_id": f"{data['request_id']}",
+                                    "user_id": f"{data.get('user', '')}",
+                                    "event": "REQUEST_SCHEDULE_START",
+                                    "stage": "SCHEDULE",
+                                }
+                            },
+                        )
+                        trace_logger.info(
+                            "request queue start",
+                            extra={
+                                "attributes": {
+                                    "request_id": f"{data['request_id']}",
+                                    "user_id": f"{data.get('user', '')}",
+                                    "event": "REQUEST_QUEUE_START",
+                                    "stage": "SCHEDULE",
+                                }
+                            },
+                        )
                     except Exception as e:
                         self.llm_logger.error(f"Receive request error: {e}, {traceback.format_exc()!s}")
                         err_msg = str(e)

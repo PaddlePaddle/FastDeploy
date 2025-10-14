@@ -76,6 +76,38 @@ class LoggerTests(unittest.TestCase):
         legacy_logger = self.logger._get_legacy_logger("test", "test.log")
         self.assertTrue(legacy_logger.propagate)
 
+    def test_get_trace_logger_basic(self):
+        """测试get_trace_logger基础功能"""
+        logger = self.logger.get_trace_logger("test_trace", "trace_test.log")
+
+        # 验证基础属性
+        self.assertTrue(logger.name.startswith("legacy."))
+        self.assertEqual(logger.level, logging.INFO)
+
+        # 验证handler数量
+        self.assertEqual(len(logger.handlers), 2)  # 主日志和错误日志
+
+    def test_get_trace_logger_with_console(self):
+        """测试带控制台输出的trace logger"""
+        logger = self.logger.get_trace_logger("test_trace_console", "trace_console_test.log", print_to_console=True)
+
+        # 验证handler数量
+        self.assertEqual(len(logger.handlers), 3)  # 主日志+错误日志+控制台
+
+    def test_get_trace_logger_without_formatter(self):
+        """测试不带格式化的trace logger"""
+        logger = self.logger.get_trace_logger("test_trace_no_fmt", "trace_no_fmt_test.log", without_formater=True)
+
+        # 验证handler是否没有格式化器
+        for handler in logger.handlers:
+            self.assertIsNone(handler.formatter)
+
+    def test_get_trace_logger_debug_mode(self):
+        """测试debug模式下的trace logger"""
+        with patch("fastdeploy.envs.FD_DEBUG", "1"):
+            logger = self.logger.get_trace_logger("test_trace_debug", "trace_debug_test.log")
+            self.assertEqual(logger.level, logging.DEBUG)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

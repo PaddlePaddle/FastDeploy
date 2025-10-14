@@ -16,7 +16,7 @@
 import logging
 import unittest
 
-from fastdeploy.logger.formatters import ColoredFormatter
+from fastdeploy.logger.formatters import ColoredFormatter, CustomColoredFormatter
 
 
 class TestColoredFormatter(unittest.TestCase):
@@ -97,6 +97,94 @@ class TestColoredFormatter(unittest.TestCase):
         formatted_message = self.formatter.format(record)
         expected = "CUSTOM - This is custom level"
         self.assertEqual(formatted_message, expected)
+
+    def test_format_with_otel_span_id(self):
+        """测试带otelSpanID的日志格式化"""
+        record = logging.LogRecord(
+            name="test", level=logging.INFO, pathname="", lineno=0, msg="This has span", args=(), exc_info=None
+        )
+        record.otelSpanID = "span123"
+
+        formatted_message = self.formatter.format(record)
+        expected = "INFO - [otel_span_id=span123] This has span"
+        self.assertEqual(formatted_message, expected)
+
+    def test_format_with_otel_trace_id(self):
+        """测试带otelTraceID的日志格式化"""
+        record = logging.LogRecord(
+            name="test", level=logging.INFO, pathname="", lineno=0, msg="This has trace", args=(), exc_info=None
+        )
+        record.otelTraceID = "trace456"
+
+        formatted_message = self.formatter.format(record)
+        expected = "INFO - [otel_trace_id=trace456] This has trace"
+        self.assertEqual(formatted_message, expected)
+
+
+class TestCustomColoredFormatter(unittest.TestCase):
+    """测试 CustomColoredFormatter 类"""
+
+    def setUp(self):
+        """测试前准备"""
+        self.formatter = CustomColoredFormatter("%(levelname)s - %(message)s")
+
+    def test_color_codes_definition(self):
+        """测试颜色代码定义"""
+        expected_colors = {
+            logging.WARNING: 33,  # 黄色
+            logging.ERROR: 31,  # 红色
+            logging.CRITICAL: 31,  # 红色
+        }
+        self.assertEqual(self.formatter.COLOR_CODES, expected_colors)
+
+    def test_format_with_attributes(self):
+        """测试带attributes的日志格式化"""
+        record = logging.LogRecord(
+            name="test", level=logging.INFO, pathname="", lineno=0, msg="This has attrs", args=(), exc_info=None
+        )
+        record.attributes = {"key1": "value1", "key2": "value2"}
+
+        formatted_message = self.formatter.format(record)
+        self.assertIn("[key1=value1]", formatted_message)
+        self.assertIn("[key2=value2]", formatted_message)
+        self.assertIn("This has attrs", formatted_message)
+
+    def test_format_with_camel_case_attributes(self):
+        """测试带驼峰命名attributes的转换"""
+        record = logging.LogRecord(
+            name="test", level=logging.INFO, pathname="", lineno=0, msg="This has camelCase", args=(), exc_info=None
+        )
+        record.attributes = {"camelCaseKey": "value"}
+
+        formatted_message = self.formatter.format(record)
+        self.assertIn("[camel_case_key=value]", formatted_message)
+
+    def test_format_with_empty_attributes(self):
+        """测试空attributes的处理"""
+        record = logging.LogRecord(
+            name="test", level=logging.INFO, pathname="", lineno=0, msg="Empty attrs", args=(), exc_info=None
+        )
+        record.attributes = {}
+
+        formatted_message = self.formatter.format(record)
+        # 检查是否包含线程信息和时间戳
+        self.assertIn("[thread=", formatted_message)
+        self.assertIn("[thread_name=", formatted_message)
+        self.assertIn("[timestamp=", formatted_message)
+        self.assertTrue(formatted_message.endswith("Empty attrs"))
+
+    def test_format_with_thread_info(self):
+        """测试线程信息的添加"""
+        record = logging.LogRecord(
+            name="test", level=logging.INFO, pathname="", lineno=0, msg="Thread test", args=(), exc_info=None
+        )
+        record.thread = 123
+        record.threadName = "TestThread"
+
+        formatted_message = self.formatter.format(record)
+        self.assertIn("[thread=123]", formatted_message)
+        self.assertIn("[thread_name=TestThread]", formatted_message)
+        self.assertIn("[timestamp=", formatted_message)  # 检查时间戳
 
 
 if __name__ == "__main__":

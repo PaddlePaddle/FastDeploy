@@ -43,6 +43,7 @@ from fastdeploy.utils import (
     ParameterError,
     StatefulSemaphore,
     api_server_logger,
+    trace_logger,
 )
 
 
@@ -171,6 +172,17 @@ class EngineClient:
         """
 
         task["preprocess_start_time"] = time.time()
+        trace_logger.info(
+            "preprocess is started",
+            extra={
+                "attributes": {
+                    "request_id": f"{task['request_id']}",
+                    "user_id": f"{task.get('user', '')}",
+                    "event": "PREPROCESSING_START",
+                    "stage": "PREPROCESSING",
+                }
+            },
+        )
         try:
             chat_template_kwargs = task.get("chat_template_kwargs", {})
             chat_template_kwargs.update({"chat_template": task.get("chat_template"), "tools": task.get("tools")})

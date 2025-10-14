@@ -34,7 +34,13 @@ from fastdeploy.entrypoints.openai.protocol import (
     ErrorResponse,
     UsageInfo,
 )
-from fastdeploy.utils import ErrorCode, ErrorType, ParameterError, api_server_logger
+from fastdeploy.utils import (
+    ErrorCode,
+    ErrorType,
+    ParameterError,
+    api_server_logger,
+    trace_logger,
+)
 from fastdeploy.worker.output import LogprobsLists
 
 
@@ -293,6 +299,17 @@ class OpenAIServingCompletion:
             self.engine_client.semaphore.release()
             if dealer is not None:
                 await self.engine_client.connection_manager.cleanup_request(request_id)
+            trace_logger.info(
+                "request end",
+                extra={
+                    "attributes": {
+                        "request_id": f"{request_id}",
+                        "user_id": f"{getattr(request, 'user', '')}",
+                        "event": "POSTPROCESSING_END",
+                        "stage": "POSTPROCESSING",
+                    }
+                },
+            )
 
     def _echo_back_prompt(self, request, idx):
         """
@@ -498,6 +515,17 @@ class OpenAIServingCompletion:
             api_server_logger.error(f"Error in completion_stream_generator: {e}, {str(traceback.format_exc())}")
             yield f"data: {ErrorResponse(message=str(e), code=400).model_dump_json(exclude_unset=True)}\n\n"
         finally:
+            trace_logger.info(
+                "request end",
+                extra={
+                    "attributes": {
+                        "request_id": f"{request_id}",
+                        "user_id": f"{getattr(request, 'user', '')}",
+                        "event": "POSTPROCESSING_END",
+                        "stage": "POSTPROCESSING",
+                    }
+                },
+            )
             del request
             if dealer is not None:
                 await self.engine_client.connection_manager.cleanup_request(request_id)
