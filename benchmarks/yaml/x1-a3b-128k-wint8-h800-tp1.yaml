@@ -4,3 +4,4 @@ max_num_seqs: 32
 reasoning_parser: ernie_x1
 tool_call_parser: ernie_x1
 load_choices: "default_v1"
+quantization: wint8
