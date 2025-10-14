@@ -17,7 +17,11 @@ import unittest
 import numpy as np
 import paddle
 
-from fastdeploy.model_executor.ops.gpu import w4afp8_gemm, w4afp8_gemm_weight_convert
+from fastdeploy.model_executor.ops.gpu import (
+    w4afp8_gemm,
+    w4afp8_gemm_scale_permute,
+    w4afp8_gemm_weight_convert,
+)
 
 
 class TestW4AFP8GEMM(unittest.TestCase):
@@ -72,20 +76,35 @@ class TestW4AFP8GEMM(unittest.TestCase):
                     weight_scale[b, n + j + 1] = temp[j // 2 + 8]
         return weight_scale
 
+    def get_per_group_scale(self, processed_weight_scale):
+        processed_weight_scale = processed_weight_scale.repeat_interleave(self.K // 128, axis=-1)
+        origin_shape = processed_weight_scale.shape
+        processed_weight_scale = processed_weight_scale.transpose([0, 2, 1])
+        processed_weight_scale = processed_weight_scale.reshape([-1, processed_weight_scale.shape[-1]])
+
+        processed_weight_scale = w4afp8_gemm_scale_permute(processed_weight_scale)
+        processed_weight_scale = processed_weight_scale.reshape(
+            [origin_shape[0], origin_shape[2], origin_shape[1] // 128, 128]
+        )
+        processed_weight_scale = processed_weight_scale.transpose([0, 2, 1, 3])
+        return processed_weight_scale
+
     def test_w4afp8_gemm(self):
         out_naive = self.w4afp8_gemm_naive(
             self.input_bf16, self.weight_quant_naive, self.tokens, self.weight_dequant_scale
         )
 
-        weight_dequant_scale = paddle.to_tensor(self.permute_scale(self.weight_dequant_scale) * 512)
-        weight_int4 = w4afp8_gemm_weight_convert(self.weight_quant.astype("uint8").cpu())
+        # weight_dequant_scale = paddle.to_tensor(self.permute_scale(self.weight_dequant_scale) * 512)
+        weight_dequant_scale = self.get_per_group_scale(self.weight_dequant_scale * 512)
+        weight_int4 = w4afp8_gemm_weight_convert(self.weight_quant.astype("uint8").cpu()).cuda()
 
         if self.TokenPadding == 0:
             out_cuda = w4afp8_gemm(
                 self.input_fp8,
-                weight_int4.cuda(),
+                weight_int4,
                 self.tokens_prefix_sum,
                 weight_dequant_scale.astype("float32"),
+                None,
                 int(self.TokenPadding),
                 self.all_tokens,
                 True,
@@ -93,9 +112,10 @@ class TestW4AFP8GEMM(unittest.TestCase):
         else:
             out_cuda = w4afp8_gemm(
                 self.input_fp8,
-                weight_int4.cuda(),
+                weight_int4,
                 self.tokens,
                 weight_dequant_scale.astype("float32"),
+                None,
                 int(self.TokenPadding),
                 self.max_tokens,
                 True,
