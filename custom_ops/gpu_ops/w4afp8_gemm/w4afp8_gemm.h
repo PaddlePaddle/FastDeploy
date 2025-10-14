@@ -25,7 +25,7 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
         const paddle::Tensor& weight,
         const paddle::Tensor& tokens, // If tokenpadding=0, this tensor represents the prefix sum of tensors, otherwise it represents the number of tokens in each group
         const paddle::Tensor& weight_scale,
-        const paddle::Tensor& input_dequant_scale,
+        const paddle::optional<paddle::Tensor>& input_dequant_scale,
         const int64_t token_padding_size,
         const int64_t max_tokens,
         const bool is_bfloat16);

@@ -84,7 +84,7 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
         const paddle::Tensor& weight,
         const paddle::Tensor& tokens, // If tokenpadding=0, this tensor represents the prefix sum of tensors, otherwise it represents the number of tokens in each group
         const paddle::Tensor& weight_scale,
-        const paddle::Tensor& input_dequant_scale,
+        const paddle::optional<paddle::Tensor>& input_dequant_scale,
         const int64_t token_padding_size,
         const int64_t max_tokens,
         const bool is_bfloat16) {
@@ -109,7 +109,7 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
                 reinterpret_cast<const cutlass::float_e4m3_t*>(weight.data<uint8_t>()),
                 tokens.data<int64_t>(),
                 weight_scale.data<float>(),
-                input_dequant_scale.data<float>(),
+                input_dequant_scale ? const_cast<float*>(input_dequant_scale.get().data<float>()) : nullptr,
                 reinterpret_cast<cutlass::bfloat16_t*>(out_data),
                 token_padding_size,
                 max_tokens,
@@ -131,7 +131,7 @@ std::vector<paddle::Tensor> W4AFp8Gemm(
                 reinterpret_cast<const cutlass::float_e4m3_t*>(weight.data<uint8_t>()),
                 tokens.data<int64_t>(),
                 weight_scale.data<float>(),
-                input_dequant_scale.data<float>(),
+                input_dequant_scale ? const_cast<float*>(input_dequant_scale.get().data<float>()) : nullptr,
                 reinterpret_cast<cutlass::bfloat16_t*>(out_data),
                 token_padding_size,
                 max_tokens,
@@ -190,7 +190,8 @@ PD_BUILD_STATIC_OP(w4afp8_gemm)
     .Inputs({"input",
              "weight",
              "tokens",
-             "weight_scale"})
+             "weight_scale",
+             paddle::Optional("input_dequant_scale")})
     .Outputs({"out"})
     .Attrs({"token_padding_size: int64_t",
             "max_tokens: int64_t",

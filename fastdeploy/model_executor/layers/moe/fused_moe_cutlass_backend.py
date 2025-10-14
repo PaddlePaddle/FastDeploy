@@ -902,6 +902,8 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                     processed_weight_scale = processed_weight_scale / processed_in_scale[:, None]
             else:
                 processed_weight_scale = paddle.stack(weight_scales, axis=0) / (448 * 7 * 2 ** (-9))
+
+            processed_weight_scale = processed_weight_scale.unsqueeze(-1)
             if len(processed_weight_scale.shape) == 3:
                 if name == "up_gate_proj_weight_scale" and processed_weight_scale.shape[-1] * 128 != layer.hidden_size:
                     assert (
@@ -942,6 +944,7 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                 )
             else:
                 processed_weight_scale = _permute_weight_scale(processed_weight_scale)
+            print("processed_weight_scale", processed_weight_scale)
             getattr(layer, name).set_value(processed_weight_scale)
 
         # 1. Init scale containers and maps
