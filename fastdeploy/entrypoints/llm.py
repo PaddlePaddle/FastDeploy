@@ -246,12 +246,12 @@ class LLM:
         if chat_template is None:
             chat_template = self.chat_template
 
+        validated_tools = None
         if tools is not None:
             try:
                 validated_tools = _validate_tools(tools)
             except ValueError as e:
                 raise RuntimeError(f"Failed to validate 'tools' parameter in chat method: {e}") from e
-        validated_tools = None
         messages_len = len(messages)
         for i in range(messages_len):
             messages[i] = {"messages": messages[i]}
