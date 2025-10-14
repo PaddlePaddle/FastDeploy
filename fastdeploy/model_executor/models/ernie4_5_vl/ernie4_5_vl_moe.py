@@ -403,27 +403,27 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
 @cuda_graph_buffers(
     {
         "text_input": {
-            "shape": ["parallel_config.max_model_len", "model_config.hidden_size"],
+            "shape": ["model_config.max_model_len", "model_config.hidden_size"],
             "dtype": "model_config.dtype",
             "value": 1,
         },
         "image_input": {
-            "shape": ["parallel_config.max_model_len", "model_config.hidden_size"],
+            "shape": ["model_config.max_model_len", "model_config.hidden_size"],
             "dtype": "model_config.dtype",
             "value": 1,
         },
         "text_index": {
-            "shape": ["parallel_config.max_model_len"],
+            "shape": ["model_config.max_model_len"],
             "dtype": "int32",
             "value": 0,
         },
         "image_index": {
-            "shape": ["parallel_config.max_model_len"],
+            "shape": ["model_config.max_model_len"],
             "dtype": "int32",
             "value": 0,
         },
         "token_type_ids": {
-            "shape": ["parallel_config.max_model_len"],
+            "shape": ["model_config.max_model_len"],
             "dtype": "int32",
             "value": -1,
         },
@@ -568,7 +568,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
 
         # Persistent buffers for CUDA graphs.
         self._input_embeddings = paddle.zeros(
-            [fd_config.parallel_config.max_model_len, fd_config.model_config.hidden_size],
+            [fd_config.model_config.max_model_len, fd_config.model_config.hidden_size],
             dtype=fd_config.model_config.dtype,
         )
 

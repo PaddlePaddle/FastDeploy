@@ -45,7 +45,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 or
 `export XPU_VISIBLE_DEVICES="4,5,6,7"`
 
-更多参数可以参考 [参数说明](../../parameters.md)。
+更多参数可以参考 [参数说明](../parameters.md)。
 
 全部支持的模型可以在上方的 *支持的模型* 章节找到。
 
