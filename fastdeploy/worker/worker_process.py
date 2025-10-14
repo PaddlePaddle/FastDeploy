@@ -28,7 +28,6 @@ from paddle.distributed import fleet
 from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
-    DecodingConfig,
     DeviceConfig,
     EarlyStopConfig,
     ErnieArchitectures,
@@ -688,7 +687,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     paddle.set_default_dtype(args.dtype)
     model_config = ModelConfig(vars(args))
     device_config = DeviceConfig(vars(args))
-    decoding_config = DecodingConfig(vars(args))
     speculative_config = SpeculativeConfig(args.speculative_config)
     parallel_config = ParallelConfig(vars(args))
     cache_config = CacheConfig(vars(args))
@@ -787,7 +785,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         speculative_config=speculative_config,
         device_config=device_config,
         load_config=load_config,
-        decoding_config=decoding_config,
         quant_config=quant_config,
         graph_opt_config=graph_opt_config,
         early_stop_config=early_stop_config,

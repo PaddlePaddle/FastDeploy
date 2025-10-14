@@ -1305,21 +1305,6 @@ class CacheConfig:
         logger.info("=============================================================")
 
 
-class DecodingConfig:
-    """
-    Configuration for decoding
-    """
-
-    def __init__(
-        self,
-        args,
-    ):
-        self.pad_token_id = None
-        for key, value in args.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
-
-
 class CommitConfig:
     """
     Configuration for tracking version information from version.txt
@@ -1392,7 +1377,6 @@ class FDConfig:
         commit_config: CommitConfig = CommitConfig(),
         scheduler_config: SchedulerConfig = None,
         device_config: DeviceConfig = None,
-        decoding_config: DecodingConfig = None,
         quant_config: QuantConfigBase = None,
         graph_opt_config: GraphOptimizationConfig = None,
         plas_attention_config: PlasAttentionConfig = None,
@@ -1423,7 +1407,6 @@ class FDConfig:
         self.quant_config: Optional[QuantConfigBase] = quant_config
         self.graph_opt_config: Optional[GraphOptimizationConfig] = graph_opt_config
         self.early_stop_config: Optional[EarlyStopConfig] = early_stop_config
-        self.decoding_config: DecodingConfig = decoding_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
         self.plas_attention_config: Optional[PlasAttentionConfig] = plas_attention_config
         # Initialize cuda graph capture list
