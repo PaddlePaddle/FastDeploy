@@ -282,6 +282,14 @@ class GPUModelRunner(ModelRunnerBase):
         req_len = len(req_dicts)
         has_prefill_task = False
         has_decode_task = False
+        multi_vision_inputs = {"images_lst": [], "grid_thw_lst": [], "vit_position_ids_lst": [], "cu_seqlens": [0]}
+        rope_3d_position_ids = {
+            "position_ids_idx": [],
+            "position_ids_lst": [],
+            "position_ids_offset": [0],
+            "max_tokens_lst": [],
+        }
+
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
@@ -292,35 +300,48 @@ class GPUModelRunner(ModelRunnerBase):
                 if self.enable_mm:
                     inputs = request.multimodal_inputs
                     if request.with_image:
-                        vision_inputs = {}
-                        vision_inputs["input_ids"] = paddle.to_tensor(
-                            inputs["input_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
-                        )
-                        vision_inputs["token_type_ids"] = paddle.to_tensor(
-                            inputs["token_type_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
-                        )
-                        vision_inputs["image_type_ids"] = paddle.to_tensor(
-                            inputs["image_type_ids"][request.image_type_ids_start : request.image_type_ids_end],
-                            dtype=paddle.int64,
-                        )
-                        vision_inputs["images"] = paddle.to_tensor(
-                            inputs["images"][request.image_start : request.image_end],
-                            dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16",
-                        )
-                        vision_inputs["grid_thw"] = paddle.to_tensor(
-                            inputs["grid_thw"][request.num_image_start : request.num_image_end], dtype="int64"
-                        )
-                        self.share_inputs["image_features"] = self.extract_vision_features(vision_inputs)
+                        if envs.FD_ENABLE_MAX_PREFILL:
+                            multi_vision_inputs["images_lst"].extend(
+                                inputs["images"][request.image_start : request.image_end]
+                            )
+                            multi_vision_inputs["grid_thw_lst"].extend(
+                                inputs["grid_thw"][request.num_image_start : request.num_image_end]
+                            )
+                            multi_vision_inputs["cu_seqlens"].extend(
+                                inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
+                            )
+                            multi_vision_inputs["vit_position_ids_lst"].extend(
+                                inputs["vit_position_ids"][request.num_image_start : request.num_image_end]
+                            )
+                        else:
+                            vision_inputs = {}
+                            vision_inputs["input_ids"] = paddle.to_tensor(
+                                inputs["input_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
+                            )
+                            vision_inputs["token_type_ids"] = paddle.to_tensor(
+                                inputs["token_type_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
+                            )
+                            vision_inputs["image_type_ids"] = paddle.to_tensor(
+                                inputs["image_type_ids"][request.image_type_ids_start : request.image_type_ids_end],
+                                dtype=paddle.int64,
+                            )
+                            vision_inputs["images"] = paddle.to_tensor(
+                                inputs["images"][request.image_start : request.image_end],
+                                dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16",
+                            )
+                            vision_inputs["grid_thw"] = paddle.to_tensor(
+                                inputs["grid_thw"][request.num_image_start : request.num_image_end], dtype="int64"
+                            )
+                            self.share_inputs["image_features"] = self.extract_vision_features(vision_inputs)
                     else:
                         self.share_inputs["image_features"] = None
 
-                    if inputs["position_ids"] is not None:
-                        position_ids = paddle.to_tensor(
-                            request.multimodal_inputs["position_ids"],
-                            dtype="int64",
-                        ).unsqueeze([0])
-                    else:
-                        position_ids = None
+                    rope_3d_position_ids["position_ids_idx"].append(idx)
+                    rope_3d_position_ids["position_ids_lst"].append(request.multimodal_inputs["position_ids"])
+                    rope_3d_position_ids["position_ids_offset"].append(
+                        length + rope_3d_position_ids["position_ids_offset"][-1]
+                    )
+                    rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
 
                     if "ernie" in self.model_config.model_type:
                         enable_thinking = request.get("enable_thinking", True)
@@ -331,20 +352,19 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["enable_thinking"][:] = enable_thinking
                     self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
                     self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)
-                    self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
-                        position_ids, request.get("max_tokens", 2048)
-                    )
 
                 if isinstance(request.prompt_token_ids, np.ndarray):
                     prompt_token_ids = request.prompt_token_ids.tolist()
                 else:
                     prompt_token_ids = request.prompt_token_ids
                 input_ids = prompt_token_ids + request.output_token_ids
-                logger.debug(
-                    f"Handle prefill request {request} at idx {idx}, "
-                    f"{prefill_start_index=}, {prefill_end_index=}, "
-                    f"need_prefilled_token_num={len(input_ids)}"
-                )
+
+                # logger.debug(
+                #     f"Handle prefill request {request} at idx {idx}, "
+                #     f"{prefill_start_index=}, {prefill_end_index=}, "
+                #     f"need_prefilled_token_num={len(input_ids)}"
+                # )
+
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(
                     input_ids[prefill_start_index:prefill_end_index]
                 )
@@ -367,7 +387,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
-                logger.debug(f"Handle decode request {request} at idx {idx}")
+                # logger.debug(f"Handle decode request {request} at idx {idx}")
                 encoder_block_num = len(request.block_tables)
                 self.share_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
@@ -378,7 +398,7 @@ class GPUModelRunner(ModelRunnerBase):
                     has_decode_task = True
                 continue
             else:  # preempted task
-                logger.debug(f"Handle preempted request {request} at idx {idx}")
+                # logger.debug(f"Handle preempted request {request} at idx {idx}")
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
                 self.seq_lens_this_time_buffer[idx : idx + 1] = 0
@@ -437,6 +457,21 @@ class GPUModelRunner(ModelRunnerBase):
                 ] = np.array(request.get("stop_token_ids"), dtype="int64")
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
+
+        if len(multi_vision_inputs["images_lst"]) > 0:
+            self.share_inputs["image_features"] = self.extract_vision_features(multi_vision_inputs)
+
+        if len(rope_3d_position_ids["position_ids_idx"]) > 0:
+            packed_position_ids = paddle.to_tensor(
+                np.concatenate(rope_3d_position_ids["position_ids_lst"]), dtype="int64"
+            )
+            rope_3d_lst = self.prepare_rope3d(
+                packed_position_ids,
+                rope_3d_position_ids["max_tokens_lst"],
+                rope_3d_position_ids["position_ids_offset"],
+            )
+            for i, idx in enumerate(rope_3d_position_ids["position_ids_idx"]):
+                self.share_inputs["rope_emb"][idx : idx + 1, :] = rope_3d_lst[i]
 
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
@@ -517,7 +552,7 @@ class GPUModelRunner(ModelRunnerBase):
                             position_ids = paddle.to_tensor(
                                 request.multimodal_inputs["position_ids"],
                                 dtype="int64",
-                            ).unsqueeze([0])
+                            )
                         else:
                             position_ids = None
                         token_chunk_size = inputs["input_ids"].shape[1]
@@ -562,8 +597,8 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
                     self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)
                     self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
-                        position_ids, request.get("max_tokens", 2048)
-                    )
+                        position_ids, [request.get("max_tokens", 2048)], [0, length]
+                    )[0]
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
@@ -2070,22 +2105,26 @@ class GPUModelRunner(ModelRunnerBase):
         return image_features
 
     def extract_vision_features_qf(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
-        assert inputs["images"] is not None
-        grid_thw = inputs["grid_thw"]
-        images = inputs["images"]
+        if envs.FD_ENABLE_MAX_PREFILL:
+            inputs["vit_position_ids_lst"] = np.concatenate(inputs["vit_position_ids_lst"])
+            images = paddle.to_tensor(inputs["images_lst"], dtype="bfloat16")
+            grid_thw = paddle.to_tensor(inputs["grid_thw_lst"], dtype="int64")
+            position_ids = paddle.to_tensor(inputs["vit_position_ids_lst"], dtype="int64")
+            cu_seqlens = paddle.cumsum(paddle.to_tensor(inputs["cu_seqlens"])).cast("int32")
+        else:
+            assert inputs["images"] is not None
+            grid_thw = inputs["grid_thw"]
+            images = inputs["images"]
 
-        position_ids = []
-        sample_indices = []
-        cu_seqlens = [0]
-        for idx, thw in enumerate(grid_thw):
-            numel = np.prod(np.array(thw))
-            position_ids.append(paddle.arange(numel) % np.prod(thw[1:]))
-            sample_indices.append(paddle.full((numel,), idx, dtype=paddle.int64))
-            cu_seqlens.append(cu_seqlens[-1] + numel)
+            position_ids = []
+            cu_seqlens = [0]
+            for idx, thw in enumerate(grid_thw):
+                numel = np.prod(np.array(thw))
+                position_ids.append(paddle.arange(numel) % np.prod(thw[1:]))
+                cu_seqlens.append(cu_seqlens[-1] + numel)
 
-        position_ids = paddle.concat(position_ids, axis=0).to(images.place)
-        cu_seqlens = paddle.to_tensor(cu_seqlens, dtype=paddle.int32).to(images.place)
-        sample_indices = paddle.concat(sample_indices, axis=0).to(images.place)
+            position_ids = paddle.concat(position_ids, axis=0).to(images.place)
+            cu_seqlens = paddle.to_tensor(cu_seqlens, dtype=paddle.int32).to(images.place)
 
         with paddle.amp.auto_cast(
             True,
@@ -2099,7 +2138,6 @@ class GPUModelRunner(ModelRunnerBase):
                 image_grid_thw=grid_thw,
                 position_ids=position_ids,
                 interpolate_pos_encoding=True,
-                sample_indices=sample_indices,
                 cu_seqlens=cu_seqlens,
                 use_rope=True,
                 window_size=-1,
@@ -2122,24 +2160,20 @@ class GPUModelRunner(ModelRunnerBase):
             raise ValueError(f"multiple modalities model {self.model_config.model_type} is not supported")
 
     @paddle.no_grad()
-    def prepare_rope3d(self, position_ids: paddle.Tensor, max_len: int) -> paddle.Tensor:
+    def prepare_rope3d(
+        self, position_ids: paddle.Tensor, max_len_lst: list[int], cumsum_seqlens: list[int]
+    ) -> paddle.Tensor:
         """prepare_rope3d"""
 
-        prefix_max_position_ids = paddle.max(position_ids) + 1
-        dec_pos_ids = paddle.tile(
-            paddle.arange(max_len, dtype="int64").unsqueeze(0).unsqueeze(-1),
-            [1, 1, 3],
-        )
-        dec_pos_ids = dec_pos_ids + prefix_max_position_ids
-        position_ids_3d_real = paddle.concat([position_ids, dec_pos_ids], axis=1)
-
         rope_emb = get_rope_3d(
-            position_ids=position_ids_3d_real,
+            position_ids=position_ids,
             rotary_dim=self.model_config.head_dim,
             partial_rotary_factor=1.0,
             base=self.model_config.rope_theta,
             max_position=self.parallel_config.max_model_len,
             freq_allocation=getattr(self.model_config, "freq_allocation", 20),
             model_type=self.model_config.model_type,
+            max_len_lst=max_len_lst,
+            cumsum_seqlens=cumsum_seqlens,
         )
         return rope_emb

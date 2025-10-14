@@ -74,6 +74,7 @@ class SiglipAttention(nn.Layer):
         attention_mask: Optional[paddle.Tensor] = None,
         output_attentions: Optional[bool] = False,
         cu_seqlens: Optional[List[paddle.Tensor]] = None,
+        max_seqlen: Optional[paddle.Tensor] = None,
         rope_emb: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,  # (cos, sin)
     ):
         B, seq_length, D = hidden_states.shape
@@ -94,10 +95,8 @@ class SiglipAttention(nn.Layer):
         cos, sin = rope_emb
 
         # --------
-        q = apply_rotary_pos_emb_vision(q, cos, sin).squeeze(axis=0)
-        k = apply_rotary_pos_emb_vision(k, cos, sin).squeeze(axis=0)
-
-        max_seqlen = (cu_seqlens[1:] - cu_seqlens[:-1]).max().item()
+        q = apply_rotary_pos_emb_vision(q, cos, sin)
+        k = apply_rotary_pos_emb_vision(k, cos, sin)
 
         attn_output, _ = flash_attn_unpadded(
             q,
@@ -282,6 +281,7 @@ class SiglipEncoderLayer(paddle.nn.Layer):
         attention_mask,
         output_attentions=False,
         cu_seqlens=None,
+        max_seqlen=None,
         rope_emb=None,
     ):
 
@@ -294,6 +294,7 @@ class SiglipEncoderLayer(paddle.nn.Layer):
             attention_mask=attention_mask,
             output_attentions=output_attentions,
             cu_seqlens=cu_seqlens,
+            max_seqlen=max_seqlen,
             rope_emb=rope_emb,
         )
 
@@ -480,6 +481,8 @@ class SiglipEncoder(nn.Layer):
         else:
             attn_cu_seqlens = cu_seqlens
 
+        max_seqlen = (attn_cu_seqlens[1:] - attn_cu_seqlens[:-1]).max().item()
+
         for encoder_layer in self.layers:
             if output_hidden_states:
                 encoder_states = encoder_states + (
@@ -487,10 +490,11 @@ class SiglipEncoder(nn.Layer):
                 )
 
             layer_outputs = encoder_layer(
-                hidden_states,
-                attention_mask,
+                hidden_states=hidden_states,
+                attention_mask=attention_mask,
                 output_attentions=output_attentions,
                 cu_seqlens=attn_cu_seqlens,
+                max_seqlen=max_seqlen,
                 rope_emb=rope_emb,
             )
             hidden_states = layer_outputs[0]

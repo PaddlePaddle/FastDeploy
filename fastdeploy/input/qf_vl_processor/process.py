@@ -163,6 +163,8 @@ class DataProcessor:
             "cur_position": 0,
             "pic_cnt": 0,
             "video_cnt": 0,
+            "vit_seqlen": [],
+            "vit_position_ids": [],
         }
         # Define placeholders and their lengths
         # IMAGE_PLACEHOLDER = "<|vision_start|><|image_pad|><|vision_end|>"
@@ -231,6 +233,8 @@ class DataProcessor:
             "cur_position": 0,
             "pic_cnt": 0,
             "video_cnt": 0,
+            "vit_seqlen": [],
+            "vit_position_ids": [],
         }
 
         # Parse and validate chat messages
@@ -361,6 +365,9 @@ class DataProcessor:
         position_ids = self._compute_vision_positions(outputs["cur_position"], t, h, w, 0)
         outputs["position_ids"].append(position_ids)
         outputs["cur_position"] = position_ids.max() + 1
+        numel = h * w
+        outputs["vit_seqlen"].append(numel)
+        outputs["vit_position_ids"].append(np.arange(numel) % numel)
 
     def _add_video(self, frames, meta: Dict, outputs: Dict) -> None:
         """
@@ -394,6 +401,9 @@ class DataProcessor:
 
         outputs["position_ids"].append(position_ids)
         outputs["cur_position"] = position_ids.max() + 1
+        numel = h * w
+        outputs["vit_seqlen"].append(numel)
+        outputs["vit_position_ids"].append(np.arange(numel) % numel)
 
     def _compute_vision_positions(
         self, start_pos: int, t: int, h: int, w: int, second_per_grid_t: float

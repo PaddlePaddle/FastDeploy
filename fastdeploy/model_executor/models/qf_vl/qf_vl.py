@@ -24,6 +24,7 @@ from paddleformers.transformers import PretrainedModel
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 from paddleformers.utils.log import logger
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
@@ -104,22 +105,15 @@ class QFVLModel(nn.Layer):
             logger.info(f"Start load layer {i}")
             self.layers[i].load_state_dict(state_dict)
 
+    def get_input_embeddings(self, ids_remove_padding: paddle.Tensor) -> paddle.Tensor:
+        return self.embed_tokens(ids_remove_padding=ids_remove_padding)
+
     def forward(
         self,
-        ids_remove_padding: paddle.Tensor,
-        image_features: Optional[paddle.Tensor],
+        input_embeddings: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
-
-        # -----------------------
-        image_mask = ids_remove_padding == self.config.image_token_id
-        image_token_num = image_mask.sum()
-
-        if image_token_num > 0:
-            hidden_states[image_mask] = image_features.cast(self._dtype)
-        # -----------------------
-
+        hidden_states = input_embeddings
         residual = None
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
@@ -154,6 +148,16 @@ class QFVLForConditionalGeneration(ModelForCasualLM):
             prefix="lm_head",
         )
 
+        # Persistent buffers for CUDA graphs.
+        if envs.FD_ENABLE_MAX_PREFILL:
+            max_length = fd_config.scheduler_config.max_num_seqs * fd_config.parallel_config.max_model_len
+        else:
+            max_length = fd_config.parallel_config.max_model_len
+        self._input_embeddings = paddle.zeros(
+            [max_length, fd_config.model_config.hidden_size],
+            dtype=fd_config.model_config.dtype,
+        )
+
     @paddle.no_grad()
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
         """
@@ -184,15 +188,32 @@ class QFVLForConditionalGeneration(ModelForCasualLM):
 
         return logits
 
+    def get_input_embeddings(
+        self,
+        ids_remove_padding: paddle.Tensor,
+        image_features: Optional[paddle.Tensor] = None,
+    ) -> paddle.Tensor:
+        input_embeddings = self.model.get_input_embeddings(ids_remove_padding=ids_remove_padding)
+        image_mask = ids_remove_padding == self.model.config.image_token_id
+        image_token_num = image_mask.sum()
+
+        if image_token_num > 0:
+            input_embeddings[image_mask] = image_features.cast(self._dtype)
+        return input_embeddings
+
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
         image_features: Optional[paddle.Tensor],
         forward_meta: ForwardMeta,
     ):
+        input_embeddings = self.get_input_embeddings(
+            ids_remove_padding=ids_remove_padding, image_features=image_features
+        )
+        self._input_embeddings.copy_(input_embeddings, False)
+
         hidden_states = self.model(
-            ids_remove_padding=ids_remove_padding,
-            image_features=image_features,
+            input_embeddings=self._input_embeddings,
             forward_meta=forward_meta,
         )
 
