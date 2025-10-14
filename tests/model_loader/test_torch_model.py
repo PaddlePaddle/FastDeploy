@@ -73,23 +73,25 @@ def check_result_against_baseline(outputs, baseline_file, threshold=0.05):
         )
 
 
-hugging_face_model_param_map = {
-    "Qwen2.5-7B-Instruct": {
+hugging_face_model_list = [
+    {
+        "model": "Qwen2.5-7B-Instruct",
         "tensor_parallel_size": 2,
         "quantizations": ["wint8"],
     },
-    "Qwen3-30B-A3B": {
+    {
+        "model": "Qwen3-30B-A3B",
         "tensor_parallel_size": 2,
         "quantizations": ["wint8"],
     },
-}
+]
 
 hf_params = []
-for model, cfg in hugging_face_model_param_map.items():
+for cfg in hugging_face_model_list:
     for q in cfg["quantizations"]:
         hf_params.append(
             pytest.param(
-                model,
+                cfg["model"],
                 cfg.get("tensor_parallel_size", 2),
                 cfg.get("max_model_len", 1024),
                 q,
@@ -137,8 +139,7 @@ def test_model_against_baseline(
     base_path = os.getenv("MODEL_PATH", "")
 
     # Get baseline suffix from config
-    model_config = hugging_face_model_param_map.get(model_name_or_path, {})
-    baseline_suffix = model_config.get("baseline_suffix", "tp2")
+    baseline_suffix = f"tp{tensor_parallel_size}"
     baseline_filename = f"{model_name_or_path}-{baseline_suffix}"
 
     if base_path:
