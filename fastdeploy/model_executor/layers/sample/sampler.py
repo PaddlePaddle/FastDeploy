@@ -36,13 +36,15 @@ from fastdeploy.model_executor.layers.sample.ops import (
     min_p_sampling,
     top_k_top_p_sampling,
 )
-from fastdeploy.model_executor.ops.gpu import (
-    speculate_limit_thinking_content_length_v2,
-    speculate_verify,
-    top_p_candidates,
-)
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.output import LogprobsTensors, SamplerOutput
+
+if current_platform.is_cuda():
+    from fastdeploy.model_executor.ops.gpu import (
+        speculate_limit_thinking_content_length_v2,
+        speculate_verify,
+        top_p_candidates,
+    )
 
 
 def top_p_normalize_probs_paddle(
