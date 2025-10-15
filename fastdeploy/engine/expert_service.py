@@ -146,7 +146,7 @@ class ExpertService:
                         )
                         break
                     except:
-                        llm_logger.info(f"Failed to attach to get_profile_block_num_signal, try again!")
+                        llm_logger.info("Failed to attach to get_profile_block_num_signal, try again!")
                         time.sleep(1)
                 self.reset_kvcache_blocks()
             ipc_signal_suffix_cache = self.cfg.parallel_config.engine_worker_queue_port[local_data_parallel_id]
