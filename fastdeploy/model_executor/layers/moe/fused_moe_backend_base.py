@@ -43,6 +43,15 @@ class MoEMethodBase(QuantMethodBase):
         self.ep_prefill_runner = None
         self.ep_decoder_runner = None
 
+    def import_backend_ep_runner(self) -> None:
+        """
+        Different platform has different ep runner. Override this method to import the corresponding EP runner.
+        """
+        from .ep import EPDecoderRunner, EPPrefillRunner
+
+        self.EPPrefillRunner = EPPrefillRunner
+        self.EPDecoderRunner = EPDecoderRunner
+
     def init_ep(self, layer: nn.Layer) -> None:
         """
         Initialize EP (Expert Parallel) related modules.
@@ -51,7 +60,7 @@ class MoEMethodBase(QuantMethodBase):
             return
 
         # Lazy import to avoid circular dependency or unnecessary loading
-        from .ep import EPDecoderRunner, EPPrefillRunner
+        self.import_backend_ep_runner()
 
         # Common arguments for both runners
         common_args = {
@@ -76,16 +85,16 @@ class MoEMethodBase(QuantMethodBase):
                 # for RL init model without deepep buff
                 return
             else:
-                self.ep_prefill_runner = EPPrefillRunner(**common_args)
-                self.ep_decoder_runner = EPDecoderRunner(**common_args)
+                self.ep_prefill_runner = self.EPPrefillRunner(**common_args)
+                self.ep_decoder_runner = self.EPDecoderRunner(**common_args)
             return
 
         # For non-mixed ep
         phase = config.model_config.moe_phase.phase
         if phase == "prefill":
-            self.ep_prefill_runner = EPPrefillRunner(**common_args)
+            self.ep_prefill_runner = self.EPPrefillRunner(**common_args)
         else:
-            self.ep_decoder_runner = EPDecoderRunner(**common_args)
+            self.ep_decoder_runner = self.EPDecoderRunner(**common_args)
 
     def process_loaded_weights(self, layer, weights) -> None:
         """
