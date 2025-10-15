@@ -39,6 +39,7 @@ class VideoEncodeRequest(BaseEncodeRequest):
     start_ts: int
     end_ts: int
     frames: int
+    vit_merge: bool
 
 
 class ImageDecodeRequest(BaseModel):
