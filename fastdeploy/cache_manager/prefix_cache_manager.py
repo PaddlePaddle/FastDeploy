@@ -1148,7 +1148,12 @@ class PrefixCacheManager:
         """
         hash_keys = []
         mm_inputs = request.multimodal_inputs
-        if "mm_positions" not in mm_inputs or "mm_hashes" not in mm_inputs or len(mm_inputs["mm_positions"]) == 0:
+        if (
+            mm_inputs is None
+            or "mm_positions" not in mm_inputs
+            or "mm_hashes" not in mm_inputs
+            or len(mm_inputs["mm_positions"]) == 0
+        ):
             return mm_idx, hash_keys
 
         assert start_idx < end_idx, f"start_idx {start_idx} >= end_idx {end_idx}"

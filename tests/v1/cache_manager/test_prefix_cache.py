@@ -19,6 +19,7 @@ from fastdeploy.cache_manager.prefix_cache_manager import PrefixCacheManager
 from fastdeploy.config import CacheConfig, FDConfig, ParallelConfig
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.request import ImagePosition, Request
+from fastdeploy.scheduler import SchedulerConfig
 
 
 def make_prefix_cache_manager(max_num_seqs, enable_mm=False, num_gpu_blocks_override=100, max_num_batched_tokens=3200):
@@ -29,11 +30,12 @@ def make_prefix_cache_manager(max_num_seqs, enable_mm=False, num_gpu_blocks_over
     )
     args = asdict(engine_args)
     cache_cfg = CacheConfig(args)
-    model_cfg = SimpleNamespace(enable_mm=enable_mm)
+    model_cfg = SimpleNamespace(enable_mm=enable_mm, max_model_len=8192)
     speculative_cfg = SimpleNamespace(method=None)
     model_cfg.print = print
     cache_cfg.bytes_per_layer_per_block = 1
     parallel_cfg = ParallelConfig(args)
+    scheduler_cfg = SchedulerConfig(args)
     graph_opt_cfg = engine_args.create_graph_optimization_config()
     fd_config = FDConfig(
         model_config=model_cfg,
@@ -41,6 +43,7 @@ def make_prefix_cache_manager(max_num_seqs, enable_mm=False, num_gpu_blocks_over
         parallel_config=parallel_cfg,
         graph_opt_config=graph_opt_cfg,
         speculative_config=speculative_cfg,
+        scheduler_config=scheduler_cfg,
     )
     return PrefixCacheManager(config=fd_config, tensor_parallel_size=8, splitwise_role="mixed")
 
@@ -137,8 +140,10 @@ def test_mm_extra_keys():
         "request_id": "req2",
         "prompt_token_ids": prompt_token_ids,
         "prompt_token_ids_len": len(prompt_token_ids),
-        "mm_positions": mm_positions,
-        "mm_hashes": mm_hashes,
+        "multimodal_inputs": {
+            "mm_positions": mm_positions,
+            "mm_hashes": mm_hashes,
+        },
     }
 
     mm_idx, key_idx = 0, 0
