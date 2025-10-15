@@ -150,9 +150,9 @@ class QFVLForConditionalGeneration(ModelForCasualLM):
 
         # Persistent buffers for CUDA graphs.
         if envs.FD_ENABLE_MAX_PREFILL:
-            max_length = fd_config.scheduler_config.max_num_seqs * fd_config.parallel_config.max_model_len
+            max_length = fd_config.scheduler_config.max_num_seqs * fd_config.model_config.max_model_len
         else:
-            max_length = fd_config.parallel_config.max_model_len
+            max_length = fd_config.model_config.max_model_len
         self._input_embeddings = paddle.zeros(
             [max_length, fd_config.model_config.hidden_size],
             dtype=fd_config.model_config.dtype,
