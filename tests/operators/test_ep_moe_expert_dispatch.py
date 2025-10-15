@@ -18,19 +18,36 @@ class TestEPMoeExpertDispatch(unittest.TestCase):
         self.hidden_size = 32
         self.num_experts = 4
         self.moe_topk = 2
-        self.token_nums_per_expert = [9, 8, 8, 7]  
+        self.token_nums_per_expert = [9, 8, 8, 7]
         self.token_nums_this_rank = sum(self.token_nums_per_expert)
-        self.topk_ids = np.array([
-        [0, 1], [0, 2], [0, 3], [0, 1],  
-        [1, 0], [1, 2], [1, 3],           
-        [2, 0], [2, 1], [2, 3], [2, 0], [2, 1],  
-        [3, 0], [3, 1], [3, 2], [3, 0]   
-    ])
+        self.topk_ids = np.array(
+            [
+                [0, 1],
+                [0, 2],
+                [0, 3],
+                [0, 1],
+                [1, 0],
+                [1, 2],
+                [1, 3],
+                [2, 0],
+                [2, 1],
+                [2, 3],
+                [2, 0],
+                [2, 1],
+                [3, 0],
+                [3, 1],
+                [3, 2],
+                [3, 0],
+            ]
+        )
         self.topk_ids = paddle.to_tensor(self.topk_ids)
-    
-    def ep_moe_expert_dispatch_ref(self, input, topk_ids, topk_weights, token_nums_per_expert, moe_quant_type="fp16", up_gate_proj_in_scale=None):
+
+    def ep_moe_expert_dispatch_ref(
+        self, input, topk_ids, topk_weights, token_nums_per_expert, moe_quant_type="fp16", up_gate_proj_in_scale=None
+    ):
         num_rows = input.shape[0]
         hidden_size = input.shape[1]
+        # moe_topk = topk_ids.shape[1]
         num_experts_per_rank = len(token_nums_per_expert)
         token_nums_this_rank = sum(token_nums_per_expert)
 
@@ -42,27 +59,30 @@ class TestEPMoeExpertDispatch(unittest.TestCase):
         dst_weights = paddle.zeros([token_nums_this_rank], dtype="float32")
         dst_indices = paddle.zeros([num_rows, num_experts_per_rank], dtype="int32")
         cumsum_idx_gpu = paddle.zeros([num_experts_per_rank], dtype="int32")
-        token_nums_per_expert_cumsum = paddle.to_tensor([sum(token_nums_per_expert[:i]) for i in range(num_experts_per_rank)], dtype="int64")
+        token_nums_per_expert_cumsum = paddle.to_tensor(
+            [sum(token_nums_per_expert[:i]) for i in range(num_experts_per_rank)], dtype="int64"
+        )
         expert_idx_per_token = paddle.zeros([token_nums_this_rank], dtype="int64")
 
+        # offset = 0
         for expert_id in range(num_experts_per_rank):
             for row_id in range(num_rows):
-                
+
                 topk_expert_ids = topk_ids[row_id]
-                
+
                 if expert_id in topk_expert_ids:
-                    
+
                     expert_token_index = paddle.nonzero(topk_expert_ids == expert_id)[0][0]
                     dst_idx = token_nums_per_expert_cumsum[expert_id] + cumsum_idx_gpu[expert_id]
                     cumsum_idx_gpu[expert_id] = cumsum_idx_gpu[expert_id] + 1
-                   
+
                     if moe_quant_type == "w4a8" and up_gate_proj_in_scale is not None:
                         scale = up_gate_proj_in_scale[expert_id]
                         quantized_input = paddle.clip(paddle.round(input[row_id] * scale), -127, 127).cast("int8")
                         permute_input[dst_idx] = quantized_input
                     else:
                         permute_input[dst_idx] = input[row_id]
-                    
+
                     permute_indices_per_token[expert_id, row_id] = dst_idx
                     dst_weights[dst_idx] = topk_weights[row_id, expert_token_index]
                     dst_indices[row_id, expert_id] = expert_id
@@ -117,9 +137,17 @@ class TestEPMoeExpertDispatch(unittest.TestCase):
                     self.token_nums_this_rank,
                     moe_quant_type,
                 )
-                
+
                 # 3. 验证输出
-                permute_input, permute_indices_per_token, token_nums_per_expert_cumsum, dst_weights, dst_indices, cumsum_idx_gpu, expert_idx_per_token = outputs
+                (
+                    permute_input,
+                    permute_indices_per_token,
+                    token_nums_per_expert_cumsum,
+                    dst_weights,
+                    dst_indices,
+                    cumsum_idx_gpu,
+                    expert_idx_per_token,
+                ) = outputs
 
                 np.testing.assert_allclose(
                     permute_input_ref.numpy(),
