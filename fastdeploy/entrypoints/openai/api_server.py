@@ -22,13 +22,13 @@ import time
 import traceback
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from multiprocessing import current_process
 
 import uvicorn
 import zmq
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
+from gunicorn.app.base import BaseApplication
 from opentelemetry import trace
 from prometheus_client import CONTENT_TYPE_LATEST
 
@@ -43,12 +43,14 @@ from fastdeploy.entrypoints.openai.protocol import (
     CompletionRequest,
     CompletionResponse,
     ControlSchedulerRequest,
+    EmbeddingRequest,
     ErrorInfo,
     ErrorResponse,
     ModelList,
 )
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
+from fastdeploy.entrypoints.openai.serving_embedding import OpenAIServingEmbedding
 from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServingModels
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
@@ -86,6 +88,24 @@ if args.tool_parser_plugin:
     ToolParserManager.import_tool_parser(args.tool_parser_plugin)
 llm_engine = None
 
+MAX_CONCURRENT_CONNECTIONS = (args.max_concurrency + args.workers - 1) // args.workers
+connection_semaphore = StatefulSemaphore(MAX_CONCURRENT_CONNECTIONS)
+
+
+class StandaloneApplication(BaseApplication):
+    def __init__(self, app, options=None):
+        self.application = app
+        self.options = options or {}
+        super().__init__()
+
+    def load_config(self):
+        config = {key: value for key, value in self.options.items() if key in self.cfg.settings and value is not None}
+        for key, value in config.items():
+            self.cfg.set(key.lower(), value)
+
+    def load(self):
+        return self.application
+
 
 def load_engine():
     """
@@ -95,21 +115,15 @@ def load_engine():
     if llm_engine is not None:
         return llm_engine
 
-    api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}")
+    api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}, port: {args.port}")
     engine_args = EngineArgs.from_cli_args(args)
     engine = LLMEngine.from_engine_args(engine_args)
-    if not engine.start(api_server_pid=os.getpid()):
+    if not engine.start(api_server_pid=args.port):
         api_server_logger.error("Failed to initialize FastDeploy LLM engine, service exit now!")
         return None
 
     llm_engine = engine
     return engine
-
-
-app = FastAPI()
-
-MAX_CONCURRENT_CONNECTIONS = (args.max_concurrency + args.workers - 1) // args.workers
-connection_semaphore = StatefulSemaphore(MAX_CONCURRENT_CONNECTIONS)
 
 
 def load_data_service():
@@ -119,12 +133,12 @@ def load_data_service():
     global llm_engine
     if llm_engine is not None:
         return llm_engine
-    api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}")
+    api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}, port: {args.port}")
     engine_args = EngineArgs.from_cli_args(args)
     config = engine_args.create_engine_config()
     api_server_logger.info(f"local_data_parallel_id: {config.parallel_config}")
     expert_service = ExpertService(config, config.parallel_config.local_data_parallel_id)
-    if not expert_service.start(os.getpid(), config.parallel_config.local_data_parallel_id):
+    if not expert_service.start(args.port, config.parallel_config.local_data_parallel_id):
         api_server_logger.error("Failed to initialize FastDeploy LLM expert service, service exit now!")
         return None
     llm_engine = expert_service
@@ -136,13 +150,22 @@ async def lifespan(app: FastAPI):
     """
     async context manager for FastAPI lifespan
     """
+    import logging
+
+    uvicorn_access = logging.getLogger("uvicorn.access")
+    uvicorn_access.handlers.clear()
+
+    # 使用 gunicorn 的格式
+    formatter = logging.Formatter("[%(asctime)s] [%(process)d] [INFO] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(formatter)
+    uvicorn_access.addHandler(handler)
+    uvicorn_access.propagate = False
 
     if args.tokenizer is None:
         args.tokenizer = args.model
-    if current_process().name != "MainProcess":
-        pid = os.getppid()
-    else:
-        pid = os.getpid()
+    pid = args.port
     api_server_logger.info(f"{pid}")
 
     if args.served_model_name is not None:
@@ -195,11 +218,24 @@ async def lifespan(app: FastAPI):
         args.ips,
         args.max_waiting_time,
     )
+
+    engine_args = EngineArgs.from_cli_args(args)
+    config = engine_args.create_engine_config(port_availability_check=False)
+    embedding_handler = OpenAIServingEmbedding(
+        engine_client,
+        app.state.model_handler,
+        config,
+        pid,
+        args.ips,
+        args.max_waiting_time,
+        chat_template,
+    )
     engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid
     app.state.engine_client = engine_client
     app.state.chat_handler = chat_handler
     app.state.completion_handler = completion_handler
+    app.state.embedding_handler = embedding_handler
     global llm_engine
     if llm_engine is not None:
         llm_engine.engine.data_processor = engine_client.data_processor
@@ -409,6 +445,20 @@ async def list_models() -> Response:
         return JSONResponse(content=models.model_dump())
 
 
+@app.post("/v1/embeddings")
+async def create_embedding(request: EmbeddingRequest):
+    """
+    Create embeddings for the input texts
+    """
+    if app.state.dynamic_load_weight:
+        status, msg = app.state.engine_client.is_workers_alive()
+        if not status:
+            return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
+
+    generator = await app.state.embedding_handler.create_embedding(request)
+    return JSONResponse(content=generator.model_dump())
+
+
 @app.get("/update_model_weight")
 def update_model_weight(request: Request) -> Response:
     """
@@ -448,16 +498,17 @@ def launch_api_server() -> None:
     api_server_logger.info(f"args: {args.__dict__}")
     fd_start_span("FD_START")
 
+    options = {
+        "bind": f"{args.host}:{args.port}",
+        "workers": args.workers,
+        "worker_class": "uvicorn.workers.UvicornWorker",
+        "loglevel": "info",
+        "log_config": UVICORN_CONFIG,
+        "timeout_graceful_shutdown": args.timeout_graceful_shutdown,
+    }
+
     try:
-        uvicorn.run(
-            app="fastdeploy.entrypoints.openai.api_server:app",
-            host=args.host,
-            port=args.port,
-            workers=args.workers,
-            log_config=UVICORN_CONFIG,
-            log_level="info",
-            timeout_graceful_shutdown=args.timeout_graceful_shutdown,
-        )  # set log level to error to avoid log
+        StandaloneApplication(app, options).run()
     except Exception as e:
         api_server_logger.error(f"launch sync http server error, {e}, {str(traceback.format_exc())}")
 
@@ -553,6 +604,7 @@ def control_scheduler(request: ControlSchedulerRequest):
         return JSONResponse(content=content.model_dump(), status_code=500)
 
     if request.reset:
+        llm_engine.engine.clear_data()
         llm_engine.engine.scheduler.reset()
 
     if request.load_shards_num or request.reallocate_shard:
