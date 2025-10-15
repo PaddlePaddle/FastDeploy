@@ -994,7 +994,8 @@ class EngineService:
             llm_logger.info("Clear Data: Start")
             self.token_processor.clear_data()
             self.engine_worker_queue.clear_data()
-            self.zmq_server.req_dict.clear()
+            self.send_response_server.req_dict.clear()
+            self.recv_request_server.req_dict.clear()
             llm_logger.info("Clear Data: Successfully")
             return True
         except Exception as e:
