@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import unittest
+
 import numpy as np
 import paddle
 import paddle.device.cuda.graphs as graphs
@@ -16,11 +17,13 @@ from fastdeploy.config import (
     ParallelConfig,
 )
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
-from fastdeploy.model_executor.layers.quantization.block_wise_fp8 import (
-    BlockWiseFP8Config,
+from fastdeploy.model_executor.layers.quantization.weight_only import (
+    WINT8Config,
 )
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.worker.worker_process import init_distributed_environment
+
+paddle.set_default_dtype("bfloat16")
 
 
 class FuseMoEWrapper(paddle.nn.Layer):
@@ -51,7 +54,8 @@ class FuseMoEWrapper(paddle.nn.Layer):
                     "data_parallel_size": self.ep_size,
                 }
             ),
-            quant_config=BlockWiseFP8Config(weight_block_size=[64, 64]),
+            # quant_config=BlockWiseFP8Config(weight_block_size=[64, 64]),
+            quant_config=WINT8Config({}),
             scheduler_config=SchedulerConfig({}),
             cache_config=CacheConfig({}),
             graph_opt_config=GraphOptimizationConfig({}),
@@ -62,8 +66,6 @@ class FuseMoEWrapper(paddle.nn.Layer):
         self.fd_config.parallel_config.tensor_parallel_rank = tp_rank
         self.fd_config.parallel_config.expert_parallel_size = self.ep_size
         self.fd_config.parallel_config.ep_group = paddle.distributed.new_group()
-
-
 
         weight_key_map = {
             "gate_weight_key": f"{self.prefix}.gate.weight",
@@ -109,9 +111,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
             state_dict[up_gate_proj_expert_weight_key_name] = up_gate_proj_weight[
                 expert_idx - moe_layer.expert_id_offset
             ]
-            state_dict[down_proj_expert_weight_key_name] = down_proj_weight[
-                expert_idx - moe_layer.expert_id_offset
-            ]
+            state_dict[down_proj_expert_weight_key_name] = down_proj_weight[expert_idx - moe_layer.expert_id_offset]
 
         moe_layer.load_state_dict(state_dict)
 
@@ -119,7 +119,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
 class TestFusedMoE(unittest.TestCase):
     def setUp(self) -> None:
         self.architectures = ["Ernie4_5_MoeForCausalLM"]
-        self.num_tokens = 192
+        self.num_tokens = 96
         self.hidden_size = 7168
         self.moe_intermediate_size = 3584
         self.moe_num_experts = 48
@@ -166,7 +166,7 @@ class TestFusedMoE(unittest.TestCase):
         gating.to(dtype=paddle.float32)  # it's dtype is bfloat16 default, but the forward input is float32
         gating.weight.set_value(paddle.rand(gating.weight.shape, dtype=paddle.float32))
 
-        os.environ["FD_USE_DEEP_GEMM"] = "1"  # use deepgemm
+        # os.environ["FD_USE_DEEP_GEMM"] = "1"  # use deepgemm
         ep_size = paddle.distributed.get_world_size()
         ep_rank = paddle.distributed.get_rank()
 
@@ -181,38 +181,31 @@ class TestFusedMoE(unittest.TestCase):
         out = fused_moe.fused_moe(hidden_states, gating)
         zkk_cuda_graph.capture_end()
 
-
         p = profiler.Profiler(
-            targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU], 
-            on_trace_ready=profiler.export_chrome_tracing('./profile_log'))
+            targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
+            on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+        )
         p.start()
-        
+
         num_tests = 20
 
-        start_events = [
-            paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)
-        ]
-        end_events = [
-            paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)
-        ]
+        start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
+        end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
         for i in range(num_tests):
             # Record
             start_events[i].record()
-            
+
             # zkk_cuda_graph.replay()
             out = fused_moe.fused_moe(hidden_states, gating)
 
             end_events[i].record()
         paddle.device.cuda.synchronize()
 
-        times = np.array(
-            [s.elapsed_time(e) for s, e in zip(start_events, end_events)]
-        )[1:]
+        times = np.array([s.elapsed_time(e) for s, e in zip(start_events, end_events)])[1:]
 
         print(times)
 
         p.stop()
-
 
         # for i in range(10):
         #     out = fused_moe.fused_moe(hidden_states, gating)
