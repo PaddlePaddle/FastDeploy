@@ -31,7 +31,6 @@ class TestEPMoeExpertDispatch(unittest.TestCase):
     def ep_moe_expert_dispatch_ref(self, input, topk_ids, topk_weights, token_nums_per_expert, moe_quant_type="fp16", up_gate_proj_in_scale=None):
         num_rows = input.shape[0]
         hidden_size = input.shape[1]
-        moe_topk = topk_ids.shape[1]
         num_experts_per_rank = len(token_nums_per_expert)
         token_nums_this_rank = sum(token_nums_per_expert)
 
@@ -46,7 +45,6 @@ class TestEPMoeExpertDispatch(unittest.TestCase):
         token_nums_per_expert_cumsum = paddle.to_tensor([sum(token_nums_per_expert[:i]) for i in range(num_experts_per_rank)], dtype="int64")
         expert_idx_per_token = paddle.zeros([token_nums_this_rank], dtype="int64")
 
-        offset = 0
         for expert_id in range(num_experts_per_rank):
             for row_id in range(num_rows):
                 
