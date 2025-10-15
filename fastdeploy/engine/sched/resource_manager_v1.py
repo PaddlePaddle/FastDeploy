@@ -664,7 +664,6 @@ class ResourceManagerV1(ResourceManager):
                         request.need_prefill_tokens = (
                             request.num_total_tokens
                         )  # Before preempted task rescheduled, preempted task has been sent to engine, no more tokens are output, here num_total_tokens should be static and correct
-                        self._update_mm_hashes(request)
                         if self.config.cache_config.enable_prefix_caching:
                             if (
                                 self.config.cache_config.enable_hierarchical_cache
