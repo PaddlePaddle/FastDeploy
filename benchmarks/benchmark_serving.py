@@ -463,6 +463,7 @@ async def benchmark(
     if pbar is not None:
         pbar.close()
 
+    benchmark_outputs = outputs
     drop_ratio = args.drop_ratio
     if 0.0 < drop_ratio < 1:
         # 按drop_ratio头尾各舍弃一半请求，不计入benchmark统计
@@ -470,7 +471,7 @@ async def benchmark(
         drop_count = int(n * drop_ratio)
         half = drop_count // 2
         if half > 0:
-            outputs = outputs[half : n - half]
+            benchmark_outputs = outputs[half : n - half]
 
         # 根据收到最后一个chunk的时间戳计算总时长
         if len(outputs) >= 2:
@@ -479,7 +480,7 @@ async def benchmark(
             benchmark_duration = 0.0
 
         print(f"丢弃前数量: {n}")
-        print(f"丢弃后数量: {len(outputs)}")
+        print(f"丢弃后数量: {len(benchmark_outputs)}")
         print(f"benchmark_duration: {benchmark_duration} 秒")
     else:
         benchmark_duration = time.perf_counter() - benchmark_start_time
@@ -487,7 +488,7 @@ async def benchmark(
 
     metrics, actual_output_lens = calculate_metrics(
         # input_requests=input_requests,
-        outputs=outputs,
+        outputs=benchmark_outputs,
         dur_s=benchmark_duration,
         # tokenizer=tokenizer,
         selected_percentiles=selected_percentiles,
@@ -516,7 +517,7 @@ async def benchmark(
         "total_token_throughput": metrics.total_token_throughput,
         "input_lens": [output.prompt_len for output in outputs],
         "infer_input_lens": [output.prompt_tokens for output in outputs],
-        "output_lens": actual_output_lens,
+        "output_lens": [output.output_tokens for output in outputs],
         "ttfts": [output.ttft for output in outputs],
         "itls": [output.itl for output in outputs],
         "input_texts": [input.prompt for input in input_requests],
