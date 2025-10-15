@@ -34,7 +34,13 @@ from fastdeploy.entrypoints.openai.protocol import (
     ErrorResponse,
     UsageInfo,
 )
-from fastdeploy.utils import ErrorCode, ErrorType, ParameterError, api_server_logger
+from fastdeploy.utils import (
+    ErrorCode,
+    ErrorType,
+    ParameterError,
+    api_server_logger,
+    get_host_ip,
+)
 from fastdeploy.worker.output import LogprobsLists
 
 
@@ -49,11 +55,14 @@ class OpenAIServingCompletion:
                 self.master_ip = ips[0]
             else:
                 self.master_ip = ips.split(",")[0]
+            self.is_master_ip = get_host_ip() == self.master_ip
         else:
             self.master_ip = "0.0.0.0"
+            self.is_master_ip = True
+        api_server_logger.info(f"master ip: {self.master_ip}")
 
     def _check_master(self):
-        return self.engine_client.is_master
+        return self.engine_client.is_master or self.is_master_ip
 
     async def create_completion(self, request: CompletionRequest):
         """

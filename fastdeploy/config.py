@@ -1518,7 +1518,7 @@ class FDConfig:
         """
         self.local_device_ids = self.device_ids.split(",")[: self.parallel_config.tensor_parallel_size]
 
-        if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node:
+        if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node or self.node_rank == 0:
             self.is_master = True
             self.master_ip = "0.0.0.0"
         else:
