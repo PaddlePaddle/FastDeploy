@@ -21,7 +21,6 @@ class TestEPMoeExpertDispatchFP8(unittest.TestCase):
         self.use_in_ep = False
         self.token_nums_this_rank_padded = self.batch_size * self.moe_topk
 
-
     def ep_moe_expert_dispatch_fp8_ref(
         self,
         input,
