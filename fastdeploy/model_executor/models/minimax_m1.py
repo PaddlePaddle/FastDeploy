@@ -53,6 +53,11 @@ from fastdeploy.model_executor.utils import (
     default_weight_loader,
     process_weights_after_loading,
 )
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 
 
 class RMSNormTP(nn.Layer):
@@ -417,7 +422,12 @@ class MiniMaxM1Model(nn.Layer):
         out = self.norm(hidden_states)
         return out
 
-
+@ModelRegistry.register_model_class(
+    architecture="MiniMaxM1ForCausalLM",
+    module_name="minimax_m1",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class MiniMaxM1ForCausalLM(ModelForCasualLM):
     """
     Causal LM model for MiniMax-M1.
