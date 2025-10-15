@@ -563,6 +563,7 @@ if __name__ == "__main__":
     # llm = LLM(model="llama_model")
     # output = llm.generate(prompts="who are you？", use_tqdm=True)
     # print(output)
+
     llm = LLM(
         model="/opt/baidu/paddle_internal/FastDeploy/Qwen2.5-7B",
         tensor_parallel_size=2,

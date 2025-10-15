@@ -26,11 +26,11 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 
 from fastdeploy.config import FDConfig, ModelConfig, PoolerConfig
+from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.tasks import PoolingTask
 from fastdeploy.model_executor.layers.pool.metadata import (
     PoolingCursor,
     PoolingMetadata,
-    PoolingParams,
 )
 from fastdeploy.model_executor.models.adapters import _load_st_projector
 from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
