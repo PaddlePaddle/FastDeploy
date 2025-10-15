@@ -708,7 +708,7 @@ class GPUModelRunner(ModelRunnerBase):
         max_dec_len = expected_decode_len + 1
         input_length = min(
             num_tokens // (1 if capture_prefill else batch_size),
-            self.parallel_config.max_model_len - max_dec_len,
+            self.model_config.max_model_len - max_dec_len,
         )
 
         # NOTE(wanglongzhi): When the full length is too large, DeepEP's buffer size will not be enough to cause the result to appear nan.
@@ -773,17 +773,17 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs = {}
 
         self.share_inputs["pre_ids"] = paddle.full(
-            [max_num_seqs, self.parallel_config.max_model_len],
+            [max_num_seqs, self.model_config.max_model_len],
             -1,
             dtype="int64",
         )
         self.share_inputs["input_ids"] = paddle.full(
-            [max_num_seqs, self.parallel_config.max_model_len],
+            [max_num_seqs, self.model_config.max_model_len],
             self.model_config.pad_token_id,
             dtype="int64",
         )
         self.share_inputs["prompt_ids"] = paddle.full(
-            [max_num_seqs, self.parallel_config.max_model_len],
+            [max_num_seqs, self.model_config.max_model_len],
             self.model_config.pad_token_id,
             dtype="int64",
         )
@@ -850,12 +850,12 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["system_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int32")
 
         self.share_inputs["ids_remove_padding"] = paddle.full(
-            [max_num_seqs * self.parallel_config.max_model_len],
+            [max_num_seqs * self.model_config.max_model_len],
             0,
             dtype="int64",
         )
         self.share_inputs["batch_id_per_token"] = paddle.full(
-            [max_num_seqs * self.parallel_config.max_model_len, 1], 0, dtype="int32"
+            [max_num_seqs * self.model_config.max_model_len, 1], 0, dtype="int32"
         )
         self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
@@ -873,10 +873,9 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["kv_batch_ids"] = None
         self.share_inputs["kv_tile_ids_per_batch"] = None
         self.share_inputs["kv_num_blocks_x_cpu"] = None  # CPU
-        self.share_inputs["max_len_kv_cpu"] = None  # CPU
 
         # Initialize rotary position embedding
-        tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
+        tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
 
         # Initialize thinking related buffers
         self.share_inputs["need_think_end"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
@@ -895,7 +894,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Set block tables
         pre_max_block_num = (
-            self.parallel_config.max_model_len + self.cache_config.block_size - 1
+            self.model_config.max_model_len + self.cache_config.block_size - 1
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
         self.share_inputs["block_tables"] = paddle.full([max_num_seqs, pre_max_block_num], -1, dtype="int32")
 
@@ -927,7 +926,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.speculative_decoding:
             max_draft_token_num = self.speculative_config.num_speculative_tokens
             self.share_inputs["input_ids_cpu"] = paddle.full(
-                shape=[max_num_seqs, self.parallel_config.max_model_len],
+                shape=[max_num_seqs, self.model_config.max_model_len],
                 fill_value=1,
                 dtype="int64",
             ).cpu()
@@ -974,7 +973,7 @@ class GPUModelRunner(ModelRunnerBase):
                     max_num_seqs,
                     2,
                     1,
-                    self.parallel_config.max_model_len,
+                    self.model_config.max_model_len,
                     1,
                     rope_head_dim,
                 ],
@@ -1119,7 +1118,6 @@ class GPUModelRunner(ModelRunnerBase):
             kv_batch_ids=self.share_inputs["kv_batch_ids"],
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
-            max_len_kv_cpu=self.share_inputs["max_len_kv_cpu"],
         )
 
         # Update Batch type for cuda graph for only_decode_batch
@@ -1185,7 +1183,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         if not create_cache_tensor:
             logger.info(f"Waiting for cache managers to create kv cache.. {cache_ready_signal.value}")
-            while cache_ready_signal.value[self.local_rank] != 1:
+            while cache_ready_signal.value[local_rank] != 1:
                 time.sleep(1)
             logger.info(f"OK! Stop waiting. {cache_ready_signal.value}")
 
@@ -1236,7 +1234,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["caches"] = cache_kvs_list
 
         if not profile and create_cache_tensor:
-            cache_ready_signal.value[self.local_rank] = 1
+            cache_ready_signal.value[local_rank] = 1
             logger.info(f"✅ kv cache is ready! {cache_ready_signal.value}")
 
         paddle.device.cuda.empty_cache()
@@ -1280,7 +1278,7 @@ class GPUModelRunner(ModelRunnerBase):
         # adapted to cudagraph.
         self.share_inputs["decoder_num_blocks_device"] = paddle.full([1], 0, dtype="int32")
         self.share_inputs["decoder_chunk_size_device"] = paddle.full([1], 64, dtype="int32")
-        self.share_inputs["max_len_tensor_cpu"] = paddle.full([8], 0, dtype="int32").cpu()
+        self.share_inputs["max_len_tensor_cpu"] = paddle.full([9], 0, dtype="int32").cpu()
 
         self.share_inputs["encoder_batch_ids"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
         self.share_inputs["encoder_tile_ids_per_batch"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
@@ -1289,7 +1287,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["kv_batch_ids"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
         self.share_inputs["kv_tile_ids_per_batch"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
         self.share_inputs["kv_num_blocks_x_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
-        self.share_inputs["max_len_kv_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
 
         # Get the attention backend
         attn_cls = get_attention_backend()
@@ -1373,7 +1370,7 @@ class GPUModelRunner(ModelRunnerBase):
                 (
                     self.share_inputs["output_padding_offset"] if self.speculative_decoding else None
                 ),  # speculative decoding requires
-                self.parallel_config.max_model_len,
+                self.model_config.max_model_len,
             )
 
             logits = None
@@ -1405,7 +1402,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.sampler(
                     logits,
                     self.sampling_metadata,
-                    self.parallel_config.max_model_len,
+                    self.model_config.max_model_len,
                     self.share_inputs,
                     accept_all_drafts,
                 )
@@ -1723,7 +1720,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_decoder"],
             self.share_inputs["seq_lens_encoder"],
             (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
-            self.parallel_config.max_model_len,
+            self.model_config.max_model_len,
         )
 
         logits = None
@@ -1760,7 +1757,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.sampler(
                 logits,
                 self.sampling_metadata,
-                self.parallel_config.max_model_len,
+                self.model_config.max_model_len,
                 self.share_inputs,
             )
             sampler_output = None
@@ -2198,7 +2195,7 @@ class GPUModelRunner(ModelRunnerBase):
             rotary_dim=self.model_config.head_dim,
             partial_rotary_factor=1.0,
             base=self.model_config.rope_theta,
-            max_position=self.parallel_config.max_model_len,
+            max_position=self.model_config.max_model_len,
             freq_allocation=getattr(self.model_config, "freq_allocation", 20),
             model_type=self.model_config.model_type,
         )
