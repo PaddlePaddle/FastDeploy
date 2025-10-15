@@ -257,6 +257,7 @@ class DynamicWeightManager:
         while model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
             if model_weights_status.value[0] == ModelWeightsStatus.UPDATING:
                 logger.info("infer engine stopped! start to load new checkpoint...")
+                model_runner.clear_requests()
                 model_runner.update_parameters(pid)
                 while model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     time.sleep(0.01)
