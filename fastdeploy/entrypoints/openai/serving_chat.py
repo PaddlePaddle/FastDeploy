@@ -573,9 +573,11 @@ class OpenAIServingChat:
         num_cached_tokens[idx] = output.get("num_cached_tokens", 0)
 
         finish_reason = "stop"
-        if output.get("tool_call"):
-            finish_reason = "tool_calls"
-        if not has_no_token_limit and previous_num_tokens == max_tokens:
+        if has_no_token_limit or previous_num_tokens != max_tokens:
+            finish_reason = "stop"
+            if output.get("tool_call"):
+                finish_reason = "tool_calls"
+        else:
             finish_reason = "length"
         if output.get("error_msg") is not None and "Recover" in output["error_msg"]:
             finish_reason = "recover_stop"
