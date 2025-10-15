@@ -30,6 +30,7 @@ use-triton-in-paddle
 crcmod
 fastsafetensors==0.1.14
 msgpack
+gunicorn
 modelscope
 opentelemetry-api>=1.24.0
 opentelemetry-sdk>=1.24.0
