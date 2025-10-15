@@ -366,7 +366,7 @@ class XPUWeightOnlyMoeEpMethod(XPUMoEMethod):
             self.down_proj_weight_shape = [
                 layer.num_local_experts,
                 layer.hidden_size,
-                layer.moe_intermediate // 2,
+                layer.moe_intermediate_size // 2,
             ]
         else:
             raise ValueError(f"Unsupported moe quant type: {self.moe_quant_type}")
