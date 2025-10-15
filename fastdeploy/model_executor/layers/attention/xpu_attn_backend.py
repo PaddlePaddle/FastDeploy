@@ -198,5 +198,7 @@ class XPUAttentionBackend(AttentionBackend):
             None,  # smooth
             None,  # kv_signal_data
             None,  # kv_signal_sender
+            forward_meta.pos_emb_type,
+            self.rope_3d,
         )
         return res
