@@ -1758,7 +1758,6 @@ class GPUModelRunner(ModelRunnerBase):
             assert (
                 sampler_output is not None
             ), "Warning, limit thinking content length not support speculative decoding."
-            assert self.model_config.line_break_id > 0
             limit_thinking_content_length(
                 limit_strategy=envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR,
                 sampled_token_ids=sampler_output.sampled_token_ids,

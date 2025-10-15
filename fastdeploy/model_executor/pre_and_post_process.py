@@ -664,6 +664,7 @@ def limit_thinking_content_length(
         )
     elif limit_strategy == "\n</think>\n\n":
         # for ernie_x1
+        assert line_break_id > 0
         limit_thinking_content_length_v2(
             sampled_token_ids,
             max_think_lens,
