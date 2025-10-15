@@ -117,6 +117,9 @@ class MTPProposer(Proposer):
             self.parallel_config.max_model_len - max_dec_len,
         )
 
+        if self.fd_config.parallel_config.enable_expert_parallel:
+            input_length = min(input_length, 32)
+
         block_num = (
             input_length + self.cache_config.block_size - 1
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
@@ -579,7 +582,7 @@ class MTPProposer(Proposer):
             prefill_exists = self.exist_prefill()
             paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
             only_decode_batch = all(only_decode_batch_list)
-            self.fd_config.model_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
+            self.fd_config.parallel_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
 
         self.forward_meta.step_use_cudagraph = (
             self.use_cudagraph
