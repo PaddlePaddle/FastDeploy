@@ -93,7 +93,7 @@ class LLM:
         # Create the Engine
         self.llm_engine = LLMEngine.from_engine_args(engine_args=engine_args)
 
-        self.default_sampling_params = SamplingParams(max_tokens=self.llm_engine.cfg.max_model_len)
+        self.default_sampling_params = SamplingParams(max_tokens=self.llm_engine.cfg.model_config.max_model_len)
 
         self.llm_engine.start()
 
@@ -563,6 +563,7 @@ if __name__ == "__main__":
     # llm = LLM(model="llama_model")
     # output = llm.generate(prompts="who are you？", use_tqdm=True)
     # print(output)
+
     llm = LLM(
         model="/opt/baidu/paddle_internal/FastDeploy/Qwen2.5-7B",
         tensor_parallel_size=2,
