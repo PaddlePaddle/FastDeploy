@@ -199,7 +199,12 @@ class FusedMoE(nn.Layer):
         else:
             self.gate_correction_bias = None
         self.quant_method.create_weights(
-            self, weight_loader=self.weight_loader, model_format=fd_config.model_config.model_format
+            self,
+            weight_loader=self.weight_loader,
+            model_format=fd_config.model_config.model_format,
+            num_experts=self.num_local_experts if self.ep_size > 1 else self.num_experts,
+            hidden_size=self.hidden_size,
+            moe_intermediate_size=self.moe_intermediate_size,
         )
 
         logger.info(
