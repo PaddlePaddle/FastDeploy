@@ -302,7 +302,7 @@ jobs:
               rm -rf ${REPO_NAME}*
             fi
           '
-          wget -q ${fd_archive_url}
+          wget -q --no-proxy ${fd_archive_url}
           tar -xf FastDeploy.tar.gz
           rm -rf FastDeploy.tar.gz
           cd FastDeploy
