@@ -23,9 +23,54 @@ from fastdeploy.entrypoints.openai.serving_completion import (
     OpenAIServingCompletion,
     RequestOutput,
 )
+from fastdeploy.utils import get_host_ip
 
 
 class TestOpenAIServingCompletion(unittest.TestCase):
+
+    def test_check_master_tp4_dp1(self):
+        engine_client = Mock()
+        engine_client.tensor_parallel_size = 4
+        max_chips_per_node = 8
+        if engine_client.tensor_parallel_size <= max_chips_per_node:
+            engine_client.is_master = True
+        else:
+            engine_client.is_master = False
+        serving_completion = OpenAIServingCompletion(engine_client, None, "pid", None, 360)
+        self.assertTrue(serving_completion._check_master())
+
+    def test_check_master_tp4_dp4(self):
+        engine_client = Mock()
+        engine_client.tensor_parallel_size = 4
+        max_chips_per_node = 8
+        if engine_client.tensor_parallel_size <= max_chips_per_node:
+            engine_client.is_master = True
+        else:
+            engine_client.is_master = False
+        serving_completion = OpenAIServingCompletion(engine_client, None, "pid", "0.0.0.0, {get_host_ip()}", 360)
+        self.assertTrue(serving_completion._check_master())
+
+    def test_check_master_tp16_dp1_slave(self):
+        engine_client = Mock()
+        engine_client.tensor_parallel_size = 16
+        max_chips_per_node = 8
+        if engine_client.tensor_parallel_size <= max_chips_per_node:
+            engine_client.is_master = True
+        else:
+            engine_client.is_master = False
+        serving_completion = OpenAIServingCompletion(engine_client, None, "pid", f"0.0.0.0, {get_host_ip()}", 360)
+        self.assertFalse(serving_completion._check_master())
+
+    def test_check_master_tp16_dp1_master(self):
+        engine_client = Mock()
+        engine_client.tensor_parallel_size = 16
+        max_chips_per_node = 8
+        if engine_client.tensor_parallel_size <= max_chips_per_node:
+            engine_client.is_master = True
+        else:
+            engine_client.is_master = False
+        serving_completion = OpenAIServingCompletion(engine_client, None, "pid", f"{get_host_ip()}, 0.0.0.0", 360)
+        self.assertTrue(serving_completion._check_master())
 
     def test_calc_finish_reason_tool_calls(self):
         # 创建一个模拟的engine_client，并设置reasoning_parser为"ernie_x1"
