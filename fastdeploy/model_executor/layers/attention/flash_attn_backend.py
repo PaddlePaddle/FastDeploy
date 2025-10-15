@@ -125,6 +125,7 @@ class FlashAttentionBackend(AttentionBackend):
         self.pd_disaggregation_mode: str = fd_config.parallel_config.pd_disaggregation_mode
 
         self.start_layer_index: int = fd_config.model_config.start_layer_index
+        self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False)
 
         if fd_config.parallel_config.expert_parallel_rank is None:
             fd_config.parallel_config.expert_parallel_rank = 0
