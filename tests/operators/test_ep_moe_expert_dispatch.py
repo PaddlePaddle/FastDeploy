@@ -112,7 +112,7 @@ class TestEPMoeExpertDispatch(unittest.TestCase):
                 # 2. 调用算子
                 outputs = ep_moe_expert_dispatch(
                     input,
-                    topk_ids,
+                    self.topk_ids,
                     topk_weights,
                     up_gate_scale,
                     self.token_nums_per_expert,
