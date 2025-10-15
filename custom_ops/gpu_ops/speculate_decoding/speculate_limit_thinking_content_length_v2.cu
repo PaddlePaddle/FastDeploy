@@ -64,7 +64,7 @@ __global__ void speculate_limit_thinking_content_length_kernel_v2(
             // 当开启思考长度控制时，检查是否超时
             if (current_step == max_think_len) {
                 // 强制将当前token替换为结束思考的token
-                next_token = think_end_id;
+                next_token = line_break_id;
                 current_limit_think_status = 1;
                 condition_triggered = true;  // 因为修改了token，需要截断
             } else if (current_step == max_think_len + 1) {
