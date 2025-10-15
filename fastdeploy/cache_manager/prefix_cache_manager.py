@@ -256,7 +256,9 @@ class PrefixCacheManager:
         if exit_code is None:
             logger.info("Launch cache transfer manager successful")
         else:
-            logger.info("Launch cache transfer manager failed, see launch_cache_transfer_manager.log for more information")
+            logger.info(
+                "Launch cache transfer manager failed, see launch_cache_transfer_manager.log for more information"
+            )
 
         # Start additional threads
         if cache_config.enable_hierarchical_cache and self.num_cpu_blocks > 0:
