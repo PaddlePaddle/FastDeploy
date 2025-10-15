@@ -176,7 +176,7 @@ class OpenAIServingChat:
         created_time = int(time.time())
         chunk_object_type: str = "chat.completion.chunk"
         num_choices = 1 if request.n is None else request.n
-        first_iteration = [True] * num_choices
+        first_iteration = True
         previous_num_tokens = [0] * num_choices
         num_prompt_tokens = 0
         tool_called = [False] * num_choices
@@ -261,7 +261,7 @@ class OpenAIServingChat:
                         inference_start_time = res["metrics"]["inference_start_time"]
                     else:
                         arrival_time = res["metrics"]["arrival_time"] - inference_start_time
-                    if first_iteration[idx]:
+                    if first_iteration:
                         num_prompt_tokens = len(prompt_token_ids)
                         num_cached_tokens = res.get("num_cached_tokens", 0)
                         for i in range(num_choices):
@@ -305,7 +305,7 @@ class OpenAIServingChat:
                                 )
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)} \n\n"
                             api_server_logger.info(f"Chat Streaming response send_idx 0: {chunk.model_dump_json()}")
-                        first_iteration[idx] = False
+                        first_iteration = False
 
                     output = res["outputs"]
                     output_top_logprobs = output["top_logprobs"]
@@ -494,55 +494,16 @@ class OpenAIServingChat:
                             logprob_contents[idx].extend(logprobs_res.content)
                     if data["finished"]:
                         num_choices -= 1
-                        if (
-                            output is not None
-                            and output.get("metrics") is not None
-                            and output.get("metrics").get("request_start_time") is not None
-                        ):
-                            work_process_metrics.e2e_request_latency.observe(
-                                time.time() - output.get("metrics").get("request_start_time")
-                            )
-                        message = ChatMessage(
-                            role="assistant",
-                            reasoning_content=output.get("reasoning_content"),
-                            tool_calls=output.get("tool_call"),
-                            prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
-                            # TODO 确认这里是用idx还是不是idx
-                            completion_token_ids=completion_token_ids[idx] if request.return_token_ids else None,
-                            text_after_process=text_after_process if request.return_token_ids else None,
-                            prompt_tokens=text_after_process if request.return_token_ids else None,
-                            raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
-                            completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
+                        choice = await self._create_chat_completion_choice(
+                            data=data,
+                            request=request,
+                            prompt_token_ids=prompt_token_ids,
+                            text_after_process=text_after_process,
+                            completion_token_ids=completion_token_ids,
+                            num_cached_tokens=num_cached_tokens,
+                            logprob_contents=logprob_contents,
+                            response_processor=response_processor,
                         )
-
-                        if response_processor.enable_multimodal_content():
-                            message.multimodal_content = output.get("multipart")
-                        else:
-                            message.content = output["text"]
-
-                        logprobs_full_res = None
-                        if logprob_contents[idx]:
-                            logprobs_full_res = LogProbs(content=logprob_contents[idx])
-
-                        choice = ChatCompletionResponseChoice(
-                            index=idx,
-                            message=message,
-                            logprobs=logprobs_full_res,
-                            finish_reason=None,
-                        )
-                        has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
-                        max_tokens = request.max_completion_tokens or request.max_tokens
-                        # output 可能没有num_cached_tokens字段
-                        num_cached_tokens[idx] = output.get("num_cached_tokens", 0)
-                        if has_no_token_limit or previous_num_tokens[idx] != max_tokens:
-                            choice.finish_reason = "stop"
-                            if output.get("tool_call"):
-                                choice.finish_reason = "tool_calls"
-                        else:
-                            choice.finish_reason = "length"
-
-                        if output.get("error_msg") is not None and "Recover" in output["error_msg"]:
-                            choice.finish_reason = "recover_stop"
                         choices.append(choice)
         finally:
             await self.engine_client.connection_manager.cleanup_request(request_id)
@@ -567,6 +528,64 @@ class OpenAIServingChat:
         )
         api_server_logger.info(f"Chat response: {res.model_dump_json()}")
         return res
+
+    async def _create_chat_completion_choice(
+        self,
+        data: dict,
+        request: ChatCompletionRequest,
+        prompt_token_ids: list,
+        text_after_process: str,
+        completion_token_ids: list,
+        num_cached_tokens: list,
+        logprob_contents: list,
+        response_processor: ChatResponseProcessor,
+    ) -> ChatCompletionResponseChoice:
+        idx = int(data["request_id"].split("_")[-1])
+        output = data["outputs"]
+        previous_num_tokens = len(data["outputs"]["token_ids"])
+
+        if output is not None and output.get("metrics") and output["metrics"].get("request_start_time"):
+            work_process_metrics.e2e_request_latency.observe(
+                time.time() - output.get("metrics").get("request_start_time")
+            )
+        message = ChatMessage(
+            role="assistant",
+            reasoning_content=output.get("reasoning_content"),
+            tool_calls=output.get("tool_call"),
+            prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
+            completion_token_ids=completion_token_ids[idx] if request.return_token_ids else None,
+            text_after_process=text_after_process if request.return_token_ids else None,
+            prompt_tokens=text_after_process if request.return_token_ids else None,
+            raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
+            completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
+        )
+        if response_processor.enable_multimodal_content():
+            message.multimodal_content = output.get("multipart")
+        else:
+            message.content = output["text"]
+
+        logprobs_full_res = None
+        if logprob_contents[idx]:
+            logprobs_full_res = LogProbs(content=logprob_contents[idx])
+
+        has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
+        max_tokens = request.max_completion_tokens or request.max_tokens
+        num_cached_tokens[idx] = output.get("num_cached_tokens", 0)
+
+        finish_reason = "stop"
+        if output.get("tool_call"):
+            finish_reason = "tool_calls"
+        if not has_no_token_limit and previous_num_tokens == max_tokens:
+            finish_reason = "length"
+        if output.get("error_msg") is not None and "Recover" in output["error_msg"]:
+            finish_reason = "recover_stop"
+
+        return ChatCompletionResponseChoice(
+            index=idx,
+            message=message,
+            logprobs=logprobs_full_res,
+            finish_reason=finish_reason,
+        )
 
     def _create_chat_logprobs(
         self,
