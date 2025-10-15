@@ -42,8 +42,6 @@ elif current_platform.is_gcu():
 elif current_platform.is_dcu():
     from fastdeploy.model_executor.ops.gpu import (
         get_padding_offset,
-        limit_thinking_content_length_v1,
-        limit_thinking_content_length_v2,
         save_output,
         set_stop_value_multi_ends,
         step_paddle,
@@ -81,6 +79,8 @@ else:
         step_reschedule,
         update_inputs_v1,
         speculate_step_reschedule,
+        limit_thinking_content_length_v1,
+        limit_thinking_content_length_v2,
     )
 
 from fastdeploy.inter_communicator import ZmqIpcClient

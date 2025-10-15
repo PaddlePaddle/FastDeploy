@@ -898,6 +898,19 @@ void SaveOutMmsgStatic(const paddle::Tensor& x,
                        int64_t rank_id,
                        bool save_each_rank);
 
+void LimitThinkingContentLengthV1(const paddle::Tensor &next_tokens,
+            const paddle::Tensor &max_think_lens,
+            const paddle::Tensor &step_idx,
+            const paddle::Tensor &limit_think_status,
+            const int64_t think_end_id);
+
+void LimitThinkingContentLengthV2(const paddle::Tensor &next_tokens,
+                                  const paddle::Tensor &max_think_lens,
+                                  const paddle::Tensor &step_idx,
+                                  const paddle::Tensor &limit_think_status,
+                                  const int64_t think_end_id,
+                                  const int64_t line_break_id);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("get_expert_token_num", &GetExpertTokenNum, py::arg("topk_ids"),
@@ -1286,4 +1299,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("min_p_sampling", &MinPSamplingFromProbs, "min_p_sampling function");
 
   m.def("save_output", &SaveOutMmsgStatic, "save_output function");
+
+  m.def("limit_thinking_content_length_v1", &LimitThinkingContentLengthV1, "save_output function");
+
+  m.def("limit_thinking_content_length_v2", &LimitThinkingContentLengthV2, "save_output function");
 }
