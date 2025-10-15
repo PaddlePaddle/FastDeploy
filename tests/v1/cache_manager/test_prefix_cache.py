@@ -41,7 +41,6 @@ def make_prefix_cache_manager(max_num_seqs, enable_mm=False, num_gpu_blocks_over
         parallel_config=parallel_cfg,
         graph_opt_config=graph_opt_cfg,
         speculative_config=speculative_cfg,
-        max_num_batched_tokens=engine_args.max_num_batched_tokens,
     )
     return PrefixCacheManager(config=fd_config, tensor_parallel_size=8, splitwise_role="mixed")
 
