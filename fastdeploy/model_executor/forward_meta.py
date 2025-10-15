@@ -142,6 +142,11 @@ class ForwardMeta:
     block_tables: Optional[paddle.Tensor] = None
     # KV caches
     caches: Optional[list[paddle.Tensor]] = None
+    
+    # Linear attention caches
+    linear_attn_caches: Optional[paddle.Tensor] = None
+    # Slot mapping
+    slot_mapping: Optional[paddle.Tensor] = None
 
     def clear_caches(self):
         """Safely clean up the caches"""

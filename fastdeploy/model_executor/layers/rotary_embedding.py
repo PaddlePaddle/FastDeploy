@@ -276,7 +276,7 @@ def get_rope_impl(
     if model_config is None or architecture.startswith("Qwen"):
         rotary_emb_layer = QwenRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
         rotary_emb = rotary_emb_layer(position_ids)
-    elif architecture.startswith("Glm"):
+    elif "MiniMaxM1" in architecture or architecture.startswith("Glm"):
         rotary_emb_layer = GlmRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
         rotary_emb = rotary_emb_layer(position_ids)
     else:

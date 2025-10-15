@@ -147,6 +147,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Initialize share inputs
         self._init_share_inputs(self.scheduler_config.max_num_seqs)
+        self._initialize_linear_attn_cache() 
         self.infer_seed_increment = paddle.full(
             shape=[self.scheduler_config.max_num_seqs, 1],
             fill_value=4,
@@ -175,6 +176,49 @@ class GPUModelRunner(ModelRunnerBase):
             self.zmq_client = ZmqIpcClient(name=f"get_save_output_rank{local_rank}", mode=zmq.PUSH)
             self.zmq_client.connect()
             self.zmq_client.socket.SNDTIMEO = 3000
+            
+    def _initialize_linear_attn_cache(self):
+        """Initializes the state cache required for Linear Attention layers.
+
+        This method checks if the model configuration includes any linear attention
+        layers (type 0). If so, it allocates a zero-initialized tensor to store
+        the recurrent state for these layers across decoding steps. If no such
+        layers are present or active in the model's execution plan, it sets
+        the cache to None and skips allocation.
+        """
+        config = self.model_config
+
+        # Exit early if the model architecture does not use any Linear Attention layers at all.
+        if not hasattr(config, "attn_type_list") or 0 not in config.attn_type_list:
+            self.share_inputs["linear_attn_caches"] = None
+            logger.info("Model does not contain Linear Attention layers. Skipping cache initialization.")
+            return
+
+        # Determine if any linear attention layers are actually active after considering
+        # the layer_mapping, which might reorder or skip layers from the original config.
+        layer_mapping = getattr(config, "layer_mapping", list(range(config.num_hidden_layers)))
+        has_active_linear_layers = any(
+            config.attn_type_list[layer_mapping[i]] == 0 for i in range(config.num_hidden_layers)
+        )
+
+        if not has_active_linear_layers:
+            self.share_inputs["linear_attn_caches"] = None
+            logger.info("No active Linear Attention layers found after applying layer_mapping. Skipping cache initialization.")
+            return
+
+        # The cache shape is [max_batch_size, num_total_layers, num_heads_tp, head_dim, head_dim].
+        # We allocate space for *all* potential layers to simplify indexing during the forward pass.
+        # Non-linear-attention layers will simply not use their allocated slice of the cache.
+        shape = (
+            self.parallel_config.max_num_seqs,
+            config.num_hidden_layers,
+            config.num_attention_heads // self.parallel_config.tensor_parallel_size,
+            config.head_dim,
+            config.head_dim,
+        )
+
+        self.share_inputs["linear_attn_caches"] = paddle.zeros(shape, dtype="float32")
+        logger.info(f"Initialized Linear Attention cache with shape: {shape}")
 
     def exist_prefill(self):
         """
@@ -1030,6 +1074,9 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Update bad tokens len
         max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
+        
+        # Update slot mapping
+        self.share_inputs["slot_mapping"] = batch_id_per_token
 
         # Initialize forward meta data
         self.initialize_forward_meta()
@@ -1112,6 +1159,8 @@ class GPUModelRunner(ModelRunnerBase):
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
             block_tables=self.share_inputs["block_tables"],
             caches=self.share_inputs["caches"],
+            linear_attn_caches=self.share_inputs.get("linear_attn_caches"),
+            slot_mapping=self.share_inputs.get("slot_mapping"),
             encoder_batch_ids=self.share_inputs["encoder_batch_ids"],
             encoder_tile_ids_per_batch=self.share_inputs["encoder_tile_ids_per_batch"],
             encoder_num_blocks_x_cpu=self.share_inputs["encoder_num_blocks_x_cpu"],
