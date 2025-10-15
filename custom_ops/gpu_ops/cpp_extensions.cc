@@ -1305,7 +1305,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("save_output", &SaveOutMmsgStatic, "save_output function");
 
-  m.def("limit_thinking_content_length_v1", &LimitThinkingContentLengthV1, "save_output function");
+  m.def("limit_thinking_content_length_v1", &LimitThinkingContentLengthV1, "limit_thinking_content_length_v1 function");
 
-  m.def("limit_thinking_content_length_v2", &LimitThinkingContentLengthV2, "save_output function");
+  m.def("limit_thinking_content_length_v2", &LimitThinkingContentLengthV2, "limit_thinking_content_length_v2 function");
 }
