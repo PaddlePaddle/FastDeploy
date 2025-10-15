@@ -825,16 +825,17 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             )
 
         # in_scales
-        for in_scale_name in ["up_gate_proj_in_scale", "down_proj_in_scale"]:
-            setattr(
-                layer,
-                in_scale_name,
-                layer.create_parameter(
-                    shape=[layer.num_local_experts],
-                    dtype="float32",
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
+        if not layer.moe_quant_config.moe_dynamic_quant:
+            for in_scale_name in ["up_gate_proj_in_scale", "down_proj_in_scale"]:
+                setattr(
+                    layer,
+                    in_scale_name,
+                    layer.create_parameter(
+                        shape=[layer.num_local_experts],
+                        dtype="float32",
+                        default_initializer=paddle.nn.initializer.Constant(0),
+                    ),
+                )
 
         # weight_scales
         setattr(

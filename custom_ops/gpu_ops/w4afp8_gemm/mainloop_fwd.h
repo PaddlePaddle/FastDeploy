@@ -490,10 +490,11 @@ struct CollectiveMainloopFwd {
             }
             tiled_mma.accumulate_ = GMMA::ScaleOut::Zero;
         }
-
-        for (int i = 0; i < size(tSrS) / 2; i+=2) {
-            tSrS_data[i] = __hfma2(tSrS2_data[i], scale3, tSrS_data[i]);
-            tSrS_data[i+1] = __hfma2(tSrS2_data[i + 1], scale4, tSrS_data[i+1]);
+        if constexpr (kTiles % 2 == 0) {
+            for (int i = 0; i < size(tSrS) / 2; i+=2) {
+                tSrS_data[i] = __hfma2(tSrS2_data[i], scale3, tSrS_data[i]);
+                tSrS_data[i+1] = __hfma2(tSrS2_data[i + 1], scale4, tSrS_data[i+1]);
+            }
         }
     }
 };
