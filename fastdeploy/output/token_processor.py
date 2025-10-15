@@ -156,7 +156,13 @@ class TokenProcessor:
             try:
                 is_blocking = True
                 if self.speculative_decoding:
-                    speculate_get_output(self.output_tokens, rank_id, is_blocking, False)
+                    if (
+                        self.cfg.parallel_config.enable_expert_parallel
+                        and self.cfg.parallel_config.data_parallel_size > 1
+                    ):
+                        speculate_get_output(self.output_tokens, rank_id, is_blocking, True)
+                    else:
+                        speculate_get_output(self.output_tokens, rank_id, is_blocking, False)
                     if self.output_tokens[0] == -2:
                         continue
 
@@ -332,6 +338,9 @@ class TokenProcessor:
                     + accept_num[i]
                 ].tolist()
                 if len(token_ids) == 0 or token_ids[-1] <= 0:
+                    if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                        if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                            self.resource_manager.reschedule_preempt_task(task_id)
                     continue
             else:
                 token_id = int(tokens[i, 0])
@@ -387,7 +396,7 @@ class TokenProcessor:
             if self.tokens_counter[task_id] == 0:
                 if task.messages is not None:
                     result.prompt = task.messages
-                result.num_cached_tokens = task.num_cached_tokens
+            result.num_cached_tokens = task.num_cached_tokens
 
             is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
 

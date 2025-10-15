@@ -60,7 +60,6 @@ else:
         save_output,
         save_output_topk,
         set_stop_value_multi_ends,
-        speculate_clear_accept_nums,
         speculate_get_output_padding_offset,
         speculate_get_padding_offset,
         speculate_get_seq_lens_output,
@@ -329,11 +328,12 @@ def post_process_specualate(
             model_output.accept_tokens,
             model_output.accept_num,
             model_output.not_need_stop,
+            model_output.seq_lens_decoder,
+            model_output.prompt_lens,
             model_output.mp_rank,
             save_each_rank,
+            envs.ENABLE_V1_KVCACHE_SCHEDULER,
         )
-
-    speculate_clear_accept_nums(model_output.accept_num, model_output.seq_lens_decoder)
 
     # Update pre_ids through accept tokens
 

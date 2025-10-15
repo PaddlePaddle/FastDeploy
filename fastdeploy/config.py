@@ -588,6 +588,9 @@ class GraphOptimizationConfig:
         Thus this flag cannot be used together with splitting_ops."""
         self.full_cuda_graph: bool = True
 
+        """ Whether to use shared memory pool for multi capture_size """
+        self.use_unique_memory_pool: bool = False
+
         self.max_capture_size: int = None
         self.real_shape_to_captured_size: dict[int, int] = None
         # CINN Config ...
@@ -1147,7 +1150,14 @@ class FDConfig:
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.parallel_config.max_num_seqs)
-        self.graph_opt_config.init_with_cudagrpah_size(max_num_seqs=self.parallel_config.max_num_seqs)
+
+        if self.speculative_config is not None and self.speculative_config.method == "mtp":
+            max_shape = self.parallel_config.max_num_seqs * (self.speculative_config.num_speculative_tokens + 1)
+            if max_shape % 2 == 1:
+                max_shape = max_shape + 1
+            self.graph_opt_config.init_with_cudagrpah_size(max_num_seqs=min(512, max_shape))
+        else:
+            self.graph_opt_config.init_with_cudagrpah_size(max_num_seqs=self.parallel_config.max_num_seqs)
 
         # TODO(wangmingkai02): change graph_opt_level=2 when using static mode with cinn
         if self.graph_opt_config.graph_opt_level == 2:

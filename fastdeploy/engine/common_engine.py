@@ -33,16 +33,19 @@ from opentelemetry import trace
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
+from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
     EngineCacheQueue,
     EngineWorkerQueue,
     IPCSignal,
-    ZmqClient,
+    ZmqIpcServer,
+    ZmqTcpServer,
 )
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.output.token_processor import TokenProcessor
+from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.utils import EngineError, envs, llm_logger
 
@@ -60,6 +63,13 @@ class EngineSevice:
             cfg (Config): Config object containing all the configuration parameters.
         """
         self.cfg = cfg
+        if cfg.splitwise_role != "mixed" or cfg.cache_config.enable_prefix_caching:
+            if isinstance(self.cfg.cache_config.cache_queue_port, str):
+                self.cfg.cache_config.cache_queue_port = self.cfg.cache_config.cache_queue_port.split(",")
+            if isinstance(self.cfg.cache_config.cache_queue_port, list):
+                self.cfg.cache_config.cache_queue_port = int(
+                    self.cfg.cache_config.cache_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+                )
 
         self.scheduler = cfg.scheduler_config.scheduler()
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -126,6 +136,17 @@ class EngineSevice:
         self.insert_task_to_worker_thread.start()
         self.token_processor.tasks_queue = self.engine_worker_queue
         self.token_processor.run()
+
+    def create_data_processor(self):
+        self.input_processor = InputPreprocessor(
+            self.cfg.tokenizer,
+            self.cfg.reasoning_parser,
+            self.cfg.limit_mm_per_prompt,
+            self.cfg.mm_processor_kwargs,
+            self.cfg.model_config.enable_mm,
+            self.cfg.tool_parser,
+        )
+        self.data_processor = self.input_processor.create_processor()
 
     def _init_worker_monitor_signals(self):  # exist_task_signal 用于各worker进程感知是否有新Task需要处理
         current_suffix = int(self.cfg.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id])
@@ -198,15 +219,11 @@ class EngineSevice:
                 local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
             )
 
-            if (
-                self.cfg.cache_config.enable_prefix_caching
-                or self.cfg.splitwise_role != "mixed"
-                and self.cfg.parallel_config.local_data_parallel_id == 0
-            ):
+            if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
                 self.cache_task_queue = EngineCacheQueue(
                     address=(
                         self.cfg.master_ip,
-                        self.cfg.cache_config.cache_queue_port,
+                        int(self.cfg.cache_config.cache_queue_port),
                     ),
                     authkey=b"cache_queue_service",
                     is_server=True,
@@ -571,10 +588,21 @@ class EngineSevice:
     def start_zmq_service(self, api_server_pid=None):
         if api_server_pid is None:
             return
-        self.api_server_pid = api_server_pid
-        self.zmq_server = ZmqClient(name=api_server_pid, mode=zmq.PULL)
-        self.zmq_server.start_server()
-        self.zmq_server.create_router()
+
+        if envs.FD_ENABLE_INTERNAL_ADAPTER:
+            self.recv_request_server = ZmqTcpServer(port=envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT, mode=zmq.PULL)
+            self.send_response_server = ZmqTcpServer(port=envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT, mode=zmq.ROUTER)
+            self.external_adapter = InternalAdapter(
+                cfg=self.cfg, engine=self, dp_rank=self.cfg.parallel_config.local_data_parallel_id
+            )
+        else:
+            self.recv_request_server = ZmqIpcServer(name=api_server_pid, mode=zmq.PULL)
+            self.send_response_server = ZmqIpcServer(name=api_server_pid, mode=zmq.ROUTER)
+        self.recv_result_handle_thread = threading.Thread(
+            target=self.send_response_server.recv_result_handle, daemon=True
+        )
+        self.recv_result_handle_thread.start()
+
         time.sleep(3)
         self.insert_task_to_scheduler_thread = threading.Thread(target=self._insert_zmq_task_to_scheduler, daemon=True)
         self.insert_task_to_scheduler_thread.start()
@@ -588,9 +616,9 @@ class EngineSevice:
             try:
                 block = True if len(added_requests) == 0 else False
                 if not self.cfg.model_config.enable_mm:
-                    err, data = self.zmq_server.receive_json_once(block)
+                    err, data = self.recv_request_server.receive_json_once(block)
                 else:
-                    err, data = self.zmq_server.receive_pyobj_once(block)
+                    err, data = self.recv_request_server.receive_pyobj_once(block)
                 if err is not None:
                     llm_logger.error("Engine stops inserting zmq task into scheduler, err:{err}")
                     break
@@ -644,12 +672,26 @@ class EngineSevice:
                     )
                     # Since the request is not in scheduler
                     # Send result by zmq directly
-                    self.zmq_server.send_multipart(request_id, [error_result])
+                    self.send_response_server.send_response(request_id, [error_result])
             except Exception as e:
                 llm_logger.error(
                     f"Error happend while receving new request from zmq, details={e}, "
                     f"traceback={traceback.format_exc()}"
                 )
+
+    def _decode_token(self, token_ids, req_id, is_end):
+        delta_text = ""
+        if envs.FD_ENABLE_RETURN_TEXT:
+            delta_text, cum_tokens, _ = self.data_processor.ids2tokens(token_ids, req_id)
+            if delta_text != "":
+                prefix_offset = self.data_processor.decode_status[req_id][0]
+                read_offset = self.data_processor.decode_status[req_id][1]
+                token_ids = cum_tokens[prefix_offset:read_offset]
+            else:
+                token_ids = []
+            if is_end:
+                del self.data_processor.decode_status[req_id]
+        return delta_text, token_ids
 
     def _zmq_send_generated_tokens(self):
         """
@@ -662,7 +704,23 @@ class EngineSevice:
                     time.sleep(0.005)
                     continue
                 for request_id, contents in results.items():
-                    self.zmq_server.send_multipart(request_id, contents)
+                    new_contents = []
+                    for content in contents:
+                        delta_text, token_ids = self._decode_token(
+                            token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
+                        )
+                        if len(token_ids):
+                            content.outputs.token_ids = token_ids
+                            content.outputs.text = delta_text
+                            new_contents.append(content)
+                        else:
+                            llm_logger.warning(
+                                f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
+                            )
+
+                    if len(new_contents):
+                        llm_logger.info(f"Send response for request id: {request_id}")
+                        self.send_response_server.send_response(request_id, new_contents)
 
             except Exception as e:
                 llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
@@ -756,7 +814,8 @@ class EngineSevice:
             llm_logger.info("Clear Data: Start")
             self.token_processor.clear_data()
             self.engine_worker_queue.clear_data()
-            self.zmq_server.req_dict.clear()
+            self.send_response_server.req_dict.clear()
+            self.recv_request_server.req_dict.clear()
             llm_logger.info("Clear Data: Successfully")
             return True
         except Exception as e:
