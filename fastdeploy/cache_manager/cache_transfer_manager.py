@@ -179,7 +179,7 @@ class CacheTransferManager:
     def _init_gpu_cache(self, args):
 
         try:
-            assert args.create_cache_tensor == False
+            assert not args.create_cache_tensor
         except:
             logger.warn(
                 f"In current implementation, cache transfer manager do not create cache tensors at all, "
