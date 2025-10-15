@@ -198,7 +198,7 @@ class EngineArgs:
     The amount of CPU memory to offload to.
     """
 
-    cache_queue_port: int = 8003
+    cache_queue_port: str = "8003"
     """
     Port for cache queue.
     """
@@ -387,7 +387,7 @@ class EngineArgs:
     Configuration for early stop.
     """
 
-    load_choices: str = "default"
+    load_choices: str = "default_v1"
     """The format of the model weights to load.
         Options include:
         - "default": default loader.
@@ -715,7 +715,7 @@ class EngineArgs:
             type=str,
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\
-                 default/new_loader.",
+                 default/default_v1.",
         )
 
         # CacheConfig parameters group
@@ -741,7 +741,7 @@ class EngineArgs:
 
         cache_group.add_argument(
             "--cache-queue-port",
-            type=int,
+            type=lambda s: [int(item.strip()) for item in s.split(",")] if s else None,
             default=EngineArgs.cache_queue_port,
             help="port for cache queue",
         )
@@ -1026,11 +1026,7 @@ class EngineArgs:
 
         speculative_cfg = self.create_speculative_config()
         if not self.enable_chunked_prefill:
-            if (
-                current_platform.is_cuda()
-                and self.splitwise_role == "mixed"
-                and (speculative_cfg is None or speculative_cfg.method not in ["mtp"])
-            ):
+            if current_platform.is_cuda() and self.splitwise_role == "mixed":
                 # default enable chunked prefill
                 self.enable_chunked_prefill = True
 
@@ -1079,7 +1075,6 @@ class EngineArgs:
             cache_config=cache_cfg,
             load_config=load_cfg,
             parallel_config=parallel_cfg,
-            max_model_len=self.max_model_len,
             speculative_config=speculative_cfg,
             ips=self.ips,
             use_warmup=self.use_warmup,

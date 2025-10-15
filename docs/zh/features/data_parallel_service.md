@@ -12,15 +12,14 @@ FastDeploy 提供了splitwise scheduler，可以感知各个DP的负载状态，
 具体调度流程如下图，用户随机请求ip 与端口，通过redis获取负载状态，将数据分发到负载较低的DP进行推理。
 ![数据调度架构图](./images/scheduler_img.png)
 
-
 #### 离线推理
 ```python
 
 prompts = [
     "Hello, my name is",
-    "你好，请问今天是星期", 
-    "请写6个以数字开头的成语", 
-    "写一个300字的小说大纲，内容是李白穿越到现代，最后成为公司文职人员的故事", 
+    "你好，请问今天是星期",
+    "请写6个以数字开头的成语",
+    "写一个300字的小说大纲，内容是李白穿越到现代，最后成为公司文职人员的故事",
     "我要采访一位科幻作家，创建一个包含5个问题的列表"
 ]
 
@@ -65,10 +64,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --scheduler-ttl 9000
 ```
 
-
 ### 用户自行调度
 FastDeploy 提供了multi_api_server，用户可以拉起多个api server，用户自行选择dp 进行请求，在该种情况下用户可以自行添加负载均衡模型进行调度。（目前该种方式只支持在线推理）
-
 
 #### 在线推理
 
@@ -95,8 +92,6 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
 - ports: 指定拉起的api server 的端口
 - args: 指定拉起的api server 的参数
 
-
-
 ### 数据并行 + 分离式部署
 
 具体可以参考[分离式部署](disaggregated.md#多机分离式部署)
@@ -106,8 +101,8 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
 多机部署时需要确认当前网卡是否支持RDMA，并且需要集群中所有节点网络互通。
 
 **注意**：
-* `KVCACHE_RDMA_NICS` 指定当前机器的RDMA网卡，多个网卡用逗号隔开。
-* 仓库中提供了自动检测RDMA网卡的脚本 `bash scripts/get_rdma_nics.sh <device>`, 其中 <device> 可以是 `cpu` 或 `gpu`。
+- `KVCACHE_RDMA_NICS` 指定当前机器的RDMA网卡，多个网卡用逗号隔开。
+- 仓库中提供了自动检测RDMA网卡的脚本 `bash scripts/get_rdma_nics.sh <device>`, 其中 <device> 可以是 `cpu` 或 `gpu`。
 
 **prefill 实例**
 
@@ -163,4 +158,3 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --scheduler-topic "test" \
        --splitwise-role "decode"
 ```
-

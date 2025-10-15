@@ -119,8 +119,6 @@ class ForwardMeta:
     kv_tile_ids_per_batch: Optional[paddle.Tensor] = None
     # The number of CUDA blocks to launch in the x-dimension for the append_write_cache_kv kernel, defining its grids.x.
     kv_num_blocks_x_cpu: Optional[paddle.Tensor] = None
-    # The maximum sequence length of the KV cache, which may represent the current maximum decoder length.
-    max_len_kv_cpu: Optional[paddle.Tensor] = None
 
     decoder_chunk_size_device: Optional[paddle.Tensor] = None
 
@@ -167,7 +165,7 @@ class ForwardMeta:
                     "shape": obj.shape,
                     "dtype": str(obj.dtype),
                     "place": str(obj.place),
-                    # "content": obj if obj.numel()<10 else "Too big to show"
+                    "content": obj if obj.numel() < 70 else "Too big to show",
                 }
                 return tensor_info
             elif isinstance(obj, (list, tuple)):
@@ -193,7 +191,7 @@ class XPUForwardMeta(ForwardMeta):
 
     # Accumulated offset
     cum_offsets: Optional[paddle.Tensor] = None
-    # TODO(wanghaitao): Supplementary notes
+    # TODO(yinwei): Supplementary notes
     #
     encoder_batch_map: Optional[paddle.Tensor] = None
     #
@@ -205,10 +203,17 @@ class XPUForwardMeta(ForwardMeta):
     #
     encoder_seq_lod: Optional[paddle.Tensor] = None
     #
+    decoder_seq_lod: Optional[paddle.Tensor] = None
+    #
+    encoder_kv_lod: Optional[paddle.Tensor] = None
+    #
+    prefix_len: Optional[paddle.Tensor] = None
+    #
     decoder_context_len: Optional[paddle.Tensor] = None
     #
     decoder_context_len_cache: Optional[paddle.Tensor] = None
-
+    #
+    prefix_block_tables: Optional[paddle.Tensor] = None
     #
     encoder_batch_map_cpu: Optional[paddle.Tensor] = None
     #
@@ -220,10 +225,17 @@ class XPUForwardMeta(ForwardMeta):
     #
     encoder_seq_lod_cpu: Optional[paddle.Tensor] = None
     #
+    decoder_seq_lod_cpu: Optional[paddle.Tensor] = None
+    #
+    encoder_kv_lod_cpu: Optional[paddle.Tensor] = None
+    #
+    prefix_len_cpu: Optional[paddle.Tensor] = None
+    #
     decoder_context_len_cpu: Optional[paddle.Tensor] = None
     #
     decoder_context_len_cache_cpu: Optional[paddle.Tensor] = None
-
+    #
+    len_info_cpu: Optional[paddle.Tensor] = None
     #
     batch_tensor: Optional[paddle.Tensor] = None
     #

@@ -66,6 +66,7 @@ class DynamicWeightManager:
 
         # step1 : restart paddle process group
         if not self.first_load:
+            paddle.distributed.restart_process_group()
             paddle.distributed.restart_process_group(self.parallel_config.tp_group)
             if self.parallel_config.enable_expert_parallel:
                 paddle.distributed.restart_process_group(self.parallel_config.ep_group)
@@ -148,6 +149,7 @@ class DynamicWeightManager:
         if self.parallel_config.enable_expert_parallel:
             paddle.distributed.barrier(self.parallel_config.ep_group)
             paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
+        paddle.distributed.shutdown_process_group()
         self._update_shared_status(pid, ModelWeightsStatus.CLEARED)
 
     def _update_model_from_state(self, state_dict: Dict[str, paddle.Tensor], src_type: str):
@@ -255,6 +257,7 @@ class DynamicWeightManager:
         while model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
             if model_weights_status.value[0] == ModelWeightsStatus.UPDATING:
                 logger.info("infer engine stopped! start to load new checkpoint...")
+                model_runner.clear_requests()
                 model_runner.update_parameters(pid)
                 while model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     time.sleep(0.01)

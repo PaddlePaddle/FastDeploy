@@ -154,7 +154,7 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
 
         # Persistent buffers for CUDA graphs.
         self._input_embeddings = paddle.zeros(
-            [fd_config.parallel_config.max_model_len, fd_config.model_config.hidden_size],
+            [fd_config.model_config.max_model_len, fd_config.model_config.hidden_size],
             dtype=fd_config.model_config.dtype,
         )
 

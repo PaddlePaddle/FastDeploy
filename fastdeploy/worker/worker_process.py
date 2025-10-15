@@ -44,6 +44,7 @@ from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import ExistTaskStatus, IPCSignal, ModelWeightsStatus
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
+from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.utils import get_logger, optional_type
@@ -117,7 +118,7 @@ def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     if fd_config.model_config.enable_mm and ErnieArchitectures.contains_ernie_arch(architectures):
         tokenizer = Ernie4_5Tokenizer.from_pretrained(
             fd_config.model_config.model,
-            model_max_length=fd_config.parallel_config.max_model_len,
+            model_max_length=fd_config.model_config.max_model_len,
             padding_side="right",
             use_fast=False,
         )
@@ -183,7 +184,7 @@ class PaddleDisWorkerProc:
                 name="launched_expert_service_signal",
                 array=launched_expert_service_signal_data,
                 dtype=np.int32,
-                suffix=self.parallel_config.engine_worker_queue_port,
+                suffix=self.parallel_config.engine_pid,
                 create=False,
             )
             while self.launched_expert_service_signal.value[self.local_rank % self.max_chips_per_node] == 0:
@@ -200,7 +201,7 @@ class PaddleDisWorkerProc:
             name="worker_ready_signal",
             array=workers_ready,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.engine_pid,
             create=False,
         )
         self.worker_ready_signal.value[self.local_rank % self.max_chips_per_node] = 1
@@ -332,6 +333,8 @@ class PaddleDisWorkerProc:
                         self.worker.model_runner,
                         self.parallel_config.engine_worker_queue_port,
                     )
+                    logger.info(f"current task queue data: {self.task_queue.num_tasks()}")
+                    self.task_queue.clear_data()
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
 
@@ -418,7 +421,7 @@ class PaddleDisWorkerProc:
                     name="get_profile_block_num",
                     array=get_profile_block_num,
                     dtype=np.int32,
-                    suffix=self.parallel_config.engine_worker_queue_port,
+                    suffix=self.parallel_config.engine_pid,
                     create=False,
                 )
                 self.get_profile_block_num_signal.value[0] = num_blocks_local
@@ -433,12 +436,8 @@ class PaddleDisWorkerProc:
         self.worker.graph_optimize_and_warm_up_model()
         # reset cache_messager prefilled_step signal
         if self.scheduler_config.splitwise_role == "prefill":
-            dp_rank_id = (
-                self.local_rank
-                + self.parallel_config.local_data_parallel_id * self.parallel_config.tensor_parallel_size
-            )
             gpu_id = self.worker.model_runner.device_id
-            prefilled_step_name = f"splitwise_complete_prefilled_step_{dp_rank_id}"
+            prefilled_step_name = f"splitwise_complete_prefilled_step_{self.local_rank}"
             prefilled_step_idx_data = np.zeros(shape=[1], dtype=np.int32)
             step_shm_value = IPCSignal(
                 name=prefilled_step_name,
@@ -477,7 +476,7 @@ class PaddleDisWorkerProc:
             name="loaded_model_signal",
             array=loaded_model_signal_data,
             dtype=np.int32,
-            suffix=self.parallel_config.engine_worker_queue_port,
+            suffix=self.parallel_config.engine_pid,
             create=False,
         )
         if self.ranks > 1:
@@ -816,7 +815,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         plas_attention_config=plas_attention_config,
     )
     update_fd_config_for_mm(fd_config)
-
+    if fd_config.load_config.load_choices == "default_v1" and not v1_loader_support(fd_config):
+        fd_config.load_config.load_choices = "default"
     return fd_config
 
 
