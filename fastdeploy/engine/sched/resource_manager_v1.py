@@ -190,7 +190,8 @@ class ResourceManagerV1(ResourceManager):
 
         self.processor_cache = None
         if config.model_config.enable_mm and config.cache_config.max_processor_cache > 0:
-            self.processor_cache = ProcessorCacheManager(config.cache_config.max_processor_cache)
+            max_processor_cache_in_bytes = int(config.cache_config.max_processor_cache * 1024 * 1024 * 1024)
+            self.processor_cache = ProcessorCacheManager(max_processor_cache_in_bytes)
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size

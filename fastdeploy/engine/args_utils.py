@@ -128,9 +128,9 @@ class EngineArgs:
     """
     Maximum number of tokens in the encoder cache.
     """
-    max_processor_cache: int = -1
+    max_processor_cache: float = 4
     """
-    Maximum number of bytes in the processor cache.
+    Maximum number of bytes(in GiB) in the processor cache.
     """
     reasoning_parser: str = None
     """
@@ -539,7 +539,7 @@ class EngineArgs:
         model_group.add_argument(
             "--max-processor-cache",
             default=EngineArgs.max_processor_cache,
-            type=int,
+            type=float,
             help="Maximum processor cache bytes(use 0 to disable).",
         )
         model_group.add_argument(
