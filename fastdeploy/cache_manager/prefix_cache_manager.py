@@ -115,6 +115,7 @@ class PrefixCacheManager:
 
         main_process_metrics.max_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.available_gpu_block_num.set(self.num_gpu_blocks)
+        main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.available_gpu_resource.set(1.0)
 
     @property
@@ -358,6 +359,7 @@ class PrefixCacheManager:
 
         main_process_metrics.max_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.available_gpu_block_num.set(self.num_gpu_blocks)
+        main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.available_gpu_resource.set(1.0)
 
     def can_allocate_gpu_blocks(self, num_blocks: int):

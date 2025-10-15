@@ -19,7 +19,9 @@ __global__ void speculate_schedula_cache(
                                     const int64_t *draft_tokens,
                                     int *block_tables,
                                     bool *stop_flags,
+                                    const int64_t* prompt_lens,
                                     int *seq_lens_this_time,
+                                    int *seq_lens_encoder,
                                     int *seq_lens_decoder,
                                     int *step_seq_lens_decoder,
                                     int64_t *step_draft_tokens,
@@ -44,23 +46,37 @@ __global__ void speculate_schedula_cache(
             int64_t *step_draft_tokens_now = step_draft_tokens + bid * draft_tokens_len;
             int *block_table_now = block_tables + bid * block_num_per_seq;
             int64_t *accept_tokens_now = accept_tokens + bid * accept_tokens_len;
-            const int max_possible_block_idx = (seq_lens_decoder[bid] + max_next_step_tokens) / block_size;
-            if (max_possible_block_idx < block_num_per_seq && block_table_now[max_possible_block_idx] == -1) {
-                is_block_step[bid] = true;
-                step_seq_lens_this_time[bid] = seq_lens_this_time[bid];
-                seq_lens_this_time[bid] = 0;
+
+            if (seq_lens_decoder[bid] >= prompt_lens[bid]) {
+                // decoder
+                const int max_possible_block_idx = (seq_lens_decoder[bid] + max_next_step_tokens) / block_size;
+                if (max_possible_block_idx < block_num_per_seq && block_table_now[max_possible_block_idx] == -1) {
+                    is_block_step[bid] = true;
+                    step_seq_lens_this_time[bid] = seq_lens_this_time[bid];
+                    seq_lens_this_time[bid] = 0;
+                    stop_flags[bid] = true;
+                    stop_flag_now_int = 1;
+                    step_seq_lens_decoder[bid] = seq_lens_decoder[bid];
+                    seq_lens_decoder[bid] = 0;
+                    accept_num[bid] = 0;
+                    for (int i = 0; i < accept_tokens_len; i++) {
+                        accept_tokens_now[i] = -1;
+                    }
+                    for (int i = 0; i < draft_tokens_len; i++) {
+                        step_draft_tokens_now[i] = draft_tokens_now[i];
+                    }
+                }
+            } else {
+                // prefill
                 stop_flags[bid] = true;
-                stop_flag_now_int = 1;
-                step_seq_lens_decoder[bid] = seq_lens_decoder[bid];
+                seq_lens_this_time[bid] = 0;
                 seq_lens_decoder[bid] = 0;
+                seq_lens_encoder[bid] = 0;
                 accept_num[bid] = 0;
-                for (int i = 0; i < accept_tokens_len; i++) {
-                    accept_tokens_now[i] = -1;
-                }
-                for (int i = 0; i < draft_tokens_len; i++) {
-                    step_draft_tokens_now[i] = draft_tokens_now[i];
-                }
+                stop_flag_now_int = 1;
             }
+
+
         } else {
             stop_flag_now_int = 1;
         }
@@ -83,7 +99,9 @@ __global__ void speculate_schedula_cache(
 void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
                             const paddle::Tensor &block_tables,
                             const paddle::Tensor &stop_flags,
+                            const paddle::Tensor &prompt_lens,
                             const paddle::Tensor &seq_lens_this_time,
+                            const paddle::Tensor &seq_lens_encoder,
                             const paddle::Tensor &seq_lens_decoder,
                             const paddle::Tensor &step_seq_lens_decoder,
                             const paddle::Tensor &step_draft_tokens,
@@ -109,7 +127,9 @@ void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
         draft_tokens.data<int64_t>(),
         const_cast<int *>(block_tables.data<int>()),
         const_cast<bool *>(stop_flags.data<bool>()),
+        prompt_lens.data<int64_t>(),
         const_cast<int *>(seq_lens_this_time.data<int>()),
+        const_cast<int *>(seq_lens_encoder.data<int>()),
         const_cast<int *>(seq_lens_decoder.data<int>()),
         const_cast<int *>(step_seq_lens_decoder.data<int>()),
         const_cast<int64_t *>(step_draft_tokens.data<int64_t>()),
@@ -138,7 +158,9 @@ PD_BUILD_STATIC_OP(speculate_schedule_cache)
     .Inputs({"draft_tokens",
              "block_tables",
              "stop_flags",
+             "prompt_lens",
              "seq_lens_this_time",
+             "seq_lens_encoder",
              "seq_lens_decoder",
              "step_seq_lens_decoder",
              "step_draft_tokens",
@@ -153,6 +175,7 @@ PD_BUILD_STATIC_OP(speculate_schedule_cache)
               "block_tables_out",
               "stop_flags_out",
               "seq_lens_this_time_out",
+              "seq_lens_encoder_out",
               "seq_lens_decoder_out",
               "step_seq_lens_decoder_out",
               "step_draft_tokens_out",
@@ -165,6 +188,7 @@ PD_BUILD_STATIC_OP(speculate_schedule_cache)
                     {"block_tables", "block_tables_out"},
                     {"stop_flags", "stop_flags_out"},
                     {"seq_lens_this_time", "seq_lens_this_time_out"},
+                    {"seq_lens_encoder", "seq_lens_encoder_out"},
                     {"seq_lens_decoder", "seq_lens_decoder_out"},
                     {"step_seq_lens_decoder", "step_seq_lens_decoder_out"},
                     {"step_draft_tokens", "step_draft_tokens_out"},
