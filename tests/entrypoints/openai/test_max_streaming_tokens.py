@@ -160,7 +160,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             request_id="test-request-id",
             model_name="test-model",
             prompt_token_ids=[1, 2, 3],
-            text_after_process="Hello",
+            prompt_tokens="Hello",
         )
 
         chunks = []
@@ -242,7 +242,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             model_name="test-model",
             created_time=11,
             prompt_batched_token_ids=[[1, 2, 3]],
-            text_after_process_list=["Hello"],
+            prompt_tokens_list=["Hello"],
         )
 
         chunks = []
