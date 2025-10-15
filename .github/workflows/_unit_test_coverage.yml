@@ -71,7 +71,7 @@ jobs:
               fi
             '
 
-            wget -q ${fd_archive_url}
+            wget -q --no-proxy ${fd_archive_url}
             tar -xf FastDeploy.tar.gz
             rm -rf FastDeploy.tar.gz
             cd FastDeploy
@@ -303,7 +303,7 @@ jobs:
         env:
           diff_cov_file_url: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url }}
         run: |
-          wget ${fd_archive_url}
+          wget -q --no-proxy ${fd_archive_url}
           tar -xf FastDeploy.tar.gz
           cd FastDeploy
           if [ -z "${diff_cov_file_url}" ]; then

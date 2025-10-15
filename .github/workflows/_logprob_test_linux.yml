@@ -32,6 +32,7 @@ on:
 jobs:
   run_tests_logprob:
     runs-on: [self-hosted, GPU-h20-1Cards]
+    timeout-minutes: 60
     steps:
       - name: Code Prepare
         shell: bash
@@ -46,7 +47,7 @@ jobs:
             ${docker_image} /bin/bash -c '
             rm -rf /workspace/*
             '
-            wget -q ${paddletest_archive_url}
+            wget -q --no-proxy ${paddletest_archive_url}
             tar -xf PaddleTest.tar.gz
             rm -rf PaddleTest.tar.gz
             cd PaddleTest
