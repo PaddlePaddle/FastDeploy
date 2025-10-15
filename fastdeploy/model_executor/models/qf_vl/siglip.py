@@ -275,6 +275,7 @@ class SiglipEncoderLayer(paddle.nn.Layer):
         self.layer_norm2 = paddle.nn.LayerNorm(self.embed_dim, epsilon=config.layer_norm_eps)
         self.mlp = SiglipMLP(config)
 
+    # @paddle.jit.to_static
     def forward(
         self,
         hidden_states,
