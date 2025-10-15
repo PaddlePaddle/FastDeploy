@@ -194,6 +194,7 @@ if paddle.is_compiled_with_rocm():
     # NOTE(@duanyanhui): paddle.is_compiled_with_cuda() returns True when paddle compiled with rocm.
     # so we need to check if paddle compiled with rocm at first.
     sources = [
+        "cpp_extensions.cc",
         "gpu_ops/save_with_output_msg.cc",
         "gpu_ops/get_output.cc",
         "gpu_ops/get_output_msg_with_topk.cc",
@@ -232,7 +233,7 @@ if paddle.is_compiled_with_rocm():
         ext_modules=CUDAExtension(
             sources=sources,
             extra_compile_args={
-                "cxx": ["-O3"],
+                "cxx": ["-O3", "-DCUSTOM_ROCM"],
                 "hipcc": [
                     "-O3",
                     "--gpu-max-threads-per-block=1024",
@@ -287,7 +288,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/swap_cache_batch.cu",
         "gpu_ops/swap_cache.cu",
         "gpu_ops/step_system_cache.cu",
-        "gpu_ops/cpp_extensions.cc",
+        "cpp_extensions.cc",
         "gpu_ops/share_external_data.cu",
         "gpu_ops/per_token_quant_fp8.cu",
         "gpu_ops/extract_text_token_output.cu",
@@ -340,7 +341,7 @@ elif paddle.is_compiled_with_cuda():
         except Exception as e:
             raise RuntimeError(f"Failed to copy from {src_dir} to {dst_dir}: {e}")
 
-    cc_compile_args = []
+    cc_compile_args = ["-DCUSTOM_GPU"]
     nvcc_compile_args = get_gencode_flags(archs)
     nvcc_compile_args += ["-DPADDLE_DEV"]
     nvcc_compile_args += ["-DPADDLE_ON_INFERENCE"]
@@ -516,12 +517,14 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
         name="fastdeploy_ops",
         ext_modules=CUDAExtension(
             extra_compile_args={
+                "cxx": ["-DCUSTOM_ILUVATAR"],
                 "nvcc": [
                     "-DPADDLE_DEV",
                     "-DPADDLE_WITH_CUSTOM_DEVICE",
-                ]
+                ],
             },
             sources=[
+                "cpp_extensions.cc",
                 "gpu_ops/save_with_output_msg.cc",
                 "gpu_ops/get_output.cc",
                 "gpu_ops/get_output_msg_with_topk.cc",
@@ -554,16 +557,21 @@ elif paddle.is_compiled_with_custom_device("gcu"):
     setup(
         name="fastdeploy_ops",
         ext_modules=CppExtension(
+            extra_compile_args={
+                "cxx": ["-DCUSTOM_GCU"],
+            },
             sources=[
+                "cpp_extensions.cc",
                 "gpu_ops/save_with_output_msg.cc",
                 "gpu_ops/get_output.cc",
                 "gpu_ops/get_output_msg_with_topk.cc",
-            ]
+            ],
         ),
     )
 elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
     maca_path = os.getenv("MACA_PATH", "/opt/maca")
     sources = [
+        "cpp_extensions.cc",
         "gpu_ops/update_inputs_v1.cu",
         "gpu_ops/save_with_output_msg.cc",
         "gpu_ops/get_output.cc",
@@ -612,7 +620,7 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         ext_modules=CUDAExtension(
             sources=sources,
             extra_compile_args={
-                "cxx": ["-O3"],
+                "cxx": ["-O3", "-DCUSTOM_METAX"],
                 "nvcc": [
                     "-O3",
                     "-Ithird_party/nlohmann_json/include",
@@ -649,12 +657,14 @@ else:
         "-lstdc++fs",
         "-D_GLIBCXX_USE_CXX11_ABI=1",
         "-DPy_LIMITED_API=0x03090000",
+        "-DCUSTOM_CPU",
     ]
 
     setup(
         name="fastdeploy_cpu_ops",
         ext_modules=CppExtension(
             sources=[
+                "cpp_extensions.cc",
                 "gpu_ops/save_with_output_msg.cc",
                 "gpu_ops/get_output.cc",
                 "gpu_ops/get_output_msg_with_topk.cc",
