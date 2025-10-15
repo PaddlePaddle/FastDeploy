@@ -36,6 +36,7 @@ jobs:
           echo "Fetching and merging PR..."
           git fetch origin pull/${{ github.event.pull_request.number }}/head:pr/${{ github.event.pull_request.number }}
           git merge --no-ff pr/${{ github.event.pull_request.number }}
+          git submodule update --init --recursive
           echo "PR Branch log "
           git log --oneline -n 5 pr/${{ github.event.pull_request.number }}
       - uses: actions/setup-python@v5
@@ -48,7 +49,7 @@ jobs:
           SK: paddle
         run: |
           git config --unset http.https://github.com/.extraheader
-          git submodule foreach --recursive sh -c "git config --local --unset-all 'http.https://github.com/.extraheader'"
+          git submodule foreach --recursive sh -c "git config --local --unset-all 'http.https://github.com/.extraheader' || true"
           git submodule foreach --recursive sh -c "git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'"
           echo "Current HEAD Log:"
           git log --oneline -n 5
