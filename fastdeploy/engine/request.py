@@ -285,6 +285,7 @@ class CompletionOutput:
     index: int
     send_idx: int
     token_ids: list[int]
+    decode_type: int = 0
     logprob: Optional[float] = None
     top_logprobs: Optional[LogprobsLists] = None
     logprobs: Optional[SampleLogprobs] = None
@@ -302,6 +303,7 @@ class CompletionOutput:
             "send_idx": self.send_idx,
             "token_ids": self.token_ids,
             "logprob": self.logprob,
+            "decode_type": self.decode_type,
             "top_logprobs": self.top_logprobs,
             "logprobs": self.logprobs,
             "draft_token_ids": self.draft_token_ids,
