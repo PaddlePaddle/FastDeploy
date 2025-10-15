@@ -105,8 +105,7 @@ class XpuWorker(WorkerBase):
         free_memory = xpu_get_free_global_memory(int(self.device_ids[self.local_rank]))
 
         logger.info(
-            f"Before warm up, total_memory: {total_memory}, \
-                    used_memory: {used_memory}, free_memory: {free_memory}"
+            f"Before warm up, total_memory: {total_memory[0]/ 1024**3} GB, used_memory: {used_memory[0]/ 1024**3} GB, free_memory: {free_memory[0] / 1024**3} GB"
         )
 
         self.model_runner.prepare_profile()
@@ -127,9 +126,9 @@ class XpuWorker(WorkerBase):
         self.model_runner.clear_block_table()
 
         logger.info(
-            f"After warm up, total_available_memory: {total_available_memory}, \
-                    used_memory: {used_memory}, available_kv_cache_memory: {available_kv_cache_memory}"
+            f"After warm up, total_available_memory: {total_available_memory / 1024**3} GB, used_memory: {used_memory[0] / 1024**3} GB, available_kv_cache_memory: {available_kv_cache_memory[0]/1024**3} GB"
         )
+
         paddle.device.xpu.empty_cache()
         return available_kv_cache_memory  # approximate value
 
