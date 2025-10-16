@@ -727,8 +727,6 @@ class EngineService:
                                     ]
                                 )
                     self.resource_manager.get_real_bsz()
-                    print("tasks", tasks)
-                    print("self.resource_manager.real_bsz", self.resource_manager.real_bsz)
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
                 else:
                     time.sleep(0.005)

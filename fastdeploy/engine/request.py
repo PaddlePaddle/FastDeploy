@@ -207,10 +207,6 @@ class Request:
         )
 
     @property
-    def is_pooling_request(self) -> bool:
-        return self.pooling_params is not None and self.sampling_params is None
-
-    @property
     def num_total_tokens(self):
         """
         Total tokens of the request, include prompt tokens and generated tokens.
@@ -498,14 +494,11 @@ class RequestOutput:
     def to_dict(self):
         """convert RequestOutput into a serializable dict"""
 
-        outputs_dict = None
-        if self.outputs is not None:
-            outputs_dict = self.outputs.to_dict()
         return {
             "request_id": self.request_id,
             "prompt": self.prompt,
             "prompt_token_ids": self.prompt_token_ids,
-            "outputs": outputs_dict,
+            "outputs": None if self.outputs is None else self.outputs.to_dict(),
             "metrics": None if self.metrics is None else self.metrics.to_dict(),
             "finished": self.finished,
             "num_cached_tokens": self.num_cached_tokens,

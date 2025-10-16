@@ -374,7 +374,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(
                     input_ids[prefill_start_index:prefill_end_index]
                 )
-                print("self.share_inputs['input_ids']", self.share_inputs["input_ids"])
+                # print("self.share_inputs['input_ids']", self.share_inputs["input_ids"])
                 encoder_block_num = len(request.block_tables)
                 self.share_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
@@ -488,7 +488,6 @@ class GPUModelRunner(ModelRunnerBase):
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
-            print("idx", idx)
             length = len(request.prompt_token_ids)
             assert length > 0, "The prompt requested must not be empty."
 
@@ -1804,7 +1803,7 @@ class GPUModelRunner(ModelRunnerBase):
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
 
-        print("input_ids", self.share_inputs["ids_remove_padding"])
+        # print("input_ids", self.share_inputs["ids_remove_padding"])
 
         # 3. Execute model
         if self.enable_mm:
@@ -1832,7 +1831,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         logits = None
         # 4. Compute logits, Sample
-        print("self.is_pooling_model", self.is_pooling_model)
         if self.is_pooling_model:
             # num_scheduled_tokens = int(self.share_inputs["seq_lens_this_time"][:num_running_requests].sum())
             output = self._pool(hidden_states, num_running_requests)
@@ -2012,7 +2010,6 @@ class GPUModelRunner(ModelRunnerBase):
         pooling_metadata.build_pooling_cursor(num_scheduled_tokens_list, device=device_str)
 
         raw_pooler_output = self.model.pooler(hidden_states=hidden_states, pooling_metadata=pooling_metadata)
-        print("raw_pooler_output", raw_pooler_output)
         seq_lens_cpu = self.share_inputs["seq_lens_this_time"][:num_running_requests]
         pooler_output: list[Optional[paddle.Tensor]] = []
         for raw_output, seq_len, prompt_len in zip(raw_pooler_output, seq_lens_cpu, pooling_metadata.prompt_lens):

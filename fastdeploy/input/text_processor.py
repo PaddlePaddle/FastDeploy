@@ -196,16 +196,6 @@ class DataProcessor(BaseDataProcessor):
             self.reasoning_parser = reasoning_parser_obj(self.tokenizer)
         self.tokenizer.pad_token_id = self.pad_token_id
 
-    def is_pooling_request(self, request):
-        if isinstance(request, dict):
-            return request.get("pooling_params") is not None and request.get("sampling_params") is None
-        else:
-            return (
-                hasattr(request, "pooling_params")
-                and request.pooling_params is not None
-                and (not hasattr(request, "sampling_params") or request.sampling_params is None)
-            )
-
     def process_request(self, request, max_model_len=None, **kwargs):
         """
         Preprocess the request
@@ -403,20 +393,7 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
-        if response_dict.get("outputs") is None:
-            data_processor_logger.warning(
-                f"Request {response_dict['request_id']} outputs is None, "
-                f"returning response as-is (likely a pooling request)"
-            )
-            return response_dict
-
-        if "token_ids" not in response_dict["outputs"]:
-            data_processor_logger.info(
-                f"Request {response_dict['request_id']} has no token_ids, " f"treating as pooling response"
-            )
-            return response_dict
         enable_thinking = kwargs.get("enable_thinking")
-
         token_ids = response_dict["outputs"]["token_ids"]
         is_end = response_dict["finished"]
         req_id = response_dict["request_id"]
@@ -508,11 +485,6 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             Dict: response contain text fields
         """
-        if response_dict.get("outputs") is None or "token_ids" not in response_dict.get("outputs", {}):
-            data_processor_logger.info(
-                f"Request {response_dict['request_id']} is a pooling request, " f"skipping text decoding"
-            )
-            return response_dict
         enable_thinking = kwargs.pop("enable_thinking", True)
         if enable_thinking is None:
             enable_thinking = True
