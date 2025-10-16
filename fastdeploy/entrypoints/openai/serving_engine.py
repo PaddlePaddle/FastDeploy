@@ -61,9 +61,10 @@ class OpenAIServing(ABC, Generic[RequestT]):
     Base pipeline for OpenAI-style serving implementations
     """
 
-    def __init__(self, engine_client, models, pid, ips, max_waiting_time):
+    def __init__(self, engine_client, models, cfg, pid, ips, max_waiting_time):
         self.engine_client = engine_client
         self.models = models
+        self.cfg = cfg
         self.pid = pid
         self.max_waiting_time = max_waiting_time
 
@@ -102,6 +103,7 @@ class OpenAIServing(ABC, Generic[RequestT]):
                 await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
             return True
         except asyncio.TimeoutError:
+            self._release_semaphore(request_id)
             error_msg = f"Request waiting timeout, request:{request_id} max waiting time:{self.max_waiting_time}"
             api_server_logger.error(error_msg)
             return False
@@ -216,13 +218,11 @@ class ZmqOpenAIServing(OpenAIServing):
     OpenAI-style service architecture using ZeroMQ as the communication mechanism.
     """
 
-    def __init__(self, engine_client, models, pid, ips, max_waiting_time, chat_template):
-        super().__init__(engine_client, models, pid, ips, max_waiting_time)
+    def __init__(self, engine_client, models, cfg, pid, ips, max_waiting_time, chat_template):
+        super().__init__(engine_client, models, cfg, pid, ips, max_waiting_time)
         self.chat_template = chat_template
 
-    @override
-    async def _preprocess(self, ctx: ServeContext) -> Dict:
-        """Preprocess the request into engine format"""
+    def _request_to_dict(self, ctx: ServeContext):
         request = ctx.request
         if hasattr(request, "to_dict_for_infer"):
             request_dict = request.to_dict_for_infer(ctx.request_id)
@@ -232,14 +232,22 @@ class ZmqOpenAIServing(OpenAIServing):
         request_dict["arrival_time"] = time.time()
 
         self._process_chat_template_kwargs(request_dict)
-
-        if hasattr(request, "to_pooling_params"):
-            request_dict["pooling_params"] = request.to_pooling_params().to_dict()
-
-        await self.engine_client.format_and_add_data(request_dict)
         return request_dict
 
+    def _request_to_batch_dicts(self, ctx: ServeContext):
+        """Convert multiple requests to dictionary form"""
+        return [self._request_to_dict(ctx)]
+
+    @override
+    async def _preprocess(self, ctx: ServeContext) -> Dict:
+        """Preprocess the request into engine format"""
+        request_dicts = self._request_to_batch_dicts(ctx)
+        for request_dict in request_dicts:
+            api_server_logger.info(f"batch add request_id: {request_dict['request_id']}, request: {request_dict}")
+            await self.engine_client.format_and_add_data(request_dict)
+
     def _process_chat_template_kwargs(self, request_dict):
+        """Add default values to chat template kwargs"""
         if "chat_template" not in request_dict:
             request_dict["chat_template"] = self.chat_template
         chat_template_kwargs = request_dict.get("chat_template_kwargs") or {}
@@ -247,7 +255,6 @@ class ZmqOpenAIServing(OpenAIServing):
             {
                 "chat_template": request_dict.get("chat_template"),
                 "add_generation_prompt": request_dict.get("add_generation_prompt"),
-                # "add_special_tokens": request_dict.get("add_special_tokens"),
                 "add_stop_sequences": request_dict.get("add_stop_sequences"),
             }
         )
@@ -255,6 +262,7 @@ class ZmqOpenAIServing(OpenAIServing):
 
     @override
     async def _prepare_generators(self, ctx: ServeContext) -> AsyncGenerator[RequestOutput]:
+        """Prepare a generator of responses"""
         request_id = ctx.request_id
         try:
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id)

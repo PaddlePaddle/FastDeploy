@@ -64,7 +64,6 @@ else:
         save_output,
         save_output_topk,
         set_stop_value_multi_ends,
-        speculate_clear_accept_nums,
         speculate_get_output_padding_offset,
         speculate_get_padding_offset,
         speculate_get_seq_lens_output,
@@ -217,10 +216,7 @@ def post_process_normal(
             model_output.reasoning_index,
         )
 
-        stop_wo_think = (
-            (sampler_output.sampled_token_ids == model_output.eos_token_id.T).any(axis=1, keepdim=True)
-            | (model_output.reasoning_index == 0)
-        ) & (model_output.need_think_end > 0)
+        stop_wo_think = ((model_output.reasoning_index == 0)) & (model_output.need_think_end > 0)
 
         stop_wo_think = stop_wo_think & thinking_mask
         sampler_output.sampled_token_ids = paddle.where(
@@ -369,11 +365,12 @@ def post_process_specualate(
             model_output.accept_tokens,
             model_output.accept_num,
             model_output.not_need_stop,
+            model_output.seq_lens_decoder,
+            model_output.prompt_lens,
             model_output.mp_rank,
             save_each_rank,
+            envs.ENABLE_V1_KVCACHE_SCHEDULER,
         )
-
-    speculate_clear_accept_nums(model_output.accept_num, model_output.seq_lens_decoder)
 
     # Update pre_ids through accept tokens
 

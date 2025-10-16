@@ -20,12 +20,14 @@ from typing import Literal, Union
 import numpy as np
 from typing_extensions import assert_never, override
 
+from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.request import (
     EmbeddingOutput,
     EmbeddingRequestOutput,
     PoolingRequestOutput,
 )
 from fastdeploy.entrypoints.openai.protocol import (
+    EmbeddingCompletionRequest,
     EmbeddingRequest,
     EmbeddingResponse,
     EmbeddingResponseData,
@@ -57,8 +59,52 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
     OpenAI-style embedding serving using pipeline pattern
     """
 
-    def __init__(self, engine_client, models, pid, ips, max_waiting_time, chat_template):
-        super().__init__(engine_client, models, pid, ips, max_waiting_time, chat_template)
+    def __init__(self, engine_client, models, cfg, pid, ips, max_waiting_time, chat_template):
+        super().__init__(engine_client, models, cfg, pid, ips, max_waiting_time, chat_template)
+
+    @override
+    def _request_to_dict(self, ctx: ServeContext):
+        request: EmbeddingRequest = ctx.request
+        request_dict = super()._request_to_dict(ctx)
+        if hasattr(request, "to_pooling_params"):
+            pooling_params: PoolingParams = request.to_pooling_params()
+            pooling_params.verify("embed", self.cfg.model_config)
+            request_dict["pooling_params"] = pooling_params.to_dict()
+        return request_dict
+
+    @override
+    def _request_to_batch_dicts(self, ctx: ServeContext):
+        """
+        Convert the request into dictionary format that can be sent to the inference server
+        """
+        request_dicts = []
+        if isinstance(ctx.request, EmbeddingCompletionRequest):
+            # Union[list[int], list[list[int]], str, list[str]]
+            request: EmbeddingCompletionRequest = ctx.request
+            if isinstance(request.input, str):
+                request_prompts = [request.input]
+            elif isinstance(request.input, list) and all(isinstance(item, int) for item in request.input):
+                request_prompts = [request.input]
+            elif isinstance(request.input, list) and all(isinstance(item, str) for item in request.input):
+                request_prompts = request.input
+            elif isinstance(request.input, list):
+                for item in request.input:
+                    if isinstance(item, list) and all(isinstance(x, int) for x in item):
+                        continue
+                    else:
+                        raise ValueError("If prompt is a list, each item type must be one of: str, list[int]")
+                request_prompts = request.input
+            else:
+                raise ValueError("Prompt type must be one of: str, list[str], list[int], list[list[int]]")
+
+            for idx, prompt in enumerate(request_prompts):
+                request_dict = self._request_to_dict(ctx)
+                request_dict["request_id"] = f"{ctx.request_id}-{idx}"
+                request_dict["prompt"] = prompt
+                request_dicts.append(request_dict)
+        else:
+            request_dicts = [self._request_to_dict(ctx)]
+        return request_dicts
 
     async def create_embedding(self, request: EmbeddingRequest):
         """
@@ -79,8 +125,7 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
     @override
     def _build_response(self, ctx: ServeContext):
         """Generate final embedding response"""
-
-        print(f"=====> {ctx.request_output} <======")
+        api_server_logger.info(f"[{ctx.request_id}] Embedding RequestOutput received:{ctx.request_output}")
 
         base = PoolingRequestOutput.from_dict(ctx.request_output)
         embedding_res = EmbeddingRequestOutput.from_base(base)
@@ -90,11 +135,9 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
             embedding=_get_embedding(embedding_res.outputs, ctx.request.encoding_format),
         )
 
-        api_server_logger.info(f"[{ctx.request_id}] Embedding response generated:{ctx.request_output}")
-
         num_prompt_tokens = 0
-        if ctx.request_output.prompt_token_ids:
-            num_prompt_tokens = len(ctx.request_output.prompt_token_ids)
+        if embedding_res.prompt_token_ids:
+            num_prompt_tokens = len(embedding_res.prompt_token_ids)
 
         usage = UsageInfo(
             prompt_tokens=num_prompt_tokens,

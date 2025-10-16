@@ -75,6 +75,7 @@ class Request:
         structural_tag: Optional[Any] = None,
         guided_json_object: Optional[bool] = None,
         enable_thinking: Optional[bool] = True,
+        reasoning_max_tokens: Optional[int] = None,
         trace_carrier: dict = dict(),
         dp_rank: Optional[int] = None,
         chat_template: Optional[str] = None,
@@ -125,6 +126,7 @@ class Request:
         self.multimodal_img_boundaries = None
 
         self.enable_thinking = enable_thinking
+        self.reasoning_max_tokens = reasoning_max_tokens
         self.trace_carrier = trace_carrier
 
         self.chat_template = chat_template
@@ -188,7 +190,8 @@ class Request:
             guided_grammar=d.get("guided_grammar", None),
             structural_tag=d.get("structural_tag", None),
             guided_json_object=d.get("guided_json_object", None),
-            enable_thinking=d.get("enable_thinking", True),
+            enable_thinking=d.get("enable_thinking", False),
+            reasoning_max_tokens=d.get("reasoning_max_tokens", None),
             trace_carrier=d.get("trace_carrier", {}),
             chat_template=d.get("chat_template", None),
             num_computed_tokens=d.get("num_computed_tokens", 0),
@@ -243,6 +246,7 @@ class Request:
             "disaggregate_info": self.disaggregate_info,
             "draft_token_ids": self.draft_token_ids,
             "enable_thinking": self.enable_thinking,
+            "reasoning_max_tokens": self.reasoning_max_tokens,
             "trace_carrier": self.trace_carrier,
             "chat_template": self.chat_template,
             "num_computed_tokens": self.num_computed_tokens,
@@ -554,6 +558,14 @@ class PoolingRequestOutput(Generic[_O]):
             f"prompt_token_ids={self.prompt_token_ids}, "
             f"finished={self.finished})"
         )
+
+    def to_dict(self):
+        return {
+            "request_id": self.request_id,
+            "outputs": {"data": self.outputs.data},
+            "prompt_token_ids": self.prompt_token_ids,
+            "finished": self.finished,
+        }
 
     @classmethod
     def from_dict(cls, req_dict: dict):
