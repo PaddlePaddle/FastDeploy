@@ -153,7 +153,6 @@ class OpenAIServingCompletion:
                 for idx, prompt in enumerate(request_prompts):
                     request_id_idx = f"{request_id}_{idx}"
                     current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
-                    n_param = current_req_dict.get("n", 1)
                     current_req_dict["arrival_time"] = time.time()
                     prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)  # tokenize
                     if isinstance(prompt_token_ids, np.ndarray):
