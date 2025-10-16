@@ -216,10 +216,7 @@ def post_process_normal(
             model_output.reasoning_index,
         )
 
-        stop_wo_think = (
-            (sampler_output.sampled_token_ids == model_output.eos_token_id.T).any(axis=1, keepdim=True)
-            | (model_output.reasoning_index == 0)
-        ) & (model_output.need_think_end > 0)
+        stop_wo_think = ((model_output.reasoning_index == 0)) & (model_output.need_think_end > 0)
 
         stop_wo_think = stop_wo_think & thinking_mask
         sampler_output.sampled_token_ids = paddle.where(

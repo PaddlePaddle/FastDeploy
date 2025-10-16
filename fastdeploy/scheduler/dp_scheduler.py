@@ -174,6 +174,7 @@ class DPLocalScheduler(LocalScheduler):
                     ):
                         break
             else:
+                required_total_blocks = 0
                 batch_ids = self.requests_not_empty.wait_for(
                     lambda: self.ids[self.ids_read_cursor : self.ids_read_cursor + batch],
                     0.005,
@@ -181,6 +182,10 @@ class DPLocalScheduler(LocalScheduler):
                 if batch_ids:
                     for request_id in batch_ids:
                         request = self.requests[request_id]
+                        required_input_blocks = self.calc_required_blocks(request.prompt_tokens_ids_len, block_size)
+                        required_total_blocks += required_input_blocks + reserved_output_blocks
+                        if required_total_blocks > available_blocks:
+                            break
                         requests.append(request.raw)
                         self.ids_read_cursor += 1
 

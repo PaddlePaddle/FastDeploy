@@ -796,6 +796,8 @@ class ResourceManagerV1(ResourceManager):
                 return False
             if self.available_batch() == 0:
                 return False
+            if request.reasoning_max_tokens is not None:
+                request.reasoning_max_tokens -= 1
             request.need_prefill_tokens = len(request.prompt_token_ids)
             need_prealloc_prefill_blocks = (
                 request.need_prefill_tokens + self.config.cache_config.block_size - 1
