@@ -282,6 +282,7 @@ class GPUModelRunner(ModelRunnerBase):
         return (
             self.guided_backend.get_logits_processor(
                 schemata_key=schemata_key,
+                enable_thinking=True,
             ),
             schemata_key,
         )
