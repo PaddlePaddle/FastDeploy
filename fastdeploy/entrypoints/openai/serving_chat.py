@@ -39,7 +39,13 @@ from fastdeploy.entrypoints.openai.protocol import (
 )
 from fastdeploy.entrypoints.openai.response_processors import ChatResponseProcessor
 from fastdeploy.metrics.work_metrics import work_process_metrics
-from fastdeploy.utils import ErrorCode, ErrorType, ParameterError, api_server_logger
+from fastdeploy.utils import (
+    ErrorCode,
+    ErrorType,
+    ParameterError,
+    api_server_logger,
+    get_host_ip,
+)
 from fastdeploy.worker.output import LogprobsLists
 
 
@@ -71,12 +77,14 @@ class OpenAIServingChat:
                 self.master_ip = ips[0]
             else:
                 self.master_ip = ips.split(",")[0]
+            self.is_master_ip = get_host_ip() == self.master_ip
         else:
             self.master_ip = "0.0.0.0"
+            self.is_master_ip = True
         api_server_logger.info(f"master ip: {self.master_ip}")
 
     def _check_master(self):
-        return self.engine_client.is_master
+        return self.engine_client.is_master or self.is_master_ip
 
     async def create_chat_completion(self, request: ChatCompletionRequest):
         """
@@ -110,14 +118,14 @@ class OpenAIServingChat:
             else:
                 request_id = f"chatcmpl-{uuid.uuid4()}"
             api_server_logger.info(f"create chat completion request: {request_id}")
-            text_after_process = None
+            prompt_tokens = None
             try:
                 current_req_dict = request.to_dict_for_infer(request_id)
                 if "chat_template" not in current_req_dict:
                     current_req_dict["chat_template"] = self.chat_template
                 current_req_dict["arrival_time"] = time.time()
                 prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)
-                text_after_process = current_req_dict.get("text_after_process")
+                prompt_tokens = current_req_dict.get("prompt_tokens")
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
             except ParameterError as e:
@@ -135,12 +143,12 @@ class OpenAIServingChat:
 
             if request.stream:
                 return self.chat_completion_stream_generator(
-                    request, request_id, request.model, prompt_token_ids, text_after_process
+                    request, request_id, request.model, prompt_token_ids, prompt_tokens
                 )
             else:
                 try:
                     return await self.chat_completion_full_generator(
-                        request, request_id, request.model, prompt_token_ids, text_after_process
+                        request, request_id, request.model, prompt_token_ids, prompt_tokens
                     )
                 except Exception as e:
                     error_msg = f"request[{request_id}]full generator error: {str(e)}, {str(traceback.format_exc())}"
@@ -167,7 +175,7 @@ class OpenAIServingChat:
         request_id: str,
         model_name: str,
         prompt_token_ids: list(),
-        text_after_process: str,
+        prompt_tokens: str,
     ):
         """
         Streaming chat completion generator.
@@ -281,8 +289,7 @@ class OpenAIServingChat:
 
                             if request.return_token_ids:
                                 choice.delta.prompt_token_ids = list(prompt_token_ids)
-                                choice.delta.text_after_process = text_after_process
-                                choice.delta.prompt_tokens = text_after_process
+                                choice.delta.prompt_tokens = prompt_tokens
                             chunk = ChatCompletionStreamResponse(
                                 id=request_id,
                                 object=chunk_object_type,
@@ -360,8 +367,7 @@ class OpenAIServingChat:
                             choice.delta.multimodal_content[0]["completion_token_ids"] = list(output["token_ids"])
                         else:
                             choice.delta.completion_token_ids = list(output["token_ids"])
-                        choice.delta.raw_prediction = output.get("raw_prediction")
-                        choice.delta.completion_tokens = output.get("raw_prediction")
+                        choice.delta.completion_tokens = output.get("completion_tokens")
                     if include_continuous_usage:
                         chunk.usage = UsageInfo(
                             prompt_tokens=num_prompt_tokens,
@@ -411,7 +417,7 @@ class OpenAIServingChat:
         request_id: str,
         model_name: str,
         prompt_token_ids: list(),
-        text_after_process: str,
+        prompt_tokens: str,
     ):
         """
         Full chat completion generator.
@@ -501,10 +507,8 @@ class OpenAIServingChat:
             tool_calls=output.get("tool_call"),
             prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
             completion_token_ids=completion_token_ids if request.return_token_ids else None,
-            text_after_process=text_after_process if request.return_token_ids else None,
-            prompt_tokens=text_after_process if request.return_token_ids else None,
-            raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
-            completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
+            prompt_tokens=prompt_tokens if request.return_token_ids else None,
+            completion_tokens=output.get("completion_tokens") if request.return_token_ids else None,
         )
 
         if response_processor.enable_multimodal_content():

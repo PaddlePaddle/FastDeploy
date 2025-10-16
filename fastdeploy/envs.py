@@ -120,6 +120,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ENABLE_SWAP_SPACE_CLEARING": lambda: int(os.getenv("FD_ENABLE_SWAP_SPACE_CLEARING", "0")),
     # enable return text, used when FD_ENABLE_INTERNAL_ADAPTER=1
     "FD_ENABLE_RETURN_TEXT": lambda: bool(int(os.getenv("FD_ENABLE_RETURN_TEXT", "0"))),
+    # Timeout for cache_transfer_manager process exit
+    "FD_CACHE_PROC_EXIT_TIMEOUT": lambda: int(os.getenv("FD_CACHE_PROC_EXIT_TIMEOUT", "600")),
+    # Count for cache_transfer_manager process error
+    "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),
 }
 
 
