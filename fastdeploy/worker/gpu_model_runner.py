@@ -172,6 +172,7 @@ class GPUModelRunner(ModelRunnerBase):
         logger.info(f"queue id is {str(self.parallel_config.engine_worker_queue_port)}")
 
         self.zmq_client = None
+        self.async_output_queue = None
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
             logger.info(f"zmq client get_save_output_rank{local_rank}")
             self.zmq_client = ZmqIpcClient(name=f"get_save_output_rank{local_rank}", mode=zmq.PUSH)
