@@ -708,8 +708,7 @@ class EngineService:
                     ):
                         # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
                         try:
-                            if not get_request_pool._shutdown:
-                                get_request_pool.submit(_fetch_request)
+                            get_request_pool.submit(_fetch_request)
                         except RuntimeError as e:
                             if "shutdown" in str(e):
                                 llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")

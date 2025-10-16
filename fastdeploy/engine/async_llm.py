@@ -188,22 +188,22 @@ class AsyncLLMEngine:
     @classmethod
     def from_engine_args(cls, engine_args: EngineArgs):
         """
-        Creates an LLM engine from the provided engine arguments.
+        Creates an AsyncLLMEngine from the provided engine arguments.
 
         Args:
             engine_args (EngineArgs): Engine arguments object.
 
         Returns:
-            LLMEngine: Instance of the LLMEngine class.
+            AsyncLLMEngine: Instance of the AsyncLLMEngine class.
         """
         # Create the engine configs.
         config = engine_args.create_engine_config()
-        # Create the LLMEngine.
+        # Create the AsyncLLMEngine.
         return cls(cfg=config)
 
     def __init__(self, cfg):
         """
-        Initializes the LLMEngine with the provided configuration.
+        Initializes the AsyncLLMEngine with the provided configuration.
 
         Args:
             cfg (Config): Config object containing all the configuration parameters.
@@ -379,11 +379,11 @@ class AsyncLLMEngine:
         if not self.is_started or self.engine_service is None:
             raise EngineError("Engine not started. Call start() first.", error_code=500)
 
-        # Create output queue
-        output_queue = AsyncRequestQueue(request_id)
-
         if request_id is None:
             request_id = str(uuid.uuid4())
+
+        # Create output queue
+        output_queue = AsyncRequestQueue(request_id)
 
         if arrival_time is None:
             arrival_time = time.time()
@@ -773,7 +773,7 @@ class AsyncLLMEngine:
         current_file_path = os.path.abspath(__file__)
         current_dir_path = os.path.split(current_file_path)[0]
         # TODO
-        uncache_worker_stdout = "" if os.getenv("UNCACHE_WORKER_STDOUT", "0") == 1 else "-u"
+        uncache_worker_stdout = "" if os.getenv("UNCACHE_WORKER_STDOUT", "0") == "1" else "-u"
         pd_cmd = f"{command_prefix} {sys.executable} {uncache_worker_stdout} -m paddle.distributed.launch"
         pd_cmd = pd_cmd + f" --log_dir {log_dir}"
 
