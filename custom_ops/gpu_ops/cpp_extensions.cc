@@ -678,6 +678,16 @@ void SpeculateVerify(
     const paddle::Tensor &actual_draft_token_nums, const paddle::Tensor &topp,
     int max_seq_len, int verify_window, bool enable_topp, bool benchmark_mode, bool accept_all_drafts);
 
+void SpeculateLimitThinkingContentLengthV2(
+    const paddle::Tensor& next_tokens,
+    const paddle::Tensor& max_think_lens,
+    const paddle::Tensor& step_idx,
+    const paddle::Tensor& limit_think_status,
+    const paddle::Tensor& accept_num,
+    const paddle::Tensor& seq_lens_decoder,
+    const int64_t think_end_id,
+    const int64_t line_break_id);
+
 void SpeculateUpdate(const paddle::Tensor &seq_lens_encoder,
                        const paddle::Tensor &seq_lens_decoder,
                        const paddle::Tensor &not_need_stop,
@@ -702,8 +712,11 @@ void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor &pre_ids_all,
 void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,
                                       const paddle::Tensor& accept_num,
                                       const paddle::Tensor& not_need_stop,
+                                      const paddle::Tensor& seq_lens_decoder,
+                                      const paddle::Tensor& prompt_lens,
                                       int64_t rank_id,
-                                      bool save_each_rank);
+                                      bool save_each_rank,
+                                      bool skip_prefill);
 
 
 void SpeculateClearAcceptNums(const paddle::Tensor& accept_num,
@@ -712,7 +725,9 @@ void SpeculateClearAcceptNums(const paddle::Tensor& accept_num,
 void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
                             const paddle::Tensor &block_tables,
                             const paddle::Tensor &stop_flags,
+                            const paddle::Tensor &prompt_lens,
                             const paddle::Tensor &seq_lens_this_time,
+                            const paddle::Tensor &seq_lens_encoder,
                             const paddle::Tensor &seq_lens_decoder,
                             const paddle::Tensor &step_seq_lens_decoder,
                             const paddle::Tensor &step_draft_tokens,
@@ -1239,6 +1254,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_set_stop_value_multi_seqs",&SpecGetStopFlagsMultiSeqs, "speculate_set_stop_value_multi_seqs function");
 
   m.def("speculate_verify",&SpeculateVerify, "speculate_verify function");
+
+  m.def("speculate_limit_thinking_content_length_v2",&SpeculateLimitThinkingContentLengthV2, "speculate limit thinking content length function");
 
   m.def("speculate_update",&SpeculateUpdate, "Speculate Update Kernel");
 

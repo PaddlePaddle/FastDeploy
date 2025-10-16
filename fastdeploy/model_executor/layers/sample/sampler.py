@@ -39,6 +39,13 @@ from fastdeploy.model_executor.layers.sample.ops import (
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.output import LogprobsTensors, SamplerOutput
 
+if current_platform.is_cuda():
+    from fastdeploy.model_executor.ops.gpu import (
+        speculate_limit_thinking_content_length_v2,
+        speculate_verify,
+        top_p_candidates,
+    )
+
 
 def top_p_normalize_probs_paddle(
     probs: paddle.Tensor,
@@ -396,11 +403,9 @@ class SpeculativeSampler(nn.Layer):
         max_model_len: int,
         share_inputs: List[paddle.Tensor],
         accept_all_drafts: bool = False,
+        think_end_id: int = -1,
+        line_break_id: int = -1,
     ) -> paddle.Tensor:
-        """ """
-
-        from fastdeploy.model_executor.ops.gpu import speculate_verify, top_p_candidates
-
         logits = apply_speculative_penalty_multi_scores(
             sampling_metadata.pre_token_ids,
             logits,
@@ -454,6 +459,18 @@ class SpeculativeSampler(nn.Layer):
             self.speculative_benchmark_mode,
             accept_all_drafts,
         )
+
+        if think_end_id > 0 and line_break_id > 0:
+            speculate_limit_thinking_content_length_v2(
+                share_inputs["accept_tokens"],
+                share_inputs["max_think_lens"],
+                share_inputs["step_idx"],
+                share_inputs["limit_think_status"],
+                share_inputs["accept_num"],
+                share_inputs["seq_lens_decoder"],
+                think_end_id,
+                line_break_id,
+            )
 
         return None
 

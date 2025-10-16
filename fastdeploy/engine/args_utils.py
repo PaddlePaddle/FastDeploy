@@ -1011,11 +1011,7 @@ class EngineArgs:
 
         speculative_cfg = self.create_speculative_config()
         if not self.enable_chunked_prefill:
-            if (
-                current_platform.is_cuda()
-                and self.splitwise_role == "mixed"
-                and (speculative_cfg is None or speculative_cfg.method not in ["mtp"])
-            ):
+            if current_platform.is_cuda() and self.splitwise_role == "mixed":
                 # default enable chunked prefill
                 self.enable_chunked_prefill = True
 
@@ -1028,10 +1024,7 @@ class EngineArgs:
                 if paddle.is_compiled_with_xpu():
                     self.max_num_batched_tokens = self.max_model_len
                 else:
-                    if speculative_cfg is not None and speculative_cfg.method is not None:
-                        self.max_num_batched_tokens = self.max_model_len
-                    else:
-                        self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.enable_chunked_prefill:
                     self.max_num_batched_tokens = 2048

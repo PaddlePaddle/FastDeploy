@@ -82,7 +82,7 @@ jobs:
               fi
             '
 
-            wget -q ${fd_archive_url}
+            wget -q --no-proxy ${fd_archive_url}
             tar -xf FastDeploy.tar.gz
             rm -rf FastDeploy.tar.gz
             cd FastDeploy
@@ -134,6 +134,7 @@ jobs:
             fi
 
             git config --global --add safe.directory /workspace/FastDeploy
+            chown -R $(whoami) /workspace/FastDeploy
             cd FastDeploy
             if [[ "${WITH_NIGHTLY_BUILD}" == "ON" ]];then
               GIT_COMMIT_TIME=$(git --no-pager show -s --format=%ci HEAD)
