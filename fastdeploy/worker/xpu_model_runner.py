@@ -26,6 +26,7 @@ from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
+from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.forward_meta import ForwardMeta, XPUForwardMeta
 from fastdeploy.model_executor.graph_optimization.utils import (
     profile_run_guard,
@@ -45,6 +46,8 @@ from fastdeploy.model_executor.ops.xpu import (
     get_infer_param,
     get_padding_offset,
     recover_decode_task,
+    set_data_ipc,
+    share_external_data,
     update_inputs_v1,
 )
 from fastdeploy.utils import get_logger
@@ -335,11 +338,19 @@ def step_paddle(
 class XPUModelRunner(ModelRunnerBase):
     """ """
 
-    def __init__(self, fd_config: FDConfig, device: str, rank: int, local_rank: int):
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        device: str,  # logic device
+        device_id: int,  # physical device id
+        rank: int,
+        local_rank: int,
+    ):
         super().__init__(fd_config=fd_config, device=device)
         self.enable_mm = self.model_config.enable_mm
         self.rank = rank
         self.local_rank = local_rank
+        self.device_id = device_id
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
 
         # VL model config:
@@ -895,11 +906,11 @@ class XPUModelRunner(ModelRunnerBase):
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
-    def initialize_kv_cache(self) -> None:
+    def initialize_kv_cache(self, profile: bool = False) -> None:
         """
         Initialize kv cache
         """
-        cache_kvs = {}
+        # cache_kvs = {}
         max_block_num = self.num_gpu_blocks
 
         # Get kv cache dtype
@@ -914,21 +925,56 @@ class XPUModelRunner(ModelRunnerBase):
 
         # Get kv cache shape
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(max_num_blocks=max_block_num)
+        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+
+        cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
+        cache_ready_signal = IPCSignal(
+            name="cache_ready_signal",
+            array=cache_ready_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.engine_worker_queue_port,
+            create=False,
+        )
+
+        # Check if gpu runner needs to create kv cache
+        # 1. During profiling, it creates its own kv cache.
+        # 2. GPU runner creates kv cache tensor unless p/d disaggregation is enabled.
+        create_cache_tensor = profile or self.scheduler_config.splitwise_role == "mixed"
+        if not create_cache_tensor:
+            logger.info(f"Waiting for cache managers to create kv cache.. {cache_ready_signal.value}")
+            while cache_ready_signal.value[local_rank] != 1:
+                time.sleep(1)
+            logger.info(f"OK! Stop waiting. {cache_ready_signal.value}")
+
+        logger.info(f"Initializing kv cache for all layers. {cache_ready_signal.value}")
+        cache_kvs_list = []
 
         for i in range(self.model_config.num_hidden_layers):
-            cache_kvs[f"key_caches_{i}"] = paddle.full(
-                shape=kv_cache_shape,
-                fill_value=0,
-                dtype=cache_type,
-            )
-            cache_kvs[f"value_caches_{i}"] = paddle.full(
-                shape=kv_cache_shape,
-                fill_value=0,
-                dtype=cache_type,
-            )
-        self.share_inputs["caches"] = list(cache_kvs.values())
-        for value in cache_kvs.values():
-            del value
+            key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
+            val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
+
+            if create_cache_tensor:
+                logger.info(f"..creating kv cache for layer {i}: {kv_cache_shape}")
+                key_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
+                set_data_ipc(key_cache, key_cache_name)
+                val_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
+                set_data_ipc(val_cache, val_cache_name)
+                cache_kvs_list.extend([key_cache, val_cache])
+
+            else:
+                logger.info(f"..attaching kv cache for layer {i}: {kv_cache_shape}")
+                key_cache = paddle.empty(shape=[], dtype=cache_type)
+                key_cache = share_external_data(key_cache, key_cache_name, kv_cache_shape, False)
+                val_cache = paddle.empty(shape=[], dtype=cache_type)
+                val_cache = share_external_data(val_cache, val_cache_name, kv_cache_shape, False)
+                cache_kvs_list.extend([key_cache, val_cache])
+
+        self.share_inputs["caches"] = cache_kvs_list
+
+        if not profile and create_cache_tensor:
+            cache_ready_signal.value[local_rank] = 1
+            logger.info(f"✅ kv cache is ready! {cache_ready_signal.value}")
+
         paddle.device.xpu.empty_cache()
 
     def initialize_attn_backend(self) -> None:
@@ -1138,18 +1184,12 @@ class XPUModelRunner(ModelRunnerBase):
 
         return None
 
-    def prepare_profile(self) -> None:
-        """Prepare the profile run by setting the block number and initializing the KV cache."""
-        paddle.device.xpu.empty_cache()
-        self.num_gpu_blocks = self.parallel_config.total_block_num
-        self.initialize_kv_cache()
-
     @profile_run_guard(True)
     def profile_run(self) -> None:
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 
         self.num_gpu_blocks = self.parallel_config.total_block_num
-        self.initialize_kv_cache()
+        self.initialize_kv_cache(profile=True)
 
         self._dummy_run(
             num_tokens=int(self.scheduler_config.max_num_batched_tokens),

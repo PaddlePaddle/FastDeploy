@@ -23,6 +23,7 @@ from paddle import nn
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import get_logger, set_random_seed
 from fastdeploy.worker.output import ModelRunnerOutput
 from fastdeploy.worker.worker_base import WorkerBase
@@ -49,10 +50,11 @@ class XpuWorker(WorkerBase):
 
     def init_device(self):
         """Initialize device and Construct model runner"""
+        self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         if paddle.is_compiled_with_xpu():
             # Set environment variable
             self.device_ids = self.parallel_config.device_ids.split(",")
-            self.device = f"xpu:{self.local_rank}"
+            self.device = f"xpu:{self.local_rank % self.max_chips_per_node}"
             paddle.device.set_device(self.device)
             paddle.set_default_dtype(self.parallel_config.dtype)
 
@@ -67,6 +69,7 @@ class XpuWorker(WorkerBase):
             fd_config=self.fd_config,
             device=self.device,
             rank=self.rank,
+            device_id=int(self.device_ids[self.local_rank % self.max_chips_per_node]),
             local_rank=self.local_rank,
         )
 
@@ -109,7 +112,6 @@ class XpuWorker(WorkerBase):
                     used_memory: {used_memory}, free_memory: {free_memory}"
         )
 
-        self.model_runner.prepare_profile()
         if self.parallel_config.use_ep:
             logger.warning("EP mode does not support profile run.")
         else:
