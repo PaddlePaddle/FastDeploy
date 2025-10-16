@@ -146,15 +146,14 @@ class ExpertService:
                         )
                         break
                     except:
-                        llm_logger.info("Failed to attach to get_profile_block_num_signal, try again!")
                         time.sleep(1)
                 self.reset_kvcache_blocks()
             ipc_signal_suffix_cache = self.cfg.parallel_config.engine_worker_queue_port[local_data_parallel_id]
             self.cache_manager_processes = self.engine.start_cache_service(
-                self.cfg.local_device_ids, ipc_signal_suffix_cache, self.cfg.scheduler_config.splitwise_role != "mixed"
+                self.cfg.local_device_ids,
+                ipc_signal_suffix_cache,
+                create_cache_tensor=(self.cfg.scheduler_config.splitwise_role != "mixed"),
             )
-            if self.cfg.scheduler_config.splitwise_role != "mixed":
-                self.engine.split_mode_get_tasks()
 
         console_logger.info(
             f"Worker processes(rank {local_rank}) are launched with {time.time() - start_time} seconds."
