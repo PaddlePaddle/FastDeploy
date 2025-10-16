@@ -64,7 +64,7 @@ std::vector<paddle::Tensor> AppendAttention(
     const paddle::Tensor &decoder_batch_ids,
     const paddle::Tensor &decoder_tile_ids_per_batch,
     const paddle::Tensor &decoder_num_blocks_cpu,
-    const paddle::Tensor &set_max_lengths, const paddle::Tensor &max_len_kv,
+    const paddle::Tensor &set_max_lengths,
     const paddle::optional<paddle::Tensor> &rotary_embs,
     const paddle::optional<paddle::Tensor> &attn_mask,
     const paddle::optional<paddle::Tensor> &qkv_bias,
@@ -106,7 +106,7 @@ void AppendAttentionWithOutput(
     const paddle::Tensor &decoder_batch_ids,
     const paddle::Tensor &decoder_tile_ids_per_batch,
     const paddle::Tensor &decoder_num_blocks_cpu,
-    const paddle::Tensor &set_max_lengths, const paddle::Tensor &max_len_kv,
+    const paddle::Tensor &set_max_lengths,
     paddle::Tensor &fmha_out,
     const paddle::optional<paddle::Tensor> &rotary_embs,
     const paddle::optional<paddle::Tensor> &attn_mask,
@@ -315,7 +315,6 @@ void GetBlockShapeAndSplitKVBlock(
     paddle::Tensor &kv_batch_ids,               // Inplace
     paddle::Tensor &kv_tile_ids_per_batch,      // Inplace
     paddle::Tensor &kv_num_blocks_x_cpu,        // Inplace, Pinned Memory
-    paddle::Tensor &max_len_kv_cpu,             // Inplace, Pinned Memory
     const int encoder_block_shape_q,
     const int decoder_block_shape_q,
     const int group_size,
@@ -712,8 +711,11 @@ void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor &pre_ids_all,
 void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,
                                       const paddle::Tensor& accept_num,
                                       const paddle::Tensor& not_need_stop,
+                                      const paddle::Tensor& seq_lens_decoder,
+                                      const paddle::Tensor& prompt_lens,
                                       int64_t rank_id,
-                                      bool save_each_rank);
+                                      bool save_each_rank,
+                                      bool skip_prefill);
 
 
 void SpeculateClearAcceptNums(const paddle::Tensor& accept_num,
@@ -722,7 +724,9 @@ void SpeculateClearAcceptNums(const paddle::Tensor& accept_num,
 void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
                             const paddle::Tensor &block_tables,
                             const paddle::Tensor &stop_flags,
+                            const paddle::Tensor &prompt_lens,
                             const paddle::Tensor &seq_lens_this_time,
+                            const paddle::Tensor &seq_lens_encoder,
                             const paddle::Tensor &seq_lens_decoder,
                             const paddle::Tensor &step_seq_lens_decoder,
                             const paddle::Tensor &step_draft_tokens,

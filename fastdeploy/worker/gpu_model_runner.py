@@ -15,7 +15,9 @@
 """
 
 import os
+import queue
 import time
+from threading import Thread
 from typing import List, Optional
 
 import numpy as np
@@ -170,11 +172,28 @@ class GPUModelRunner(ModelRunnerBase):
         logger.info(f"queue id is {str(self.parallel_config.engine_worker_queue_port)}")
 
         self.zmq_client = None
+        self.async_output_queue = None
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
             logger.info(f"zmq client get_save_output_rank{local_rank}")
             self.zmq_client = ZmqIpcClient(name=f"get_save_output_rank{local_rank}", mode=zmq.PUSH)
             self.zmq_client.connect()
             self.zmq_client.socket.SNDTIMEO = 3000
+            self.async_output_queue: queue.Queue = queue.Queue()
+            self.async_output_copy_thread = Thread(
+                target=self._async_output_busy_loop,
+                daemon=True,
+                name="WorkerAsyncOutputCopy",
+            )
+            self.async_output_copy_thread.start()
+
+    def _async_output_busy_loop(self):
+        """Entrypoint for the thread which handles outputs asynchronously."""
+        while True:
+            try:
+                output = self.async_output_queue.get()
+                self.zmq_client.send_pyobj(output)
+            except Exception as e:
+                logger.exception("Exception in async output loop: %s", e)
 
     def exist_prefill(self):
         """
@@ -915,7 +934,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["kv_batch_ids"] = None
         self.share_inputs["kv_tile_ids_per_batch"] = None
         self.share_inputs["kv_num_blocks_x_cpu"] = None  # CPU
-        self.share_inputs["max_len_kv_cpu"] = None  # CPU
 
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
@@ -1165,7 +1183,6 @@ class GPUModelRunner(ModelRunnerBase):
             kv_batch_ids=self.share_inputs["kv_batch_ids"],
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
-            max_len_kv_cpu=self.share_inputs["max_len_kv_cpu"],
         )
 
         # Update Batch type for cuda graph for only_decode_batch
@@ -1326,7 +1343,7 @@ class GPUModelRunner(ModelRunnerBase):
         # adapted to cudagraph.
         self.share_inputs["decoder_num_blocks_device"] = paddle.full([1], 0, dtype="int32")
         self.share_inputs["decoder_chunk_size_device"] = paddle.full([1], 64, dtype="int32")
-        self.share_inputs["max_len_tensor_cpu"] = paddle.full([8], 0, dtype="int32").cpu()
+        self.share_inputs["max_len_tensor_cpu"] = paddle.full([9], 0, dtype="int32").cpu()
 
         self.share_inputs["encoder_batch_ids"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
         self.share_inputs["encoder_tile_ids_per_batch"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
@@ -1335,7 +1352,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["kv_batch_ids"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
         self.share_inputs["kv_tile_ids_per_batch"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
         self.share_inputs["kv_num_blocks_x_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
-        self.share_inputs["max_len_kv_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
 
         # Get the attention backend
         attn_cls = get_attention_backend()
@@ -1511,6 +1527,7 @@ class GPUModelRunner(ModelRunnerBase):
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
                 stop_token_ids=self.share_inputs["stop_token_ids"],
                 stop_token_ids_len=self.share_inputs["stop_token_ids_len"],
+                prompt_lens=self.share_inputs["prompt_lens"],
             )
 
             post_process(
@@ -1520,7 +1537,7 @@ class GPUModelRunner(ModelRunnerBase):
                 block_size=self.cache_config.block_size,
                 speculative_decoding=self.speculative_decoding,
                 skip_save_output=True,
-                zmq_client=self.zmq_client,
+                async_output_queue=self.async_output_queue,
             )
             if self.speculative_decoding:
                 if self.speculative_method == "mtp":
@@ -1867,6 +1884,7 @@ class GPUModelRunner(ModelRunnerBase):
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
             stop_token_ids=self.share_inputs["stop_token_ids"],
             stop_token_ids_len=self.share_inputs["stop_token_ids_len"],
+            prompt_lens=self.share_inputs["prompt_lens"],
         )
 
         if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
@@ -1881,7 +1899,7 @@ class GPUModelRunner(ModelRunnerBase):
             save_each_rank=self.parallel_config.use_ep,
             speculative_decoding=self.speculative_decoding,
             skip_save_output=skip_save_output,
-            zmq_client=self.zmq_client,
+            async_output_queue=self.async_output_queue,
         )
         if self.guided_backend is not None and sampler_output is not None:
             self.sampler.post_process(sampler_output.sampled_token_ids, skip_idx_list)
@@ -1913,7 +1931,9 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["draft_tokens"],
                 self.share_inputs["block_tables"],
                 self.share_inputs["stop_flags"],
+                self.share_inputs["prompt_lens"],
                 self.share_inputs["seq_lens_this_time"],
+                self.share_inputs["seq_lens_encoder"],
                 self.share_inputs["seq_lens_decoder"],
                 self.share_inputs["step_seq_lens_decoder"],
                 self.share_inputs["step_draft_tokens"],
