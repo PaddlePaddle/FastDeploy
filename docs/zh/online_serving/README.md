@@ -230,8 +230,18 @@ ChatMessage:
     role: str
     content: str
     reasoning_content: Optional[str] = None
+    tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
+    prompt_tokens: Optional[str] = None
+    completion_tokens: Optional[str] = None
+ToolCall:
+    id: str = None
+    type: Literal["function"] = "function"
+    function: FunctionCall
+FunctionCall:
+    name: str
+    arguments: str
 
 # 返回流式响应的字段
 ChatCompletionStreamResponse:
@@ -253,6 +263,17 @@ DeltaMessage:
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
     reasoning_content: Optional[str] = None
+    tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
+    prompt_tokens: Optional[str] = None
+    completion_tokens: Optional[str] = None
+DeltaToolCall:
+    id: Optional[str] = None
+    type: Optional[Literal["function"]] = None
+    index: int
+    function: Optional[DeltaFunctionCall] = None
+DeltaFunctionCall:
+    name: Optional[str] = None
+    arguments: Optional[str] = None
 ```
 
 ## Completion API
@@ -380,10 +401,20 @@ CompletionResponseChoice:
     text: str
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
+    prompt_tokens: Optional[str] = None
+    completion_tokens: Optional[str] = None
     arrival_time: Optional[float] = None
     logprobs: Optional[int] = None
     reasoning_content: Optional[str] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]]
+    tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
+ToolCall:
+    id: str = None
+    type: Literal["function"] = "function"
+    function: FunctionCall
+FunctionCall:
+    name: str
+    arguments: str
 
 # 返回流式响应的字段
 CompletionStreamResponse：
@@ -399,8 +430,18 @@ CompletionResponseStreamChoice:
     arrival_time: float = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
+    prompt_tokens: Optional[str] = None
+    completion_tokens: Optional[str] = None
     logprobs: Optional[float] = None
     reasoning_content: Optional[str] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
-
+    tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
+DeltaToolCall:
+    id: Optional[str] = None
+    type: Optional[Literal["function"]] = None
+    index: int
+    function: Optional[DeltaFunctionCall] = None
+DeltaFunctionCall:
+    name: Optional[str] = None
+    arguments: Optional[str] = None
 ```
