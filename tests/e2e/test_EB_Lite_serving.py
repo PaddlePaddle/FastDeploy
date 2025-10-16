@@ -394,15 +394,20 @@ def test_streaming_chat_with_n(openai_client):
         stream_options={"include_usage": True},
         n=2,
     )
+    count: list = [0, 0]
     for chunk in response:
         assert hasattr(chunk, "choices")
         assert hasattr(chunk, "usage")
         if len(chunk.choices) > 0:
             assert chunk.usage is None
-            assert chunk.choices[0].index == 0 or chunk.choices[0].index == 1
+            if chunk.choices[0].index == 0:
+                count[0] = 1
+            elif chunk.choices[0].index == 1:
+                count[1] = 1
         else:
             assert hasattr(chunk.usage, "prompt_tokens")
             assert chunk.usage.prompt_tokens == 9
+    assert sum(count) == 2
 
 
 def test_completions_non_streaming_with_n(openai_client):
@@ -440,14 +445,19 @@ def test_completions_streaming_with_n(openai_client):
     )
 
     output_chunks = []
+    count: list = [0, 0]
     for chunk in response:
+        if chunk.choices[0].index == 0:
+            count[0] = 1
+        elif chunk.choices[0].index == 1:
+            count[1] = 1
         assert hasattr(chunk, "choices")
         assert len(chunk.choices) > 0
         assert hasattr(chunk.choices[0], "text")
-        assert chunk.choices[0].index == 0 or chunk.choices[0].index == 1
         output_chunks.append(chunk.choices[0].text)
 
     assert len(output_chunks) > 0
+    assert sum(count) == 2
 
 
 def test_non_streaming_with_stop_str(openai_client):
