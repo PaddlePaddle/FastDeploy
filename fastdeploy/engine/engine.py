@@ -247,7 +247,6 @@ class LLMEngine:
         request.preprocess_start_time = time.time()
         chat_template_kwargs = kwargs.get("chat_template_kwargs") or {}
         chat_template_kwargs["chat_template"] = kwargs.get("chat_template")
-        chat_template_kwargs["tools"] = kwargs.get("tools")
         kwargs["chat_template_kwargs"] = chat_template_kwargs
         request = self.data_processor.process_request(request, self.cfg.model_config.max_model_len, **kwargs)
         request.prompt_token_ids_len = len(request.prompt_token_ids)
