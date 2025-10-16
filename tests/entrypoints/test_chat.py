@@ -93,7 +93,7 @@ class TestChat(unittest.TestCase):
             """Wrap original messages2ids to capture spliced_message"""
             token_ids = data_processor.original_messages2ids(request_or_messages, **kwargs)
             nonlocal captured_spliced_message
-            captured_spliced_message = request_or_messages.get("text_after_process")
+            captured_spliced_message = request_or_messages.get("prompt_tokens")
             return token_ids
 
         data_processor.original_messages2ids = data_processor.messages2ids
