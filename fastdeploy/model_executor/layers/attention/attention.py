@@ -130,6 +130,14 @@ class Attention(nn.Layer):
             )
 
         if (
+            hasattr(self.fd_config.model_config, "layer_types")
+            and self.fd_config.model_config.layer_types[self.layer_id] == "sliding_attention"
+        ):
+            self.sliding_window = self.fd_config.model_config.sliding_window
+        else:
+            self.sliding_window = 0
+
+        if (
             fd_config.plas_attention_config is not None
             and fd_config.plas_attention_config.plas_encoder_top_k_left is not None
             and fd_config.plas_attention_config.plas_encoder_top_k_right is not None
