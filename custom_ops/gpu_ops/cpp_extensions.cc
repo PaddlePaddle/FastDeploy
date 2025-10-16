@@ -909,18 +909,19 @@ void SaveOutMmsgStatic(const paddle::Tensor& x,
                        bool save_each_rank);
 
 void SpeculateGetLogits(const paddle::Tensor &draft_logits,
+                        const paddle::Tensor &next_token_num,
                         const paddle::Tensor &batch_token_num,
+                        const paddle::Tensor &cu_next_token_offset,
                         const paddle::Tensor &cu_batch_token_offset,
                         const paddle::Tensor &logits,
                         const paddle::Tensor &first_token_logits,
-                        const paddle::Tensor &cu_seqlens_q,
                         const paddle::Tensor &seq_lens_this_time,
                         const paddle::Tensor &seq_lens_encoder);
 
 void SpeculateInsertFirstToken(const paddle::Tensor &token_ids,
                                const paddle::Tensor &accept_tokens,
                                const paddle::Tensor &next_tokens,
-                               const paddle::Tensor &cu_seqlens_q,
+                               const paddle::Tensor &cu_next_token_offset,
                                const paddle::Tensor &cu_batch_token_offset,
                                const paddle::Tensor &seq_lens_this_time,
                                const paddle::Tensor &seq_lens_encoder);

@@ -14,16 +14,17 @@
 
 #include "helper.h"
 
-template <int THREADBLOCK_SIZE>
-__global__ void get_token_num_per_batch_kernel(int* batch_token_num,
+__global__ void get_token_num_per_batch_kernel(int* next_token_num,
+                                               int* batch_token_num,
                                                const int* seq_lens_this_time,
                                                const int* seq_lens_encoder,
                                                const int real_bsz) {
     int bid = threadIdx.x;
-    int token_num_now = 0;
     if (bid < real_bsz) {
-        token_num_now = seq_lens_encoder[bid] > 0 ? 2 : seq_lens_this_time[bid];
-        batch_token_num[bid] = token_num_now;
+        next_token_num[bid] =
+            seq_lens_encoder[bid] > 0 ? 1 : seq_lens_this_time[bid];
+        batch_token_num[bid] =
+            seq_lens_encoder[bid] > 0 ? 2 : seq_lens_this_time[bid];
     }
 }
 
@@ -31,7 +32,7 @@ template <int VecSize>
 __global__ void speculate_get_logits_kernel(float* draft_logits,
                                             const float* logits,
                                             const float* first_token_logits,
-                                            const int* cu_seqlens_q,
+                                            const int* cu_next_token_offset,
                                             const int* cu_batch_token_offset,
                                             const int* seq_lens_this_time,
                                             const int* seq_lens_encoder,
@@ -43,7 +44,7 @@ __global__ void speculate_get_logits_kernel(float* draft_logits,
     if (bid < real_bsz) {
         auto* draft_logits_now =
             draft_logits + cu_batch_token_offset[bid] * vocab_size;
-        auto* logits_now = logits + bid * vocab_size;
+        auto* logits_now = logits + cu_next_token_offset[bid] * vocab_size;
         for (int i = tid * VecSize; i < vocab_size; i += blockDim.x * VecSize) {
             if (seq_lens_encoder[bid] > 0) {
                 Load<float, VecSize>(&first_token_logits[bid * vocab_size + i],
@@ -66,40 +67,58 @@ __global__ void speculate_get_logits_kernel(float* draft_logits,
 }
 
 void SpeculateGetLogits(const paddle::Tensor& draft_logits,
+                        const paddle::Tensor& next_token_num,
                         const paddle::Tensor& batch_token_num,
+                        const paddle::Tensor& cu_next_token_offset,
                         const paddle::Tensor& cu_batch_token_offset,
                         const paddle::Tensor& logits,
                         const paddle::Tensor& first_token_logits,
-                        const paddle::Tensor& cu_seqlens_q,
                         const paddle::Tensor& seq_lens_this_time,
                         const paddle::Tensor& seq_lens_encoder) {
     auto cu_stream = seq_lens_this_time.stream();
     const int vocab_size = logits.shape()[1];
     const int real_bsz = seq_lens_this_time.shape()[0];
 
-    constexpr int THREADBLOCK_SIZE = 512;
-    get_token_num_per_batch_kernel<THREADBLOCK_SIZE>
-        <<<1, THREADBLOCK_SIZE, 0, cu_stream>>>(
-            const_cast<int*>(batch_token_num.data<int>()),
-            seq_lens_this_time.data<int>(),
-            seq_lens_encoder.data<int>(),
-            real_bsz);
+    get_token_num_per_batch_kernel<<<1, 512, 0, cu_stream>>>(
+        const_cast<int*>(next_token_num.data<int>()),
+        const_cast<int*>(batch_token_num.data<int>()),
+        seq_lens_this_time.data<int>(),
+        seq_lens_encoder.data<int>(),
+        real_bsz);
 
-    void* temp_storage = nullptr;
-    size_t temp_storage_bytes = 0;
+    void* temp_storage1 = nullptr;
+    size_t temp_storage_bytes1 = 0;
     cub::DeviceScan::InclusiveSum(
-        temp_storage,
-        temp_storage_bytes,
+        temp_storage1,
+        temp_storage_bytes1,
         batch_token_num.data<int>(),
         const_cast<int*>(&cu_batch_token_offset.data<int>()[1]),
         real_bsz,
         cu_stream);
-    cudaMalloc(&temp_storage, temp_storage_bytes);
+    cudaMalloc(&temp_storage1, temp_storage_bytes1);
     cub::DeviceScan::InclusiveSum(
-        temp_storage,
-        temp_storage_bytes,
+        temp_storage1,
+        temp_storage_bytes1,
         batch_token_num.data<int>(),
         const_cast<int*>(&cu_batch_token_offset.data<int>()[1]),
+        real_bsz,
+        cu_stream);
+
+    void* temp_storage2 = nullptr;
+    size_t temp_storage_bytes2 = 0;
+    cub::DeviceScan::InclusiveSum(
+        temp_storage2,
+        temp_storage_bytes2,
+        next_token_num.data<int>(),
+        const_cast<int*>(&cu_next_token_offset.data<int>()[1]),
+        real_bsz,
+        cu_stream);
+    cudaMalloc(&temp_storage2, temp_storage_bytes2);
+    cub::DeviceScan::InclusiveSum(
+        temp_storage2,
+        temp_storage_bytes2,
+        next_token_num.data<int>(),
+        const_cast<int*>(&cu_next_token_offset.data<int>()[1]),
         real_bsz,
         cu_stream);
 
@@ -111,7 +130,7 @@ void SpeculateGetLogits(const paddle::Tensor& draft_logits,
             const_cast<float*>(draft_logits.data<float>()),
             logits.data<float>(),
             first_token_logits.data<float>(),
-            cu_seqlens_q.data<int>(),
+            cu_next_token_offset.data<int>(),
             cu_batch_token_offset.data<int>(),
             seq_lens_this_time.data<int>(),
             seq_lens_encoder.data<int>(),
@@ -123,7 +142,7 @@ __global__ void speculate_insert_first_token_kernel(
     int64_t* token_ids,
     const int64_t* accept_tokens,
     const int64_t* next_tokens,
-    const int* cu_seqlens_q,
+    const int* cu_next_token_offset,
     const int* cu_batch_token_offset,
     const int* seq_lens_this_time,
     const int* seq_lens_encoder,
@@ -133,7 +152,7 @@ __global__ void speculate_insert_first_token_kernel(
 
     auto* token_ids_now = token_ids + cu_batch_token_offset[bid];
     auto* accept_tokens_now = accept_tokens + bid * max_draft_tokens;
-    auto* next_tokens_now = next_tokens + bid;
+    auto* next_tokens_now = next_tokens + cu_next_token_offset[bid];
     if (seq_lens_encoder[bid] != 0) {
         token_ids_now[0] = accept_tokens_now[0];
         token_ids_now[1] = next_tokens_now[0];
@@ -147,7 +166,7 @@ __global__ void speculate_insert_first_token_kernel(
 void SpeculateInsertFirstToken(const paddle::Tensor& token_ids,
                                const paddle::Tensor& accept_tokens,
                                const paddle::Tensor& next_tokens,
-                               const paddle::Tensor& cu_seqlens_q,
+                               const paddle::Tensor& cu_next_token_offset,
                                const paddle::Tensor& cu_batch_token_offset,
                                const paddle::Tensor& seq_lens_this_time,
                                const paddle::Tensor& seq_lens_encoder) {
@@ -159,7 +178,7 @@ void SpeculateInsertFirstToken(const paddle::Tensor& token_ids,
         const_cast<int64_t*>(token_ids.data<int64_t>()),
         accept_tokens.data<int64_t>(),
         next_tokens.data<int64_t>(),
-        cu_seqlens_q.data<int>(),
+        cu_next_token_offset.data<int>(),
         cu_batch_token_offset.data<int>(),
         seq_lens_this_time.data<int>(),
         seq_lens_encoder.data<int>(),
@@ -230,11 +249,12 @@ void SpeculateGetTargetLogits(const paddle::Tensor& target_logits,
 
 PD_BUILD_STATIC_OP(speculate_get_logits)
     .Inputs({"draft_logits",
+             "next_token_num",
              "batch_token_num",
+             "cu_next_token_offset",
              "cu_batch_token_offset",
              "logits",
              "first_token_logits",
-             "cu_seqlens_q",
              "seq_lens_this_time",
              "seq_lens_encoder"})
     .Outputs({"draft_logits_out",
@@ -249,7 +269,7 @@ PD_BUILD_STATIC_OP(speculate_insert_first_token)
     .Inputs({"token_ids",
              "accept_tokens",
              "next_tokens",
-             "cu_seqlens_q",
+             "cu_next_token_offset",
              "cu_batch_token_offset",
              "seq_lens_this_time",
              "seq_lens_encoder"})

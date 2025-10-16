@@ -72,7 +72,7 @@ __global__ void RebuildAppendPaddingKernel(T *output_data,
         if (seq_len_decoder[bi] == 0 && seq_len_encoder[bi] == 0) continue;
 
         if (seq_len_encoder[bi] > 0) seq_id = seq_len_encoder[bi] - 1;
-         const int cum_offset_bi = bi * max_input_length - cu_seqlens_q[bi];
+        const int cum_offset_bi = bi * max_input_length - cu_seqlens_q[bi];
         const int input_token_id = ori_token_id - cum_offset_bi + seq_id;
         const int bias_idx = i % dim_embed;
 
@@ -81,12 +81,10 @@ __global__ void RebuildAppendPaddingKernel(T *output_data,
         Store<T, VecSize>(src_vec, &output_data[i]);
 
         if (enable_logprob && seq_len_encoder[bi] > 0) {
-            int first_token_seq_id = seq_len_encoder[bi] - 2;
-            const int first_token_id =
-                ori_token_id - cum_offset_bi + first_token_seq_id;
-            Load<T, VecSize>(&input_data[first_token_id * dim_embed + bias_idx],
+            const int first_input_token_id = input_token_id - 1;
+            Load<T, VecSize>(&input_data[first_input_token_id * dim_embed + bias_idx],
                              &src_vec);
-            Store<T, VecSize>(src_vec, &first_token_out[i]);
+            Store<T, VecSize>(src_vec, &first_token_out[bi * dim_embed + bias_idx]);
         }
     }
 }

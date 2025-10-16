@@ -405,7 +405,13 @@ class MTPProposer(Proposer):
             [self.max_num_seqs, self.model_config.hidden_size], -1
         )
         self.model_inputs["batch_token_num"] = paddle.full(shape=[self.max_num_seqs], fill_value=0, dtype="int32")
-        self.model_inputs["cu_batch_token_offset"] = self.target_model_inputs["cu_batch_token_offset"]
+        self.model_inputs["next_token_num"] = paddle.full(shape=[self.max_num_seqs], fill_value=0, dtype="int32")
+        self.model_inputs["cu_batch_token_offset"] = paddle.full_like(
+            self.target_model_inputs["cu_batch_token_offset"], fill_value=0, dtype="int32"
+        )
+        self.model_inputs["cu_next_token_offset"] = paddle.full(
+            shape=[self.max_num_seqs + 1], fill_value=0, dtype="int32"
+        )
 
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int):
 
@@ -773,11 +779,12 @@ class MTPProposer(Proposer):
 
                     speculate_get_logits(
                         self.model_inputs["draft_logits"],
+                        self.model_inputs["next_token_num"],
                         self.model_inputs["batch_token_num"],
+                        self.model_inputs["cu_next_token_offset"],
                         self.model_inputs["cu_batch_token_offset"],
                         logits,
                         first_token_logits,
-                        self.model_inputs["cu_seqlens_q"],
                         self.model_inputs["seq_lens_this_time"],
                         self.model_inputs["seq_lens_encoder"],
                     )
@@ -790,13 +797,14 @@ class MTPProposer(Proposer):
                 )
 
                 if substep == 0 and sampler_output.logprobs_tensors is not None:
+                    real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
                     speculate_save_output_topk(
                         sampler_output.sampled_token_ids,
                         sampler_output.logprobs_tensors.logprob_token_ids,
                         sampler_output.logprobs_tensors.logprobs,
                         sampler_output.logprobs_tensors.selected_token_ranks,
-                        self.model_inputs["batch_token_num"],
-                        self.model_inputs["cu_batch_token_offset"],
+                        self.model_inputs["batch_token_num"][:real_bsz],
+                        self.model_inputs["cu_batch_token_offset"][:real_bsz],
                         self.model_inputs["not_need_stop"],
                         4,  # mtype
                         self.local_rank,

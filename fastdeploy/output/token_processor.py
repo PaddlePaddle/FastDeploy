@@ -243,18 +243,21 @@ class TokenProcessor:
         try:
             if self.cfg.speculative_config.method and self.use_logprobs:
                 if mtype == 3:  # target
-                    has_finished = any(r.finished for r in batch_result)
-                    if has_finished:
+                    finished_batch_result, unfinished_batch_result = [], []
+                    for r in batch_result:
+                        (finished_batch_result if r.finished else unfinished_batch_result).append(r)
+                    if finished_batch_result:
                         self.cached_generated_tokens.put_results(batch_result)
                     else:
-                        self._batch_result_buffer = batch_result
+                        self._batch_result_buffer = unfinished_batch_result
                 elif mtype == 4:  # draft
                     target_batch_result = []
                     draft_batch_result = batch_result
-                    for target, decode in zip(self._batch_result_buffer, draft_batch_result):
-                        target.outputs.draft_top_logprobs = decode.outputs.draft_top_logprobs
-                        target_batch_result.append(target)
-                    self._batch_result_buffer = None
+                    if self._batch_result_buffer is not None:
+                        for target, decode in zip(self._batch_result_buffer, draft_batch_result):
+                            target.outputs.draft_top_logprobs = decode.outputs.draft_top_logprobs
+                            target_batch_result.append(target)
+                        self._batch_result_buffer = None
                     self.cached_generated_tokens.put_results(target_batch_result)
                 else:
                     self.cached_generated_tokens.put_results(batch_result)
@@ -506,12 +509,13 @@ class TokenProcessor:
                                 result.outputs.draft_top_logprobs.logprob_token_ids.extend([topk_token_ids])
                                 result.outputs.draft_top_logprobs.logprobs.extend([topk_logprobs])
                                 result.outputs.draft_top_logprobs.sampled_token_ranks.extend([sampled_rank])
-                if token_id in task.eos_token_ids or is_prefill or recovery_stop:
+                if mtype == 3 and (token_id in task.eos_token_ids or is_prefill or recovery_stop):
                     result.finished = True
                     if recovery_stop:
                         result.error_msg = "Recover is not supported, the result is incomplete!"
                     llm_logger.info(
-                        f"Request: {task_id} finished, number of " f"generated tokens: {self.tokens_counter[task_id]}."
+                        f"Request: {task_id} finished, number of "
+                        f"generated tokens: {self.tokens_counter[task_id]}, token_id:{token_id},is_prefill:{is_prefill},recovery_stop:{recovery_stop}"
                     )
                     llm_logger.info(
                         f"Request: {task_id} token ratio: {self.tokens_counter[task_id] / (time.time() - task.inference_start_time)}"
@@ -523,7 +527,11 @@ class TokenProcessor:
                         self._record_completion_metrics(task, current_time)
                     self._recycle_resources(task_id, i, task, result, is_prefill)
                     break
-            if not is_prefill or self.cfg.scheduler_config.name == "splitwise":
+            if (
+                not is_prefill
+                or self.cfg.scheduler_config.name == "splitwise"
+                or self.cfg.scheduler_config.name == "dp"
+            ):
                 batch_result.append(result)
 
         self.postprocess(batch_result, mtype)

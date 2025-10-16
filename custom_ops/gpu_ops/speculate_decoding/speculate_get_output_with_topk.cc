@@ -88,7 +88,7 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
         return;
     }
 
-    int bsz = msg_rcv.meta[1];
+    int bsz = msg_rcv.meta[2];
     output_tokens_data[0] = (int64_t)msg_rcv.meta[0];
     output_tokens_data[1] = (int64_t)msg_rcv.meta[1];
     output_tokens_data[2] = (int64_t)msg_rcv.meta[2];
@@ -114,6 +114,40 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
                 (int64_t)cur_batch_msg_rcv->ranks[j];
         }
     }
+#ifdef SPECULATE_GET_WITH_OUTPUT_DEBUG
+    std::cout << "msg data: " << std::endl;
+    std::cout << "stop_flag: " << output_tokens_data[0]
+              << ", message_flag: " << output_tokens_data[1]
+              << ", bsz: " << output_tokens_data[2] << std::endl;
+    for (int i = 0; i < output_tokens_data[2]; i++) {
+        int cur_token_num = output_tokens_data[3 + i];
+        std::cout << "batch " << i << " token_num: " << cur_token_num
+                  << std::endl;
+        for (int j = 0; j < cur_token_num; j++) {
+            std::cout << "tokens: ";
+            for (int k = 0; k < K + 1; k++) {
+                std::cout
+                    << output_tokens_data[output_tokens_offset +
+                                          i * MAX_DRAFT_TOKEN_NUM * (K + 1) +
+                                          j * (K + 1) + k]
+                    << " ";
+            }
+            std::cout << std::endl;
+            std::cout << "scores: ";
+            for (int k = 0; k < K + 1; k++) {
+                std::cout
+                    << output_scores_data[i * MAX_DRAFT_TOKEN_NUM * (K + 1) +
+                                          j * (K + 1) + k]
+                    << " ";
+            }
+            std::cout << std::endl;
+            std::cout << "ranks: "
+                      << output_ranks_data[i * MAX_DRAFT_TOKEN_NUM + j]
+                      << std::endl;
+        }
+    }
+    std::cout << std::endl;
+#endif
     return;
 }
 

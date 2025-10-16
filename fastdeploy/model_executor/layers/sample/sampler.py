@@ -583,10 +583,12 @@ class SpeculativeSampler(nn.Layer):
                 "int32"
             )
             cu_batch_token_offset = paddle.concat(
-                [paddle.to_tensor([0]), paddle.cumsum(share_inputs["accept_num"])]
+                [paddle.to_tensor([0]), paddle.cumsum(share_inputs["accept_num"][:real_bsz])]
             ).astype("int32")
             share_inputs["cu_batch_token_offset"] = cu_batch_token_offset
-            target_logtis = paddle.empty([share_inputs["accept_num"].sum(), logits.shape[1]], dtype=logits.dtype)
+            target_logtis = paddle.empty(
+                [share_inputs["accept_num"][:real_bsz].sum(), logits.shape[1]], dtype=logits.dtype
+            )
             speculate_get_target_logits(
                 target_logtis,
                 logits,
@@ -604,7 +606,7 @@ class SpeculativeSampler(nn.Layer):
             token_ids = paddle.concat(
                 [
                     share_inputs["accept_tokens"][i, : share_inputs["accept_num"][i]]
-                    for i in range(share_inputs["accept_num"].shape[0])
+                    for i in range(share_inputs["accept_num"][:real_bsz].shape[0])
                 ]
             )
             logprobs_tensors = self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=token_ids)
@@ -785,7 +787,7 @@ class MTPSampler(nn.Layer):
                 token_ids,
                 share_inputs["accept_tokens"],
                 next_tokens,
-                share_inputs["cu_seqlens_q"],
+                share_inputs["cu_next_token_offset"],
                 share_inputs["cu_batch_token_offset"],
                 share_inputs["seq_lens_this_time"],
                 share_inputs["seq_lens_encoder"],
