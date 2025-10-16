@@ -459,7 +459,7 @@ class XPUWeightOnlyMoEMethod(XPUMoEMethod):
             tmp_ffn_out = paddle.empty(x.shape, x.dtype)
 
         if layer.reduce_results and layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(tmp_ffn_out)
+            tmp_ffn_out = tensor_model_parallel_all_reduce(tmp_ffn_out)
         return tmp_ffn_out
 
 
