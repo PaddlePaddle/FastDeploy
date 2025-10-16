@@ -22,7 +22,7 @@
 ## Checklist
 
 - [ ] Add at least a tag in the PR title.
-  - Tag list: [`[BugFix]`, `[Docs]`, `[CI]`, `[Optimization]`, `[Feature]`, `[Graph Optimization]`, `[PD Disaggregation]`, `[Loader]`, `[RL]`, `[XPU]`, `[GCU]`, `[DCU]`, `[Iluvatar]`, `[Metax]`, `[HPU]`, `[Benchmark]`, `[FDConfig]`, `[Speculative Decoding]`, `[Scheduler]`, `[Others]`]
+  - Tag list: [`[FDConfig]`,`[APIServer]`,`[Engine]`, `[Scheduler]`, `[PD Disaggregation]`, `[Executor]`, `[Graph Optimization]`, `[Speculative Decoding]`, `[RL]`, `[Models]`, `[Quantization]`, `[Loader]`, `[OP]`, `[BugFix]`, `[Docs]`, `[CI]`, `[Optimization]`, `[Feature]`, `[Benchmark]`, `[Others]`, `[XPU]`, `[HPU]`, `[GCU]`, `[DCU]`, `[Iluvatar]`, `[Metax]`]
   - You can add new tags based on the PR content, but the semantics must be clear.
 - [ ] Format your code, run `pre-commit` before commit.
 - [ ] Add unit tests. Please write the reason in this PR if no unit tests.
