@@ -250,6 +250,11 @@ class ModelOutputData:
     """
     stop_seqs_len: paddle.Tensor = None
 
+    """
+        the length of input prompt
+    """
+    prompt_lens: paddle.Tensor = None
+
 
 @dataclass
 class ModelRunnerOutput:
