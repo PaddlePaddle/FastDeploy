@@ -655,8 +655,8 @@ class HPUModelRunner(ModelRunnerBase):
         # Initialize free list
         free_list = list(
             range(
-                self.parallel_config.total_block_num - 2,
-                int(self.parallel_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
+                self.cache_config.total_block_num - 2,
+                int(self.cache_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
                 -1,
             )
         )
@@ -713,7 +713,7 @@ class HPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_encoder"],
             self.share_inputs["seq_lens_decoder"],
             self.cache_config.block_size,
-            self.parallel_config.dtype,
+            self.model_config.dtype,
         )
         is_prompt = is_prompt.item() == 1 if is_prompt.item() > 0 else None
         if is_prompt is True:
@@ -858,7 +858,7 @@ class HPUModelRunner(ModelRunnerBase):
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(max_num_blocks=max_block_num)
 
         for i in range(self.model_config.num_hidden_layers):
-            cache_type = self.parallel_config.dtype
+            cache_type = self.model_config.dtype
             cache_kvs["key_caches_{}".format(i)] = paddle.full(
                 shape=kv_cache_shape,
                 fill_value=0,
@@ -1376,7 +1376,7 @@ class HPUModelRunner(ModelRunnerBase):
 
         # Initialize kv cache for profile run. After profile run kv cache will be reset.
         # TODO(gongshaotian): Optimize the management logic of kvcache
-        self.num_gpu_blocks = self.parallel_config.total_block_num
+        self.num_gpu_blocks = self.cache_config.total_block_num
         self.initialize_kv_cache()
 
         # 1. Profile with multimodal encoder & encoder cache
