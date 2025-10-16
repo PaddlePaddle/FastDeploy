@@ -58,7 +58,7 @@ class MetaxWorker(WorkerBase):
             self.device_ids = self.parallel_config.device_ids.split(",")
             self.device = f"metax_gpu:{self.local_rank % self.max_chips_per_node}"
             paddle.device.set_device(self.device)
-            paddle.set_default_dtype(self.parallel_config.dtype)
+            paddle.set_default_dtype(self.model_config.dtype)
 
             gc.collect()
 
@@ -149,7 +149,7 @@ class MetaxWorker(WorkerBase):
             available_kv_cache_memory = (
                 after_run_meminfo_free - paddle_peak_increase
             ) * self.cache_config.gpu_memory_utilization
-            available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
+            available_kv_cache_memory += model_block_memory_used * self.cache_config.total_block_num
 
             end_time = time.perf_counter()
 

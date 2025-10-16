@@ -54,7 +54,7 @@ class IluvatarWorker(GpuWorker):
             # Set environment variable
             self.device = f"iluvatar_gpu:{self.local_rank}"
             paddle.device.set_device(self.device)
-            paddle.set_default_dtype(self.parallel_config.dtype)
+            paddle.set_default_dtype(self.model_config.dtype)
             self.device_ids = self.parallel_config.device_ids.split(",")
 
             gc.collect()
@@ -167,7 +167,7 @@ class IluvatarPaddleDisWorkerProc(PaddleDisWorkerProc):
 
             self.get_profile_block_num_signal.value[self.local_rank] = num_blocks_global
         else:
-            num_blocks_global = self.fd_config.parallel_config.total_block_num
+            num_blocks_global = self.fd_config.cache_config.total_block_num
         # 4. init kv_cache with accurate num_blocks
         logger.info(f"------- num_blocks_global:{num_blocks_global} --------")
         self.worker.initialize_cache(num_gpu_blocks=num_blocks_global)

@@ -455,8 +455,8 @@ class GCUModelRunner(ModelRunnerBase):
         # Initialize free list
         free_list = list(
             range(
-                self.parallel_config.total_block_num - 1,
-                int(self.parallel_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
+                self.cache_config.total_block_num - 1,
+                int(self.cache_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
                 -1,
             )
         )
@@ -632,7 +632,7 @@ class GCUModelRunner(ModelRunnerBase):
         max_block_num = self.num_gcu_blocks
 
         # Get kv cache dtype
-        cache_type = self.parallel_config.dtype
+        cache_type = self.model_config.dtype
 
         kv_cache_quant_type = None
         if (
@@ -844,7 +844,7 @@ class GCUModelRunner(ModelRunnerBase):
                 sampler_output=sampler_output,
                 model_output=model_output_data,
                 share_inputs=self.share_inputs,
-                block_size=self.parallel_config.block_size,
+                block_size=self.cache_config.block_size,
                 speculative_decoding=self.speculative_decoding,
                 skip_save_output=True,
             )
@@ -1076,7 +1076,7 @@ class GCUModelRunner(ModelRunnerBase):
             sampler_output=sampler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
-            block_size=self.parallel_config.block_size,
+            block_size=self.cache_config.block_size,
             save_each_rank=self.parallel_config.use_ep,
             speculative_decoding=self.speculative_decoding,
             skip_save_output=skip_save_output,
@@ -1132,7 +1132,7 @@ class GCUModelRunner(ModelRunnerBase):
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 
         # Initialize kv cache for profile run. After profile run kv cache will be reset.
-        self.num_gcu_blocks = self.parallel_config.total_block_num
+        self.num_gcu_blocks = self.cache_config.total_block_num
         self.initialize_kv_cache(profile=True)
 
         # 1. Profile with multimodal encoder & encoder cache

@@ -71,7 +71,7 @@ class IluvatarAttnBackend(AttentionBackend):
     def __init__(self, fd_config: FDConfig, kv_num_heads: int, num_heads: int, head_dim: int):
         super().__init__()
         self.attention_metadata = IluvatarAttentionMetadata()
-        self.block_size = fd_config.parallel_config.block_size
+        self.block_size = fd_config.cache_config.block_size
         assert self.block_size == 16, "Iluvatar paged attn requires block_size must be 16."
         self.max_context_len = fd_config.model_config.max_model_len
         self.causal = getattr(fd_config.model_config, "causal", True)

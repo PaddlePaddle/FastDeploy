@@ -56,7 +56,7 @@ class XpuWorker(WorkerBase):
             self.device_ids = self.parallel_config.device_ids.split(",")
             self.device = f"xpu:{self.local_rank % self.max_chips_per_node}"
             paddle.device.set_device(self.device)
-            paddle.set_default_dtype(self.parallel_config.dtype)
+            paddle.set_default_dtype(self.model_config.dtype)
 
             gc.collect()
             paddle.device.xpu.empty_cache()
@@ -122,7 +122,7 @@ class XpuWorker(WorkerBase):
         used_memory = xpu_get_used_global_memory(int(self.device_ids[self.local_rank]))
         available_kv_cache_memory = total_available_memory - used_memory
         model_block_memory_used = self.cal_theortical_kvcache()
-        available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
+        available_kv_cache_memory += model_block_memory_used * self.cache_config.total_block_num
         if self.parallel_config.use_ep:
             available_kv_cache_memory = int(available_kv_cache_memory * 0.6)
 
