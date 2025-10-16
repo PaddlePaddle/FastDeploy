@@ -103,29 +103,6 @@ class ExpertService:
 
         llm_logger.info(f"start expert service {local_data_parallel_id}")
 
-        if self.cfg.scheduler_config.splitwise_role != "mixed" or self.cfg.cache_config.enable_prefix_caching:
-            if self.do_profile:
-                get_profile_block_num = np.zeros([1], dtype=np.int32)
-                while True:
-                    try:
-                        self.get_profile_block_num_signal = IPCSignal(
-                            name="get_profile_block_num",
-                            array=get_profile_block_num,
-                            dtype=np.int32,
-                            suffix=int(self.cfg.engine_worker_queue_port[0]),
-                            create=False,
-                        )
-                        break
-                    except:
-                        time.sleep(1)
-                self.reset_kvcache_blocks()
-            ipc_signal_suffix_cache = self.cfg.parallel_config.engine_worker_queue_port[local_data_parallel_id]
-            self.cache_manager_processes = self.engine.start_cache_service(
-                self.cfg.local_device_ids, ipc_signal_suffix_cache
-            )
-            if self.cfg.scheduler_config.splitwise_role != "mixed":
-                self.engine.split_mode_get_tasks()
-
         if self.cfg.scheduler_config.name == "splitwise":
             self.cfg.init_cache_info()
             role = self.cfg.scheduler_config.splitwise_role
@@ -154,6 +131,29 @@ class ExpertService:
                 create=False,
             )
             self.launched_expert_service_signal.value[local_rank] = 1
+
+        if self.cfg.scheduler_config.splitwise_role != "mixed" or self.cfg.cache_config.enable_prefix_caching:
+            if self.do_profile:
+                get_profile_block_num = np.zeros([1], dtype=np.int32)
+                while True:
+                    try:
+                        self.get_profile_block_num_signal = IPCSignal(
+                            name="get_profile_block_num",
+                            array=get_profile_block_num,
+                            dtype=np.int32,
+                            suffix=int(self.cfg.parallel_config.engine_worker_queue_port[0]),
+                            create=False,
+                        )
+                        break
+                    except:
+                        time.sleep(1)
+                self.reset_kvcache_blocks()
+            ipc_signal_suffix_cache = self.cfg.parallel_config.engine_worker_queue_port[local_data_parallel_id]
+            self.cache_manager_processes = self.engine.start_cache_service(
+                self.cfg.local_device_ids,
+                ipc_signal_suffix_cache,
+                create_cache_tensor=(self.cfg.scheduler_config.splitwise_role != "mixed"),
+            )
 
         console_logger.info(
             f"Worker processes(rank {local_rank}) are launched with {time.time() - start_time} seconds."
