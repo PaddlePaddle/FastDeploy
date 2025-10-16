@@ -758,7 +758,6 @@ class MTPProposer(Proposer):
                 )
                 if self.use_cudagraph:
                     model_output = model_output[: self.real_token_num]
-                print(f"[MTPProposer] model_output: {model_output}")
 
                 hidden_states = rebuild_padding(
                     model_output,
