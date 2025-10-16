@@ -269,8 +269,10 @@ class DataProcessor(BaseDataProcessor):
         if request.get("top_p") < _SAMPLING_EPS:
             request.set("top_p", _SAMPLING_EPS)
         if self.reasoning_parser:
-            model_status = self.reasoning_parser.get_model_status(request.prompt_token_ids)
-            self.model_status_dict[request.request_id] = model_status
+            real_req_id = request.request_id.split("_")[0]
+            if real_req_id in self.model_status_dict:
+                model_status = self.reasoning_parser.get_model_status(request.prompt_token_ids)
+                self.model_status_dict[real_req_id] = model_status
             request.enable_thinking = model_status == "think_start"
 
         data_processor_logger.info(f"Processed request: {request}")
@@ -347,8 +349,10 @@ class DataProcessor(BaseDataProcessor):
         if request.get("top_p") < _SAMPLING_EPS:
             request["top_p"] = _SAMPLING_EPS
         if self.reasoning_parser:
-            model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
-            self.model_status_dict[request["request_id"]] = model_status
+            real_req_id = request["request_id"].split("_")[0]
+            if real_req_id not in self.model_status_dict:
+                model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
+                self.model_status_dict[real_req_id] = model_status
             request["enable_thinking"] = model_status == "think_start"
 
         data_processor_logger.info(f"Processed request dict: {request}")
@@ -376,7 +380,7 @@ class DataProcessor(BaseDataProcessor):
         response_dict.outputs.text = full_text
         if self.reasoning_parser:
             reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
-                full_text, response_dict, self.model_status_dict[req_id]
+                full_text, response_dict, self.model_status_dict[req_id.split("_")[0]]
             )
             response_dict.outputs.text = text
             response_dict.outputs.reasoning_content = reasoning_content
@@ -386,8 +390,8 @@ class DataProcessor(BaseDataProcessor):
             if tool_call_info.tools_called:
                 response_dict.outputs.tool_calls = tool_call_info.tool_calls
                 response_dict.outputs.text = tool_call_info.content
-        if req_id in self.model_status_dict:
-            del self.model_status_dict[req_id]
+        if req_id.split("_")[0] in self.model_status_dict:
+            del self.model_status_dict[req_id.split("_")[0]]
         data_processor_logger.info(f"req_id:{req_id}, token_ids: {token_ids}")
 
         return response_dict
@@ -415,7 +419,7 @@ class DataProcessor(BaseDataProcessor):
             response_dict["outputs"]["text"] = full_text
             if self.reasoning_parser:
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
-                    full_text, response_dict, self.model_status_dict[req_id]
+                    full_text, response_dict, self.model_status_dict[req_id.split("_")[0]]
                 )
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
@@ -456,7 +460,7 @@ class DataProcessor(BaseDataProcessor):
                 previous_token_ids,
                 previous_token_ids + token_ids,
                 token_ids,
-                self.model_status_dict[req_id],
+                self.model_status_dict[req_id.split("_")[0]],
             )
             response_dict["outputs"]["delta_message"] = reasoning_delta_message
         if self.tool_parser_obj:
@@ -481,7 +485,7 @@ class DataProcessor(BaseDataProcessor):
             if req_id in self.tool_parser_dict:
                 del self.tool_parser_dict[req_id]
             if req_id in self.model_status_dict:
-                del self.model_status_dict[req_id]
+                del self.model_status_dict[req_id.split("_")[0]]
         return response_dict
 
     def process_response_dict(self, response_dict, **kwargs):

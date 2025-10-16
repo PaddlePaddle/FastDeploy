@@ -83,6 +83,8 @@ class ErnieX1ReasoningParser(ReasoningParser):
             self.think_end_token_id,
             self.response_start_token_id,
             self.response_end_token_id,
+            self.tool_call_start_token_id,
+            self.tool_call_end_token_id,
         ]:
             return None
 

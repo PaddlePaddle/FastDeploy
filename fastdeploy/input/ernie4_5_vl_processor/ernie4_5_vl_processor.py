@@ -260,8 +260,10 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         data_processor_logger.info(f"Processed request {request}")
 
         if self.reasoning_parser:
-            model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
-            self.model_status_dict[request["request_id"]] = model_status
+            real_req_id = request["request_id"].split("_")[0]
+            if real_req_id not in self.model_status_dict:
+                model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
+                self.model_status_dict[real_req_id] = model_status
             request["enable_thinking"] = model_status == "think_start"
 
         return request
