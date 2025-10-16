@@ -22,7 +22,7 @@
 ## Checklist
 
 - [ ] Add at least a tag in the PR title.
-  - Tag list: [`[BUGFix]`, `[Docs]`, `[CI]`，`[Optimization]` ,`[Feature]`, `[CUDAGraph]`, `[PD Disaggregation]`, `[V1 Loader]`, `[XPU]`, `[Benchmark]`, `[FDConfig]`, `[MTP]`, `[Sheduler]`,`[Others]`]
+  - Tag list: [`[BugFix]`, `[Docs]`, `[CI]`, `[Optimization]`, `[Feature]`, `[Graph Optimization]`, `[PD Disaggregation]`, `[Loader]`, `[RL]`, `[XPU]`, `[GCU]`, `[ILUVATAR_GPU]`, `[METAX_GPU]`, `[INTEL_HPU]`, `[Benchmark]`, `[FDConfig]`, `[Speculative Decoding]`, `[Scheduler]`, `[Others]`]
   - You can add new tags based on the PR content, but the semantics must be clear.
 - [ ] Format your code, run `pre-commit` before commit.
 - [ ] Add unit tests. Please write the reason in this PR if no unit tests.
