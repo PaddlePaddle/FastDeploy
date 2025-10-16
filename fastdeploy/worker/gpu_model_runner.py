@@ -1575,6 +1575,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.proposer.update_task_chunk_prefill(task)
             task.chunk_idx += 1
 
+    @sot_warmup_guard(True)
     def capture_model(self) -> None:
         """
         Trigger CUDA Graph capture for all shapes in cuda graph capture list
