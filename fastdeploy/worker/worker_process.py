@@ -404,9 +404,9 @@ class PaddleDisWorkerProc:
 
             if num_blocks_local <= 0:
                 raise ValueError(
-                    "The total number of blocks cannot be less than zero."
-                    "Please increase gpu_memory_utilization"
-                    "Or decrease max_num_batched_tokens(max model length) "
+                    "The total number of blocks cannot be less than zero. "
+                    "Please increase gpu_memory_utilization "
+                    "Or decrease max_num_batched_tokens(max model length)."
                 )
 
             if self.ranks > 1:

@@ -228,8 +228,9 @@ MoeLayer(const paddle::Tensor &x, const paddle::Tensor &gate_weight,
                quant_method == "weight_only_int4") {
         APPLY_MOE_LAYER_KERNEL(paddle::bfloat16, int4_t);
     } else {
-        PD_THROW("MoeLayer not support x_type==%d, w_type==%d",
-                 static_cast<int>(x_type), static_cast<int>(w_type));
+        PD_THROW("MoeLayer not support x_type=", static_cast<int>(x_type),
+                 ", w_type=", static_cast<int>(w_type),
+                 ", quant_method=", quant_method);
         return {};
     }
 #undef APPLY_MOE_LAYER_KERNEL

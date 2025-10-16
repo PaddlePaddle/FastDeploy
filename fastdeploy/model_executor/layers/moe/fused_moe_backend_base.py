@@ -30,14 +30,21 @@ class MoEMethodBase(QuantMethodBase):
 
     def __init__(self, quant_config):
         super().__init__()
-        if quant_config is None:
+        self.quant_config = quant_config
+        if self.quant_config is None:
             self.moe_quant_type = "w16a16"
+        elif hasattr(quant_config, "algo"):
+            self.moe_quant_type = quant_config.algo
         else:
-            self.quant_config = quant_config
+            self.moe_quant_type = quant_config.name()
         self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
         self.added_scale_attrs = [
             "up_gate_proj_weight_scale",
             "down_proj_weight_scale",
+        ]
+        self.added_in_scale_attrs = [
+            "up_gate_proj_in_scale",
+            "down_proj_in_scale",
         ]
         self.pack_num = 1
         self.ep_prefill_runner = None
