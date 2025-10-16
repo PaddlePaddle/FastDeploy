@@ -68,12 +68,13 @@ class EngineService:
             cfg (Config): Config object containing all the configuration parameters.
         """
         self.cfg = cfg
-        if isinstance(self.cfg.cache_config.cache_queue_port, str):
-            self.cfg.cache_config.cache_queue_port = self.cfg.cache_config.cache_queue_port.split(",")
-        if isinstance(self.cfg.cache_config.cache_queue_port, list):
-            self.cfg.cache_config.cache_queue_port = int(
-                self.cfg.cache_config.cache_queue_port[self.cfg.parallel_config.local_data_parallel_id]
-            )
+        if cfg.scheduler_config.splitwise_role != "mixed" or cfg.cache_config.enable_prefix_caching:
+            if isinstance(self.cfg.cache_config.cache_queue_port, str):
+                self.cfg.cache_config.cache_queue_port = self.cfg.cache_config.cache_queue_port.split(",")
+            if isinstance(self.cfg.cache_config.cache_queue_port, list):
+                self.cfg.cache_config.cache_queue_port = int(
+                    self.cfg.cache_config.cache_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+                )
 
         if self.cfg.parallel_config.enable_expert_parallel:
             self.llm_logger = get_logger(
@@ -696,9 +697,7 @@ class EngineService:
                     time.sleep(0.001)
                     continue
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
-                    if self.scheduler.get_unhandled_request_num() <= envs.FD_EP_MAX_PREFETCH_TASK_NUM and (
-                        not is_fetching
-                    ):
+                    if not is_fetching:
                         get_request_pool.submit(_fetch_request)
 
                 else:
