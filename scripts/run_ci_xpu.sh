@@ -187,6 +187,13 @@ export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
 export XSHMEM_QP_NUM_PER_RANK=32
 export BKCL_RDMA_VERBS=1
+
+wget -q https://paddle-qa.bj.bcebos.com/xpu_third_party/xDeepEP.tar.gz
+tar -xzf xDeepEP.tar.gz
+cd xDeepEP
+bash build.sh
+cd -
+
 python tests/ci_use/XPU_45T/test_ep.py
 ep_exit_code=$?
 
