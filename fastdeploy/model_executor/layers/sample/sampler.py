@@ -34,11 +34,9 @@ from fastdeploy.model_executor.layers.sample.ops import (
     apply_penalty_multi_scores,
     apply_speculative_penalty_multi_scores,
     min_p_sampling,
-    top_k_top_p_sampling,
-)
-from fastdeploy.model_executor.ops.gpu import (
     speculate_get_target_logits,
     speculate_insert_first_token,
+    top_k_top_p_sampling,
 )
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.output import LogprobsTensors, SamplerOutput
