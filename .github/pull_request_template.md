@@ -21,7 +21,10 @@
 
 ## Checklist
 
-- [ ] Add a tag like `[BugFix]`, `[CUDAGraph]`, `[EP]` in the PR title.
+- [ ] Add at least a tag in the PR title.
+  - Tag list: `[BUGFix]`, `[Docs]`, `[CI]`，`[Optimization]` ,`[Feature]`, `[CUDAGraph]`, `[PD Disaggregation]`, `[V1 Loader]`, `[XPU]`, `[Benchmark]`, `[FDConfig]`, `[MTP]`, `[Sheduler]`,`[Others]`
+  - You can add new tags based on the PR content, but the semantics must be clear.
 - [ ] Format your code, run `pre-commit` before commit.
 - [ ] Add unit tests. Please write the reason in this PR if no unit tests.
 - [ ] Provide accuracy results.
+- [ ] Make sure the PR is submitted to the `develop` branch and then cherry-pick to the `release` branch with `[Cherry-Pick]` tag.
