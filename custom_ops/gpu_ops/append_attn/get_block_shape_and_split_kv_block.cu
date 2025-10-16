@@ -462,6 +462,32 @@ void GetBlockShapeAndSplitKVBlock(
 
 }
 
+std::vector<std::vector<int64_t>> GetBlockShapeAndSplitKVBlockInferShape(
+    const std::vector<int64_t> &seq_lens_encoder,
+    const std::vector<int64_t> &seq_lens_decoder,
+    const std::vector<int64_t> &seq_lens_this_time,
+    const int encoder_block_shape_q,
+    const int decoder_block_shape_q,
+    const int group_size,
+    const int block_size,
+    const int decoder_step_token_num
+) {
+  return {};
+}
+
+std::vector<paddle::DataType> GetBlockShapeAndSplitKVBlockInferDtype(
+    const paddle::DataType &seq_lens_encoder,
+    const paddle::DataType &seq_lens_decoder,
+    const paddle::DataType &seq_lens_this_time,
+    const int encoder_block_shape_q,
+    const int decoder_block_shape_q,
+    const int group_size,
+    const int block_size,
+    const int decoder_step_token_num
+) {
+  return {};
+}
+
 PD_BUILD_STATIC_OP(get_block_shape_and_split_kv_block)
     .Inputs({
       "seq_lens_encoder",
@@ -490,4 +516,6 @@ PD_BUILD_STATIC_OP(get_block_shape_and_split_kv_block)
       "block_size: int",
       "decoder_step_token_num: int"
     })
-    .SetKernelFn(PD_KERNEL(GetBlockShapeAndSplitKVBlock));
+    .SetKernelFn(PD_KERNEL(GetBlockShapeAndSplitKVBlock))
+    .SetInferShapeFn(PD_INFER_SHAPE(GetBlockShapeAndSplitKVBlockInferShape))
+    .SetInferDtypeFn(PD_INFER_DTYPE(GetBlockShapeAndSplitKVBlockInferDtype));
