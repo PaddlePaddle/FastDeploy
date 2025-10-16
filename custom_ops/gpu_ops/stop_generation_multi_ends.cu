@@ -40,13 +40,17 @@ __global__ void set_value_by_flags(bool *stop_flags,
                                    const int64_t *stop_token_ids,
                                    const int *stop_token_ids_len,
                                    const int stop_token_ids_max_len,
+                                   const int64_t *min_tokens,      // 新增
+                                   const int64_t *max_tokens,      // 新增
                                    bool beam_search,
                                    bool prefill_one_step_stop) {
     int tid = threadIdx.x;
     int bid = blockIdx.x;
     if (tid >= stop_seqs_bs) return;
+
     if (bid < bs) {
         if(tid == 0){
+            // 原有的 prefill 逻辑
             if (prefill_one_step_stop) {
                 stop_flags[bid] = true;
                 if (seq_lens[bid] == 0) {
@@ -65,43 +69,69 @@ __global__ void set_value_by_flags(bool *stop_flags,
                     next_tokens[bid] = topk_ids[bid];
                 }
             }
-            if (!beam_search && is_in_end(topk_ids[bid], end_ids, end_length)) {
+
+            // check max_tokens
+            const int64_t current_step = step_idx[bid];
+            const int64_t max_token_limit = max_tokens[bid];
+
+            if (current_step >= max_token_limit) {
                 stop_flags[bid] = true;
+                next_tokens[bid] = end_ids[0];
+                topk_ids[bid] = end_ids[0];
+                return;
             }
 
+            // check min_tokens
+            const int64_t min_token_limit = min_tokens[bid];
+            const bool below_min_tokens = current_step < min_token_limit;
 
-            if(!stop_flags[bid] && stop_token_ids != nullptr && stop_token_ids_len != nullptr)
-            {
-                const int num_stop_tokens = stop_token_ids_len[bid];
-                if (bid == 0) {
-                    printf("DEBUG bid=%d: num_stop_tokens=%d, current_token=%ld\n",
-                        bid, num_stop_tokens, topk_ids[bid]);
+            // If haven't reached min_tokens, cannot stop for any reason
+            if (below_min_tokens) {
+                if (!beam_search && is_in_end(topk_ids[bid], end_ids, end_length)) {
+                    return;
+                }
+            } else {
+                if (!beam_search && is_in_end(topk_ids[bid], end_ids, end_length)) {
+                    stop_flags[bid] = true;
                 }
 
-                if(num_stop_tokens > 0 && topk_ids[bid] >=0)
+                if(!stop_flags[bid] && stop_token_ids != nullptr && stop_token_ids_len != nullptr)
                 {
-                    const int64_t current_token = topk_ids[bid];
-                    const int64_t *stop_tokens_now = stop_token_ids + bid * stop_token_ids_max_len;
+                    const int num_stop_tokens = stop_token_ids_len[bid];
 
-                    for(int i = 0; i < num_stop_tokens; ++i)
+                    if(num_stop_tokens > 0)
                     {
-                        int64_t stop_token = stop_tokens_now[i];
-                        printf("DEBUG bid=%d\n",stop_token);
-                        if(stop_token>=0 && current_token == stop_tokens_now[i])
+                        const int64_t last_token_id = topk_ids[bid];
+
+                        if(last_token_id >= 0)
                         {
-                            stop_flags[bid] = true;
-                            next_tokens[bid] = end_ids[0];
-                            topk_ids[bid] = end_ids[0];
-                            break;
+                            const int64_t *stop_tokens_now = stop_token_ids + bid * stop_token_ids_max_len;
+
+                            for(int i = 0; i < num_stop_tokens; ++i)
+                            {
+                                const int64_t stop_token = stop_tokens_now[i];
+
+                                if(stop_token >= 0 && last_token_id == stop_token)
+                                {
+                                    stop_flags[bid] = true;
+                                    next_tokens[bid] = end_ids[0];
+                                    topk_ids[bid] = end_ids[0];
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
             }
         }
 
-        // dealing stop_seqs
         const int stop_seq_len = (stop_seqs_len + bid * stop_seqs_bs)[tid];
         if (stop_seq_len <= 0) return;
+
+        const int64_t current_step = step_idx[bid];
+        const int64_t min_token_limit = min_tokens[bid];
+        if (current_step < min_token_limit) return;
+
         const int64_t *stop_seq_now = stop_seqs + bid * stop_seqs_bs + tid * stop_seqs_max_len;
         const int64_t *pre_ids_now = pre_ids + bid * pre_ids_len;
         const int64_t step_idx_now = step_idx[bid];
@@ -124,6 +154,7 @@ __global__ void set_value_by_flags(bool *stop_flags,
 }
 
 
+
 void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
                        const paddle::Tensor &stop_flags,
                        const paddle::Tensor &seq_lens,
@@ -135,6 +166,8 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
                        const paddle::Tensor &stop_seqs_len,
                        const paddle::Tensor &stop_token_ids,
                        const paddle::Tensor &stop_token_ids_len,
+                       const paddle::Tensor &min_tokens,
+                       const paddle::Tensor &max_tokens,
                        const bool beam_search) {
     PD_CHECK(topk_ids.dtype() == paddle::DataType::INT64);
     PD_CHECK(stop_flags.dtype() == paddle::DataType::BOOL);
@@ -186,12 +219,14 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
         stop_token_ids_ptr,
         stop_token_ids_len_ptr,
         stop_token_ids_max_len,
+        min_tokens.data<int64_t>(),
+        max_tokens.data<int64_t>(),
         beam_search,
         prefill_one_step_stop);
 }
 
 PD_BUILD_STATIC_OP(set_stop_value_multi_ends)
-    .Inputs({"topk_ids", "stop_flags", "seq_lens", "end_ids", "next_tokens", "pre_ids", "step_idx", "stop_seqs", "stop_seqs_len","stop_token_ids","stop_token_ids_len"})
+    .Inputs({"topk_ids", "stop_flags", "seq_lens", "end_ids", "next_tokens", "pre_ids", "step_idx", "stop_seqs", "stop_seqs_len","stop_token_ids","stop_token_ids_len","min_tokens","max_tokens"})
     .Attrs({"beam_search: bool"})
     .Outputs({"topk_ids_out", "stop_flags_out", "next_tokens_out"})
     .SetInplaceMap({{"topk_ids", "topk_ids_out"},

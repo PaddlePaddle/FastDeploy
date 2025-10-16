@@ -1527,6 +1527,8 @@ class GPUModelRunner(ModelRunnerBase):
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
                 stop_token_ids=self.share_inputs["stop_token_ids"],
                 stop_token_ids_len=self.share_inputs["stop_token_ids_len"],
+                min_tokens=self.share_inputs["min_dec_len"],
+                max_tokens=self.share_inputs["max_dec_len"],
                 prompt_lens=self.share_inputs["prompt_lens"],
             )
 
@@ -1884,6 +1886,8 @@ class GPUModelRunner(ModelRunnerBase):
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
             stop_token_ids=self.share_inputs["stop_token_ids"],
             stop_token_ids_len=self.share_inputs["stop_token_ids_len"],
+            min_tokens=self.share_inputs["min_dec_len"],
+            max_tokens=self.share_inputs["max_dec_len"],
             prompt_lens=self.share_inputs["prompt_lens"],
         )
 

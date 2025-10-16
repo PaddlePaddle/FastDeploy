@@ -260,6 +260,15 @@ class ModelOutputData:
         the length of stop_token_ids
     """
 
+    min_tokens: paddle.Tensor = None
+    """
+        the minimum tokens that will be generated
+    """
+    max_tokens: paddle.Tensor = None
+    """
+        the maximum tokens that will be generated
+    """
+
 
 @dataclass
 class ModelRunnerOutput:
