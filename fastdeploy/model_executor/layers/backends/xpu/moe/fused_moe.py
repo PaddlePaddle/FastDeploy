@@ -79,7 +79,7 @@ class XPUMoEMethod(UnquantizedFusedMoEMethod):
                 tensor_model_parallel_all_reduce,
             )
 
-            tensor_model_parallel_all_reduce(fused_moe_out)
+            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out)
 
         return fused_moe_out
 
@@ -318,7 +318,7 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
                 tensor_model_parallel_all_reduce,
             )
 
-            tensor_model_parallel_all_reduce(tmp_ffn_out)
+            tmp_ffn_out = tensor_model_parallel_all_reduce(tmp_ffn_out)
         return tmp_ffn_out
 
 
@@ -863,5 +863,5 @@ class XPUW4A8MoEMethod(XPUMoEMethod):
                 tensor_model_parallel_all_reduce,
             )
 
-            tensor_model_parallel_all_reduce(tmp_ffn_out)
+            tmp_ffn_out = tensor_model_parallel_all_reduce(tmp_ffn_out)
         return tmp_ffn_out
