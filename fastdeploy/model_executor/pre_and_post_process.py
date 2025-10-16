@@ -425,7 +425,6 @@ def step_cuda(
     TODO(gongshaotian): normalization name
     """
 
-    print("speculative_config.method", speculative_config.method)
     if speculative_config.method is not None:
         if DISABLE_RECOVER:
             speculate_step_reschedule(
@@ -518,7 +517,6 @@ def step_cuda(
                 )
     else:
         if DISABLE_RECOVER:
-            print("step_reschedule前面", share_inputs["seq_lens_this_time"])
             step_reschedule(
                 share_inputs["stop_flags"],
                 share_inputs["seq_lens_this_time"],
@@ -545,10 +543,8 @@ def step_cuda(
                 block_size,
                 enc_dec_block_num,
             )
-            print("step_reschedule后面", share_inputs["seq_lens_this_time"])
         else:
             if enable_prefix_caching:
-                print("step_system_cache前面", int((share_inputs["seq_lens_this_time"] > 0).sum()))
                 step_system_cache(
                     share_inputs["stop_flags"],
                     share_inputs["seq_lens_this_time"],
@@ -576,9 +572,7 @@ def step_cuda(
                     block_size,
                     enc_dec_block_num,
                 )
-                print("step_system_cache后面", int((share_inputs["seq_lens_this_time"] > 0).sum()))
             else:
-                print("step_paddle前面", share_inputs["seq_lens_this_time"])
                 step_paddle(
                     share_inputs["stop_flags"],
                     share_inputs["seq_lens_this_time"],
@@ -605,7 +599,6 @@ def step_cuda(
                     block_size,
                     enc_dec_block_num,
                 )
-                print("step_paddle后面", share_inputs["seq_lens_this_time"])
 
 
 def rebuild_padding(

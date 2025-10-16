@@ -192,10 +192,12 @@ class EngineWorkerQueue:
                 "get_finish_request_barrier",
                 callable=lambda idx: self.finish_request_barrier[idx],
             )
+
             QueueManager.register(
                 "get_finish_add_cache_task_barrier",
                 callable=lambda idx: self.finish_add_cache_task_barrier[idx],
             )
+
             QueueManager.register(
                 "get_worker_process_tp_barrier",
                 callable=lambda idx: self.worker_process_tp_barrier[idx],

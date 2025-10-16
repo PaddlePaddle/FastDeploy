@@ -110,7 +110,7 @@ class FlashAttentionBackend(AttentionBackend):
         """
         super().__init__()
         self.attention_metadata: FlashAttentionMetadata = None
-        self.max_seq_len = fd_config.parallel_config.max_model_len
+        self.max_seq_len = fd_config.model_config.max_model_len
         self.causal = getattr(fd_config.model_config, "causal", True)
 
         self.kv_num_heads = kv_num_heads
