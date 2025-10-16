@@ -1383,7 +1383,7 @@ class StructuredOutputsConfig:
         self.disable_any_whitespace: bool = True
 
         for key, value in args.items():
-            if hasattr(self, key):
+            if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
 
 
