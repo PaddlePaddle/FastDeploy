@@ -15,7 +15,7 @@
 """
 
 from copy import deepcopy
-from typing import TYPE_CHECKING, Annotated, Any, Optional
+from typing import TYPE_CHECKING, Annotated, Any, Dict, Optional
 
 import msgspec
 
@@ -26,7 +26,11 @@ if TYPE_CHECKING:
     from fastdeploy.config import ModelConfig
 
 
-class PoolingParams:
+class PoolingParams(
+    msgspec.Struct,
+    omit_defaults=True,  # type: ignore[call-arg]
+    array_like=True,
+):  # type: ignore[call-arg]:
     """API parameters for pooling models.
 
     Attributes:
@@ -85,6 +89,33 @@ class PoolingParams:
             "embed": ["dimensions", "normalize"],
             "encode": ["softmax", "step_tag_id", "returned_token_ids"],
         }
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert instance to dictionary including only non-None attributes."""
+        result = {}
+        for field_name in self.__annotations__:
+            if field_name == "output_kind":
+                continue
+            value = getattr(self, field_name, None)
+            if isinstance(value, PoolingParams):
+                result[field_name] = value.to_dict()
+            else:
+                result[field_name] = value
+        if self.extra_kwargs:
+            result.update(self.extra_kwargs)
+        return result
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "PoolingParams":
+        """Create instance from dictionary, separating known fields and extra_kwargs."""
+        known_fields = set(cls.__annotations__.keys())
+        init_kwargs = {k: v for k, v in data.items() if k in known_fields}
+        extra_kwargs = {k: v for k, v in data.items() if k not in known_fields}
+
+        if extra_kwargs:
+            init_kwargs["extra_kwargs"] = extra_kwargs
+
+        return cls(**init_kwargs)
 
     def clone(self) -> "PoolingParams":
         """Returns a deep copy of the PoolingParams instance."""

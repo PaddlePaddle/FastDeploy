@@ -58,10 +58,12 @@ class RequestFuncOutput:
     """Output for requesting LLMs via API"""
 
     no: int = 0
+    request_id: str = ""
     generated_text: str = ""
     reasoning_content: str = ""
     success: bool = False
     latency: float = 0.0
+    end_timestamp: float = 0.0  # 模型完全返回的时间戳（秒, perf_counter基准）
     output_tokens: int = 0
     ttft: float = 0.0  # Time to first token
     arrival_time: list = field(default_factory=list)  # arrival_time
@@ -116,6 +118,7 @@ async def async_request_eb_openai_chat_completions(
         most_recent_timestamp = st
         try:
             async with session.post(url=api_url, json=payload, headers=headers) as response:
+                data = {}
                 if response.status == 200:
                     async for chunk_bytes in response.content:
                         chunk_bytes = chunk_bytes.strip()
@@ -154,6 +157,8 @@ async def async_request_eb_openai_chat_completions(
                             most_recent_timestamp = timestamp
 
                     # output.generated_text = generated_text
+                    # 在流式结束时，记录最后一个 chunk 收到的时间戳
+                    output.end_timestamp = most_recent_timestamp
                     if output.generated_text.strip() == "":
                         output.success = False
                         output.error = "No generated text found!"
@@ -170,6 +175,7 @@ async def async_request_eb_openai_chat_completions(
                     )
                     output.error = error_text or ""
                     output.success = False
+                output.request_id = data.get("id", "")
         except Exception:
             output.success = False
             exc_info = sys.exc_info()
