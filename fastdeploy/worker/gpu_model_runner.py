@@ -187,12 +187,12 @@ class GPUModelRunner(ModelRunnerBase):
 
     def _async_output_busy_loop(self):
         """Entrypoint for the thread which handles outputs asynchronously."""
-        try:
-            while True:
+        while True:
+            try:
                 output = self.async_output_queue.get()
                 self.zmq_client.send_pyobj(output)
-        except Exception as e:
-            logger.exception("Exception in async output loop: %s", e)
+            except Exception as e:
+                logger.exception("Exception in async output loop: %s", e)
 
     def exist_prefill(self):
         """
