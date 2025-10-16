@@ -10,6 +10,7 @@ from fastdeploy.config import (
     ParallelConfig,
     SchedulerConfig,
 )
+from fastdeploy.utils import get_host_ip
 
 
 class TestConfig(unittest.TestCase):
@@ -28,11 +29,11 @@ class TestConfig(unittest.TestCase):
             cache_config=cache_config,
             scheduler_config=scheduler_config,
             model_config=model_config,
-            ips=["1.1.1.1", "0.0.0.0"],
+            ips=[get_host_ip(), "0.0.0.0"],
             test_mode=True,
         )
         assert fd_config.nnode == 2
-        assert fd_config.is_master is False
+        assert fd_config.is_master is True
 
     def test_fdconfig_ips(self):
         parallel_config = ParallelConfig({})
