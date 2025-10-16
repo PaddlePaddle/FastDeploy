@@ -16,28 +16,28 @@ class TestEPMoeExpertDispatch(unittest.TestCase):
         print(paddle.__git_commit__)
         self.batch_size = 16
         self.hidden_size = 32
-        self.num_experts = 4
+        self.num_experts = 8
         self.moe_topk = 2
-        self.token_nums_per_expert = [9, 8, 8, 7]
+        self.token_nums_per_expert = [4, 4, 3, 4, 4, 4, 5, 4]
         self.token_nums_this_rank = sum(self.token_nums_per_expert)
         self.topk_ids = np.array(
             [
                 [0, 1],
                 [0, 2],
                 [0, 3],
-                [0, 1],
-                [1, 0],
                 [1, 2],
                 [1, 3],
-                [2, 0],
-                [2, 1],
-                [2, 3],
-                [2, 0],
-                [2, 1],
-                [3, 0],
-                [3, 1],
-                [3, 2],
-                [3, 0],
+                [4, 5],
+                [4, 6],
+                [4, 7],
+                [5, 6],
+                [5, 7],
+                [6, 7],
+                [0, 4],
+                [1, 5],
+                [2, 6],
+                [3, 7],
+                [3, 6],
             ]
         )
         self.topk_ids = paddle.to_tensor(self.topk_ids)
