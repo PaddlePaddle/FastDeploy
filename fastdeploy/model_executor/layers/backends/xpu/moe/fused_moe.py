@@ -240,8 +240,6 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
         """
         XPU compute Fused MoE.
         """
-        from fastdeploy.model_executor.ops.xpu import xpu_moe_layer
-
         USING_EP_MOE_ALGO = os.environ.get("USING_EP_MOE_ALGO", False)
         if USING_EP_MOE_ALGO:
             gate_out = paddle.matmul(x.cast("float32"), gate.weight.transpose([1, 0]), transpose_y=True)
@@ -294,6 +292,8 @@ class XPUWeightOnlyMoEMethod(QuantMethodBase):
                 tensor_model_parallel_all_reduce(tmp_ffn_out)
             return tmp_ffn_out
         else:
+            from fastdeploy.model_executor.ops.xpu import xpu_moe_layer
+
             fused_moe_out = xpu_moe_layer(
                 x,
                 gate.weight.transpose([1, 0]),
