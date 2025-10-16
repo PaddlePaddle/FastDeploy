@@ -206,7 +206,7 @@ def is_pre_sliced_weight(model_path):
 
 
 def v1_loader_support(fd_config):
-    _v1_no_support_archs = ["Qwen2VLForConditionalGeneration", "Qwen2_5_VLForConditionalGeneration"]
+    _v1_no_support_archs = ["Qwen2VLForConditionalGeneration"]
 
     def _err_msg(msg: str) -> str:
         logger.info(msg + "; fallback to the v0 loader for model loading.")
