@@ -22,7 +22,7 @@
 __global__ void limit_thinking_content_length_kernel_v2(
     int64_t *next_tokens,
     const int *max_think_lens,
-    const int64_t *step_idx,  // step_idx 不再需要被修改，改为 const
+    const int64_t *step_idx,
     int *limit_think_status,
     const int64_t think_end_id,
     const int64_t line_break_id,
