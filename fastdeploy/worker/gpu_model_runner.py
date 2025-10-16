@@ -1744,6 +1744,16 @@ class GPUModelRunner(ModelRunnerBase):
                     group=self.parallel_config.tp_group,
                 )
 
+            if self.model_config.think_end_id > 0:
+                limit_thinking_content_length(
+                    limit_strategy=envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR,
+                    sampled_token_ids=sampler_output.sampled_token_ids,
+                    max_think_lens=self.share_inputs["max_think_lens"],
+                    step_idx=self.share_inputs["step_idx"],
+                    limit_think_status=self.share_inputs["limit_think_status"],
+                    think_end_id=self.model_config.think_end_id,
+                    line_break_id=self.model_config.line_break_id,
+                )
         else:
             self.sampler(
                 logits,
@@ -1773,20 +1783,6 @@ class GPUModelRunner(ModelRunnerBase):
                     self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
                     group=self.parallel_config.tp_group,
                 )
-
-        if self.model_config.think_end_id > 0 and not self.speculative_decoding:
-            assert (
-                sampler_output is not None
-            ), "Warning, limit thinking content length not support speculative decoding."
-            limit_thinking_content_length(
-                limit_strategy=envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR,
-                sampled_token_ids=sampler_output.sampled_token_ids,
-                max_think_lens=self.share_inputs["max_think_lens"],
-                step_idx=self.share_inputs["step_idx"],
-                limit_think_status=self.share_inputs["limit_think_status"],
-                think_end_id=self.model_config.think_end_id,
-                line_break_id=self.model_config.line_break_id,
-            )
 
         # 5. Post Process
         model_output_data = ModelOutputData(
