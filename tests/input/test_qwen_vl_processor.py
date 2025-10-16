@@ -276,7 +276,7 @@ class TestQwenVLProcessor(unittest.TestCase):
         # Create equivalent request in prompt format
         prompt = {
             "request_id": "12345",
-            "prompt": request["text_after_process"],
+            "prompt": request["prompt_tokens"],
             "multimodal_data": {
                 "image": [mock_pil_image(480, 640)],
                 "video": [{"video": b"123"}],
@@ -300,7 +300,7 @@ class TestQwenVLProcessor(unittest.TestCase):
 
         This test verifies that:
         - The processor correctly handles multimodal messages (image, video, text)
-        - The text_after_process field matches the output from direct tokenizer application
+        - The prompt_tokens field matches the output from direct tokenizer application
         - The chat template application preserves the message structure and content
 
         Test Steps:
@@ -345,7 +345,7 @@ class TestQwenVLProcessor(unittest.TestCase):
 
         # Process request through the processor
         self.processor.process_request_dict(request, 1024 * 100)
-        prompt2 = request["text_after_process"]
+        prompt2 = request["prompt_tokens"]
 
         # Verify both methods produce identical prompt strings
         self.assertEqual(prompt, prompt2)

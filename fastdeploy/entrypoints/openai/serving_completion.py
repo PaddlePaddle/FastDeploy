@@ -132,7 +132,7 @@ class OpenAIServingCompletion:
         num_choices = len(request_prompts)
         api_server_logger.info(f"Start preprocessing request: req_id={request_id}), num_choices={num_choices}")
         prompt_batched_token_ids = []
-        text_after_process_list = []
+        prompt_tokens_list = []
         try:
             if self.max_waiting_time < 0:
                 await self.engine_client.semaphore.acquire()
@@ -157,7 +157,7 @@ class OpenAIServingCompletion:
                     prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)  # tokenize
                     if isinstance(prompt_token_ids, np.ndarray):
                         prompt_token_ids = prompt_token_ids.tolist()
-                    text_after_process_list.append(current_req_dict.get("text_after_process"))
+                    prompt_tokens_list.append(current_req_dict.get("prompt_tokens"))
                     prompt_batched_token_ids.append(prompt_token_ids)
                     del current_req_dict
             except ParameterError as e:
@@ -180,7 +180,7 @@ class OpenAIServingCompletion:
                     created_time=created_time,
                     model_name=request.model,
                     prompt_batched_token_ids=prompt_batched_token_ids,
-                    text_after_process_list=text_after_process_list,
+                    prompt_tokens_list=prompt_tokens_list,
                 )
             else:
                 try:
@@ -191,7 +191,7 @@ class OpenAIServingCompletion:
                         created_time=created_time,
                         model_name=request.model,
                         prompt_batched_token_ids=prompt_batched_token_ids,
-                        text_after_process_list=text_after_process_list,
+                        prompt_tokens_list=prompt_tokens_list,
                     )
                 except Exception as e:
                     error_msg = (
@@ -213,7 +213,7 @@ class OpenAIServingCompletion:
         created_time: int,
         model_name: str,
         prompt_batched_token_ids: list(),
-        text_after_process_list: list(),
+        prompt_tokens_list: list(),
     ):
         """
         Process the full completion request with multiple choices.
@@ -292,7 +292,7 @@ class OpenAIServingCompletion:
                 model_name=model_name,
                 prompt_batched_token_ids=prompt_batched_token_ids,
                 completion_batched_token_ids=completion_batched_token_ids,
-                text_after_process_list=text_after_process_list,
+                prompt_tokens_list=prompt_tokens_list,
             )
             api_server_logger.info(f"Completion response: {res.model_dump_json()}")
             return res
@@ -344,7 +344,7 @@ class OpenAIServingCompletion:
         created_time: int,
         model_name: str,
         prompt_batched_token_ids: list(),
-        text_after_process_list: list(),
+        prompt_tokens_list: list(),
     ):
         """
         Process the stream completion request.
@@ -408,8 +408,7 @@ class OpenAIServingCompletion:
                                         index=idx,
                                         text="",
                                         prompt_token_ids=list(prompt_batched_token_ids[idx]),
-                                        text_after_process=text_after_process_list[idx],
-                                        prompt_tokens=text_after_process_list[idx],
+                                        prompt_tokens=prompt_tokens_list[idx],
                                         completion_token_ids=None,
                                     )
                                 ],
@@ -443,8 +442,7 @@ class OpenAIServingCompletion:
                         prompt_token_ids=None,
                         completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
                         tool_calls=None,
-                        raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
-                        completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
+                        completion_tokens=output.get("completion_tokens") if request.return_token_ids else None,
                         reasoning_content="",
                         arrival_time=arrival_time,
                         logprobs=logprobs_res,
@@ -522,7 +520,7 @@ class OpenAIServingCompletion:
         model_name: str,
         prompt_batched_token_ids: list(),
         completion_batched_token_ids: list(),
-        text_after_process_list: list(),
+        prompt_tokens_list: list(),
     ) -> CompletionResponse:
         choices: List[CompletionResponseChoice] = []
         num_prompt_tokens = 0
@@ -556,10 +554,8 @@ class OpenAIServingCompletion:
                 text=output_text,
                 prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
                 completion_token_ids=completion_token_ids if request.return_token_ids else None,
-                raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
-                completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
-                text_after_process=text_after_process_list[idx] if request.return_token_ids else None,
-                prompt_tokens=text_after_process_list[idx] if request.return_token_ids else None,
+                completion_tokens=output.get("completion_tokens") if request.return_token_ids else None,
+                prompt_tokens=prompt_tokens_list[idx] if request.return_token_ids else None,
                 reasoning_content=output.get("reasoning_content"),
                 tool_calls=output.get("tool_call"),
                 logprobs=aggregated_logprobs,

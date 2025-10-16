@@ -1227,7 +1227,8 @@ class XPUModelRunner(ModelRunnerBase):
         """
         Clear the block tables and kv cache after profiling.
         """
-        del self.share_inputs["caches"]
+        if hasattr(self.share_inputs, "caches"):
+            del self.share_inputs["caches"]
         if self.forward_meta is not None:
             del self.forward_meta.caches
         paddle.device.xpu.empty_cache()
