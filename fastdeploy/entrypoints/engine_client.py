@@ -73,6 +73,7 @@ class EngineClient:
         architectures = ModelConfig({"model": model_name_or_path}).architectures[0]
         if MultimodalRegistry.contains_model(architectures):
             self.enable_mm = True
+            self.disable_prefix_mm = MultimodalRegistry.contains_mm_disable_prefix_cache_model(architectures)
         else:
             self.enable_mm = False
 
@@ -158,6 +159,16 @@ class EngineClient:
         await self.add_requests(prompts)
         return prompts["prompt_token_ids"]
 
+    def _check_mm_disable_prefix_cache(self, task):
+        is_multimodal_data = False
+        if self.disable_prefix_mm:
+            multimodal_inputs = task.get("multimodal_inputs", [])
+            if multimodal_inputs:
+                token_type_ids = multimodal_inputs.get("token_type_ids", [])
+                if token_type_ids:
+                    is_multimodal_data = np.sum(token_type_ids) > 0
+        return is_multimodal_data
+
     async def add_requests(self, task):
         """
         Add a new request to the queue.
@@ -179,6 +190,15 @@ class EngineClient:
                 await self.data_processor.process_request_dict(task, self.max_model_len)
             else:
                 self.data_processor.process_request_dict(task, self.max_model_len)
+
+            if self.enable_mm and self.enable_prefix_caching:
+                if self._check_mm_disable_prefix_cache(task):
+                    api_server_logger.error(
+                        f"Current model doesn't support multimodal data with prefix caching, {task}"
+                    )
+                    raise EngineError(
+                        "Current model doesn't support multimodal data with prefix caching", error_code=400
+                    )
 
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]
