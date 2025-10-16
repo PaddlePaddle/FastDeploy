@@ -387,7 +387,7 @@ class EngineArgs:
     Configuration for early stop.
     """
 
-    load_choices: str = "default"
+    load_choices: str = "default_v1"
     """The format of the model weights to load.
         Options include:
         - "default": default loader.
@@ -715,7 +715,7 @@ class EngineArgs:
             type=str,
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\
-                 default/new_loader.",
+                 default/default_v1.",
         )
 
         # CacheConfig parameters group
@@ -1014,7 +1014,7 @@ class EngineArgs:
                 early_stop_args[k] = v
         return EarlyStopConfig(early_stop_args)
 
-    def create_engine_config(self) -> FDConfig:
+    def create_engine_config(self, port_availability_check=True) -> FDConfig:
         """
         Create and return a Config object based on the current settings.
         """
@@ -1026,11 +1026,7 @@ class EngineArgs:
 
         speculative_cfg = self.create_speculative_config()
         if not self.enable_chunked_prefill:
-            if (
-                current_platform.is_cuda()
-                and self.splitwise_role == "mixed"
-                and (speculative_cfg is None or speculative_cfg.method not in ["mtp"])
-            ):
+            if current_platform.is_cuda() and self.splitwise_role == "mixed":
                 # default enable chunked prefill
                 self.enable_chunked_prefill = True
 
@@ -1068,9 +1064,10 @@ class EngineArgs:
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
 
-        assert is_port_available(
-            "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
-        ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
+        if port_availability_check:
+            assert is_port_available(
+                "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
+            ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
 
         return FDConfig(
             model_config=model_cfg,
