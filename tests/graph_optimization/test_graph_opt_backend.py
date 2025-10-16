@@ -174,8 +174,10 @@ class TestGraphOptBackend(unittest.TestCase):
         # Validate results if comparison is requested
         if compare_with_baseline:
             np.testing.assert_allclose(
-                self.baseline_result, output.numpy(), err_msg=f"Test {test_name} failed: output mismatch", 
-                atol=1e-6 # for CINN
+                self.baseline_result,
+                output.numpy(),
+                err_msg=f"Test {test_name} failed: output mismatch",
+                atol=1e-6,  # for CINN
             )
 
         paddle.jit.sot.opcode_translator.executor.executor_cache.OpcodeExecutorCache().clear()
