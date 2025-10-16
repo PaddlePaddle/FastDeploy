@@ -13,7 +13,6 @@
 // limitations under the License.
 #pragma once
 
-#include "append_attention_func.cuh"
 #include "multiquery_attention_c8_kernel.h"
 
 template <typename T,
