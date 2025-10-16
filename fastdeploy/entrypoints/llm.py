@@ -249,7 +249,7 @@ class LLM:
         validated_tools = None
         if tools is not None:
             try:
-                validated_tools = _validate_tools(tools)
+                validated_tools = self._validate_tools(tools)
             except ValueError as e:
                 raise RuntimeError(f"Failed to validate 'tools' parameter in chat method: {e}") from e
         messages_len = len(messages)
@@ -568,62 +568,59 @@ class LLM:
 
         return incremental_result
 
+    def _validate_tools(self, raw_tools: Any) -> Optional[list[dict]]:
+        """
+        Validate the format of the `tools` parameter for chat requests.
+        Valid inputs are accepted and standardized, while invalid inputs raise ValueError.
+        Empty dict/list will be returned as None.
 
-def _validate_tools(raw_tools: Any) -> Optional[list[dict]]:
-    """
-    统一校验 tools 参数格式，支持以下合法输入：
-    1. None（不传入 tools，返回 None）
-    2. 单个工具字典（如 {"type": "function", "function": {...}}，自动转为列表）
-    3. 工具字典列表（如 [{"type": "function", "function": {...}}, ...]）
+        Args:
+            raw_tools: Raw `tools` parameter obtained from kwargs (can be any type)
 
-    非法输入会抛出 ValueError，包含具体错误信息：
-    - 非 None/字典/列表类型（如字符串、数字、布尔值等）
-    - 空字典/空列表（允许，但会提示“无有效工具”）
-    - 字典格式不符合 ChatCompletionToolsParam 定义（如缺少 function.name、type 错误等）
+        Returns:
+            Optional[List[Dict[str, Any]]]: Standardized list of valid tool dictionaries if validation passes;
+            None if `raw_tools` is None or empty (empty dict/list).
 
-    Args:
-        raw_tools: 从 kwargs 中获取的原始 tools 参数（可能是任何类型）
+        Raises:
+            ValueError: Raised when input type is invalid or format does not meet standards.
+        """
+        if raw_tools is None:
+            return None
+        if isinstance(raw_tools, ChatCompletionToolsParam):
+            return [raw_tools]
+        if isinstance(raw_tools, list) and all(isinstance(t, ChatCompletionToolsParam) for t in raw_tools):
+            if not raw_tools:
+                return None
+            else:
+                return raw_tools
 
-    Returns:
-        Optional[List[Dict[str, Any]]]: 校验通过的标准工具字典列表，或 None（当 raw_tools 为 None 时）
-
-    Raises:
-        ValueError: 输入类型非法或格式不符合标准时抛出
-    """
-    if raw_tools is None:
-        return None
-    if isinstance(raw_tools, ChatCompletionToolsParam):
-        return [raw_tools]
-    if isinstance(raw_tools, list) and all(isinstance(t, ChatCompletionToolsParam) for t in raw_tools):
-        return raw_tools
-
-    if not isinstance(raw_tools, dict) and not isinstance(raw_tools, list):
-        raise ValueError(
-            f"Invalid tools top-level type! Expected None, dict (single tool) or list (multiple tools), "
-            f"but got type '{type(raw_tools).__name__}' (value: {raw_tools})."
-        )
-    tools_list: list[dict[str, Any]] = [raw_tools] if isinstance(raw_tools, dict) else raw_tools
-
-    if not tools_list:
-        return None
-
-    validated_tools = []
-    for idx, tool in enumerate(tools_list):
-        if not isinstance(tool, dict):
+        if not isinstance(raw_tools, dict) and not isinstance(raw_tools, list):
             raise ValueError(
-                f"Invalid element type in tools list! At index {idx}, "
-                f"expected dict (tool definition), but got type '{type(tool).__name__}' (value: {tool})."
+                f"Invalid tools top-level type! Expected None, dict (single tool) or list (multiple tools), "
+                f"but got type '{type(raw_tools).__name__}' (value: {raw_tools})."
             )
+        tools_list: list[dict[str, Any]] = [raw_tools] if isinstance(raw_tools, dict) else raw_tools
 
-        try:
-            validated_tool_obj = ChatCompletionToolsParam.model_validate(tool)
-            validated_tools.append(validated_tool_obj.model_dump())
-        except ValidationError as e:
-            raise ValueError(
-                f"Invalid tool format at index {idx} in tools list! " f"Tool content: {tool}\nError details: {e}"
-            ) from e
+        if not tools_list:
+            return None
 
-    return validated_tools
+        validated_tools = []
+        for idx, tool in enumerate(tools_list):
+            if not isinstance(tool, dict):
+                raise ValueError(
+                    f"Invalid element type in tools list! At index {idx}, "
+                    f"expected dict (tool definition), but got type '{type(tool).__name__}' (value: {tool})."
+                )
+
+            try:
+                validated_tool_obj = ChatCompletionToolsParam.model_validate(tool)
+                validated_tools.append(validated_tool_obj.model_dump())
+            except ValidationError as e:
+                raise ValueError(
+                    f"Invalid tool format at index {idx} in tools list! " f"Tool content: {tool}\nError details: {e}"
+                ) from e
+
+        return validated_tools
 
 
 if __name__ == "__main__":
