@@ -1512,7 +1512,7 @@ class GPUModelRunner(ModelRunnerBase):
             block_size=self.cache_config.block_size,
             speculative_decoding=self.speculative_decoding,
             skip_save_output=True,
-            zmq_client=self.zmq_client,
+            async_output_queue=self.async_output_queue,
         )
 
         if self.speculative_decoding:
