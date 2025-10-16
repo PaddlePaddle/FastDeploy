@@ -61,7 +61,7 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         result = self.processor.process_response_dict_streaming(response_dict, **kwargs)
 
         # 验证结果
-        self.assertEqual(result["outputs"]["raw_prediction"], "delta_text")
+        self.assertEqual(result["outputs"]["completion_tokens"], "delta_text")
 
     def test_process_request_dict(self):
         request_dict = {

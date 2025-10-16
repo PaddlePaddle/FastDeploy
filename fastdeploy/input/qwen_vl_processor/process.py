@@ -495,7 +495,7 @@ class DataProcessor:
             add_generation_prompt=request.get("add_generation_prompt", True),
         )
         prompt_token_str = raw_prompt.replace(self.image_token, "").replace(self.video_token, "")
-        request["text_after_process"] = raw_prompt
+        request["prompt_tokens"] = raw_prompt
 
         tokens = self.tokenizer.tokenize(prompt_token_str)
         token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
