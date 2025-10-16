@@ -473,9 +473,12 @@ async def benchmark(
         if half > 0:
             benchmark_outputs = outputs[half : n - half]
 
+        # 先过滤掉 end_timestamp == 0.0 的请求（失败请求）
+        benchmark_outputs = [o for o in benchmark_outputs if o.end_timestamp != 0.0]
+
         # 根据收到最后一个chunk的时间戳计算总时长
-        if len(outputs) >= 2:
-            benchmark_duration = outputs[-1].end_timestamp - outputs[0].end_timestamp
+        if len(benchmark_outputs) >= 2:
+            benchmark_duration = benchmark_outputs[-1].end_timestamp - benchmark_outputs[0].end_timestamp
         else:
             benchmark_duration = 0.0
 
