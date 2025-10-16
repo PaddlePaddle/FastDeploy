@@ -44,6 +44,7 @@ from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import ExistTaskStatus, IPCSignal, ModelWeightsStatus
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
+from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.utils import get_logger, optional_type
@@ -332,6 +333,8 @@ class PaddleDisWorkerProc:
                         self.worker.model_runner,
                         self.parallel_config.engine_worker_queue_port,
                     )
+                    logger.info(f"current task queue data: {self.task_queue.num_tasks()}")
+                    self.task_queue.clear_data()
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
 
@@ -401,9 +404,9 @@ class PaddleDisWorkerProc:
 
             if num_blocks_local <= 0:
                 raise ValueError(
-                    "The total number of blocks cannot be less than zero."
-                    "Please increase gpu_memory_utilization"
-                    "Or decrease max_num_batched_tokens(max model length) "
+                    "The total number of blocks cannot be less than zero. "
+                    "Please increase gpu_memory_utilization "
+                    "Or decrease max_num_batched_tokens(max model length)."
                 )
 
             if self.ranks > 1:
@@ -423,7 +426,7 @@ class PaddleDisWorkerProc:
                 )
                 self.get_profile_block_num_signal.value[0] = num_blocks_local
         else:
-            num_blocks_local = self.fd_config.parallel_config.total_block_num
+            num_blocks_local = self.fd_config.cache_config.total_block_num
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
 
         # 4. init kv_cache with accurate num_blocks
@@ -812,7 +815,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         plas_attention_config=plas_attention_config,
     )
     update_fd_config_for_mm(fd_config)
-
+    if fd_config.load_config.load_choices == "default_v1" and not v1_loader_support(fd_config):
+        fd_config.load_config.load_choices = "default"
     return fd_config
 
 
