@@ -170,8 +170,8 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
         # TODO(hehongyu): remove this after fix model network
         setattr(
             self.gate.weight,
-            "model_format",
-            "",
+            "weight_need_transpose",
+            False,
         )
 
     def forward(self, hidden_states: paddle.Tensor):
