@@ -15,7 +15,9 @@
 """
 
 import os
+import queue
 import time
+from threading import Thread
 from typing import List, Optional
 
 import numpy as np
@@ -175,6 +177,22 @@ class GPUModelRunner(ModelRunnerBase):
             self.zmq_client = ZmqIpcClient(name=f"get_save_output_rank{local_rank}", mode=zmq.PUSH)
             self.zmq_client.connect()
             self.zmq_client.socket.SNDTIMEO = 3000
+            self.async_output_queue: queue.Queue = queue.Queue()
+            self.async_output_copy_thread = Thread(
+                target=self._async_output_busy_loop,
+                daemon=True,
+                name="WorkerAsyncOutputCopy",
+            )
+            self.async_output_copy_thread.start()
+
+    def _async_output_busy_loop(self):
+        """Entrypoint for the thread which handles outputs asynchronously."""
+        try:
+            while True:
+                output = self.async_output_queue.get()
+                self.zmq_client.send_pyobj(output)
+        except Exception as e:
+            logger.exception("Exception in async output loop: %s", e)
 
     def exist_prefill(self):
         """
@@ -1470,7 +1488,7 @@ class GPUModelRunner(ModelRunnerBase):
                 block_size=self.cache_config.block_size,
                 speculative_decoding=self.speculative_decoding,
                 skip_save_output=True,
-                zmq_client=self.zmq_client,
+                async_output_queue=self.async_output_queue,
             )
             if self.speculative_decoding:
                 if self.speculative_method == "mtp":
@@ -1830,7 +1848,7 @@ class GPUModelRunner(ModelRunnerBase):
             save_each_rank=self.parallel_config.use_ep,
             speculative_decoding=self.speculative_decoding,
             skip_save_output=skip_save_output,
-            zmq_client=self.zmq_client,
+            async_output_queue=self.async_output_queue,
         )
         if self.guided_backend is not None and sampler_output is not None:
             self.sampler.post_process(sampler_output.sampled_token_ids, skip_idx_list)
