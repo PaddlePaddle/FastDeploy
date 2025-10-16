@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
+    ChatCompletionResponseChoice,
     CompletionRequest,
 )
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
@@ -371,6 +372,99 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         self.engine_client.semaphore.release.assert_called_once()
         self.engine_client.connection_manager.cleanup_request.assert_awaited_once_with(request_id)
+
+    async def test_create_chat_completion_choice(self):
+        """
+        Test core & edge scenarios for _create_chat_completion_choice:
+        """
+        test_cases = [
+            {
+                "test_data": {
+                    "request_id": "test_0",
+                    "outputs": {
+                        "token_ids": [123, 456],
+                        "text": "Normal AI response",
+                        "reasoning_content": "Normal reasoning",
+                        "tool_call": None,
+                        "num_cached_tokens": 3,
+                        "raw_prediction": "raw_answer_0",
+                    },
+                    "finished": True,
+                },
+                "mock_request": ChatCompletionRequest(
+                    model="test", messages=[], return_token_ids=True, max_tokens=10, n=2
+                ),
+                "expected": {
+                    "index": 0,
+                    "content": "Normal AI response",
+                    "reasoning_content": "Normal reasoning",
+                    "tool_calls": None,
+                    "raw_prediction": "raw_answer_0",
+                    "num_cached_tokens": 3,
+                    "finish_reason": "stop",
+                },
+            },
+            {
+                "test_data": {
+                    "request_id": "test_1",
+                    "outputs": {
+                        "token_ids": [789],
+                        "text": "Edge case response",
+                        "reasoning_content": None,
+                        "tool_call": None,
+                        "num_cached_tokens": 0,
+                        "raw_prediction": None,
+                    },
+                    "finished": True,
+                },
+                "mock_request": ChatCompletionRequest(
+                    model="test", messages=[], return_token_ids=True, max_tokens=5, n=2
+                ),
+                "expected": {
+                    "index": 1,
+                    "content": "Edge case response",
+                    "reasoning_content": None,
+                    "tool_calls": None,
+                    "raw_prediction": None,
+                    "num_cached_tokens": 0,
+                    "finish_reason": "stop",
+                },
+            },
+        ]
+
+        prompt_token_ids = [1, 2]
+        text_after_process = "test_prompt"
+        logprob_contents = [[], []]
+        mock_response_processor = Mock()
+        mock_response_processor.enable_multimodal_content.return_value = False
+        completion_token_ids = [[], []]
+        num_cached_tokens = [0, 0]
+
+        for idx, case in enumerate(test_cases):
+            actual_choice = await self.chat_serving._create_chat_completion_choice(
+                data=case["test_data"],
+                request=case["mock_request"],
+                prompt_token_ids=prompt_token_ids,
+                text_after_process=text_after_process,
+                completion_token_ids=completion_token_ids,
+                num_cached_tokens=num_cached_tokens,
+                logprob_contents=logprob_contents,
+                response_processor=mock_response_processor,
+            )
+
+            expected = case["expected"]
+
+            self.assertIsInstance(actual_choice, ChatCompletionResponseChoice)
+            self.assertEqual(actual_choice.index, expected["index"])
+
+            self.assertEqual(actual_choice.message.content, expected["content"])
+            self.assertEqual(actual_choice.message.reasoning_content, expected["reasoning_content"])
+            self.assertEqual(actual_choice.message.tool_calls, expected["tool_calls"])
+            self.assertEqual(actual_choice.message.raw_prediction, expected["raw_prediction"])
+            self.assertEqual(actual_choice.message.completion_token_ids, completion_token_ids[idx])
+
+            self.assertEqual(num_cached_tokens[expected["index"]], expected["num_cached_tokens"])
+            self.assertEqual(actual_choice.finish_reason, expected["finish_reason"])
 
 
 if __name__ == "__main__":
