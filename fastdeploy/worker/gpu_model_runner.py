@@ -18,7 +18,7 @@ import os
 import queue
 import time
 from threading import Thread
-from typing import List, Optional
+from typing import List, Optional, cast
 
 import numpy as np
 import paddle
