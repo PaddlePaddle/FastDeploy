@@ -150,7 +150,7 @@ async def get_request(
 
 
 def calculate_metrics(
-    input_requests: list[SampleRequest],
+    # input_requests: list[SampleRequest],
     outputs: list[RequestFuncOutput],
     dur_s: float,
     selected_percentiles: list[float],
@@ -395,6 +395,7 @@ async def benchmark(
     print(f"Traffic request rate: {request_rate}")
     print(f"Burstiness factor: {burstiness} ({distribution})")
     print(f"Maximum request concurrency: {max_concurrency}")
+    print(f"Drop ratio: {args.drop_ratio}")
 
     pbar = None if disable_tqdm else tqdm(total=len(input_requests))
 
@@ -443,6 +444,8 @@ async def benchmark(
         tasks.append(asyncio.create_task(limited_request_func(request_func_input=request_func_input, pbar=pbar)))
     outputs: list[RequestFuncOutput] = await asyncio.gather(*tasks)
 
+    outputs.sort(key=lambda x: x.end_timestamp)
+
     if profile:
         print("Stopping profiler...")
         profile_input = RequestFuncInput(
@@ -460,12 +463,35 @@ async def benchmark(
     if pbar is not None:
         pbar.close()
 
-    benchmark_duration = time.perf_counter() - benchmark_start_time
-    print("benchmark_duration:", benchmark_duration)
+    benchmark_outputs = outputs
+    drop_ratio = args.drop_ratio
+    if 0.0 < drop_ratio < 1:
+        # 按drop_ratio头尾各舍弃一半请求，不计入benchmark统计
+        n = len(outputs)
+        drop_count = int(n * drop_ratio)
+        half = drop_count // 2
+        if half > 0:
+            benchmark_outputs = outputs[half : n - half]
+
+        # 先过滤掉 end_timestamp == 0.0 的请求（失败请求）
+        benchmark_outputs = [o for o in benchmark_outputs if o.end_timestamp != 0.0]
+
+        # 根据收到最后一个chunk的时间戳计算总时长
+        if len(benchmark_outputs) >= 2:
+            benchmark_duration = benchmark_outputs[-1].end_timestamp - benchmark_outputs[0].end_timestamp
+        else:
+            benchmark_duration = 0.0
+
+        print(f"丢弃前数量: {n}")
+        print(f"丢弃后数量: {len(benchmark_outputs)}")
+        print(f"benchmark_duration: {benchmark_duration} 秒")
+    else:
+        benchmark_duration = time.perf_counter() - benchmark_start_time
+        print(f"benchmark_duration: {benchmark_duration} 秒")
 
     metrics, actual_output_lens = calculate_metrics(
-        input_requests=input_requests,
-        outputs=outputs,
+        # input_requests=input_requests,
+        outputs=benchmark_outputs,
         dur_s=benchmark_duration,
         # tokenizer=tokenizer,
         selected_percentiles=selected_percentiles,
@@ -494,7 +520,7 @@ async def benchmark(
         "total_token_throughput": metrics.total_token_throughput,
         "input_lens": [output.prompt_len for output in outputs],
         "infer_input_lens": [output.prompt_tokens for output in outputs],
-        "output_lens": actual_output_lens,
+        "output_lens": [output.output_tokens for output in outputs],
         "ttfts": [output.ttft for output in outputs],
         "itls": [output.itl for output in outputs],
         "input_texts": [input.prompt for input in input_requests],
@@ -1080,6 +1106,12 @@ if __name__ == "__main__":
         "--shuffle",
         action="store_true",
         help="shuffle dataset",
+    )
+    parser.add_argument(
+        "--drop-ratio",
+        type=float,
+        default=0.0,
+        help="Drop ratio of the outputs. [0, 1)",
     )
     parser.add_argument(
         "--trust-remote-code",
