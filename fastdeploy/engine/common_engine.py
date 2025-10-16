@@ -697,9 +697,7 @@ class EngineService:
                     time.sleep(0.001)
                     continue
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
-                    if self.scheduler.get_unhandled_request_num() <= envs.FD_EP_MAX_PREFETCH_TASK_NUM and (
-                        not is_fetching
-                    ):
+                    if not is_fetching:
                         get_request_pool.submit(_fetch_request)
 
                 else:
