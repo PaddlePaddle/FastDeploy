@@ -374,6 +374,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(
                     input_ids[prefill_start_index:prefill_end_index]
                 )
+                print("self.share_inputs['input_ids']", self.share_inputs["input_ids"])
                 encoder_block_num = len(request.block_tables)
                 self.share_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
@@ -1803,7 +1804,7 @@ class GPUModelRunner(ModelRunnerBase):
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
 
-        print("input_ids",self.share_inputs["ids_remove_padding"])
+        print("input_ids", self.share_inputs["ids_remove_padding"])
 
         # 3. Execute model
         if self.enable_mm:
@@ -2009,13 +2010,13 @@ class GPUModelRunner(ModelRunnerBase):
         ]
         device_str = "gpu" if hidden_states.place.is_gpu_place() else "cpu"
         pooling_metadata.build_pooling_cursor(num_scheduled_tokens_list, device=device_str)
-        print("exepooling_metadata",pooling_metadata)
+
         raw_pooler_output = self.model.pooler(hidden_states=hidden_states, pooling_metadata=pooling_metadata)
-        logger.info(f"raw_pooler_output:{raw_pooler_output}")
+        print("raw_pooler_output", raw_pooler_output)
         seq_lens_cpu = self.share_inputs["seq_lens_this_time"][:num_running_requests]
         pooler_output: list[Optional[paddle.Tensor]] = []
         for raw_output, seq_len, prompt_len in zip(raw_pooler_output, seq_lens_cpu, pooling_metadata.prompt_lens):
-            output = raw_output.data if seq_len == prompt_len else None
+            output = raw_output.data if int(seq_len) == int(prompt_len) else None
             pooler_output.append(output)
 
         print("pooler_output", pooler_output)

@@ -81,6 +81,10 @@ def get_tasks(pooling_metadata: PoolingMetadata) -> list[PoolingTask]:
     pooling_params = get_pooling_params(pooling_metadata)
 
     tasks: list[PoolingTask] = [task for pooling_param in pooling_params if (task := pooling_param.task) is not None]
+    print("pooling_params", pooling_params)
+    print("len(pooling_params)", len(pooling_params))
+    print("len(tasks)", len(tasks))
+    print("tasks", tasks)
     assert len(pooling_params) == len(tasks)
 
     return tasks
