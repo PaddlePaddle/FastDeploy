@@ -79,12 +79,17 @@ class SplitWiseSchedulerConfig:
         self.writer_parallel = writer_parallel
         self.writer_batch_size = writer_batch_size
 
-        self.max_model_len = kwargs.get("max_model_len", 8192)
-        self.enable_chunked_prefill = kwargs.get("enable_chunked_prefill", False)
-        self.max_num_partial_prefills = kwargs.get("max_num_partial_prefills", 1)
-        self.max_long_partial_prefills = kwargs.get("max_long_partial_prefills", 1)
-        self.long_prefill_token_threshold = kwargs.get("long_prefill_token_threshold", 0)
-        if self.long_prefill_token_threshold == 0:
+        self.max_model_len = kwargs.get("max_model_len")
+        self.enable_chunked_prefill = kwargs.get("enable_chunked_prefill")
+        self.max_num_partial_prefills = kwargs.get("max_num_partial_prefills")
+        self.max_long_partial_prefills = kwargs.get("max_long_partial_prefills")
+        self.long_prefill_token_threshold = kwargs.get("long_prefill_token_threshold")
+
+        assert self.enable_chunked_prefill is not None, "enable_chunked_prefill must be set"
+        assert self.max_num_partial_prefills is not None, "max_num_partial_prefills must be set"
+        assert self.max_long_partial_prefills is not None, "max_long_partial_prefills must be set"
+        if self.long_prefill_token_threshold is None or self.long_prefill_token_threshold == 0:
+            assert self.max_model_len is not None, "max_model_len must be set"
             self.long_prefill_token_threshold = int(self.max_model_len * 0.04)
 
     def check(self):
