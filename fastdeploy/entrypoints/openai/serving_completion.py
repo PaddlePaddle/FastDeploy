@@ -239,8 +239,8 @@ class OpenAIServingCompletion:
                         raise ValueError("{}".format(data["error_msg"]))
 
                     output = data["outputs"]
-                    output_top_logprobs = output["top_logprobs"]
-                    output_draft_top_logprobs = output["draft_top_logprobs"]
+                    output_top_logprobs = output.get("top_logprobs") or None
+                    output_draft_top_logprobs = output.get("draft_top_logprobs") or None
                     if output_top_logprobs is not None:
                         aggregated_top_logprobs[rid][0].extend(output_top_logprobs[0])
                         aggregated_top_logprobs[rid][1].extend(output_top_logprobs[1])
@@ -510,8 +510,8 @@ class OpenAIServingCompletion:
             completion_token_ids = completion_batched_token_ids[idx]
 
             output = final_res["outputs"]
-            output_top_logprobs = output["top_logprobs"]
-            output_draft_top_logprobs = output["draft_top_logprobs"]
+            output_top_logprobs = output.get("top_logprobs") or None
+            output_draft_top_logprobs = output.get("draft_top_logprobs") or None
 
             aggregated_logprobs: Optional[CompletionLogprobs] = None
             if output_top_logprobs is not None:
