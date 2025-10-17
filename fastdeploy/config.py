@@ -187,7 +187,6 @@ class ModelConfig:
         self.redundant_experts_num = 0
         self.seed = 0
         self.quantization = None
-        self.reasoning_parser = None
         self.pad_token_id: int = -1
         self.eos_tokens_lens: int = 2
         self.lm_head_fp32: bool = False
@@ -540,10 +539,6 @@ class ParallelConfig:
         # Do profile or not
         self.do_profile: bool = False
 
-        # guided decoding backend
-        self.guided_decoding_backend: str = None
-        # disable any whitespace for guided decoding
-        self.disable_any_whitespace: bool = True
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
         self.disable_custom_all_reduce: bool = False
@@ -1128,12 +1123,6 @@ class PoolerConfig:
     """
 
 
-class LoRAConfig:
-    """LoRA Config"""
-
-    pass
-
-
 class CacheConfig:
     """
     Configuration for the KV cache.
@@ -1364,6 +1353,25 @@ class CommitConfig:
         logger.info("=============================================================")
 
 
+class StructuredOutputsConfig:
+    """
+    Configuration for structured outputs
+    """
+
+    def __init__(
+        self,
+        args,
+    ) -> None:
+        self.reasoning_parser: Optional[str] = None
+        self.guided_decoding_backend: Optional[str] = None
+        # disable any whitespace for guided decoding
+        self.disable_any_whitespace: bool = True
+
+        for key, value in args.items():
+            if hasattr(self, key) and value != "None":
+                setattr(self, key, value)
+
+
 class FDConfig:
     """
     The configuration class which contains all fastdeploy-related configuration. This
@@ -1384,6 +1392,7 @@ class FDConfig:
         graph_opt_config: GraphOptimizationConfig = None,
         plas_attention_config: PlasAttentionConfig = None,
         speculative_config: SpeculativeConfig = None,
+        structured_outputs_config: StructuredOutputsConfig = None,
         tokenizer: str = None,
         ips: str = None,
         use_warmup: bool = False,
@@ -1393,9 +1402,6 @@ class FDConfig:
         max_num_partial_prefills: int = 1,
         max_long_partial_prefills: int = 1,
         long_prefill_token_threshold: int = 0,
-        reasoning_parser: str = None,
-        guided_decoding_backend: Optional[str] = None,
-        disable_any_whitespace: bool = False,
         early_stop_config: Optional[Dict[str, Any]] = None,
         tool_parser: str = None,
         test_mode=False,
@@ -1413,6 +1419,7 @@ class FDConfig:
         self.decoding_config: DecodingConfig = decoding_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
         self.plas_attention_config: Optional[PlasAttentionConfig] = plas_attention_config
+        self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.scheduler_config.max_num_seqs)
@@ -1459,9 +1466,7 @@ class FDConfig:
         self.max_num_partial_prefills = max_num_partial_prefills
         self.max_long_partial_prefills = max_long_partial_prefills
         self.long_prefill_token_threshold = long_prefill_token_threshold
-        self.reasoning_parser = reasoning_parser
-        self.guided_decoding_backend = guided_decoding_backend
-        self.disable_any_whitespace = disable_any_whitespace
+
         self._str_to_list("innode_prefill_ports", int)
 
         if envs.FD_FOR_TORCH_MODEL_FORMAT:
@@ -1483,12 +1488,12 @@ class FDConfig:
         else:
             self.worker_num_per_node = num_ranks
 
-        self.device_ids = ",".join([str(i) for i in range(self.worker_num_per_node)])
-        self.device_ids = os.getenv("CUDA_VISIBLE_DEVICES", self.device_ids)
+        self.parallel_config.device_ids = ",".join([str(i) for i in range(self.worker_num_per_node)])
+        self.parallel_config.device_ids = os.getenv("CUDA_VISIBLE_DEVICES", self.parallel_config.device_ids)
         if current_platform.is_xpu():
-            self.device_ids = os.getenv("XPU_VISIBLE_DEVICES", self.device_ids)
+            self.parallel_config.device_ids = os.getenv("XPU_VISIBLE_DEVICES", self.parallel_config.device_ids)
         if current_platform.is_intel_hpu():
-            self.device_ids = os.getenv("HPU_VISIBLE_DEVICES", self.device_ids)
+            self.parallel_config.device_ids = os.getenv("HPU_VISIBLE_DEVICES", self.parallel_config.device_ids)
 
         self.read_from_config()
         self.postprocess()
@@ -1501,7 +1506,7 @@ class FDConfig:
         """
         calculate some parameters
         """
-        self.local_device_ids = self.device_ids.split(",")[: self.parallel_config.tensor_parallel_size]
+        self.local_device_ids = self.parallel_config.device_ids.split(",")[: self.parallel_config.tensor_parallel_size]
 
         if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node or self.node_rank == 0:
             self.is_master = True
@@ -1532,12 +1537,15 @@ class FDConfig:
         if self.model_config is not None and self.model_config.enable_mm:
             self.cache_config.enable_prefix_caching = False
 
-        if self.guided_decoding_backend == "auto":
+        if (
+            self.structured_outputs_config is not None
+            and self.structured_outputs_config.guided_decoding_backend == "auto"
+        ):
             if current_platform.is_xpu() or self.speculative_config.method is not None:
                 logger.warning("Speculative Decoding and XPU currently do not support Guided decoding, set off.")
-                self.guided_decoding_backend = "off"
+                self.structured_outputs_config.guided_decoding_backend = "off"
             else:
-                self.guided_decoding_backend = "xgrammar"
+                self.structured_outputs_config.guided_decoding_backend = "xgrammar"
 
         if self.scheduler_config.splitwise_role == "mixed":
             self.model_config.moe_phase = MoEPhase(phase="prefill")
@@ -1612,15 +1620,18 @@ class FDConfig:
                 f" max_model_len: {self.model_config.max_model_len}"
             )
 
-        if self.guided_decoding_backend is not None:
-            assert self.guided_decoding_backend in [
+        if (
+            self.structured_outputs_config is not None
+            and self.structured_outputs_config.guided_decoding_backend is not None
+        ):
+            assert self.structured_outputs_config.guided_decoding_backend in [
                 "xgrammar",
                 "XGrammar",
                 "auto",
                 "off",
-            ], f"Only support xgrammar、auto guided decoding backend, but got {self.guided_decoding_backend}."
+            ], f"Only support xgrammar、auto guided decoding backend, but got {self.structured_outputs_config.guided_decoding_backend}."
 
-            if self.guided_decoding_backend != "off":
+            if self.structured_outputs_config.guided_decoding_backend != "off":
                 # TODO: speculative decoding support guided_decoding
                 assert (
                     self.speculative_config.method is None
