@@ -142,9 +142,9 @@ class BackendBase:
         self.reasoning_parser = None
 
         self.hf_tokenizer = self._get_tokenizer_hf()
-        if self.fd_config.model_config.reasoning_parser:
+        if self.fd_config.structured_outputs_config.reasoning_parser:
             reasoning_parser_obj = ReasoningParserManager.get_reasoning_parser(
-                self.fd_config.model_config.reasoning_parser
+                self.fd_config.structured_outputs_config.reasoning_parser
             )
             self.reasoning_parser = reasoning_parser_obj(self.hf_tokenizer)
 

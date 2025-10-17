@@ -319,7 +319,7 @@ class HPUModelRunner(ModelRunnerBase):
         self.speculative_decoding = self.speculative_method is not None
 
         self.guided_backend = None
-        if self.fd_config.parallel_config.guided_decoding_backend != "off":
+        if self.fd_config.structured_outputs_config.guided_decoding_backend != "off":
             self.guided_backend = get_guided_backend(fd_config=self.fd_config)
 
         #  Sampler

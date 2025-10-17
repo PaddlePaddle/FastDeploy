@@ -39,6 +39,7 @@ from fastdeploy.config import (
     ParallelConfig,
     PlasAttentionConfig,
     SpeculativeConfig,
+    StructuredOutputsConfig,
 )
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
@@ -744,6 +745,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     early_stop_config = EarlyStopConfig(args.early_stop_config)
 
+    structured_outputs_config: StructuredOutputsConfig = StructuredOutputsConfig(args=vars(args))
+
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
     model_config.pretrained_config.tensor_parallel_degree = parallel_config.tensor_parallel_size
@@ -792,7 +795,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     if not current_platform.is_cuda() and not current_platform.is_xpu():
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-    if parallel_config.guided_decoding_backend != "off":
+    if structured_outputs_config.guided_decoding_backend != "off":
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported guided_decoding.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
@@ -813,6 +816,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         scheduler_config=scheduler_config,
         ips=args.ips,
         plas_attention_config=plas_attention_config,
+        structured_outputs_config=structured_outputs_config,
     )
     update_fd_config_for_mm(fd_config)
     if fd_config.load_config.load_choices == "default_v1" and not v1_loader_support(fd_config):

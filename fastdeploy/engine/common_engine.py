@@ -128,10 +128,10 @@ class EngineService:
             )
 
         self.guided_decoding_checker = None
-        if self.cfg.guided_decoding_backend != "off":
+        if self.cfg.structured_outputs_config.guided_decoding_backend != "off":
             self.guided_decoding_checker = schema_checker(
-                self.cfg.guided_decoding_backend,
-                disable_any_whitespace=self.cfg.disable_any_whitespace,
+                self.cfg.structured_outputs_config.guided_decoding_backend,
+                disable_any_whitespace=self.cfg.structured_outputs_config.disable_any_whitespace,
             )
         self._init_worker_monitor_signals()
 

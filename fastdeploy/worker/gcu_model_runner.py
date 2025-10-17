@@ -73,7 +73,7 @@ class GCUModelRunner(ModelRunnerBase):
         self.enable_logprob = fd_config.model_config.enable_logprob
 
         self.guided_backend = None
-        if self.fd_config.parallel_config.guided_decoding_backend != "off":
+        if self.fd_config.structured_outputs_config.guided_decoding_backend != "off":
             self.guided_backend = get_guided_backend(fd_config=self.fd_config)
 
         #  Sampler

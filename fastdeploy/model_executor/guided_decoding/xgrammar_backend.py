@@ -212,7 +212,7 @@ class XGrammarBackend(BackendBase):
         self.vocab_size = fd_config.model_config.vocab_size
         self.batch_size = fd_config.scheduler_config.max_num_seqs
 
-        self.any_whitespace = not fd_config.parallel_config.disable_any_whitespace
+        self.any_whitespace = not fd_config.structured_outputs_config.disable_any_whitespace
 
         try:
             tokenizer_info = TokenizerInfo.from_huggingface(self.hf_tokenizer, vocab_size=self.vocab_size)
