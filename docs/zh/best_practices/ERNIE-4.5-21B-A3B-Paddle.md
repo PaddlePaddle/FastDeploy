@@ -1,7 +1,7 @@
 [English](../../best_practices/ERNIE-4.5-21B-A3B-Paddle.md)
 
 # ERNIE-4.5-21B-A3B
-## 一、环境准备 
+## 一、环境准备
 ### 1.1 支持情况
 ERNIE-4.5-21B-A3B 各量化精度，在下列硬件上部署所需要的最小卡数如下：
 
