@@ -1,3 +1,5 @@
+[简体中文](../zh/features/multi-node_deployment.md)
+
 # Multi-Node Deployment
 
 ## Overview
