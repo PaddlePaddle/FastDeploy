@@ -34,6 +34,8 @@ from prometheus_client.registry import Collector
 
 from fastdeploy.metrics import build_1_2_5_buckets
 from fastdeploy.metrics.work_metrics import work_process_metrics
+from fastdeploy.metrics.interface import MetricsManagerInterface
+from fastdeploy import envs
 
 
 def cleanup_prometheus_files(is_main: bool, instance_id: str = None):
@@ -50,7 +52,6 @@ def cleanup_prometheus_files(is_main: bool, instance_id: str = None):
     os.makedirs(prom_dir, exist_ok=True)
 
     return prom_dir
-
 
 class SimpleCollector(Collector):
     """
@@ -89,13 +90,19 @@ def get_filtered_metrics(exclude_names: Set[str], extra_register_func=None) -> s
     :param exclude_names: metric.name set to be excluded
     :param extra_register_func: optional, main process custom metric registration method
     :return: filtered metric text (str)
+    
+    generate_latest(filtered_registry) <- filtered_registry.collect <- SimpleCollector.collect 
+      <- base_registry.collect <- MultiProcessCollector.collect
     """
+    # Register a MultiProcessCollector to base registry
+    # When a MultiProcessCollector collects, it reads metrics from *.db files in PROMETHEUS_MULTIPROC_DIR
     base_registry = CollectorRegistry()
     multiprocess.MultiProcessCollector(base_registry)
 
     filtered_registry = CollectorRegistry()
     filtered_registry.register(SimpleCollector(base_registry, exclude_names))
 
+    # extra_register_func is used to register custom metrics to filtered_registry
     if extra_register_func:
         extra_register_func(filtered_registry)
 
@@ -127,7 +134,7 @@ REQUEST_LATENCY_BUCKETS = [
 ]
 
 
-class MetricsManager:
+class MetricsManager(MetricsManagerInterface):
     """Prometheus Metrics Manager handles all metric updates"""
 
     _instance = None
@@ -392,11 +399,17 @@ class MetricsManager:
             "kwargs": {},
         },
     }
+
     SPECULATIVE_METRICS = {}
 
     def __init__(self):
         """Initializes the Prometheus metrics and starts the HTTP server if not already initialized."""
-        # 动态创建所有指标
+        # Add labels to existing metrics: model_id
+        if envs.FD_ENABLE_METRIC_LABELS:
+            for metric in self.METRICS:
+                self.METRICS[metric]["kwargs"]["labelnames"] = ["model_id"]
+
+        # Create metrics dynamically
         for metric_name, config in self.METRICS.items():
             setattr(
                 self,

@@ -113,10 +113,10 @@ class PrefixCacheManager:
             + f"{self.num_cpu_blocks}, bytes_per_layer_per_block {self.cache_config.bytes_per_layer_per_block}"
         )
 
-        main_process_metrics.max_gpu_block_num.set(self.num_gpu_blocks)
-        main_process_metrics.available_gpu_block_num.set(self.num_gpu_blocks)
-        main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
-        main_process_metrics.available_gpu_resource.set(1.0)
+        main_process_metrics.set_value("max_gpu_block_num", self.num_gpu_blocks)
+        main_process_metrics.set_value("available_gpu_block_num", self.num_gpu_blocks)
+        main_process_metrics.set_value("free_gpu_block_num", self.num_gpu_blocks)
+        main_process_metrics.set_value("available_gpu_resource", 1.0)
 
     @property
     def available_gpu_resource(self):
@@ -357,10 +357,10 @@ class PrefixCacheManager:
         heapq.heapify(self.gpu_free_block_list)
         self.node_id_pool = list(range(self.num_gpu_blocks + self.num_cpu_blocks))
 
-        main_process_metrics.max_gpu_block_num.set(self.num_gpu_blocks)
-        main_process_metrics.available_gpu_block_num.set(self.num_gpu_blocks)
-        main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
-        main_process_metrics.available_gpu_resource.set(1.0)
+        main_process_metrics.set_value("max_gpu_block_num", self.num_gpu_blocks)
+        main_process_metrics.set_value("free_gpu_block_num", self.num_gpu_blocks)
+        main_process_metrics.set_value("available_gpu_block_num", self.num_gpu_blocks)
+        main_process_metrics.set_value("available_gpu_resource", 1.0)
 
     def can_allocate_gpu_blocks(self, num_blocks: int):
         """
@@ -387,8 +387,8 @@ class PrefixCacheManager:
         logger.info(
             f"allocate_gpu_blocks: {allocated_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
         )
-        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
-        main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
+        main_process_metrics.set_value("free_gpu_block_num", len(self.gpu_free_block_list))
+        main_process_metrics.set_value("available_gpu_resource", self.available_gpu_resource)
         return allocated_block_ids
 
     def recycle_gpu_blocks(self, gpu_block_ids):
@@ -403,8 +403,8 @@ class PrefixCacheManager:
                 heapq.heappush(self.gpu_free_block_list, gpu_block_id)
         else:
             heapq.heappush(self.gpu_free_block_list, gpu_block_ids)
-        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
-        main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
+        main_process_metrics.set_value("free_gpu_block_num", len(self.gpu_free_block_list))
+        main_process_metrics.set_value("available_gpu_resource", self.available_gpu_resource)
 
     def allocate_cpu_blocks(self, num_blocks):
         """
@@ -1454,8 +1454,8 @@ class PrefixCacheManager:
 
         # reset metrics
         self.metrics.reset_metrics()
-        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
-        main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
+        main_process_metrics.set_value("free_gpu_block_num", len(self.gpu_free_block_list))
+        main_process_metrics.set_value("available_gpu_resource", self.available_gpu_resource)
 
     def clear_prefix_cache(self):
         """
