@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import os
+
 import paddle
 from paddle import nn
 
@@ -402,65 +404,88 @@ class XPUWeightOnlyMoEMethod(XPUMoEMethod):
         """
         XPU compute Fused MoE.
         """
-        token_num = x.shape[0]
-        if token_num > 0:
-            gate_out = gate(x.cast("float32"))
-            topk_idx, topk_weights = moe_topk_select(
-                gate_out,
-                layer.gate_correction_bias,
-                layer.top_k,
-                True,
-            )
-            token_nums_per_expert_list = list(range(64))  # 填充做占位符
-            (
-                permute_input,
-                permute_indices_per_token,
-                token_num_lod,
-                dst_weights,
-                ffn1_act_scale_per_token,
-            ) = ep_moe_expert_dispatch(
-                x,
-                topk_idx,
-                topk_weights,
-                getattr(layer, "up_gate_proj_in_scale", None),
-                token_nums_per_expert_list,
-                x.shape[0] * layer.top_k,
-                self.moe_quant_type,
-            )
+        USING_EP_MOE_ALGO = int(os.environ.get("USING_EP_MOE_ALGO", 0))
+        if USING_EP_MOE_ALGO:
+            token_num = x.shape[0]
+            if token_num > 0:
+                gate_out = gate(x.cast("float32"))
+                topk_idx, topk_weights = moe_topk_select(
+                    gate_out,
+                    layer.gate_correction_bias,
+                    layer.top_k,
+                    True,
+                )
+                token_nums_per_expert_list = list(range(64))  # 填充做占位符
+                (
+                    permute_input,
+                    permute_indices_per_token,
+                    token_num_lod,
+                    dst_weights,
+                    ffn1_act_scale_per_token,
+                ) = ep_moe_expert_dispatch(
+                    x,
+                    topk_idx,
+                    topk_weights,
+                    getattr(layer, "up_gate_proj_in_scale", None),
+                    token_nums_per_expert_list,
+                    x.shape[0] * layer.top_k,
+                    self.moe_quant_type,
+                )
 
-            ffn_out = moe_expert_ffn(
-                permute_input,
-                token_num_lod,
+                ffn_out = moe_expert_ffn(
+                    permute_input,
+                    token_num_lod,
+                    layer.up_gate_proj_weight,
+                    layer.down_proj_weight,
+                    None,  # moe_ffn1_bias
+                    None,  # moe_ffn2_bias
+                    None,  # ffn1 in scale
+                    None,  # ffn2 in scale
+                    getattr(layer, "up_gate_proj_weight_scale", None),
+                    getattr(layer, "down_proj_weight_scale", None),
+                    None,  # moe_ffn2_shift
+                    None,  # moe_ffn2_smooth
+                    self.moe_quant_type,
+                    -1,
+                    x.shape[0] * layer.top_k,  # token_all_num
+                )
+                topk_weights_bf16 = topk_weights.astype("bfloat16")
+                tmp_ffn_out = ep_moe_expert_combine(
+                    ffn_out,
+                    permute_indices_per_token,
+                    topk_weights_bf16,
+                    permute_indices_per_token.shape[0],
+                    ffn_out.shape[0],
+                    ffn_out.shape[1],
+                    permute_indices_per_token.shape[1],
+                )
+            else:
+                tmp_ffn_out = paddle.empty(x.shape, x.dtype)
+
+            if layer.reduce_results and layer.tp_size > 1:
+                tensor_model_parallel_all_reduce(tmp_ffn_out)
+            return tmp_ffn_out
+        else:
+            from fastdeploy.model_executor.ops.xpu import xpu_moe_layer
+
+            fused_moe_out = xpu_moe_layer(
+                x,
+                gate.weight.transpose([1, 0]),
+                layer.gate_correction_bias,
                 layer.up_gate_proj_weight,
                 layer.down_proj_weight,
-                None,  # moe_ffn1_bias
-                None,  # moe_ffn2_bias
-                None,  # ffn1 in scale
-                None,  # ffn2 in scale
-                getattr(layer, "up_gate_proj_weight_scale", None),
-                getattr(layer, "down_proj_weight_scale", None),
-                None,  # moe_ffn2_shift
-                None,  # moe_ffn2_smooth
+                None,  # up_gate_proj bias
+                None,  # down_proj bias
+                (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
+                (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
+                (layer.down_proj_in_scale if hasattr(layer, "down_proj_in_scale") else None),
                 self.moe_quant_type,
-                -1,
-                x.shape[0] * layer.top_k,  # token_all_num
+                layer.top_k,
+                False,  # moe group, used in deepseek
             )
-            topk_weights_bf16 = topk_weights.astype("bfloat16")
-            tmp_ffn_out = ep_moe_expert_combine(
-                ffn_out,
-                permute_indices_per_token,
-                topk_weights_bf16,
-                permute_indices_per_token.shape[0],
-                ffn_out.shape[0],
-                ffn_out.shape[1],
-                permute_indices_per_token.shape[1],
-            )
-        else:
-            tmp_ffn_out = paddle.empty(x.shape, x.dtype)
-
-        if layer.reduce_results and layer.tp_size > 1:
-            tmp_ffn_out = tensor_model_parallel_all_reduce(tmp_ffn_out)
-        return tmp_ffn_out
+            if layer.tp_size > 1:
+                tensor_model_parallel_all_reduce(fused_moe_out)
+            return fused_moe_out
 
 
 class XPUW4A8MoEMethod(XPUMoEMethod):
