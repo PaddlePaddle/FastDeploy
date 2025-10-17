@@ -505,7 +505,7 @@ class OpenAIServingChat:
                             request=request,
                             prompt_token_ids=prompt_token_ids,
                             prompt_tokens=prompt_tokens,
-                            completion_token_ids=completion_token_ids,
+                            completion_token_ids=completion_token_ids[idx],
                             num_cached_tokens=num_cached_tokens,
                             logprob_contents=logprob_contents,
                             response_processor=response_processor,

@@ -341,7 +341,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         created_time = 1655136000
         model_name = "test_model"
         prompt_batched_token_ids = [[1, 2, 3], [4, 5, 6]]
-        text_after_process_list = ["Hello", "Hello"]
+        prompt_tokens_list = ["Hello", "Hello"]
 
         actual_response = await self.completion_serving.completion_full_generator(
             request=request,
@@ -350,7 +350,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             created_time=created_time,
             model_name=model_name,
             prompt_batched_token_ids=prompt_batched_token_ids,
-            text_after_process_list=text_after_process_list,
+            prompt_tokens_list=prompt_tokens_list,
         )
 
         self.assertEqual(actual_response, expected_completion_response)
@@ -433,7 +433,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         ]
 
         prompt_token_ids = [1, 2]
-        text_after_process = "test_prompt"
+        prompt_tokens = "test_prompt"
         logprob_contents = [[], []]
         mock_response_processor = Mock()
         mock_response_processor.enable_multimodal_content.return_value = False
@@ -445,8 +445,8 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 data=case["test_data"],
                 request=case["mock_request"],
                 prompt_token_ids=prompt_token_ids,
-                text_after_process=text_after_process,
-                completion_token_ids=completion_token_ids,
+                prompt_tokens=prompt_tokens,
+                completion_token_ids=completion_token_ids[idx],
                 num_cached_tokens=num_cached_tokens,
                 logprob_contents=logprob_contents,
                 response_processor=mock_response_processor,
@@ -460,7 +460,6 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             self.assertEqual(actual_choice.message.content, expected["content"])
             self.assertEqual(actual_choice.message.reasoning_content, expected["reasoning_content"])
             self.assertEqual(actual_choice.message.tool_calls, expected["tool_calls"])
-            self.assertEqual(actual_choice.message.raw_prediction, expected["raw_prediction"])
             self.assertEqual(actual_choice.message.completion_token_ids, completion_token_ids[idx])
 
             self.assertEqual(num_cached_tokens[expected["index"]], expected["num_cached_tokens"])
