@@ -135,7 +135,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.sampler = SpeculativeSampler(fd_config)
 
         self.guided_backend = None
-        if self.fd_config.parallel_config.guided_decoding_backend != "off":
+        if self.fd_config.structured_outputs_config.guided_decoding_backend != "off":
             self.guided_backend = get_guided_backend(fd_config=self.fd_config)
             self.sampler.set_reasoning_parser(self.guided_backend.get_reasoning_parser())
 
@@ -396,7 +396,7 @@ class GPUModelRunner(ModelRunnerBase):
                     has_decode_task = True
                 continue
             else:  # preempted task
-                logger.debug(f"Handle preempted request {request} at idx {idx}")
+                logger.info(f"Handle preempted request {request} at idx {idx}")
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
                 self.seq_lens_this_time_buffer[idx : idx + 1] = 0
