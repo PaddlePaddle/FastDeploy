@@ -404,7 +404,7 @@ class XPUWeightOnlyMoEMethod(XPUMoEMethod):
         """
         XPU compute Fused MoE.
         """
-        USING_EP_MOE_ALGO = os.environ.get("USING_EP_MOE_ALGO", False)
+        USING_EP_MOE_ALGO = int(os.environ.get("USING_EP_MOE_ALGO", 0))
         if USING_EP_MOE_ALGO:
             token_num = x.shape[0]
             if token_num > 0:
