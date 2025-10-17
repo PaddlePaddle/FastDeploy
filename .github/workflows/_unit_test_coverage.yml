@@ -292,6 +292,7 @@ jobs:
     needs: run_tests_with_coverage
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
     steps:
