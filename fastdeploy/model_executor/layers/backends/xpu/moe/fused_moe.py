@@ -487,6 +487,7 @@ class XPUWeightOnlyMoEMethod(XPUMoEMethod):
                 tensor_model_parallel_all_reduce(fused_moe_out)
             return fused_moe_out
 
+
 class XPUW4A8MoEMethod(XPUMoEMethod):
     """
     XPU w4a8 MoE Method
