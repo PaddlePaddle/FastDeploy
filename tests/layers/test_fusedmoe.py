@@ -55,7 +55,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
                     "data_parallel_size": self.ep_size,
                 }
             ),
-            quant_config=BlockWiseFP8Config(weight_block_size=[64, 64]),
+            quant_config=BlockWiseFP8Config(weight_block_size=[128, 128]),
             # quant_config=WINT8Config({}),
             scheduler_config=SchedulerConfig({}),
             cache_config=CacheConfig({}),
@@ -123,7 +123,7 @@ class TestFusedMoE(unittest.TestCase):
         self.hidden_size = 7168
         self.moe_intermediate_size = 3584
         self.moe_num_experts = 384
-        self.moe_k = 1
+        self.moe_k = 8
         self.hidden_act = "silu"
         self.num_attention_heads = 64
         self.model_config = self.build_model_config()
@@ -172,7 +172,7 @@ class TestFusedMoE(unittest.TestCase):
 
         nnodes = (ep_size + 7) // 8
 
-        fused_moe = FuseMoEWrapper(self.model_config, tp_size, tp_rank, ep_size, ep_rank, nnodes)
+        fused_moe = FuseMoEWrapper(self.model_config, tp_size, tp_rank, ep_size, ep_rank, nnodes = nnodes)
 
         # 这行代码必须保留，否则影响均匀性！
         paddle.seed(ep_rank + 100)
@@ -217,5 +217,4 @@ class TestFusedMoE(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    exit(0)
     unittest.main()
