@@ -113,8 +113,8 @@ class XPUKVCacheMethodBase(QuantMethodBase):
             # cache_k_scale and cache_v_scale are used to quantize the KV Cache, while cache_k_out_scale and cache_v_out_scale are used for inverse quantization
             cache_k_scale = self.cache_quant_config.max_bound / cache_k_scale_tensor
             cache_v_scale = self.cache_quant_config.max_bound / cache_v_scale_tensor
-            cache_k_out_scale = cache_k_scale_tensor / self.cache_quant_config.max_bound
-            cache_v_out_scale = cache_v_scale_tensor / self.cache_quant_config.max_bound
+            cache_k_out_scale = cache_k_scale_tensor
+            cache_v_out_scale = cache_v_scale_tensor
         else:
             raise NotImplementedError(f"{self.cache_quant_config.quant_type} is not implemented")
 
