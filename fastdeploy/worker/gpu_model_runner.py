@@ -406,7 +406,7 @@ class GPUModelRunner(ModelRunnerBase):
                     has_decode_task = True
                 continue
             else:  # preempted task
-                logger.debug(f"Handle preempted request {request} at idx {idx}")
+                logger.info(f"Handle preempted request {request} at idx {idx}")
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
                 self.seq_lens_this_time_buffer[idx : idx + 1] = 0

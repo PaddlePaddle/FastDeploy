@@ -32,6 +32,7 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
 )
+from fastdeploy.model_executor.graph_optimization.utils import sot_warmup_guard
 
 
 @support_graph_optimization
@@ -46,7 +47,7 @@ class Attention(nn.Layer):
 
     def forward(
         self,
-        ids_remove_padding,
+        ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
         hidden_states = self.embed_tokens(forward_meta.ids_remove_padding)
@@ -58,7 +59,7 @@ class Attention(nn.Layer):
 
     def forward_dynamic(
         self,
-        ids_remove_padding,
+        ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
         hidden_states = self.embed_tokens(forward_meta.ids_remove_padding)
@@ -164,14 +165,22 @@ class TestGraphOptBackend(unittest.TestCase):
         """
         test_model = Attention(fd_config=fd_config, **self.model_config)
 
+        with sot_warmup_guard(True):
+            _ = test_model(ids_remove_padding=self.input_tensor, forward_meta=self.forward_meta)
+
         # Run model test
         output = test_model(ids_remove_padding=self.input_tensor, forward_meta=self.forward_meta)
 
         # Validate results if comparison is requested
         if compare_with_baseline:
             np.testing.assert_allclose(
-                self.baseline_result, output.numpy(), err_msg=f"Test {test_name} failed: output mismatch"
+                self.baseline_result,
+                output.numpy(),
+                err_msg=f"Test {test_name} failed: output mismatch",
+                atol=1e-6,  # for CINN
             )
+
+        paddle.jit.sot.opcode_translator.executor.executor_cache.OpcodeExecutorCache().clear()
 
     def test_dynamic_graph(self):
         """Test dynamic graph mode"""
