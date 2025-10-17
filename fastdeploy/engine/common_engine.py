@@ -68,12 +68,13 @@ class EngineService:
             cfg (Config): Config object containing all the configuration parameters.
         """
         self.cfg = cfg
-        if isinstance(self.cfg.cache_config.cache_queue_port, str):
-            self.cfg.cache_config.cache_queue_port = self.cfg.cache_config.cache_queue_port.split(",")
-        if isinstance(self.cfg.cache_config.cache_queue_port, list):
-            self.cfg.cache_config.cache_queue_port = int(
-                self.cfg.cache_config.cache_queue_port[self.cfg.parallel_config.local_data_parallel_id]
-            )
+        if cfg.scheduler_config.splitwise_role != "mixed" or cfg.cache_config.enable_prefix_caching:
+            if isinstance(self.cfg.cache_config.cache_queue_port, str):
+                self.cfg.cache_config.cache_queue_port = self.cfg.cache_config.cache_queue_port.split(",")
+            if isinstance(self.cfg.cache_config.cache_queue_port, list):
+                self.cfg.cache_config.cache_queue_port = int(
+                    self.cfg.cache_config.cache_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+                )
 
         if self.cfg.parallel_config.enable_expert_parallel:
             self.llm_logger = get_logger(
@@ -127,10 +128,10 @@ class EngineService:
             )
 
         self.guided_decoding_checker = None
-        if self.cfg.guided_decoding_backend != "off":
+        if self.cfg.structured_outputs_config.guided_decoding_backend != "off":
             self.guided_decoding_checker = schema_checker(
-                self.cfg.guided_decoding_backend,
-                disable_any_whitespace=self.cfg.disable_any_whitespace,
+                self.cfg.structured_outputs_config.guided_decoding_backend,
+                disable_any_whitespace=self.cfg.structured_outputs_config.disable_any_whitespace,
             )
         self._init_worker_monitor_signals()
 
@@ -697,9 +698,7 @@ class EngineService:
                     time.sleep(0.001)
                     continue
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
-                    if self.scheduler.get_unhandled_request_num() <= envs.FD_EP_MAX_PREFETCH_TASK_NUM and (
-                        not is_fetching
-                    ):
+                    if not is_fetching:
                         get_request_pool.submit(_fetch_request)
 
                 else:
@@ -995,7 +994,8 @@ class EngineService:
             llm_logger.info("Clear Data: Start")
             self.token_processor.clear_data()
             self.engine_worker_queue.clear_data()
-            self.zmq_server.req_dict.clear()
+            self.send_response_server.req_dict.clear()
+            self.recv_request_server.req_dict.clear()
             llm_logger.info("Clear Data: Successfully")
             return True
         except Exception as e:

@@ -863,7 +863,7 @@ class RowParallelLinear(LinearBase):
             out = paddle.matmul(x, self.weight)
 
         if self.reduce_results and self.nranks > 1:
-            tensor_model_parallel_all_reduce(out, self.tp_group)
+            out = tensor_model_parallel_all_reduce(out, self.tp_group)
         if not self.fd_config.quant_config and self.add_bias:
             out = paddle.add(out, self.bias)
         return out

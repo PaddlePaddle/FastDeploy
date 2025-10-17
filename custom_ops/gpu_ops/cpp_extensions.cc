@@ -91,7 +91,7 @@ std::vector<paddle::Tensor> AppendAttention(
     const int speculate_max_draft_token_num, const bool causal,
     const bool speculate_decoder);
 
-void AppendAttentionWithOutput(
+std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const paddle::Tensor &qkv, const paddle::Tensor &key_cache,
     const paddle::Tensor &value_cache, const paddle::Tensor &seq_lens_encoder,
     const paddle::Tensor &seq_lens_decoder,
@@ -1141,13 +1141,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
    * recover_decode_task
    */
   m.def("recover_decode_task", &RecoverDecodeTask, "recover decode task for scheduler v1 function");
-
-  /**
-   * extract_text_token_output.cu
-   * extract_text_token_output
-   */
-  m.def("extract_text_token_output", &ExtractTextTokenOutput,
-        "extract_text_token_output function");
 
   m.def("group_swiglu_with_masked", &GroupSwigluWithMasked,
         "group_swiglu_with_masked function");

@@ -213,13 +213,13 @@ class CustomAllreduce:
             stream_capturing = lib.cudaStreamIsCapturing(stream)
             if stream_capturing.value == 1:
                 # 1 is cudaStreamCaptureStatusActive: The stream is capturing.
-                return self.all_reduce(input, input, registered=True)
+                return self.all_reduce(input, registered=True)
             else:
                 # If warm up, mimic the allocation pattern since custom
                 # allreduce is out-of-place.
                 return paddle.empty_like(input)
         else:
-            return self.all_reduce(input, input, registered=False)
+            return self.all_reduce(input, registered=False)
 
     def clear_ipc_handles(self):
         clear_ipc_handles(self._ptr)
