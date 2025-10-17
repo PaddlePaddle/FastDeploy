@@ -26,12 +26,7 @@ from fastdeploy.config import (
     iter_architecture_defaults,
     try_match_architecture_defaults,
 )
-
-
-def get_default_pooling_type(model_cls: Type[nn.Layer] = None) -> str:
-    if model_cls is not None:
-        return getattr(model_cls, "default_pooling_type", "LAST")
-    return "LAST"
+from fastdeploy.model_executor.models.interfaces_base import get_default_pooling_type
 
 
 class ModelCategory(IntFlag):
