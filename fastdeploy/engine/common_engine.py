@@ -153,7 +153,7 @@ class EngineService:
     def create_data_processor(self):
         self.input_processor = InputPreprocessor(
             self.cfg.tokenizer,
-            self.cfg.reasoning_parser,
+            self.cfg.structured_outputs_config.reasoning_parser,
             self.cfg.limit_mm_per_prompt,
             self.cfg.mm_processor_kwargs,
             self.cfg.model_config.enable_mm,
