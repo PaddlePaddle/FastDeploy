@@ -255,6 +255,8 @@ def post_process_normal(
             model_output.stop_seqs_len,
             model_output.stop_token_ids,
             model_output.stop_token_ids_len,
+            model_output.min_tokens,
+            model_output.max_tokens,
             False,
         )  # multi ends
     elif current_platform.is_maca():
@@ -270,6 +272,8 @@ def post_process_normal(
             model_output.stop_seqs_len,
             model_output.stop_token_ids,
             model_output.stop_token_ids_len,
+            model_output.min_tokens,
+            model_output.max_tokens,
             False,
         )  # multi ends
     else:

@@ -251,6 +251,11 @@ class ModelOutputData:
     stop_seqs_len: paddle.Tensor = None
 
     """
+        the length of input prompt
+    """
+    prompt_lens: paddle.Tensor = None
+
+    """
         the string of stop sequences
     """
     stop_seqs: paddle.Tensor = None
