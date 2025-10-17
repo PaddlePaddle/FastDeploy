@@ -205,4 +205,4 @@ if [ ${ep_exit_code} -ne 0 ]; then
     cat log/workerlog.0
     echo "EP并行 相关测试失败，请检查pr代码"
     exit 1
-f
+fi
