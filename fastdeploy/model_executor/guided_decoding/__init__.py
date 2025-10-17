@@ -41,7 +41,7 @@ def get_guided_backend(
     Raises:
         ValueError: If the specified backend is not supported
     """
-    if fd_config.parallel_config.guided_decoding_backend.lower() == "xgrammar":
+    if fd_config.structured_outputs_config.guided_decoding_backend.lower() == "xgrammar":
         from fastdeploy.model_executor.guided_decoding.xgrammar_backend import (
             XGrammarBackend,
         )
@@ -52,7 +52,7 @@ def get_guided_backend(
         )
     else:
         raise ValueError(
-            f"Get unsupported backend {fd_config.parallel_config.guided_decoding_backend},"
+            f"Get unsupported backend {fd_config.structured_outputs_config.guided_decoding_backend},"
             f" please check your configuration."
         )
 

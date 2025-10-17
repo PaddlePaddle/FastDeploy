@@ -1,3 +1,5 @@
+[English](../../features/data_parallel_service.md)
+
 # 数据并行
 在MOE模型下，开启专家并行（EP）与数据并行（DP）相结合，EP 分摊专家负载，结合 DP 实现请求并行处理。
 
