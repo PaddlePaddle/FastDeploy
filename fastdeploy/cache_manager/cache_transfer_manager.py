@@ -28,27 +28,19 @@ import paddle
 
 from fastdeploy import envs
 from fastdeploy.cache_manager.cache_data import CacheStatus
+from fastdeploy.cache_manager.ops import (
+    cuda_host_alloc,
+    cuda_host_free,
+    memory_allocated,
+    set_data_ipc,
+    set_device,
+    share_external_data_,
+    swap_cache_all_layers,
+    unset_data_ipc,
+)
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheStatus
 from fastdeploy.platforms import current_platform
-
-if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import (
-        cuda_host_alloc,
-        cuda_host_free,
-        set_data_ipc,
-        share_external_data,
-        swap_cache_all_layers,
-        unset_data_ipc,
-    )
-elif current_platform.is_xpu():
-    from fastdeploy.model_executor.ops.xpu import (
-        cuda_host_alloc,
-        cuda_host_free,
-        set_data_ipc,
-        share_external_data,
-        swap_cache_all_layers,
-    )
 from fastdeploy.utils import get_logger
 
 
@@ -194,10 +186,7 @@ class CacheTransferManager:
             suffix=args.engine_worker_queue_port,
             create=False,
         )
-
-        # TODO XPU support RL
-        if not current_platform.is_xpu():
-            threading.Thread(target=self.clear_or_update_caches, args=[args], daemon=True).start()
+        threading.Thread(target=self.clear_or_update_caches, args=[args], daemon=True).start()
 
     def _init_gpu_cache(self, args):
 
@@ -208,10 +197,7 @@ class CacheTransferManager:
             logger.info(f"[rank {self.rank}/{self.n_ranks}] OK! Stop waiting.")
 
         logger.info(f"[rank {self.rank}/{self.n_ranks}] Initializing kv cache for all layers.")
-        if current_platform.is_cuda():
-            paddle.set_device(f"gpu:{self.device}")
-        elif current_platform.is_xpu():
-            paddle.set_device(f"xpu:{self.device}")
+        set_device(self.device)
         for i in range(args.num_layers + self.num_extra_layers):
             num_gpu_blocks = args.num_gpu_blocks if i < args.num_layers else self.num_extra_layer_gpu_blocks
             cache_shape = [num_gpu_blocks, args.kv_num_head, args.block_size, args.head_dim]
@@ -228,12 +214,8 @@ class CacheTransferManager:
                 logger.info(f"[rank {self.rank}/{self.n_ranks}] ..attaching kv cache for layer {i}: {cache_shape}")
                 key_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
                 val_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
-                if current_platform.is_xpu():
-                    key_cache = share_external_data(key_cache, key_name, cache_shape, True)
-                    val_cache = share_external_data(val_cache, val_name, cache_shape, True)
-                else:
-                    key_cache = share_external_data(key_cache, key_name, cache_shape)
-                    val_cache = share_external_data(val_cache, val_name, cache_shape)
+                key_cache = share_external_data_(key_cache, key_name, cache_shape, True)
+                val_cache = share_external_data_(val_cache, val_name, cache_shape, True)
 
             self.gpu_cache_kvs[key_name] = key_cache
             self.gpu_cache_kvs[val_name] = val_cache
@@ -247,10 +229,7 @@ class CacheTransferManager:
         cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in self.gpu_cache_kvs.items()])
         logger.info(f"[rank {self.rank}/{self.n_ranks}] device :{self.device}")
         logger.info(f"[rank {self.rank}/{self.n_ranks}] cache_kv_size_byte : {cache_kv_size_byte}")
-        if current_platform.is_cuda():
-            logger.info(
-                f"[rank {self.rank}/{self.n_ranks}] done init cache (full) gmem alloc : {paddle.device.cuda.memory_allocated()}"
-            )
+        logger.info(f"[rank {self.rank}/{self.n_ranks}] done init cache (full) gmem alloc : {memory_allocated()}")
 
     def _init_cpu_cache(self, args):
         if args.num_cpu_blocks == 0:
@@ -349,7 +328,9 @@ class CacheTransferManager:
         """
 
         consecutive_error_count = 0
-        max_errors = envs.FD_CACHE_PROC_ERROR_COUNT  # 连续错误超过此次数后检测work进程是否还存在
+        max_errors = (
+            envs.FD_CACHE_PROC_ERROR_COUNT
+        )  # After this many consecutive errors, check if the worker process exists.
 
         while True:
             try:
@@ -405,8 +386,8 @@ class CacheTransferManager:
                 consecutive_error_count = 0
 
             except (BrokenPipeError, EOFError, ConnectionResetError) as e:
-                # cache_transfer_manager进程残留时会持续打印异常日志导致磁盘耗尽，此处增加检测work进程是否存活，
-                # 如果worker进程已经结束，此残留进程会终止循环退出，避免持续打印异常日志
+                # When a cache_transfer_manager process remains, it keeps printing error logs and may exhaust disk space.
+                # Add a check to see if the worker process is alive; if it has ended, exit the loop to stop continuous logging.
                 logger.error(f"[CacheTransferManager] Connection broken: {e}")
                 consecutive_error_count += 1
                 if consecutive_error_count > max_errors:
@@ -511,6 +492,9 @@ class CacheTransferManager:
         )
 
     def clear_or_update_caches(self, args):
+        # TODO XPU support RL
+        if unset_data_ipc is None:
+            return
         logger.info("Start a thread to clear/restore kv cache when model weights are cleared/updated.")
         logger.info(f"FD_ENABLE_SWAP_SPACE_CLEARING={envs.FD_ENABLE_SWAP_SPACE_CLEARING}")
         kv_cache_status = np.zeros([1], dtype=np.int32)
@@ -542,10 +526,7 @@ class CacheTransferManager:
                             time.sleep(0.1)
 
                     # clear gpu caches
-                    if current_platform.is_cuda():
-                        paddle.set_device(f"gpu:{self.device}")
-                    elif current_platform.is_xpu():
-                        paddle.set_device(f"xpu:{self.device}")
+                    set_device(self.device)
                     for name, tensor in self.gpu_cache_kvs.items():
                         unset_data_ipc(tensor, name, True, False)
                     self.gpu_cache_kvs.clear()
@@ -615,8 +596,5 @@ if __name__ == "__main__":
     args = parse_args()
     rank_id = args.rank + args.local_data_parallel_id * args.mp_num
     logger = get_logger("cache_transfer_manager", f"cache_transfer_manager_rank{rank_id}.log")
-    if current_platform.is_cuda():
-        paddle.set_device(f"gpu:{args.device_id}")
-    elif current_platform.is_xpu():
-        paddle.set_device(f"xpu:{args.device_id}")
+    set_device(args.device_id)
     main()

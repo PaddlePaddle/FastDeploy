@@ -56,6 +56,13 @@ class XpuWorker(WorkerBase):
             self.device_ids = self.parallel_config.device_ids.split(",")
             self.device = f"xpu:{self.local_rank % self.max_chips_per_node}"
             paddle.device.set_device(self.device)
+            self.device_id = int(self.device_ids[self.local_rank % self.max_chips_per_node])
+            assert (
+                self.device_id is not None
+            ), f"device_id is none for rank {self.local_rank % self.max_chips_per_node}"
+            assert len(self.device_ids) > (
+                self.local_rank % self.max_chips_per_node
+            ), f"device number must be greater than local rank, but get device number is {len(self.device_ids)}, rank is {self.local_rank % self.max_chips_per_node}"
             paddle.set_default_dtype(self.model_config.dtype)
 
             gc.collect()
@@ -69,7 +76,7 @@ class XpuWorker(WorkerBase):
             fd_config=self.fd_config,
             device=self.device,
             rank=self.rank,
-            device_id=int(self.device_ids[self.local_rank % self.max_chips_per_node]),
+            device_id=self.device_id,
             local_rank=self.local_rank,
         )
 
@@ -98,14 +105,9 @@ class XpuWorker(WorkerBase):
             xpu_get_used_global_memory,
         )
 
-        assert self.device_ids[self.local_rank] is not None, f"device_id is none for rank {self.local_rank}"
-        assert (
-            len(self.device_ids) > self.local_rank
-        ), f"device number must be greater than local rank, but get device number is {len(self.device_ids)}, rank is {self.local_rank}"
-
-        total_memory = xpu_get_total_global_memory(int(self.device_ids[self.local_rank]))
-        used_memory = xpu_get_used_global_memory(int(self.device_ids[self.local_rank]))
-        free_memory = xpu_get_free_global_memory(int(self.device_ids[self.local_rank]))
+        total_memory = xpu_get_total_global_memory(self.device_id)
+        used_memory = xpu_get_used_global_memory(self.device_id)
+        free_memory = xpu_get_free_global_memory(self.device_id)
 
         logger.info(
             f"Before warm up, total_memory: {total_memory}, \
@@ -119,7 +121,7 @@ class XpuWorker(WorkerBase):
         set_random_seed(self.fd_config.model_config.seed)
 
         total_available_memory = int(total_memory * self.cache_config.gpu_memory_utilization)
-        used_memory = xpu_get_used_global_memory(int(self.device_ids[self.local_rank]))
+        used_memory = xpu_get_used_global_memory(self.device_id)
         available_kv_cache_memory = total_available_memory - used_memory
         model_block_memory_used = self.cal_theortical_kvcache()
         available_kv_cache_memory += model_block_memory_used * self.cache_config.total_block_num
