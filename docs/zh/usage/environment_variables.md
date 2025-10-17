@@ -77,5 +77,11 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # 是否使用 Machete 后端的 wint4 GEMM.
     "FD_USE_MACHETE": lambda: os.getenv("FD_USE_MACHETE", "0"),
+
+    # cache_transfer_manager 进程残留时退出等待超时时间
+    "FD_CACHE_PROC_EXIT_TIMEOUT": lambda: int(os.getenv("FD_CACHE_PROC_EXIT_TIMEOUT", "600")),
+
+    # cache_transfer_manager 进程残留时连续错误阈值
+    "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),
 }
 ```
