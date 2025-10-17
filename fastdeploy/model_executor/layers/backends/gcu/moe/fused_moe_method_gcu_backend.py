@@ -180,7 +180,7 @@ class GCUFusedMoeMethod(UnquantizedFusedMoEMethod):
                 tensor_model_parallel_all_reduce,
             )
 
-            tensor_model_parallel_all_reduce(fused_moe_out)
+            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out)
 
         return fused_moe_out
 

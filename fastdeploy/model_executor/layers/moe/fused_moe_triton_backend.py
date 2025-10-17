@@ -393,7 +393,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         down_proj_out.reshape_([token_num, top_k, hidden_size])
         out = down_proj_out.sum(axis=1)
         if layer.reduce_results and layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(out)
+            out = tensor_model_parallel_all_reduce(out)
 
         return out
 
@@ -767,7 +767,7 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
         out = down_proj_out.sum(axis=1)
 
         if layer.reduce_results and layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(out)
+            out = tensor_model_parallel_all_reduce(out)
 
         return out
 
@@ -1056,7 +1056,7 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         out = down_proj_out.sum(axis=1)
 
         if layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(out)
+            out = tensor_model_parallel_all_reduce(out)
 
         return out
 
@@ -1460,6 +1460,6 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         out = intermediate_cache3.sum(axis=1)
 
         if layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(out)
+            out = tensor_model_parallel_all_reduce(out)
 
         return out

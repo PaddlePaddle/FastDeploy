@@ -318,7 +318,7 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
         )
 
         if layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(fused_moe_out)
+            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out)
 
         return fused_moe_out
 
@@ -488,6 +488,6 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
         fused_moe_out = paddle.sum(intermediate_cache3, axis=1)
 
         if layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(fused_moe_out)
+            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out)
 
         return fused_moe_out

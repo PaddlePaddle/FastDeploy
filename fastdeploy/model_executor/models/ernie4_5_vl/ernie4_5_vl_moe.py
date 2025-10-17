@@ -300,7 +300,7 @@ class Ernie4_5_VLMoE(nn.Layer):
         if self.num_shared_experts > 0:
             hidden_states += shared_experts_out
         if self.tp_size > 1:
-            tensor_model_parallel_all_reduce(hidden_states)
+            hidden_states = tensor_model_parallel_all_reduce(hidden_states)
         return hidden_states
 
 
