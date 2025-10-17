@@ -171,7 +171,7 @@ class XPUMoEMethod(MoEMethodBase):
             False,  # moe group, used in deepseek
         )
         if layer.reduce_results and layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(fused_moe_out)
+            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out)
 
         return fused_moe_out
 
@@ -459,7 +459,7 @@ class XPUWeightOnlyMoEMethod(XPUMoEMethod):
             tmp_ffn_out = paddle.empty(x.shape, x.dtype)
 
         if layer.reduce_results and layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(tmp_ffn_out)
+            tmp_ffn_out = tensor_model_parallel_all_reduce(tmp_ffn_out)
         return tmp_ffn_out
 
 
@@ -640,5 +640,5 @@ class XPUW4A8MoEMethod(XPUMoEMethod):
             permute_indices_per_token.shape[1],
         )
         if layer.reduce_results and layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(tmp_ffn_out)
+            tmp_ffn_out = tensor_model_parallel_all_reduce(tmp_ffn_out)
         return tmp_ffn_out
