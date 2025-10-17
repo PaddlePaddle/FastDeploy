@@ -36,6 +36,7 @@ from fastdeploy.config import (
     PoolerConfig,
     RunnerOption,
     SpeculativeConfig,
+    StructuredOutputsConfig,
     TaskOption,
 )
 from fastdeploy.platforms import current_platform
@@ -1063,7 +1064,7 @@ class EngineArgs:
 
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
-
+        structured_outputs_config: StructuredOutputsConfig = StructuredOutputsConfig(args=all_dict)
         if port_availability_check:
             assert is_port_available(
                 "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
@@ -1077,11 +1078,11 @@ class EngineArgs:
             load_config=load_cfg,
             parallel_config=parallel_cfg,
             speculative_config=speculative_cfg,
+            structured_outputs_config=structured_outputs_config,
             ips=self.ips,
             use_warmup=self.use_warmup,
             limit_mm_per_prompt=self.limit_mm_per_prompt,
             mm_processor_kwargs=self.mm_processor_kwargs,
-            reasoning_parser=self.reasoning_parser,
             tool_parser=self.tool_call_parser,
             innode_prefill_ports=self.innode_prefill_ports,
             max_num_partial_prefills=self.max_num_partial_prefills,
@@ -1089,7 +1090,5 @@ class EngineArgs:
             long_prefill_token_threshold=self.long_prefill_token_threshold,
             graph_opt_config=graph_opt_cfg,
             plas_attention_config=plas_attention_config,
-            guided_decoding_backend=self.guided_decoding_backend,
-            disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             early_stop_config=early_stop_cfg,
         )

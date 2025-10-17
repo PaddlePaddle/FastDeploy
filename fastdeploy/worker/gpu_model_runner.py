@@ -109,7 +109,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.enable_logprob = fd_config.model_config.enable_logprob
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
         self.is_pooling_model = self.fd_config.model_config.runner_type == "pooling"
-        self.pooling_params: dict[str, PoolingParams] = {}
 
         # VL model config:
         if self.enable_mm:
@@ -141,7 +140,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.sampler = SpeculativeSampler(fd_config)
 
         self.guided_backend = None
-        if self.fd_config.parallel_config.guided_decoding_backend != "off":
+        if self.fd_config.structured_outputs_config.guided_decoding_backend != "off":
             self.guided_backend = get_guided_backend(fd_config=self.fd_config)
             self.sampler.set_reasoning_parser(self.guided_backend.get_reasoning_parser())
 
@@ -424,7 +423,7 @@ class GPUModelRunner(ModelRunnerBase):
                     has_decode_task = True
                 continue
             else:  # preempted task
-                logger.debug(f"Handle preempted request {request} at idx {idx}")
+                logger.info(f"Handle preempted request {request} at idx {idx}")
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
                 self.seq_lens_this_time_buffer[idx : idx + 1] = 0
@@ -959,8 +958,8 @@ class GPUModelRunner(ModelRunnerBase):
         # Initialize free list
         free_list = list(
             range(
-                self.parallel_config.total_block_num - 1,
-                int(self.parallel_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
+                self.cache_config.total_block_num - 1,
+                int(self.cache_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
                 -1,
             )
         )
@@ -1207,7 +1206,7 @@ class GPUModelRunner(ModelRunnerBase):
         max_block_num = self.num_gpu_blocks
 
         # Get kv cache dtype
-        cache_type = self.parallel_config.dtype
+        cache_type = self.model_config.dtype
         kv_cache_quant_type = None
         if (
             self.quant_config
@@ -1678,6 +1677,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.proposer.update_task_chunk_prefill(task)
             task.chunk_idx += 1
 
+    @sot_warmup_guard(True)
     def capture_model(self) -> None:
         """
         Trigger CUDA Graph capture for all shapes in cuda graph capture list
@@ -2073,7 +2073,7 @@ class GPUModelRunner(ModelRunnerBase):
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
         # Initialize kv cache for profile run. After profile run kv cache will be reset.
         # TODO(gongshaotian): Optimize the management logic of kvcache
-        self.num_gpu_blocks = self.parallel_config.total_block_num
+        self.num_gpu_blocks = self.cache_config.total_block_num
         self.initialize_kv_cache(profile=True)
         if self.speculative_method in ["mtp"]:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
@@ -2295,7 +2295,7 @@ class GPUModelRunner(ModelRunnerBase):
             custom_black_list=self.amp_black,
             custom_white_list=self.amp_white,
             level="O2",
-            dtype=self.parallel_config.dtype,
+            dtype=self.model_config.dtype,
         ):
             image_features = self.model.vision_model.extract_feature(images, grid_thw)
             if self.parallel_config.tensor_parallel_size > 1:
@@ -2322,7 +2322,7 @@ class GPUModelRunner(ModelRunnerBase):
             custom_black_list=self.amp_black,
             custom_white_list=self.amp_white,
             level="O2",
-            dtype=self.parallel_config.dtype,
+            dtype=self.model_config.dtype,
         ):
             image_features = self.model.visual.extract_feature(images, grid_thw)
 

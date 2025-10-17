@@ -53,7 +53,7 @@ class ExpertService:
         end_pos = start_pos + self.cfg.parallel_config.tensor_parallel_size
         if cfg.scheduler_config.splitwise_role != "mixed":
             self.cfg.cache_config.rdma_comm_ports = self.cfg.cache_config.rdma_comm_ports[start_pos:end_pos]
-        self.cfg.local_device_ids = self.cfg.device_ids.split(",")[start_pos:end_pos]
+        self.cfg.local_device_ids = self.cfg.parallel_config.device_ids.split(",")[start_pos:end_pos]
         llm_logger.info(f"local_data_parallel_id: {local_data_parallel_id}")
         self.cfg.disaggregate_info = None
 

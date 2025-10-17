@@ -91,7 +91,7 @@ std::vector<paddle::Tensor> AppendAttention(
     const int speculate_max_draft_token_num, const bool causal,
     const bool speculate_decoder);
 
-void AppendAttentionWithOutput(
+std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const paddle::Tensor &qkv, const paddle::Tensor &key_cache,
     const paddle::Tensor &value_cache, const paddle::Tensor &seq_lens_encoder,
     const paddle::Tensor &seq_lens_decoder,
