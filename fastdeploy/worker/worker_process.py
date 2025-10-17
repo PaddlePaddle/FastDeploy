@@ -810,7 +810,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     update_fd_config_for_mm(fd_config)
     update_think_end_id_for_ernie(fd_config)
 
-    if not is_paddle_support_v1_loader():
+    if load_config.load_choices == "default_v1" and not is_paddle_support_v1_loader():
         raise ValueError("The install Paddle don't support v1 loader.")
 
     return fd_config
