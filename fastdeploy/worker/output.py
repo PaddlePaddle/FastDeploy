@@ -261,3 +261,8 @@ class ModelRunnerOutput:
         [num_reqs, num_spec_tokens]
     """
     spec_token_ids: Optional[list[list[int]]]
+
+    """
+    [num_reqs, hidden_size]
+    """
+    pooler_output: list[Optional[paddle.Tensor]]
