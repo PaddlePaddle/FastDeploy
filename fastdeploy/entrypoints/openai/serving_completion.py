@@ -163,7 +163,9 @@ class OpenAIServingCompletion:
             except ParameterError as e:
                 api_server_logger.error(f"OpenAIServingCompletion format error: {e}, {e.message}")
                 self.engine_client.semaphore.release()
-                return ErrorResponse(code=400, message=str(e.message), type="invalid_request", param=e.param)
+                return ErrorResponse(
+                    error=ErrorInfo(code="400", message=str(e.message), type="invalid_request", param=e.param)
+                )
             except Exception as e:
                 error_msg = f"OpenAIServingCompletion format error: {e}, {str(traceback.format_exc())}"
                 api_server_logger.error(error_msg)
@@ -407,8 +409,12 @@ class OpenAIServingCompletion:
                                     CompletionResponseStreamChoice(
                                         index=idx,
                                         text="",
-                                        prompt_token_ids=list(prompt_batched_token_ids[idx]),
-                                        prompt_tokens=prompt_tokens_list[idx],
+                                        prompt_token_ids=list(
+                                            prompt_batched_token_ids[idx // (1 if request.n is None else request.n)]
+                                        ),
+                                        prompt_tokens=prompt_tokens_list[
+                                            idx // (1 if request.n is None else request.n)
+                                        ],
                                         completion_token_ids=None,
                                     )
                                 ],
@@ -493,9 +499,14 @@ class OpenAIServingCompletion:
                                 model=model_name,
                                 choices=[],
                                 usage=UsageInfo(
-                                    prompt_tokens=len(prompt_batched_token_ids[idx]),
+                                    prompt_tokens=len(
+                                        prompt_batched_token_ids[idx // (1 if request.n is None else request.n)]
+                                    ),
                                     completion_tokens=output_tokens[idx],
-                                    total_tokens=len(prompt_batched_token_ids[idx]) + output_tokens[idx],
+                                    total_tokens=len(
+                                        prompt_batched_token_ids[idx // (1 if request.n is None else request.n)]
+                                    )
+                                    + output_tokens[idx],
                                 ),
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
@@ -503,7 +514,7 @@ class OpenAIServingCompletion:
 
         except Exception as e:
             api_server_logger.error(f"Error in completion_stream_generator: {e}, {str(traceback.format_exc())}")
-            yield f"data: {ErrorResponse(message=str(e), code=400).model_dump_json(exclude_unset=True)}\n\n"
+            yield f"data: {ErrorResponse(error=ErrorInfo(message=str(e), code='400', type=ErrorType.INTERNAL_ERROR)).model_dump_json(exclude_unset=True)}\n\n"
         finally:
             del request
             if dealer is not None:
@@ -528,7 +539,7 @@ class OpenAIServingCompletion:
 
         for idx in range(len(final_res_batch)):
             final_res = final_res_batch[idx]
-            prompt_token_ids = prompt_batched_token_ids[idx]
+            prompt_token_ids = prompt_batched_token_ids[idx // (1 if request.n is None else request.n)]
             assert prompt_token_ids is not None
             completion_token_ids = completion_batched_token_ids[idx]
 
@@ -555,7 +566,11 @@ class OpenAIServingCompletion:
                 prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
                 completion_token_ids=completion_token_ids if request.return_token_ids else None,
                 completion_tokens=output.get("completion_tokens") if request.return_token_ids else None,
-                prompt_tokens=prompt_tokens_list[idx] if request.return_token_ids else None,
+                prompt_tokens=(
+                    prompt_tokens_list[idx // (1 if request.n is None else request.n)]
+                    if request.return_token_ids
+                    else None
+                ),
                 reasoning_content=output.get("reasoning_content"),
                 tool_calls=output.get("tool_call"),
                 logprobs=aggregated_logprobs,
