@@ -21,6 +21,7 @@ from prometheus_client import (
     Histogram,
 )
 from fastdeploy import envs
+import json
 
 class MetricsManagerInterface:
 
@@ -28,8 +29,10 @@ class MetricsManagerInterface:
         metric = getattr(self, name, None)
         if isinstance(metric, Gauge):
             if envs.FD_ENABLE_METRIC_LABELS:
+                default_labelvalues = json.loads(envs.FD_DEFAULT_METRIC_LABEL_VALUES)
                 if labelvalues is None:
-                    labelvalues = {ln: "" for ln in metric._labelnames}
+                    labelvalues = {}
+                labelvalues = {ln: labelvalues.get(ln, default_labelvalues.get(ln, "")) for ln in metric._labelnames}
                 metric.labels(**labelvalues).set(value)
             else:
                 metric.set(value)
@@ -39,8 +42,10 @@ class MetricsManagerInterface:
         metric = getattr(self, name, None)
         if isinstance(metric, Gauge) or isinstance(metric, Counter):
             if envs.FD_ENABLE_METRIC_LABELS:
+                default_labelvalues = json.loads(envs.FD_DEFAULT_METRIC_LABEL_VALUES)
                 if labelvalues is None:
-                    labelvalues = {ln: "" for ln in metric._labelnames}
+                    labelvalues = {}
+                labelvalues = {ln: labelvalues.get(ln, default_labelvalues.get(ln, "")) for ln in metric._labelnames}
                 metric.labels(**labelvalues).inc(value)
             else:
                 metric.inc(value)
@@ -50,8 +55,10 @@ class MetricsManagerInterface:
         metric = getattr(self, name, None)
         if isinstance(metric, Gauge):
             if envs.FD_ENABLE_METRIC_LABELS:
+                default_labelvalues = json.loads(envs.FD_DEFAULT_METRIC_LABEL_VALUES)
                 if labelvalues is None:
-                    labelvalues = {ln: "" for ln in metric._labelnames}
+                    labelvalues = {}
+                labelvalues = {ln: labelvalues.get(ln, default_labelvalues.get(ln, "")) for ln in metric._labelnames}
                 metric.labels(**labelvalues).dec(value)
             else:
                 metric.dec(value)
@@ -61,8 +68,10 @@ class MetricsManagerInterface:
         metric = getattr(self, name, None)
         if isinstance(metric, Histogram):
             if envs.FD_ENABLE_METRIC_LABELS:
+                default_labelvalues = json.loads(envs.FD_DEFAULT_METRIC_LABEL_VALUES)
                 if labelvalues is None:
-                    labelvalues = {ln: "" for ln in metric._labelnames}
+                    labelvalues = {}
+                labelvalues = {ln: labelvalues.get(ln, default_labelvalues.get(ln, "")) for ln in metric._labelnames}
                 metric.labels(**labelvalues).observe(value)
             else:
                 metric.observe(value)
