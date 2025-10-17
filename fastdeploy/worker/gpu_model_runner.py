@@ -345,7 +345,6 @@ class GPUModelRunner(ModelRunnerBase):
                     )
 
                 if request.get("reasoning_max_tokens") is not None:
-                    assert request.get("reasoning_max_tokens") >= 0, "reasoning_max_tokens in requests need >= 0."
                     # Enable thinking
                     self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
                     self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
@@ -578,7 +577,6 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
 
                 if request.get("reasoning_max_tokens") is not None:
-                    assert request.get("reasoning_max_tokens") >= 0, "reasoning_max_tokens in requests need >= 0."
                     # Enable thinking
                     self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
                     self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
