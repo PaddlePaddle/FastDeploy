@@ -172,7 +172,7 @@ class TestFusedMoE(unittest.TestCase):
 
         nnodes = (ep_size + 7) // 8
 
-        fused_moe = FuseMoEWrapper(self.model_config, tp_size, tp_rank, ep_size, ep_rank, nnodes = nnodes)
+        fused_moe = FuseMoEWrapper(self.model_config, tp_size, tp_rank, ep_size, ep_rank, nnodes=nnodes)
 
         # 这行代码必须保留，否则影响均匀性！
         paddle.seed(ep_rank + 100)
