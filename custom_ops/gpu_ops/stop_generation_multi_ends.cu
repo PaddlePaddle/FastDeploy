@@ -40,8 +40,8 @@ __global__ void set_value_by_flags(bool *stop_flags,
                                    const int64_t *stop_token_ids,
                                    const int *stop_token_ids_len,
                                    const int stop_token_ids_max_len,
-                                   const int64_t *min_tokens,      // 新增
-                                   const int64_t *max_tokens,      // 新增
+                                   const int64_t *min_tokens,
+                                   const int64_t *max_tokens,
                                    bool beam_search,
                                    bool prefill_one_step_stop) {
     int tid = threadIdx.x;
@@ -50,7 +50,6 @@ __global__ void set_value_by_flags(bool *stop_flags,
 
     if (bid < bs) {
         if(tid == 0){
-            // 原有的 prefill 逻辑
             if (prefill_one_step_stop) {
                 stop_flags[bid] = true;
                 if (seq_lens[bid] == 0) {
