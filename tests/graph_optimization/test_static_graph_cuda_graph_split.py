@@ -14,16 +14,16 @@
 # limitations under the License.
 """
 
-import os
-
-os.environ["FLAGS_cuda_graph_blacklist"] = "pd_op.matmul,pd_op.transpose"
-
-
 import unittest
 from unittest.mock import Mock
 
 import paddle
 import paddle.nn as nn
+
+from fastdeploy.model_executor.graph_optimization.utils import sot_warmup_guard
+
+paddle.set_flags({"FLAGS_cuda_graph_blacklist": "pd_op.matmul,pd_op.transpose"})
+
 
 from fastdeploy.config import (
     CacheConfig,
@@ -77,10 +77,10 @@ class TestModel(nn.Layer):
         super().__init__()
         self.model = Attention(fd_config)
 
-    def forward(self, ids_remove_padding, forward_meta: ForwardMeta):
+    def forward(self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta):
         return self.model(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
-    def forward_correct(self, ids_remove_padding, forward_meta: ForwardMeta):
+    def forward_correct(self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta):
         return self.model.forward_dynamic(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
 
@@ -111,7 +111,8 @@ class TestStaticGraphCUDAGraphSplit(unittest.TestCase):
         forward_meta1 = ForwardMeta(input_ids=x, ids_remove_padding=x, step_use_cudagraph=True)
 
         # Trigger Capture
-        _ = test_model1(x, forward_meta=forward_meta1)
+        with sot_warmup_guard(True):
+            _ = test_model1(x, forward_meta=forward_meta1)
 
         # Replay
         _ = test_model1(x, forward_meta=forward_meta1)
