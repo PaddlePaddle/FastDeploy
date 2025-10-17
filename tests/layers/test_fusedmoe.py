@@ -66,7 +66,8 @@ class FuseMoEWrapper(paddle.nn.Layer):
         self.fd_config.parallel_config.tp_group = None
         self.fd_config.parallel_config.tensor_parallel_rank = tp_rank
         self.fd_config.parallel_config.expert_parallel_size = self.ep_size
-        self.fd_config.parallel_config.ep_group = fleet.get_hybrid_communicate_group().get_model_parallel_group()
+        if self.ep_size > 1:
+            self.fd_config.parallel_config.ep_group = fleet.get_hybrid_communicate_group().get_model_parallel_group()
 
         weight_key_map = {
             "gate_weight_key": f"{self.prefix}.gate.weight",
@@ -85,7 +86,6 @@ class FuseMoEWrapper(paddle.nn.Layer):
         )
         moe_layer = self.fused_moe
 
-        # paddle.seed(1024)
         up_gate_proj_weight_shape = [
             moe_layer.num_local_experts,
             moe_layer.hidden_size,
@@ -122,7 +122,7 @@ class TestFusedMoE(unittest.TestCase):
         self.architectures = ["Ernie4_5_MoeForCausalLM"]
         self.hidden_size = 7168
         self.moe_intermediate_size = 3584
-        self.moe_num_experts = 384
+        self.moe_num_experts = 64
         self.moe_k = 8
         self.hidden_act = "silu"
         self.num_attention_heads = 64
@@ -163,7 +163,7 @@ class TestFusedMoE(unittest.TestCase):
         gating.to(dtype=paddle.float32)  # it's dtype is bfloat16 default, but the forward input is float32
         gating.weight.set_value(paddle.rand(gating.weight.shape, dtype=paddle.float32))
 
-        # os.environ["FD_USE_DEEP_GEMM"] = "1"  # use deepgemm
+        os.environ["FD_USE_DEEP_GEMM"] = "1"  # use deepgemm
         ep_size = paddle.distributed.get_world_size()
         ep_rank = paddle.distributed.get_rank()
 
@@ -175,7 +175,7 @@ class TestFusedMoE(unittest.TestCase):
         fused_moe = FuseMoEWrapper(self.model_config, tp_size, tp_rank, ep_size, ep_rank, nnodes=nnodes)
 
         # 这行代码必须保留，否则影响均匀性！
-        # paddle.seed(ep_rank + 100)
+        paddle.seed(ep_rank + 100)
 
         moe_cuda_graphs = [None] * 100
         cache_hidden_states = [None] * 100
@@ -188,9 +188,7 @@ class TestFusedMoE(unittest.TestCase):
 
             num_layers = 80
             for _ in range(num_layers):
-                out = fused_moe.fused_moe.quant_method.apply_ep_decode(
-                    fused_moe.fused_moe, cache_hidden_states[idx], gating
-                )
+                out = fused_moe.fused_moe(cache_hidden_states[idx], gating)
 
             moe_cuda_graphs[idx].capture_end()
 
@@ -217,5 +215,4 @@ class TestFusedMoE(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    exit(0)
     unittest.main()
