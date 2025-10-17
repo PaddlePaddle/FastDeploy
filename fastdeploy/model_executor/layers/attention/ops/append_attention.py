@@ -205,7 +205,7 @@ def append_attention_with_output(
     append_attention
     """
     if current_platform.is_cuda():
-        append_attention_with_output_gpu(
+        return append_attention_with_output_gpu(
             qkv,
             key_cache,
             value_cache,
