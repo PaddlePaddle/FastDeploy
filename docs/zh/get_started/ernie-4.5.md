@@ -1,3 +1,5 @@
+[English](../../get_started/ernie-4.5.md)
+
 # ERNIE-4.5模型
 
 本文档讲解如何部署ERNIE-4.5模型，在开始部署前，请确保你的硬件环境满足如下条件：
