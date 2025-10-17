@@ -46,7 +46,10 @@ from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_iluvatar():
-    from fastdeploy.model_executor.ops.iluvatar import set_value_by_flags_and_idx
+    from fastdeploy.model_executor.ops.iluvatar import (
+        set_data_ipc,
+        set_value_by_flags_and_idx,
+    )
 
     recover_decode_task = None
     share_external_data = None

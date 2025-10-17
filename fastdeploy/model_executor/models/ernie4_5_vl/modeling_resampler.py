@@ -31,6 +31,7 @@ from fastdeploy.model_executor.models.ernie4_5_vl.dist_utils import (
     scatter_axis,
 )
 from fastdeploy.model_executor.utils import set_weight_attrs
+from fastdeploy.platforms import current_platform
 
 
 class ScatterOp(PyLayer):
@@ -172,7 +173,7 @@ class VariableResolutionResamplerModel(nn.Layer):
                         self.spatial_dim,
                         input_is_parallel=True,
                         has_bias=True,
-                        fuse_matmul_bias=True,
+                        fuse_matmul_bias=False if current_platform.is_iluvatar() else True,
                     )
                     if self.tensor_parallel_degree > 1
                     else nn.Linear(self.spatial_dim, self.spatial_dim)

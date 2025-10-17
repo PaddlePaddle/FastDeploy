@@ -411,6 +411,9 @@ class ErnieVlRotaryEmbedding3D:
         rot_emb[0] = cos_thw
         rot_emb[1] = sin_thw
 
+        if current_platform.is_iluvatar():
+            rot_emb = paddle.stack([rot_emb, rot_emb], axis=-1).reshape([2, 1, self.max_position, 1, self.rotary_dim])
+
         return rot_emb
 
 
