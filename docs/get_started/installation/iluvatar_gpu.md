@@ -1,3 +1,5 @@
+[简体中文](../../zh/get_started/installation/iluvatar_gpu.md)
+
 # Run ERNIE-4.5-300B-A47B & ERNIE-4.5-21B-A3B model on iluvatar machine
 
 ## Machine Preparation

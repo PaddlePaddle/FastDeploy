@@ -250,6 +250,11 @@ class ModelOutputData:
     """
     stop_seqs_len: paddle.Tensor = None
 
+    """
+        the length of input prompt
+    """
+    prompt_lens: paddle.Tensor = None
+
 
 @dataclass
 class ModelRunnerOutput:
@@ -276,3 +281,8 @@ class ModelRunnerOutput:
         [num_reqs, num_spec_tokens]
     """
     spec_token_ids: Optional[list[list[int]]]
+
+    """
+    [num_reqs, hidden_size]
+    """
+    pooler_output: list[Optional[paddle.Tensor]]

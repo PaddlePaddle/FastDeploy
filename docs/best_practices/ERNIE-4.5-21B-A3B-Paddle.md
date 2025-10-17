@@ -1,3 +1,5 @@
+[简体中文](../zh/best_practices/ERNIE-4.5-21B-A3B-Paddle.md)
+
 # ERNIE-4.5-21B-A3B
 ## Environmental Preparation
 ### 1.1 Hardware requirements

@@ -148,7 +148,7 @@ class MTPProposer(Proposer):
         self.cache_kvs = {}
 
         # Get kv cache dtype
-        cache_type = self.parallel_config.dtype
+        cache_type = self.model_config.dtype
         kv_cache_quant_type = None
         if (
             self.quant_config
@@ -247,7 +247,6 @@ class MTPProposer(Proposer):
         self.model_inputs["kv_num_blocks_x_cpu"] = paddle.zeros_like(
             self.target_model_inputs["kv_num_blocks_x_cpu"]
         ).cpu()
-        self.model_inputs["max_len_kv_cpu"] = paddle.zeros_like(self.target_model_inputs["max_len_kv_cpu"]).cpu()
 
         # Get the attention backend
         attn_cls = get_attention_backend()
@@ -374,7 +373,6 @@ class MTPProposer(Proposer):
         self.model_inputs["kv_batch_ids"] = None
         self.model_inputs["kv_tile_ids_per_batch"] = None
         self.model_inputs["kv_num_blocks_x_cpu"] = None  # CPU
-        self.model_inputs["max_len_kv_cpu"] = None  # CPU
 
         # Input tokens
         self.model_inputs["draft_tokens"] = paddle.full(
@@ -385,8 +383,8 @@ class MTPProposer(Proposer):
 
         self.free_list = list(
             range(
-                self.parallel_config.total_block_num - 1,
-                int(self.parallel_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
+                self.cache_config.total_block_num - 1,
+                int(self.cache_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
                 -1,
             )
         )
@@ -583,7 +581,6 @@ class MTPProposer(Proposer):
             kv_batch_ids=self.model_inputs["kv_batch_ids"],
             kv_tile_ids_per_batch=self.model_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.model_inputs["kv_num_blocks_x_cpu"],
-            max_len_kv_cpu=self.model_inputs["max_len_kv_cpu"],
         )
 
         # Initialzie attention meta data
