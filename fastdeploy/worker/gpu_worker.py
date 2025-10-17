@@ -64,7 +64,7 @@ class GpuWorker(WorkerBase):
             self.device_ids = self.parallel_config.device_ids.split(",")
             self.device = f"gpu:{self.local_rank % self.max_chips_per_node}"
             paddle.device.set_device(self.device)
-            paddle.set_default_dtype(self.parallel_config.dtype)
+            paddle.set_default_dtype(self.model_config.dtype)
 
             gc.collect()
             paddle.device.cuda.empty_cache()
@@ -153,7 +153,7 @@ class GpuWorker(WorkerBase):
             - after_run_meminfo.used
             - paddle_peak_increase
         )
-        available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
+        available_kv_cache_memory += model_block_memory_used * self.cache_config.total_block_num
 
         end_time = time.perf_counter()
         logger.info(

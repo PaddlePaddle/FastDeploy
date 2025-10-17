@@ -426,7 +426,7 @@ class PaddleDisWorkerProc:
                 )
                 self.get_profile_block_num_signal.value[0] = num_blocks_local
         else:
-            num_blocks_local = self.fd_config.parallel_config.total_block_num
+            num_blocks_local = self.fd_config.cache_config.total_block_num
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
 
         # 4. init kv_cache with accurate num_blocks
