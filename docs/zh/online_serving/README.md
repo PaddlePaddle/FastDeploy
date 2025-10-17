@@ -1,3 +1,5 @@
+[English](../../online_serving/README.md)
+
 # 兼容 OpenAI 协议的服务化部署
 
 FastDeploy 提供与 OpenAI 协议兼容的服务化部署方案。用户可以通过如下命令快速进行部署：
