@@ -74,4 +74,4 @@ def test_fd_ep():
 
 
 if __name__ == "__main__":
-    test_fastdeploy_llm()
+    test_fd_ep()
