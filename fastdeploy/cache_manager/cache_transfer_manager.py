@@ -183,6 +183,18 @@ class CacheTransferManager:
             suffix=args.engine_pid,
             create=False,
         )
+
+        max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        array_size = min(max_chips_per_node, args.mp_num)
+        worker_healthy_live_array = np.zeros(shape=[array_size], dtype=np.int32)
+        self.worker_healthy_live_signal = IPCSignal(
+            name="worker_healthy_live_signal",
+            array=worker_healthy_live_array,
+            dtype=np.int32,
+            suffix=args.engine_worker_queue_port,
+            create=False,
+        )
+
         # TODO XPU support RL
         if not current_platform.is_xpu():
             threading.Thread(target=self.clear_or_update_caches, args=[args], daemon=True).start()
@@ -319,10 +331,28 @@ class CacheTransferManager:
             logger.debug(f"_do_swap_to_gpu_task: put_transfer_done_signal {result}")
             logger.info(f"_do_swap_to_gpu_task: put_transfer_done_signal for transfer_task_id {transfer_task_id}")
 
+    def check_work_status(self, time_interval_threashold=envs.FD_CACHE_PROC_EXIT_TIMEOUT):
+        """
+        Check the health of the model server by checking whether all workers are alive.
+
+        """
+        if self.worker_healthy_live_signal.value[0]:
+            elapsed_time = time.time() - self.worker_healthy_live_signal.value[0]
+            if elapsed_time > time_interval_threashold:
+                return False, "Worker Service Not Healthy"
+
+        return True, ""
+
     def do_data_transfer(self):
         """
         do data transfer task
         """
+
+        consecutive_error_count = 0
+        max_errors = (
+            envs.FD_CACHE_PROC_ERROR_COUNT
+        )  # After this many consecutive errors, check if the worker process exists.
+
         while True:
             try:
                 if self.rank == 0:
@@ -373,6 +403,28 @@ class CacheTransferManager:
                     self.cache_task_queue.barrier3.wait()
                     if self.rank == 0:
                         self.cache_task_queue.barrier3.reset()
+
+                consecutive_error_count = 0
+
+            except (BrokenPipeError, EOFError, ConnectionResetError) as e:
+                # When a cache_transfer_manager process remains, it keeps printing error logs and may exhaust disk space.
+                # Add a check to see if the worker process is alive; if it has ended, exit the loop to stop continuous logging.
+                logger.error(f"[CacheTransferManager] Connection broken: {e}")
+                consecutive_error_count += 1
+                if consecutive_error_count > max_errors:
+                    try:
+                        status, msg = self.check_work_status()
+                    except Exception:
+                        status = True
+
+                    if status is False:
+                        logger.critical(
+                            f"The Worker process has been inactive for over {envs.FD_CACHE_PROC_EXIT_TIMEOUT} seconds, and the Cache process will automatically terminate (the waiting timeout can be extended via FD_CACHE_PROC_EXIT_TIMEOUT)."
+                        )
+                        break
+                time.sleep(1)
+                continue
+
             except Exception as e:
                 logger.info(f"do_data_transfer: error: {e}, {str(traceback.format_exc())}")
 

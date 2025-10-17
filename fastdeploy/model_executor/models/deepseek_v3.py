@@ -194,7 +194,7 @@ class DeepSeekV3MoE(nn.Layer):
         moe_out = moe_out + shared_experts_out
         # We do to TP all reduce after the sum of experts.
         if self.tp_size > 1:
-            tensor_model_parallel_all_reduce(moe_out)
+            moe_out = tensor_model_parallel_all_reduce(moe_out)
         return moe_out
 
 
