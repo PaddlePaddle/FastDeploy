@@ -158,9 +158,9 @@ class EngineClient:
             if "messages" in task:
                 del task["messages"]
             api_server_logger.info(f"task['max_tokens']:{task['max_tokens']}")
-            work_process_metrics.request_params_max_tokens.observe(task["max_tokens"])
-            work_process_metrics.prompt_tokens_total.inc(input_ids_len)
-            work_process_metrics.request_prompt_tokens.observe(input_ids_len)
+            work_process_metrics.obs_value("request_params_max_tokens", task["max_tokens"])
+            work_process_metrics.inc_value("prompt_tokens_total", input_ids_len)
+            work_process_metrics.obs_value("request_prompt_tokens", input_ids_len)
         except Exception as e:
             api_server_logger.error(f"add_requests error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)

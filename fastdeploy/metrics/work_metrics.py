@@ -21,9 +21,10 @@ metrics
 from prometheus_client import Counter, Histogram
 
 from fastdeploy.metrics.metrics import build_1_2_5_buckets
+from fastdeploy.metrics.interface import MetricsManagerInterface
+from fastdeploy import envs
 
-
-class WorkMetricsManager:
+class WorkMetricsManager(MetricsManagerInterface):
     """Prometheus Metrics Manager handles all metric updates"""
 
     _initialized = False
@@ -33,6 +34,9 @@ class WorkMetricsManager:
 
         if self._initialized:
             return
+
+        # Add labels to existing metrics: model_id
+        LABEL_NAMES = ["model_id"] if envs.FD_ENABLE_METRIC_LABELS else []
 
         self.e2e_request_latency = Histogram(
             "fastdeploy:e2e_request_latency_seconds",
@@ -60,22 +64,26 @@ class WorkMetricsManager:
                 1920.0,
                 7680.0,
             ],
+            labelnames=LABEL_NAMES,
         )
         self.request_params_max_tokens = Histogram(
             name="fastdeploy:request_params_max_tokens",
             documentation="Histogram of max_tokens parameter in request parameters",
             buckets=build_1_2_5_buckets(33792),
+            labelnames=LABEL_NAMES,
         )
         self.prompt_tokens_total = Counter(
             name="fastdeploy:prompt_tokens_total",
             documentation="Total number of prompt tokens processed",
+            labelnames=LABEL_NAMES,
         )
         self.request_prompt_tokens = Histogram(
             name="fastdeploy:request_prompt_tokens",
             documentation="Number of prefill tokens processed.",
             buckets=build_1_2_5_buckets(33792),
+            labelnames=LABEL_NAMES,
         )
-
+        
         self._initialized = True
 
 

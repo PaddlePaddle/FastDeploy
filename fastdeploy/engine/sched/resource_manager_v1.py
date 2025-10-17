@@ -91,7 +91,7 @@ class ResourceManagerV1(ResourceManager):
         self.finish_execution_pool = ThreadPoolExecutor(max_workers=1)
         self.lock = threading.Lock()
         self.to_be_rescheduled_request_id_set = set()
-        main_process_metrics.max_batch_size.set(max_num_seqs)
+        main_process_metrics.set_value("max_batch_size", max_num_seqs)
 
         self.using_extend_tables_req_id = set()
 
@@ -144,13 +144,12 @@ class ResourceManagerV1(ResourceManager):
                     if preempted_req.request_id in self.req_dict:
                         del self.req_dict[preempted_req.request_id]
                     self._free_blocks(preempted_req)
-                    main_process_metrics.num_requests_running.dec(1)
+                    llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 else:
                     self._free_blocks(preempted_req)
                     preempted_req.cached_block_num = 0
                     self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
-                    main_process_metrics.num_requests_waiting.inc(1)
-                    main_process_metrics.num_requests_running.dec(1)
+                    llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 preempted_reqs.append(preempted_req)
                 scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
                 if preempted_req == request:
@@ -414,8 +413,6 @@ class ResourceManagerV1(ResourceManager):
                                     request, self.config.cache_config.block_size, request.num_computed_tokens
                                 )
                             request.status = RequestStatus.RUNNING
-                            main_process_metrics.num_requests_waiting.dec(1)
-                            main_process_metrics.num_requests_running.inc(1)
                             if self.config.scheduler_config.splitwise_role == "mixed":
                                 allocated_position = self.get_available_position()
                                 request.idx = allocated_position
@@ -460,8 +457,6 @@ class ResourceManagerV1(ResourceManager):
                                     request, self.config.cache_config.block_size, request.num_computed_tokens
                                 )
                             request.status = RequestStatus.RUNNING
-                            main_process_metrics.num_requests_waiting.dec(1)
-                            main_process_metrics.num_requests_running.inc(1)
                         else:
                             if self.config.cache_config.enable_prefix_caching:
                                 self._free_blocks(request)
@@ -520,11 +515,17 @@ class ResourceManagerV1(ResourceManager):
                             continue
 
             if scheduled_reqs:
-                task_used_block_num = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
-                main_process_metrics.available_gpu_block_num.set(self.total_block_number() - task_used_block_num)
-                main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
-                main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
                 llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
+
+            # Update metrics
+            num_tasks = sum([1 if task else 0 for task in self.tasks_list])
+            num_blocks_used_by_tasks = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
+            main_process_metrics.set_value("available_gpu_block_num", self.total_block_number() - num_blocks_used_by_tasks)
+            main_process_metrics.set_value("batch_size", self.max_num_seqs - self.available_batch())
+            main_process_metrics.set_value("gpu_cache_usage_perc", self.get_gpu_cache_usage_perc())
+            main_process_metrics.set_value("num_requests_running", len(self.running))
+            main_process_metrics.set_value("num_requests_waiting", num_tasks - len(self.running))
+
             return scheduled_reqs
 
     def get_available_position(self) -> int:
@@ -566,9 +567,9 @@ class ResourceManagerV1(ResourceManager):
             request.skip_allocate = False
 
             # Report the number of cached tokens to Prometheus metrics
-            main_process_metrics.prefix_cache_token_num.inc(matched_token_num)
-            main_process_metrics.prefix_gpu_cache_token_num.inc(request.gpu_cache_token_num)
-            main_process_metrics.prefix_cpu_cache_token_num.inc(request.cpu_cache_token_num)
+            main_process_metrics.inc_value("prefix_cache_token_num", matched_token_num)
+            main_process_metrics.inc_value("prefix_gpu_cache_token_num", request.gpu_cache_token_num)
+            main_process_metrics.inc_value("prefix_cpu_cache_token_num", request.cpu_cache_token_num)
 
             if matched_token_num == request.need_prefill_tokens:
                 request.num_computed_tokens = matched_token_num - self.config.cache_config.block_size
