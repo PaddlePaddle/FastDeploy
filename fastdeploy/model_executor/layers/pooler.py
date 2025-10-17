@@ -332,6 +332,29 @@ class PoolingMethod(nn.Layer, ABC):
             return MeanPool()
         raise NotImplementedError(f"Unsupported method: {pooling_type}")
 
+    @abstractmethod
+    def get_supported_tasks(self) -> Set[PoolingTask]:
+        raise NotImplementedError
+
+    def get_pooling_updates(self, task: PoolingTask) -> PoolingParamsUpdate:
+        return PoolingParamsUpdate()
+
+    @abstractmethod
+    def forward_all(
+        self,
+        hidden_states: paddle.Tensor,
+        pooling_cursor: PoolingCursor,
+    ) -> Union[list[paddle.Tensor], paddle.Tensor]:
+        raise NotImplementedError
+
+    def forward(
+        self,
+        hidden_states: paddle.Tensor,
+        pooling_metadata: PoolingMetadata,
+    ) -> Union[list[paddle.Tensor], paddle.Tensor]:
+        pooling_cursor = pooling_metadata.pooling_cursor
+        return self.forward_all(hidden_states, pooling_cursor)
+
 
 class LastPool(PoolingMethod):
 

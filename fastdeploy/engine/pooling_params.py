@@ -37,8 +37,6 @@ class PoolingParams(
         normalize: Whether to normalize the embeddings outputs.
         dimensions: Reduce the dimensions of embeddings
                     if model support matryoshka representation.
-        activation: Whether to apply activation function to
-                    the classification outputs.
         softmax: Whether to apply softmax to the reward outputs.
         step_tag_id: Step tag ID for process reward models to identify
                     specific steps in multi-step reasoning tasks.
