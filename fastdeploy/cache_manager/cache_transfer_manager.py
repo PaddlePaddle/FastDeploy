@@ -349,7 +349,9 @@ class CacheTransferManager:
         """
 
         consecutive_error_count = 0
-        max_errors = envs.FD_CACHE_PROC_ERROR_COUNT  # 连续错误超过此次数后检测work进程是否还存在
+        max_errors = (
+            envs.FD_CACHE_PROC_ERROR_COUNT
+        )  # After this many consecutive errors, check if the worker process exists.
 
         while True:
             try:
@@ -405,8 +407,8 @@ class CacheTransferManager:
                 consecutive_error_count = 0
 
             except (BrokenPipeError, EOFError, ConnectionResetError) as e:
-                # cache_transfer_manager进程残留时会持续打印异常日志导致磁盘耗尽，此处增加检测work进程是否存活，
-                # 如果worker进程已经结束，此残留进程会终止循环退出，避免持续打印异常日志
+                # When a cache_transfer_manager process remains, it keeps printing error logs and may exhaust disk space.
+                # Add a check to see if the worker process is alive; if it has ended, exit the loop to stop continuous logging.
                 logger.error(f"[CacheTransferManager] Connection broken: {e}")
                 consecutive_error_count += 1
                 if consecutive_error_count > max_errors:
