@@ -142,6 +142,7 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         request: CompletionRequest = Mock()
         request.prompt = "Hello, world!"
         request.echo = True
+        request.n = 2
         request_id = "test_request_id"
         created_time = 1655136000
         model_name = "test_model"

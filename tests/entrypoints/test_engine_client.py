@@ -18,6 +18,7 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
 
     async def test_add_request(self):
         request = {
+            "request_id": "test-request-id",
             "chat_template_kwargs": {"enable_thinking": True},
             "prompt_token_ids": [1],
             "chat_template": "Hello",
