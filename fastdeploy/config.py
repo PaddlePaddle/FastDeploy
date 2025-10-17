@@ -1532,6 +1532,7 @@ class FDConfig:
             (self.speculative_config is not None and self.speculative_config.method is not None)
             or (self.model_config is not None and self.model_config.enable_mm is True)
             or (self.load_config is not None and self.load_config.dynamic_load_weight is True)
+            or (self.scheduler_config.splitwise_role != "mixed")
         ):
             self.graph_opt_config.use_cudagraph = False
             logger.info(
