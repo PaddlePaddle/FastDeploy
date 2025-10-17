@@ -63,7 +63,7 @@ class XpuWorker(WorkerBase):
             assert len(self.device_ids) > (
                 self.local_rank % self.max_chips_per_node
             ), f"device number must be greater than local rank, but get device number is {len(self.device_ids)}, rank is {self.local_rank % self.max_chips_per_node}"
-            paddle.set_default_dtype(self.parallel_config.dtype)
+            paddle.set_default_dtype(self.model_config.dtype)
 
             gc.collect()
             paddle.device.xpu.empty_cache()
@@ -124,7 +124,7 @@ class XpuWorker(WorkerBase):
         used_memory = xpu_get_used_global_memory(self.device_id)
         available_kv_cache_memory = total_available_memory - used_memory
         model_block_memory_used = self.cal_theortical_kvcache()
-        available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
+        available_kv_cache_memory += model_block_memory_used * self.cache_config.total_block_num
         if self.parallel_config.use_ep:
             available_kv_cache_memory = int(available_kv_cache_memory * 0.6)
 
