@@ -41,7 +41,10 @@ model_param_map = {
         "quantizations": [
             {
                 "quant_type": "wint4",
-                "env": {"FD_ENABLE_MODEL_LOAD_CACHE": "1"},
+                "env": {
+                    "FD_ENABLE_MODEL_LOAD_CACHE": "1",
+                    "FD_USE_MACHETE": "0",
+                },
             }
         ],
     }
@@ -84,6 +87,11 @@ def test_model_cache(
     monkeypatch,
 ) -> None:
     model_path = get_paddle_model_path(model_name_or_path)
+
+    if env:
+        for k, v in env.items():
+            if k == "FD_ENABLE_MODEL_LOAD_CACHE":
+                continue
 
     fd_outputs_v1 = run_with_timeout(
         target=form_model_get_output_topp0,
