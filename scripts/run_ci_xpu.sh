@@ -178,7 +178,8 @@ if [ ${kv_block_test_exit_code} -ne 0 ]; then
 fi
 
 echo "============================开始EP并行测试!============================"
-
+sleep 5
+xpu_smi
 export XPU_VISIBLE_DEVICES="0,1,2,3"
 export BKCL_ENABLE_XDR=1
 export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
