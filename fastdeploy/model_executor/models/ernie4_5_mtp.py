@@ -315,7 +315,9 @@ class Ernie4_5_MTPModel(nn.Layer):
 
         hidden_states = hidden_states + residual
 
-        hidden_states = self.norm(hidden_states)
+        # NOTE@wangyuanpeng04 Whether to use norm here is determined by
+        # whether norm is used in the MTP training phase.
+        # hidden_states = self.norm(hidden_states)
 
         return hidden_states
 
