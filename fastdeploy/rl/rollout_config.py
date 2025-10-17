@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+from typing import Any, Dict, Optional
+
 from fastdeploy.worker.worker_process import initialize_fd_config
 
 
@@ -52,7 +54,7 @@ class RolloutModelConfig:
         expert_parallel_size: int = 1,
         enable_expert_parallel: bool = False,
         ori_vocab_size: int = None,
-        quantization: str = "None",
+        quantization: Optional[Dict[str, Any]] = None,
         guided_decoding_backend: str = "off",
         disable_any_whitespace: bool = True,
         enable_logprob: bool = False,
