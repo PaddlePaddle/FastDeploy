@@ -191,7 +191,9 @@ jobs:
           bash scripts/coverage_run.sh || TEST_EXIT_CODE=8
           echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> exit_code.env
           coverage combine coveragedata/ || echo "No data to combine"
-          coverage report
+          coverage report -m > full_coverage_report.txt
+          echo "=== Full Coverage Report ==="
+          cat full_coverage_report.txt
           coverage xml -o python_coverage_all.xml
           COVERAGE_EXIT_CODE=0
           if [[ "$IS_PR" == "true" ]]; then
@@ -240,6 +242,14 @@ jobs:
             echo "unittest_failed_url=${UNIT_TEST_RESULT_URL}" >> $GITHUB_OUTPUT
             echo "unittest_failed_url=${UNIT_TEST_RESULT_URL}" >> $GITHUB_ENV
           fi
+          full_cov_file="full_coverage_report.txt"
+          if [ -f ${full_cov_file} ]; then
+            python ${push_file} ${full_cov_file} ${target_path}/CoverageData
+            target_path_stripped="${target_path#paddle-github-action/}"
+            FULL_COV_FILE_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${full_cov_file}
+            echo "full_coverage_report_url=${FULL_COV_FILE_URL}" >> $GITHUB_OUTPUT
+            echo "full_coverage_report_url=${FULL_COV_FILE_URL}" >> $GITHUB_ENV
+          fi
       - name: Check Unit Test Success
         shell: bash
         run: |
@@ -287,35 +297,3 @@ jobs:
           fi
           echo "coverage passed"
           exit 0
-
-  diff_coverage_report:
-    needs: run_tests_with_coverage
-    if: always()
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
-    steps:
-      - name: coverage diff file download
-        shell: bash
-        env:
-          diff_cov_file_url: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url }}
-        run: |
-          wget -q --no-proxy ${fd_archive_url}
-          tar -xf FastDeploy.tar.gz
-          cd FastDeploy
-          if [ -z "${diff_cov_file_url}" ]; then
-            echo "No diff coverage file URL provided."
-            exit 0
-          fi
-          wget "${diff_cov_file_url}" -O ./diff_coverage.xml || echo "Download cov file failed, but continuing..."
-      - name: Upload diff coverage report
-        if: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url != null && needs.run_tests_with_coverage.outputs.diff_cov_file_url != '' }}
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./FastDeploy/diff_coverage.xml
-          name: python diff coverage
-          verbose: true
-          disable_search: true
-          commit_parent: false
-          flags: diff
