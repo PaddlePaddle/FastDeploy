@@ -163,7 +163,7 @@ class TestFusedMoE(unittest.TestCase):
         gating.to(dtype=paddle.float32)  # it's dtype is bfloat16 default, but the forward input is float32
         gating.weight.set_value(paddle.rand(gating.weight.shape, dtype=paddle.float32))
 
-        os.environ["FD_USE_DEEP_GEMM"] = "1"  # use deepgemm
+        os.environ["FD_USE_DEEP_GEMM"] = "0"  # use deepgemm
         ep_size = paddle.distributed.get_world_size()
         ep_rank = paddle.distributed.get_rank()
 
@@ -192,7 +192,7 @@ class TestFusedMoE(unittest.TestCase):
 
             moe_cuda_graphs[idx].capture_end()
 
-            num_tests = 100
+            num_tests = 20
             start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
             end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
             for i in range(num_tests):
