@@ -1434,10 +1434,6 @@ class FDConfig:
         else:
             self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=self.scheduler_config.max_num_seqs)
 
-        # TODO(wangmingkai02): change graph_opt_level=2 when using static mode with cinn
-        if self.graph_opt_config.graph_opt_level == 2:
-            self.graph_opt_config.graph_opt_level = 1
-
         self.tokenizer = tokenizer
         self.ips = ips
         self.tool_parser = tool_parser
