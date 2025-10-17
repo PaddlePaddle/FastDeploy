@@ -1,3 +1,5 @@
+[English](../../get_started/ernie-4.5-vl.md)
+
 # ERNIE-4.5-VL多模态模型
 
 本文档讲解如何部署ERNIE-4.5-VL多模态模型，支持用户使用多模态数据与模型进行对话交互(包含思考Reasoning)，在开始部署前，请确保你的硬件环境满足如下条件：

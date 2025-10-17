@@ -1,3 +1,5 @@
+[English](../../usage/kunlunxin_xpu_deployment.md)
+
 ## 支持的模型
 |模型名|上下文长度|量化|所需卡数|部署命令|最低版本要求|
 |-|-|-|-|-|-|

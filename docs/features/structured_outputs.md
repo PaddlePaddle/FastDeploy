@@ -1,3 +1,5 @@
+[简体中文](../zh/features/structured_outputs.md)
+
 # Structured Outputs
 
 ## Overview

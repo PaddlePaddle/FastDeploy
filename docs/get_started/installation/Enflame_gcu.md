@@ -1,3 +1,5 @@
+[简体中文](../../zh/get_started/installation/Enflame_gcu.md)
+
 # Running ERNIE 4.5 Series Models with FastDeploy
 
 The Enflame S60 ([Learn about Enflame](https://www.enflame-tech.com/)) is a next-generation AI inference accelerator card designed for large-scale deployment in data centers. It meets the demands of large language models (LLMs), search/advertising/recommendation systems, and traditional models. Characterized by broad model coverage, user-friendliness, and high portability, it is widely applicable to mainstream inference scenarios such as image and text generation applications, search and recommendation systems, and text/image/speech recognition.

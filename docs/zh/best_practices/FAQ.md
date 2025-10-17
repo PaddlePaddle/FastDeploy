@@ -1,3 +1,5 @@
+[English](../../best_practices/FAQ.md)
+
 # 常见问题FAQ
 ## 1.显存不足
 1. 启动服务时显存不足：

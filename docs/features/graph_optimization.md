@@ -1,3 +1,5 @@
+[简体中文](../zh/features/graph_optimization.md)
+
 # Graph optimization technology in FastDeploy
 
 FastDeploy's `GraphOptimizationBackend` integrates a variety of graph optimization technologies:

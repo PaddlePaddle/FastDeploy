@@ -1,3 +1,5 @@
+[简体中文](../zh/usage/environment_variables.md)
+
 # FastDeploy Environment Variables
 
 FastDeploy's environment variables are defined in `fastdeploy/envs.py` at the root of the repository. Below is the documentation:

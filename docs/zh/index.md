@@ -1,3 +1,5 @@
+[English](../index.md)
+
 # FastDeploy
 
 **FastDeploy** 是基于飞桨（PaddlePaddle）的大语言模型（LLM）与视觉语言模型（VLM）推理部署工具包，提供**开箱即用的生产级部署方案**，核心技术特性包括：

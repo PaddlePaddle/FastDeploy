@@ -1,3 +1,5 @@
+[简体中文](zh/benchmark.md)
+
 # Benchmark
 
 FastDeploy extends the [vLLM benchmark](https://github.com/vllm-project/vllm/blob/main/benchmarks/) script with additional metrics, enabling more detailed performance benchmarking for FastDeploy.

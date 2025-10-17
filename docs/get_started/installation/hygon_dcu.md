@@ -1,3 +1,5 @@
+[简体中文](../../zh/get_started/installation/hygon_dcu.md)
+
 # Run ERNIE-4.5-300B-A47B & ERNIE-4.5-21B-A3B model on hygon machine
 The current version of the software merely serves as a demonstration demo for the hygon k100AI combined with the Fastdeploy inference framework for large models. There may be issues when running the latest ERNIE4.5 model, and we will conduct repairs and performance optimization in the future. Subsequent versions will provide customers with a more stable version.
 

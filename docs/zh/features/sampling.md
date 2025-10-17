@@ -1,3 +1,5 @@
+[English](../../features/sampling.md)
+
 # 采样策略
 
 采样策略用于决定如何从模型的输出概率分布中选择下一个token。FastDeploy目前支持 Top-p 、 Top-k_Top-p 和 Min-p Sampling 多种采样策略。

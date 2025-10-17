@@ -1,3 +1,5 @@
+[简体中文](../zh/quantization/online_quantization.md)
+
 # Online Quantization
 
 Online quantization refers to the inference engine quantizing weights after loading BF16 weights, rather than loading pre-quantized low-precision weights. FastDeploy supports online quantization of BF16 to various precisions, including: INT4, INT8, and FP8.

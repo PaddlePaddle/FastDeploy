@@ -1,3 +1,5 @@
+[English](../../usage/environment_variables.md)
+
 # FastDeploy 环境变量说明
 
 FastDeploy 的环境变量保存在了代码库根目录下 fastdeploy/envs.py 文件中，以下是其对应的中文版说明：

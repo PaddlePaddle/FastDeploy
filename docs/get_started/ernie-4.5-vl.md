@@ -1,3 +1,5 @@
+[简体中文](../zh/get_started/ernie-4.5-vl.md)
+
 # Deploy ERNIE-4.5-VL-424B-A47B Multimodal Model
 
 This document explains how to deploy the ERNIE-4.5-VL multimodal model, which supports users to interact with the model using multimodal data (including reasoning capabilities). Before starting the deployment, please ensure that your hardware environment meets the following requirements:

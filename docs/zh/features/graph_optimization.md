@@ -1,3 +1,5 @@
+[English](../../features/graph_optimization.md)
+
 # FastDeploy 中的图优化技术
 FastDeploy 的 `GraphOptimizationBackend` 中集成了多种图优化技术:
 

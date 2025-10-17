@@ -1,3 +1,5 @@
+[简体中文](../../zh/get_started/installation/kunlunxin_xpu.md)
+
 # Kunlunxin XPU
 
 ## Requirements

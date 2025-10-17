@@ -1,3 +1,5 @@
+[English](../../features/reasoning_output.md)
+
 # 思考链内容
 
 思考模型在输出中返回 `reasoning_content` 字段，表示思考链内容,即得出最终结论的思考步骤.

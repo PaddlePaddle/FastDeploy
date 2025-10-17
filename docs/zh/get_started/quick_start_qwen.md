@@ -1,3 +1,5 @@
+[English](../../get_started/quick_start_qwen.md)
+
 # 10分钟完成 Qwen3-0.6b 模型部署
 
 本文档讲解如何部署Qwen3-0.6b模型，在开始部署前，请确保你的硬件环境满足如下条件：

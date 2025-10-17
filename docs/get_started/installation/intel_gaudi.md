@@ -1,3 +1,5 @@
+[简体中文](../../zh/get_started/installation/intel_gaudi.md)
+
 # Intel Gaudi Installation for running ERNIE 4.5 Series Models
 
 The following installation methods are available when your environment meets these requirements:

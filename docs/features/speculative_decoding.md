@@ -1,3 +1,5 @@
+[简体中文](../zh/features/speculative_decoding.md)
+
 # 🔮 Speculative Decoding
 
 This project implements an efficient **Speculative Decoding** inference framework based on PaddlePaddle. It supports **Multi-Token Proposing (MTP)** to accelerate large language model (LLM) generation, significantly reducing latency and improving throughput.

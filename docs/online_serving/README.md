@@ -1,3 +1,5 @@
+[简体中文](../zh/online_serving/README.md)
+
 # OpenAI Protocol-Compatible API Server
 
 FastDeploy provides a service-oriented deployment solution that is compatible with the OpenAI protocol. Users can quickly deploy it using the following command:
