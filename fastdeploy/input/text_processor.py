@@ -214,8 +214,6 @@ class DataProcessor(BaseDataProcessor):
 
         # processing stop_sequences
         stop_sequences = request.get("stop", [])
-        data_processor_logger.info(f"request:{request}")
-        data_processor_logger.info(f"request.getstop:{stop_sequences}")
         if stop_sequences is not None and len(stop_sequences) != 0:
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
             request.set("stop_seqs", stop_seqs)
@@ -292,11 +290,8 @@ class DataProcessor(BaseDataProcessor):
 
         # processing stop_sequences
         stop_sequences = request.get("stop", [])
-        data_processor_logger.info(f"request.getstop:{stop_sequences}")
         if stop_sequences:
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
-            data_processor_logger.info(f"stop_seqs:{stop_seqs}")
-            data_processor_logger.info(f"stop_seqs_len:{stop_seqs_len}")
             request["stop_seqs"] = stop_seqs
             request["stop_seqs_len"] = stop_seqs_len
 
@@ -697,10 +692,7 @@ class DataProcessor(BaseDataProcessor):
         for seq in stop_sequences:
             if seq != self.tokenizer.eos_token_id:
                 stop_seqs.append(self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(seq)))
-                data_processor_logger.info(f"update_stop_seqs的stop_seqs:{stop_seqs}")
         stop_seqs, stop_seqs_len = self.pad_batch_data(stop_seqs, pad_id=-1, return_seq_len=True, return_array=False)
-        data_processor_logger.info(f"stop_seqs:{stop_seqs}")
-        data_processor_logger.info(f"stop_seqs_len:{stop_seqs_len}")
         data_processor_logger.debug(f"processed stop_seqs: {stop_seqs}, {stop_seqs_len}")
         return stop_seqs, stop_seqs_len
 
