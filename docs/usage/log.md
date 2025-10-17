@@ -1,3 +1,5 @@
+[简体中文](../zh/usage/log.md)
+
 # Log Description
 
 FastDeploy generates the following log files during deployment. Below is an explanation of each log's purpose.

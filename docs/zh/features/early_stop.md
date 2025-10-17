@@ -1,3 +1,5 @@
+[English](../../features/early_stop.md)
+
 
 # 早停功能
 
