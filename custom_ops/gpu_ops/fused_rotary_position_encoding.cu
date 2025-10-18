@@ -15,7 +15,6 @@
 #include "helper.h"
 #include "paddle/extension.h"
 
-
 template <typename T, bool IS_NEOX>
 inline __device__ void apply_token_rotary_embedding_kernel(
     T* __restrict__ arr,
@@ -42,7 +41,6 @@ inline __device__ void apply_token_rotary_embedding_kernel(
   arr[x_index] = x * cos - y * sin;
   arr[y_index] = y * cos + x * sin;
 }
-
 
 template <typename T, bool IS_NEOX>
 __global__ void apply_rotary_embedding_kernel(
@@ -83,7 +81,6 @@ __global__ void apply_rotary_embedding_kernel(
         key + token_head, cos_ptr, sin_ptr, rot_offset, embed_dim);
   }
 }
-
 
 void FusedRotaryPositionEncoding(
     paddle::Tensor& query,  // [num_tokens, num_heads, head_size] or

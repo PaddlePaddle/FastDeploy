@@ -15,10 +15,10 @@
 #include "helper.h"
 
 float bfloat16_to_float(__nv_bfloat16 x) {
-    uint32_t tmp_x = *(reinterpret_cast<uint16_t*>(&x));
-    tmp_x = tmp_x << 16;
-    float float_x = *(reinterpret_cast<float*>(&tmp_x));
-    return float_x;
+  uint32_t tmp_x = *(reinterpret_cast<uint16_t*>(&x));
+  tmp_x = tmp_x << 16;
+  float float_x = *(reinterpret_cast<float*>(&tmp_x));
+  return float_x;
 }
 
 template <typename T>
@@ -26,24 +26,24 @@ static void PrintMatrix(const T* mat_d,
                         int num,
                         std::string name,
                         int numOfCols) {
-    std::vector<T> tmp(num);
-    cudaMemcpy(tmp.data(), mat_d, sizeof(T) * num, cudaMemcpyDeviceToHost);
+  std::vector<T> tmp(num);
+  cudaMemcpy(tmp.data(), mat_d, sizeof(T) * num, cudaMemcpyDeviceToHost);
 
-    std::ofstream outfile;
-    outfile.open(name + ".dtxt", std::ios::out | std::ios::app);
-    std::stringstream ss;
+  std::ofstream outfile;
+  outfile.open(name + ".dtxt", std::ios::out | std::ios::app);
+  std::stringstream ss;
 
-    for (int i = 0; i < num; ++i) {
-        if (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value ||
-            std::is_same<T, int32_t>::value) {
-            ss << static_cast<int>(tmp[i]) << " ";
-        } else {
-            ss << std::setprecision(8) << static_cast<float>(tmp[i]) << " ";
-        }
-        if (i % numOfCols == numOfCols - 1) {
-            ss << std::endl;
-        }
+  for (int i = 0; i < num; ++i) {
+    if (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value ||
+        std::is_same<T, int32_t>::value) {
+      ss << static_cast<int>(tmp[i]) << " ";
+    } else {
+      ss << std::setprecision(8) << static_cast<float>(tmp[i]) << " ";
     }
-    outfile << ss.str();
-    outfile.close();
+    if (i % numOfCols == numOfCols - 1) {
+      ss << std::endl;
+    }
+  }
+  outfile << ss.str();
+  outfile.close();
 }

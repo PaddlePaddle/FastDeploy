@@ -17,12 +17,17 @@
 
 template <typename T, int TileRows, int TileColumns, int NumThreads>
 __global__ void Wint25UnzipKernel(const uint16_t *zipped_weight_ptr,
-                                  const T *super_scale_ptr, T *weight_ptr,
-                                  const int64_t batch, const int64_t num_rows,
+                                  const T *super_scale_ptr,
+                                  T *weight_ptr,
+                                  const int64_t batch,
+                                  const int64_t num_rows,
                                   const int64_t num_columns) {
-  using UnzipFunctor =
-      cutlass::gemm::threadblock::UnzipAndDequantFunctor<T, cutlass::WintQuantMethod::kWeightOnlyInt25, TileRows,
-                             TileColumns, NumThreads>;
+  using UnzipFunctor = cutlass::gemm::threadblock::UnzipAndDequantFunctor<
+      T,
+      cutlass::WintQuantMethod::kWeightOnlyInt25,
+      TileRows,
+      TileColumns,
+      NumThreads>;
 
   __shared__ T smem[TileRows * TileColumns];
 
@@ -41,7 +46,8 @@ __global__ void Wint25UnzipKernel(const uint16_t *zipped_weight_ptr,
 
   // unzip to shared memory
   UnzipFunctor unzip_functor;
-  unzip_functor(block_zipped_weight_ptr, block_super_scale_ptr, smem, num_columns);
+  unzip_functor(
+      block_zipped_weight_ptr, block_super_scale_ptr, smem, num_columns);
 
   // write back to global memory
   for (int row = 0; row < TileRows; ++row) {
@@ -55,19 +61,26 @@ __global__ void Wint25UnzipKernel(const uint16_t *zipped_weight_ptr,
 }
 
 template <typename T, int64_t TileRows, int64_t TileColumns, int NumThreads>
-__global__ void
-Wint2UnzipKernel(const uint8_t *zipped_weight_ptr,
-                 const uint8_t *local_scale_ptr, const float *code_scale_ptr,
-                 const float *code_zp_ptr, const T *super_scale_ptr,
-                 T *weight_ptr, const int64_t batch, const int64_t num_rows,
-                 const int64_t num_columns) {
-  using UnzipFunctor =
-      cutlass::gemm::threadblock::UnzipAndDequantFunctor<T, cutlass::WintQuantMethod::kWeightOnlyInt2, TileRows,
-                             TileColumns, NumThreads>;
+__global__ void Wint2UnzipKernel(const uint8_t *zipped_weight_ptr,
+                                 const uint8_t *local_scale_ptr,
+                                 const float *code_scale_ptr,
+                                 const float *code_zp_ptr,
+                                 const T *super_scale_ptr,
+                                 T *weight_ptr,
+                                 const int64_t batch,
+                                 const int64_t num_rows,
+                                 const int64_t num_columns) {
+  using UnzipFunctor = cutlass::gemm::threadblock::UnzipAndDequantFunctor<
+      T,
+      cutlass::WintQuantMethod::kWeightOnlyInt2,
+      TileRows,
+      TileColumns,
+      NumThreads>;
 
   constexpr bool kUseAsyncLoad = true;
 
-  __shared__ uint8_t zipped_smem[UnzipFunctor::kZippedSmemBytes + UnzipFunctor::kColumnWiseSmemBytes];
+  __shared__ uint8_t zipped_smem[UnzipFunctor::kZippedSmemBytes +
+                                 UnzipFunctor::kColumnWiseSmemBytes];
   __shared__ T smem[TileRows * TileColumns];
 
   int64_t block_start_column = blockIdx.x * TileColumns;
@@ -95,15 +108,21 @@ Wint2UnzipKernel(const uint8_t *zipped_weight_ptr,
           ? super_scale_ptr + blockIdx.z * num_columns + block_start_column
           : nullptr;
 
-  typename UnzipFunctor::Arguments args(zipped_smem, zipped_smem + UnzipFunctor::kZippedSmemBytes);
+  typename UnzipFunctor::Arguments args(
+      zipped_smem, zipped_smem + UnzipFunctor::kZippedSmemBytes);
 
   // unzip to shared memory
   UnzipFunctor functor;
 
   if (kUseAsyncLoad) {
-    functor.LoadAsync(block_zipped_weight_ptr, block_local_scale_ptr,
-                      block_code_scale_ptr, block_code_zp_ptr, block_super_scale_ptr,
-                      &args, num_columns, true);
+    functor.LoadAsync(block_zipped_weight_ptr,
+                      block_local_scale_ptr,
+                      block_code_scale_ptr,
+                      block_code_zp_ptr,
+                      block_super_scale_ptr,
+                      &args,
+                      num_columns,
+                      true);
 
     // 发起 cp.async 的收束
     cutlass::arch::cp_async_fence();
@@ -112,9 +131,14 @@ Wint2UnzipKernel(const uint8_t *zipped_weight_ptr,
     cutlass::arch::cp_async_wait<0>();
     __syncthreads();
   } else {
-    functor.Load(block_zipped_weight_ptr, block_local_scale_ptr,
-                 block_code_scale_ptr, block_code_zp_ptr, block_super_scale_ptr,
-                 &args, num_columns, true);
+    functor.Load(block_zipped_weight_ptr,
+                 block_local_scale_ptr,
+                 block_code_scale_ptr,
+                 block_code_zp_ptr,
+                 block_super_scale_ptr,
+                 &args,
+                 num_columns,
+                 true);
   }
 
   functor.Compute(args, smem, block_start_row);
@@ -132,8 +156,10 @@ Wint2UnzipKernel(const uint8_t *zipped_weight_ptr,
 
 template <typename T>
 void Wint25UnzipKernelLauncher(const uint16_t *zipped_weight,
-                               const T *supper_scale, T *weight,
-                               const int64_t batch, const int64_t num_rows,
+                               const T *supper_scale,
+                               T *weight,
+                               const int64_t batch,
+                               const int64_t num_rows,
                                const int64_t num_columns) {
   constexpr int kTileRows = 64;
   constexpr int kTileColumns = 128;
@@ -146,16 +172,19 @@ void Wint25UnzipKernelLauncher(const uint16_t *zipped_weight,
   dim3 grid_dim(block_dim_x, block_dim_y, batch);
 
   Wint25UnzipKernel<T, kTileRows, kTileColumns, kNumThreads>
-      <<<grid_dim, block_dim>>>(zipped_weight, supper_scale, weight, batch,
-                                num_rows, num_columns);
+      <<<grid_dim, block_dim>>>(
+          zipped_weight, supper_scale, weight, batch, num_rows, num_columns);
 }
 
 template <typename T>
 void Wint2UnzipKernelLauncher(const uint8_t *zipped_weight,
                               const uint8_t *local_scale,
-                              const float *code_scale, const float *code_zp,
-                              const T *supper_scale, T *weight,
-                              const int64_t batch, const int64_t num_rows,
+                              const float *code_scale,
+                              const float *code_zp,
+                              const T *supper_scale,
+                              T *weight,
+                              const int64_t batch,
+                              const int64_t num_rows,
                               const int64_t num_columns) {
   constexpr int kTileRows = 64;
   constexpr int kTileColumns = 256;
@@ -168,8 +197,14 @@ void Wint2UnzipKernelLauncher(const uint8_t *zipped_weight,
   dim3 grid_dim(block_dim_x, block_dim_y, batch);
 
   Wint2UnzipKernel<T, kTileRows, kTileColumns, kNumThreads>
-      <<<grid_dim, block_dim>>>(zipped_weight, local_scale, code_scale, code_zp,
-                                supper_scale, weight, batch, num_rows,
+      <<<grid_dim, block_dim>>>(zipped_weight,
+                                local_scale,
+                                code_scale,
+                                code_zp,
+                                supper_scale,
+                                weight,
+                                batch,
+                                num_rows,
                                 num_columns);
 }
 
@@ -179,7 +214,8 @@ void WintxUnzipKernel(const paddle::Tensor &zipped_weight,
                       const paddle::optional<paddle::Tensor> &code_scale,
                       const paddle::optional<paddle::Tensor> &code_zp,
                       const paddle::optional<paddle::Tensor> &super_scale,
-                      paddle::Tensor &weight, const std::string &quant_method) {
+                      paddle::Tensor &weight,
+                      const std::string &quant_method) {
   using data_t = typename PDTraits<T>::data_t;
   using NvType = typename PDTraits<T>::DataType;
 
@@ -199,7 +235,10 @@ void WintxUnzipKernel(const paddle::Tensor &zipped_weight,
     Wint25UnzipKernelLauncher<NvType>(
         reinterpret_cast<const uint16_t *>(zipped_weight_ptr),
         reinterpret_cast<const NvType *>(super_scale_ptr),
-        reinterpret_cast<NvType *>(weight_ptr), batch, num_rows, num_columns);
+        reinterpret_cast<NvType *>(weight_ptr),
+        batch,
+        num_rows,
+        num_columns);
   } else if (quant_method == "weight_only_int2") {
     paddle::Tensor *local_scale_tensor =
         const_cast<paddle::Tensor *>(local_scale.get_ptr());
@@ -209,22 +248,27 @@ void WintxUnzipKernel(const paddle::Tensor &zipped_weight,
         const_cast<paddle::Tensor *>(code_zp.get_ptr());
 
     Wint2UnzipKernelLauncher<NvType>(
-        zipped_weight.data<uint8_t>(), local_scale_tensor->data<uint8_t>(),
-        code_scale_tensor->data<float>(), code_zp_tensor->data<float>(),
+        zipped_weight.data<uint8_t>(),
+        local_scale_tensor->data<uint8_t>(),
+        code_scale_tensor->data<float>(),
+        code_zp_tensor->data<float>(),
         reinterpret_cast<const NvType *>(super_scale_ptr),
-        reinterpret_cast<NvType *>(weight_ptr), batch, num_rows, num_columns);
+        reinterpret_cast<NvType *>(weight_ptr),
+        batch,
+        num_rows,
+        num_columns);
   } else {
     PD_THROW("Unsupported quant_method for WintxUnzip.");
   }
 }
 
-std::vector<paddle::Tensor>
-WintXUnzip(const paddle::Tensor &zipped_weight,
-           const paddle::optional<paddle::Tensor> &local_scale,
-           const paddle::optional<paddle::Tensor> &code_scale,
-           const paddle::optional<paddle::Tensor> &code_zp,
-           const paddle::optional<paddle::Tensor> &super_scale,
-           const std::string &quant_method) {
+std::vector<paddle::Tensor> WintXUnzip(
+    const paddle::Tensor &zipped_weight,
+    const paddle::optional<paddle::Tensor> &local_scale,
+    const paddle::optional<paddle::Tensor> &code_scale,
+    const paddle::optional<paddle::Tensor> &code_zp,
+    const paddle::optional<paddle::Tensor> &super_scale,
+    const std::string &quant_method) {
   paddle::Tensor *local_scale_tensor =
       const_cast<paddle::Tensor *>(local_scale.get_ptr());
   paddle::Tensor *super_scale_tensor =
@@ -251,18 +295,26 @@ WintXUnzip(const paddle::Tensor &zipped_weight,
   auto output_tensor = GetEmptyTensor(output_dims, dtype, place);
 
   switch (dtype) {
-  case paddle::DataType::BFLOAT16:
-    WintxUnzipKernel<paddle::DataType::BFLOAT16>(
-        zipped_weight, local_scale, code_scale, code_zp, super_scale,
-        output_tensor, quant_method);
-    break;
-  case paddle::DataType::FLOAT16:
-    WintxUnzipKernel<paddle::DataType::FLOAT16>(
-        zipped_weight, local_scale, code_scale, code_zp, super_scale,
-        output_tensor, quant_method);
-    break;
-  default:
-    PD_THROW("Unsupported data type for WintxUnzip");
+    case paddle::DataType::BFLOAT16:
+      WintxUnzipKernel<paddle::DataType::BFLOAT16>(zipped_weight,
+                                                   local_scale,
+                                                   code_scale,
+                                                   code_zp,
+                                                   super_scale,
+                                                   output_tensor,
+                                                   quant_method);
+      break;
+    case paddle::DataType::FLOAT16:
+      WintxUnzipKernel<paddle::DataType::FLOAT16>(zipped_weight,
+                                                  local_scale,
+                                                  code_scale,
+                                                  code_zp,
+                                                  super_scale,
+                                                  output_tensor,
+                                                  quant_method);
+      break;
+    default:
+      PD_THROW("Unsupported data type for WintxUnzip");
   }
   return {output_tensor};
 }
@@ -306,8 +358,10 @@ std::vector<paddle::DataType> WintXUnzipInferDtype(
 }
 
 PD_BUILD_STATIC_OP(winx_unzip)
-    .Inputs({"zipped_weight", paddle::Optional("local_scale"),
-             paddle::Optional("code_scale"), paddle::Optional("code_zp"),
+    .Inputs({"zipped_weight",
+             paddle::Optional("local_scale"),
+             paddle::Optional("code_scale"),
+             paddle::Optional("code_zp"),
              paddle::Optional("super_scale")})
     .Outputs({"weight"})
     .Attrs({"quant_method:std::string"})

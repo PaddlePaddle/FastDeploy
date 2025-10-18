@@ -33,19 +33,23 @@ enum WintQuantMethod {
 };
 
 // Convert CUDA data type to cutlass data type
-template <typename T> struct CutlassDataType {
+template <typename T>
+struct CutlassDataType {
   using Type = T;
 };
 
-template <> struct CutlassDataType<half> {
+template <>
+struct CutlassDataType<half> {
   using Type = cutlass::half_t;
 };
 
-template <> struct CutlassDataType<__nv_bfloat16> {
+template <>
+struct CutlassDataType<__nv_bfloat16> {
   using Type = cutlass::bfloat16_t;
 };
 
-template <typename ElementT, WintQuantMethod Method> struct WintQuantTraits;
+template <typename ElementT, WintQuantMethod Method>
+struct WintQuantTraits;
 
 template <typename ElementT>
 struct WintQuantTraits<ElementT, WintQuantMethod::kNone> {
@@ -129,7 +133,7 @@ struct WintQuantTraits<ElementT, WintQuantMethod::kWeightOnlyInt2> {
   using CodeScaleZpType = float;
 
   struct Arguments {
-    uint8_t *local_scale_ptr; // quanted 4-bits
+    uint8_t *local_scale_ptr;  // quanted 4-bits
     float *code_scale_ptr;
     float *code_zp_ptr;
   };
@@ -140,4 +144,4 @@ struct WintQuantTraits<ElementT, WintQuantMethod::kWeightOnlyInt2> {
   }
 };
 
-} // namespace cutlass
+}  // namespace cutlass

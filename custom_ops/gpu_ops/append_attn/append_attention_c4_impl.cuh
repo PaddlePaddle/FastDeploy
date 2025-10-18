@@ -18,7 +18,8 @@
 template <typename T, typename OutT>
 void CascadeAppendAttentionC4Kernel(
     const AppendAttnMetaData& meta_data,
-    const paddle::Tensor& qkv,  // [token_num, (num_heads + 2* kv_num_head) * head_dim]
+    const paddle::Tensor&
+        qkv,  // [token_num, (num_heads + 2* kv_num_head) * head_dim]
     const paddle::Tensor&
         cache_k,  // [max_block_num, num_heads, block_size, head_dim]
     const paddle::Tensor&
@@ -126,7 +127,8 @@ void CascadeAppendAttentionC4Kernel(
                           })})})})})})
 }
 
-template void CascadeAppendAttentionC4Kernel<paddle::bfloat16, paddle::bfloat16>(
+template void
+CascadeAppendAttentionC4Kernel<paddle::bfloat16, paddle::bfloat16>(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& qkv,  // [token_num, num_heads, head_dim]
     const paddle::Tensor&
@@ -170,7 +172,8 @@ template void CascadeAppendAttentionC4Kernel<paddle::bfloat16, paddle::bfloat16>
     cudaStream_t& stream,
     paddle::Tensor* out);
 
-template void CascadeAppendAttentionC4Kernel<paddle::bfloat16, paddle::float8_e4m3fn>(
+template void
+CascadeAppendAttentionC4Kernel<paddle::bfloat16, paddle::float8_e4m3fn>(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& qkv,  // [token_num, num_heads, head_dim]
     const paddle::Tensor&
@@ -302,7 +305,8 @@ template void CascadeAppendAttentionC4Kernel<paddle::float16, paddle::float16>(
     cudaStream_t& stream,
     paddle::Tensor* out);
 
-template void CascadeAppendAttentionC4Kernel<paddle::float16, paddle::float8_e4m3fn>(
+template void
+CascadeAppendAttentionC4Kernel<paddle::float16, paddle::float8_e4m3fn>(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor& qkv,  // [token_num, num_heads, head_dim]
     const paddle::Tensor&

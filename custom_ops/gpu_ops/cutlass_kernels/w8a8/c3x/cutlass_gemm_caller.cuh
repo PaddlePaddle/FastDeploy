@@ -1,4 +1,5 @@
-// adapted from: https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/quantization/cutlass_w8a8/c3x/cutlass_gemm_caller.cuh
+// adapted from:
+// https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/quantization/cutlass_w8a8/c3x/cutlass_gemm_caller.cuh
 #pragma once
 
 // clang-format will break include orders
@@ -21,15 +22,16 @@
 
 namespace fastdeploy::c3x {
 
-static inline cute::Shape<int, int, int, int>
-get_problem_shape(paddle::Tensor const &a, paddle::Tensor const &b) {
+static inline cute::Shape<int, int, int, int> get_problem_shape(
+    paddle::Tensor const &a, paddle::Tensor const &b) {
   int32_t m = a.dims()[0], n = b.dims()[0], k = a.dims()[1];
   return {m, n, k, 1};
 }
 
 template <typename GemmKernel>
 void cutlass_gemm_caller(
-    phi::Place device, cute::Shape<int, int, int, int> prob_shape,
+    phi::Place device,
+    cute::Shape<int, int, int, int> prob_shape,
     typename GemmKernel::MainloopArguments mainloop_args,
     typename GemmKernel::EpilogueArguments epilogue_args,
     typename GemmKernel::TileSchedulerArguments scheduler = {}) {
@@ -57,7 +59,8 @@ void cutlass_gemm_caller(
 }
 
 template <typename Gemm, typename... EpilogueArgs>
-void cutlass_gemm_caller(paddle::Tensor &out, paddle::Tensor const &a,
+void cutlass_gemm_caller(paddle::Tensor &out,
+                         paddle::Tensor const &a,
                          paddle::Tensor const &b,
                          EpilogueArgs &&...epilogue_params) {
   using ElementAB = typename Gemm::ElementAB;
@@ -86,17 +89,20 @@ void cutlass_gemm_caller(paddle::Tensor &out, paddle::Tensor const &a,
 
   auto a_ptr = static_cast<ElementAB *>(const_cast<void *>(a.data()));
   auto b_ptr = static_cast<ElementAB *>(const_cast<void *>(b.data()));
-  typename GemmKernel::MainloopArguments mainloop_args{a_ptr, a_stride, b_ptr,
-                                                       b_stride};
+  typename GemmKernel::MainloopArguments mainloop_args{
+      a_ptr, a_stride, b_ptr, b_stride};
 
   auto c_ptr = static_cast<ElementD *>(const_cast<void *>(out.data()));
   typename GemmKernel::EpilogueArguments epilogue_args{
       Gemm::Epilogue::prepare_args(
           std::forward<EpilogueArgs>(epilogue_params)...),
-      c_ptr, c_stride, c_ptr, d_stride};
+      c_ptr,
+      c_stride,
+      c_ptr,
+      d_stride};
 
-  cutlass_gemm_caller<GemmKernel>(a.place(), prob_shape, mainloop_args,
-                                  epilogue_args);
+  cutlass_gemm_caller<GemmKernel>(
+      a.place(), prob_shape, mainloop_args, epilogue_args);
 }
 
-} // namespace fastdeploy::c3x
+}  // namespace fastdeploy::c3x

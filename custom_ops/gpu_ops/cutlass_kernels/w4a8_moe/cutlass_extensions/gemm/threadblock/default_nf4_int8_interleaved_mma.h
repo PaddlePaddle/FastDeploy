@@ -38,57 +38,67 @@ namespace gemm {
 namespace threadblock {
 ////////////////////////////////////////////////////////////////////////////////
 
-// // We need to distinguish here, since we want volta support. It is too much effort
-// // to write shared memory iterators that are probably needed for volta to function
-// // properly. As a result, we allow converters both after the LDG (for volta) and after
+// // We need to distinguish here, since we want volta support. It is too much
+// effort
+// // to write shared memory iterators that are probably needed for volta to
+// function
+// // properly. As a result, we allow converters both after the LDG (for volta)
+// and after
 // // the LDS for Turing+.
-template<
+template <
     /// Iterator for B matrix in global memory
     typename IteratorB,
     /// Warp level Mma
     typename MmaOperator,
     /// Math operation perform by warp level operator
     typename MathOperator>
-struct SetConvertersInt8Nf4Interleaved {
-};
+struct SetConvertersInt8Nf4Interleaved {};
 
 // // Dequantize after LDG, so set transforms accordingly
-template<
+template <
     /// Iterator for B matrix in global memory
     typename IteratorB,
     /// Mma Policy
     typename MmaOperator>
-struct SetConvertersInt8Nf4Interleaved<IteratorB, MmaOperator, arch::OpMultiplyAdd> {
-    using TransformAfterLDG =
-        FastInterleavedAndBiasedNumericArrayConverterNf4<typename MmaOperator::ArchMmaOperator::ElementB,
-                                                      typename IteratorB::Element,
-                                                      IteratorB::Fragment::kElements>;
+struct SetConvertersInt8Nf4Interleaved<IteratorB,
+                                       MmaOperator,
+                                       arch::OpMultiplyAdd> {
+  using TransformAfterLDG = FastInterleavedAndBiasedNumericArrayConverterNf4<
+      typename MmaOperator::ArchMmaOperator::ElementB,
+      typename IteratorB::Element,
+      IteratorB::Fragment::kElements>;
 
-    using TransformAfterLDS = NumericArrayConverter<typename MmaOperator::ArchMmaOperator::ElementB,
-                                                    typename MmaOperator::ArchMmaOperator::ElementB,
-                                                    MmaOperator::FragmentB::kElements>;
+  using TransformAfterLDS =
+      NumericArrayConverter<typename MmaOperator::ArchMmaOperator::ElementB,
+                            typename MmaOperator::ArchMmaOperator::ElementB,
+                            MmaOperator::FragmentB::kElements>;
 };
 
 // Dequantize after LDS, so set transforms accordingly
 
-template<
+template <
     /// Iterator for B matrix in global memory
     typename IteratorB,
     /// Mma Policy
     typename MmaOperator>
-struct SetConvertersInt8Nf4Interleaved<IteratorB, MmaOperator, arch::OpMultiplyAddDequantizeInterleavedBToA> {
-    using TransformAfterLDG =
-        NumericArrayConverter<typename IteratorB::Element, typename IteratorB::Element, IteratorB::Fragment::kElements>;
+struct SetConvertersInt8Nf4Interleaved<
+    IteratorB,
+    MmaOperator,
+    arch::OpMultiplyAddDequantizeInterleavedBToA> {
+  using TransformAfterLDG =
+      NumericArrayConverter<typename IteratorB::Element,
+                            typename IteratorB::Element,
+                            IteratorB::Fragment::kElements>;
 
-    using TransformAfterLDS =
-        FastInterleavedAndBiasedNumericArrayConverterNf4<typename MmaOperator::ArchMmaOperator::ElementB,
-                                                      typename TransformAfterLDG::result_type::Element,
-                                                      MmaOperator::FragmentB::kElements>;
+  using TransformAfterLDS = FastInterleavedAndBiasedNumericArrayConverterNf4<
+      typename MmaOperator::ArchMmaOperator::ElementB,
+      typename TransformAfterLDG::result_type::Element,
+      MmaOperator::FragmentB::kElements>;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 
-template<
+template <
     /// Element type for A matrix operand
     typename ElementA_,
     /// Layout type for A matrix operand

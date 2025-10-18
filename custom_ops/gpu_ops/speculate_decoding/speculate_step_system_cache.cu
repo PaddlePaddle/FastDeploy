@@ -39,59 +39,58 @@ __global__ void speculate_recover_block(int *recover_block_list,  // [bsz]
                                         const int block_num_per_seq,
                                         const int length,
                                         const int pre_id_length) {
-    const int bid = blockIdx.x;
-    const int tid = threadIdx.x;
-    __shared__ int ori_free_list_len;
-    if (bid < recover_len[0]) {
-        const int recover_id = recover_block_list[bid];
-        const int ori_seq_len_encoder = ori_seq_lens_encoder[recover_id];
-        const int step_idx_now = step_idx[recover_id];
-        const int seq_len = ori_seq_len_encoder + step_idx_now;
-        const int encoder_block_len = encoder_block_lens[recover_id];
-        const int decoder_used_len = used_list_len[recover_id];
-        int *block_table_now = block_tables + recover_id * block_num_per_seq;
-        int64_t *input_ids_now = input_ids + recover_id * length;
-        int64_t *pre_ids_now = pre_ids + recover_id * pre_id_length;
-        if (tid == 0) {
-            seq_lens_this_time[recover_id] = seq_len;
-            seq_lens_encoder[recover_id] = seq_len;
-            seq_lens_decoder[recover_id] = ori_seq_lens_decoder[recover_id];
-            stop_flags[recover_id] = false;
-            // input_ids_now[ori_seq_len_encoder + step_idx_now - 1] =
-            //     next_tokens[recover_id];  // next tokens
-            input_ids_now[0] =
-                first_token_ids[recover_id];  // set first prompt token
-            const int ori_free_list_len_tid0 =
-                atomicSub(free_list_len, decoder_used_len);
-            ori_free_list_len = ori_free_list_len_tid0;
+  const int bid = blockIdx.x;
+  const int tid = threadIdx.x;
+  __shared__ int ori_free_list_len;
+  if (bid < recover_len[0]) {
+    const int recover_id = recover_block_list[bid];
+    const int ori_seq_len_encoder = ori_seq_lens_encoder[recover_id];
+    const int step_idx_now = step_idx[recover_id];
+    const int seq_len = ori_seq_len_encoder + step_idx_now;
+    const int encoder_block_len = encoder_block_lens[recover_id];
+    const int decoder_used_len = used_list_len[recover_id];
+    int *block_table_now = block_tables + recover_id * block_num_per_seq;
+    int64_t *input_ids_now = input_ids + recover_id * length;
+    int64_t *pre_ids_now = pre_ids + recover_id * pre_id_length;
+    if (tid == 0) {
+      seq_lens_this_time[recover_id] = seq_len;
+      seq_lens_encoder[recover_id] = seq_len;
+      seq_lens_decoder[recover_id] = ori_seq_lens_decoder[recover_id];
+      stop_flags[recover_id] = false;
+      // input_ids_now[ori_seq_len_encoder + step_idx_now - 1] =
+      //     next_tokens[recover_id];  // next tokens
+      input_ids_now[0] = first_token_ids[recover_id];  // set first prompt token
+      const int ori_free_list_len_tid0 =
+          atomicSub(free_list_len, decoder_used_len);
+      ori_free_list_len = ori_free_list_len_tid0;
 #ifdef DEBUG_STEP
-            printf(
-                "seq_id: %d, ori_seq_len_encoder: %d, step_idx_now: %d, "
-                "seq_len: %d, ori_free_list_len_tid0: %d, "
-                "ori_free_list_len: %d\n",
-                recover_id,
-                ori_seq_len_encoder,
-                step_idx_now,
-                seq_len,
-                ori_free_list_len_tid0,
-                ori_free_list_len);
+      printf(
+          "seq_id: %d, ori_seq_len_encoder: %d, step_idx_now: %d, "
+          "seq_len: %d, ori_free_list_len_tid0: %d, "
+          "ori_free_list_len: %d\n",
+          recover_id,
+          ori_seq_len_encoder,
+          step_idx_now,
+          seq_len,
+          ori_free_list_len_tid0,
+          ori_free_list_len);
 #endif
-        }
-        __syncthreads();
-        // 恢复block table
-        for (int i = tid; i < decoder_used_len; i += blockDim.x) {
-            block_table_now[encoder_block_len + i] =
-                free_list[ori_free_list_len - i - 1];
-        }
-        // 恢复input_ids
-        for (int i = tid; i < step_idx_now; i += blockDim.x) {
-            input_ids_now[ori_seq_len_encoder + i] = pre_ids_now[i + 1];
-        }
     }
+    __syncthreads();
+    // 恢复block table
+    for (int i = tid; i < decoder_used_len; i += blockDim.x) {
+      block_table_now[encoder_block_len + i] =
+          free_list[ori_free_list_len - i - 1];
+    }
+    // 恢复input_ids
+    for (int i = tid; i < step_idx_now; i += blockDim.x) {
+      input_ids_now[ori_seq_len_encoder + i] = pre_ids_now[i + 1];
+    }
+  }
 
-    if (bid == 0 && tid == 0) {
-        recover_len[0] = 0;
-    }
+  if (bid == 0 && tid == 0) {
+    recover_len[0] = 0;
+  }
 }
 
 void SpeculateStepPaddle(
@@ -122,83 +121,83 @@ void SpeculateStepPaddle(
     const int block_size,
     const int encoder_decoder_block_num,
     const int max_draft_tokens) {
-    auto cu_stream = seq_lens_this_time.stream();
-    const int bsz = seq_lens_this_time.shape()[0];
-    const int block_num_per_seq = block_tables.shape()[1];
-    const int length = input_ids.shape()[1];
-    const int pre_id_length = pre_ids.shape()[1];
-    constexpr int BlockSize = 256;  // bsz <= 256
-    const int max_decoder_block_num = length / block_size;
-    // const int max_decoder_block_num = 2048 / block_size -
-    // encoder_decoder_block_num;
+  auto cu_stream = seq_lens_this_time.stream();
+  const int bsz = seq_lens_this_time.shape()[0];
+  const int block_num_per_seq = block_tables.shape()[1];
+  const int length = input_ids.shape()[1];
+  const int pre_id_length = pre_ids.shape()[1];
+  constexpr int BlockSize = 256;  // bsz <= 256
+  const int max_decoder_block_num = length / block_size;
+  // const int max_decoder_block_num = 2048 / block_size -
+  // encoder_decoder_block_num;
 #ifdef DEBUG_STEP
-    printf(
-        "bsz: %d, block_num_per_seq: %d, length: %d, max_decoder_block_num: "
-        "%d\n",
+  printf(
+      "bsz: %d, block_num_per_seq: %d, length: %d, max_decoder_block_num: "
+      "%d\n",
+      bsz,
+      block_num_per_seq,
+      length,
+      max_decoder_block_num);
+#endif
+  speculate_free_and_dispatch_block<<<1, BlockSize, 0, cu_stream>>>(
+      const_cast<bool *>(stop_flags.data<bool>()),
+      const_cast<int *>(seq_lens_this_time.data<int>()),
+      const_cast<int *>(seq_lens_decoder.data<int>()),
+      const_cast<int *>(block_tables.data<int>()),
+      const_cast<int *>(encoder_block_lens.data<int>()),
+      const_cast<bool *>(is_block_step.data<bool>()),
+      const_cast<int *>(step_block_list.data<int>()),
+      const_cast<int *>(step_lens.data<int>()),
+      const_cast<int *>(recover_block_list.data<int>()),
+      const_cast<int *>(recover_lens.data<int>()),
+      const_cast<int *>(need_block_list.data<int>()),
+      const_cast<int *>(need_block_len.data<int>()),
+      const_cast<int *>(used_list_len.data<int>()),
+      const_cast<int *>(free_list.data<int>()),
+      const_cast<int *>(free_list_len.data<int>()),
+      const_cast<int64_t *>(first_token_ids.data<int64_t>()),
+      const_cast<int *>(accept_num.data<int>()),
+      bsz,
+      block_size,
+      block_num_per_seq,
+      max_decoder_block_num,
+      max_draft_tokens);
+#ifdef DEBUG_STEP
+  cudaDeviceSynchronize();
+#endif
+  auto cpu_recover_lens = recover_lens.copy_to(paddle::CPUPlace(), false);
+  const int grid_size = cpu_recover_lens.data<int>()[0];
+#ifdef DEBUG_STEP
+  printf("grid_size2 %d\n", grid_size);
+#endif
+  if (grid_size > 0) {
+    speculate_recover_block<<<grid_size, BlockSize, 0, cu_stream>>>(
+        const_cast<int *>(recover_block_list.data<int>()),
+        const_cast<int *>(recover_lens.data<int>()),
+        const_cast<bool *>(stop_flags.data<bool>()),
+        const_cast<int *>(seq_lens_this_time.data<int>()),
+        const_cast<int *>(ori_seq_lens_encoder.data<int>()),
+        const_cast<int *>(ori_seq_lens_decoder.data<int>()),
+        const_cast<int *>(seq_lens_encoder.data<int>()),
+        const_cast<int *>(seq_lens_decoder.data<int>()),
+        const_cast<int *>(block_tables.data<int>()),
+        const_cast<int *>(free_list.data<int>()),
+        const_cast<int *>(free_list_len.data<int>()),
+        const_cast<int64_t *>(input_ids.data<int64_t>()),
+        const_cast<int64_t *>(pre_ids.data<int64_t>()),
+        const_cast<int64_t *>(step_idx.data<int64_t>()),
+        const_cast<int *>(encoder_block_lens.data<int>()),
+        const_cast<int *>(used_list_len.data<int>()),
+        next_tokens.data<int64_t>(),
+        first_token_ids.data<int64_t>(),
         bsz,
         block_num_per_seq,
         length,
-        max_decoder_block_num);
-#endif
-    speculate_free_and_dispatch_block<<<1, BlockSize, 0, cu_stream>>>(
-        const_cast<bool *>(stop_flags.data<bool>()),
-        const_cast<int *>(seq_lens_this_time.data<int>()),
-        const_cast<int *>(seq_lens_decoder.data<int>()),
-        const_cast<int *>(block_tables.data<int>()),
-        const_cast<int *>(encoder_block_lens.data<int>()),
-        const_cast<bool *>(is_block_step.data<bool>()),
-        const_cast<int *>(step_block_list.data<int>()),
-        const_cast<int *>(step_lens.data<int>()),
-        const_cast<int *>(recover_block_list.data<int>()),
-        const_cast<int *>(recover_lens.data<int>()),
-        const_cast<int *>(need_block_list.data<int>()),
-        const_cast<int *>(need_block_len.data<int>()),
-        const_cast<int *>(used_list_len.data<int>()),
-        const_cast<int *>(free_list.data<int>()),
-        const_cast<int *>(free_list_len.data<int>()),
-        const_cast<int64_t *>(first_token_ids.data<int64_t>()),
-        const_cast<int *>(accept_num.data<int>()),
-        bsz,
-        block_size,
-        block_num_per_seq,
-        max_decoder_block_num,
-        max_draft_tokens);
+        pre_id_length);
 #ifdef DEBUG_STEP
     cudaDeviceSynchronize();
 #endif
-    auto cpu_recover_lens = recover_lens.copy_to(paddle::CPUPlace(), false);
-    const int grid_size = cpu_recover_lens.data<int>()[0];
-#ifdef DEBUG_STEP
-    printf("grid_size2 %d\n", grid_size);
-#endif
-    if (grid_size > 0) {
-        speculate_recover_block<<<grid_size, BlockSize, 0, cu_stream>>>(
-            const_cast<int *>(recover_block_list.data<int>()),
-            const_cast<int *>(recover_lens.data<int>()),
-            const_cast<bool *>(stop_flags.data<bool>()),
-            const_cast<int *>(seq_lens_this_time.data<int>()),
-            const_cast<int *>(ori_seq_lens_encoder.data<int>()),
-            const_cast<int *>(ori_seq_lens_decoder.data<int>()),
-            const_cast<int *>(seq_lens_encoder.data<int>()),
-            const_cast<int *>(seq_lens_decoder.data<int>()),
-            const_cast<int *>(block_tables.data<int>()),
-            const_cast<int *>(free_list.data<int>()),
-            const_cast<int *>(free_list_len.data<int>()),
-            const_cast<int64_t *>(input_ids.data<int64_t>()),
-            const_cast<int64_t *>(pre_ids.data<int64_t>()),
-            const_cast<int64_t *>(step_idx.data<int64_t>()),
-            const_cast<int *>(encoder_block_lens.data<int>()),
-            const_cast<int *>(used_list_len.data<int>()),
-            next_tokens.data<int64_t>(),
-            first_token_ids.data<int64_t>(),
-            bsz,
-            block_num_per_seq,
-            length,
-            pre_id_length);
-#ifdef DEBUG_STEP
-        cudaDeviceSynchronize();
-#endif
-    }
+  }
 }
 
 PD_BUILD_STATIC_OP(speculate_step_system_cache)

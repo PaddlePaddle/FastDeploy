@@ -13,8 +13,8 @@
 // limitations under the License.
 
 /*
- * Copyright (c) 2024, Jay Shah, Ganesh Bikshandi, Ying Zhang, Vijay Thakkar, Pradeep Ramani, Tri
- * Dao. Licensed under the BSD 3-Clause.
+ * Copyright (c) 2024, Jay Shah, Ganesh Bikshandi, Ying Zhang, Vijay Thakkar,
+ * Pradeep Ramani, Tri Dao. Licensed under the BSD 3-Clause.
  *
  * Modified by the FlashInfer team.
  */
@@ -30,18 +30,24 @@ using namespace cute;
 
 template <typename T>
 struct MaxOp {
-  __device__ __forceinline__ T operator()(T const& x, T const& y) { return x > y ? x : y; }
+  __device__ __forceinline__ T operator()(T const& x, T const& y) {
+    return x > y ? x : y;
+  }
 };
 
 template <>
 struct MaxOp<float> {
   // This is slightly faster
-  __device__ __forceinline__ float operator()(float const& x, float const& y) { return max(x, y); }
+  __device__ __forceinline__ float operator()(float const& x, float const& y) {
+    return max(x, y);
+  }
 };
 
 template <typename T>
 struct SumOp {
-  __device__ __forceinline__ T operator()(T const& x, T const& y) { return x + y; }
+  __device__ __forceinline__ T operator()(T const& x, T const& y) {
+    return x + y;
+  }
 };
 
 template <int THREADS>
@@ -64,10 +70,16 @@ struct Allreduce<2> {
   }
 };
 
-template <bool init, typename Engine0, typename Layout0, typename Engine1, typename Layout1,
+template <bool init,
+          typename Engine0,
+          typename Layout0,
+          typename Engine1,
+          typename Layout1,
           typename Operator>
-__device__ __forceinline__ void thread_reduce_(Tensor<Engine0, Layout0> const& tensor,
-                                               Tensor<Engine1, Layout1>& summary, Operator& op) {
+__device__ __forceinline__ void thread_reduce_(
+    Tensor<Engine0, Layout0> const& tensor,
+    Tensor<Engine1, Layout1>& summary,
+    Operator& op) {
   static_assert(Layout0::rank == 2, "Only support 2D Tensor");
   static_assert(Layout1::rank == 1, "Only support 1D Tensor");
   CUTE_STATIC_ASSERT_V(size<0>(summary) == size<0>(tensor));
@@ -81,9 +93,14 @@ __device__ __forceinline__ void thread_reduce_(Tensor<Engine0, Layout0> const& t
   }
 }
 
-template <typename Engine0, typename Layout0, typename Engine1, typename Layout1, typename Operator>
+template <typename Engine0,
+          typename Layout0,
+          typename Engine1,
+          typename Layout1,
+          typename Operator>
 __device__ __forceinline__ void quad_allreduce_(Tensor<Engine0, Layout0>& dst,
-                                                Tensor<Engine1, Layout1>& src, Operator& op) {
+                                                Tensor<Engine1, Layout1>& src,
+                                                Operator& op) {
   CUTE_STATIC_ASSERT_V(size(dst) == size(src));
 #pragma unroll
   for (int i = 0; i < size(dst); i++) {
@@ -91,25 +108,38 @@ __device__ __forceinline__ void quad_allreduce_(Tensor<Engine0, Layout0>& dst,
   }
 }
 
-template <bool init, typename Engine0, typename Layout0, typename Engine1, typename Layout1,
+template <bool init,
+          typename Engine0,
+          typename Layout0,
+          typename Engine1,
+          typename Layout1,
           typename Operator>
 __device__ __forceinline__ void reduce_(Tensor<Engine0, Layout0> const& tensor,
-                                        Tensor<Engine1, Layout1>& summary, Operator& op) {
+                                        Tensor<Engine1, Layout1>& summary,
+                                        Operator& op) {
   thread_reduce_<init>(tensor, summary, op);
   quad_allreduce_(summary, summary, op);
 }
 
-template <bool init, typename Engine0, typename Layout0, typename Engine1, typename Layout1>
-__device__ __forceinline__ void reduce_max(Tensor<Engine0, Layout0> const& tensor,
-                                           Tensor<Engine1, Layout1>& max) {
+template <bool init,
+          typename Engine0,
+          typename Layout0,
+          typename Engine1,
+          typename Layout1>
+__device__ __forceinline__ void reduce_max(
+    Tensor<Engine0, Layout0> const& tensor, Tensor<Engine1, Layout1>& max) {
   MaxOp<float> max_op;
   reduce_<init>(tensor, max, max_op);
 }
 
-template <bool init, bool warp_reduce = true, typename Engine0, typename Layout0, typename Engine1,
+template <bool init,
+          bool warp_reduce = true,
+          typename Engine0,
+          typename Layout0,
+          typename Engine1,
           typename Layout1>
-__device__ __forceinline__ void reduce_sum(Tensor<Engine0, Layout0> const& tensor,
-                                           Tensor<Engine1, Layout1>& sum) {
+__device__ __forceinline__ void reduce_sum(
+    Tensor<Engine0, Layout0> const& tensor, Tensor<Engine1, Layout1>& sum) {
   SumOp<float> sum_op;
   thread_reduce_<init>(tensor, sum, sum_op);
   if constexpr (warp_reduce) {
@@ -117,9 +147,12 @@ __device__ __forceinline__ void reduce_sum(Tensor<Engine0, Layout0> const& tenso
   }
 }
 
-template <typename Engine0, typename Layout0, typename Engine1, typename Layout1>
-__forceinline__ __device__ void apply_exp2(Tensor<Engine0, Layout0>& tensor,
-                                           Tensor<Engine1, Layout1> const& max) {
+template <typename Engine0,
+          typename Layout0,
+          typename Engine1,
+          typename Layout1>
+__forceinline__ __device__ void apply_exp2(
+    Tensor<Engine0, Layout0>& tensor, Tensor<Engine1, Layout1> const& max) {
   static_assert(Layout0::rank == 2, "Only support 2D Tensor");
   static_assert(Layout1::rank == 1, "Only support 1D Tensor");
   CUTE_STATIC_ASSERT_V(size<0>(max) == size<0>(tensor));
@@ -133,10 +166,14 @@ __forceinline__ __device__ void apply_exp2(Tensor<Engine0, Layout0>& tensor,
   }
 }
 
-template <typename Engine0, typename Layout0, typename Engine1, typename Layout1>
-__forceinline__ __device__ void scale_apply_exp2(Tensor<Engine0, Layout0>& tensor,
-                                                 Tensor<Engine1, Layout1> const& max,
-                                                 const float scale) {
+template <typename Engine0,
+          typename Layout0,
+          typename Engine1,
+          typename Layout1>
+__forceinline__ __device__ void scale_apply_exp2(
+    Tensor<Engine0, Layout0>& tensor,
+    Tensor<Engine1, Layout1> const& max,
+    const float scale) {
   static_assert(Layout0::rank == 2, "Only support 2D Tensor");
   static_assert(Layout1::rank == 1, "Only support 1D Tensor");
   CUTE_STATIC_ASSERT_V(size<0>(max) == size<0>(tensor));
@@ -154,11 +191,13 @@ __forceinline__ __device__ void scale_apply_exp2(Tensor<Engine0, Layout0>& tenso
 template <int NUM_ROWS_PER_THREAD, bool WITH_SCALE>
 struct OnlineSoftmax {
   constexpr static float fill_value = -5e4;
-  using TensorT = decltype(make_tensor<float>(Shape<Int<NUM_ROWS_PER_THREAD>>{}));
+  using TensorT =
+      decltype(make_tensor<float>(Shape<Int<NUM_ROWS_PER_THREAD>>{}));
   TensorT row_max, row_sum, scores_scale;
   float sm_scale_log2;
 
-  CUTLASS_DEVICE OnlineSoftmax(float sm_scale_log2) : sm_scale_log2(sm_scale_log2) {
+  CUTLASS_DEVICE OnlineSoftmax(float sm_scale_log2)
+      : sm_scale_log2(sm_scale_log2) {
     clear(scores_scale);
   };
 
@@ -166,8 +205,10 @@ struct OnlineSoftmax {
 
   template <bool init, typename Tensor0>
   __forceinline__ __device__ TensorT update(Tensor0& acc_s) {
-    // Reshape acc_s from ((2, 2, V), MMA_M, MMA_N) to (nrow=(2, MMA_M), ncol=(2, V, MMA_N))
-    Tensor scores = make_tensor(acc_s.data(), convert_layout_acc_rowcol(acc_s.layout()));
+    // Reshape acc_s from ((2, 2, V), MMA_M, MMA_N) to (nrow=(2, MMA_M),
+    // ncol=(2, V, MMA_N))
+    Tensor scores =
+        make_tensor(acc_s.data(), convert_layout_acc_rowcol(acc_s.layout()));
 
     static_assert(decltype(size<0>(scores))::value == NUM_ROWS_PER_THREAD);
     if constexpr (init) {
@@ -188,7 +229,8 @@ struct OnlineSoftmax {
       for (int mi = 0; mi < size(row_max); ++mi) {
         float scores_max_cur = row_max(mi);
         if constexpr (WITH_SCALE) {
-          scores_scale(mi) = __expf((scores_max_prev(mi) - scores_max_cur) * sm_scale_log2);
+          scores_scale(mi) =
+              __expf((scores_max_prev(mi) - scores_max_cur) * sm_scale_log2);
         } else {
           scores_scale(mi) = __expf(scores_max_prev(mi) - scores_max_cur);
         }
@@ -208,8 +250,10 @@ struct OnlineSoftmax {
 
   template <typename Tensor0>
   __forceinline__ __device__ TensorT finalize(Tensor0& acc_s) {
-    // Reshape acc_s from ((2, 2, V), MMA_M, MMA_N) to (nrow=(2, MMA_M), ncol=(2, V, MMA_N))
-    Tensor scores = make_tensor(acc_s.data(), convert_layout_acc_rowcol(acc_s.layout()));
+    // Reshape acc_s from ((2, 2, V), MMA_M, MMA_N) to (nrow=(2, MMA_M),
+    // ncol=(2, V, MMA_N))
+    Tensor scores =
+        make_tensor(acc_s.data(), convert_layout_acc_rowcol(acc_s.layout()));
     static_assert(decltype(size<0>(scores))::value == NUM_ROWS_PER_THREAD);
     SumOp<float> sum_op;
     quad_allreduce_(row_sum, row_sum, sum_op);
@@ -225,9 +269,12 @@ struct OnlineSoftmax {
 
   template <typename Tensor1>
   __forceinline__ __device__ void rescale_o(Tensor1& acc_o) {
-    // Reshape acc_o from (MMA=4, MMA_M, MMA_K) to (nrow=(2, MMA_M), ncol=(2, MMA_K))
-    Tensor acc_o_rowcol = make_tensor(acc_o.data(), convert_layout_acc_rowcol(acc_o.layout()));
-    static_assert(decltype(size<0>(acc_o_rowcol))::value == NUM_ROWS_PER_THREAD);
+    // Reshape acc_o from (MMA=4, MMA_M, MMA_K) to (nrow=(2, MMA_M), ncol=(2,
+    // MMA_K))
+    Tensor acc_o_rowcol =
+        make_tensor(acc_o.data(), convert_layout_acc_rowcol(acc_o.layout()));
+    static_assert(decltype(size<0>(acc_o_rowcol))::value ==
+                  NUM_ROWS_PER_THREAD);
 #pragma unroll
     for (int mi = 0; mi < size(row_max); ++mi) {
 #pragma unroll
@@ -238,10 +285,14 @@ struct OnlineSoftmax {
   };
 
   template <typename Tensor1, typename Tensor2>
-  __forceinline__ __device__ void rescale_o(Tensor1& acc_o, Tensor2& scores_scale_input) {
-    // Reshape acc_o from (MMA=4, MMA_M, MMA_K) to (nrow=(2, MMA_M), ncol=(2, MMA_K))
-    Tensor acc_o_rowcol = make_tensor(acc_o.data(), convert_layout_acc_rowcol(acc_o.layout()));
-    static_assert(decltype(size<0>(acc_o_rowcol))::value == NUM_ROWS_PER_THREAD);
+  __forceinline__ __device__ void rescale_o(Tensor1& acc_o,
+                                            Tensor2& scores_scale_input) {
+    // Reshape acc_o from (MMA=4, MMA_M, MMA_K) to (nrow=(2, MMA_M), ncol=(2,
+    // MMA_K))
+    Tensor acc_o_rowcol =
+        make_tensor(acc_o.data(), convert_layout_acc_rowcol(acc_o.layout()));
+    static_assert(decltype(size<0>(acc_o_rowcol))::value ==
+                  NUM_ROWS_PER_THREAD);
 #pragma unroll
     for (int mi = 0; mi < size(row_max); ++mi) {
 #pragma unroll

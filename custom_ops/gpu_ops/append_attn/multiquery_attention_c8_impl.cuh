@@ -34,12 +34,14 @@ template <typename T,
           bool IsFP8 = false,
           bool IsDynamicC8 = false>
 __global__ void multi_query_append_attention_c8_kernel(
-    T *__restrict__ q,             // [token_num, (num_heads + 2* kv_num_head) * head_dim]
+    T *__restrict__ q,  // [token_num, (num_heads + 2* kv_num_head) * head_dim]
     CacheT *__restrict__ cache_k,  // [max_block_num, num_heads, block_size,
                                    // head_dim]
     CacheT *__restrict__ cache_v,
-    const T *__restrict__ cache_k_scale,  // [num_kv_heads] or [max_block_num, num_heads, block_size]
-    const T *__restrict__ cache_v_scale,  // [num_kv_heads] or [max_block_num, num_heads, block_size]
+    const T *__restrict__ cache_k_scale,  // [num_kv_heads] or [max_block_num,
+                                          // num_heads, block_size]
+    const T *__restrict__ cache_v_scale,  // [num_kv_heads] or [max_block_num,
+                                          // num_heads, block_size]
     const T *__restrict__ shift_bias,     // [q_num_heads * HEAD_DIM]
     const T *__restrict__ smooth_weight,  // [q_num_heads * HEAD_DIM]
     const int *__restrict__ seq_lens,
@@ -87,8 +89,8 @@ __global__ void multi_query_append_attention_c8_kernel(
 
   block_table_now = block_table + batch_id * max_block_num_per_seq;
 
-  //When cudagraph capture prefill, may launch more gridDim.x
-  if(btid >= static_cast<uint32_t>(num_blocks_x_cpu)){
+  // When cudagraph capture prefill, may launch more gridDim.x
+  if (btid >= static_cast<uint32_t>(num_blocks_x_cpu)) {
     return;
   }
 
@@ -188,7 +190,8 @@ __global__ void multi_query_append_attention_c8_kernel(
   } else {
     o_base_ptr_int8 = out + o_offset;
   }
-  const int *mask_offset_this_seq = mask_offset ? mask_offset + q_start_seq_id * 2 : nullptr;
+  const int *mask_offset_this_seq =
+      mask_offset ? mask_offset + q_start_seq_id * 2 : nullptr;
   smem_t qo_smem(smem);
 
   uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
@@ -209,14 +212,14 @@ __global__ void multi_query_append_attention_c8_kernel(
   smem_t k_smem(smem + NUM_WARPS * num_frags_x * 16 * HEAD_DIM * sizeof(T)),
       v_smem(smem + NUM_WARPS * num_frags_x * 16 * HEAD_DIM * sizeof(T) +
              num_frags_z * 16 * HEAD_DIM * sizeof(CacheT));
-  T* k_smem_scale = nullptr;
-  T* v_smem_scale = nullptr;
+  T *k_smem_scale = nullptr;
+  T *v_smem_scale = nullptr;
   if constexpr (IsDynamicC8) {
-    k_smem_scale = reinterpret_cast<T*>(smem + NUM_WARPS * num_frags_x * 16 * HEAD_DIM * sizeof(T) +
-                                         num_frags_z * 16 * HEAD_DIM * sizeof(CacheT) * 2);
+    k_smem_scale = reinterpret_cast<T *>(
+        smem + NUM_WARPS * num_frags_x * 16 * HEAD_DIM * sizeof(T) +
+        num_frags_z * 16 * HEAD_DIM * sizeof(CacheT) * 2);
     v_smem_scale = k_smem_scale + num_frags_z * 16;
   }
-
 
   const uint32_t num_iterations = div_up(
       CAUSAL
@@ -228,12 +231,13 @@ __global__ void multi_query_append_attention_c8_kernel(
           : chunk_len,
       num_frags_z * 16);
   const uint32_t mask_check_iteration =
-      (CAUSAL ? (min(chunk_len,
+      (CAUSAL        ? (min(chunk_len,
                      sub_if_greater_or_zero(
                          kv_len - q_len +
                              tile_id * num_rows_per_block / GROUP_SIZE,
                          chunk_start)))
-              : mask_offset ? 0 : chunk_len) /
+       : mask_offset ? 0
+                     : chunk_len) /
       (num_frags_z * 16);
 
   uint32_t k_smem_offset_r =
@@ -246,8 +250,7 @@ __global__ void multi_query_append_attention_c8_kernel(
 
   uint32_t k_smem_offset_w =
       smem_t::get_permuted_offset<num_vecs_per_head_k, inv_k_stride>(
-          wid * 4 + tid / 8,
-          tid % 8);
+          wid * 4 + tid / 8, tid % 8);
   uint32_t v_smem_offset_w =
       smem_t::get_permuted_offset<num_vecs_per_blocksize, inv_v_stride>(
           wid * 8 + tid / 4, tid % 4);  // 4 * 128 / 8 = 64
@@ -299,26 +302,31 @@ __global__ void multi_query_append_attention_c8_kernel(
   for (uint32_t iter = 0; iter < num_iterations; ++iter) {
     if constexpr (IsDynamicC8) {
       produce_k_dynamic_scale<BLOCK_SIZE, num_frags_z, NUM_WARP_Q, T>(
-        k_smem_scale,
-        cache_k_scale_reg,
-        block_table_now,
-        cache_k_scale,
-        kv_idx_base,
-        kv_num_heads,
-        kv_head_idx,
-        chunk_end
-      );
+          k_smem_scale,
+          cache_k_scale_reg,
+          block_table_now,
+          cache_k_scale,
+          kv_idx_base,
+          kv_num_heads,
+          kv_head_idx,
+          chunk_end);
     }
     wait_group<1>();
     __syncthreads();
     // s = qk
-    compute_qk_c8<num_frags_x, num_frags_y, num_frags_z, T, CacheT, is_scale_channel_wise, IsFP8, IsDynamicC8>(
-        &qo_smem,
-        &q_smem_offset_r,
-        &k_smem,
-        &k_smem_offset_r,
-        cache_k_scale_reg,
-        s_frag);
+    compute_qk_c8<num_frags_x,
+                  num_frags_y,
+                  num_frags_z,
+                  T,
+                  CacheT,
+                  is_scale_channel_wise,
+                  IsFP8,
+                  IsDynamicC8>(&qo_smem,
+                               &q_smem_offset_r,
+                               &k_smem,
+                               &k_smem_offset_r,
+                               cache_k_scale_reg,
+                               s_frag);
 
     // mask according to kv_idx and q_idx
     if (iter >= mask_check_iteration) {
@@ -366,15 +374,14 @@ __global__ void multi_query_append_attention_c8_kernel(
     commit_group();
     if constexpr (IsDynamicC8) {
       produce_v_dynamic_scale<BLOCK_SIZE, num_frags_z, NUM_WARP_Q, T>(
-        v_smem_scale,
-        cache_v_scale_reg,
-        block_table_now,
-        cache_v_scale,
-        ori_kv_idx_base,
-        kv_num_heads,
-        kv_head_idx,
-        chunk_end
-      );
+          v_smem_scale,
+          cache_v_scale_reg,
+          block_table_now,
+          cache_v_scale,
+          ori_kv_idx_base,
+          kv_num_heads,
+          kv_head_idx,
+          chunk_end);
     }
     wait_group<1>();
     __syncthreads();
@@ -409,7 +416,6 @@ __global__ void multi_query_append_attention_c8_kernel(
                                        chunk_end,
                                        const_v_offset);
     commit_group();
-
   }
   wait_group<0>();
   __syncthreads();
@@ -458,7 +464,6 @@ __global__ void multi_query_append_attention_c8_kernel(
         HEAD_DIM);
   }
 
-
   if constexpr (partition_kv) {
 #pragma unroll
     for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
@@ -504,16 +509,18 @@ template <typename T,
           uint32_t num_frags_y,
           typename OutT = T,
           bool ENABLE_PREFILL = true,
-          bool is_scale_channel_wise=false,
+          bool is_scale_channel_wise = false,
           bool IsFP8 = false,
           bool IsDynamicC8 = false>
 __global__ void multi_query_append_attention_c8_warp1_4_kernel(
-    T *__restrict__ q,             // [token_num, (num_heads + 2* kv_num_head) * head_dim]
+    T *__restrict__ q,  // [token_num, (num_heads + 2* kv_num_head) * head_dim]
     CacheT *__restrict__ cache_k,  // [max_block_num, num_heads, block_size,
                                    // head_dim]
     CacheT *__restrict__ cache_v,
-    const T *__restrict__ cache_k_scale,  // [num_kv_heads] or [max_block_num, num_heads, block_size]
-    const T *__restrict__ cache_v_scale,  // [num_kv_heads] or [max_block_num, num_heads, block_size]
+    const T *__restrict__ cache_k_scale,  // [num_kv_heads] or [max_block_num,
+                                          // num_heads, block_size]
+    const T *__restrict__ cache_v_scale,  // [num_kv_heads] or [max_block_num,
+                                          // num_heads, block_size]
     const T *__restrict__ shift_bias,     // [q_num_heads * HEAD_DIM]
     const T *__restrict__ smooth_weight,  // [q_num_heads * HEAD_DIM]
     const int *__restrict__ seq_lens,
@@ -523,7 +530,7 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
     const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
     const int *__restrict__ mask_offset,
-    const bool *__restrict__ attn_mask,   // [bsz, max_q, max_q] for tree-mask
+    const bool *__restrict__ attn_mask,  // [bsz, max_q, max_q] for tree-mask
     const int max_seq_len,
     const int max_dec_len,
     const int max_block_num_per_seq,
@@ -562,8 +569,8 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
   const uint32_t num_rows_per_block = num_frags_x * 16;
   const int *block_table_now = block_table + batch_id * max_block_num_per_seq;
 
-  //When cudagraph capture prefill, may launch more gridDim.x
-  if(btid >= static_cast<uint32_t>(num_blocks_x_cpu)){
+  // When cudagraph capture prefill, may launch more gridDim.x
+  if (btid >= static_cast<uint32_t>(num_blocks_x_cpu)) {
     return;
   }
 
@@ -660,7 +667,8 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
           tid % 8 * num_elems_per_128b<T>();
     }
   }
-  const int *mask_offset_this_seq = mask_offset ? mask_offset + q_start_seq_id * 2 : nullptr;
+  const int *mask_offset_this_seq =
+      mask_offset ? mask_offset + q_start_seq_id * 2 : nullptr;
   smem_t qo_smem(smem);
 
   uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
@@ -685,11 +693,12 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
   smem_t k_smem(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T)),
       v_smem(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T) +
              NUM_WARP_KV * num_frags_z * 16 * HEAD_DIM * sizeof(CacheT));
-  T* k_smem_scale = nullptr;
-  T* v_smem_scale = nullptr;
+  T *k_smem_scale = nullptr;
+  T *v_smem_scale = nullptr;
   if constexpr (IsDynamicC8) {
-    k_smem_scale = reinterpret_cast<T*>(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T) +
-                                        NUM_WARP_KV * num_frags_z * 16 * HEAD_DIM * sizeof(CacheT) * 2);
+    k_smem_scale = reinterpret_cast<T *>(
+        smem + num_frags_x * 16 * HEAD_DIM * sizeof(T) +
+        NUM_WARP_KV * num_frags_z * 16 * HEAD_DIM * sizeof(CacheT) * 2);
     v_smem_scale = k_smem_scale + NUM_WARP_KV * num_frags_z * 16;
   }
 
@@ -703,12 +712,13 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
           : chunk_len,
       NUM_WARP_KV * num_frags_z * 16);
   const uint32_t mask_check_iteration =
-      (CAUSAL ? (min(chunk_len,
+      (CAUSAL        ? (min(chunk_len,
                      sub_if_greater_or_zero(
                          kv_len - q_len +
                              tile_id * num_rows_per_block / GROUP_SIZE,
                          chunk_start)))
-              : mask_offset ? 0 : chunk_len) /
+       : mask_offset ? 0
+                     : chunk_len) /
       (NUM_WARP_KV * num_frags_z * 16);
 
   uint32_t k_smem_offset_r =
@@ -722,9 +732,7 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
 
   uint32_t k_smem_offset_w =
       smem_t::get_permuted_offset<num_vecs_per_head_k, inv_k_stride>(
-          wid * 4 + tid / 8,
-          tid %
-              8);
+          wid * 4 + tid / 8, tid % 8);
   uint32_t v_smem_offset_w =
       smem_t::get_permuted_offset<num_vecs_per_blocksize, inv_v_stride>(
           wid * 8 + tid / 4, tid % 4);
@@ -776,27 +784,32 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
   for (uint32_t iter = 0; iter < num_iterations; ++iter) {
     if constexpr (IsDynamicC8) {
       produce_k_dynamic_scale<BLOCK_SIZE, num_frags_z, NUM_WARP_Q, T>(
-        k_smem_scale,
-        cache_k_scale_reg,
-        block_table_now,
-        cache_k_scale,
-        kv_idx_base,
-        kv_num_heads,
-        kv_head_idx,
-        chunk_end
-      );
+          k_smem_scale,
+          cache_k_scale_reg,
+          block_table_now,
+          cache_k_scale,
+          kv_idx_base,
+          kv_num_heads,
+          kv_head_idx,
+          chunk_end);
     }
     wait_group<1>();
     __syncthreads();
 
     // s = qk
-    compute_qk_c8<num_frags_x, num_frags_y, num_frags_z, T, CacheT, is_scale_channel_wise, IsFP8, IsDynamicC8>(
-        &qo_smem,
-        &q_smem_offset_r,
-        &k_smem,
-        &k_smem_offset_r,
-        cache_k_scale_reg,
-        s_frag);
+    compute_qk_c8<num_frags_x,
+                  num_frags_y,
+                  num_frags_z,
+                  T,
+                  CacheT,
+                  is_scale_channel_wise,
+                  IsFP8,
+                  IsDynamicC8>(&qo_smem,
+                               &q_smem_offset_r,
+                               &k_smem,
+                               &k_smem_offset_r,
+                               cache_k_scale_reg,
+                               s_frag);
     // mask according to kv_idx and q_idx
     if (iter >= mask_check_iteration) {
       mask_s<T,
@@ -806,16 +819,17 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
              NUM_WARPS,
              num_frags_x,
              num_frags_y,
-             num_frags_z>(attn_mask ? attn_mask + batch_id * attn_mask_len *attn_mask_len : nullptr,
-                          q_base_seq_id_this_block,
-                          kv_idx_base + wid * num_frags_z * 16,
-                          q_len,
-                          kv_len,
-                          chunk_end,
-                          attn_mask_len,
-                          s_frag,
-                          mask_offset_this_seq);
-
+             num_frags_z>(
+          attn_mask ? attn_mask + batch_id * attn_mask_len * attn_mask_len
+                    : nullptr,
+          q_base_seq_id_this_block,
+          kv_idx_base + wid * num_frags_z * 16,
+          q_len,
+          kv_len,
+          chunk_end,
+          attn_mask_len,
+          s_frag,
+          mask_offset_this_seq);
     }
 
     // update m,d
@@ -844,15 +858,14 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
     commit_group();
     if constexpr (IsDynamicC8) {
       produce_v_dynamic_scale<BLOCK_SIZE, num_frags_z, NUM_WARP_Q, T>(
-        v_smem_scale,
-        cache_v_scale_reg,
-        block_table_now,
-        cache_v_scale,
-        ori_kv_idx_base,
-        kv_num_heads,
-        kv_head_idx,
-        chunk_end
-      );
+          v_smem_scale,
+          cache_v_scale_reg,
+          block_table_now,
+          cache_v_scale,
+          ori_kv_idx_base,
+          kv_num_heads,
+          kv_head_idx,
+          chunk_end);
     }
     wait_group<1>();
     __syncthreads();
@@ -949,7 +962,6 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
           const uint32_t qo_head_idx = q_head_idx + qo_idx_now % GROUP_SIZE;
           const uint32_t qo_idx = q_start_seq_id + qo_idx_now / GROUP_SIZE;
           if (qo_idx - q_start_seq_id < q_len) {
-
             uint32_t offset;
             if (ENABLE_PREFILL) {
               offset = (batch_id * num_chunks + chunk_idx) * q_num_heads +
@@ -1061,25 +1073,24 @@ void MultiQueryAppendC8Attention(
                                                IsFP8,
                                                IsDynamicC8>;
     if (is_scale_channel_wise) {
-      split_kv_kernel =
-        multi_query_append_attention_c8_kernel<NV_TYPE,
-                                               uint8_t,
-                                               true,
-                                               GROUP_SIZE,
-                                               CAUSAL,
-                                               num_warps,
-                                               NUM_WARP_Q,
-                                               NUM_WARP_KV,
-                                               HEAD_DIM,
-                                               BLOCK_SIZE,
-                                               num_frags_x,
-                                               num_frags_z,
-                                               num_frags_y,
-                                               OUT_NV_TYPE,
-                                               ENABLE_PREFILL,
-                                               true,
-                                               IsFP8,
-                                               IsDynamicC8>;
+      split_kv_kernel = multi_query_append_attention_c8_kernel<NV_TYPE,
+                                                               uint8_t,
+                                                               true,
+                                                               GROUP_SIZE,
+                                                               CAUSAL,
+                                                               num_warps,
+                                                               NUM_WARP_Q,
+                                                               NUM_WARP_KV,
+                                                               HEAD_DIM,
+                                                               BLOCK_SIZE,
+                                                               num_frags_x,
+                                                               num_frags_z,
+                                                               num_frags_y,
+                                                               OUT_NV_TYPE,
+                                                               ENABLE_PREFILL,
+                                                               true,
+                                                               IsFP8,
+                                                               IsDynamicC8>;
     }
     if (smem_size >= 48 * 1024) {
       cudaFuncSetAttribute(split_kv_kernel,
@@ -1118,24 +1129,24 @@ void MultiQueryAppendC8Attention(
                                                  IsDynamicC8>;
       if (is_scale_channel_wise) {
         nosplit_kv_kernel =
-          multi_query_append_attention_c8_kernel<NV_TYPE,
-                                                 uint8_t,
-                                                 false,
-                                                 GROUP_SIZE,
-                                                 CAUSAL,
-                                                 num_warps,
-                                                 NUM_WARP_Q,
-                                                 NUM_WARP_KV,
-                                                 HEAD_DIM,
-                                                 BLOCK_SIZE,
-                                                 num_frags_x,
-                                                 num_frags_z,
-                                                 num_frags_y,
-                                                 OUT_NV_TYPE,
-                                                 ENABLE_PREFILL,
-                                                 true,
-                                                 IsFP8,
-                                                 IsDynamicC8>;
+            multi_query_append_attention_c8_kernel<NV_TYPE,
+                                                   uint8_t,
+                                                   false,
+                                                   GROUP_SIZE,
+                                                   CAUSAL,
+                                                   num_warps,
+                                                   NUM_WARP_Q,
+                                                   NUM_WARP_KV,
+                                                   HEAD_DIM,
+                                                   BLOCK_SIZE,
+                                                   num_frags_x,
+                                                   num_frags_z,
+                                                   num_frags_y,
+                                                   OUT_NV_TYPE,
+                                                   ENABLE_PREFILL,
+                                                   true,
+                                                   IsFP8,
+                                                   IsDynamicC8>;
       }
       if (smem_size >= 48 * 1024) {
         cudaFuncSetAttribute(nosplit_kv_kernel,
@@ -1274,8 +1285,7 @@ void MultiQueryAppendC8Attention(
       } else {
         constexpr int blockx = HEAD_DIM / vec_size;
         constexpr int blocky = (128 + blockx - 1) / blockx;
-        dim3 grids_merge(min(sm_count * 4, token_num),
-                         num_heads);
+        dim3 grids_merge(min(sm_count * 4, token_num), num_heads);
         dim3 blocks_merge(blockx, blocky);
         merge_multi_chunks_v2_kernel<NV_TYPE,
                                      vec_size,
@@ -1338,24 +1348,24 @@ void MultiQueryAppendC8Attention(
                                                        IsDynamicC8>;
     if (is_scale_channel_wise) {
       split_kv_kernel =
-        multi_query_append_attention_c8_warp1_4_kernel<NV_TYPE,
-                                                       uint8_t,
-                                                       true,
-                                                       GROUP_SIZE,
-                                                       CAUSAL,
-                                                       num_warps,
-                                                       NUM_WARP_Q,
-                                                       NUM_WARP_KV,
-                                                       HEAD_DIM,
-                                                       BLOCK_SIZE,
-                                                       num_frags_x,
-                                                       num_frags_z,
-                                                       num_frags_y,
-                                                       OUT_NV_TYPE,
-                                                       ENABLE_PREFILL,
-                                                       true,
-                                                       IsFP8,
-                                                       IsDynamicC8>;
+          multi_query_append_attention_c8_warp1_4_kernel<NV_TYPE,
+                                                         uint8_t,
+                                                         true,
+                                                         GROUP_SIZE,
+                                                         CAUSAL,
+                                                         num_warps,
+                                                         NUM_WARP_Q,
+                                                         NUM_WARP_KV,
+                                                         HEAD_DIM,
+                                                         BLOCK_SIZE,
+                                                         num_frags_x,
+                                                         num_frags_z,
+                                                         num_frags_y,
+                                                         OUT_NV_TYPE,
+                                                         ENABLE_PREFILL,
+                                                         true,
+                                                         IsFP8,
+                                                         IsDynamicC8>;
     }
     if (smem_size >= 48 * 1024) {
       cudaFuncSetAttribute(split_kv_kernel,
@@ -1373,9 +1383,9 @@ void MultiQueryAppendC8Attention(
     const int num_chunks = div_up(max_seq_len, chunk_size);
     uint32_t attn_mask_len;
     if (attn_mask) {
-        attn_mask_len = attn_mask.get().shape()[1];
+      attn_mask_len = attn_mask.get().shape()[1];
     } else {
-        attn_mask_len = -1;
+      attn_mask_len = -1;
     }
 
     dim3 grids(num_blocks_x_cpu, num_chunks, kv_num_heads);
@@ -1402,24 +1412,24 @@ void MultiQueryAppendC8Attention(
                                                          IsDynamicC8>;
       if (is_scale_channel_wise) {
         nosplit_kv_kernel =
-          multi_query_append_attention_c8_warp1_4_kernel<NV_TYPE,
-                                                         uint8_t,
-                                                         false,
-                                                         GROUP_SIZE,
-                                                         CAUSAL,
-                                                         num_warps,
-                                                         NUM_WARP_Q,
-                                                         NUM_WARP_KV,
-                                                         HEAD_DIM,
-                                                         BLOCK_SIZE,
-                                                         num_frags_x,
-                                                         num_frags_z,
-                                                         num_frags_y,
-                                                         OUT_NV_TYPE,
-                                                         ENABLE_PREFILL,
-                                                         true,
-                                                         IsFP8,
-                                                         IsDynamicC8>;
+            multi_query_append_attention_c8_warp1_4_kernel<NV_TYPE,
+                                                           uint8_t,
+                                                           false,
+                                                           GROUP_SIZE,
+                                                           CAUSAL,
+                                                           num_warps,
+                                                           NUM_WARP_Q,
+                                                           NUM_WARP_KV,
+                                                           HEAD_DIM,
+                                                           BLOCK_SIZE,
+                                                           num_frags_x,
+                                                           num_frags_z,
+                                                           num_frags_y,
+                                                           OUT_NV_TYPE,
+                                                           ENABLE_PREFILL,
+                                                           true,
+                                                           IsFP8,
+                                                           IsDynamicC8>;
       }
       if (smem_size >= 48 * 1024) {
         cudaFuncSetAttribute(nosplit_kv_kernel,
@@ -1447,7 +1457,7 @@ void MultiQueryAppendC8Attention(
           block_table.data<int>(),
           meta_data.mask_offset,
           attn_mask ? const_cast<bool *>(attn_mask.get().data<bool>())
-                        : nullptr,
+                    : nullptr,
           max_seq_len,
           max_dec_len,
           max_block_num_per_seq,
@@ -1509,8 +1519,8 @@ void MultiQueryAppendC8Attention(
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_k_scale.data<T>())),
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_v_scale.data<T>())),
           shift_bias ? reinterpret_cast<NV_TYPE *>(
-                            const_cast<T *>(shift_bias.get().data<T>()))
-                      : nullptr,
+                           const_cast<T *>(shift_bias.get().data<T>()))
+                     : nullptr,
           smooth_weight ? reinterpret_cast<NV_TYPE *>(
                               const_cast<T *>(smooth_weight.get().data<T>()))
                         : nullptr,
@@ -1522,7 +1532,7 @@ void MultiQueryAppendC8Attention(
           block_table.data<int>(),
           meta_data.mask_offset,
           attn_mask ? const_cast<bool *>(attn_mask.get().data<bool>())
-                        : nullptr,
+                    : nullptr,
           max_seq_len,
           max_dec_len,
           max_block_num_per_seq,
@@ -1555,8 +1565,8 @@ void MultiQueryAppendC8Attention(
                 seq_lens_encoder.data<int>(),
                 cu_seqlens_q.data<int>(),
                 shift_bias ? reinterpret_cast<NV_TYPE *>(
-                                  const_cast<T *>(shift_bias.get().data<T>()))
-                            : nullptr,
+                                 const_cast<T *>(shift_bias.get().data<T>()))
+                           : nullptr,
                 smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
                                     smooth_weight.get().data<T>()))
                               : nullptr,
@@ -1572,15 +1582,14 @@ void MultiQueryAppendC8Attention(
       } else {
         constexpr int blockx = HEAD_DIM / vec_size;
         constexpr int blocky = (128 + blockx - 1) / blockx;
-        dim3 grids_merge(min(sm_count * 4, token_num),
-                          num_heads);
+        dim3 grids_merge(min(sm_count * 4, token_num), num_heads);
         dim3 blocks_merge(blockx, blocky);
         merge_multi_chunks_v2_kernel<NV_TYPE,
-                                      vec_size,
-                                      blocky,
-                                      HEAD_DIM,
-                                      OUT_NV_TYPE,
-                                      ENABLE_PREFILL>
+                                     vec_size,
+                                     blocky,
+                                     HEAD_DIM,
+                                     OUT_NV_TYPE,
+                                     ENABLE_PREFILL>
             <<<grids_merge, blocks_merge, 0, stream>>>(
                 reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
                 static_cast<float *>(tmp_m->ptr()),
@@ -1591,8 +1600,8 @@ void MultiQueryAppendC8Attention(
                 batch_id_per_token.data<int>(),
                 cu_seqlens_q.data<int>(),
                 shift_bias ? reinterpret_cast<NV_TYPE *>(
-                                  const_cast<T *>(shift_bias.get().data<T>()))
-                            : nullptr,
+                                 const_cast<T *>(shift_bias.get().data<T>()))
+                           : nullptr,
                 smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
                                     smooth_weight.get().data<T>()))
                               : nullptr,

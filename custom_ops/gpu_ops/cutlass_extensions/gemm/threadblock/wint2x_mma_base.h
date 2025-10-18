@@ -66,7 +66,7 @@ template <
     /// Size of extra quantized params
     typename QuantParamsShape>
 class Wint2xMmaBase {
-public:
+ public:
   ///< Size of the Gemm problem - concept: gemm::GemmShape<>
   using Shape = Shape_;
 
@@ -85,9 +85,9 @@ public:
   using WarpGemm = typename Policy::Operator::Shape;
 
   /// Shape describing the number of warps filling the CTA
-  using WarpCount =
-      GemmShape<Shape::kM / WarpGemm::kM, Shape::kN / WarpGemm::kN,
-                Shape::kK / WarpGemm::kK>;
+  using WarpCount = GemmShape<Shape::kM / WarpGemm::kM,
+                              Shape::kN / WarpGemm::kN,
+                              Shape::kK / WarpGemm::kK>;
 
   /// Number of warp-level GEMM operations
   static int const kWarpGemmIterations =
@@ -95,7 +95,8 @@ public:
 
   /// Number of warp-level GEMM operations per load for B
   static constexpr int kWarpGemmIterationsPerLoadForB =
-      Operator::IteratorB::InstructionShape::kRow / Operator::InstructionShape::kK;
+      Operator::IteratorB::InstructionShape::kRow /
+      Operator::InstructionShape::kK;
   static_assert(!(kWarpGemmIterations % kWarpGemmIterationsPerLoadForB), "");
 
   static constexpr int kWarpLoadIterationsForB =
@@ -125,7 +126,7 @@ public:
 
   /// Shared storage object needed by threadblock-scoped GEMM
   class SharedStorage {
-  public:
+   public:
     //
     // Type definitions
     //
@@ -142,7 +143,7 @@ public:
     /// Shape of all quant params in shared memory
     using QuantParamsShapeB = QuantParamsShape;
 
-  public:
+   public:
     //
     // Data members
     //
@@ -156,7 +157,7 @@ public:
     /// Buffer for extra quant params of B operand
     AlignedBuffer<uint8_t, QuantParamsShapeB::kCount> operand_quant_params_B;
 
-  public:
+   public:
     //
     // Methods
     //
@@ -186,7 +187,7 @@ public:
     }
   };
 
-protected:
+ protected:
   //
   // Data members
   //
@@ -197,7 +198,7 @@ protected:
   /// Iterator to load a warp-scoped tile of B operand from shared memory
   typename Operator::IteratorB warp_tile_iterator_B_;
 
-public:
+ public:
   /// Construct from tensor references
   CUTLASS_DEVICE
   Wint2xMmaBase(
@@ -215,8 +216,8 @@ public:
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-} // namespace threadblock
-} // namespace gemm
-} // namespace cutlass
+}  // namespace threadblock
+}  // namespace gemm
+}  // namespace cutlass
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

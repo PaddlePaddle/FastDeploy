@@ -28,28 +28,29 @@ std::vector<paddle::Tensor> TopKRenorm(const paddle::Tensor &probs,
 
   cudaError_t status;
 
-
   status = sampling::TopKRenormProb<float>(
-    const_cast<float *>(probs.data<float>()),
-    renorm_probs.data<float>(),
-    const_cast<int64_t *>(top_k.data<int64_t>()),
-    batch_size, vocab_size, cu_stream);
+      const_cast<float *>(probs.data<float>()),
+      renorm_probs.data<float>(),
+      const_cast<int64_t *>(top_k.data<int64_t>()),
+      batch_size,
+      vocab_size,
+      cu_stream);
 
-  PD_CHECK(status == cudaSuccess, "TopKRenormProb failed with error code " +
-                                      std::string(cudaGetErrorString(status)));
+  PD_CHECK(status == cudaSuccess,
+           "TopKRenormProb failed with error code " +
+               std::string(cudaGetErrorString(status)));
 
   return {renorm_probs};
 }
 
-std::vector<std::vector<int64_t>>
-TopKRenormInferShape(const std::vector<int64_t> &probs_shape,
-                    const std::vector<int64_t> &top_k_shape) {
+std::vector<std::vector<int64_t>> TopKRenormInferShape(
+    const std::vector<int64_t> &probs_shape,
+    const std::vector<int64_t> &top_k_shape) {
   return {probs_shape};
 }
 
-std::vector<paddle::DataType>
-TopKRenormInferDtype(const paddle::DataType &probs_dtype,
-                    const paddle::DataType &top_k_shape) {
+std::vector<paddle::DataType> TopKRenormInferDtype(
+    const paddle::DataType &probs_dtype, const paddle::DataType &top_k_shape) {
   return {probs_dtype};
 }
 

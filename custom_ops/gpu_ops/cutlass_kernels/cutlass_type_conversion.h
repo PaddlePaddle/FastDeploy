@@ -24,45 +24,38 @@
 #include "cutlass/float8.h"
 #include "cutlass/half.h"
 
-namespace kernels
-{
-namespace cutlass_kernels
-{
+namespace kernels {
+namespace cutlass_kernels {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Cuda to Cutlass
 
 template <typename T>
-struct CudaToCutlassTypeAdapter
-{
-    using type = T;
+struct CudaToCutlassTypeAdapter {
+  using type = T;
 };
 
 template <>
-struct CudaToCutlassTypeAdapter<half>
-{
-    using type = cutlass::half_t;
+struct CudaToCutlassTypeAdapter<half> {
+  using type = cutlass::half_t;
 };
 
 #if defined(ENABLE_BF16)
 template <>
-struct CudaToCutlassTypeAdapter<__nv_bfloat16>
-{
-    using type = cutlass::bfloat16_t;
+struct CudaToCutlassTypeAdapter<__nv_bfloat16> {
+  using type = cutlass::bfloat16_t;
 };
 #endif
 
 #if defined(ENABLE_FP8)
 template <>
-struct CudaToCutlassTypeAdapter<__nv_fp8_e4m3>
-{
-    using type = cutlass::float_e4m3_t;
+struct CudaToCutlassTypeAdapter<__nv_fp8_e4m3> {
+  using type = cutlass::float_e4m3_t;
 };
 
 template <>
-struct CudaToCutlassTypeAdapter<__nv_fp8_e5m2>
-{
-    using type = cutlass::float_e5m2_t;
+struct CudaToCutlassTypeAdapter<__nv_fp8_e5m2> {
+  using type = cutlass::float_e5m2_t;
 };
 #endif
 
@@ -70,40 +63,35 @@ struct CudaToCutlassTypeAdapter<__nv_fp8_e5m2>
 // Cutlass to Cuda
 
 template <typename T>
-struct CutlassToCudaTypeAdapter
-{
-    using type = T;
+struct CutlassToCudaTypeAdapter {
+  using type = T;
 };
 
 template <>
-struct CutlassToCudaTypeAdapter<cutlass::half_t>
-{
-    using type = half;
+struct CutlassToCudaTypeAdapter<cutlass::half_t> {
+  using type = half;
 };
 
 #if defined(ENABLE_BF16)
 template <>
-struct CutlassToCudaTypeAdapter<cutlass::bfloat16_t>
-{
-    using type = __nv_bfloat16;
+struct CutlassToCudaTypeAdapter<cutlass::bfloat16_t> {
+  using type = __nv_bfloat16;
 };
 #endif
 
 #if defined(ENABLE_FP8)
 template <>
-struct CutlassToCudaTypeAdapter<cutlass::float_e4m3_t>
-{
-    using type = __nv_fp8_e4m3;
+struct CutlassToCudaTypeAdapter<cutlass::float_e4m3_t> {
+  using type = __nv_fp8_e4m3;
 };
 
 template <>
-struct CutlassToCudaTypeAdapter<cutlass::float_e5m2_t>
-{
-    using type = __nv_fp8_e5m2;
+struct CutlassToCudaTypeAdapter<cutlass::float_e5m2_t> {
+  using type = __nv_fp8_e5m2;
 };
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-} // namespace cutlass_kernels
-} // namespace kernels
+}  // namespace cutlass_kernels
+}  // namespace kernels

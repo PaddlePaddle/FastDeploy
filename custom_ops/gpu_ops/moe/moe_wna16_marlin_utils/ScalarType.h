@@ -41,15 +41,18 @@ class ScalarType {
     NAN_REPR_ID_MAX
   };
 
-  constexpr ScalarType(uint8_t exponent, uint8_t mantissa, bool signed_,
-                       int32_t bias, bool finite_values_only = false,
+  constexpr ScalarType(uint8_t exponent,
+                       uint8_t mantissa,
+                       bool signed_,
+                       int32_t bias,
+                       bool finite_values_only = false,
                        NanRepr nan_repr = NAN_IEEE_754)
       : exponent(exponent),
         mantissa(mantissa),
         signed_(signed_),
         bias(bias),
         finite_values_only(finite_values_only),
-        nan_repr(nan_repr) {};
+        nan_repr(nan_repr){};
 
   static constexpr ScalarType int_(uint8_t size_bits, int32_t bias = 0) {
     return ScalarType(0, size_bits - 1, true, bias);
@@ -67,16 +70,17 @@ class ScalarType {
   }
 
   // IEEE 754 non-compliant floating point type
-  static constexpr ScalarType float_(uint8_t exponent, uint8_t mantissa,
+  static constexpr ScalarType float_(uint8_t exponent,
+                                     uint8_t mantissa,
                                      bool finite_values_only,
                                      NanRepr nan_repr) {
     // PADDLE_ENFORCE(nan_repr < NAN_REPR_ID_MAX, "Invalid NanRepr");
     // PADDLE_ENFORCE(mantissa > 0 && exponent > 0);
     // PADDLE_ENFORCE(nan_repr != NAN_IEEE_754,
-    //             "use `float_IEEE754` constructor for floating point types that "
-    //             "follow IEEE 754 conventions");
-    return ScalarType(exponent, mantissa, true, 0, finite_values_only,
-                      nan_repr);
+    //             "use `float_IEEE754` constructor for floating point types
+    //             that " "follow IEEE 754 conventions");
+    return ScalarType(
+        exponent, mantissa, true, 0, finite_values_only, nan_repr);
   }
 
   uint8_t const exponent;  // size of the exponent field (0 for integer types)
@@ -103,7 +107,9 @@ class ScalarType {
   }
 
   template <typename Fn, typename Init, typename Member, typename... Rest>
-  static constexpr auto reduce_members_helper(Fn f, Init val, Member member,
+  static constexpr auto reduce_members_helper(Fn f,
+                                              Init val,
+                                              Member member,
                                               Rest... rest) {
     auto new_val = f(val, member);
     if constexpr (sizeof...(rest) > 0) {
@@ -116,8 +122,14 @@ class ScalarType {
   template <typename Fn, typename Init>
   constexpr auto reduce_members(Fn f, Init init) const {
     // Should be in constructor order for `from_id`
-    return reduce_members_helper(f, init, exponent, mantissa, signed_, bias,
-                                 finite_values_only, nan_repr);
+    return reduce_members_helper(f,
+                                 init,
+                                 exponent,
+                                 mantissa,
+                                 signed_,
+                                 bias,
+                                 finite_values_only,
+                                 nan_repr);
   };
 
   template <typename Fn, typename Init>
@@ -194,7 +206,8 @@ class ScalarType {
  private:
   double _floating_point_max() const {
     PADDLE_ENFORCE(mantissa <= 52 && exponent <= 11,
-                "Cannot represent max/min as a double for type ", str());
+                   "Cannot represent max/min as a double for type ",
+                   str());
 
     uint64_t max_mantissa = (uint64_t(1) << mantissa) - 1;
     if (nan_repr == NAN_EXTD_RANGE_MAX_MIN) {
@@ -204,7 +217,8 @@ class ScalarType {
     uint64_t max_exponent = (uint64_t(1) << exponent) - 2;
     if (nan_repr == NAN_EXTD_RANGE_MAX_MIN || nan_repr == NAN_NONE) {
       PADDLE_ENFORCE(exponent < 11,
-                  "Cannot represent max/min as a double for type ", str());
+                     "Cannot represent max/min as a double for type ",
+                     str());
       max_exponent += 1;
     }
 
@@ -327,23 +341,32 @@ using ScalarTypeId = MARLIN_NAMESPACE_NAME::ScalarType::Id;
 //   https://github.com/pytorch/pytorch/blob/6d9f74f0af54751311f0dd71f7e5c01a93260ab3/torch/csrc/api/include/torch/types.h#L60-L70
 static inline constexpr auto kS4 = MARLIN_NAMESPACE_NAME::ScalarType::int_(4);
 static inline constexpr auto kU4 = MARLIN_NAMESPACE_NAME::ScalarType::uint(4);
-static inline constexpr auto kU4B8 = MARLIN_NAMESPACE_NAME::ScalarType::uint(4, 8);
+static inline constexpr auto kU4B8 =
+    MARLIN_NAMESPACE_NAME::ScalarType::uint(4, 8);
 static inline constexpr auto kS8 = MARLIN_NAMESPACE_NAME::ScalarType::int_(8);
 static inline constexpr auto kU8 = MARLIN_NAMESPACE_NAME::ScalarType::uint(8);
-static inline constexpr auto kU8B128 = MARLIN_NAMESPACE_NAME::ScalarType::uint(8, 128);
+static inline constexpr auto kU8B128 =
+    MARLIN_NAMESPACE_NAME::ScalarType::uint(8, 128);
 
 static inline constexpr auto kFE2M1f =
-    MARLIN_NAMESPACE_NAME::ScalarType::float_(2, 1, true, MARLIN_NAMESPACE_NAME::ScalarType::NAN_NONE);
+    MARLIN_NAMESPACE_NAME::ScalarType::float_(
+        2, 1, true, MARLIN_NAMESPACE_NAME::ScalarType::NAN_NONE);
 static inline constexpr auto kFE3M2f =
-    MARLIN_NAMESPACE_NAME::ScalarType::float_(3, 2, true, MARLIN_NAMESPACE_NAME::ScalarType::NAN_NONE);
+    MARLIN_NAMESPACE_NAME::ScalarType::float_(
+        3, 2, true, MARLIN_NAMESPACE_NAME::ScalarType::NAN_NONE);
 static inline constexpr auto kFE4M3fn =
-    MARLIN_NAMESPACE_NAME::ScalarType::float_(4, 3, true, MARLIN_NAMESPACE_NAME::ScalarType::NAN_EXTD_RANGE_MAX_MIN);
-static inline constexpr auto kFE5M2 = MARLIN_NAMESPACE_NAME::ScalarType::float_IEEE754(5, 2);
-static inline constexpr auto kFE8M7 = MARLIN_NAMESPACE_NAME::ScalarType::float_IEEE754(8, 7);
-static inline constexpr auto kFE5M10 = MARLIN_NAMESPACE_NAME::ScalarType::float_IEEE754(5, 10);
+    MARLIN_NAMESPACE_NAME::ScalarType::float_(
+        4, 3, true, MARLIN_NAMESPACE_NAME::ScalarType::NAN_EXTD_RANGE_MAX_MIN);
+static inline constexpr auto kFE5M2 =
+    MARLIN_NAMESPACE_NAME::ScalarType::float_IEEE754(5, 2);
+static inline constexpr auto kFE8M7 =
+    MARLIN_NAMESPACE_NAME::ScalarType::float_IEEE754(8, 7);
+static inline constexpr auto kFE5M10 =
+    MARLIN_NAMESPACE_NAME::ScalarType::float_IEEE754(5, 10);
 
 // // Fixed width style names, generally following:
-// //  https://github.com/pytorch/pytorch/blob/6d9f74f0af54751311f0dd71f7e5c01a93260ab3/torch/csrc/api/include/torch/types.h#L47-L57
+// //
+// https://github.com/pytorch/pytorch/blob/6d9f74f0af54751311f0dd71f7e5c01a93260ab3/torch/csrc/api/include/torch/types.h#L47-L57
 constexpr auto kInt4 = kS4;
 constexpr auto kUint4 = kU4;
 constexpr auto kUint4b8 = kU4B8;
@@ -369,4 +392,4 @@ constexpr auto kBFloat16 = phi::DataType::BFLOAT16;
 constexpr auto kFloat32 = phi::DataType::FLOAT32;
 constexpr auto kByte = phi::DataType::INT8;
 
-};  // namespace Marlin
+};  // namespace MARLIN_NAMESPACE_NAME

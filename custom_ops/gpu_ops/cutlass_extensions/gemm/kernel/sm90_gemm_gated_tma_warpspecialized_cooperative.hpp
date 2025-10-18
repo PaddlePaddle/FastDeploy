@@ -53,15 +53,20 @@ namespace cutlass::gemm::kernel {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-template <class ProblemShape_, class CollectiveMainloop_,
-          class CollectiveEpilogue_, class TileScheduler_>
+template <class ProblemShape_,
+          class CollectiveMainloop_,
+          class CollectiveEpilogue_,
+          class TileScheduler_>
 class GemmUniversalGated<
-    ProblemShape_, CollectiveMainloop_, CollectiveEpilogue_, TileScheduler_,
+    ProblemShape_,
+    CollectiveMainloop_,
+    CollectiveEpilogue_,
+    TileScheduler_,
     cute::enable_if_t<cute::is_base_of_v<KernelTmaWarpSpecializedCooperative,
                                          typename CollectiveMainloop_::
                                              DispatchPolicy::Schedule> &&
                       CollectiveMainloop_::isGated>> {
-public:
+ public:
   //
   // Type Aliases
   //
@@ -98,7 +103,9 @@ public:
 
   using TileSchedulerTag = TileScheduler_;
   using TileScheduler =
-      typename detail::TileSchedulerSelector<TileScheduler_, ArchTag, TileShape,
+      typename detail::TileSchedulerSelector<TileScheduler_,
+                                             ArchTag,
+                                             TileShape,
                                              ClusterShape>::Scheduler;
   using TileSchedulerArguments = typename TileScheduler::Arguments;
   using TileSchedulerParams = typename TileScheduler::Params;
@@ -222,9 +229,14 @@ public:
     // used, therefore separate reduction will not be enabled.
     constexpr uint32_t NumEpilogueSubTiles =
         CollectiveEpilogue::get_store_pipe_increment(TileShape{});
-    TileSchedulerParams scheduler = TileScheduler::to_underlying_arguments(
-        problem_shape_MNKL, TileShape{}, ClusterShape{}, hw_info,
-        args.scheduler, scheduler_workspace, NumEpilogueSubTiles);
+    TileSchedulerParams scheduler =
+        TileScheduler::to_underlying_arguments(problem_shape_MNKL,
+                                               TileShape{},
+                                               ClusterShape{},
+                                               hw_info,
+                                               args.scheduler,
+                                               scheduler_workspace,
+                                               NumEpilogueSubTiles);
 
     return {args.mode,
             problem_shape,
@@ -242,8 +254,9 @@ public:
                          (args.mode == GemmUniversalMode::kBatched &&
                           cute::rank(ProblemShape{}) == 4);
     if (!implementable) {
-      CUTLASS_TRACE_HOST("  CAN IMPLEMENT: Arguments or Problem Shape don't "
-                         "meet the requirements.\n");
+      CUTLASS_TRACE_HOST(
+          "  CAN IMPLEMENT: Arguments or Problem Shape don't "
+          "meet the requirements.\n");
       return implementable;
     }
     implementable &=
@@ -262,7 +275,10 @@ public:
     workspace_size +=
         TileScheduler::template get_workspace_size<ProblemShape,
                                                    ElementAccumulator>(
-            args.scheduler, args.problem_shape, args.hw_info, NumMmaWarpGroups,
+            args.scheduler,
+            args.problem_shape,
+            args.hw_info,
+            NumMmaWarpGroups,
             NumEpilogueSubTiles);
     workspace_size = round_nearest(workspace_size, MinWorkspaceAlignment);
 
@@ -273,10 +289,11 @@ public:
     return workspace_size;
   }
 
-  static cutlass::Status
-  initialize_workspace(Arguments const &args, void *workspace = nullptr,
-                       cudaStream_t stream = nullptr,
-                       CudaHostAdapter *cuda_adapter = nullptr) {
+  static cutlass::Status initialize_workspace(
+      Arguments const &args,
+      void *workspace = nullptr,
+      cudaStream_t stream = nullptr,
+      CudaHostAdapter *cuda_adapter = nullptr) {
     Status status = Status::kSuccess;
     uint8_t *workspace_ptr = reinterpret_cast<uint8_t *>(workspace);
     size_t workspace_offset = 0;
@@ -285,13 +302,20 @@ public:
 
     status = TileScheduler::template initialize_workspace<ProblemShape,
                                                           ElementAccumulator>(
-        args.scheduler, workspace_ptr + workspace_offset, stream,
-        args.problem_shape, args.hw_info, NumMmaWarpGroups,
+        args.scheduler,
+        workspace_ptr + workspace_offset,
+        stream,
+        args.problem_shape,
+        args.hw_info,
+        NumMmaWarpGroups,
         NumEpilogueSubTiles);
     workspace_offset +=
         TileScheduler::template get_workspace_size<ProblemShape,
                                                    ElementAccumulator>(
-            args.scheduler, args.problem_shape, args.hw_info, NumMmaWarpGroups,
+            args.scheduler,
+            args.problem_shape,
+            args.hw_info,
+            NumMmaWarpGroups,
             NumEpilogueSubTiles);
     workspace_offset = round_nearest(workspace_offset, MinWorkspaceAlignment);
     if (status != Status::kSuccess) {
@@ -299,8 +323,11 @@ public:
     }
 
     status = CollectiveEpilogue::initialize_workspace(
-        args.problem_shape, args.epilogue, workspace_ptr + workspace_offset,
-        stream, cuda_adapter);
+        args.problem_shape,
+        args.epilogue,
+        workspace_ptr + workspace_offset,
+        stream,
+        cuda_adapter);
     workspace_offset += CollectiveEpilogue::get_workspace_size(
         args.problem_shape, args.epilogue);
     workspace_offset = round_nearest(workspace_offset, MinWorkspaceAlignment);
@@ -323,9 +350,12 @@ public:
         params.scheduler.raster_order_ == TileScheduler::RasterOrder::AlongN
             ? TileScheduler::RasterOrderOptions::AlongN
             : TileScheduler::RasterOrderOptions::AlongM;
-    return TileScheduler::get_grid_shape(params.scheduler, params.problem_shape,
-                                         TileShape{}, ClusterShape{},
-                                         params.hw_info, args);
+    return TileScheduler::get_grid_shape(params.scheduler,
+                                         params.problem_shape,
+                                         TileShape{},
+                                         ClusterShape{},
+                                         params.hw_info,
+                                         args);
   }
 
   static dim3 get_block_shape() { return dim3(MaxThreadsPerBlock, 1, 1); }
@@ -337,8 +367,9 @@ public:
 
 // Any Tensor Op MMA Atom in the WGMMA ISA is arch conditional to sm90a.
 #if !defined(__CUDA_ARCH_FEAT_SM90_ALL)
-    printf("ERROR : Arch conditional MMA instruction used without targeting "
-           "sm90a compute capability. Aborting.\n");
+    printf(
+        "ERROR : Arch conditional MMA instruction used without targeting "
+        "sm90a compute capability. Aborting.\n");
 #else
 
     // Preconditions
@@ -469,7 +500,7 @@ public:
         return []() { cute::cluster_wait(); };
       } else {
         __syncthreads();
-        return []() {}; // do nothing
+        return []() {};  // do nothing
       }
     }();
 
@@ -480,7 +511,7 @@ public:
     // Get the appropriate blocks for this thread block -- potential for thread
     // block locality
     TiledMma tiled_mma;
-    auto blk_shape = TileShape{}; // (BLK_M,BLK_N,BLK_K)
+    auto blk_shape = TileShape{};  // (BLK_M,BLK_N,BLK_K)
 
     TileScheduler scheduler{params.scheduler};
     auto work_tile_info = scheduler.get_current_work();
@@ -540,10 +571,16 @@ public:
           auto k_tile_iter = cute::make_coord_iterator(
               idx2crd(work_k_tile_start, shape<3>(gA_mkl)), shape<3>(gA_mkl));
 
-          collective_mainloop.load(
-              params.mainloop, mainloop_pipeline, mainloop_pipe_producer_state,
-              load_inputs, blk_coord, k_tile_iter, work_k_tile_count, lane_idx,
-              block_rank_in_cluster, shared_storage.tensors.mainloop);
+          collective_mainloop.load(params.mainloop,
+                                   mainloop_pipeline,
+                                   mainloop_pipe_producer_state,
+                                   load_inputs,
+                                   blk_coord,
+                                   k_tile_iter,
+                                   work_k_tile_count,
+                                   lane_idx,
+                                   block_rank_in_cluster,
+                                   shared_storage.tensors.mainloop);
           // Update starting pipeline state for the next tile
           mainloop_pipe_producer_state.advance(work_k_tile_count);
 
@@ -555,12 +592,12 @@ public:
 
           // Get next work tile
           work_tile_info = fetch_next_work(work_tile_info, scheduler);
-        } // Scheduler work fetch loop
+        }  // Scheduler work fetch loop
 
         // Make sure all Consumer Warp Groups have been waited upon
         collective_mainloop.load_tail(mainloop_pipeline,
                                       mainloop_pipe_producer_state);
-      } // Mainloop Producer Warp End
+      }  // Mainloop Producer Warp End
 
       // Epilogue Producer Warp
       else if (producer_warp_role == ProducerWarpRole::Epilogue &&
@@ -579,21 +616,26 @@ public:
             auto blk_coord = make_coord(m_coord, n_coord, _, l_coord);
 
             epi_load_pipe_producer_state = collective_epilogue.load(
-                epi_load_pipeline, epi_load_pipe_producer_state,
-                problem_shape_MNKL, blk_shape, blk_coord, tiled_mma, lane_idx,
+                epi_load_pipeline,
+                epi_load_pipe_producer_state,
+                problem_shape_MNKL,
+                blk_shape,
+                blk_coord,
+                tiled_mma,
+                lane_idx,
                 shared_storage.tensors.epilogue,
                 work_tile_info.reduction_subtile_idx());
           }
 
           // Get next work tile
           work_tile_info = fetch_next_work(work_tile_info, scheduler);
-        } // Scheduler work fetch loop
+        }  // Scheduler work fetch loop
 
         // Make sure all Consumer Warp Groups have been waited upon
         collective_epilogue.load_tail(epi_load_pipeline,
                                       epi_load_pipe_producer_state);
-      } // Epilogue Producer Warp End
-    } // Producer Warp Group End
+      }  // Epilogue Producer Warp End
+    }    // Producer Warp Group End
 
     else if (warp_group_role == WarpGroupRole::Consumer0 ||
              warp_group_role == WarpGroupRole::Consumer1) {
@@ -618,14 +660,18 @@ public:
         //
         // MSVC CTAD breaks if we say "Tensor" here, so we use "auto" instead.
         auto accumulators0 = partition_fragment_C(
-            tiled_mma, take<0, 2>(blk_shape)); // (MMA,MMA_M,MMA_N)
+            tiled_mma, take<0, 2>(blk_shape));  // (MMA,MMA_M,MMA_N)
         auto accumulators1 = partition_fragment_C(
-            tiled_mma, take<0, 2>(blk_shape)); // (MMA,MMA_M,MMA_N)
+            tiled_mma, take<0, 2>(blk_shape));  // (MMA,MMA_M,MMA_N)
         if (TileScheduler::valid_warpgroup_in_work_tile(work_tile_info)) {
-          collective_mainloop.mma(
-              mainloop_pipeline, mainloop_pipe_consumer_state, accumulators0,
-              accumulators1, work_k_tile_count, mma_thread_idx,
-              shared_storage.tensors.mainloop, params.mainloop);
+          collective_mainloop.mma(mainloop_pipeline,
+                                  mainloop_pipe_consumer_state,
+                                  accumulators0,
+                                  accumulators1,
+                                  work_k_tile_count,
+                                  mma_thread_idx,
+                                  shared_storage.tensors.mainloop,
+                                  params.mainloop);
 
           // Make sure the math instructions are done and free buffers before
           // entering the epilogue
@@ -641,10 +687,16 @@ public:
             canonical_warp_group_idx() - NumLoadWarpGroups;
 
         // Perform reduction across splits, if needed
-        TileScheduler::fixup(params.scheduler, work_tile_info, accumulators0,
-                             NumMmaWarpGroups, consumer_warp_group_idx);
-        TileScheduler::fixup(params.scheduler, work_tile_info, accumulators1,
-                             NumMmaWarpGroups, consumer_warp_group_idx);
+        TileScheduler::fixup(params.scheduler,
+                             work_tile_info,
+                             accumulators0,
+                             NumMmaWarpGroups,
+                             consumer_warp_group_idx);
+        TileScheduler::fixup(params.scheduler,
+                             work_tile_info,
+                             accumulators1,
+                             NumMmaWarpGroups,
+                             consumer_warp_group_idx);
 
         Activation elt_op;
         CUTLASS_PRAGMA_UNROLL
@@ -657,12 +709,18 @@ public:
           // Epilogue and write to gD
           auto [epi_load_pipe_consumer_state_next,
                 epi_store_pipe_producer_state_next] =
-              collective_epilogue.store(
-                  epi_load_pipeline, epi_load_pipe_consumer_state,
-                  epi_store_pipeline, epi_store_pipe_producer_state,
-                  problem_shape_MNKL, blk_shape, blk_coord, accumulators0,
-                  tiled_mma, mma_thread_idx, shared_storage.tensors.epilogue,
-                  work_tile_info.reduction_subtile_idx());
+              collective_epilogue.store(epi_load_pipeline,
+                                        epi_load_pipe_consumer_state,
+                                        epi_store_pipeline,
+                                        epi_store_pipe_producer_state,
+                                        problem_shape_MNKL,
+                                        blk_shape,
+                                        blk_coord,
+                                        accumulators0,
+                                        tiled_mma,
+                                        mma_thread_idx,
+                                        shared_storage.tensors.epilogue,
+                                        work_tile_info.reduction_subtile_idx());
           epi_load_pipe_consumer_state = epi_load_pipe_consumer_state_next;
           epi_store_pipe_producer_state = epi_store_pipe_producer_state_next;
           do_store_tail = true;
@@ -670,23 +728,24 @@ public:
 
         // Get next work tile
         work_tile_info = fetch_next_work(work_tile_info, scheduler);
-      } // Scheduler work fetch loop
+      }  // Scheduler work fetch loop
 
       if (do_store_tail) {
-        collective_epilogue.store_tail(
-            epi_load_pipeline, epi_load_pipe_consumer_state, epi_store_pipeline,
-            epi_store_pipe_producer_state);
+        collective_epilogue.store_tail(epi_load_pipeline,
+                                       epi_load_pipe_consumer_state,
+                                       epi_store_pipeline,
+                                       epi_store_pipe_producer_state);
       }
-    } // Consumer Warp Groups End
+    }  // Consumer Warp Groups End
 #endif
   }
 
-private:
+ private:
   // Kernel helper function to get next work unit
   CUTLASS_DEVICE
-  typename TileScheduler::WorkTileInfo
-  fetch_next_work(typename TileScheduler::WorkTileInfo &work_tile_info,
-                  TileScheduler &scheduler) const {
+  typename TileScheduler::WorkTileInfo fetch_next_work(
+      typename TileScheduler::WorkTileInfo &work_tile_info,
+      TileScheduler &scheduler) const {
     // Check whether we should continue on with the current work unit. If this
     // is the case, the work unit will have been updated in
     // continue_current_work to reflect the new tile to be computed.
@@ -702,4 +761,4 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-} // namespace cutlass::gemm::kernel
+}  // namespace cutlass::gemm::kernel

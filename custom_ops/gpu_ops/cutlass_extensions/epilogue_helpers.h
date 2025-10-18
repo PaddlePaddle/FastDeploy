@@ -1,6 +1,6 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION &
+ * AFFILIATES. All rights reserved. SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,10 @@
 /**
  * @file epilogue_helpers.h
  *
- * This file includes types for the epilogues. The empty structs exist so we can signal to template
- * code the type of epilogue we want to run, and let the underlying code specify the details such as
- * element types, accumulator type and elements per vector access.
+ * This file includes types for the epilogues. The empty structs exist so we can
+ * signal to template code the type of epilogue we want to run, and let the
+ * underlying code specify the details such as element types, accumulator type
+ * and elements per vector access.
  *
  */
 
@@ -33,107 +34,161 @@
 
 // #include "cutlass/epilogue/fusion/operations.hpp"
 
-namespace cutlass_extensions
-{
+namespace cutlass_extensions {
 
-struct EpilogueOpBiasSilu
-{
+struct EpilogueOpBiasSilu {};
+
+struct EpilogueOpBiasReLU {};
+
+struct EpilogueOpBiasFtGelu {};
+
+struct EpilogueOpBias {};
+
+struct EpilogueOpDefaultSilu {};
+
+struct EpilogueOpDefaultReLU {};
+
+struct EpilogueOpDefaultFtGelu {};
+
+struct EpilogueOpDefault {};
+
+template <typename ElementType,
+          int ElementsPerVectorAccess,
+          typename ElementAccumulator,
+          typename Op>
+struct Epilogue {
+  static_assert(sizeof(ElementType) == 0, "Unrecognized Epilogue Tag");
 };
 
-struct EpilogueOpBiasReLU
-{
+constexpr auto BiasScaleMode =
+    cutlass::epilogue::thread::ScaleType::NoBetaScaling;
+
+template <typename ElementType,
+          int ElementsPerVectorAccess,
+          typename ElementAccumulator>
+struct Epilogue<ElementType,
+                ElementsPerVectorAccess,
+                ElementAccumulator,
+                EpilogueOpBiasSilu> {
+  using Op =
+      cutlass::epilogue::thread::LinearCombinationSilu<ElementType,
+                                                       ElementsPerVectorAccess,
+                                                       ElementAccumulator,
+                                                       ElementAccumulator,
+                                                       BiasScaleMode>;
 };
 
-struct EpilogueOpBiasFtGelu
-{
+template <typename ElementType,
+          int ElementsPerVectorAccess,
+          typename ElementAccumulator>
+struct Epilogue<ElementType,
+                ElementsPerVectorAccess,
+                ElementAccumulator,
+                EpilogueOpBiasReLU> {
+  using Op =
+      cutlass::epilogue::thread::LinearCombinationRelu<ElementType,
+                                                       ElementsPerVectorAccess,
+                                                       ElementAccumulator,
+                                                       ElementAccumulator,
+                                                       BiasScaleMode>;
 };
 
-struct EpilogueOpBias
-{
+template <typename ElementType,
+          int ElementsPerVectorAccess,
+          typename ElementAccumulator>
+struct Epilogue<ElementType,
+                ElementsPerVectorAccess,
+                ElementAccumulator,
+                EpilogueOpBiasFtGelu> {
+  using Op = cutlass::epilogue::thread::LinearCombinationGeneric<
+      cutlass::epilogue::thread::GELU_taylor,
+      ElementType,
+      ElementsPerVectorAccess,
+      ElementAccumulator,
+      ElementAccumulator,
+      BiasScaleMode,
+      cutlass::FloatRoundStyle::round_to_nearest,
+      true>;
 };
 
-struct EpilogueOpDefaultSilu
-{
-};
-
-struct EpilogueOpDefaultReLU
-{
-};
-
-struct EpilogueOpDefaultFtGelu
-{
-};
-
-struct EpilogueOpDefault
-{
-};
-
-template <typename ElementType, int ElementsPerVectorAccess, typename ElementAccumulator, typename Op>
-struct Epilogue
-{
-    static_assert(sizeof(ElementType) == 0, "Unrecognized Epilogue Tag");
-};
-
-constexpr auto BiasScaleMode = cutlass::epilogue::thread::ScaleType::NoBetaScaling;
-
-template <typename ElementType, int ElementsPerVectorAccess, typename ElementAccumulator>
-struct Epilogue<ElementType, ElementsPerVectorAccess, ElementAccumulator, EpilogueOpBiasSilu>
-{
-    using Op = cutlass::epilogue::thread::LinearCombinationSilu<ElementType, ElementsPerVectorAccess,
-        ElementAccumulator, ElementAccumulator, BiasScaleMode>;
-};
-
-template <typename ElementType, int ElementsPerVectorAccess, typename ElementAccumulator>
-struct Epilogue<ElementType, ElementsPerVectorAccess, ElementAccumulator, EpilogueOpBiasReLU>
-{
-    using Op = cutlass::epilogue::thread::LinearCombinationRelu<ElementType, ElementsPerVectorAccess,
-        ElementAccumulator, ElementAccumulator, BiasScaleMode>;
-};
-
-template <typename ElementType, int ElementsPerVectorAccess, typename ElementAccumulator>
-struct Epilogue<ElementType, ElementsPerVectorAccess, ElementAccumulator, EpilogueOpBiasFtGelu>
-{
-    using Op = cutlass::epilogue::thread::LinearCombinationGeneric<cutlass::epilogue::thread::GELU_taylor, ElementType,
-        ElementsPerVectorAccess, ElementAccumulator, ElementAccumulator, BiasScaleMode,
-        cutlass::FloatRoundStyle::round_to_nearest, true>;
-};
-
-template <typename ElementType, int ElementsPerVectorAccess, typename ElementAccumulator>
-struct Epilogue<ElementType, ElementsPerVectorAccess, ElementAccumulator, EpilogueOpBias>
-{
-    using Op = cutlass::epilogue::thread::LinearCombination<ElementType, ElementsPerVectorAccess, ElementAccumulator,
-        ElementAccumulator, BiasScaleMode>;
+template <typename ElementType,
+          int ElementsPerVectorAccess,
+          typename ElementAccumulator>
+struct Epilogue<ElementType,
+                ElementsPerVectorAccess,
+                ElementAccumulator,
+                EpilogueOpBias> {
+  using Op =
+      cutlass::epilogue::thread::LinearCombination<ElementType,
+                                                   ElementsPerVectorAccess,
+                                                   ElementAccumulator,
+                                                   ElementAccumulator,
+                                                   BiasScaleMode>;
 };
 
 constexpr auto DefaultScaleMode = cutlass::epilogue::thread::ScaleType::Default;
 
-template <typename ElementType, int ElementsPerVectorAccess, typename ElementAccumulator>
-struct Epilogue<ElementType, ElementsPerVectorAccess, ElementAccumulator, EpilogueOpDefaultSilu>
-{
-    using Op = cutlass::epilogue::thread::LinearCombinationSilu<ElementType, ElementsPerVectorAccess,
-        ElementAccumulator, ElementAccumulator, DefaultScaleMode>;
+template <typename ElementType,
+          int ElementsPerVectorAccess,
+          typename ElementAccumulator>
+struct Epilogue<ElementType,
+                ElementsPerVectorAccess,
+                ElementAccumulator,
+                EpilogueOpDefaultSilu> {
+  using Op =
+      cutlass::epilogue::thread::LinearCombinationSilu<ElementType,
+                                                       ElementsPerVectorAccess,
+                                                       ElementAccumulator,
+                                                       ElementAccumulator,
+                                                       DefaultScaleMode>;
 };
 
-template <typename ElementType, int ElementsPerVectorAccess, typename ElementAccumulator>
-struct Epilogue<ElementType, ElementsPerVectorAccess, ElementAccumulator, EpilogueOpDefaultReLU>
-{
-    using Op = cutlass::epilogue::thread::LinearCombinationRelu<ElementType, ElementsPerVectorAccess,
-        ElementAccumulator, ElementAccumulator, DefaultScaleMode>;
+template <typename ElementType,
+          int ElementsPerVectorAccess,
+          typename ElementAccumulator>
+struct Epilogue<ElementType,
+                ElementsPerVectorAccess,
+                ElementAccumulator,
+                EpilogueOpDefaultReLU> {
+  using Op =
+      cutlass::epilogue::thread::LinearCombinationRelu<ElementType,
+                                                       ElementsPerVectorAccess,
+                                                       ElementAccumulator,
+                                                       ElementAccumulator,
+                                                       DefaultScaleMode>;
 };
 
-template <typename ElementType, int ElementsPerVectorAccess, typename ElementAccumulator>
-struct Epilogue<ElementType, ElementsPerVectorAccess, ElementAccumulator, EpilogueOpDefaultFtGelu>
-{
-    using Op = cutlass::epilogue::thread::LinearCombinationGeneric<cutlass::epilogue::thread::GELU_taylor, ElementType,
-        ElementsPerVectorAccess, ElementAccumulator, ElementAccumulator, DefaultScaleMode,
-        cutlass::FloatRoundStyle::round_to_nearest, true>;
+template <typename ElementType,
+          int ElementsPerVectorAccess,
+          typename ElementAccumulator>
+struct Epilogue<ElementType,
+                ElementsPerVectorAccess,
+                ElementAccumulator,
+                EpilogueOpDefaultFtGelu> {
+  using Op = cutlass::epilogue::thread::LinearCombinationGeneric<
+      cutlass::epilogue::thread::GELU_taylor,
+      ElementType,
+      ElementsPerVectorAccess,
+      ElementAccumulator,
+      ElementAccumulator,
+      DefaultScaleMode,
+      cutlass::FloatRoundStyle::round_to_nearest,
+      true>;
 };
 
-template <typename ElementType, int ElementsPerVectorAccess, typename ElementAccumulator>
-struct Epilogue<ElementType, ElementsPerVectorAccess, ElementAccumulator, EpilogueOpDefault>
-{
-    using Op = cutlass::epilogue::thread::LinearCombination<ElementType, ElementsPerVectorAccess, ElementAccumulator,
-        ElementAccumulator, DefaultScaleMode>;
+template <typename ElementType,
+          int ElementsPerVectorAccess,
+          typename ElementAccumulator>
+struct Epilogue<ElementType,
+                ElementsPerVectorAccess,
+                ElementAccumulator,
+                EpilogueOpDefault> {
+  using Op =
+      cutlass::epilogue::thread::LinearCombination<ElementType,
+                                                   ElementsPerVectorAccess,
+                                                   ElementAccumulator,
+                                                   ElementAccumulator,
+                                                   DefaultScaleMode>;
 };
 
-} // namespace cutlass_extensions
+}  // namespace cutlass_extensions

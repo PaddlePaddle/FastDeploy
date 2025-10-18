@@ -19,18 +19,16 @@ namespace cutlass {
 namespace arch {
 
 template <>
-struct Mma<
-  gemm::GemmShape<16,8,16>,
-  32,
-  int8_t,
-  layout::RowMajor,
-  int8_t,
-  layout::ColumnMajor,
-  int,
-  layout::RowMajor,
-  OpMultiplyAdd> {
-
-  using Shape = gemm::GemmShape<16,8,16>;
+struct Mma<gemm::GemmShape<16, 8, 16>,
+           32,
+           int8_t,
+           layout::RowMajor,
+           int8_t,
+           layout::ColumnMajor,
+           int,
+           layout::RowMajor,
+           OpMultiplyAdd> {
+  using Shape = gemm::GemmShape<16, 8, 16>;
 
   using ElementA = int8_t;
   using LayoutA = layout::RowMajor;
@@ -50,13 +48,10 @@ struct Mma<
 
   /// Computes multiply-add
   CUTLASS_HOST_DEVICE
-  void operator()(
-    FragmentC &d,
-    FragmentA const &a,
-    FragmentB const &b,
-    FragmentC const &c
-  ) const {
-
+  void operator()(FragmentC &d,
+                  FragmentA const &a,
+                  FragmentB const &b,
+                  FragmentC const &c) const {
 #if defined(CUTLASS_ARCH_MMA_SM80_ENABLED)
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
     uint32_t const &B = reinterpret_cast<uint32_t const &>(b);
@@ -65,10 +60,16 @@ struct Mma<
     int *D = reinterpret_cast<int *>(&d);
 
     asm volatile(
-        "mma.sync.aligned.m16n8k16.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5}, {%6}, "
+        "mma.sync.aligned.m16n8k16.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, "
+        "{%4,%5}, {%6}, "
         "{%7,%8,%9,%10};\n"
         : "=r"(D[0]), "=r"(D[1]), "=r"(D[2]), "=r"(D[3])
-        : "r"(A[0]), "r"(A[1]), "r"(B), "r"(C[0]), "r"(C[1]), "r"(C[2]),
+        : "r"(A[0]),
+          "r"(A[1]),
+          "r"(B),
+          "r"(C[0]),
+          "r"(C[1]),
+          "r"(C[2]),
           "r"(C[3]));
 
 #else
@@ -82,18 +83,16 @@ struct Mma<
 };
 
 template <>
-struct Mma<
-  gemm::GemmShape<16,8,32>,
-  32,
-  int8_t,
-  layout::RowMajor,
-  int8_t,
-  layout::ColumnMajor,
-  int,
-  layout::RowMajor,
-  OpMultiplyAdd> {
-
-  using Shape = gemm::GemmShape<16,8,32>;
+struct Mma<gemm::GemmShape<16, 8, 32>,
+           32,
+           int8_t,
+           layout::RowMajor,
+           int8_t,
+           layout::ColumnMajor,
+           int,
+           layout::RowMajor,
+           OpMultiplyAdd> {
+  using Shape = gemm::GemmShape<16, 8, 32>;
 
   using ElementA = int8_t;
   using LayoutA = layout::RowMajor;
@@ -112,13 +111,10 @@ struct Mma<
 
   /// Computes multiply-add
   CUTLASS_HOST_DEVICE
-  void operator()(
-    FragmentC &d,
-    FragmentA const &a,
-    FragmentB const &b,
-    FragmentC const &c
-  ) const {
-
+  void operator()(FragmentC &d,
+                  FragmentA const &a,
+                  FragmentB const &b,
+                  FragmentC const &c) const {
 #if defined(CUTLASS_ARCH_MMA_SM80_ENABLED)
 
     uint32_t const *A = reinterpret_cast<uint32_t const *>(&a);
@@ -128,11 +124,20 @@ struct Mma<
     int *D = reinterpret_cast<int *>(&d);
 
     asm volatile(
-        "mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, {%4,%5,%6,%7}, "
+        "mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {%0,%1,%2,%3}, "
+        "{%4,%5,%6,%7}, "
         "{%8,%9}, {%10,%11,%12,%13};\n"
         : "=r"(D[0]), "=r"(D[1]), "=r"(D[2]), "=r"(D[3])
-        : "r"(A[0]), "r"(A[1]), "r"(A[2]), "r"(A[3]), "r"(B[0]), "r"(B[1]),
-          "r"(C[0]), "r"(C[1]), "r"(C[2]), "r"(C[3]));
+        : "r"(A[0]),
+          "r"(A[1]),
+          "r"(A[2]),
+          "r"(A[3]),
+          "r"(B[0]),
+          "r"(B[1]),
+          "r"(C[0]),
+          "r"(C[1]),
+          "r"(C[2]),
+          "r"(C[3]));
 
 #else
     assert(0);
@@ -140,6 +145,5 @@ struct Mma<
   }
 };
 
-
-}
-}
+}  // namespace arch
+}  // namespace cutlass

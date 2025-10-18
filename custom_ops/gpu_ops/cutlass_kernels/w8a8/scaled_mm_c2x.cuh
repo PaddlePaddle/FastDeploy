@@ -1,4 +1,5 @@
-// adapted from: https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/quantization/cutlass_w8a8/scaled_mm_c2x.cuh
+// adapted from:
+// https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/quantization/cutlass_w8a8/scaled_mm_c2x.cuh
 
 #pragma once
 #include <stddef.h>
@@ -70,34 +71,42 @@ struct enable_sm89_to_sm90 : Kernel {
 #endif
   }
 };
-template <typename Arch, template <typename> typename ArchGuard,
-          typename ElementAB_, typename ElementD_,
-          template <typename, typename> typename Epilogue_, typename TileShape,
-          typename WarpShape, typename InstructionShape, int32_t MainLoopStages,
+template <typename Arch,
+          template <typename>
+          typename ArchGuard,
+          typename ElementAB_,
+          typename ElementD_,
+          template <typename, typename>
+          typename Epilogue_,
+          typename TileShape,
+          typename WarpShape,
+          typename InstructionShape,
+          int32_t MainLoopStages,
           typename FP8MathOperator = cutlass::arch::OpMultiplyAdd>
 struct cutlass_2x_gemm {
   using ElementAB = ElementAB_;
   using ElementD = ElementD_;
 
-  using ElementAcc =
-      typename std::conditional<std::is_same_v<ElementAB, int8_t>, int32_t,
-                                float>::type;
+  using ElementAcc = typename std::
+      conditional<std::is_same_v<ElementAB, int8_t>, int32_t, float>::type;
 
   using Operator =
       typename std::conditional<std::is_same_v<ElementAB, int8_t>,
                                 cutlass::arch::OpMultiplyAddSaturate,
                                 FP8MathOperator>::type;
 
-  using OutputTileThreadMap =
-      cutlass::epilogue::threadblock::OutputTileThreadLayout<
-          TileShape, WarpShape, float, 4, 1 /* epilogue stages */
-          >;
+  using OutputTileThreadMap = cutlass::epilogue::threadblock::
+      OutputTileThreadLayout<TileShape, WarpShape, float, 4, 1 /* epilogue
+                                                                  stages */
+                             >;
 
   using Epilogue = Epilogue_<ElementD, OutputTileThreadMap>;
   using EVTCompute = typename Epilogue::EVTCompute;
 
   using D = cutlass::epilogue::threadblock::VisitorAuxStore<
-      OutputTileThreadMap, ElementD, cutlass::FloatRoundStyle::round_to_nearest,
+      OutputTileThreadMap,
+      ElementD,
+      cutlass::FloatRoundStyle::round_to_nearest,
       Stride<int64_t, Int<1>, Int<0>>>;
 
   using EVTD = cutlass::epilogue::threadblock::Sm80EVT<D, EVTCompute>;
@@ -129,7 +138,8 @@ struct cutlass_2x_gemm {
 };
 
 template <typename Gemm, typename... EpilogueArgs>
-inline void cutlass_gemm_caller(paddle::Tensor& out, paddle::Tensor const& a,
+inline void cutlass_gemm_caller(paddle::Tensor& out,
+                                paddle::Tensor const& a,
                                 paddle::Tensor const& b,
                                 EpilogueArgs&&... epilogue_params) {
   using ElementAB = typename Gemm::ElementAB;
@@ -183,7 +193,7 @@ inline void cutlass_gemm_caller(paddle::Tensor& out, paddle::Tensor const& a,
   // Launch the CUTLASS GEMM kernel.
   typename Gemm::Op gemm_op;
   size_t workspace_size = gemm_op.get_workspace_size(args);
-  phi::Allocator *allocator = paddle::GetAllocator(a.place());
+  phi::Allocator* allocator = paddle::GetAllocator(a.place());
   auto workspace = allocator->Allocate(workspace_size);
 
   auto stream = a.stream();
@@ -210,11 +220,10 @@ inline void fallback_cutlass_gemm_caller(paddle::Tensor& out,
       sizeof(typename FallbackGemm::KernelType::SharedStorage);
 
   if (gemm_shared_mem_size <= max_shared_mem_per_block_opt_in) {
-    return cutlass_gemm_caller<Gemm>(out, a, b,
-                                     std::forward<EpilogueArgs>(args)...);
+    return cutlass_gemm_caller<Gemm>(
+        out, a, b, std::forward<EpilogueArgs>(args)...);
   } else {
-    PD_CHECK(fallback_gemm_shared_mem_size <=
-                max_shared_mem_per_block_opt_in);
+    PD_CHECK(fallback_gemm_shared_mem_size <= max_shared_mem_per_block_opt_in);
     return cutlass_gemm_caller<FallbackGemm>(
         out, a, b, std::forward<EpilogueArgs>(args)...);
   }

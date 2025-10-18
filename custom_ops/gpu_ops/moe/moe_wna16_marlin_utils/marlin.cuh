@@ -10,7 +10,7 @@
 #include <iostream>
 
 #ifndef MARLIN_NAMESPACE_NAME
-  #define MARLIN_NAMESPACE_NAME marlin_moe_wna16
+#define MARLIN_NAMESPACE_NAME marlin_moe_wna16
 #endif
 
 namespace MARLIN_NAMESPACE_NAME {
@@ -51,10 +51,10 @@ using I4 = Vec<int, 4>;
 
 constexpr int div_ceil(int a, int b) { return (a + b - 1) / b; }
 
-
 #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
 
-__device__ inline void cp_async4_pred(void* smem_ptr, const void* glob_ptr,
+__device__ inline void cp_async4_pred(void* smem_ptr,
+                                      const void* glob_ptr,
                                       bool pred = true) {
   const int BYTES = 16;
   uint32_t smem = static_cast<uint32_t>(__cvta_generic_to_shared(smem_ptr));
@@ -64,7 +64,9 @@ __device__ inline void cp_async4_pred(void* smem_ptr, const void* glob_ptr,
       "   setp.ne.b32 p, %0, 0;\n"
       "   @p cp.async.cg.shared.global [%1], [%2], %3;\n"
       "}\n" ::"r"((int)pred),
-      "r"(smem), "l"(glob_ptr), "n"(BYTES));
+      "r"(smem),
+      "l"(glob_ptr),
+      "n"(BYTES));
 }
 
 __device__ inline void cp_async4(void* smem_ptr, const void* glob_ptr) {
@@ -74,7 +76,8 @@ __device__ inline void cp_async4(void* smem_ptr, const void* glob_ptr) {
       "{\n"
       "   cp.async.cg.shared.global [%0], [%1], %2;\n"
       "}\n" ::"r"(smem),
-      "l"(glob_ptr), "n"(BYTES));
+      "l"(glob_ptr),
+      "n"(BYTES));
 }
 
 __device__ inline void cp_async_fence() {
@@ -92,7 +95,6 @@ inline void cp_async4(void*, const void*) {}
 inline void cp_async_fence() {}
 template <int n>
 inline void cp_async_wait() {}
-
 
 #endif
 

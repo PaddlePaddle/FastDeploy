@@ -1,7 +1,7 @@
 #pragma once
 
-#include "cutlass/cutlass.h"
 #include "cute/layout.hpp"
+#include "cutlass/cutlass.h"
 
 namespace machete {
 

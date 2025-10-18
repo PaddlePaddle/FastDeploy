@@ -17,14 +17,14 @@
 #include "paddle/phi/core/memory/memcpy.h"
 
 __global__ void pre_cache_len_concat(const int* __restrict__ seq_lens_decoder,
-                               const int* __restrict__ seq_lens_this_time,
-                               int* __restrict__ cu_seqlens_k,
-                               int* __restrict__ batch_ids,
-                               int* __restrict__ tile_ids_per_batch,
-                               int* __restrict__ num_blocks_x,
-                               int* __restrict__ kv_token_num,
-                               const int bsz,
-                               const int num_row_per_block) {
+                                     const int* __restrict__ seq_lens_this_time,
+                                     int* __restrict__ cu_seqlens_k,
+                                     int* __restrict__ batch_ids,
+                                     int* __restrict__ tile_ids_per_batch,
+                                     int* __restrict__ num_blocks_x,
+                                     int* __restrict__ kv_token_num,
+                                     const int bsz,
+                                     const int num_row_per_block) {
   if (threadIdx.x == 0) {
     int gridx = 0;
     int index = 0;
@@ -58,45 +58,42 @@ std::vector<paddle::Tensor> PreCacheLenConcat(
   auto stream = seq_lens_decoder.stream();
   auto place = seq_lens_decoder.place();
   int bsz = seq_lens_this_time.shape()[0];
-  const uint32_t max_tile_size_per_bs_pre_cache = div_up(max_dec_len, block_size);
+  const uint32_t max_tile_size_per_bs_pre_cache =
+      div_up(max_dec_len, block_size);
 
-  paddle::Tensor cu_seqlens_k = GetEmptyTensor(
-    {bsz + 1},
-    paddle::DataType::INT32,
-    place);
+  paddle::Tensor cu_seqlens_k =
+      GetEmptyTensor({bsz + 1}, paddle::DataType::INT32, place);
   paddle::Tensor pre_cache_batch_ids = GetEmptyTensor(
-    {bsz * max_tile_size_per_bs_pre_cache},
-    paddle::DataType::INT32,
-    place);
+      {bsz * max_tile_size_per_bs_pre_cache}, paddle::DataType::INT32, place);
   paddle::Tensor pre_cache_tile_ids_per_batch = GetEmptyTensor(
-    {bsz * max_tile_size_per_bs_pre_cache},
-    paddle::DataType::INT32,
-    place);
+      {bsz * max_tile_size_per_bs_pre_cache}, paddle::DataType::INT32, place);
   paddle::Tensor pre_cache_num_blocks =
-    GetEmptyTensor({1}, paddle::DataType::INT32, place);
+      GetEmptyTensor({1}, paddle::DataType::INT32, place);
   paddle::Tensor kv_token_num =
-    GetEmptyTensor({1}, paddle::DataType::INT32, place);
+      GetEmptyTensor({1}, paddle::DataType::INT32, place);
 
   pre_cache_len_concat<<<1, 32, 0, stream>>>(
-    seq_lens_decoder.data<int>(),
-    seq_lens_this_time.data<int>(),
-    cu_seqlens_k.data<int>(),
-    pre_cache_batch_ids.data<int>(),
-    pre_cache_tile_ids_per_batch.data<int>(),
-    pre_cache_num_blocks.data<int>(),
-    kv_token_num.data<int>(),
-    bsz,
-    block_size
-  );
-  paddle::Tensor pre_cache_num_blocks_cpu = pre_cache_num_blocks.copy_to(paddle::CPUPlace(), false);
-  paddle::Tensor kv_token_num_cpu = kv_token_num.copy_to(paddle::CPUPlace(), false);
+      seq_lens_decoder.data<int>(),
+      seq_lens_this_time.data<int>(),
+      cu_seqlens_k.data<int>(),
+      pre_cache_batch_ids.data<int>(),
+      pre_cache_tile_ids_per_batch.data<int>(),
+      pre_cache_num_blocks.data<int>(),
+      kv_token_num.data<int>(),
+      bsz,
+      block_size);
+  paddle::Tensor pre_cache_num_blocks_cpu =
+      pre_cache_num_blocks.copy_to(paddle::CPUPlace(), false);
+  paddle::Tensor kv_token_num_cpu =
+      kv_token_num.copy_to(paddle::CPUPlace(), false);
 
-  return {cu_seqlens_k,
-          pre_cache_batch_ids,
-          pre_cache_tile_ids_per_batch,
-          pre_cache_num_blocks_cpu, /*cpu*/
-          kv_token_num_cpu /*cpu*/
-          };
+  return {
+      cu_seqlens_k,
+      pre_cache_batch_ids,
+      pre_cache_tile_ids_per_batch,
+      pre_cache_num_blocks_cpu, /*cpu*/
+      kv_token_num_cpu          /*cpu*/
+  };
 }
 
 std::vector<paddle::DataType> PreCacheLenConcatInferDtype(
@@ -121,15 +118,13 @@ std::vector<std::vector<int64_t>> PreCacheLenConcatInferShape(
 }
 
 PD_BUILD_STATIC_OP(pre_cache_len_concat)
-    .Inputs({"seq_lens_decoder",
-             "seq_lens_this_time"})
+    .Inputs({"seq_lens_decoder", "seq_lens_this_time"})
     .Outputs({"cu_seqlens_k",
               "pre_cache_batch_ids",
               "pre_cache_tile_ids_per_batch",
               "pre_cache_num_blocks_cpu", /*cpu*/
-              "kv_token_num_cpu"}) /*cpu*/
-    .Attrs({"max_dec_len: int",
-            "block_size: int"})
+              "kv_token_num_cpu"})        /*cpu*/
+    .Attrs({"max_dec_len: int", "block_size: int"})
     .SetKernelFn(PD_KERNEL(PreCacheLenConcat))
     .SetInferShapeFn(PD_INFER_SHAPE(PreCacheLenConcatInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(PreCacheLenConcatInferDtype));
