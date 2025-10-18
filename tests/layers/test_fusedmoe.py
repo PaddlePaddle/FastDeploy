@@ -164,7 +164,7 @@ class TestFusedMoE(unittest.TestCase):
         gating.weight.set_value(paddle.rand(gating.weight.shape, dtype=paddle.float32))
 
         os.environ["FD_USE_DEEP_GEMM"] = "0"  # use deepgemm
-        # os.environ["DG_NVCC_OVERRIDE_CPP_STANDARD"] = "20"  # use deepgemm
+        # os.environ["DG_NVCC_OVERRIDE_CPP_STANDARD"] = "10"  # use deepgemm
         ep_size = paddle.distributed.get_world_size()
         ep_rank = paddle.distributed.get_rank()
 
