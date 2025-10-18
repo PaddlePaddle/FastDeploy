@@ -42,7 +42,7 @@ repos:
       description: Format files with ClangFormat.
       entry: bash ./scripts/clang_format.sh -i
       language: system
-      files: \.(c|cc|cxx|cpp|cu|h|cuh|hpp|hxx|xpu|kps)$
+      files: \.(c|cc|cxx|cpp|cu|h|cuh|hpp|hxx)$
 # markdown
 - repo: https://github.com/jackdewinter/pymarkdown
   rev: v0.9.29
