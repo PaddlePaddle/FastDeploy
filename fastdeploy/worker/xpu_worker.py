@@ -23,6 +23,7 @@ from paddle import nn
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import get_logger, set_random_seed
 from fastdeploy.worker.output import ModelRunnerOutput
 from fastdeploy.worker.worker_base import WorkerBase
@@ -49,12 +50,20 @@ class XpuWorker(WorkerBase):
 
     def init_device(self):
         """Initialize device and Construct model runner"""
+        self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         if paddle.is_compiled_with_xpu():
             # Set environment variable
             self.device_ids = self.parallel_config.device_ids.split(",")
-            self.device = f"xpu:{self.local_rank}"
+            self.device = f"xpu:{self.local_rank % self.max_chips_per_node}"
             paddle.device.set_device(self.device)
-            paddle.set_default_dtype(self.parallel_config.dtype)
+            self.device_id = int(self.device_ids[self.local_rank % self.max_chips_per_node])
+            assert (
+                self.device_id is not None
+            ), f"device_id is none for rank {self.local_rank % self.max_chips_per_node}"
+            assert len(self.device_ids) > (
+                self.local_rank % self.max_chips_per_node
+            ), f"device number must be greater than local rank, but get device number is {len(self.device_ids)}, rank is {self.local_rank % self.max_chips_per_node}"
+            paddle.set_default_dtype(self.model_config.dtype)
 
             gc.collect()
             paddle.device.xpu.empty_cache()
@@ -67,6 +76,7 @@ class XpuWorker(WorkerBase):
             fd_config=self.fd_config,
             device=self.device,
             rank=self.rank,
+            device_id=self.device_id,
             local_rank=self.local_rank,
         )
 
@@ -95,21 +105,15 @@ class XpuWorker(WorkerBase):
             xpu_get_used_global_memory,
         )
 
-        assert self.device_ids[self.local_rank] is not None, f"device_id is none for rank {self.local_rank}"
-        assert (
-            len(self.device_ids) > self.local_rank
-        ), f"device number must be greater than local rank, but get device number is {len(self.device_ids)}, rank is {self.local_rank}"
-
-        total_memory = xpu_get_total_global_memory(int(self.device_ids[self.local_rank]))
-        used_memory = xpu_get_used_global_memory(int(self.device_ids[self.local_rank]))
-        free_memory = xpu_get_free_global_memory(int(self.device_ids[self.local_rank]))
+        total_memory = xpu_get_total_global_memory(self.device_id)
+        used_memory = xpu_get_used_global_memory(self.device_id)
+        free_memory = xpu_get_free_global_memory(self.device_id)
 
         logger.info(
             f"Before warm up, total_memory: {total_memory}, \
                     used_memory: {used_memory}, free_memory: {free_memory}"
         )
 
-        self.model_runner.prepare_profile()
         if self.parallel_config.use_ep:
             logger.warning("EP mode does not support profile run.")
         else:
@@ -117,10 +121,10 @@ class XpuWorker(WorkerBase):
         set_random_seed(self.fd_config.model_config.seed)
 
         total_available_memory = int(total_memory * self.cache_config.gpu_memory_utilization)
-        used_memory = xpu_get_used_global_memory(int(self.device_ids[self.local_rank]))
+        used_memory = xpu_get_used_global_memory(self.device_id)
         available_kv_cache_memory = total_available_memory - used_memory
         model_block_memory_used = self.cal_theortical_kvcache()
-        available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
+        available_kv_cache_memory += model_block_memory_used * self.cache_config.total_block_num
         if self.parallel_config.use_ep:
             available_kv_cache_memory = int(available_kv_cache_memory * 0.6)
 

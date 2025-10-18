@@ -49,7 +49,6 @@ def append_attention(
     decoder_tile_ids_per_batch: paddle.Tensor,
     decoder_num_blocks: paddle.Tensor,
     set_max_lengths: paddle.Tensor,
-    max_len_kv: paddle.Tensor,
     rotary_embs: Optional[paddle.Tensor] = None,
     attn_mask: Optional[paddle.Tensor] = None,
     qkv_bias: Optional[paddle.Tensor] = None,
@@ -107,7 +106,6 @@ def append_attention(
             decoder_tile_ids_per_batch,
             decoder_num_blocks,
             set_max_lengths,
-            max_len_kv,
             rotary_embs,
             attn_mask,
             qkv_bias,
@@ -169,7 +167,6 @@ def append_attention_with_output(
     decoder_tile_ids_per_batch: paddle.Tensor,
     decoder_num_blocks: paddle.Tensor,
     set_max_lengths: paddle.Tensor,
-    max_len_kv: paddle.Tensor,
     out: paddle.tensor,  # attention output
     rotary_embs: Optional[paddle.Tensor] = None,
     attn_mask: Optional[paddle.Tensor] = None,
@@ -208,7 +205,7 @@ def append_attention_with_output(
     append_attention
     """
     if current_platform.is_cuda():
-        append_attention_with_output_gpu(
+        return append_attention_with_output_gpu(
             qkv,
             key_cache,
             value_cache,
@@ -228,7 +225,6 @@ def append_attention_with_output(
             decoder_tile_ids_per_batch,
             decoder_num_blocks,
             set_max_lengths,
-            max_len_kv,
             out,
             rotary_embs,
             attn_mask,
