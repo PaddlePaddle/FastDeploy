@@ -121,7 +121,7 @@ class TestFusedMoE(unittest.TestCase):
 
         # (ZKK): disable this test,
         # CI machine does not support deepgemm blockwise_fp8, compilation error.
-        exit(0)
+        return
 
         moe_cuda_graphs = [None] * 100
         cache_hidden_states = [None] * 100
