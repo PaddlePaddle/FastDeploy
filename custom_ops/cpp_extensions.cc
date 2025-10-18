@@ -474,7 +474,7 @@ std::vector<paddle::Tensor> AppendAttention(
     const bool causal,
     const bool speculate_decoder);
 
-void AppendAttentionWithOutput(
+std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const paddle::Tensor &qkv,
     const paddle::Tensor &key_cache,
     const paddle::Tensor &value_cache,
@@ -1433,13 +1433,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
      * dequant_int8
      */
     m.def("dequant_int8", &DequantInt8Func, "dequant int8 function");
-    /**
-     * extract_text_token_output.cu
-     * extract_text_token_output
-     */
-    m.def("extract_text_token_output",
-          &ExtractTextTokenOutput,
-          "extract_text_token_output function");
+
     /**
      * moe/fused_moe/moe_topk_select.cu
      * moe_topk_select

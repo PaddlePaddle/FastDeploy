@@ -282,5 +282,5 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
         down_proj_out.reshape_([token_num, top_k, hidden_size])
         out = down_proj_out.sum(axis=1)
         if layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(out)
+            out = tensor_model_parallel_all_reduce(out)
         return out

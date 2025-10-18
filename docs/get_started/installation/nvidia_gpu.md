@@ -1,3 +1,5 @@
+[简体中文](../../zh/get_started/installation/nvidia_gpu.md)
+
 # NVIDIA CUDA GPU Installation
 
 The following installation methods are available when your environment meets these requirements:
