@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "paddle/extension.h"
 #include "helper.h"
+#include "paddle/extension.h"
 
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
@@ -24,14 +24,14 @@ __global__ void RemovePadding(int64_t *output_data,
                               const int *seq_lens,
                               const int *cum_offsets,
                               const int sequence_length) {
-    const int bi = blockIdx.x;
-    const int tid = threadIdx.x;
+  const int bi = blockIdx.x;
+  const int tid = threadIdx.x;
 
-    for (int i = tid; i < seq_lens[bi]; i += blockDim.x) {
-        const int tgt_seq_id = bi * sequence_length - cum_offsets[bi] + i;
-        const int src_seq_id = bi * sequence_length + i;
-        output_data[tgt_seq_id] = input_data[src_seq_id];
-    }
+  for (int i = tid; i < seq_lens[bi]; i += blockDim.x) {
+    const int tgt_seq_id = bi * sequence_length - cum_offsets[bi] + i;
+    const int src_seq_id = bi * sequence_length + i;
+    output_data[tgt_seq_id] = input_data[src_seq_id];
+  }
 }
 
 __global__ void GetPaddingOffsetKernel(int *batch_id_per_token,
@@ -41,23 +41,23 @@ __global__ void GetPaddingOffsetKernel(int *batch_id_per_token,
                                        const int *cum_offsets,
                                        const int *seq_lens,
                                        const int max_seq_len) {
-    // get padding offset of each batch
-    const int bi = blockIdx.x;
-    const int ti = threadIdx.x;
-    int cum_offset = bi == 0 ? 0 : cum_offsets[bi - 1];
-    for (int i = ti; i < seq_lens[bi]; i += blockDim.x) {
+  // get padding offset of each batch
+  const int bi = blockIdx.x;
+  const int ti = threadIdx.x;
+  int cum_offset = bi == 0 ? 0 : cum_offsets[bi - 1];
+  for (int i = ti; i < seq_lens[bi]; i += blockDim.x) {
 #ifdef PADDLE_WITH_HIP
-        batch_id_per_token[bi * max_seq_len - cum_offset + i] = cum_offset;
+    batch_id_per_token[bi * max_seq_len - cum_offset + i] = cum_offset;
 #else
-        batch_id_per_token[bi * max_seq_len - cum_offset + i] = bi;
+    batch_id_per_token[bi * max_seq_len - cum_offset + i] = bi;
 #endif
-    }
-    if (ti == 0) {
-        cum_offsets_out[bi] = cum_offset;
-        int cum_seq_len = (bi + 1) * max_seq_len - cum_offsets[bi];
-        cu_seqlens_q[bi + 1] = cum_seq_len;
-        cu_seqlens_k[bi + 1] = cum_seq_len;
-    }
+  }
+  if (ti == 0) {
+    cum_offsets_out[bi] = cum_offset;
+    int cum_seq_len = (bi + 1) * max_seq_len - cum_offsets[bi];
+    cu_seqlens_q[bi + 1] = cum_seq_len;
+    cu_seqlens_k[bi + 1] = cum_seq_len;
+  }
 }
 
 std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
@@ -65,49 +65,53 @@ std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
                                              const paddle::Tensor &token_num,
                                              const paddle::Tensor &seq_len) {
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
-    auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(input_ids.place()));
-    auto cu_stream = dev_ctx->stream();
+  auto dev_ctx = static_cast<const phi::CustomContext *>(
+      paddle::experimental::DeviceContextPool::Instance().Get(
+          input_ids.place()));
+  auto cu_stream = dev_ctx->stream();
 #else
-    auto cu_stream = input_ids.stream();
+  auto cu_stream = input_ids.stream();
 #endif
-    std::vector<int64_t> input_ids_shape = input_ids.shape();
-    const int bsz = seq_len.shape()[0];
-    const int seq_length = input_ids_shape[1];
-    auto cum_offsets_out = cum_offsets.copy_to(cum_offsets.place(), false);
-    auto cpu_token_num = token_num.copy_to(paddle::CPUPlace(), false);
+  std::vector<int64_t> input_ids_shape = input_ids.shape();
+  const int bsz = seq_len.shape()[0];
+  const int seq_length = input_ids_shape[1];
+  auto cum_offsets_out = cum_offsets.copy_to(cum_offsets.place(), false);
+  auto cpu_token_num = token_num.copy_to(paddle::CPUPlace(), false);
 
-    const int token_num_data = cpu_token_num.data<int64_t>()[0];
-    auto x_remove_padding = paddle::empty(
-        {token_num_data}, paddle::DataType::INT64, input_ids.place());
-    auto batch_id_per_token = paddle::empty(
-        {token_num_data}, paddle::DataType::INT32, input_ids.place());
-    auto cu_seqlens_q =
-        paddle::full({bsz + 1}, 0, paddle::DataType::INT32, input_ids.place());
-    auto cu_seqlens_k =
-        paddle::full({bsz + 1}, 0, paddle::DataType::INT32, input_ids.place());
+  const int token_num_data = cpu_token_num.data<int64_t>()[0];
+  auto x_remove_padding = paddle::empty(
+      {token_num_data}, paddle::DataType::INT64, input_ids.place());
+  auto batch_id_per_token = paddle::empty(
+      {token_num_data}, paddle::DataType::INT32, input_ids.place());
+  auto cu_seqlens_q =
+      paddle::full({bsz + 1}, 0, paddle::DataType::INT32, input_ids.place());
+  auto cu_seqlens_k =
+      paddle::full({bsz + 1}, 0, paddle::DataType::INT32, input_ids.place());
 #ifdef PADDLE_WITH_COREX
-    int blockSize = std::min((token_num_data + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE, 128);
+  int blockSize =
+      std::min((token_num_data + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE, 128);
 #else
-    int blockSize = min((token_num_data + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE, 128);
+  int blockSize =
+      min((token_num_data + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE, 128);
 #endif
-    GetPaddingOffsetKernel<<<bsz, 128, 0, cu_stream>>>(
-        batch_id_per_token.data<int>(),
-        cum_offsets_out.data<int>(),
-        cu_seqlens_q.data<int>(),
-        cu_seqlens_k.data<int>(),
-        cum_offsets.data<int>(),
-        seq_len.data<int>(),
-        seq_length);
-    RemovePadding<<<bsz, blockSize, 0, cu_stream>>>(
-        x_remove_padding.data<int64_t>(),
-        input_ids.data<int64_t>(),
-        seq_len.data<int>(),
-        cum_offsets_out.data<int>(),
-        seq_length);
-    return {x_remove_padding,
-            batch_id_per_token,
-            cu_seqlens_q,
-            cu_seqlens_k};  // , enc_token_num, dec_token_num};
+  GetPaddingOffsetKernel<<<bsz, 128, 0, cu_stream>>>(
+      batch_id_per_token.data<int>(),
+      cum_offsets_out.data<int>(),
+      cu_seqlens_q.data<int>(),
+      cu_seqlens_k.data<int>(),
+      cum_offsets.data<int>(),
+      seq_len.data<int>(),
+      seq_length);
+  RemovePadding<<<bsz, blockSize, 0, cu_stream>>>(
+      x_remove_padding.data<int64_t>(),
+      input_ids.data<int64_t>(),
+      seq_len.data<int>(),
+      cum_offsets_out.data<int>(),
+      seq_length);
+  return {x_remove_padding,
+          batch_id_per_token,
+          cu_seqlens_q,
+          cu_seqlens_k};  // , enc_token_num, dec_token_num};
 }
 
 std::vector<std::vector<int64_t>> GetPaddingOffsetInferShape(
@@ -115,9 +119,9 @@ std::vector<std::vector<int64_t>> GetPaddingOffsetInferShape(
     const std::vector<int64_t> &cum_offsets_shape,
     const std::vector<int64_t> &token_num_shape,
     const std::vector<int64_t> &seq_len_shape) {
-    int64_t bsz = seq_len_shape[0];
-    int64_t seq_len = input_ids_shape[1];
-    return {{-1}, {-1}, {bsz + 1}, {bsz + 1}};
+  int64_t bsz = seq_len_shape[0];
+  int64_t seq_len = input_ids_shape[1];
+  return {{-1}, {-1}, {bsz + 1}, {bsz + 1}};
 }
 
 std::vector<paddle::DataType> GetPaddingOffsetInferDtype(
@@ -125,10 +129,7 @@ std::vector<paddle::DataType> GetPaddingOffsetInferDtype(
     const paddle::DataType &cum_offsets_dtype,
     const paddle::DataType &token_num_dtype,
     const paddle::DataType &seq_len_dtype) {
-    return {input_ids_dtype,
-            seq_len_dtype,
-            seq_len_dtype,
-            seq_len_dtype};
+  return {input_ids_dtype, seq_len_dtype, seq_len_dtype, seq_len_dtype};
 }
 
 PD_BUILD_STATIC_OP(get_padding_offset)

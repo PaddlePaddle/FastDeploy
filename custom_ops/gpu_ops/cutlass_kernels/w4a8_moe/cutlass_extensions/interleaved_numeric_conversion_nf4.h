@@ -104,8 +104,8 @@ struct FastInterleavedAndBiasedNumericArrayConverterNf4<half_t, uint8_t, N> {
     using scalar_result_type = typename result_type::Element;
     using scalar_source_type = typename source_type::Element;
     FastInterleavedAndBiasedNumericArrayConverterNf4<scalar_result_type,
-                                                  scalar_source_type,
-                                                  VEC_WIDTH>
+                                                     scalar_source_type,
+                                                     VEC_WIDTH>
         convert_vector_;
 
     result_type result;
@@ -128,7 +128,9 @@ struct FastInterleavedAndBiasedNumericArrayConverterNf4<half_t, uint8_t, N> {
 };
 
 template <>
-struct FastInterleavedAndBiasedNumericArrayConverterNf4<bfloat16_t, uint8_t, 4> {
+struct FastInterleavedAndBiasedNumericArrayConverterNf4<bfloat16_t,
+                                                        uint8_t,
+                                                        4> {
   using result_type = Array<bfloat16_t, 4>;
   using source_type = Array<uint8_t, 4>;
 
@@ -179,7 +181,9 @@ struct FastInterleavedAndBiasedNumericArrayConverterNf4<bfloat16_t, uint8_t, 4> 
 };
 
 template <int N>
-struct FastInterleavedAndBiasedNumericArrayConverterNf4<bfloat16_t, uint8_t, N> {
+struct FastInterleavedAndBiasedNumericArrayConverterNf4<bfloat16_t,
+                                                        uint8_t,
+                                                        N> {
   static constexpr int VEC_WIDTH = 4;
   static_assert(!(N % VEC_WIDTH), "N must be multiple of 4.");
 
@@ -191,8 +195,8 @@ struct FastInterleavedAndBiasedNumericArrayConverterNf4<bfloat16_t, uint8_t, N> 
     using scalar_result_type = typename result_type::Element;
     using scalar_source_type = typename source_type::Element;
     FastInterleavedAndBiasedNumericArrayConverterNf4<scalar_result_type,
-                                                  scalar_source_type,
-                                                  VEC_WIDTH>
+                                                     scalar_source_type,
+                                                     VEC_WIDTH>
         convert_vector_;
 
     result_type result;
@@ -314,8 +318,8 @@ struct FastInterleavedAndBiasedNumericArrayConverterNf4<half_t, uint4b_t, N> {
     using scalar_result_type = typename result_type::Element;
     using scalar_source_type = typename source_type::Element;
     FastInterleavedAndBiasedNumericArrayConverterNf4<scalar_result_type,
-                                                  scalar_source_type,
-                                                  VEC_WIDTH>
+                                                     scalar_source_type,
+                                                     VEC_WIDTH>
         convert_vector_;
 
     result_type result;
@@ -338,7 +342,9 @@ struct FastInterleavedAndBiasedNumericArrayConverterNf4<half_t, uint4b_t, N> {
 };
 
 template <>
-struct FastInterleavedAndBiasedNumericArrayConverterNf4<bfloat16_t, uint4b_t, 8> {
+struct FastInterleavedAndBiasedNumericArrayConverterNf4<bfloat16_t,
+                                                        uint4b_t,
+                                                        8> {
   using result_type = Array<bfloat16_t, 8>;
   using source_type = Array<uint4b_t, 8>;
 
@@ -400,7 +406,9 @@ struct FastInterleavedAndBiasedNumericArrayConverterNf4<bfloat16_t, uint4b_t, 8>
 };
 
 template <int N>
-struct FastInterleavedAndBiasedNumericArrayConverterNf4<bfloat16_t, uint4b_t, N> {
+struct FastInterleavedAndBiasedNumericArrayConverterNf4<bfloat16_t,
+                                                        uint4b_t,
+                                                        N> {
   static constexpr int VEC_WIDTH = 8;
   static_assert(!(N % VEC_WIDTH), "N must be multiple of 8.");
 
@@ -412,8 +420,8 @@ struct FastInterleavedAndBiasedNumericArrayConverterNf4<bfloat16_t, uint4b_t, N>
     using scalar_result_type = typename result_type::Element;
     using scalar_source_type = typename source_type::Element;
     FastInterleavedAndBiasedNumericArrayConverterNf4<scalar_result_type,
-                                                  scalar_source_type,
-                                                  VEC_WIDTH>
+                                                     scalar_source_type,
+                                                     VEC_WIDTH>
         convert_vector_;
 
     result_type result;
@@ -435,388 +443,405 @@ struct FastInterleavedAndBiasedNumericArrayConverterNf4<bfloat16_t, uint4b_t, N>
   result_type operator()(source_type const& s) { return convert(s); }
 };
 
-template<>
+template <>
 struct FastInterleavedAndBiasedNumericArrayConverterNf4<int8_t, int8_t, 4> {
-    using result_type = Array<int8_t, 4>;
-    using source_type = Array<int8_t, 4>;
+  using result_type = Array<int8_t, 4>;
+  using source_type = Array<int8_t, 4>;
 
-    CUTLASS_DEVICE
-    static result_type convert(source_type const& source)
-    {
-        result_type result;
+  CUTLASS_DEVICE
+  static result_type convert(source_type const& source) {
+    result_type result;
 
-        uint32_t*      h   = reinterpret_cast<uint32_t*>(&result);
-        uint32_t const i8s = reinterpret_cast<uint32_t const&>(source);
+    uint32_t* h = reinterpret_cast<uint32_t*>(&result);
+    uint32_t const i8s = reinterpret_cast<uint32_t const&>(source);
 
-        // 3 2 1 0 -> 3 1 2 0
-        static constexpr uint32_t mask_for_elt     = 0x3120;
-        asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(h[0]) : "r"(i8s), "r"(i8s), "n"(mask_for_elt));
+    // 3 2 1 0 -> 3 1 2 0
+    static constexpr uint32_t mask_for_elt = 0x3120;
+    asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                 : "=r"(h[0])
+                 : "r"(i8s), "r"(i8s), "n"(mask_for_elt));
 
-        // Author zhengzekang
-        uint8_t*  tmp  = reinterpret_cast<uint8_t*>(&result);
-        #pragma unroll
-        for(int i = 0; i < 4; i++){
-            result[i] = static_cast<int8_t>(static_cast<int32_t>(tmp[i]) - 128);
-        }
-        return result;
+    // Author zhengzekang
+    uint8_t* tmp = reinterpret_cast<uint8_t*>(&result);
+#pragma unroll
+    for (int i = 0; i < 4; i++) {
+      result[i] = static_cast<int8_t>(static_cast<int32_t>(tmp[i]) - 128);
     }
+    return result;
+  }
 
-    CUTLASS_DEVICE
-    result_type operator()(source_type const& s)
-    {
-        return convert(s);
-    }
+  CUTLASS_DEVICE
+  result_type operator()(source_type const& s) { return convert(s); }
 };
 
-
-template<>
+template <>
 struct FastInterleavedAndBiasedNumericArrayConverterNf4<int8_t, int8_t, 8> {
-    using result_type = Array<int8_t, 8>;
-    using source_type = Array<int8_t, 8>;
+  using result_type = Array<int8_t, 8>;
+  using source_type = Array<int8_t, 8>;
 
-    CUTLASS_DEVICE
-    static result_type convert(source_type const& source)
-    {
-        result_type result;
+  CUTLASS_DEVICE
+  static result_type convert(source_type const& source) {
+    result_type result;
 
-        uint32_t*      h   = reinterpret_cast<uint32_t*>(&result);
-        const uint32_t * i8s = reinterpret_cast<const uint32_t*>(&source);
+    uint32_t* h = reinterpret_cast<uint32_t*>(&result);
+    const uint32_t* i8s = reinterpret_cast<const uint32_t*>(&source);
 
-        // 3 2 1 0 -> 3 1 2 0
-        static constexpr uint32_t mask_for_elt_1     = 0x7120;
-        static constexpr uint32_t mask_for_elt_2     = 0x3654;
+    // 3 2 1 0 -> 3 1 2 0
+    static constexpr uint32_t mask_for_elt_1 = 0x7120;
+    static constexpr uint32_t mask_for_elt_2 = 0x3654;
 
-        asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(h[0]) : "r"(i8s[0]), "r"(i8s[1]), "n"(mask_for_elt_1));
-        asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(h[1]) : "r"(i8s[0]), "r"(i8s[1]), "n"(mask_for_elt_2));
+    asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                 : "=r"(h[0])
+                 : "r"(i8s[0]), "r"(i8s[1]), "n"(mask_for_elt_1));
+    asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                 : "=r"(h[1])
+                 : "r"(i8s[0]), "r"(i8s[1]), "n"(mask_for_elt_2));
 
-        // Author zhengzekang
-        uint8_t*  tmp  = reinterpret_cast<uint8_t*>(&result);
-        #pragma unroll
-        for(int i = 0; i < 8; i++){
-            result[i] = static_cast<int8_t>(static_cast<int32_t>(tmp[i]) - 128);
-        }
-        return result;
+    // Author zhengzekang
+    uint8_t* tmp = reinterpret_cast<uint8_t*>(&result);
+#pragma unroll
+    for (int i = 0; i < 8; i++) {
+      result[i] = static_cast<int8_t>(static_cast<int32_t>(tmp[i]) - 128);
     }
+    return result;
+  }
 
-    CUTLASS_DEVICE
-    result_type operator()(source_type const& s)
-    {
-        return convert(s);
-    }
+  CUTLASS_DEVICE
+  result_type operator()(source_type const& s) { return convert(s); }
 };
 
-
-template<>
+template <>
 struct FastInterleavedAndBiasedNumericArrayConverterNf4<int8_t, int8_t, 16> {
-    using result_type = Array<int8_t, 16>;
-    using source_type = Array<int8_t, 16>;
+  using result_type = Array<int8_t, 16>;
+  using source_type = Array<int8_t, 16>;
 
-    CUTLASS_DEVICE
-    static result_type convert(source_type const& source)
-    {
-        result_type result;
+  CUTLASS_DEVICE
+  static result_type convert(source_type const& source) {
+    result_type result;
 
-        uint32_t*      h   = reinterpret_cast<uint32_t*>(&result);
-        const uint32_t * i8s = reinterpret_cast<const uint32_t*>(&source);
+    uint32_t* h = reinterpret_cast<uint32_t*>(&result);
+    const uint32_t* i8s = reinterpret_cast<const uint32_t*>(&source);
 
-        // 3 2 1 0 -> 3 1 2 0
-        static constexpr uint32_t mask_for_elt_1     = 0x3120;
-        static constexpr uint32_t mask_for_elt_2     = 0x3120;
-        static constexpr uint32_t mask_for_elt_3     = 0x3120;
-        static constexpr uint32_t mask_for_elt_4     = 0x3120;
+    // 3 2 1 0 -> 3 1 2 0
+    static constexpr uint32_t mask_for_elt_1 = 0x3120;
+    static constexpr uint32_t mask_for_elt_2 = 0x3120;
+    static constexpr uint32_t mask_for_elt_3 = 0x3120;
+    static constexpr uint32_t mask_for_elt_4 = 0x3120;
 
-        asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(h[0]) : "r"(i8s[0]), "r"(i8s[2]), "n"(mask_for_elt_1));
-        asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(h[1]) : "r"(i8s[1]), "r"(i8s[3]), "n"(mask_for_elt_2));
-        asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(h[2]) : "r"(i8s[2]), "r"(i8s[0]), "n"(mask_for_elt_3));
-        asm volatile("prmt.b32 %0,%1,%2,%3;\n" : "=r"(h[3]) : "r"(i8s[3]), "r"(i8s[1]), "n"(mask_for_elt_4));
+    asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                 : "=r"(h[0])
+                 : "r"(i8s[0]), "r"(i8s[2]), "n"(mask_for_elt_1));
+    asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                 : "=r"(h[1])
+                 : "r"(i8s[1]), "r"(i8s[3]), "n"(mask_for_elt_2));
+    asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                 : "=r"(h[2])
+                 : "r"(i8s[2]), "r"(i8s[0]), "n"(mask_for_elt_3));
+    asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                 : "=r"(h[3])
+                 : "r"(i8s[3]), "r"(i8s[1]), "n"(mask_for_elt_4));
 
-
-        // Author zhengzekang
-        uint8_t*  tmp  = reinterpret_cast<uint8_t*>(&result);
-        #pragma unroll
-        for(int i = 0; i < 16; i++){
-            result[i] = static_cast<int8_t>(static_cast<int32_t>(tmp[i]) - 128);
-        }
-
-        return result;
-
+    // Author zhengzekang
+    uint8_t* tmp = reinterpret_cast<uint8_t*>(&result);
+#pragma unroll
+    for (int i = 0; i < 16; i++) {
+      result[i] = static_cast<int8_t>(static_cast<int32_t>(tmp[i]) - 128);
     }
 
-    CUTLASS_DEVICE
-    result_type operator()(source_type const& s)
-    {
-        return convert(s);
-    }
+    return result;
+  }
+
+  CUTLASS_DEVICE
+  result_type operator()(source_type const& s) { return convert(s); }
 };
-template<int N>
+template <int N>
 struct FastInterleavedAndBiasedNumericArrayConverterNf4<int8_t, int8_t, N> {
-    static constexpr int VEC_WIDTH = 4;
-    static_assert(N == 32,"N must be 32");
-    static_assert(!(N % VEC_WIDTH), "N must be multiple of 16.");
+  static constexpr int VEC_WIDTH = 4;
+  static_assert(N == 32, "N must be 32");
+  static_assert(!(N % VEC_WIDTH), "N must be multiple of 16.");
 
-    using result_type = Array<int8_t, N>;
-    using source_type = Array<int8_t, N>;
+  using result_type = Array<int8_t, N>;
+  using source_type = Array<int8_t, N>;
 
-    CUTLASS_DEVICE
-    static result_type convert(source_type const& source)
-    {
-        return source;
-    }
+  CUTLASS_DEVICE
+  static result_type convert(source_type const& source) { return source; }
 
-    CUTLASS_DEVICE
-    result_type operator()(source_type const& s)
-    {
-        return convert(s);
-    }
+  CUTLASS_DEVICE
+  result_type operator()(source_type const& s) { return convert(s); }
 };
 
-template<int N>
-struct FastInterleavedAndBiasedNumericArrayConverterNf4<int8_t, cutlass::uint4b_t, N> {
-    static constexpr int VEC_WIDTH = 8;
-    // static_assert(N == 64,"N must be 64");
-    static_assert(!(N % VEC_WIDTH), "N must be multiple of VEC_WIDTH.");
+template <int N>
+struct FastInterleavedAndBiasedNumericArrayConverterNf4<int8_t,
+                                                        cutlass::uint4b_t,
+                                                        N> {
+  static constexpr int VEC_WIDTH = 8;
+  // static_assert(N == 64,"N must be 64");
+  static_assert(!(N % VEC_WIDTH), "N must be multiple of VEC_WIDTH.");
 
-    using result_type = Array<int8_t, N>;
-    using source_type = Array<cutlass::uint4b_t, N>;
-    using vec_source = Array<cutlass::uint4b_t, VEC_WIDTH>;
-    using vec_result = Array<int8_t, VEC_WIDTH>;
-    CUTLASS_DEVICE
-    static result_type convert(source_type const& source)
-    {
-        //nf4
-        using scalar_result_type = typename result_type::Element;
-        using scalar_source_type = typename source_type::Element;
-        result_type result;
-        vec_result* result_ptr = reinterpret_cast<vec_result*>(&result);
-        vec_source const* source_ptr = reinterpret_cast<vec_source const*>(&source);
-        CUTLASS_PRAGMA_UNROLL
-        for (int i = 0; i < N / VEC_WIDTH; ++i) {
-          vec_result index;
-          uint32_t* result_i_ptr = reinterpret_cast<uint32_t*>(&(result_ptr[i]));
-          uint32_t const i4s = reinterpret_cast<uint32_t const&>(source_ptr[i]);
-          static constexpr uint32_t up_int4_mask = 0xf0f0f0f0;
-          static constexpr uint32_t immLut_0 = 0x40;
-          static constexpr uint32_t immLut_1 = 0x80;
-          asm volatile(
-              "lop3.b32 %0, %1, %2, %3, %4;\n"
-              : "=r"(result_i_ptr[1])
-              : "r"(i4s), "r"(i4s), "n"(up_int4_mask), "n"(immLut_1));
-          asm volatile(
-              "lop3.b32 %0, %1, %2, %3, %4;\n"
-              : "=r"(result_i_ptr[0])
-              : "r"(i4s), "r"(i4s), "n"(up_int4_mask), "n"(immLut_0));
-          result_i_ptr[0]=(result_i_ptr[0]<<4);
-        }
-        return result;
+  using result_type = Array<int8_t, N>;
+  using source_type = Array<cutlass::uint4b_t, N>;
+  using vec_source = Array<cutlass::uint4b_t, VEC_WIDTH>;
+  using vec_result = Array<int8_t, VEC_WIDTH>;
+  CUTLASS_DEVICE
+  static result_type convert(source_type const& source) {
+    // nf4
+    using scalar_result_type = typename result_type::Element;
+    using scalar_source_type = typename source_type::Element;
+    result_type result;
+    vec_result* result_ptr = reinterpret_cast<vec_result*>(&result);
+    vec_source const* source_ptr = reinterpret_cast<vec_source const*>(&source);
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < N / VEC_WIDTH; ++i) {
+      vec_result index;
+      uint32_t* result_i_ptr = reinterpret_cast<uint32_t*>(&(result_ptr[i]));
+      uint32_t const i4s = reinterpret_cast<uint32_t const&>(source_ptr[i]);
+      static constexpr uint32_t up_int4_mask = 0xf0f0f0f0;
+      static constexpr uint32_t immLut_0 = 0x40;
+      static constexpr uint32_t immLut_1 = 0x80;
+      asm volatile("lop3.b32 %0, %1, %2, %3, %4;\n"
+                   : "=r"(result_i_ptr[1])
+                   : "r"(i4s), "r"(i4s), "n"(up_int4_mask), "n"(immLut_1));
+      asm volatile("lop3.b32 %0, %1, %2, %3, %4;\n"
+                   : "=r"(result_i_ptr[0])
+                   : "r"(i4s), "r"(i4s), "n"(up_int4_mask), "n"(immLut_0));
+      result_i_ptr[0] = (result_i_ptr[0] << 4);
     }
+    return result;
+  }
 
-    CUTLASS_DEVICE
-    static result_type convert(source_type const& source, int32_t* shared_look_up_table)
-    {
-        using scalar_result_type = typename result_type::Element;
-        using scalar_source_type = typename source_type::Element;
-        result_type result;
-        // static constexpr uint32_t loop_up_table[4]{0x03020100,0x07060504,0x0B0A0908,0x0F0E0D0C};
-        vec_result* result_ptr = reinterpret_cast<vec_result*>(&result);
-        vec_source const* source_ptr = reinterpret_cast<vec_source const*>(&source);
-        // FastInterleavedAndBiasedNumericArrayConverterNf4<scalar_result_type, scalar_source_type, VEC_WIDTH>
-        //     convert_vector_;
-        // static constexpr Array<uint32_t, 4> loop_up_table{0x00010203,0x04050607,0x08090A0B,0x0C0D0E0F};
-        for (int i = 0; i < N / VEC_WIDTH; ++i) {
-          vec_result index;
-          uint32_t* h = reinterpret_cast<uint32_t*>(&index);
-          // const int8_t* loop_up_table_int8 = reinterpret_cast<const int8_t*>(&loop_up_table);
-          uint32_t const i4s = reinterpret_cast<uint32_t const&>(source_ptr[i]);
-          static constexpr uint32_t down_int4_mask = 0x0f0f0f0f;
-          static constexpr uint32_t up_int4_mask = 0xf0f0f0f0;
-          h[0]=i4s&down_int4_mask;
-          h[1]=i4s&up_int4_mask;
-          h[1]=h[1]>>4;
+  CUTLASS_DEVICE
+  static result_type convert(source_type const& source,
+                             int32_t* shared_look_up_table) {
+    using scalar_result_type = typename result_type::Element;
+    using scalar_source_type = typename source_type::Element;
+    result_type result;
+    // static constexpr uint32_t
+    // loop_up_table[4]{0x03020100,0x07060504,0x0B0A0908,0x0F0E0D0C};
+    vec_result* result_ptr = reinterpret_cast<vec_result*>(&result);
+    vec_source const* source_ptr = reinterpret_cast<vec_source const*>(&source);
+    // FastInterleavedAndBiasedNumericArrayConverterNf4<scalar_result_type,
+    // scalar_source_type, VEC_WIDTH>
+    //     convert_vector_;
+    // static constexpr Array<uint32_t, 4>
+    // loop_up_table{0x00010203,0x04050607,0x08090A0B,0x0C0D0E0F};
+    for (int i = 0; i < N / VEC_WIDTH; ++i) {
+      vec_result index;
+      uint32_t* h = reinterpret_cast<uint32_t*>(&index);
+      // const int8_t* loop_up_table_int8 = reinterpret_cast<const
+      // int8_t*>(&loop_up_table);
+      uint32_t const i4s = reinterpret_cast<uint32_t const&>(source_ptr[i]);
+      static constexpr uint32_t down_int4_mask = 0x0f0f0f0f;
+      static constexpr uint32_t up_int4_mask = 0xf0f0f0f0;
+      h[0] = i4s & down_int4_mask;
+      h[1] = i4s & up_int4_mask;
+      h[1] = h[1] >> 4;
 
-          //TODO(wangbojun)!!!! do nf4 lookup table
-          CUTLASS_PRAGMA_UNROLL
-          for(int ii=0; ii<VEC_WIDTH;++ii){
-            result_ptr[i][ii]=shared_look_up_table[index[ii]];
-          }
-          // CUTLASS_PRAGMA_UNROLL
-          // for(int ii=0; ii<VEC_WIDTH;++ii){
-          //   result_ptr[i][ii]=static_cast<int8_t>(index[ii]);
-          // }
+      // TODO(wangbojun)!!!! do nf4 lookup table
+      CUTLASS_PRAGMA_UNROLL
+      for (int ii = 0; ii < VEC_WIDTH; ++ii) {
+        result_ptr[i][ii] = shared_look_up_table[index[ii]];
+      }
+      // CUTLASS_PRAGMA_UNROLL
+      // for(int ii=0; ii<VEC_WIDTH;++ii){
+      //   result_ptr[i][ii]=static_cast<int8_t>(index[ii]);
+      // }
 
-          // CUTLASS_PRAGMA_UNROLL
-          // for(int ii=0; ii<VEC_WIDTH;++ii){
-          //   result_ptr[i][ii]=0;
-          // }
+      // CUTLASS_PRAGMA_UNROLL
+      // for(int ii=0; ii<VEC_WIDTH;++ii){
+      //   result_ptr[i][ii]=0;
+      // }
 
-          // printf("### i:%d index:%d-%d-%d-%d-%d-%d-%d-%d, result:%d-%d-%d-%d-%d-%d-%d-%d\n",
-          //       i,
-          //       static_cast<int32_t>(index[0]),
-          //       static_cast<int32_t>(index[1]),
-          //       static_cast<int32_t>(index[2]),
-          //       static_cast<int32_t>(index[3]),
-          //       static_cast<int32_t>(index[4]),
-          //       static_cast<int32_t>(index[5]),
-          //       static_cast<int32_t>(index[6]),
-          //       static_cast<int32_t>(index[7]),
-          //       static_cast<int32_t>(result_ptr[i][0]),
-          //       static_cast<int32_t>(result_ptr[i][1]),
-          //       static_cast<int32_t>(result_ptr[i][2]),
-          //       static_cast<int32_t>(result_ptr[i][3]),
-          //       static_cast<int32_t>(result_ptr[i][4]),
-          //       static_cast<int32_t>(result_ptr[i][5]),
-          //       static_cast<int32_t>(result_ptr[i][6]),
-          //       static_cast<int32_t>(result_ptr[i][7])
-          //       );
-        }
-        return result;
+      // printf("### i:%d index:%d-%d-%d-%d-%d-%d-%d-%d,
+      // result:%d-%d-%d-%d-%d-%d-%d-%d\n",
+      //       i,
+      //       static_cast<int32_t>(index[0]),
+      //       static_cast<int32_t>(index[1]),
+      //       static_cast<int32_t>(index[2]),
+      //       static_cast<int32_t>(index[3]),
+      //       static_cast<int32_t>(index[4]),
+      //       static_cast<int32_t>(index[5]),
+      //       static_cast<int32_t>(index[6]),
+      //       static_cast<int32_t>(index[7]),
+      //       static_cast<int32_t>(result_ptr[i][0]),
+      //       static_cast<int32_t>(result_ptr[i][1]),
+      //       static_cast<int32_t>(result_ptr[i][2]),
+      //       static_cast<int32_t>(result_ptr[i][3]),
+      //       static_cast<int32_t>(result_ptr[i][4]),
+      //       static_cast<int32_t>(result_ptr[i][5]),
+      //       static_cast<int32_t>(result_ptr[i][6]),
+      //       static_cast<int32_t>(result_ptr[i][7])
+      //       );
     }
+    return result;
+  }
 
+  // #define NF4_LUT_DEBUG
+  CUTLASS_DEVICE
+  static result_type convert(
+      source_type const& source,
+      cutlass::Array<uint32_t, 4, true> const& reg_look_up_table) {
+    // static_assert(VEC_WIDTH==16, "VEC_WIDTH == 16 for int8 int8 int32")
+    using scalar_result_type = typename result_type::Element;
+    using scalar_source_type = typename source_type::Element;
+    result_type result;
+    // static constexpr uint32_t
+    // loop_up_table[4]{0x03020100,0x07060504,0x0B0A0908,0x0F0E0D0C};
+    vec_result* result_ptr = reinterpret_cast<vec_result*>(&result);
+    vec_source const* source_ptr = reinterpret_cast<vec_source const*>(&source);
+    // FastInterleavedAndBiasedNumericArrayConverterNf4<scalar_result_type,
+    // scalar_source_type, VEC_WIDTH>
+    //     convert_vector_;
+    // static constexpr Array<uint32_t, 4>
+    // loop_up_table{0x00010203,0x04050607,0x08090A0B,0x0C0D0E0F};
+    CUTLASS_PRAGMA_UNROLL
+    for (int i = 0; i < N / VEC_WIDTH; ++i) {
+      uint32_t bitwise_workspace;
+      uint32_t* result_reg = reinterpret_cast<uint32_t*>(&(result_ptr[i]));
+      uint32_t const i4s = reinterpret_cast<uint32_t const&>(source_ptr[i]);
+      static constexpr uint32_t down_int4_mask = 0x0f0f0f0f;
+#ifdef NF4_LUT_DEBUG
+      if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0 &&
+          blockIdx.z == 0) {
+        printf("#### lup 0:%08x, lup 1:%08x, lup2:%08x, lup3:%08x \n",
+               reg_look_up_table[0],
+               reg_look_up_table[1],
+               reg_look_up_table[2],
+               reg_look_up_table[3]);
+        printf("#### i4s:%08x \n", i4s);
+      }
+#endif
+      bitwise_workspace = i4s & down_int4_mask;  // 0x0v0v0v0v
 
-// #define NF4_LUT_DEBUG
-    CUTLASS_DEVICE
-    static result_type convert(source_type const& source, cutlass::Array<uint32_t, 4, true> const& reg_look_up_table)
-    {
-        // static_assert(VEC_WIDTH==16, "VEC_WIDTH == 16 for int8 int8 int32")
-        using scalar_result_type = typename result_type::Element;
-        using scalar_source_type = typename source_type::Element;
-        result_type result;
-        // static constexpr uint32_t loop_up_table[4]{0x03020100,0x07060504,0x0B0A0908,0x0F0E0D0C};
-        vec_result* result_ptr = reinterpret_cast<vec_result*>(&result);
-        vec_source const* source_ptr = reinterpret_cast<vec_source const*>(&source);
-        // FastInterleavedAndBiasedNumericArrayConverterNf4<scalar_result_type, scalar_source_type, VEC_WIDTH>
-        //     convert_vector_;
-        // static constexpr Array<uint32_t, 4> loop_up_table{0x00010203,0x04050607,0x08090A0B,0x0C0D0E0F};
-        CUTLASS_PRAGMA_UNROLL
-        for (int i = 0; i < N / VEC_WIDTH; ++i) {
-          uint32_t bitwise_workspace;
-          uint32_t* result_reg = reinterpret_cast<uint32_t*>(&(result_ptr[i]));
-          uint32_t const i4s = reinterpret_cast<uint32_t const&>(source_ptr[i]);
-          static constexpr uint32_t down_int4_mask = 0x0f0f0f0f;
-                                                                    #ifdef NF4_LUT_DEBUG
-                                                                      if(threadIdx.x==0 && blockIdx.x==0 && blockIdx.y==0 && blockIdx.z==0){
-                                                                        printf("#### lup 0:%08x, lup 1:%08x, lup2:%08x, lup3:%08x \n",
-                                                                              reg_look_up_table[0],
-                                                                              reg_look_up_table[1],
-                                                                              reg_look_up_table[2],
-                                                                              reg_look_up_table[3]);
-                                                                        printf("#### i4s:%08x \n", i4s);
-                                                                      }
-                                                                    #endif
-          bitwise_workspace = i4s & down_int4_mask; // 0x0v0v0v0v
+#ifdef NF4_LUT_DEBUG
+      if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0 &&
+          blockIdx.z == 0) {
+        printf("#### h0 0x0v0v0v0v:%08x \n", bitwise_workspace);
+      }
+#endif
 
-                                                                    #ifdef NF4_LUT_DEBUG
-                                                                      if(threadIdx.x==0 && blockIdx.x==0 && blockIdx.y==0 && blockIdx.z==0){
-                                                                        printf("#### h0 0x0v0v0v0v:%08x \n", bitwise_workspace);
-                                                                      }
-                                                                    #endif
+      uint32_t ge_7_mask_h_0 =
+          (bitwise_workspace | bitwise_workspace << 4) & 0x88888888;
+      ge_7_mask_h_0 |= ge_7_mask_h_0 >> 1;
+      ge_7_mask_h_0 |= ge_7_mask_h_0 >> 2;
 
-          uint32_t ge_7_mask_h_0 = (bitwise_workspace |bitwise_workspace << 4)  & 0x88888888;
-          ge_7_mask_h_0 |= ge_7_mask_h_0 >> 1;
-          ge_7_mask_h_0 |= ge_7_mask_h_0 >> 2;
+#ifdef NF4_LUT_DEBUG
+      if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0 &&
+          blockIdx.z == 0) {
+        printf("#### ge_7_mask_h_0:%08x \n", ge_7_mask_h_0);
+      }
+#endif
 
-                                                                    #ifdef NF4_LUT_DEBUG
-                                                                      if(threadIdx.x==0 && blockIdx.x==0 && blockIdx.y==0 && blockIdx.z==0){
-                                                                        printf("#### ge_7_mask_h_0:%08x \n", ge_7_mask_h_0);
-                                                                      }
-                                                                    #endif
+      // uint32_t look_up_h_0 = h[0];
+      bitwise_workspace =
+          (bitwise_workspace | (bitwise_workspace >> 4)) & 0x00FF00FF;
+      bitwise_workspace = (bitwise_workspace | (bitwise_workspace >> 8)) &
+                          0x00007777;  // make h[i] into 0x0000vvvv
 
-          // uint32_t look_up_h_0 = h[0];
-          bitwise_workspace = (bitwise_workspace | (bitwise_workspace >> 4)) & 0x00FF00FF;
-          bitwise_workspace = (bitwise_workspace | (bitwise_workspace >> 8)) & 0x00007777; // make h[i] into 0x0000vvvv
+#ifdef NF4_LUT_DEBUG
+      if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0 &&
+          blockIdx.z == 0) {
+        printf("#### h0 0x0000vvvv:%08x \n", bitwise_workspace);
+      }
+#endif
 
-                                                                    #ifdef NF4_LUT_DEBUG
-                                                                      if(threadIdx.x==0 && blockIdx.x==0 && blockIdx.y==0 && blockIdx.z==0){
-                                                                        printf("#### h0 0x0000vvvv:%08x \n", bitwise_workspace);
-                                                                      }
-                                                                    #endif
-
-          uint32_t result_1=0;
-          asm volatile("prmt.b32 %0,%1,%2,%3;\n"
-                 : "=r"(result_1)
-                 : "r"(reg_look_up_table[0]), "r"(reg_look_up_table[1]), "r"(bitwise_workspace));
-                                                                    #ifdef NF4_LUT_DEBUG
-                                                                      if(threadIdx.x==0 && blockIdx.x==0 && blockIdx.y==0 && blockIdx.z==0){
-                                                                        printf("#### result_1:%08x \n", result_1);
-                                                                      }
-                                                                    #endif
-          result_reg[0] = result_1 & (~ge_7_mask_h_0);
-          result_1 = ((~result_1)) & (ge_7_mask_h_0);
-          // result_1 = ((~result_1) | 0x01010101) & (ge_7_mask_h_0); // half mirror
-          result_reg[0] = result_reg[0] | result_1;
-                                                                    #ifdef NF4_LUT_DEBUG
-                                                                      if(threadIdx.x==0 && blockIdx.x==0 && blockIdx.y==0 && blockIdx.z==0){
-                                                                        printf("#### result[0]:%08x \n", result_reg[0]);
-                                                                      }
-                                                                    #endif
-          bitwise_workspace = i4s >> 4;
-          bitwise_workspace = bitwise_workspace & down_int4_mask;
-                                                                    #ifdef NF4_LUT_DEBUG
-                                                                      if(threadIdx.x==0 && blockIdx.x==0 && blockIdx.y==0 && blockIdx.z==0){
-                                                                        printf("#### h1 0x0v0v0v0v:%08x \n", bitwise_workspace);
-                                                                      }
-                                                                    #endif
-          ge_7_mask_h_0 = (bitwise_workspace | bitwise_workspace << 4)  & 0x88888888;
-          ge_7_mask_h_0 |= ge_7_mask_h_0 >> 1;
-          ge_7_mask_h_0 |= ge_7_mask_h_0 >> 2;
-                                                                    #ifdef NF4_LUT_DEBUG
-                                                                      if(threadIdx.x==0 && blockIdx.x==0 && blockIdx.y==0 && blockIdx.z==0){
-                                                                        printf("#### ge_7_mask_h_0:%08x \n", ge_7_mask_h_0);
-                                                                      }
-                                                                    #endif
-          bitwise_workspace = (bitwise_workspace | (bitwise_workspace >> 4)) & 0x00FF00FF;
-          bitwise_workspace = (bitwise_workspace | (bitwise_workspace >> 8)) & 0x00007777; // make look_up_h_0 into 0x0000vvvv
-                                                                    #ifdef NF4_LUT_DEBUG
-                                                                      if(threadIdx.x==0 && blockIdx.x==0 && blockIdx.y==0 && blockIdx.z==0){
-                                                                        printf("#### h1 0x0000vvvv:%08x \n", bitwise_workspace);
-                                                                      }
-                                                                    #endif
-          asm volatile("prmt.b32 %0,%1,%2,%3;\n"
-                 : "=r"(result_1)
-                 : "r"(reg_look_up_table[0]), "r"(reg_look_up_table[1]), "r"(bitwise_workspace));
-                                                                    #ifdef NF4_LUT_DEBUG
-                                                                      if(threadIdx.x==0 && blockIdx.x==0 && blockIdx.y==0 && blockIdx.z==0){
-                                                                        printf("#### result_1:%08x \n", result_1);
-                                                                      }
-                                                                    #endif
-          result_reg[1] = result_1 & (~ge_7_mask_h_0);
-          result_1 = ((~result_1)) & (ge_7_mask_h_0);
-          // result_1 = ((~result_1) | 0x01010101) & (ge_7_mask_h_0); // half mirror
-          result_reg[1] = result_reg[1] | result_1;
-                                                                    #ifdef NF4_LUT_DEBUG
-                                                                      if(threadIdx.x==0 && blockIdx.x==0 && blockIdx.y==0 && blockIdx.z==0){
-                                                                        printf("#### result[1]:%08x \n", result_reg[1]);
-                                                                      }
-                                                                    #endif
-        }
-        return result;
+      uint32_t result_1 = 0;
+      asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                   : "=r"(result_1)
+                   : "r"(reg_look_up_table[0]),
+                     "r"(reg_look_up_table[1]),
+                     "r"(bitwise_workspace));
+#ifdef NF4_LUT_DEBUG
+      if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0 &&
+          blockIdx.z == 0) {
+        printf("#### result_1:%08x \n", result_1);
+      }
+#endif
+      result_reg[0] = result_1 & (~ge_7_mask_h_0);
+      result_1 = ((~result_1)) & (ge_7_mask_h_0);
+      // result_1 = ((~result_1) | 0x01010101) & (ge_7_mask_h_0); // half mirror
+      result_reg[0] = result_reg[0] | result_1;
+#ifdef NF4_LUT_DEBUG
+      if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0 &&
+          blockIdx.z == 0) {
+        printf("#### result[0]:%08x \n", result_reg[0]);
+      }
+#endif
+      bitwise_workspace = i4s >> 4;
+      bitwise_workspace = bitwise_workspace & down_int4_mask;
+#ifdef NF4_LUT_DEBUG
+      if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0 &&
+          blockIdx.z == 0) {
+        printf("#### h1 0x0v0v0v0v:%08x \n", bitwise_workspace);
+      }
+#endif
+      ge_7_mask_h_0 = (bitwise_workspace | bitwise_workspace << 4) & 0x88888888;
+      ge_7_mask_h_0 |= ge_7_mask_h_0 >> 1;
+      ge_7_mask_h_0 |= ge_7_mask_h_0 >> 2;
+#ifdef NF4_LUT_DEBUG
+      if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0 &&
+          blockIdx.z == 0) {
+        printf("#### ge_7_mask_h_0:%08x \n", ge_7_mask_h_0);
+      }
+#endif
+      bitwise_workspace =
+          (bitwise_workspace | (bitwise_workspace >> 4)) & 0x00FF00FF;
+      bitwise_workspace = (bitwise_workspace | (bitwise_workspace >> 8)) &
+                          0x00007777;  // make look_up_h_0 into 0x0000vvvv
+#ifdef NF4_LUT_DEBUG
+      if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0 &&
+          blockIdx.z == 0) {
+        printf("#### h1 0x0000vvvv:%08x \n", bitwise_workspace);
+      }
+#endif
+      asm volatile("prmt.b32 %0,%1,%2,%3;\n"
+                   : "=r"(result_1)
+                   : "r"(reg_look_up_table[0]),
+                     "r"(reg_look_up_table[1]),
+                     "r"(bitwise_workspace));
+#ifdef NF4_LUT_DEBUG
+      if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0 &&
+          blockIdx.z == 0) {
+        printf("#### result_1:%08x \n", result_1);
+      }
+#endif
+      result_reg[1] = result_1 & (~ge_7_mask_h_0);
+      result_1 = ((~result_1)) & (ge_7_mask_h_0);
+      // result_1 = ((~result_1) | 0x01010101) & (ge_7_mask_h_0); // half mirror
+      result_reg[1] = result_reg[1] | result_1;
+#ifdef NF4_LUT_DEBUG
+      if (threadIdx.x == 0 && blockIdx.x == 0 && blockIdx.y == 0 &&
+          blockIdx.z == 0) {
+        printf("#### result[1]:%08x \n", result_reg[1]);
+      }
+#endif
     }
+    return result;
+  }
 
-
-    CUTLASS_DEVICE
-    result_type operator()(source_type const& s)
-    {
-        return convert(s);
-    }
-    CUTLASS_DEVICE
-    result_type operator()(source_type const& s, uint32_t shared_look_up_table[32][32], int32_t warp_idx, int32_t lane_idx)
-    {
-        return convert(s,shared_look_up_table,warp_idx, lane_idx);
-    }
-    CUTLASS_DEVICE
-    result_type operator()(source_type const& s, uint32_t shared_look_up_table[16])
-    {
-        return convert(s,shared_look_up_table);
-    }
-    CUTLASS_DEVICE
-    result_type operator()(source_type const& s, int32_t* shared_look_up_table)
-    {
-        return convert(s,shared_look_up_table);
-    }
-    CUTLASS_DEVICE
-    result_type operator()(source_type const& s, cutlass::Array<uint32_t, 4, true> const& reg_look_up_table)
-    {
-        return convert(s,reg_look_up_table);
-    }
+  CUTLASS_DEVICE
+  result_type operator()(source_type const& s) { return convert(s); }
+  CUTLASS_DEVICE
+  result_type operator()(source_type const& s,
+                         uint32_t shared_look_up_table[32][32],
+                         int32_t warp_idx,
+                         int32_t lane_idx) {
+    return convert(s, shared_look_up_table, warp_idx, lane_idx);
+  }
+  CUTLASS_DEVICE
+  result_type operator()(source_type const& s,
+                         uint32_t shared_look_up_table[16]) {
+    return convert(s, shared_look_up_table);
+  }
+  CUTLASS_DEVICE
+  result_type operator()(source_type const& s, int32_t* shared_look_up_table) {
+    return convert(s, shared_look_up_table);
+  }
+  CUTLASS_DEVICE
+  result_type operator()(
+      source_type const& s,
+      cutlass::Array<uint32_t, 4, true> const& reg_look_up_table) {
+    return convert(s, reg_look_up_table);
+  }
 };
 /////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -1,4 +1,5 @@
-// adapted from: https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/quantization/cutlass_w8a8/c3x/scaled_mm.cuh
+// adapted from:
+// https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/quantization/cutlass_w8a8/c3x/scaled_mm.cuh
 
 #pragma once
 
@@ -31,16 +32,19 @@ using namespace cute;
 
 namespace fastdeploy {
 
-template <typename ElementAB_, typename ElementD_,
-          template <typename, typename, typename> typename Epilogue_,
-          typename TileShape, typename ClusterShape, typename KernelSchedule,
+template <typename ElementAB_,
+          typename ElementD_,
+          template <typename, typename, typename>
+          typename Epilogue_,
+          typename TileShape,
+          typename ClusterShape,
+          typename KernelSchedule,
           typename EpilogueSchedule>
 struct cutlass_3x_gemm {
   using ElementAB = ElementAB_;
   using ElementD = ElementD_;
-  using ElementAcc =
-      typename std::conditional<std::is_same_v<ElementAB, int8_t>, int32_t,
-                                float>::type;
+  using ElementAcc = typename std::
+      conditional<std::is_same_v<ElementAB, int8_t>, int32_t, float>::type;
 
   using Epilogue = Epilogue_<ElementAcc, ElementD, TileShape>;
 
@@ -57,10 +61,21 @@ struct cutlass_3x_gemm {
 
   using CollectiveEpilogue =
       typename cutlass::epilogue::collective::CollectiveBuilder<
-          cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp, TileShape,
-          ClusterShape, cutlass::epilogue::collective::EpilogueTileAuto,
-          ElementAcc, float, ElementC, StrideC, AlignmentCD, ElementD, StrideD,
-          AlignmentCD, EpilogueSchedule, EVTCompute>::CollectiveOp;
+          cutlass::arch::Sm90,
+          cutlass::arch::OpClassTensorOp,
+          TileShape,
+          ClusterShape,
+          cutlass::epilogue::collective::EpilogueTileAuto,
+          ElementAcc,
+          float,
+          ElementC,
+          StrideC,
+          AlignmentCD,
+          ElementD,
+          StrideD,
+          AlignmentCD,
+          EpilogueSchedule,
+          EVTCompute>::CollectiveOp;
 
   static constexpr size_t CEStorageSize =
       sizeof(typename CollectiveEpilogue::SharedStorage);
@@ -78,16 +93,22 @@ struct cutlass_3x_gemm {
           KernelSchedule>::CollectiveOp;
   // clang-format on
 
-  using KernelType = enable_sm90_or_later<cutlass::gemm::kernel::GemmUniversal<
-      cute::Shape<int, int, int, int>, CollectiveMainloop, CollectiveEpilogue,
-      cutlass::gemm::PersistentScheduler>>;
+  using KernelType = enable_sm90_or_later<
+      cutlass::gemm::kernel::GemmUniversal<cute::Shape<int, int, int, int>,
+                                           CollectiveMainloop,
+                                           CollectiveEpilogue,
+                                           cutlass::gemm::PersistentScheduler>>;
 
   struct GemmKernel : public KernelType {};
 };
 
-template <typename ElementAB_, typename ElementD_,
-          template <typename, typename, typename> typename Epilogue_,
-          typename TileShape, typename ClusterShape, typename KernelSchedule,
+template <typename ElementAB_,
+          typename ElementD_,
+          template <typename, typename, typename>
+          typename Epilogue_,
+          typename TileShape,
+          typename ClusterShape,
+          typename KernelSchedule,
           typename EpilogueSchedule>
 struct cutlass_3x_gemm_sm100 {
   using ElementAB = ElementAB_;
@@ -108,9 +129,8 @@ struct cutlass_3x_gemm_sm100 {
   using LayoutD = cutlass::layout::RowMajor;
   static constexpr int AlignmentD = AlignmentC;
 
-  using ElementAcc =
-      typename std::conditional<std::is_same_v<ElementAB, int8_t>, int32_t,
-                                float>::type;
+  using ElementAcc = typename std::
+      conditional<std::is_same_v<ElementAB, int8_t>, int32_t, float>::type;
   using Epilogue = Epilogue_<ElementAcc, ElementD, TileShape>;
 
   // MMA type
@@ -127,23 +147,44 @@ struct cutlass_3x_gemm_sm100 {
 
   using CollectiveEpilogue =
       typename cutlass::epilogue::collective::CollectiveBuilder<
-          cutlass::arch::Sm100, cutlass::arch::OpClassTensorOp, TileShape,
-          ClusterShape, cutlass::epilogue::collective::EpilogueTileAuto,
-          ElementAccumulator, ElementCompute, ElementC, LayoutC, AlignmentC,
-          ElementD, LayoutD, AlignmentD, EpilogueSchedule,
+          cutlass::arch::Sm100,
+          cutlass::arch::OpClassTensorOp,
+          TileShape,
+          ClusterShape,
+          cutlass::epilogue::collective::EpilogueTileAuto,
+          ElementAccumulator,
+          ElementCompute,
+          ElementC,
+          LayoutC,
+          AlignmentC,
+          ElementD,
+          LayoutD,
+          AlignmentD,
+          EpilogueSchedule,
           EVTCompute>::CollectiveOp;
 
   using CollectiveMainloop =
       typename cutlass::gemm::collective::CollectiveBuilder<
-          cutlass::arch::Sm100, cutlass::arch::OpClassTensorOp, ElementAB,
-          LayoutA, AlignmentA, ElementAB, LayoutB, AlignmentB,
-          ElementAccumulator, TileShape, ClusterShape,
+          cutlass::arch::Sm100,
+          cutlass::arch::OpClassTensorOp,
+          ElementAB,
+          LayoutA,
+          AlignmentA,
+          ElementAB,
+          LayoutB,
+          AlignmentB,
+          ElementAccumulator,
+          TileShape,
+          ClusterShape,
           cutlass::gemm::collective::StageCountAutoCarveout<static_cast<int>(
               sizeof(typename CollectiveEpilogue::SharedStorage))>,
           KernelSchedule>::CollectiveOp;
 
-  using GemmKernel = cutlass::gemm::kernel::GemmUniversal<
-      Shape<int, int, int, int>, CollectiveMainloop, CollectiveEpilogue, void>;
+  using GemmKernel =
+      cutlass::gemm::kernel::GemmUniversal<Shape<int, int, int, int>,
+                                           CollectiveMainloop,
+                                           CollectiveEpilogue,
+                                           void>;
 };
 
-} // namespace fastdeploy
+}  // namespace fastdeploy

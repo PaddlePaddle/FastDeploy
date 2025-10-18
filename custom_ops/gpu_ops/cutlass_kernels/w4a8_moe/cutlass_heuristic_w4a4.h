@@ -33,7 +33,6 @@ limitations under the License. */
 #include "glog/logging.h"
 #include "w4a4_gemm_configs.h"
 
-
 static TileShape get_cta_shape_for_config_w4a4(CutlassTileConfig tile_config) {
   switch (tile_config) {
     case CutlassTileConfig::CtaShape16x128x64_WarpShape16x32x64:
@@ -58,12 +57,12 @@ static TileShape get_cta_shape_for_config_w4a4(CutlassTileConfig tile_config) {
 }
 
 static bool is_valid_split_k_factor_w4a4(const int64_t m,
-                                    const int64_t n,
-                                    const int64_t k,
-                                    const TileShape tile_shape,
-                                    const int split_k_factor,
-                                    const size_t workspace_bytes,
-                                    const bool is_weight_only) {
+                                         const int64_t n,
+                                         const int64_t k,
+                                         const TileShape tile_shape,
+                                         const int split_k_factor,
+                                         const size_t workspace_bytes,
+                                         const bool is_weight_only) {
   // All tile sizes have a k_tile of 64.
   static constexpr int k_tile = 64;
 
@@ -125,7 +124,7 @@ static std::vector<CutlassTileConfig> get_candidate_tiles_w4a4(
       CutlassTileConfig::CtaShape64x128x64_WarpShape64x32x64
       // CutlassTileConfig::CtaShape128x256x64_WarpShape64x64x64,
       // CutlassTileConfig::CtaShape128x128x64_WarpShape128x32x64,
-      };
+  };
   std::vector<CutlassTileConfig> quant_B_configs;
   switch (sm) {
     case 90:
@@ -147,7 +146,6 @@ static std::vector<CutlassTileConfig> get_candidate_tiles_w4a4(
       is_weight_only ? allowed_quant_B_configs : square_configs;
   return simt_configs_only ? simt_configs : allowed_configs;
 }
-
 
 static std::vector<CutlassGemmConfig> get_candidate_configs_nf4(
     int sm,
@@ -171,7 +169,6 @@ static std::vector<CutlassGemmConfig> get_candidate_configs_nf4(
   return candidate_configs;
 }
 
-
 static CutlassGemmConfig estimate_best_config_from_occupancies_w4a4(
     const std::vector<CutlassGemmConfig>& candidate_configs,
     const std::vector<int>& occupancies,
@@ -189,7 +186,7 @@ static CutlassGemmConfig estimate_best_config_from_occupancies_w4a4(
         "candidate configs vectors must have equal length.");
   }
 
-  VLOG(1)<<"estimate_best_config_from_occupancies_w4a4";
+  VLOG(1) << "estimate_best_config_from_occupancies_w4a4";
   CutlassGemmConfig best_config;
   // Score will be [0, 1]. The objective is to minimize this score.
   // It represents the fraction of SM resources unused in the last wave.
@@ -198,25 +195,25 @@ static CutlassGemmConfig estimate_best_config_from_occupancies_w4a4(
   int current_m_tile = 0;
 
   {
-    VLOG(1)<<"######## begin of cutlass gemm search";
-  if (m >= 256 &&
-      std::find_if(
-          candidate_configs.begin(),
-          candidate_configs.end(),
-          [](const CutlassGemmConfig& gemm_config) {
-            return gemm_config.tile_config ==
-                   CutlassTileConfig::CtaShape128x128x64_WarpShape128x32x64;
-          }) != candidate_configs.end()) {
-    VLOG(1) << "m >= 256, encoder config";
-    best_config = CutlassGemmConfig{
-        CutlassTileConfig::CtaShape128x128x64_WarpShape128x32x64,
-        SplitKStyle::SPLIT_K_STREAM,
-        // SplitKStyle::NO_SPLIT_K,
-        1,
-        3};
+    VLOG(1) << "######## begin of cutlass gemm search";
+    if (m >= 256 &&
+        std::find_if(
+            candidate_configs.begin(),
+            candidate_configs.end(),
+            [](const CutlassGemmConfig& gemm_config) {
+              return gemm_config.tile_config ==
+                     CutlassTileConfig::CtaShape128x128x64_WarpShape128x32x64;
+            }) != candidate_configs.end()) {
+      VLOG(1) << "m >= 256, encoder config";
+      best_config = CutlassGemmConfig{
+          CutlassTileConfig::CtaShape128x128x64_WarpShape128x32x64,
+          SplitKStyle::SPLIT_K_STREAM,
+          // SplitKStyle::NO_SPLIT_K,
+          1,
+          3};
 
-  } else {
-    VLOG(1) << "m <= 64 , decoder config";
+    } else {
+      VLOG(1) << "m <= 64 , decoder config";
       const int max_split_k =
           n >= multi_processor_count * 256 ? 1 : split_k_limit;
       for (int ii = 0; ii < candidate_configs.size(); ++ii) {
@@ -240,14 +237,14 @@ static CutlassGemmConfig estimate_best_config_from_occupancies_w4a4(
         const int ctas_in_n_dim = (n + tile_shape.n - 1) / tile_shape.n;
 
         for (int split_k_factor = 1; split_k_factor <= max_split_k;
-            ++split_k_factor) {
+             ++split_k_factor) {
           if (is_valid_split_k_factor_w4a4(m,
-                                      n,
-                                      k,
-                                      tile_shape,
-                                      split_k_factor,
-                                      workspace_bytes,
-                                      is_weight_only)) {
+                                           n,
+                                           k,
+                                           tile_shape,
+                                           split_k_factor,
+                                           workspace_bytes,
+                                           is_weight_only)) {
             const int ctas_per_wave = occupancy * multi_processor_count;
             const int ctas_for_problem =
                 ctas_in_m_dim * ctas_in_n_dim * split_k_factor;
@@ -262,7 +259,7 @@ static CutlassGemmConfig estimate_best_config_from_occupancies_w4a4(
             const float score_slack = 0.1f;
             if (current_score < config_score ||
                 ((config_waves > num_waves_total) &&
-                (current_score < config_score + score_slack))) {
+                 (current_score < config_score + score_slack))) {
               config_score = current_score;
               config_waves = num_waves_total;
               SplitKStyle split_style = split_k_factor > 1
@@ -273,9 +270,10 @@ static CutlassGemmConfig estimate_best_config_from_occupancies_w4a4(
                                               split_k_factor,
                                               candidate_config.stages};
               current_m_tile = tile_shape.m;
-              // std::cout<<"#### split-k factor: "<<split_k_factor<<" config: "<<static_cast<std::underlying_type<CutlassTileConfig>::type>(candidate_config.tile_config)<<std::endl;
+              // std::cout<<"#### split-k factor: "<<split_k_factor<<" config:
+              // "<<static_cast<std::underlying_type<CutlassTileConfig>::type>(candidate_config.tile_config)<<std::endl;
             } else if (current_score == config_score &&
-                      (best_config.stages < candidate_config.stages ||
+                       (best_config.stages < candidate_config.stages ||
                         split_k_factor < best_config.split_k_factor ||
                         current_m_tile < tile_shape.m)) {
               // Prefer deeper pipeline or smaller split-k
@@ -298,6 +296,9 @@ static CutlassGemmConfig estimate_best_config_from_occupancies_w4a4(
     throw std::runtime_error(
         "[FT Error] Heurisitc failed to find a valid config.");
   }
-  VLOG(1)<<"#### best split-k factor: "<<best_config.split_k_factor<<" config: "<<static_cast<std::underlying_type<CutlassTileConfig>::type>(best_config.tile_config);
+  VLOG(1) << "#### best split-k factor: " << best_config.split_k_factor
+          << " config: "
+          << static_cast<std::underlying_type<CutlassTileConfig>::type>(
+                 best_config.tile_config);
   return best_config;
 }

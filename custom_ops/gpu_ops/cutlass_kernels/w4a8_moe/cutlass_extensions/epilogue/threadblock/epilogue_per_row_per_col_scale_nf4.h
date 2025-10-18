@@ -52,8 +52,9 @@ namespace cutlass {
 namespace epilogue {
 namespace threadblock {
 template <typename T>
-[[gnu::warning("your type here")]]
-bool print_type_1111() { return false; }
+[[gnu::warning("your type here")]] bool print_type_1111() {
+  return false;
+}
 
 template <typename ThreadblockShape_,
           int ThreadCount,
@@ -197,10 +198,12 @@ class EpilogueVisitorPerRowPerColNf4 {
         shared_storage_(shared_storage),
         extent_(problem_size),
         elementwise_(params.elementwise),
-        per_token_quant_(quant_mode == cutlass::epilogue::QuantMode::PerTokenQuant ||
-                         quant_mode == cutlass::epilogue::QuantMode::PerTokenChannelQuant),
-        per_channel_quant_(quant_mode == cutlass::epilogue::QuantMode::PerChannelQuant ||
-                           quant_mode == cutlass::epilogue::QuantMode::PerTokenChannelQuant),
+        per_token_quant_(
+            quant_mode == cutlass::epilogue::QuantMode::PerTokenQuant ||
+            quant_mode == cutlass::epilogue::QuantMode::PerTokenChannelQuant),
+        per_channel_quant_(
+            quant_mode == cutlass::epilogue::QuantMode::PerChannelQuant ||
+            quant_mode == cutlass::epilogue::QuantMode::PerTokenChannelQuant),
         ptr_alpha_row_(ptr_alpha_row),
         ptr_alpha_col_(ptr_alpha_col),
         iterator_alpha_col_(params_alpha_col,
@@ -333,14 +336,13 @@ class EpilogueVisitorPerRowPerColNf4 {
         output_converter;
     OutputVector& output =
         reinterpret_cast<OutputVector*>(&fragment_D_)[frag_idx];
-    output               = output_converter(result);
+    output = output_converter(result);
     /* // Convert to the output, with non zero C added */
     // NumericArrayConverter<ElementOutput, ElementCompute, kElementsPerAccess>
     //     output_converter;
     // auto result_tmp = output_converter(result);
     // OutputVector& output =
     //     reinterpret_cast<OutputVector*>(&fragment_D_)[frag_idx];
-
 
     // OutputVector& vector_c =
     //     reinterpret_cast<OutputVector*>(&fragment_C_)[frag_idx];
@@ -353,9 +355,9 @@ class EpilogueVisitorPerRowPerColNf4 {
 
   /// Called after accumulators have been exchanged for each accumulator vector
   CUTLASS_DEVICE
-  void visit(AccumulatorFragment const &accum,
+  void visit(AccumulatorFragment const& accum,
              int reduce_fragment_idx,
-            OutputTileIterator &destination_iterator) {
+             OutputTileIterator& destination_iterator) {
     NumericArrayConverter<ElementCompute,
                           ElementAccumulator,
                           kElementsPerAccess>
@@ -368,7 +370,8 @@ class EpilogueVisitorPerRowPerColNf4 {
     ComputeFragment result = source_converter(accum);
 
     // if(threadIdx.x<32){
-    //   printf("#### %d-%d-%d--%d-%d-%d, reduced accu:%d-%d-%d-%d-%d-%d-%d-%d, dequant: accu:%f-%f-%f-%f-%f-%f-%f-%f  \n",
+    //   printf("#### %d-%d-%d--%d-%d-%d, reduced accu:%d-%d-%d-%d-%d-%d-%d-%d,
+    //   dequant: accu:%f-%f-%f-%f-%f-%f-%f-%f  \n",
     //           blockIdx.x,blockIdx.y,blockIdx.z,
     //           threadIdx.x,threadIdx.y,threadIdx.z,
     //           accum[0],
@@ -401,7 +404,8 @@ class EpilogueVisitorPerRowPerColNf4 {
     }
     // just for bug, pass
     // if(threadIdx.x<32){
-    //   printf("#### %d-%d-%d--%d-%d-%d, reduced accu:%d-%d-%d-%d-%d-%d-%d-%d, dequant: accu:%f-%f-%f-%f-%f-%f-%f-%f  \n",
+    //   printf("#### %d-%d-%d--%d-%d-%d, reduced accu:%d-%d-%d-%d-%d-%d-%d-%d,
+    //   dequant: accu:%f-%f-%f-%f-%f-%f-%f-%f  \n",
     //           blockIdx.x,blockIdx.y,blockIdx.z,
     //           threadIdx.x,threadIdx.y,threadIdx.z,
     //           accum[0],
@@ -428,7 +432,8 @@ class EpilogueVisitorPerRowPerColNf4 {
     // auto result_tmp = output_converter(result);
 
     // if(threadIdx.x<32){
-    //   printf("#### %d-%d-%d--%d-%d-%d, reduced accu:%d-%d-%d-%d-%d-%d-%d-%d, dequant: accu:%f-%f-%f-%f-%f-%f-%f-%f  \n",
+    //   printf("#### %d-%d-%d--%d-%d-%d, reduced accu:%d-%d-%d-%d-%d-%d-%d-%d,
+    //   dequant: accu:%f-%f-%f-%f-%f-%f-%f-%f  \n",
     //           blockIdx.x,blockIdx.y,blockIdx.z,
     //           threadIdx.x,threadIdx.y,threadIdx.z,
     //           accum[0],
@@ -452,8 +457,10 @@ class EpilogueVisitorPerRowPerColNf4 {
 
     typename OutputTileIterator::Fragment output_fragment;
     CUTLASS_PRAGMA_UNROLL
-    for (int ii = 0; ii<output_fragment.size(); ++ii){
-      output_fragment[ii]= static_cast<typename OutputTileIterator::Fragment::Element>(result[ii]);
+    for (int ii = 0; ii < output_fragment.size(); ++ii) {
+      output_fragment[ii] =
+          static_cast<typename OutputTileIterator::Fragment::Element>(
+              result[ii]);
     }
     // OutputVector& output =
     //     reinterpret_cast<OutputVector*>(&output_fragment)[0];
@@ -464,7 +471,8 @@ class EpilogueVisitorPerRowPerColNf4 {
     // }
 
     // if(threadIdx.x<32){
-    //   printf("#### %d-%d-%d--%d-%d-%d, reduced accu:%d-%d-%d-%d-%d-%d-%d-%d, dequant: accu:%f-%f-%f-%f-%f-%f-%f-%f  \n",
+    //   printf("#### %d-%d-%d--%d-%d-%d, reduced accu:%d-%d-%d-%d-%d-%d-%d-%d,
+    //   dequant: accu:%f-%f-%f-%f-%f-%f-%f-%f  \n",
     //           blockIdx.x,blockIdx.y,blockIdx.z,
     //           threadIdx.x,threadIdx.y,threadIdx.z,
     //           accum[0],
@@ -545,7 +553,9 @@ class EpilogueVisitorPerRowPerColNf4 {
       ComputeFragment const& scale_col,
       AlphaScaleElementType const& scale_row) {
     // if(threadIdx.x<32){
-    //   printf("#### per_token_channel_scale_accumulator,  %d-%d-%d--%d-%d-%d, quanted accu:%f-%f-%f-%f-%f-%f-%f-%f, scale_col:%f-%f-%f-%f-%f-%f-%f-%f  \n",
+    //   printf("#### per_token_channel_scale_accumulator,  %d-%d-%d--%d-%d-%d,
+    //   quanted accu:%f-%f-%f-%f-%f-%f-%f-%f, scale_col:%f-%f-%f-%f-%f-%f-%f-%f
+    //   \n",
     //          blockIdx.x,blockIdx.y,blockIdx.z,
     //          threadIdx.x,threadIdx.y,threadIdx.z,
     //          static_cast<float>(accum[0]),

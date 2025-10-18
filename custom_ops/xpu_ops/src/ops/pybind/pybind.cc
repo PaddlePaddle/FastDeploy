@@ -33,13 +33,13 @@ void prof_start();
 
 void prof_stop();
 
-void InitKVSignalPerQuery(const paddle::Tensor &seq_lens_encoder_tensor,
-                          const paddle::Tensor &seq_lens_this_time_tensor,
-                          const paddle::Tensor &seq_lens_decoder_tensor,
+void InitKVSignalPerQuery(const paddle::Tensor& seq_lens_encoder_tensor,
+                          const paddle::Tensor& seq_lens_this_time_tensor,
+                          const paddle::Tensor& seq_lens_decoder_tensor,
                           const int rank,
                           const int num_layers);
 
-void GetOutputKVSignal(const paddle::Tensor &x,
+void GetOutputKVSignal(const paddle::Tensor& x,
                        int64_t rank_id,
                        bool wait_flag);
 
@@ -416,7 +416,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("bias"),
         py::arg("weight_dtype"),
         py::arg("arch"),
-        py::arg("group_size")=-1);
+        py::arg("group_size") = -1);
 
   m.def("ep_moe_expert_combine",
         &MoeEPCombine,

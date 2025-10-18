@@ -34,7 +34,15 @@ repos:
 #   - id: codespell
 #     additional_dependencies: ['tomli']
 #     args: ['--toml', 'pyproject.toml']
-
+# For C++ files
+- repo: local
+  hooks:
+    - id: clang-format
+      name: clang-format
+      description: Format files with ClangFormat.
+      entry: bash ./scripts/clang_format.sh -i
+      language: system
+      files: \.(c|cc|cxx|cpp|cu|h|cuh|hpp|hxx)$
 # markdown
 - repo: https://github.com/jackdewinter/pymarkdown
   rev: v0.9.29

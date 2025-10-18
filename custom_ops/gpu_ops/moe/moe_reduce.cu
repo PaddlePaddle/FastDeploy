@@ -27,8 +27,10 @@ void MoeReduceKernel(const paddle::Tensor &ffn_out,
                      const paddle::Tensor &top_k_indices,
                      const paddle::optional<paddle::Tensor> &down_proj_bias,
                      const bool norm_topk_prob,
-                     const float routed_scaling_factor, const int num_rows,
-                     const int hidden_size, const int topk,
+                     const float routed_scaling_factor,
+                     const int num_rows,
+                     const int hidden_size,
+                     const int topk,
                      paddle::Tensor *output) {
   using namespace phi;
   typedef PDTraits<T> traits_;
@@ -37,19 +39,29 @@ void MoeReduceKernel(const paddle::Tensor &ffn_out,
   auto stream = ffn_out.stream();
 
   finalize_moe_routing_kernelLauncher(
-      ffn_out.data<data_t>(), output->data<data_t>(),
+      ffn_out.data<data_t>(),
+      output->data<data_t>(),
       down_proj_bias ? down_proj_bias->data<data_t>() : nullptr,
-      top_k_weight.data<float>(), permute_indices_per_token.data<int32_t>(),
-      top_k_indices.data<int>(), num_rows, hidden_size, topk,
-      static_cast<int>(1), norm_topk_prob, routed_scaling_factor, stream);
+      top_k_weight.data<float>(),
+      permute_indices_per_token.data<int32_t>(),
+      top_k_indices.data<int>(),
+      num_rows,
+      hidden_size,
+      topk,
+      static_cast<int>(1),
+      norm_topk_prob,
+      routed_scaling_factor,
+      stream);
 }
 
 paddle::Tensor MoeExpertReduceFunc(
-    const paddle::Tensor &ffn_out, const paddle::Tensor &top_k_weight,
+    const paddle::Tensor &ffn_out,
+    const paddle::Tensor &top_k_weight,
     const paddle::Tensor &permute_indices_per_token,
     const paddle::Tensor &top_k_indices,
     const paddle::optional<paddle::Tensor> &down_proj_bias,
-    const bool norm_topk_prob, const float routed_scaling_factor) {
+    const bool norm_topk_prob,
+    const float routed_scaling_factor) {
   const auto input_type = ffn_out.dtype();
   auto place = ffn_out.place();
 
@@ -59,38 +71,57 @@ paddle::Tensor MoeExpertReduceFunc(
 
   auto output = GetEmptyTensor({num_rows, hidden_size}, input_type, place);
 
-  if(num_rows == 0){
+  if (num_rows == 0) {
     return output;
   }
 
   switch (input_type) {
-  case paddle::DataType::BFLOAT16:
-    MoeReduceKernel<paddle::DataType::BFLOAT16>(
-        ffn_out, top_k_weight, permute_indices_per_token, top_k_indices,
-        down_proj_bias, norm_topk_prob, routed_scaling_factor, num_rows, hidden_size,
-        topk, &output);
-    break;
-  case paddle::DataType::FLOAT16:
-    MoeReduceKernel<paddle::DataType::BFLOAT16>(
-        ffn_out, top_k_weight, permute_indices_per_token, top_k_indices,
-        down_proj_bias, norm_topk_prob, routed_scaling_factor, num_rows, hidden_size,
-        topk, &output);
-    break;
-  default:
-    PD_THROW("Unsupported data type for MoeDispatchKernel");
+    case paddle::DataType::BFLOAT16:
+      MoeReduceKernel<paddle::DataType::BFLOAT16>(ffn_out,
+                                                  top_k_weight,
+                                                  permute_indices_per_token,
+                                                  top_k_indices,
+                                                  down_proj_bias,
+                                                  norm_topk_prob,
+                                                  routed_scaling_factor,
+                                                  num_rows,
+                                                  hidden_size,
+                                                  topk,
+                                                  &output);
+      break;
+    case paddle::DataType::FLOAT16:
+      MoeReduceKernel<paddle::DataType::BFLOAT16>(ffn_out,
+                                                  top_k_weight,
+                                                  permute_indices_per_token,
+                                                  top_k_indices,
+                                                  down_proj_bias,
+                                                  norm_topk_prob,
+                                                  routed_scaling_factor,
+                                                  num_rows,
+                                                  hidden_size,
+                                                  topk,
+                                                  &output);
+      break;
+    default:
+      PD_THROW("Unsupported data type for MoeDispatchKernel");
   }
   return output;
 }
 
-std::vector<paddle::Tensor>
-MoeExpertReduce(const paddle::Tensor &ffn_out,
-                const paddle::Tensor &top_k_weight,
-                const paddle::Tensor &permute_indices_per_token,
-                const paddle::Tensor &top_k_indices,
-                const paddle::optional<paddle::Tensor> &down_proj_bias,
-                const bool norm_topk_prob, const float routed_scaling_factor) {
-  return {MoeExpertReduceFunc(ffn_out, top_k_weight, permute_indices_per_token,
-                              top_k_indices, down_proj_bias, norm_topk_prob,
+std::vector<paddle::Tensor> MoeExpertReduce(
+    const paddle::Tensor &ffn_out,
+    const paddle::Tensor &top_k_weight,
+    const paddle::Tensor &permute_indices_per_token,
+    const paddle::Tensor &top_k_indices,
+    const paddle::optional<paddle::Tensor> &down_proj_bias,
+    const bool norm_topk_prob,
+    const float routed_scaling_factor) {
+  return {MoeExpertReduceFunc(ffn_out,
+                              top_k_weight,
+                              permute_indices_per_token,
+                              top_k_indices,
+                              down_proj_bias,
+                              norm_topk_prob,
                               routed_scaling_factor)};
 }
 
@@ -115,7 +146,6 @@ std::vector<paddle::DataType> MoeExpertReduceInferDtype(
   return {ffn_out_dtype};
 }
 
-
 /**
  * @brief Mixture of Experts (MoE) Expert Reduce Operator
  *
@@ -131,9 +161,8 @@ std::vector<paddle::DataType> MoeExpertReduceInferDtype(
  *   - top_k_weight: Routing weights for top-k experts per token
  *                  Shape: [total_tokens, moe_topk]
  *                  dtype: float32
- *   - permute_indices_per_token: Indices mapping for reconstructing original order
- *                               Shape: [moe_topk, total_tokens]
- *                               dtype: int32
+ *   - permute_indices_per_token: Indices mapping for reconstructing original
+ * order Shape: [moe_topk, total_tokens] dtype: int32
  *   - top_k_indices: Indices of selected top-k experts for each token
  *                   Shape: [total_tokens, moe_topk]
  *                   dtype: int32
@@ -157,8 +186,11 @@ std::vector<paddle::DataType> MoeExpertReduceInferDtype(
  * - For optimal performance, hidden_size should be a multiple of 128
  */
 PD_BUILD_STATIC_OP(moe_expert_reduce)
-    .Inputs({"ffn_out", "top_k_weight", "permute_indices_per_token",
-             "top_k_indices", paddle::Optional("down_proj_bias")})
+    .Inputs({"ffn_out",
+             "top_k_weight",
+             "permute_indices_per_token",
+             "top_k_indices",
+             paddle::Optional("down_proj_bias")})
     .Outputs({"output"})
     .Attrs({"norm_topk_prob:bool", "routed_scaling_factor:float"})
     .SetKernelFn(PD_KERNEL(MoeExpertReduce))

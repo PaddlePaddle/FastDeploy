@@ -17,15 +17,14 @@
 #include <iostream>
 #include "cuda.h"  // NOLINT
 
-#include "helper.h"
 #include "cutlass_helper.h"
+#include "helper.h"
+#include "paddle/common/flags.h"
 #include "paddle/extension.h"
 #include "paddle/phi/api/include/context_pool.h"
 #include "paddle/phi/common/data_type.h"
 #include "paddle/phi/common/place.h"
 #include "paddle/phi/core/allocator.h"
-#include "paddle/common/flags.h"
-
 
 typedef struct {
   const void *A;
@@ -47,8 +46,8 @@ typedef struct {
   std::vector<int64_t> &bias_dims;
   std::string &fuse_gemm_config;
   int split_k = 1;
-  const float* scalar_scale = nullptr;
-  const float* channel_scale = nullptr;
+  const float *scalar_scale = nullptr;
+  const float *channel_scale = nullptr;
   const void *A_scale = nullptr;
   const void *B_scale = nullptr;
 } GemmEpilogueAllParams;

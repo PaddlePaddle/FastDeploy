@@ -6,7 +6,9 @@
 
 namespace machete {
 
-template <int threads, typename PrepackedLayoutB, typename BInTensor,
+template <int threads,
+          typename PrepackedLayoutB,
+          typename BInTensor,
           typename ElementB>
 static __global__ void prepack_B_kernel(BInTensor B_in, ElementB* B_out_ptr) {
   auto constexpr block_size =
@@ -17,9 +19,10 @@ static __global__ void prepack_B_kernel(BInTensor B_in, ElementB* B_out_ptr) {
 
   // Which pre-packed are we responsible for
   auto blk_coord = make_coord(blockIdx.x, blockIdx.y, blockIdx.z);
-  auto tB_in = local_tile(
-      B_in, append(typename PrepackedLayoutB::PPBlockShape_NK{}, _1{}),
-      blk_coord);
+  auto tB_in =
+      local_tile(B_in,
+                 append(typename PrepackedLayoutB::PPBlockShape_NK{}, _1{}),
+                 blk_coord);
 
   // Find the start offset in the output for this pre-packed block
   auto bNbKL_to_offset = PrepackedLayoutB::bNbKL_to_offset(shape(B_in));
@@ -53,8 +56,10 @@ static __global__ void prepack_B_kernel(BInTensor B_in, ElementB* B_out_ptr) {
 
 template <typename PrepackedLayoutB, typename InLayout>
 static void prepack_B_template(
-    cudaStream_t stream, typename PrepackedLayoutB::ElementB const* B_in_ptr,
-    InLayout B_layout, typename PrepackedLayoutB::ElementB* B_out_ptr) {
+    cudaStream_t stream,
+    typename PrepackedLayoutB::ElementB const* B_in_ptr,
+    InLayout B_layout,
+    typename PrepackedLayoutB::ElementB* B_out_ptr) {
   using TileShapeNKL =
       decltype(append(typename PrepackedLayoutB::PPBlockShape_NK{}, _1{}));
   auto ilvd_NKbNbKL_to_offset =

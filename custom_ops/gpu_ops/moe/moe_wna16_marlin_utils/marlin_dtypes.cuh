@@ -1,12 +1,12 @@
 
 #ifndef _data_types_cuh
 #define _data_types_cuh
-#include "moe/moe_wna16_marlin_utils/marlin.cuh"
-#include <cuda_fp16.h>
 #include <cuda_bf16.h>
+#include <cuda_fp16.h>
+#include "moe/moe_wna16_marlin_utils/marlin.cuh"
 
 #ifndef MARLIN_NAMESPACE_NAME
-  #define MARLIN_NAMESPACE_NAME marlin_moe_wna16
+#define MARLIN_NAMESPACE_NAME marlin_moe_wna16
 #endif
 
 namespace MARLIN_NAMESPACE_NAME::kernel_types {
@@ -78,6 +78,6 @@ class ScalarType<nv_bfloat16> {
 #endif
 };
 
-}  // namespace MARLIN_NAMESPACE_NAME
+}  // namespace MARLIN_NAMESPACE_NAME::kernel_types
 
 #endif

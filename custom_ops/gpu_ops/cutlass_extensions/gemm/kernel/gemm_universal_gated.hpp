@@ -54,15 +54,16 @@ namespace cutlass::gemm::kernel {
  * 2.x API type argument order. Template arguments without two names
  * belong to the 3.x API only.
  **/
-template <class ProblemShapeOrThreadblockMma_, // (m, n, k) or (m, n, k, l)
+template <class ProblemShapeOrThreadblockMma_,  // (m, n, k) or (m, n, k, l)
           class CollectiveMainloopOrEpilogue_,
           class CollectiveEpilogueOrThreadblockSwizzle_,
-          class TileScheduler_ = void, class Enable = void>
+          class TileScheduler_ = void,
+          class Enable = void>
 class GemmUniversalGated;
 
 ////////////////////////////////////////////////////////////////////////////////
 
-} // namespace cutlass::gemm::kernel
+}  // namespace cutlass::gemm::kernel
 
 ////////////////////////////////////////////////////////////////////////////////
 

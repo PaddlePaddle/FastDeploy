@@ -62,7 +62,8 @@ __global__ void VariableLengthRotaryKernel(
     const int hi = qkv_bias / last_dim;
     const int h_bias = qkv_bias % last_dim;
 
-    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
+    const int ori_seq_id =
+        (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int emb_idx = ori_seq_id * half_lastdim + h_bias / 2;
     int new_emb_idx = rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
@@ -142,7 +143,8 @@ __global__ void VariableLengthRotaryKernel(
     const int hi = qkv_bias / last_dim;
     const int h_bias = qkv_bias % last_dim;
 
-    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
+    const int ori_seq_id =
+        (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int emb_idx = ori_seq_id * half_lastdim + h_bias / 2;
     int new_emb_idx = rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
@@ -213,10 +215,12 @@ __global__ void NeoxVariableLengthRotaryKernel(
     const int hi = qkv_bias / half_lastdim;
     const int h_bias = qkv_bias % half_lastdim;
 
-    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
+    const int ori_seq_id =
+        (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int emb_idx = ori_seq_id * last_dim + h_bias;
-    int new_emb_idx = rope_3d ? emb_idx + ori_bi * last_dim * seq_len * 2 : emb_idx;
+    int new_emb_idx =
+        rope_3d ? emb_idx + ori_bi * last_dim * seq_len * 2 : emb_idx;
     const int bias_idx_left =
         qkv_id * full_hidden_size + hi * last_dim + h_bias;
     const int bias_idx_right = bias_idx_left + half_lastdim;
@@ -301,10 +305,12 @@ __global__ void NeoxVariableLengthRotaryKernel(
     const int hi = qkv_bias / half_lastdim;
     const int h_bias = qkv_bias % half_lastdim;
 
-    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
+    const int ori_seq_id =
+        (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int emb_idx = ori_seq_id * last_dim + h_bias;
-    int new_emb_idx = rope_3d ? emb_idx + ori_bi * last_dim * seq_len * 2 : emb_idx;
+    int new_emb_idx =
+        rope_3d ? emb_idx + ori_bi * last_dim * seq_len * 2 : emb_idx;
     const int base_idx_left = token_idx * 3 * full_hidden_size +
                               qkv_id * full_hidden_size + hi * last_dim +
                               h_bias;
@@ -372,10 +378,12 @@ __global__ void GQAVariableLengthRotaryKernel(
     const int hi = bias / last_dim;
     const int h_bias = bias % last_dim;
 
-    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
+    const int ori_seq_id =
+        (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int64_t emb_idx = ori_seq_id * half_lastdim + h_bias / 2;
-    int64_t new_emb_idx = rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
+    int64_t new_emb_idx =
+        rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
     const int64_t bias_idx = hi * last_dim + h_bias;
     const int64_t base_idx = token_idx * offset + bias_idx;
     Load<int, VecSize>(&qkv[base_idx], &src_vec);
@@ -414,7 +422,6 @@ __global__ void GQAVariableLengthRotaryKernel(
   }
 }
 
-
 template <typename T, int VecSize = 1>
 __global__ void GQAVariableLengthRotaryQKNormKernel(
     const T *qkv,
@@ -431,10 +438,9 @@ __global__ void GQAVariableLengthRotaryQKNormKernel(
     const int seq_len,
     const int last_dim,
     const bool rope_3d,
-    const float* q_norm_weight,
-    const float* k_norm_weight,
-    const float rms_norm_eps
-) {
+    const float *q_norm_weight,
+    const float *k_norm_weight,
+    const float rms_norm_eps) {
   using LoadT = AlignedVector<T, VecSize>;
   constexpr int HalfVecSize = VecSize / 2;
   using LoadEmbT = AlignedVector<float, HalfVecSize>;
@@ -449,7 +455,8 @@ __global__ void GQAVariableLengthRotaryQKNormKernel(
   const int half_lastdim = last_dim / 2;
   const int offset = (q_num_head + kv_num_head) * last_dim;
   const int all_head_num = elem_cnt / last_dim;
-  for (int global_hi = global_warp_idx; global_hi < all_head_num; global_hi += all_warp_num) {
+  for (int global_hi = global_warp_idx; global_hi < all_head_num;
+       global_hi += all_warp_num) {
     int64_t linear_index = global_hi * last_dim + threadIdx.x * VecSize;
     const int token_idx = linear_index / offset;
     const int ori_bi = batch_id_per_token[token_idx];
@@ -458,14 +465,16 @@ __global__ void GQAVariableLengthRotaryQKNormKernel(
     const int hi = bias / last_dim;
     const int h_bias = bias % last_dim;
 
-    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
+    const int ori_seq_id =
+        (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
     const int64_t emb_idx = ori_seq_id * half_lastdim + h_bias / 2;
     const int64_t base_idx =
         token_idx * (q_num_head + 2 * kv_num_head) * last_dim + hi * last_dim +
         h_bias;
     Load<T, VecSize>(&qkv[base_idx], &src_vec);
 
-    int64_t new_emb_idx = rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
+    int64_t new_emb_idx =
+        rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
     Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
     Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
 
@@ -485,13 +494,12 @@ __global__ void GQAVariableLengthRotaryQKNormKernel(
       thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
     }
     WelfordWarpAllReduce<float, 32>(thread_m2, &warp_m2);
-    float row_variance =
-        max(warp_m2 / last_dim, 0.0f);
+    float row_variance = max(warp_m2 / last_dim, 0.0f);
     float row_inv_var = Rsqrt(row_variance + rms_norm_eps);
 
     if (hi < q_num_head) {
       Load<float, VecSize>(&q_norm_weight[threadIdx.x * VecSize], &q_norm_vec);
-      #pragma unroll
+#pragma unroll
       for (int i = 0; i < VecSize; i++) {
         src_vec[i] = static_cast<T>(tmp_vec[i] * row_inv_var * q_norm_vec[i]);
       }
@@ -506,21 +514,20 @@ __global__ void GQAVariableLengthRotaryQKNormKernel(
 }
 
 template <typename T, int VecSize = 1>
-__global__ void GQAVariableLengthRotaryKernel(
-    const T *qkv,
-    const float *cos_emb,
-    const float *sin_emb,
-    const int *batch_id_per_token,
-    const int *cu_seqlens_q,
-    const int *seq_lens,
-    const int *seq_lens_decoder,
-    T *qkv_out,
-    const int64_t elem_cnt,
-    const int q_num_head,
-    const int kv_num_head,
-    const int seq_len,
-    const int last_dim,
-    const bool rope_3d) {
+__global__ void GQAVariableLengthRotaryKernel(const T *qkv,
+                                              const float *cos_emb,
+                                              const float *sin_emb,
+                                              const int *batch_id_per_token,
+                                              const int *cu_seqlens_q,
+                                              const int *seq_lens,
+                                              const int *seq_lens_decoder,
+                                              T *qkv_out,
+                                              const int64_t elem_cnt,
+                                              const int q_num_head,
+                                              const int kv_num_head,
+                                              const int seq_len,
+                                              const int last_dim,
+                                              const bool rope_3d) {
   using LoadT = AlignedVector<T, VecSize>;
   constexpr int HalfVecSize = VecSize / 2;
   using LoadEmbT = AlignedVector<float, HalfVecSize>;
@@ -535,13 +542,15 @@ __global__ void GQAVariableLengthRotaryKernel(
        linear_index < elem_cnt;
        linear_index += step) {
     const int token_idx = linear_index / offset;
-    const int ori_bi = batch_id_per_token[token_idx];;
+    const int ori_bi = batch_id_per_token[token_idx];
+    ;
     if (seq_lens[ori_bi] == 0) continue;
     const int bias = linear_index % offset;
     const int hi = bias / last_dim;
     const int h_bias = bias % last_dim;
 
-    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
+    const int ori_seq_id =
+        (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int64_t emb_idx = ori_seq_id * half_lastdim + h_bias / 2;
     const int64_t base_idx =
@@ -549,7 +558,8 @@ __global__ void GQAVariableLengthRotaryKernel(
         h_bias;
     Load<T, VecSize>(&qkv[base_idx], &src_vec);
 
-    int64_t new_emb_idx = rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
+    int64_t new_emb_idx =
+        rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
     Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
     Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
 #pragma unroll
@@ -568,24 +578,25 @@ __global__ void GQAVariableLengthRotaryKernel(
 }
 
 template <typename T, int VecSize = 1>
-__global__ void GQAVariableLengthRotaryQuantKVKernel(const int *qkv,
-                                           const float *cos_emb, // [1, 1, seq_len, dim_head / 2]
-                                           const float *sin_emb,
-                                           const float *qkv_out_scales,
-                                           const int *batch_id_per_token,
-                                           const int *cu_seqlens_q,
-                                           const int *seq_lens,
-                                           const int *seq_lens_decoder,
-                                           const T *qkv_biases,
-                                           const T *cache_k_scales,
-                                           const T *cache_v_scales,
-                                           T *qkv_out,
-                                           const int64_t elem_cnt,
-                                           const int q_num_head,
-                                           const int kv_num_head,
-                                           const int seq_len,
-                                           const int last_dim,
-                                           const bool rope_3d) {
+__global__ void GQAVariableLengthRotaryQuantKVKernel(
+    const int *qkv,
+    const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
+    const float *sin_emb,
+    const float *qkv_out_scales,
+    const int *batch_id_per_token,
+    const int *cu_seqlens_q,
+    const int *seq_lens,
+    const int *seq_lens_decoder,
+    const T *qkv_biases,
+    const T *cache_k_scales,
+    const T *cache_v_scales,
+    T *qkv_out,
+    const int64_t elem_cnt,
+    const int q_num_head,
+    const int kv_num_head,
+    const int seq_len,
+    const int last_dim,
+    const bool rope_3d) {
   using LoadIn = AlignedVector<int, VecSize>;
   using LoadBiasT = AlignedVector<T, VecSize>;
   constexpr int HalfVecSize = VecSize / 2;
@@ -611,10 +622,12 @@ __global__ void GQAVariableLengthRotaryQuantKVKernel(const int *qkv,
     const int hi = bias / last_dim;
     const int h_bias = bias % last_dim;
 
-    int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
+    int ori_seq_id =
+        (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int64_t emb_idx = ori_seq_id * half_lastdim + h_bias / 2;
-    int64_t new_emb_idx = rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
+    int64_t new_emb_idx =
+        rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
     const int64_t bias_idx = hi * last_dim + h_bias;
     const int64_t base_idx = token_idx * offset + bias_idx;
     Load<int, VecSize>(&qkv[base_idx], &src_vec);
@@ -634,23 +647,31 @@ __global__ void GQAVariableLengthRotaryQuantKVKernel(const int *qkv,
       input_right = qkv_biases ? input_right * out_scale_vec[2 * i + 1] +
                                      static_cast<float>(bias_vec[2 * i + 1])
                                : input_right * out_scale_vec[2 * i + 1];
-      if (hi < q_num_head) { // qk rope
+      if (hi < q_num_head) {  // qk rope
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        bias_vec[2 * i] = static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-        bias_vec[2 * i + 1] = static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+        bias_vec[2 * i] =
+            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+        bias_vec[2 * i + 1] =
+            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
       } else if (hi < q_num_head + kv_num_head) {
         int k_hi = hi - q_num_head;
         const int scale_idx = k_hi * last_dim + h_bias;
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        bias_vec[2 * i] = static_cast<T>((input_left * cos_tmp - input_right * sin_tmp) * float(cache_k_scales[scale_idx + 2 * i]));
-        bias_vec[2 * i + 1] = static_cast<T>((input_right * cos_tmp + input_left * sin_tmp) * float(cache_k_scales[scale_idx + 2 * i + 1]));
+        bias_vec[2 * i] =
+            static_cast<T>((input_left * cos_tmp - input_right * sin_tmp) *
+                           float(cache_k_scales[scale_idx + 2 * i]));
+        bias_vec[2 * i + 1] =
+            static_cast<T>((input_right * cos_tmp + input_left * sin_tmp) *
+                           float(cache_k_scales[scale_idx + 2 * i + 1]));
       } else {
         int v_hi = hi - q_num_head - kv_num_head;
         const int scale_idx = v_hi * last_dim + h_bias;
-        bias_vec[2 * i] = static_cast<T>(input_left * float(cache_v_scales[scale_idx + 2 * i]));
-        bias_vec[2 * i + 1] = static_cast<T>(input_right * float(cache_v_scales[scale_idx + 2 * i + 1]));
+        bias_vec[2 * i] = static_cast<T>(
+            input_left * float(cache_v_scales[scale_idx + 2 * i]));
+        bias_vec[2 * i + 1] = static_cast<T>(
+            input_right * float(cache_v_scales[scale_idx + 2 * i + 1]));
       }
     }
     Store<T, VecSize>(bias_vec, &qkv_out[base_idx]);
@@ -658,23 +679,24 @@ __global__ void GQAVariableLengthRotaryQuantKVKernel(const int *qkv,
 }
 
 template <typename T, int VecSize = 1>
-__global__ void GQAVariableLengthRotaryQuantKVKernel(const T *qkv,
-                                           const float *cos_emb, // [1, 1, seq_len, dim_head / 2]
-                                           const float *sin_emb,
-                                           const int *batch_id_per_token,
-                                           const int *cu_seqlens_q,
-                                           const int *seq_lens,
-                                           const int *seq_lens_decoder,
-                                           const T *qkv_biases,
-                                           const T *cache_k_scales,
-                                           const T *cache_v_scales,
-                                           T *qkv_out,
-                                           const int64_t elem_cnt,
-                                           const int q_num_head,
-                                           const int kv_num_head,
-                                           const int seq_len,
-                                           const int last_dim,
-                                           const bool rope_3d) {
+__global__ void GQAVariableLengthRotaryQuantKVKernel(
+    const T *qkv,
+    const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
+    const float *sin_emb,
+    const int *batch_id_per_token,
+    const int *cu_seqlens_q,
+    const int *seq_lens,
+    const int *seq_lens_decoder,
+    const T *qkv_biases,
+    const T *cache_k_scales,
+    const T *cache_v_scales,
+    T *qkv_out,
+    const int64_t elem_cnt,
+    const int q_num_head,
+    const int kv_num_head,
+    const int seq_len,
+    const int last_dim,
+    const bool rope_3d) {
   using LoadT = AlignedVector<T, VecSize>;
   constexpr int HalfVecSize = VecSize / 2;
   using LoadEmbT = AlignedVector<float, HalfVecSize>;
@@ -697,10 +719,12 @@ __global__ void GQAVariableLengthRotaryQuantKVKernel(const T *qkv,
     const int hi = bias / last_dim;
     const int h_bias = bias % last_dim;
 
-    int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
+    int ori_seq_id =
+        (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int64_t emb_idx = ori_seq_id * half_lastdim + h_bias / 2;
-    int64_t new_emb_idx = rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
+    int64_t new_emb_idx =
+        rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
     const int64_t bias_idx = hi * last_dim + h_bias;
     const int64_t base_idx = token_idx * offset + bias_idx;
     Load<T, VecSize>(&qkv[base_idx], &src_vec);
@@ -711,29 +735,43 @@ __global__ void GQAVariableLengthRotaryQuantKVKernel(const T *qkv,
     Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
 #pragma unroll
     for (int i = 0; i < HalfVecSize; i++) {
-      const float input_left = qkv_biases ? static_cast<float>(src_vec[2 * i]+ bias_vec[2 * i]) : static_cast<float>(src_vec[2 * i]);
-      const float input_right = qkv_biases ? static_cast<float>(src_vec[2 * i + 1] + bias_vec[2 * i + 1]) : static_cast<float>(src_vec[2 * i + 1]);
+      const float input_left =
+          qkv_biases ? static_cast<float>(src_vec[2 * i] + bias_vec[2 * i])
+                     : static_cast<float>(src_vec[2 * i]);
+      const float input_right =
+          qkv_biases
+              ? static_cast<float>(src_vec[2 * i + 1] + bias_vec[2 * i + 1])
+              : static_cast<float>(src_vec[2 * i + 1]);
       // const float cos_tmp = cos_emb_vec[i];
       // const float sin_tmp = sin_emb_vec[i];
-      // src_vec[2 * i] = static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-      // src_vec[2 * i + 1] = static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
-      if (hi < q_num_head) { // qk rope
+      // src_vec[2 * i] = static_cast<T>(input_left * cos_tmp - input_right *
+      // sin_tmp); src_vec[2 * i + 1] = static_cast<T>(input_right * cos_tmp +
+      // input_left * sin_tmp);
+      if (hi < q_num_head) {  // qk rope
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        src_vec[2 * i] = static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
-        src_vec[2 * i + 1] = static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
+        src_vec[2 * i] =
+            static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
+        src_vec[2 * i + 1] =
+            static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
       } else if (hi < q_num_head + kv_num_head) {
         int k_hi = hi - q_num_head;
         const int scale_idx = k_hi * last_dim + h_bias;
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
-        src_vec[2 * i] = static_cast<T>((input_left * cos_tmp - input_right * sin_tmp) * float(cache_k_scales[scale_idx + 2 * i]));
-        src_vec[2 * i + 1] = static_cast<T>((input_right * cos_tmp + input_left * sin_tmp) * float(cache_k_scales[scale_idx + 2 * i + 1]));
+        src_vec[2 * i] =
+            static_cast<T>((input_left * cos_tmp - input_right * sin_tmp) *
+                           float(cache_k_scales[scale_idx + 2 * i]));
+        src_vec[2 * i + 1] =
+            static_cast<T>((input_right * cos_tmp + input_left * sin_tmp) *
+                           float(cache_k_scales[scale_idx + 2 * i + 1]));
       } else {
         int v_hi = hi - q_num_head - kv_num_head;
         const int scale_idx = v_hi * last_dim + h_bias;
-        src_vec[2 * i] = static_cast<T>(input_left * float(cache_v_scales[scale_idx + 2 * i]));
-        src_vec[2 * i + 1] = static_cast<T>(input_right * float(cache_v_scales[scale_idx + 2 * i + 1]));
+        src_vec[2 * i] = static_cast<T>(
+            input_left * float(cache_v_scales[scale_idx + 2 * i]));
+        src_vec[2 * i + 1] = static_cast<T>(
+            input_right * float(cache_v_scales[scale_idx + 2 * i + 1]));
       }
     }
     Store<T, VecSize>(src_vec, &qkv_out[base_idx]);
@@ -784,10 +822,12 @@ __global__ void GQANeoxVariableLengthRotaryKernel(
     const int hi = bias / half_lastdim;
     const int h_bias = bias % half_lastdim;
 
-    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
+    const int ori_seq_id =
+        (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int emb_idx = ori_seq_id * last_dim + h_bias;
-    int new_emb_idx = rope_3d ? emb_idx + ori_bi * last_dim * seq_len * 2 : emb_idx;
+    int new_emb_idx =
+        rope_3d ? emb_idx + ori_bi * last_dim * seq_len * 2 : emb_idx;
     const int bias_idx_left = hi * last_dim + h_bias;
     const int bias_idx_right = bias_idx_left + half_lastdim;
     const int base_idx_left =
@@ -834,23 +874,22 @@ __global__ void GQANeoxVariableLengthRotaryKernel(
 }
 
 template <typename T, int VecSize = 1>
-__global__ void GQANeoxVariableLengthRotaryKernel(
-    const T *qkv,
-    const float *cos_emb,
-    const float *sin_emb,
-    const int *batch_id_per_token,
-    const int *cu_seqlens_q,
-    const int *seq_lens,
-    const int *seq_lens_decoder,
-    const float *qkv_out_scales,
-    const T *qkv_biases,
-    T *qkv_out,
-    const int64_t elem_cnt,
-    const int q_num_head,
-    const int kv_num_head,
-    const int seq_len,
-    const int last_dim,
-    const bool rope_3d) {
+__global__ void GQANeoxVariableLengthRotaryKernel(const T *qkv,
+                                                  const float *cos_emb,
+                                                  const float *sin_emb,
+                                                  const int *batch_id_per_token,
+                                                  const int *cu_seqlens_q,
+                                                  const int *seq_lens,
+                                                  const int *seq_lens_decoder,
+                                                  const float *qkv_out_scales,
+                                                  const T *qkv_biases,
+                                                  T *qkv_out,
+                                                  const int64_t elem_cnt,
+                                                  const int q_num_head,
+                                                  const int kv_num_head,
+                                                  const int seq_len,
+                                                  const int last_dim,
+                                                  const bool rope_3d) {
   using LoadT = AlignedVector<T, VecSize>;
   using LoadEmbT = AlignedVector<float, VecSize>;
   LoadT left_vec;
@@ -871,10 +910,12 @@ __global__ void GQANeoxVariableLengthRotaryKernel(
     const int hi = bias / half_lastdim;
     const int h_bias = bias % half_lastdim;
 
-    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
+    const int ori_seq_id =
+        (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int emb_idx = ori_seq_id * last_dim + h_bias;
-    int64_t new_emb_idx = rope_3d ? emb_idx + ori_bi * last_dim * seq_len * 2 : emb_idx;
+    int64_t new_emb_idx =
+        rope_3d ? emb_idx + ori_bi * last_dim * seq_len * 2 : emb_idx;
     const int base_idx_left =
         token_idx * (q_num_head + 2 * kv_num_head) * last_dim + hi * last_dim +
         h_bias;
@@ -939,10 +980,12 @@ __global__ void GQANeoxVariableLengthPartialRotaryKernel(
     const int hi = bias / rotary_dim_half;
     const int h_bias = bias % rotary_dim_half;
 
-    const int ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
+    const int ori_seq_id =
+        (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int emb_idx = ori_seq_id * rotary_dim_half + h_bias;
-    int64_t new_emb_idx = rope_3d ? emb_idx + ori_bi * head_dim * seq_len * 2 : emb_idx;
+    int64_t new_emb_idx =
+        rope_3d ? emb_idx + ori_bi * head_dim * seq_len * 2 : emb_idx;
     const int base_idx_left =
         token_idx * (q_num_head + 2 * kv_num_head) * head_dim + hi * head_dim +
         h_bias;
@@ -976,11 +1019,11 @@ __global__ void cache_kernel(
                                   // head_size]
     T *__restrict__ value_cache,  // [num_blocks, kv_num_heads, block_size,
                                   // head_size]
-    const int *__restrict__ block_tables,      // [bsz, max_blocks_per_seq]
-    const int *__restrict__ batch_id_per_token,   // [num_tokens]
-    const int *__restrict__ cu_seqlens_q,   // [bsz]
-    const int *__restrict__ seq_lens,          // [bsz]
-    const int *__restrict__ seq_lens_decoder,  // [bsz]
+    const int *__restrict__ block_tables,        // [bsz, max_blocks_per_seq]
+    const int *__restrict__ batch_id_per_token,  // [num_tokens]
+    const int *__restrict__ cu_seqlens_q,        // [bsz]
+    const int *__restrict__ seq_lens,            // [bsz]
+    const int *__restrict__ seq_lens_decoder,    // [bsz]
     const int max_seq_len,
     const int max_blocks_per_seq,
     const int num_heads,
@@ -1007,7 +1050,8 @@ __global__ void cache_kernel(
     const int32_t ori_bi = batch_id_per_token[token_idx];
     if (ori_bi == -1) continue;  // skip batch_id_per_token[token_idx]=-1
     if (seq_lens[ori_bi] == 0) continue;
-    const uint32_t ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
+    const uint32_t ori_seq_id =
+        (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
     const int32_t *block_table_now = nullptr;
 
@@ -1031,7 +1075,6 @@ __global__ void cache_kernel(
   }
 }
 
-
 template <typename T,
           uint32_t num_frags_y,
           uint32_t num_frags_z,
@@ -1039,7 +1082,7 @@ template <typename T,
           uint32_t BLOCK_SIZE,
           uint32_t NUM_WARPS,
           bool is_need_kv_quant,
-          bool IsFP8=false>
+          bool IsFP8 = false>
 __global__ void append_write_cache_kv_c8_qkv(
     uint8_t *__restrict__ cache_k,
     uint8_t *__restrict__ cache_v,
@@ -1095,16 +1138,15 @@ __global__ void append_write_cache_kv_c8_qkv(
     // int lane_id = wid * 32 + tid;
     // pad zero for this kv_head_idx for this block
     LoadPadKVT pad_cache_vec;
-    *(reinterpret_cast<uint4*>(pad_cache_vec.val)) = make_uint4(0, 0, 0, 0);
+    *(reinterpret_cast<uint4 *>(pad_cache_vec.val)) = make_uint4(0, 0, 0, 0);
     // reset k
     constexpr int num_vecs_per_head_k = HEAD_DIM / KV_VEC_SIZE;
     constexpr int num_token_each_time_k = 32 / num_vecs_per_head_k;
     uint32_t tgt_idx =
         (block_id * kv_num_heads + kv_head_idx) * BLOCK_SIZE * HEAD_DIM +
         tid % num_vecs_per_head_k * KV_VEC_SIZE;
-    for (int block_i = tid / num_vecs_per_head_k;
-          block_i < BLOCK_SIZE;
-          block_i += num_token_each_time_k) {
+    for (int block_i = tid / num_vecs_per_head_k; block_i < BLOCK_SIZE;
+         block_i += num_token_each_time_k) {
       Store<uint8_t, KV_VEC_SIZE>(pad_cache_vec,
                                   &cache_k[tgt_idx + block_i * HEAD_DIM]);
     }
@@ -1112,13 +1154,12 @@ __global__ void append_write_cache_kv_c8_qkv(
     // reset v
     const int num_vecs_per_head_v = BLOCK_SIZE / KV_VEC_SIZE;
     const int num_token_each_time_v = 32 / num_vecs_per_head_v;
-    tgt_idx =
-        (block_id * kv_num_heads + kv_head_idx) * HEAD_DIM * BLOCK_SIZE +
-        tid % num_vecs_per_head_v * KV_VEC_SIZE;
+    tgt_idx = (block_id * kv_num_heads + kv_head_idx) * HEAD_DIM * BLOCK_SIZE +
+              tid % num_vecs_per_head_v * KV_VEC_SIZE;
     for (int block_i = tid / num_vecs_per_head_v; block_i < HEAD_DIM;
-          block_i += num_token_each_time_v) {
-      Store<uint8_t, KV_VEC_SIZE>(
-          pad_cache_vec, &cache_v[tgt_idx + block_i * BLOCK_SIZE]);
+         block_i += num_token_each_time_v) {
+      Store<uint8_t, KV_VEC_SIZE>(pad_cache_vec,
+                                  &cache_v[tgt_idx + block_i * BLOCK_SIZE]);
     }
   }
   smem_t k_smem(k_smem_ori);
@@ -1212,7 +1253,8 @@ __global__ void append_write_cache_kv_c8_qkv(
         uint8_t uint_quant_value;
         if (chunk_start_k + (v_id / 4) * 8 >= start_len &&
             chunk_start_k + (v_id / 4) * 8 < end_len) {
-          uint_quant_value = QuantToC8<T, is_need_kv_quant, IsFP8>(cache_k_scale, k_frag_T[v_id], 127.0f, -127.0f);
+          uint_quant_value = QuantToC8<T, is_need_kv_quant, IsFP8>(
+              cache_k_scale, k_frag_T[v_id], 127.0f, -127.0f);
         } else {
           uint_quant_value = 0;
         }
@@ -1268,7 +1310,8 @@ __global__ void append_write_cache_kv_c8_qkv(
         uint8_t uint_quant_value;
         if (chunk_start_v + v_id % 2 + (v_id % 4) / 2 * 8 >= start_len &&
             chunk_start_v + v_id % 2 + (v_id % 4) / 2 * 8 < end_len) {
-          uint_quant_value = QuantToC8<T, is_need_kv_quant, IsFP8>(cache_v_scale, v_frag_T[v_id], 127.0f, -127.0f);
+          uint_quant_value = QuantToC8<T, is_need_kv_quant, IsFP8>(
+              cache_v_scale, v_frag_T[v_id], 127.0f, -127.0f);
           // store now
         } else {
           uint_quant_value = 0;
@@ -1313,8 +1356,8 @@ __global__ void append_write_cache_kv_c8_qkv_dynamic(
     uint8_t *__restrict__ cache_k,
     uint8_t *__restrict__ cache_v,
     const T *__restrict__ qkv_input,
-    T *__restrict__ cache_k_scales, // [block_num, num_heads, block_size]
-    T *__restrict__ cache_v_scales, // [block_num, num_heads, block_size]
+    T *__restrict__ cache_k_scales,  // [block_num, num_heads, block_size]
+    T *__restrict__ cache_v_scales,  // [block_num, num_heads, block_size]
     const int *__restrict__ batch_ids,
     const int *__restrict__ tile_ids,
     const int *__restrict__ seq_lens_this_time,
@@ -1364,16 +1407,15 @@ __global__ void append_write_cache_kv_c8_qkv_dynamic(
     using LoadPadKVT = AlignedVector<uint8_t, KV_VEC_SIZE>;
     // pad zero for this kv_head_idx for this block
     LoadPadKVT pad_cache_vec;
-    *(reinterpret_cast<uint4*>(pad_cache_vec.val)) = make_uint4(0, 0, 0, 0);
+    *(reinterpret_cast<uint4 *>(pad_cache_vec.val)) = make_uint4(0, 0, 0, 0);
     // reset k
     constexpr int num_vecs_per_head_k = HEAD_DIM / KV_VEC_SIZE;
     constexpr int num_token_each_time_k = 32 / num_vecs_per_head_k;
     uint32_t tgt_idx =
         (block_id * kv_num_heads + kv_head_idx) * BLOCK_SIZE * HEAD_DIM +
         tid % num_vecs_per_head_k * KV_VEC_SIZE;
-    for (int block_i = tid / num_vecs_per_head_k;
-          block_i < BLOCK_SIZE;
-          block_i += num_token_each_time_k) {
+    for (int block_i = tid / num_vecs_per_head_k; block_i < BLOCK_SIZE;
+         block_i += num_token_each_time_k) {
       Store<uint8_t, KV_VEC_SIZE>(pad_cache_vec,
                                   &cache_k[tgt_idx + block_i * HEAD_DIM]);
     }
@@ -1381,13 +1423,12 @@ __global__ void append_write_cache_kv_c8_qkv_dynamic(
     // reset v
     const int num_vecs_per_head_v = BLOCK_SIZE / KV_VEC_SIZE;
     const int num_token_each_time_v = 32 / num_vecs_per_head_v;
-    tgt_idx =
-        (block_id * kv_num_heads + kv_head_idx) * HEAD_DIM * BLOCK_SIZE +
-        tid % num_vecs_per_head_v * KV_VEC_SIZE;
+    tgt_idx = (block_id * kv_num_heads + kv_head_idx) * HEAD_DIM * BLOCK_SIZE +
+              tid % num_vecs_per_head_v * KV_VEC_SIZE;
     for (int block_i = tid / num_vecs_per_head_v; block_i < HEAD_DIM;
-          block_i += num_token_each_time_v) {
-      Store<uint8_t, KV_VEC_SIZE>(
-          pad_cache_vec, &cache_v[tgt_idx + block_i * BLOCK_SIZE]);
+         block_i += num_token_each_time_v) {
+      Store<uint8_t, KV_VEC_SIZE>(pad_cache_vec,
+                                  &cache_v[tgt_idx + block_i * BLOCK_SIZE]);
     }
   }
   smem_t k_smem(k_smem_ori);
@@ -1456,10 +1497,10 @@ __global__ void append_write_cache_kv_c8_qkv_dynamic(
   // reduce scale
   // 16 rows per warp
   uint32_t kv_reduce_frag[4];
-  T *kv_reduce_frag_T = reinterpret_cast<T*>(kv_reduce_frag);
+  T *kv_reduce_frag_T = reinterpret_cast<T *>(kv_reduce_frag);
 
-   T k_local_max_value[num_frags_z * 2];
-   T v_local_max_value[num_frags_z * 2];
+  T k_local_max_value[num_frags_z * 2];
+  T v_local_max_value[num_frags_z * 2];
 #pragma unroll
   for (int i = 0; i < num_frags_z * 2; i++) {
     k_local_max_value[i] = -INFINITY;
@@ -1469,7 +1510,8 @@ __global__ void append_write_cache_kv_c8_qkv_dynamic(
     v_local_max_value[i] = -INFINITY;
   }
   const int num_kv_heads = gridDim.z;
-  const int scale_offset = block_id * num_kv_heads * BLOCK_SIZE + kv_head_idx * BLOCK_SIZE;
+  const int scale_offset =
+      block_id * num_kv_heads * BLOCK_SIZE + kv_head_idx * BLOCK_SIZE;
   T *cache_k_scale_now = cache_k_scales + scale_offset;
   T *cache_v_scale_now = cache_v_scales + scale_offset;
   // k scale
@@ -1481,19 +1523,23 @@ __global__ void append_write_cache_kv_c8_qkv_dynamic(
       k_smem.ldmatrix_m8n8x4(k_smem_offset_r, kv_reduce_frag);
 #pragma unroll
       for (int i = 0; i < 4; i++) {
-        k_local_max_value[fz * 2] = __hmax(__habs(kv_reduce_frag_T[i]), k_local_max_value[fz * 2]);
+        k_local_max_value[fz * 2] =
+            __hmax(__habs(kv_reduce_frag_T[i]), k_local_max_value[fz * 2]);
       }
 #pragma unroll
       for (int i = 0; i < 4; i++) {
-        k_local_max_value[fz * 2 + 1] = __hmax(__habs(kv_reduce_frag_T[i + 4]), k_local_max_value[fz * 2 + 1]);
+        k_local_max_value[fz * 2 + 1] = __hmax(__habs(kv_reduce_frag_T[i + 4]),
+                                               k_local_max_value[fz * 2 + 1]);
       }
       k_smem_offset_r = k_smem.advance_offset_by_column<2>(k_smem_offset_r, fy);
     }
     // reduce per row
     for (int i = 0; i < 2; i++) {
       T local_max_value = __habs(k_local_max_value[fz * 2 + i]);
-      local_max_value = __hmax(local_max_value, __shfl_xor_sync(0xffffffff, local_max_value, 2));
-      local_max_value = __hmax(local_max_value, __shfl_xor_sync(0xffffffff, local_max_value, 1));
+      local_max_value = __hmax(local_max_value,
+                               __shfl_xor_sync(0xffffffff, local_max_value, 2));
+      local_max_value = __hmax(local_max_value,
+                               __shfl_xor_sync(0xffffffff, local_max_value, 1));
       // used for quant
       k_local_max_value[fz * 2 + i] = __hdiv(448, local_max_value);
     }
@@ -1510,17 +1556,18 @@ __global__ void append_write_cache_kv_c8_qkv_dynamic(
       }
       if (tile_start + offset_now + 8 >= start_len) {
         if (tile_start + offset_now + 8 < end_len) {
-          cache_k_scale_now[offset_now + 8] = __hdiv(1, k_local_max_value[fz * 2 + 1]);
+          cache_k_scale_now[offset_now + 8] =
+              __hdiv(1, k_local_max_value[fz * 2 + 1]);
         } else {
           cache_k_scale_now[offset_now + 8] = 0;
         }
       }
     }
     __syncthreads();
-    k_smem_offset_r -= 2 * num_frags_y; // num_frags_z = 1
+    k_smem_offset_r -= 2 * num_frags_y;  // num_frags_z = 1
   }
-  // v scale
-  #pragma unroll
+// v scale
+#pragma unroll
   for (uint32_t fz = 0; fz < num_frags_z; ++fz) {
 #pragma unroll
     for (uint32_t fy = 0; fy < num_frags_y; ++fy) {
@@ -1528,19 +1575,23 @@ __global__ void append_write_cache_kv_c8_qkv_dynamic(
       v_smem.ldmatrix_m8n8x4(k_smem_offset_r, kv_reduce_frag);
 #pragma unroll
       for (int i = 0; i < 4; i++) {
-        v_local_max_value[fz * 2] = __hmax(__habs(kv_reduce_frag_T[i]), v_local_max_value[fz * 2]);
+        v_local_max_value[fz * 2] =
+            __hmax(__habs(kv_reduce_frag_T[i]), v_local_max_value[fz * 2]);
       }
 #pragma unroll
       for (int i = 0; i < 4; i++) {
-        v_local_max_value[fz * 2 + 1] = __hmax(__habs(kv_reduce_frag_T[i + 4]), v_local_max_value[fz * 2 + 1]);
+        v_local_max_value[fz * 2 + 1] = __hmax(__habs(kv_reduce_frag_T[i + 4]),
+                                               v_local_max_value[fz * 2 + 1]);
       }
       k_smem_offset_r = v_smem.advance_offset_by_column<2>(k_smem_offset_r, fy);
     }
     // reduce per row
     for (int i = 0; i < 2; i++) {
       T local_max_value = __habs(v_local_max_value[fz * 2 + i]);
-      local_max_value = __hmax(local_max_value, __shfl_xor_sync(0xffffffff, local_max_value, 2));
-      local_max_value = __hmax(local_max_value, __shfl_xor_sync(0xffffffff, local_max_value, 1));
+      local_max_value = __hmax(local_max_value,
+                               __shfl_xor_sync(0xffffffff, local_max_value, 2));
+      local_max_value = __hmax(local_max_value,
+                               __shfl_xor_sync(0xffffffff, local_max_value, 1));
       v_local_max_value[fz * 2 + i] = __hdiv(448, local_max_value);
     }
     // store
@@ -1558,7 +1609,8 @@ __global__ void append_write_cache_kv_c8_qkv_dynamic(
       }
       if (tile_start + offset_now + 8 >= start_len) {
         if (tile_start + offset_now + 8 < end_len) {
-          cache_v_scale_now[offset_now + 8] = __hdiv(1, v_local_max_value[fz * 2 + 1]);
+          cache_v_scale_now[offset_now + 8] =
+              __hdiv(1, v_local_max_value[fz * 2 + 1]);
           v_scale_smem[offset_now + 8] = v_local_max_value[fz * 2 + 1];
         } else {
           cache_v_scale_now[offset_now + 8] = 0;
@@ -1567,7 +1619,7 @@ __global__ void append_write_cache_kv_c8_qkv_dynamic(
       }
     }
     __syncthreads();
-    k_smem_offset_r -= 2 * num_frags_y; // num_frags_z = 1
+    k_smem_offset_r -= 2 * num_frags_y;  // num_frags_z = 1
   }
   __syncthreads();
 
@@ -1607,7 +1659,11 @@ __global__ void append_write_cache_kv_c8_qkv_dynamic(
         uint8_t uint_quant_value;
         if (chunk_start_k + (v_id / 4) * 8 >= start_len &&
             chunk_start_k + (v_id / 4) * 8 < end_len) {
-          uint_quant_value = QuantToC8<T, is_need_kv_quant, IsFP8>(k_local_max_value[fz * 2 + v_id / 4], k_frag_T[v_id], 127.0f, -127.0f);
+          uint_quant_value = QuantToC8<T, is_need_kv_quant, IsFP8>(
+              k_local_max_value[fz * 2 + v_id / 4],
+              k_frag_T[v_id],
+              127.0f,
+              -127.0f);
         } else {
           uint_quant_value = 0;
         }
@@ -1673,7 +1729,8 @@ __global__ void append_write_cache_kv_c8_qkv_dynamic(
         uint8_t uint_quant_value;
         if (chunk_start_v + v_id % 2 + (v_id % 4) / 2 * 8 >= start_len &&
             chunk_start_v + v_id % 2 + (v_id % 4) / 2 * 8 < end_len) {
-          uint_quant_value = QuantToC8<T, is_need_kv_quant, IsFP8>(v_scales[fz * 4 + v_id % 4], v_frag_T[v_id], 127.0f, -127.0f);
+          uint_quant_value = QuantToC8<T, is_need_kv_quant, IsFP8>(
+              v_scales[fz * 4 + v_id % 4], v_frag_T[v_id], 127.0f, -127.0f);
           // store now
         } else {
           uint_quant_value = 0;
@@ -1768,28 +1825,27 @@ __global__ void append_write_cache_kv_c4_qkv(
     using LoadPadKVT = AlignedVector<uint8_t, KV_VEC_SIZE>;
     // pad zero for this kv_head_idx for this block
     LoadPadKVT pad_cache_vec;
-    *(reinterpret_cast<uint4*>(pad_cache_vec.val)) = make_uint4(0, 0, 0, 0);
+    *(reinterpret_cast<uint4 *>(pad_cache_vec.val)) = make_uint4(0, 0, 0, 0);
     // reset k
-    constexpr int num_vecs_per_head_k = HEAD_DIM_HALF / KV_VEC_SIZE; // 4
-    constexpr int num_token_each_time_k = 32 / num_vecs_per_head_k; // 8
+    constexpr int num_vecs_per_head_k = HEAD_DIM_HALF / KV_VEC_SIZE;  // 4
+    constexpr int num_token_each_time_k = 32 / num_vecs_per_head_k;   // 8
     uint32_t tgt_idx =
         (block_id * kv_num_heads + kv_head_idx) * BLOCK_SIZE * HEAD_DIM_HALF +
         tid % num_vecs_per_head_k * KV_VEC_SIZE;
-    for (int block_i = tid / num_vecs_per_head_k;
-          block_i < BLOCK_SIZE;
-          block_i += num_token_each_time_k) {
+    for (int block_i = tid / num_vecs_per_head_k; block_i < BLOCK_SIZE;
+         block_i += num_token_each_time_k) {
       Store<uint8_t, KV_VEC_SIZE>(pad_cache_vec,
                                   &cache_k[tgt_idx + block_i * HEAD_DIM_HALF]);
     }
 
     // reset v
-    const int num_vecs_per_head_v = BLOCK_SIZE_HALF / KV_VEC_SIZE; // 2
-    const int num_token_each_time_v = 32 / num_vecs_per_head_v;  // 16
+    const int num_vecs_per_head_v = BLOCK_SIZE_HALF / KV_VEC_SIZE;  // 2
+    const int num_token_each_time_v = 32 / num_vecs_per_head_v;     // 16
     tgt_idx =
         (block_id * kv_num_heads + kv_head_idx) * HEAD_DIM * BLOCK_SIZE_HALF +
         tid % num_vecs_per_head_v * KV_VEC_SIZE;
     for (int block_i = tid / num_vecs_per_head_v; block_i < HEAD_DIM;
-          block_i += num_token_each_time_v) {
+         block_i += num_token_each_time_v) {
       Store<uint8_t, KV_VEC_SIZE>(
           pad_cache_vec, &cache_v[tgt_idx + block_i * BLOCK_SIZE_HALF]);
     }
@@ -1845,16 +1901,10 @@ __global__ void append_write_cache_kv_c4_qkv(
       for (uint32_t fy = 0; fy < num_frags_y / 4;
            ++fy) {  // (num_frags_y * 16) / (8 *  num_elems_per_128b<T>())
         if (chunk_start >= start_len && chunk_start < end_len) {
-          k_smem
-              .load_128b_async<SharedMemFillMode::kNoFill>(
-                  kv_smem_offset_w,
-                  qkv_input + k_read_idx,
-                  chunk_start < end_len);
-          v_smem
-              .load_128b_async<SharedMemFillMode::kNoFill>(
-                  kv_smem_offset_w,
-                  qkv_input + v_read_idx,
-                  chunk_start < end_len);
+          k_smem.load_128b_async<SharedMemFillMode::kNoFill>(
+              kv_smem_offset_w, qkv_input + k_read_idx, chunk_start < end_len);
+          v_smem.load_128b_async<SharedMemFillMode::kNoFill>(
+              kv_smem_offset_w, qkv_input + v_read_idx, chunk_start < end_len);
         }
         kv_smem_offset_w =
             k_smem.advance_offset_by_column<8>(kv_smem_offset_w, fy);
@@ -2061,9 +2111,8 @@ void rotary_qk_variable(
     const cudaStream_t &stream,
     bool use_neox_style = false,
     bool rope_3d = false) {
-  int64_t elem_nums =
-      qkv_out_scales ? token_num * 3 * head_num * dim_head
-                     : token_num * 2 * head_num * dim_head;
+  int64_t elem_nums = qkv_out_scales ? token_num * 3 * head_num * dim_head
+                                     : token_num * 2 * head_num * dim_head;
   if (use_neox_style) {
     elem_nums /= 2;
   }
@@ -2186,7 +2235,7 @@ void gqa_rotary_qk_norm_variable(
   const int blocksize = 128;
   int grid_size = 1;
   GetNumBlocks<128>(pack_num, &grid_size);
-  dim3 Block_Size(kWarpSize, blocksize/kWarpSize, 1);
+  dim3 Block_Size(kWarpSize, blocksize / kWarpSize, 1);
 
   const float *cos_emb = rotary_emb;
   const float *sin_emb = rotary_emb + input_output_len * dim_head / 2;
@@ -2310,12 +2359,13 @@ void gqa_rotary_qk_variable(
               dim_head,
               rope_3d);
     } else {
-      if (rotary_dim < dim_head){
+      if (rotary_dim < dim_head) {
         PD_CHECK((rotary_dim / 2) % PackSize == 0);
         elem_nums =
             qkv_out_scales
                 ? token_num * (num_heads + 2 * kv_num_heads) * rotary_dim
-                : token_num * (num_heads + kv_num_heads) * rotary_dim;  // for all q k v
+                : token_num * (num_heads + kv_num_heads) *
+                      rotary_dim;  // for all q k v
         if (use_neox_style) {
           elem_nums /= 2;
         }
@@ -2340,25 +2390,25 @@ void gqa_rotary_qk_variable(
                 dim_head,
                 rotary_dim,
                 rope_3d);
-      }else{
+      } else {
         GQANeoxVariableLengthRotaryKernel<T, PackSize>
-          <<<grid_size, blocksize, 0, stream>>>(
-              reinterpret_cast<const T *>(qkv_input),
-              cos_emb,
-              sin_emb,
-              batch_id_per_token,
-              cu_seqlens_q,
-              seq_lens,
-              seq_lens_decoder,
-              qkv_out_scales,
-              qkv_bias,
-              qkv_out,
-              elem_nums,
-              num_heads,
-              kv_num_heads,
-              seq_len,
-              dim_head,
-              rope_3d);
+            <<<grid_size, blocksize, 0, stream>>>(
+                reinterpret_cast<const T *>(qkv_input),
+                cos_emb,
+                sin_emb,
+                batch_id_per_token,
+                cu_seqlens_q,
+                seq_lens,
+                seq_lens_decoder,
+                qkv_out_scales,
+                qkv_bias,
+                qkv_out,
+                elem_nums,
+                num_heads,
+                kv_num_heads,
+                seq_len,
+                dim_head,
+                rope_3d);
       }
     }
   }
@@ -2397,7 +2447,7 @@ void gqa_rotary_qk_quant_variable(
   int grid_size = 1;
   GetNumBlocks<128>(pack_num, &grid_size);
   const float *cos_emb = rotary_emb;
-    const float *sin_emb = rotary_emb + input_output_len * dim_head / 2;
+  const float *sin_emb = rotary_emb + input_output_len * dim_head / 2;
   if (!use_neox_style) {
     if (qkv_out_scales) {
       GQAVariableLengthRotaryQuantKVKernel<T, PackSize>
@@ -2468,8 +2518,7 @@ void CascadeAppendWriteCacheKVQKV(
   auto head_dim = meta_data.head_dims;
   auto block_size = meta_data.block_size;
 
-  const uint32_t elem_nums =
-      num_tokens * 2 * kv_num_heads * head_dim;
+  const uint32_t elem_nums = num_tokens * 2 * kv_num_heads * head_dim;
   constexpr int PackSize = 16 / sizeof(T);
   const int pack_num = elem_nums / PackSize;
   const int blocksize = 128;
@@ -2513,7 +2562,7 @@ void CascadeAppendWriteCacheKVC8QKV(
     int num_blocks_x_cpu,
     int max_seq_len,
     bool is_scale_channel_wise,
-    const std::string& cache_quant_type,
+    const std::string &cache_quant_type,
     cudaStream_t &stream,
     paddle::Tensor *cache_k_out,
     paddle::Tensor *cache_v_out) {
@@ -2542,24 +2591,26 @@ void CascadeAppendWriteCacheKVC8QKV(
                                                   HEAD_DIM,
                                                   BLOCK_SIZE,
                                                   num_warps,
-                                                  true, false>;
+                                                  true,
+                                                  false>;
     if (cache_quant_type == "cache_fp8") {
       kernel_fn = append_write_cache_kv_c8_qkv<T,
-                                              num_frags_y,
-                                              num_frags_z,
-                                              HEAD_DIM,
-                                              BLOCK_SIZE,
-                                              num_warps,
-                                              true, true>;
+                                               num_frags_y,
+                                               num_frags_z,
+                                               HEAD_DIM,
+                                               BLOCK_SIZE,
+                                               num_warps,
+                                               true,
+                                               true>;
     }
     if (is_scale_channel_wise) {
       kernel_fn = append_write_cache_kv_c8_qkv<T,
-                                              num_frags_y,
-                                              num_frags_z,
-                                              HEAD_DIM,
-                                              BLOCK_SIZE,
-                                              num_warps,
-                                              false>;
+                                               num_frags_y,
+                                               num_frags_z,
+                                               HEAD_DIM,
+                                               BLOCK_SIZE,
+                                               num_warps,
+                                               false>;
     }
     cudaFuncSetAttribute(
         kernel_fn, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
@@ -2586,25 +2637,29 @@ void CascadeAppendWriteCacheKVC8QKV(
                                                           HEAD_DIM,
                                                           BLOCK_SIZE,
                                                           num_warps,
-                                                          true, true>;
+                                                          true,
+                                                          true>;
     cudaFuncSetAttribute(
         kernel_fn, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
-    kernel_fn<<<grids, blocks, 0, stream>>>(cache_k_out->data<uint8_t>(),
-                                            cache_v_out->data<uint8_t>(),
-                                            reinterpret_cast<const NV_TYPE*>(qkv.data<T>()),
-                                            const_cast<NV_TYPE*>(reinterpret_cast<const NV_TYPE*>(cache_k_scale.data<T>())),
-                                            const_cast<NV_TYPE*>(reinterpret_cast<const NV_TYPE*>(cache_v_scale.data<T>())),
-                                            batch_ids.data<int>(),
-                                            tile_ids_per_batch.data<int>(),
-                                            seq_lens_this_time.data<int>(),
-                                            seq_lens_decoder.data<int>(),
-                                            batch_id_per_token.data<int>(),
-                                            cu_seqlens_q.data<int>(),
-                                            block_table.data<int>(),
-                                            max_seq_len,
-                                            max_blocks_per_seq,
-                                            num_heads,
-                                            kv_num_heads);
+    kernel_fn<<<grids, blocks, 0, stream>>>(
+        cache_k_out->data<uint8_t>(),
+        cache_v_out->data<uint8_t>(),
+        reinterpret_cast<const NV_TYPE *>(qkv.data<T>()),
+        const_cast<NV_TYPE *>(
+            reinterpret_cast<const NV_TYPE *>(cache_k_scale.data<T>())),
+        const_cast<NV_TYPE *>(
+            reinterpret_cast<const NV_TYPE *>(cache_v_scale.data<T>())),
+        batch_ids.data<int>(),
+        tile_ids_per_batch.data<int>(),
+        seq_lens_this_time.data<int>(),
+        seq_lens_decoder.data<int>(),
+        batch_id_per_token.data<int>(),
+        cu_seqlens_q.data<int>(),
+        block_table.data<int>(),
+        max_seq_len,
+        max_blocks_per_seq,
+        num_heads,
+        kv_num_heads);
   }
 }
 

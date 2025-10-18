@@ -1,4 +1,5 @@
-// adapted from: https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/quantization/cutlass_w8a8/c3x/scaled_mm_sm90_int8.cu
+// adapted from:
+// https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/quantization/cutlass_w8a8/c3x/scaled_mm_sm90_int8.cu
 
 // Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
@@ -14,8 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "helper.h"
 #include "all_reduce.cuh"
+#include "helper.h"
 
 // Fake pointer type, must match fptr_t type in ops.h.
 // We use this type alias to indicate when pointers are passed in as int64_t.
@@ -23,8 +24,9 @@ using fptr_t = int64_t;
 static_assert(sizeof(void*) == sizeof(fptr_t));
 
 fptr_t init_custom_all_reduce(const std::vector<fptr_t>& fake_ipc_ptrs,
-                      paddle::Tensor& rank_data, int64_t rank,
-                      bool full_nvlink) {
+                              paddle::Tensor& rank_data,
+                              int64_t rank,
+                              bool full_nvlink) {
   int world_size = fake_ipc_ptrs.size();
   if (world_size > 8)
     throw std::invalid_argument("world size > 8 is not supported");
@@ -37,9 +39,12 @@ fptr_t init_custom_all_reduce(const std::vector<fptr_t>& fake_ipc_ptrs,
   for (int i = 0; i < world_size; i++) {
     ipc_ptrs[i] = reinterpret_cast<paddle::Signal*>(fake_ipc_ptrs[i]);
   }
-  return (fptr_t) new paddle::CustomAllreduce(ipc_ptrs, rank_data.data(),
-                                            rank_data.numel(), rank, world_size,
-                                            full_nvlink);
+  return (fptr_t) new paddle::CustomAllreduce(ipc_ptrs,
+                                              rank_data.data(),
+                                              rank_data.numel(),
+                                              rank,
+                                              world_size,
+                                              full_nvlink);
 }
 
 /**
@@ -49,36 +54,43 @@ fptr_t init_custom_all_reduce(const std::vector<fptr_t>& fake_ipc_ptrs,
  * Otherwise, _reg_buffer is assumed to be IPC-registered and inp is first
  * copied into _reg_buffer.
  */
-void all_reduce(paddle::Tensor& inp, paddle::Tensor& out, fptr_t _fa,
-                fptr_t _reg_buffer, int64_t reg_buffer_sz_bytes) {
+void all_reduce(paddle::Tensor& inp,
+                paddle::Tensor& out,
+                fptr_t _fa,
+                fptr_t _reg_buffer,
+                int64_t reg_buffer_sz_bytes) {
   auto fa = reinterpret_cast<paddle::CustomAllreduce*>(_fa);
   auto stream = inp.stream();
 
   auto input_size = inp.numel() * 2;
   auto reg_buffer = reinterpret_cast<void*>(_reg_buffer);
   if (reg_buffer) {
-    cudaMemcpyAsync(reg_buffer, inp.data(), input_size,
-                                  cudaMemcpyDeviceToDevice, stream);
+    cudaMemcpyAsync(
+        reg_buffer, inp.data(), input_size, cudaMemcpyDeviceToDevice, stream);
   } else {
     reg_buffer = inp.data();
   }
   switch (out.dtype()) {
     case phi::DataType::FLOAT32: {
-      fa->allreduce<float>(stream, reinterpret_cast<float*>(reg_buffer),
+      fa->allreduce<float>(stream,
+                           reinterpret_cast<float*>(reg_buffer),
                            reinterpret_cast<float*>(out.data()),
                            out.numel());
       break;
     }
     case phi::DataType::FLOAT16: {
-      fa->allreduce<half>(stream, reinterpret_cast<half*>(reg_buffer),
-                          reinterpret_cast<half*>(out.data()), out.numel());
+      fa->allreduce<half>(stream,
+                          reinterpret_cast<half*>(reg_buffer),
+                          reinterpret_cast<half*>(out.data()),
+                          out.numel());
       break;
     }
 #if (!defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 800)
     case phi::DataType::BFLOAT16: {
-      fa->allreduce<nv_bfloat16>(
-          stream, reinterpret_cast<nv_bfloat16*>(reg_buffer),
-          reinterpret_cast<nv_bfloat16*>(out.data()), out.numel());
+      fa->allreduce<nv_bfloat16>(stream,
+                                 reinterpret_cast<nv_bfloat16*>(reg_buffer),
+                                 reinterpret_cast<nv_bfloat16*>(out.data()),
+                                 out.numel());
       break;
     }
 #endif
@@ -132,11 +144,11 @@ void clear_ipc_handles(fptr_t _fa) {
 
 std::tuple<fptr_t, paddle::Tensor> allocate_shared_buffer_and_handle(
     int64_t size) {
-
   auto device_index = phi::backends::gpu::GetCurrentDeviceId();
   void* buffer;
   cudaStreamCaptureMode mode = cudaStreamCaptureModeRelaxed;
-  auto stream = paddle::GetCurrentCUDAStream(phi::GPUPlace(device_index))->raw_stream();
+  auto stream =
+      paddle::GetCurrentCUDAStream(phi::GPUPlace(device_index))->raw_stream();
   CUDACHECK(cudaThreadExchangeStreamCaptureMode(&mode));
 
   // Allocate buffer
@@ -148,19 +160,20 @@ std::tuple<fptr_t, paddle::Tensor> allocate_shared_buffer_and_handle(
   // Create IPC memhandle for the allocated buffer.
   // Will use it in open_mem_handle.
   auto handle =
-      paddle::empty({static_cast<int64_t>(sizeof(cudaIpcMemHandle_t))}, paddle::DataType::UINT8, paddle::GPUPlace(device_index));
-  CUDACHECK(
-      cudaIpcGetMemHandle((cudaIpcMemHandle_t*)handle.data(), buffer));
+      paddle::empty({static_cast<int64_t>(sizeof(cudaIpcMemHandle_t))},
+                    paddle::DataType::UINT8,
+                    paddle::GPUPlace(device_index));
+  CUDACHECK(cudaIpcGetMemHandle((cudaIpcMemHandle_t*)handle.data(), buffer));
 
   return std::make_tuple(reinterpret_cast<fptr_t>(buffer), handle);
 }
 
-
 fptr_t open_mem_handle(paddle::Tensor& mem_handle) {
   void* ipc_ptr;
-  CUDACHECK(cudaIpcOpenMemHandle(
-      (void**)&ipc_ptr, *((const cudaIpcMemHandle_t*)mem_handle.data()),
-      cudaIpcMemLazyEnablePeerAccess));
+  CUDACHECK(
+      cudaIpcOpenMemHandle((void**)&ipc_ptr,
+                           *((const cudaIpcMemHandle_t*)mem_handle.data()),
+                           cudaIpcMemLazyEnablePeerAccess));
   return reinterpret_cast<fptr_t>(ipc_ptr);
 }
 
@@ -168,11 +181,11 @@ void free_shared_buffer(fptr_t buffer) {
   CUDACHECK(cudaFree(reinterpret_cast<void*>(buffer)));
 }
 
-
 PD_BUILD_STATIC_OP(all_reduce)
-    .Inputs({"inp",
-             "out"})
+    .Inputs({"inp", "out"})
     .Outputs({"new_out"})
-    .Attrs({"_fa: int64_t", "_reg_buffer: int64_t", "reg_buffer_sz_bytes: int64_t"})
+    .Attrs({"_fa: int64_t",
+            "_reg_buffer: int64_t",
+            "reg_buffer_sz_bytes: int64_t"})
     .SetInplaceMap({{"out", "new_out"}})
     .SetKernelFn(PD_KERNEL(all_reduce));

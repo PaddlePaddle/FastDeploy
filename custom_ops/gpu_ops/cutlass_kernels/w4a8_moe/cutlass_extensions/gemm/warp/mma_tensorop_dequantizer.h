@@ -187,10 +187,9 @@ class MmaTensorOpDequantizer<
 
   // Adds a pointer offset in units of elements.
   CUTLASS_DEVICE
-  void add_pointer_offset(int64_t const& offset)
-  {
-      static_assert(sizeof(ElementScale) > 1, "");
-      pointer_ += offset;
+  void add_pointer_offset(int64_t const& offset) {
+    static_assert(sizeof(ElementScale) > 1, "");
+    pointer_ += offset;
   }
 
  private:
@@ -297,10 +296,9 @@ class MmaTensorOpDequantizer<
   }
   // Adds a pointer offset in units of elements.
   CUTLASS_DEVICE
-  void add_pointer_offset(int64_t const& offset)
-  {
-      static_assert(sizeof(ElementScale) > 1, "");
-      pointer_ += offset;
+  void add_pointer_offset(int64_t const& offset) {
+    static_assert(sizeof(ElementScale) > 1, "");
+    pointer_ += offset;
   }
 
  private:

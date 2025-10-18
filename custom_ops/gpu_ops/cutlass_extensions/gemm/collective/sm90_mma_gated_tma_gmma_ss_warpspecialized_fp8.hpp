@@ -55,18 +55,43 @@ using namespace cute;
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 // WarpSpecialized Mainloop
-template <int Stages, class ClusterShape, class KernelSchedule,
-          class TileShape_, class ElementA_, class StrideA_, class ElementB_,
-          class StrideB_, class TiledMma_, class GmemTiledCopyA_,
-          class SmemLayoutAtomA_, class SmemCopyAtomA_, class TransformA_,
-          class GmemTiledCopyB_, class SmemLayoutAtomB_, class SmemCopyAtomB_,
+template <int Stages,
+          class ClusterShape,
+          class KernelSchedule,
+          class TileShape_,
+          class ElementA_,
+          class StrideA_,
+          class ElementB_,
+          class StrideB_,
+          class TiledMma_,
+          class GmemTiledCopyA_,
+          class SmemLayoutAtomA_,
+          class SmemCopyAtomA_,
+          class TransformA_,
+          class GmemTiledCopyB_,
+          class SmemLayoutAtomB_,
+          class SmemCopyAtomB_,
           class TransformB_,
-          template <class /* ElementCompute */> class Activation_, bool SwapAB_>
+          template <class /* ElementCompute */>
+          class Activation_,
+          bool SwapAB_>
 struct CollectiveMmaGated<
     MainloopSm90TmaGmmaWarpSpecializedFP8<Stages, ClusterShape, KernelSchedule>,
-    TileShape_, ElementA_, StrideA_, ElementB_, StrideB_, TiledMma_,
-    GmemTiledCopyA_, SmemLayoutAtomA_, SmemCopyAtomA_, TransformA_,
-    GmemTiledCopyB_, SmemLayoutAtomB_, SmemCopyAtomB_, TransformB_, Activation_,
+    TileShape_,
+    ElementA_,
+    StrideA_,
+    ElementB_,
+    StrideB_,
+    TiledMma_,
+    GmemTiledCopyA_,
+    SmemLayoutAtomA_,
+    SmemCopyAtomA_,
+    TransformA_,
+    GmemTiledCopyB_,
+    SmemLayoutAtomB_,
+    SmemCopyAtomB_,
+    TransformB_,
+    Activation_,
     SwapAB_> {
   static constexpr bool isGated = true;
   static constexpr bool SwapAB = SwapAB_;
@@ -74,9 +99,9 @@ struct CollectiveMmaGated<
   //
   // Type Aliases
   //
-  using DispatchPolicy =
-      MainloopSm90TmaGmmaWarpSpecializedFP8<Stages, ClusterShape,
-                                            KernelSchedule>;
+  using DispatchPolicy = MainloopSm90TmaGmmaWarpSpecializedFP8<Stages,
+                                                               ClusterShape,
+                                                               KernelSchedule>;
   using TileShape = TileShape_;
   using ElementA = ElementA_;
   using StrideA = StrideA_;
@@ -96,7 +121,8 @@ struct CollectiveMmaGated<
   using Activation = Activation_<ElementAccumulator>;
 
   using ElementAux = cute::conditional_t<SwapAB, ElementA_, ElementB_>;
-  using ValTypeAux = cute::conditional_t<SwapAB, typename TiledMma::ValTypeA,
+  using ValTypeAux = cute::conditional_t<SwapAB,
+                                         typename TiledMma::ValTypeA,
                                          typename TiledMma::ValTypeB>;
 
   using MainloopPipeline = cutlass::PipelineTmaAsync<DispatchPolicy::Stages>;
@@ -121,16 +147,20 @@ struct CollectiveMmaGated<
   // Tile along modes in a way that maximizes the TMA box size.
   using SmemLayoutA = decltype(tile_to_shape(
       SmemLayoutAtomA{},
-      make_shape(shape<0>(TileShape{}), shape<2>(TileShape{}),
+      make_shape(shape<0>(TileShape{}),
+                 shape<2>(TileShape{}),
                  Int<DispatchPolicy::Stages>{}),
       conditional_t<::cutlass::gemm::detail::is_major<0, StrideA>(),
-                    Step<_2, _1, _3>, Step<_1, _2, _3>>{}));
+                    Step<_2, _1, _3>,
+                    Step<_1, _2, _3>>{}));
   using SmemLayoutB = decltype(tile_to_shape(
       SmemLayoutAtomB{},
-      make_shape(shape<1>(TileShape{}), shape<2>(TileShape{}),
+      make_shape(shape<1>(TileShape{}),
+                 shape<2>(TileShape{}),
                  Int<DispatchPolicy::Stages>{}),
       conditional_t<::cutlass::gemm::detail::is_major<0, StrideB>(),
-                    Step<_2, _1, _3>, Step<_1, _2, _3>>{}));
+                    Step<_2, _1, _3>,
+                    Step<_1, _2, _3>>{}));
   using SmemLayoutAux = cute::conditional_t<SwapAB, SmemLayoutA, SmemLayoutB>;
 
   static_assert(DispatchPolicy::Stages >= 2,
@@ -184,18 +214,22 @@ struct CollectiveMmaGated<
     using TMA_A = decltype(make_tma_copy(
         GmemTiledCopyA{},
         make_tensor(static_cast<ElementA const *>(nullptr),
-                    repeat_like(StrideA{}, int32_t(0)), StrideA{}),
+                    repeat_like(StrideA{}, int32_t(0)),
+                    StrideA{}),
         SmemLayoutA{}(_, _, 0),
         make_shape(shape<0>(TileShape{}), shape<2>(TileShape{})),
-        size<1>(ClusterShape{}))); // mcast along N mode for this M load, if any
+        size<1>(
+            ClusterShape{})));  // mcast along N mode for this M load, if any
     // Assumption: StrideB is congruent with Problem_NK
     using TMA_B = decltype(make_tma_copy(
         GmemTiledCopyB{},
         make_tensor(static_cast<ElementB const *>(nullptr),
-                    repeat_like(StrideB{}, int32_t(0)), StrideB{}),
+                    repeat_like(StrideB{}, int32_t(0)),
+                    StrideB{}),
         SmemLayoutB{}(_, _, 0),
         make_shape(shape<1>(TileShape{}), shape<2>(TileShape{})),
-        size<0>(ClusterShape{}))); // mcast along M mode for this N load, if any
+        size<0>(
+            ClusterShape{})));  // mcast along M mode for this N load, if any
     using TMA_Aux = cute::conditional_t<SwapAB, TMA_A, TMA_B>;
     TMA_A tma_load_a;
     TMA_B tma_load_b;
@@ -210,9 +244,10 @@ struct CollectiveMmaGated<
   //
 
   template <class ProblemShape>
-  static constexpr Params
-  to_underlying_arguments(ProblemShape const &problem_shape,
-                          Arguments const &args, void *workspace) {
+  static constexpr Params to_underlying_arguments(
+      ProblemShape const &problem_shape,
+      Arguments const &args,
+      void *workspace) {
     (void)workspace;
 
     // Optionally append 1s until problem shape is rank-4 (MNKL), in case it is
@@ -228,35 +263,51 @@ struct CollectiveMmaGated<
     Tensor tensor_b =
         make_tensor(ptr_B0, make_layout(make_shape(N, K, L), args.dB));
     typename Params::TMA_A tma_load_a = make_tma_copy(
-        GmemTiledCopyA{}, tensor_a, SmemLayoutA{}(_, _, cute::Int<0>{}),
+        GmemTiledCopyA{},
+        tensor_a,
+        SmemLayoutA{}(_, _, cute::Int<0>{}),
         make_shape(shape<0>(TileShape{}), shape<2>(TileShape{})),
-        size<1>(ClusterShape{})); // mcast along N mode for this M load, if any
+        size<1>(ClusterShape{}));  // mcast along N mode for this M load, if any
     typename Params::TMA_B tma_load_b = make_tma_copy(
-        GmemTiledCopyB{}, tensor_b, SmemLayoutB{}(_, _, cute::Int<0>{}),
+        GmemTiledCopyB{},
+        tensor_b,
+        SmemLayoutB{}(_, _, cute::Int<0>{}),
         make_shape(shape<1>(TileShape{}), shape<2>(TileShape{})),
-        size<0>(ClusterShape{})); // mcast along M mode for this N load, if any
+        size<0>(ClusterShape{}));  // mcast along M mode for this N load, if any
     if constexpr (SwapAB) {
       auto ptr_Aux = reinterpret_cast<ElementA const *>(args.ptr_B1);
       Tensor tensor_aux =
           make_tensor(ptr_Aux, make_layout(make_shape(M, K, L), args.dA));
       typename Params::TMA_Aux tma_load_aux = make_tma_copy(
-          GmemTiledCopyA{}, tensor_aux, SmemLayoutA{}(_, _, cute::Int<0>{}),
+          GmemTiledCopyA{},
+          tensor_aux,
+          SmemLayoutA{}(_, _, cute::Int<0>{}),
           make_shape(shape<0>(TileShape{}), shape<2>(TileShape{})),
           size<1>(
-              ClusterShape{})); // mcast along N mode for this M load, if any
-      return {tma_load_a,    tma_load_b,    tma_load_aux,
-              args.scale_d0, args.scale_d1, args.mma_promotion_interval};
+              ClusterShape{}));  // mcast along N mode for this M load, if any
+      return {tma_load_a,
+              tma_load_b,
+              tma_load_aux,
+              args.scale_d0,
+              args.scale_d1,
+              args.mma_promotion_interval};
     } else {
       auto ptr_Aux = reinterpret_cast<ElementB const *>(args.ptr_B1);
       Tensor tensor_aux =
           make_tensor(ptr_Aux, make_layout(make_shape(N, K, L), args.dB));
       typename Params::TMA_Aux tma_load_aux = make_tma_copy(
-          GmemTiledCopyB{}, tensor_aux, SmemLayoutB{}(_, _, cute::Int<0>{}),
+          GmemTiledCopyB{},
+          tensor_aux,
+          SmemLayoutB{}(_, _, cute::Int<0>{}),
           make_shape(shape<1>(TileShape{}), shape<2>(TileShape{})),
           size<0>(
-              ClusterShape{})); // mcast along M mode for this N load, if any
-      return {tma_load_a,    tma_load_b,    tma_load_aux,
-              args.scale_d0, args.scale_d1, args.mma_promotion_interval};
+              ClusterShape{}));  // mcast along M mode for this N load, if any
+      return {tma_load_a,
+              tma_load_b,
+              tma_load_aux,
+              args.scale_d0,
+              args.scale_d1,
+              args.mma_promotion_interval};
     }
   }
 
@@ -285,8 +336,9 @@ struct CollectiveMmaGated<
     implementable = implementable && (args.mma_promotion_interval % 4 == 0);
 
     if (!implementable) {
-      CUTLASS_TRACE_HOST("  CAN IMPLEMENT: Problem Size doesn't meet the "
-                         "minimum alignment requirements for TMA.\n");
+      CUTLASS_TRACE_HOST(
+          "  CAN IMPLEMENT: Problem Size doesn't meet the "
+          "minimum alignment requirements for TMA.\n");
     }
     return implementable;
   }
@@ -333,49 +385,64 @@ struct CollectiveMmaGated<
     // TMA requires special handling of strides to deal with coord codomain
     // mapping Represent the full tensors -- get these from TMA
     Tensor mA_mkl = mainloop_params.tma_load_a.get_tma_tensor(
-        make_shape(M, K, L)); // (m,k,l)
+        make_shape(M, K, L));  // (m,k,l)
     Tensor mB_nkl = mainloop_params.tma_load_b.get_tma_tensor(
-        make_shape(N, K, L)); // (n,k,l)
+        make_shape(N, K, L));  // (n,k,l)
 
     // Make tiled views, defer the slice
-    Tensor gA_mkl = local_tile(mA_mkl, TileShape{}, make_coord(_, _, _),
-                               Step<_1, X, _1>{}); // (BLK_M,BLK_K,m,k,l)
-    Tensor gB_nkl = local_tile(mB_nkl, TileShape{}, make_coord(_, _, _),
-                               Step<X, _1, _1>{}); // (BLK_N,BLK_K,n,k,l)
+    Tensor gA_mkl = local_tile(mA_mkl,
+                               TileShape{},
+                               make_coord(_, _, _),
+                               Step<_1, X, _1>{});  // (BLK_M,BLK_K,m,k,l)
+    Tensor gB_nkl = local_tile(mB_nkl,
+                               TileShape{},
+                               make_coord(_, _, _),
+                               Step<X, _1, _1>{});  // (BLK_N,BLK_K,n,k,l)
 
     if constexpr (SwapAB) {
       Tensor mAux_xkl = mainloop_params.tma_load_aux.get_tma_tensor(
-          make_shape(M, K, L)); // (m,k,l)
-      Tensor gAux_xkl = local_tile(mAux_xkl, TileShape{}, make_coord(_, _, _),
-                                   Step<_1, X, _1>{}); // (BLK_M,BLK_K,m,k,l)
+          make_shape(M, K, L));  // (m,k,l)
+      Tensor gAux_xkl = local_tile(mAux_xkl,
+                                   TileShape{},
+                                   make_coord(_, _, _),
+                                   Step<_1, X, _1>{});  // (BLK_M,BLK_K,m,k,l)
       return cute::make_tuple(gA_mkl, gB_nkl, gAux_xkl);
     } else {
       Tensor mAux_xkl = mainloop_params.tma_load_aux.get_tma_tensor(
-          make_shape(N, K, L)); // (n,k,l)
-      Tensor gAux_xkl = local_tile(mAux_xkl, TileShape{}, make_coord(_, _, _),
-                                   Step<X, _1, _1>{}); // (BLK_N,BLK_K,n,k,l)
+          make_shape(N, K, L));  // (n,k,l)
+      Tensor gAux_xkl = local_tile(mAux_xkl,
+                                   TileShape{},
+                                   make_coord(_, _, _),
+                                   Step<X, _1, _1>{});  // (BLK_N,BLK_K,n,k,l)
       return cute::make_tuple(gA_mkl, gB_nkl, gAux_xkl);
     }
   }
 
   /// Perform a collective-scoped matrix multiply-accumulate
   /// Producer Perspective
-  template <class TensorA, class TensorB, class TensorAux, class KTileIterator,
+  template <class TensorA,
+            class TensorB,
+            class TensorAux,
+            class KTileIterator,
             class BlockCoord>
-  CUTLASS_DEVICE void
-  load(Params const &mainloop_params, MainloopPipeline pipeline,
-       PipelineState smem_pipe_write,
-       cute::tuple<TensorA, TensorB, TensorAux> const &load_inputs,
-       BlockCoord const &blk_coord, KTileIterator k_tile_iter, int k_tile_count,
-       int thread_idx, uint32_t block_rank_in_cluster,
-       TensorStorage &shared_tensors) {
+  CUTLASS_DEVICE void load(
+      Params const &mainloop_params,
+      MainloopPipeline pipeline,
+      PipelineState smem_pipe_write,
+      cute::tuple<TensorA, TensorB, TensorAux> const &load_inputs,
+      BlockCoord const &blk_coord,
+      KTileIterator k_tile_iter,
+      int k_tile_count,
+      int thread_idx,
+      uint32_t block_rank_in_cluster,
+      TensorStorage &shared_tensors) {
     int lane_predicate = cute::elect_one_sync();
 
     if (lane_predicate) {
       Tensor sA = make_tensor(make_smem_ptr(shared_tensors.smem_A.data()),
-                              SmemLayoutA{}); // (BLK_M,BLK_K,PIPE)
+                              SmemLayoutA{});  // (BLK_M,BLK_K,PIPE)
       Tensor sB = make_tensor(make_smem_ptr(shared_tensors.smem_B.data()),
-                              SmemLayoutB{}); // (BLK_N,BLK_K,PIPE)
+                              SmemLayoutB{});  // (BLK_N,BLK_K,PIPE)
       Tensor sAux = make_tensor(make_smem_ptr(shared_tensors.smem_Aux.data()),
                                 SmemLayoutAux{});
 
@@ -403,17 +470,17 @@ struct CollectiveMmaGated<
 
       // Partition the inputs based on the current block coordinates.
       auto [m_coord, n_coord, k_coord, l_coord] = blk_coord;
-      Tensor gA = gA_mkl(_, _, m_coord, _, l_coord); // (BLK_M,BLK_K,k)
-      Tensor gB = gB_nkl(_, _, n_coord, _, l_coord); // (BLK_N,BLK_K,k)
+      Tensor gA = gA_mkl(_, _, m_coord, _, l_coord);  // (BLK_M,BLK_K,k)
+      Tensor gB = gB_nkl(_, _, n_coord, _, l_coord);  // (BLK_N,BLK_K,k)
       Tensor gAux = SwapAB ? gAux_xkl(_, _, m_coord, _, l_coord)
                            : gAux_xkl(_, _, n_coord, _, l_coord);
 
       // Applies the mapping from block_tma_a
-      Tensor tAgA = block_tma_a.partition_S(gA); // (TMA,TMA_M,TMA_K,k)
-      Tensor tAsA = block_tma_a.partition_D(sA); // (TMA,TMA_M,TMA_K,PIPE)
+      Tensor tAgA = block_tma_a.partition_S(gA);  // (TMA,TMA_M,TMA_K,k)
+      Tensor tAsA = block_tma_a.partition_D(sA);  // (TMA,TMA_M,TMA_K,PIPE)
 
-      Tensor tBgB = block_tma_b.partition_S(gB); // (TMA,TMA_N,TMA_K,k)
-      Tensor tBsB = block_tma_b.partition_D(sB); // (TMA,TMA_N,TMA_K,PIPE)
+      Tensor tBgB = block_tma_b.partition_S(gB);  // (TMA,TMA_N,TMA_K,k)
+      Tensor tBsB = block_tma_b.partition_D(sB);  // (TMA,TMA_N,TMA_K,PIPE)
 
       Tensor tAuxgAux = block_tma_aux.partition_S(gAux);
       Tensor tAuxsAux = block_tma_aux.partition_D(sAux);
@@ -426,18 +493,18 @@ struct CollectiveMmaGated<
       // Maps the tile -> block, value
       if constexpr (cute::is_same_v<GmemTiledCopyA, SM90_TMA_LOAD_MULTICAST>) {
         auto block_layout =
-            Layout<typename DispatchPolicy::ClusterShape>{}; // (m,n) ->
-                                                             // block_id
+            Layout<typename DispatchPolicy::ClusterShape>{};  // (m,n) ->
+                                                              // block_id
         for (int n = 0; n < size<1>(block_layout); ++n) {
-          mcast_mask_a |= (uint16_t(1) << block_layout(cluster_local_block_id.x,
-                                                       n, Int<0>{}));
+          mcast_mask_a |= (uint16_t(1) << block_layout(
+                               cluster_local_block_id.x, n, Int<0>{}));
         }
       }
 
       if constexpr (cute::is_same_v<GmemTiledCopyB, SM90_TMA_LOAD_MULTICAST>) {
         auto block_layout =
-            Layout<typename DispatchPolicy::ClusterShape>{}; // (m,n) ->
-                                                             // block_id
+            Layout<typename DispatchPolicy::ClusterShape>{};  // (m,n) ->
+                                                              // block_id
         for (int m = 0; m < size<0>(block_layout); ++m) {
           mcast_mask_b |= (uint16_t(1) << block_layout(
                                m, cluster_local_block_id.y, Int<0>{}));
@@ -466,11 +533,14 @@ struct CollectiveMmaGated<
 
         int write_stage = smem_pipe_write.index();
         copy(mainloop_params.tma_load_a.with(*tma_barrier, mcast_mask_a),
-             tAgA(_, _, _, *k_tile_iter), tAsA(_, _, _, write_stage));
+             tAgA(_, _, _, *k_tile_iter),
+             tAsA(_, _, _, write_stage));
         copy(mainloop_params.tma_load_b.with(*tma_barrier, mcast_mask_b),
-             tBgB(_, _, _, *k_tile_iter), tBsB(_, _, _, write_stage));
+             tBgB(_, _, _, *k_tile_iter),
+             tBsB(_, _, _, write_stage));
         copy(mainloop_params.tma_load_aux.with(*tma_barrier, mcast_mask_aux),
-             tAuxgAux(_, _, _, *k_tile_iter), tAuxsAux(_, _, _, write_stage));
+             tAuxgAux(_, _, _, *k_tile_iter),
+             tAuxsAux(_, _, _, write_stage));
         ++k_tile_iter;
 
         // Advance smem_pipe_write
@@ -499,11 +569,14 @@ struct CollectiveMmaGated<
   /// Perform a collective-scoped matrix multiply-accumulate
   /// Consumer Perspective
   template <class FrgTensorC>
-  CUTLASS_DEVICE void
-  mma(MainloopPipeline pipeline, PipelineState smem_pipe_read,
-      FrgTensorC &accum0, FrgTensorC &accum1, int k_tile_count, int thread_idx,
-      TensorStorage &shared_tensors, Params const &mainloop_params) {
-
+  CUTLASS_DEVICE void mma(MainloopPipeline pipeline,
+                          PipelineState smem_pipe_read,
+                          FrgTensorC &accum0,
+                          FrgTensorC &accum1,
+                          int k_tile_count,
+                          int thread_idx,
+                          TensorStorage &shared_tensors,
+                          Params const &mainloop_params) {
     static_assert(is_rmem<FrgTensorC>::value,
                   "C tensor must be rmem resident.");
     static_assert(cute::rank(SmemLayoutA{}) == 3,
@@ -518,9 +591,9 @@ struct CollectiveMmaGated<
                   "smem sourced instructions.");
 
     Tensor sA = make_tensor(make_smem_ptr(shared_tensors.smem_A.data()),
-                            SmemLayoutA{}); // (BLK_M,BLK_K,PIPE)
+                            SmemLayoutA{});  // (BLK_M,BLK_K,PIPE)
     Tensor sB = make_tensor(make_smem_ptr(shared_tensors.smem_B.data()),
-                            SmemLayoutB{}); // (BLK_N,BLK_K,PIPE)
+                            SmemLayoutB{});  // (BLK_N,BLK_K,PIPE)
     Tensor sAux = make_tensor(make_smem_ptr(shared_tensors.smem_Aux.data()),
                               SmemLayoutAux{});
 
@@ -531,12 +604,12 @@ struct CollectiveMmaGated<
     TiledMma tiled_mma;
     auto thread_mma = tiled_mma.get_thread_slice(thread_idx);
 
-    Tensor tCsA = thread_mma.partition_A(sA); // (MMA,MMA_M,MMA_K,PIPE)
-    Tensor tCsB = thread_mma.partition_B(sB); // (MMA,MMA_N,MMA_K,PIPE)
+    Tensor tCsA = thread_mma.partition_A(sA);  // (MMA,MMA_M,MMA_K,PIPE)
+    Tensor tCsB = thread_mma.partition_B(sB);  // (MMA,MMA_N,MMA_K,PIPE)
 
     // Allocate "fragments/descriptors"
-    Tensor tCrA = thread_mma.make_fragment_A(tCsA); // (MMA,MMA_M,MMA_K,PIPE)
-    Tensor tCrB = thread_mma.make_fragment_B(tCsB); // (MMA,MMA_N,MMA_K,PIPE)
+    Tensor tCrA = thread_mma.make_fragment_A(tCsA);  // (MMA,MMA_M,MMA_K,PIPE)
+    Tensor tCrB = thread_mma.make_fragment_B(tCsB);  // (MMA,MMA_N,MMA_K,PIPE)
 
     auto tCsAux = [&]() -> auto {
       if constexpr (SwapAB) {
@@ -544,34 +617,36 @@ struct CollectiveMmaGated<
       } else {
         return thread_mma.partition_B(sAux);
       }
-    }();
+    }
+    ();
     auto tCrAux = [&]() -> auto {
       if constexpr (SwapAB) {
         return thread_mma.make_fragment_A(tCsAux);
       } else {
         return thread_mma.make_fragment_B(tCsAux);
       }
-    }();
-
-    CUTE_STATIC_ASSERT_V(size<1>(tCsA) == size<1>(accum0)); // M
-    CUTE_STATIC_ASSERT_V(size<1>(tCsB) == size<2>(accum0)); // N
-    CUTE_STATIC_ASSERT_V(size<2>(tCsA) == size<2>(tCsB));   // K
-    CUTE_STATIC_ASSERT_V(size<3>(tCsA) == size<3>(tCsB));   // PIPE
-    if constexpr (SwapAB) {
-      CUTE_STATIC_ASSERT_V(size<1>(tCsAux) == size<1>(accum1)); // M
-      CUTE_STATIC_ASSERT_V(size<1>(tCsB) == size<2>(accum1));   // N
-      CUTE_STATIC_ASSERT_V(size<2>(tCsB) == size<2>(tCsAux));   // K
-      CUTE_STATIC_ASSERT_V(size<3>(tCsB) == size<3>(tCsAux));   // PIPE
-    } else {
-      CUTE_STATIC_ASSERT_V(size<1>(tCsA) == size<1>(accum1));   // M
-      CUTE_STATIC_ASSERT_V(size<1>(tCsAux) == size<2>(accum1)); // N
-      CUTE_STATIC_ASSERT_V(size<2>(tCsA) == size<2>(tCsAux));   // K
-      CUTE_STATIC_ASSERT_V(size<3>(tCsA) == size<3>(tCsAux));   // PIPE
     }
-    CUTE_STATIC_ASSERT_V(Int<DispatchPolicy::Stages>{} == size<2>(sA)); // PIPE
-    CUTE_STATIC_ASSERT_V(Int<DispatchPolicy::Stages>{} == size<2>(sB)); // PIPE
+    ();
+
+    CUTE_STATIC_ASSERT_V(size<1>(tCsA) == size<1>(accum0));  // M
+    CUTE_STATIC_ASSERT_V(size<1>(tCsB) == size<2>(accum0));  // N
+    CUTE_STATIC_ASSERT_V(size<2>(tCsA) == size<2>(tCsB));    // K
+    CUTE_STATIC_ASSERT_V(size<3>(tCsA) == size<3>(tCsB));    // PIPE
+    if constexpr (SwapAB) {
+      CUTE_STATIC_ASSERT_V(size<1>(tCsAux) == size<1>(accum1));  // M
+      CUTE_STATIC_ASSERT_V(size<1>(tCsB) == size<2>(accum1));    // N
+      CUTE_STATIC_ASSERT_V(size<2>(tCsB) == size<2>(tCsAux));    // K
+      CUTE_STATIC_ASSERT_V(size<3>(tCsB) == size<3>(tCsAux));    // PIPE
+    } else {
+      CUTE_STATIC_ASSERT_V(size<1>(tCsA) == size<1>(accum1));    // M
+      CUTE_STATIC_ASSERT_V(size<1>(tCsAux) == size<2>(accum1));  // N
+      CUTE_STATIC_ASSERT_V(size<2>(tCsA) == size<2>(tCsAux));    // K
+      CUTE_STATIC_ASSERT_V(size<3>(tCsA) == size<3>(tCsAux));    // PIPE
+    }
+    CUTE_STATIC_ASSERT_V(Int<DispatchPolicy::Stages>{} == size<2>(sA));  // PIPE
+    CUTE_STATIC_ASSERT_V(Int<DispatchPolicy::Stages>{} == size<2>(sB));  // PIPE
     CUTE_STATIC_ASSERT_V(Int<DispatchPolicy::Stages>{} ==
-                         size<2>(sAux)); // PIPE
+                         size<2>(sAux));  // PIPE
 
     //
     // PIPELINED MAIN LOOP
@@ -611,14 +686,20 @@ struct CollectiveMmaGated<
       CUTLASS_PRAGMA_UNROLL
       for (int k_block = 0; k_block < size<2>(tCrA); ++k_block) {
         // (V,M,K) x (V,N,K) => (V,M,N)
-        cute::gemm(tiled_mma, tCrA(_, _, k_block, read_stage),
-                   tCrB(_, _, k_block, read_stage), accumulation0());
+        cute::gemm(tiled_mma,
+                   tCrA(_, _, k_block, read_stage),
+                   tCrB(_, _, k_block, read_stage),
+                   accumulation0());
         if constexpr (SwapAB) {
-          cute::gemm(tiled_mma, tCrAux(_, _, k_block, read_stage),
-                     tCrB(_, _, k_block, read_stage), accumulation1());
+          cute::gemm(tiled_mma,
+                     tCrAux(_, _, k_block, read_stage),
+                     tCrB(_, _, k_block, read_stage),
+                     accumulation1());
         } else {
-          cute::gemm(tiled_mma, tCrA(_, _, k_block, read_stage),
-                     tCrAux(_, _, k_block, read_stage), accumulation1());
+          cute::gemm(tiled_mma,
+                     tCrA(_, _, k_block, read_stage),
+                     tCrAux(_, _, k_block, read_stage),
+                     accumulation1());
         }
         tiled_mma.accumulate_ = GMMA::ScaleOut::One;
       }
@@ -659,14 +740,20 @@ struct CollectiveMmaGated<
       CUTLASS_PRAGMA_UNROLL
       for (int k_block = 0; k_block < size<2>(tCrA); ++k_block) {
         // (V,M,K) x (V,N,K) => (V,M,N)
-        cute::gemm(tiled_mma, tCrA(_, _, k_block, read_stage),
-                   tCrB(_, _, k_block, read_stage), accumulation0());
+        cute::gemm(tiled_mma,
+                   tCrA(_, _, k_block, read_stage),
+                   tCrB(_, _, k_block, read_stage),
+                   accumulation0());
         if constexpr (SwapAB) {
-          cute::gemm(tiled_mma, tCrAux(_, _, k_block, read_stage),
-                     tCrB(_, _, k_block, read_stage), accumulation1());
+          cute::gemm(tiled_mma,
+                     tCrAux(_, _, k_block, read_stage),
+                     tCrB(_, _, k_block, read_stage),
+                     accumulation1());
         } else {
-          cute::gemm(tiled_mma, tCrA(_, _, k_block, read_stage),
-                     tCrAux(_, _, k_block, read_stage), accumulation1());
+          cute::gemm(tiled_mma,
+                     tCrA(_, _, k_block, read_stage),
+                     tCrAux(_, _, k_block, read_stage),
+                     accumulation1());
         }
         tiled_mma.accumulate_ = GMMA::ScaleOut::One;
       }
@@ -681,8 +768,9 @@ struct CollectiveMmaGated<
       accumulation0.promote_if_needed();
       accumulation1.promote_if_needed();
 
-      pipeline.consumer_release(smem_pipe_release); // UNLOCK smem_pipe_release,
-                                                    // done _computing_ on it
+      pipeline.consumer_release(
+          smem_pipe_release);  // UNLOCK smem_pipe_release,
+                               // done _computing_ on it
 
       // Advance smem_pipe_read and smem_pipe_release
       ++smem_pipe_read;
@@ -710,8 +798,9 @@ struct CollectiveMmaGated<
     warpgroup_wait<0>();
 
     for (int count = 0; count < prologue_mma_count; ++count) {
-      pipeline.consumer_release(smem_pipe_release); // UNLOCK smem_pipe_release,
-                                                    // done _computing_ on it
+      pipeline.consumer_release(
+          smem_pipe_release);  // UNLOCK smem_pipe_release,
+                               // done _computing_ on it
       ++smem_pipe_release;
     }
   }
@@ -719,6 +808,6 @@ struct CollectiveMmaGated<
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
-} // namespace cutlass::gemm::collective
+}  // namespace cutlass::gemm::collective
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

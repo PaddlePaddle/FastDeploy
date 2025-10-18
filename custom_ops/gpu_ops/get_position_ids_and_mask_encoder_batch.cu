@@ -15,7 +15,6 @@
 #include "helper.h"
 #include "paddle/extension.h"
 
-
 __global__ void GetPositionIdsAndMaskEncoderBatchKernel(
     const int* seq_lens_encoder,  // [bsz] 每个批次的 encoder 长度
     const int* seq_lens_decoder,  // [bsz] 每个批次的 decoder 长度
@@ -56,7 +55,6 @@ __global__ void GetPositionIdsAndMaskEncoderBatchKernel(
     }
   }
 }
-
 
 void GetPositionIdsAndMaskEncoderBatch(
     const paddle::Tensor& seq_lens_encoder,

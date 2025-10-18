@@ -209,7 +209,6 @@ struct smem_t {
   template <typename T>
   __device__ __forceinline__ smem_t(T* base) : base((b128_t*)base) {}
 
-
   template <uint32_t stride, uint32_t inv_stride = 0>
   static __device__ __forceinline__ uint32_t get_permuted_offset(uint32_t i,
                                                                  uint32_t j) {

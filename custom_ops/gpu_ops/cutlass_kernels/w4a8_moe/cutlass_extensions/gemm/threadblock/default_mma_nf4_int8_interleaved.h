@@ -74,12 +74,11 @@ template <
     /// Gather operand A by using an index array
     bool GatherA = false,
     /// Gather operand B by using an index array
-    bool GatherB = false
-    >
+    bool GatherB = false>
 struct DefaulInt8Nf4InterleavedMma;
 
 // int8 int8 int32 Gemm specialization. Author(zhengzekang)
-template<
+template <
     /// Layout type for A matrix operand
     typename LayoutA,
     /// Access granularity of A matrix in units of elements
@@ -101,24 +100,6 @@ template<
     /// Operation performed by GEMM
     typename Operator>
 struct DefaulInt8Nf4InterleavedMma<int8_t,
-                  LayoutA,
-                  kAlignmentA,
-                  int8_t,
-                  LayoutB,
-                  kAlignmentB,
-                  ElementAccumulator,
-                  layout::RowMajor,
-                  arch::OpClassTensorOp,
-                  ArchTag,
-                  ThreadblockShape,
-                  WarpShape,
-                  InstructionShape,
-                  2,
-                  Operator> {
-
-private:
-
-    using Mma = Int8Nf4InterleavedMma<int8_t,
                                    LayoutA,
                                    kAlignmentA,
                                    int8_t,
@@ -132,23 +113,39 @@ private:
                                    WarpShape,
                                    InstructionShape,
                                    2,
-                                   Operator>;
+                                   Operator> {
+ private:
+  using Mma = Int8Nf4InterleavedMma<int8_t,
+                                    LayoutA,
+                                    kAlignmentA,
+                                    int8_t,
+                                    LayoutB,
+                                    kAlignmentB,
+                                    ElementAccumulator,
+                                    layout::RowMajor,
+                                    arch::OpClassTensorOp,
+                                    ArchTag,
+                                    ThreadblockShape,
+                                    WarpShape,
+                                    InstructionShape,
+                                    2,
+                                    Operator>;
 
-public:
-    // Define the MmaCore components
-    using MmaCore = typename Mma::MmaCore;
+ public:
+  // Define the MmaCore components
+  using MmaCore = typename Mma::MmaCore;
 
-    // Define iterators over tiles from the A operand
-    using IteratorA = typename Mma::IteratorA;
+  // Define iterators over tiles from the A operand
+  using IteratorA = typename Mma::IteratorA;
 
-    // Define iterators over tiles from the B operand
-    using IteratorB = typename Mma::IteratorB;
+  // Define iterators over tiles from the B operand
+  using IteratorB = typename Mma::IteratorB;
 
-    // Define the threadblock-scoped pipelined matrix multiply
-    using ThreadblockMma = typename Mma::ThreadblockMma;
+  // Define the threadblock-scoped pipelined matrix multiply
+  using ThreadblockMma = typename Mma::ThreadblockMma;
 };
 
-template<
+template <
     /// Layout type for A matrix operand
     typename LayoutA,
     /// Access granularity of A matrix in units of elements
@@ -174,26 +171,6 @@ template<
     /// Shared memory clear option
     SharedMemoryClearOption SharedMemoryClear>
 struct DefaulInt8Nf4InterleavedMma<int8_t,
-                  LayoutA,
-                  kAlignmentA,
-                  int8_t,
-                  LayoutB,
-                  kAlignmentB,
-                  ElementAccumulator,
-                  layout::RowMajor,
-                  arch::OpClassTensorOp,
-                  ArchTag,
-                  ThreadblockShape,
-                  WarpShape,
-                  InstructionShape,
-                  kStages,
-                  Operator,
-                  false,
-                  SharedMemoryClear> {
-
-private:
-
-    using Mma = Int8Nf4InterleavedMma<int8_t,
                                    LayoutA,
                                    kAlignmentA,
                                    int8_t,
@@ -208,27 +185,42 @@ private:
                                    InstructionShape,
                                    kStages,
                                    Operator,
-                                   SharedMemoryClear>;
+                                   false,
+                                   SharedMemoryClear> {
+ private:
+  using Mma = Int8Nf4InterleavedMma<int8_t,
+                                    LayoutA,
+                                    kAlignmentA,
+                                    int8_t,
+                                    LayoutB,
+                                    kAlignmentB,
+                                    ElementAccumulator,
+                                    layout::RowMajor,
+                                    arch::OpClassTensorOp,
+                                    ArchTag,
+                                    ThreadblockShape,
+                                    WarpShape,
+                                    InstructionShape,
+                                    kStages,
+                                    Operator,
+                                    SharedMemoryClear>;
 
-public:
-    // Define the MmaCore components
-    using MmaCore = typename Mma::MmaCore;
+ public:
+  // Define the MmaCore components
+  using MmaCore = typename Mma::MmaCore;
 
-    // Define iterators over tiles from the A operand
-    using IteratorA = typename Mma::IteratorA;
+  // Define iterators over tiles from the A operand
+  using IteratorA = typename Mma::IteratorA;
 
-    // Define iterators over tiles from the B operand
-    using IteratorB = typename Mma::IteratorB;
+  // Define iterators over tiles from the B operand
+  using IteratorB = typename Mma::IteratorB;
 
-    // Define the threadblock-scoped pipelined matrix multiply
-    using ThreadblockMma = typename Mma::ThreadblockMma;
+  // Define the threadblock-scoped pipelined matrix multiply
+  using ThreadblockMma = typename Mma::ThreadblockMma;
 };
-
-
-
 
 // int8 int4 int32
-template<
+template <
     /// Layout type for A matrix operand
     typename LayoutA,
     /// Access granularity of A matrix in units of elements
@@ -250,24 +242,6 @@ template<
     /// Operation performed by GEMM
     typename Operator>
 struct DefaulInt8Nf4InterleavedMma<int8_t,
-                  LayoutA,
-                  kAlignmentA,
-                  cutlass::uint4b_t,
-                  LayoutB,
-                  kAlignmentB,
-                  ElementAccumulator,
-                  layout::RowMajor,
-                  arch::OpClassTensorOp,
-                  ArchTag,
-                  ThreadblockShape,
-                  WarpShape,
-                  InstructionShape,
-                  2,
-                  Operator> {
-
-private:
-
-    using Mma = Int8Nf4InterleavedMma<int8_t,
                                    LayoutA,
                                    kAlignmentA,
                                    cutlass::uint4b_t,
@@ -281,23 +255,39 @@ private:
                                    WarpShape,
                                    InstructionShape,
                                    2,
-                                   Operator>;
+                                   Operator> {
+ private:
+  using Mma = Int8Nf4InterleavedMma<int8_t,
+                                    LayoutA,
+                                    kAlignmentA,
+                                    cutlass::uint4b_t,
+                                    LayoutB,
+                                    kAlignmentB,
+                                    ElementAccumulator,
+                                    layout::RowMajor,
+                                    arch::OpClassTensorOp,
+                                    ArchTag,
+                                    ThreadblockShape,
+                                    WarpShape,
+                                    InstructionShape,
+                                    2,
+                                    Operator>;
 
-public:
-    // Define the MmaCore components
-    using MmaCore = typename Mma::MmaCore;
+ public:
+  // Define the MmaCore components
+  using MmaCore = typename Mma::MmaCore;
 
-    // Define iterators over tiles from the A operand
-    using IteratorA = typename Mma::IteratorA;
+  // Define iterators over tiles from the A operand
+  using IteratorA = typename Mma::IteratorA;
 
-    // Define iterators over tiles from the B operand
-    using IteratorB = typename Mma::IteratorB;
+  // Define iterators over tiles from the B operand
+  using IteratorB = typename Mma::IteratorB;
 
-    // Define the threadblock-scoped pipelined matrix multiply
-    using ThreadblockMma = typename Mma::ThreadblockMma;
+  // Define the threadblock-scoped pipelined matrix multiply
+  using ThreadblockMma = typename Mma::ThreadblockMma;
 };
 
-template<
+template <
     /// Layout type for A matrix operand
     typename LayoutA,
     /// Access granularity of A matrix in units of elements
@@ -323,26 +313,6 @@ template<
     /// Shared memory clear option
     SharedMemoryClearOption SharedMemoryClear>
 struct DefaulInt8Nf4InterleavedMma<int8_t,
-                  LayoutA,
-                  kAlignmentA,
-                  cutlass::uint4b_t,
-                  LayoutB,
-                  kAlignmentB,
-                  ElementAccumulator,
-                  layout::RowMajor,
-                  arch::OpClassTensorOp,
-                  ArchTag,
-                  ThreadblockShape,
-                  WarpShape,
-                  InstructionShape,
-                  kStages,
-                  Operator,
-                  false,
-                  SharedMemoryClear> {
-
-private:
-
-    using Mma = Int8Nf4InterleavedMma<int8_t,
                                    LayoutA,
                                    kAlignmentA,
                                    cutlass::uint4b_t,
@@ -357,20 +327,38 @@ private:
                                    InstructionShape,
                                    kStages,
                                    Operator,
-                                   SharedMemoryClear>;
+                                   false,
+                                   SharedMemoryClear> {
+ private:
+  using Mma = Int8Nf4InterleavedMma<int8_t,
+                                    LayoutA,
+                                    kAlignmentA,
+                                    cutlass::uint4b_t,
+                                    LayoutB,
+                                    kAlignmentB,
+                                    ElementAccumulator,
+                                    layout::RowMajor,
+                                    arch::OpClassTensorOp,
+                                    ArchTag,
+                                    ThreadblockShape,
+                                    WarpShape,
+                                    InstructionShape,
+                                    kStages,
+                                    Operator,
+                                    SharedMemoryClear>;
 
-public:
-    // Define the MmaCore components
-    using MmaCore = typename Mma::MmaCore;
+ public:
+  // Define the MmaCore components
+  using MmaCore = typename Mma::MmaCore;
 
-    // Define iterators over tiles from the A operand
-    using IteratorA = typename Mma::IteratorA;
+  // Define iterators over tiles from the A operand
+  using IteratorA = typename Mma::IteratorA;
 
-    // Define iterators over tiles from the B operand
-    using IteratorB = typename Mma::IteratorB;
+  // Define iterators over tiles from the B operand
+  using IteratorB = typename Mma::IteratorB;
 
-    // Define the threadblock-scoped pipelined matrix multiply
-    using ThreadblockMma = typename Mma::ThreadblockMma;
+  // Define the threadblock-scoped pipelined matrix multiply
+  using ThreadblockMma = typename Mma::ThreadblockMma;
 };
 
 }  // namespace threadblock

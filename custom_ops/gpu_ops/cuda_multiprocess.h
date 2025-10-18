@@ -52,35 +52,36 @@ namespace cub = hipcub;
 #define GPU(str) cuda##str
 #endif
 
-#define checkCudaErrors(call)                   \
-    do {                                        \
-        GPU(Error_t) err = call;                \
-        if (err != GPU(Success)) {              \
-            printf("CUDA error at %s %d: %s\n", \
-                   __FILE__,                    \
-                   __LINE__,                    \
-                   GPU(GetErrorString)(err));   \
-            exit(EXIT_FAILURE);                 \
-        }                                       \
-    } while (0)
+#define checkCudaErrors(call)             \
+  do {                                    \
+    GPU(Error_t) err = call;              \
+    if (err != GPU(Success)) {            \
+      printf("CUDA error at %s %d: %s\n", \
+             __FILE__,                    \
+             __LINE__,                    \
+             GPU(GetErrorString)(err));   \
+      exit(EXIT_FAILURE);                 \
+    }                                     \
+  } while (0)
 
 typedef struct shmStruct_st {
-    size_t nprocesses;
-    GPU(IpcMemHandle_t) memHandle;
+  size_t nprocesses;
+  GPU(IpcMemHandle_t) memHandle;
 } shmStruct;
 
 typedef struct sharedMemoryInfo_st {
-    void *addr;
-    size_t size;
+  void *addr;
+  size_t size;
 #if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
-    HANDLE shmHandle;
+  HANDLE shmHandle;
 #else
-    int shmFd;
+  int shmFd;
 #endif
 } sharedMemoryInfo;
 
-
-inline int sharedMemoryOpen(const char *name, size_t sz, sharedMemoryInfo *info) {
+inline int sharedMemoryOpen(const char *name,
+                            size_t sz,
+                            sharedMemoryInfo *info) {
 #if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
   info->size = sz;
 

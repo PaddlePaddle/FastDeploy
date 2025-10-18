@@ -26,7 +26,7 @@
 
 // TODO: replace all msgdata in speculate-decoding
 struct speculate_msgdata {
-    long mtype;
-    int mtext[MAX_BSZ * MAX_DRAFT_TOKENS + MAX_BSZ +
-              2];  // stop_flag, bsz, tokens
+  long mtype;
+  int mtext[MAX_BSZ * MAX_DRAFT_TOKENS + MAX_BSZ +
+            2];  // stop_flag, bsz, tokens
 };
