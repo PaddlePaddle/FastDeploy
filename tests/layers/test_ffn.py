@@ -25,7 +25,7 @@ from fastdeploy.worker.worker_process import init_distributed_environment
 paddle.set_default_dtype("bfloat16")
 
 
-class FuseMoEWrapper(paddle.nn.Layer):
+class FFNWrapper(paddle.nn.Layer):
     def __init__(self, model_config: ModelConfig):
         super().__init__()
         self.model_config = model_config
@@ -117,7 +117,7 @@ class TestFusedMoE(unittest.TestCase):
     def test_ffn(self):
         init_distributed_environment()
 
-        ffn = FuseMoEWrapper(self.model_config)
+        ffn = FFNWrapper(self.model_config)
 
         # (ZKK): disable this test,
         # CI machine does not support deepgemm blockwise_fp8, compilation error.
