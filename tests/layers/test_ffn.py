@@ -107,7 +107,7 @@ class TestFusedMoE(unittest.TestCase):
             "dtype": "bfloat16",
         }
 
-        tmp_dir = f"./tmpwedfewfef{paddle.distributed.get_rank()}"
+        tmp_dir = f"./tmpewfef{paddle.distributed.get_rank()}"
         os.makedirs(tmp_dir, exist_ok=True)
         with open(f"./{tmp_dir}/config.json", "w") as f:
             json.dump(config_dict, f)
