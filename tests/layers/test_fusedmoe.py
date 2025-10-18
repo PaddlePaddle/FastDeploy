@@ -163,8 +163,8 @@ class TestFusedMoE(unittest.TestCase):
         gating.to(dtype=paddle.float32)  # it's dtype is bfloat16 default, but the forward input is float32
         gating.weight.set_value(paddle.rand(gating.weight.shape, dtype=paddle.float32))
 
-        os.environ["FD_USE_DEEP_GEMM"] = "1"  # use deepgemm
-        os.environ["DG_NVCC_OVERRIDE_CPP_STANDARD"] = "20"  # use deepgemm
+        os.environ["FD_USE_DEEP_GEMM"] = "0"  # use deepgemm
+        # os.environ["DG_NVCC_OVERRIDE_CPP_STANDARD"] = "20"  # use deepgemm
         ep_size = paddle.distributed.get_world_size()
         ep_rank = paddle.distributed.get_rank()
 
