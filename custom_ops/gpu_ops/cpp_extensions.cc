@@ -91,7 +91,7 @@ std::vector<paddle::Tensor> AppendAttention(
     const int speculate_max_draft_token_num, const bool causal,
     const bool speculate_decoder);
 
-void AppendAttentionWithOutput(
+std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const paddle::Tensor &qkv, const paddle::Tensor &key_cache,
     const paddle::Tensor &value_cache, const paddle::Tensor &seq_lens_encoder,
     const paddle::Tensor &seq_lens_decoder,
@@ -709,8 +709,11 @@ void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor &pre_ids_all,
 void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,
                                       const paddle::Tensor& accept_num,
                                       const paddle::Tensor& not_need_stop,
+                                      const paddle::Tensor& seq_lens_decoder,
+                                      const paddle::Tensor& prompt_lens,
                                       int64_t rank_id,
-                                      bool save_each_rank);
+                                      bool save_each_rank,
+                                      bool skip_prefill);
 
 
 void SpeculateClearAcceptNums(const paddle::Tensor& accept_num,
@@ -719,7 +722,9 @@ void SpeculateClearAcceptNums(const paddle::Tensor& accept_num,
 void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
                             const paddle::Tensor &block_tables,
                             const paddle::Tensor &stop_flags,
+                            const paddle::Tensor &prompt_lens,
                             const paddle::Tensor &seq_lens_this_time,
+                            const paddle::Tensor &seq_lens_encoder,
                             const paddle::Tensor &seq_lens_decoder,
                             const paddle::Tensor &step_seq_lens_decoder,
                             const paddle::Tensor &step_draft_tokens,
@@ -1136,13 +1141,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
    * recover_decode_task
    */
   m.def("recover_decode_task", &RecoverDecodeTask, "recover decode task for scheduler v1 function");
-
-  /**
-   * extract_text_token_output.cu
-   * extract_text_token_output
-   */
-  m.def("extract_text_token_output", &ExtractTextTokenOutput,
-        "extract_text_token_output function");
 
   m.def("group_swiglu_with_masked", &GroupSwigluWithMasked,
         "group_swiglu_with_masked function");
