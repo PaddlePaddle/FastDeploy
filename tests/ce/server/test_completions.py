@@ -52,7 +52,6 @@ def test_completion_echo_stream_one_prompt_rti():
 
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(COMPLETIONS_URL, payload, stream=True)
-    last_data = None
     # 初始化计数器
     counter = 0
     second_data = None
@@ -87,7 +86,6 @@ def test_completion_echo_stream_one_prompt():
 
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(COMPLETIONS_URL, payload, stream=True)
-    last_data = None
     # 初始化计数器
     counter = 0
     second_data = None
@@ -123,10 +121,6 @@ def test_completion_echo_stream_more_prompt():
 
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(COMPLETIONS_URL, payload, stream=True)
-    last_data = None
-    # 初始化计数器
-    counter = 0
-    second_data = None
     # 初始化字典来存储每个index的第二包数据
     second_data_by_index = {0: None, 1: None}
     # 初始化字典来记录每个index的包计数

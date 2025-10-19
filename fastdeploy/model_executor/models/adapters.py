@@ -180,7 +180,7 @@ def _get_pooling_model_name(orig_model_name: str, pooling_suffix: str) -> str:
 
 def as_embedding_model(cls: _T) -> _T:
     """
-    Subclass an existing vLLM model to support embeddings.
+    Subclass an existing FastDeploy model to support embeddings.
 
     By default, the embeddings of the whole prompt are extracted from the
     normalized hidden state corresponding to the last token.

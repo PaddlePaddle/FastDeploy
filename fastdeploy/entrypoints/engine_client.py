@@ -19,6 +19,7 @@ import os
 import time
 import traceback
 import uuid
+from copy import copy
 
 import numpy as np
 from filelock import FileLock
@@ -238,14 +239,28 @@ class EngineClient:
 
         self.valid_parameters(task)
         api_server_logger.debug(f"Receive task: {task}")
+        n = task.get("n", 1)
         try:
-            if not self.enable_mm:
-                self.zmq_client.send_json(task)
+            request_id_idx = task.get("request_id")
+            parts = request_id_idx.rsplit("_", 1)
+            if len(parts) == 1:
+                self._send_task(task)
             else:
-                self.zmq_client.send_pyobj(task)
+                request_id = parts[0]
+                index = int(parts[1])
+                for i in range(index * n, (index + 1) * n):
+                    child_task = copy(task)
+                    child_task["request_id"] = f"{request_id}_{i}"
+                    self._send_task(child_task)
         except Exception as e:
             api_server_logger.error(f"zmq_client send task error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
+
+    def _send_task(self, task):
+        if not self.enable_mm:
+            self.zmq_client.send_json(task)
+        else:
+            self.zmq_client.send_pyobj(task)
 
     def valid_parameters(self, data):
         """
@@ -253,10 +268,6 @@ class EngineClient:
         超参数（top_p、seed、frequency_penalty、temperature、presence_penalty）的校验逻辑
         前置到了ChatCompletionRequest/CompletionRequest中
         """
-
-        if data.get("n") is not None:
-            if data["n"] != 1:
-                raise ParameterError("n", "n only support 1.")
 
         if data.get("max_tokens") is not None:
             if data["max_tokens"] < 1 or data["max_tokens"] >= self.max_model_len:
