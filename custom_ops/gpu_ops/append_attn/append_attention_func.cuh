@@ -2308,17 +2308,11 @@ __global__ void merge_multi_chunks_decoder_kernel(
   using LoadT = AlignedVector<T, vec_size>;
   LoadT load_vec;
   LoadT res_vec;
-  if constexpr (std::is_same<T, half>::value) {
-#pragma unroll
-    for (int i = 0; i < vec_size / 2; ++i) {
-      *((half2 *)(&res_vec) + i) = make_half2(0, 0);
-    }
-  } else {
-#pragma unroll
-    for (int i = 0; i < vec_size / 2; ++i) {
-      *((nv_bfloat162 *)(&res_vec) + i) = make_bfloat162(0, 0);
-    }
+
+  for (int i = 0; i < vec_size; ++i) {
+    res_vec[i] = T(0.f);
   }
+
   float m;
   float d = 1.f;
   if constexpr (std::is_same<T, half>::value) {
@@ -2334,8 +2328,7 @@ __global__ void merge_multi_chunks_decoder_kernel(
     const float m_now = multi_m[offset];
     const float d_now = multi_d[offset];
     m = max(m_prev, m_now);
-    offset = (bid * num_chunks * num_heads + i * num_heads + hid) * head_dim +
-             vid * vec_size;
+    offset = offset * head_dim + vid * vec_size;
     Load<T, vec_size>(&multi_out[offset], &load_vec);
     const float scale1 = __expf(m_prev - m), scale2 = __expf(m_now - m);
     const T scale1_T = static_cast<T>(scale1),
