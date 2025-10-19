@@ -2346,7 +2346,7 @@ class GPUModelRunner(ModelRunnerBase):
             custom_black_list=self.amp_black,
             custom_white_list=self.amp_white,
             level="O2",
-            dtype=self.parallel_config.dtype,
+            dtype=self.model_config.dtype,
         ):
             image_features = self.model.visual(
                 pixel_values=images,
