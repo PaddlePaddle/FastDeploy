@@ -1,3 +1,5 @@
+[简体中文](../zh/get_started/ernie-4.5.md)
+
 # Deploy ERNIE-4.5-300B-A47B Model
 
 This document explains how to deploy the ERNIE-4.5 model. Before starting the deployment, please ensure that your hardware environment meets the following requirements:
