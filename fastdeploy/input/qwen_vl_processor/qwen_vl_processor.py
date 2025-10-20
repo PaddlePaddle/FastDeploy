@@ -270,6 +270,13 @@ class QwenVLProcessor(TextProcessor):
         # Set default max_tokens if not specified
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))  # Ensure at least 1 token
+        if self.reasoning_parser:
+            real_req_id = request["request_id"].split("_")[0]
+            model_status = self.model_status_dict.get(real_req_id)
+            if model_status is None:
+                model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
+                self.model_status_dict[real_req_id] = model_status
+            request["enable_thinking"] = model_status == "think_start"
         data_processor_logger.info(f"Processed request {request}")
 
         return request

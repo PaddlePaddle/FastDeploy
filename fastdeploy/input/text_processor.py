@@ -382,7 +382,7 @@ class DataProcessor(BaseDataProcessor):
         response_dict.outputs.text = full_text
         if self.reasoning_parser:
             reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
-                full_text, response_dict, self.model_status_dict[req_id.split("_")[0]]
+                full_text, response_dict, self.model_status_dict.get(req_id.split("_")[0])
             )
             response_dict.outputs.text = text
             response_dict.outputs.reasoning_content = reasoning_content
@@ -421,7 +421,9 @@ class DataProcessor(BaseDataProcessor):
             response_dict["outputs"]["text"] = full_text
             if self.reasoning_parser:
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
-                    full_text, response_dict, self.model_status_dict[req_id.split("_")[0]]
+                    full_text,
+                    response_dict,
+                    self.model_status_dict.get(req_id.split("_")[0]),
                 )
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
@@ -462,7 +464,7 @@ class DataProcessor(BaseDataProcessor):
                 previous_token_ids,
                 previous_token_ids + token_ids,
                 token_ids,
-                self.model_status_dict[req_id.split("_")[0]],
+                self.model_status_dict.get(req_id.split("_")[0]),
             )
             response_dict["outputs"]["delta_message"] = reasoning_delta_message
         if self.tool_parser_obj:
@@ -486,7 +488,7 @@ class DataProcessor(BaseDataProcessor):
             del self.decode_status[req_id]
             if req_id in self.tool_parser_dict:
                 del self.tool_parser_dict[req_id]
-            if req_id in self.model_status_dict:
+            if req_id.split("_")[0] in self.model_status_dict:
                 del self.model_status_dict[req_id.split("_")[0]]
         return response_dict
 
