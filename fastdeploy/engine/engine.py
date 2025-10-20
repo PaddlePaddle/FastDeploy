@@ -163,7 +163,7 @@ class LLMEngine:
             self._stop_profile()
         elif self.cfg.cache_config.enable_prefix_caching:
             device_ids = self.cfg.parallel_config.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix, False)
+            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
         # Launch components: scheduler, cache_manager, expert_service et.al.
         if self.cfg.scheduler_config.splitwise_role != "mixed":
@@ -644,9 +644,7 @@ class LLMEngine:
         self.engine.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
             device_ids = self.cfg.parallel_config.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(
-                device_ids, self.ipc_signal_suffix, self.cfg.scheduler_config.splitwise_role != "mixed"
-            )
+            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
     def check_health(self, time_interval_threashold=30):
         """
