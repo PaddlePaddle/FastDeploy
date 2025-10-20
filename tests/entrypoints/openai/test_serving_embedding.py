@@ -1,7 +1,12 @@
+import time
 import unittest
 from unittest.mock import AsyncMock, MagicMock
 
-from fastdeploy.engine.request import PoolingOutput, PoolingRequestOutput
+from fastdeploy.engine.request import (
+    PoolingOutput,
+    PoolingRequestOutput,
+    RequestMetrics,
+)
 from fastdeploy.entrypoints.openai.protocol import (
     EmbeddingChatRequest,
     EmbeddingCompletionRequest,
@@ -27,6 +32,7 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
             prompt_token_ids=[1, 2, 3],
             finished=True,
             outputs=PoolingOutput(data=[0.1, 0.2, 0.3]),
+            metrics=RequestMetrics(arrival_time=time.time()),
         )
         mock_response_queue.get = AsyncMock(
             return_value=[
