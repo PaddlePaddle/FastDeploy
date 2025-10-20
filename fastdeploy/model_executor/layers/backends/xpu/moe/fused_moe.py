@@ -644,7 +644,7 @@ class XPUW4A8MoEMethod(XPUMoEMethod):
             layer.down_proj_weight,
             None,  # moe_ffn1_bias
             None,  # moe_ffn2_bias
-            getattr(layer, "up_gate_proj_in_scale", None),
+            (ffn1_act_scale_per_token if hasattr(layer, "up_gate_proj_in_scale") else None),
             getattr(layer, "down_proj_in_scale", None),
             getattr(layer, "up_gate_proj_weight_scale", None),
             getattr(layer, "down_proj_weight_scale", None),
