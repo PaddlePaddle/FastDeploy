@@ -39,6 +39,7 @@ class ModelCategory(Enum):
     TEXT_GENERATION = "text_generation"
     MULTIMODAL = "multimodal"
     EMBEDDING = "embedding"
+    REWARD = "reward"
 
 
 @dataclass(frozen=True)
@@ -228,8 +229,7 @@ class ModelRegistry:
 
         def _register(model_cls):
             # Traditional registration for ModelForCasualLM subclasses
-            if issubclass(model_cls, ModelForCasualLM) and model_cls is not ModelForCasualLM:
-                cls._arch_to_model_cls[model_cls.name()] = model_cls
+            cls._arch_to_model_cls[model_cls.name()] = model_cls
 
             # Enhanced decorator-style registration
             if architecture and module_name:
