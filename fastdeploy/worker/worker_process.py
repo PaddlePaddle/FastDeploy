@@ -43,6 +43,7 @@ from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import ExistTaskStatus, IPCSignal, ModelWeightsStatus
 from fastdeploy.model_executor.layers.quantization import get_quantization_config
+from fastdeploy.model_executor.utils import is_paddle_support_v1_loader
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import get_logger, parse_quantization
 from fastdeploy.worker.worker_base import WorkerBase
@@ -808,6 +809,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     )
     update_fd_config_for_mm(fd_config)
     update_think_end_id_for_ernie(fd_config)
+
+    if load_config.load_choices == "default_v1" and not is_paddle_support_v1_loader():
+        raise ValueError("The install Paddle don't support v1 loader.")
 
     return fd_config
 
