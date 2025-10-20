@@ -71,7 +71,7 @@ jobs:
               fi
             '
 
-            wget -q ${fd_archive_url}
+            wget -q --no-proxy ${fd_archive_url}
             tar -xf FastDeploy.tar.gz
             rm -rf FastDeploy.tar.gz
             cd FastDeploy
@@ -168,7 +168,8 @@ jobs:
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
           git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
-          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          # python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install paddlepaddle-gpu==3.3.0.dev20251012 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
           pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
           python -m pip install -r scripts/unittest_requirement.txt
@@ -291,6 +292,7 @@ jobs:
     needs: run_tests_with_coverage
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
     steps:
@@ -299,7 +301,7 @@ jobs:
         env:
           diff_cov_file_url: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url }}
         run: |
-          wget ${fd_archive_url}
+          wget -q --no-proxy ${fd_archive_url}
           tar -xf FastDeploy.tar.gz
           cd FastDeploy
           if [ -z "${diff_cov_file_url}" ]; then

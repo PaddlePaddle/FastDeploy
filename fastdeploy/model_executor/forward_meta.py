@@ -119,8 +119,6 @@ class ForwardMeta:
     kv_tile_ids_per_batch: Optional[paddle.Tensor] = None
     # The number of CUDA blocks to launch in the x-dimension for the append_write_cache_kv kernel, defining its grids.x.
     kv_num_blocks_x_cpu: Optional[paddle.Tensor] = None
-    # The maximum sequence length of the KV cache, which may represent the current maximum decoder length.
-    max_len_kv_cpu: Optional[paddle.Tensor] = None
 
     decoder_chunk_size_device: Optional[paddle.Tensor] = None
 

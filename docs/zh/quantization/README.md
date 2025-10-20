@@ -1,3 +1,5 @@
+[English](../../quantization/README.md)
+
 # 量化
 
 FastDeploy支持FP8、INT8、INT4、2-bit等多种量化推理精度，支持模型权重、激活和KVCache 3种张量的不同精度推理，可以满足低成本、低时延、长上下文等不同场景的推理需求。

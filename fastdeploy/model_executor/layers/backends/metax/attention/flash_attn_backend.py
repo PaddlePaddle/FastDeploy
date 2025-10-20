@@ -89,8 +89,8 @@ class FlashAttentionBackend(AttentionBackend):
         super().__init__()
         self.attention_metadata: FlashAttentionMetadata = None
         self.record_block_table_metadata = {}
-        self.block_size: int = fd_config.parallel_config.block_size
-        self.max_seq_len: int = fd_config.parallel_config.max_model_len
+        self.block_size: int = fd_config.cache_config.block_size
+        self.max_seq_len: int = fd_config.model_config.max_model_len
         self.rope_theta: float = (
             10000.0 if fd_config.model_config.rope_theta is None else fd_config.model_config.rope_theta
         )

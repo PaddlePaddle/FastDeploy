@@ -19,12 +19,30 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
-# from openai.types.chat import ChatCompletionMessageParam
-# from fastdeploy.entrypoints.chat_utils import ChatCompletionMessageParam
+from fastdeploy.engine.pooling_params import PoolingParams
+
+
+class InvalidParameterException(Exception):
+    """Exception raised for invalid API parameters"""
+
+    def __init__(self, message: str, param: Optional[str] = None):
+        """
+        Args:
+            message: Human-readable error message
+            param: The parameter that caused the error (optional)
+        """
+        self.message = message
+        self.param = param
+        super().__init__(self.message)
+
+    def __str__(self):
+        if self.param:
+            return f"Invalid parameter '{self.param}': {self.message}"
+        return self.message
 
 
 class ErrorResponse(BaseModel):
@@ -175,8 +193,6 @@ class ChatMessage(BaseModel):
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
-    text_after_process: Optional[str] = None
-    raw_prediction: Optional[str] = None
     prompt_tokens: Optional[str] = None
     completion_tokens: Optional[str] = None
 
@@ -237,8 +253,6 @@ class DeltaMessage(BaseModel):
     completion_token_ids: Optional[List[int]] = None
     reasoning_content: Optional[str] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
-    text_after_process: Optional[str] = None
-    raw_prediction: Optional[str] = None
     prompt_tokens: Optional[str] = None
     completion_tokens: Optional[str] = None
 
@@ -277,8 +291,6 @@ class CompletionResponseChoice(BaseModel):
     text: str
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
-    text_after_process: Optional[str] = None
-    raw_prediction: Optional[str] = None
     prompt_tokens: Optional[str] = None
     completion_tokens: Optional[str] = None
     arrival_time: Optional[float] = None
@@ -323,8 +335,6 @@ class CompletionResponseStreamChoice(BaseModel):
     logprobs: Optional[CompletionLogprobs] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
-    text_after_process: Optional[str] = None
-    raw_prediction: Optional[str] = None
     prompt_tokens: Optional[str] = None
     completion_tokens: Optional[str] = None
     reasoning_content: Optional[str] = None
@@ -722,8 +732,6 @@ class ControlSchedulerRequest(BaseModel):
     reallocate_shard: Optional[bool] = False
 
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
-
 BatchRequestInputBody = ChatCompletionRequest
 
 
@@ -788,3 +796,145 @@ class BatchRequestOutput(BaseModel):
     # For requests that failed with a non-HTTP error, this will contain more
     # information on the cause of the failure.
     error: Optional[Any]
+
+
+class EmbeddingCompletionRequest(BaseModel):
+    # Ordered by official OpenAI API documentation
+    # https://platform.openai.com/docs/api-reference/embeddings
+    model: Optional[str] = None
+    input: Union[list[int], list[list[int]], str, list[str]]
+    encoding_format: Literal["float", "base64"] = "float"
+    dimensions: Optional[int] = None
+    user: Optional[str] = None
+    truncate_prompt_tokens: Optional[Annotated[int, Field(ge=-1)]] = None
+
+    # --8<-- [start:embedding-extra-params]
+    add_special_tokens: bool = Field(
+        default=True,
+        description=("If true (the default), special tokens (e.g. BOS) will be added to " "the prompt."),
+    )
+    priority: int = Field(
+        default=0,
+        description=(
+            "The priority of the request (lower means earlier handling; "
+            "default: 0). Any priority other than 0 will raise an error "
+            "if the served model does not use priority scheduling."
+        ),
+    )
+    request_id: str = Field(
+        default_factory=lambda: f"{uuid.uuid4().hex}",
+        description=(
+            "The request_id related to this request. If the caller does "
+            "not set it, a uuid.uuid4().hex will be generated. This id is used "
+            "through out the inference process and return in response."
+        ),
+    )
+    normalize: Optional[bool] = None
+
+    # --8<-- [end:embedding-extra-params]
+
+    def to_pooling_params(self):
+        return PoolingParams(
+            truncate_prompt_tokens=self.truncate_prompt_tokens, dimensions=self.dimensions, normalize=self.normalize
+        )
+
+
+class EmbeddingChatRequest(BaseModel):
+    model: Optional[str] = None
+    messages: Union[List[Any], List[int]]
+
+    encoding_format: Literal["float", "base64"] = "float"
+    dimensions: Optional[int] = None
+    user: Optional[str] = None
+    truncate_prompt_tokens: Optional[Annotated[int, Field(ge=-1)]] = None
+
+    # --8<-- [start:chat-embedding-extra-params]
+    add_generation_prompt: bool = Field(
+        default=False,
+        description=(
+            "If true, the generation prompt will be added to the chat template. "
+            "This is a parameter used by chat template in tokenizer config of the "
+            "model."
+        ),
+    )
+
+    add_special_tokens: bool = Field(
+        default=False,
+        description=(
+            "If true, special tokens (e.g. BOS) will be added to the prompt "
+            "on top of what is added by the chat template. "
+            "For most models, the chat template takes care of adding the "
+            "special tokens so this should be set to false (as is the "
+            "default)."
+        ),
+    )
+    chat_template: Optional[str] = Field(
+        default=None,
+        description=(
+            "A Jinja template to use for this conversion. "
+            "As of transformers v4.44, default chat template is no longer "
+            "allowed, so you must provide a chat template if the tokenizer "
+            "does not define one."
+        ),
+    )
+    chat_template_kwargs: Optional[dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Additional keyword args to pass to the template renderer. " "Will be accessible by the chat template."
+        ),
+    )
+    mm_processor_kwargs: Optional[dict[str, Any]] = Field(
+        default=None,
+        description=("Additional kwargs to pass to the HF processor."),
+    )
+    priority: int = Field(
+        default=0,
+        description=(
+            "The priority of the request (lower means earlier handling; "
+            "default: 0). Any priority other than 0 will raise an error "
+            "if the served model does not use priority scheduling."
+        ),
+    )
+    request_id: str = Field(
+        default_factory=lambda: f"{uuid.uuid4().hex}",
+        description=(
+            "The request_id related to this request. If the caller does "
+            "not set it, a uuid.uuid4().hex will be generated. This id is used "
+            "through out the inference process and return in response."
+        ),
+    )
+    normalize: Optional[bool] = None
+    # --8<-- [end:chat-embedding-extra-params]
+
+    @model_validator(mode="before")
+    @classmethod
+    def check_generation_prompt(cls, data):
+        if data.get("continue_final_message") and data.get("add_generation_prompt"):
+            raise ValueError("Cannot set both `continue_final_message` and " "`add_generation_prompt` to True.")
+        return data
+
+    def to_pooling_params(self):
+        return PoolingParams(
+            truncate_prompt_tokens=self.truncate_prompt_tokens, dimensions=self.dimensions, normalize=self.normalize
+        )
+
+
+class EmbeddingResponseData(BaseModel):
+    index: int
+    object: str = "embedding"
+    embedding: Union[list[float], str]
+
+
+class EmbeddingResponse(BaseModel):
+    id: str = Field(default_factory=lambda: f"embd-{uuid.uuid4().hex}")
+    object: str = "list"
+    created: int = Field(default_factory=lambda: int(time.time()))
+    model: str
+    data: list[EmbeddingResponseData]
+    usage: UsageInfo
+
+
+EmbeddingRequest = Union[EmbeddingCompletionRequest, EmbeddingChatRequest]
+
+PoolingCompletionRequest = EmbeddingCompletionRequest
+PoolingChatRequest = EmbeddingChatRequest
