@@ -79,3 +79,11 @@ class FdModelForPooling(FdModel[T_co], Protocol[T_co]):
     """
     pooler: Pooler
     """The pooler is only called on TP rank 0."""
+
+
+def default_pooling_type(pooling_type: str):
+    def func(model):
+        model.default_pooling_type = pooling_type  # type: ignore
+        return model
+
+    return func
