@@ -46,7 +46,10 @@ from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_iluvatar():
-    from fastdeploy.model_executor.ops.iluvatar import set_value_by_flags_and_idx
+    from fastdeploy.model_executor.ops.iluvatar import (
+        set_data_ipc,
+        set_value_by_flags_and_idx,
+    )
 
     recover_decode_task = None
     share_external_data = None
@@ -1471,10 +1474,11 @@ class GPUModelRunner(ModelRunnerBase):
             skip_save_output=True,
             async_output_queue=self.async_output_queue,
         )
-
         if self.speculative_decoding:
             if self.speculative_method == "mtp":
-                self.proposer.run(full_hidden_states=model_output)
+                self.proposer.run(
+                    full_hidden_states=model_output, step_use_cudagraph=self.forward_meta.step_use_cudagraph
+                )
             else:
                 self.proposer.run(share_inputs=self.share_inputs)
 
@@ -1924,7 +1928,9 @@ class GPUModelRunner(ModelRunnerBase):
         # 6. Speculative decode
         if self.speculative_decoding:
             if self.speculative_method == "mtp":
-                self.proposer.run(full_hidden_states=model_output)
+                self.proposer.run(
+                    full_hidden_states=model_output, step_use_cudagraph=self.forward_meta.step_use_cudagraph
+                )
             else:
                 self.proposer.run(share_inputs=self.share_inputs)
 
