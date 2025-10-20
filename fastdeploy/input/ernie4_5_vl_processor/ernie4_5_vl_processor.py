@@ -255,11 +255,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         else:
             request["max_tokens"] = min(max_model_len - len(request["prompt_token_ids"]), request["max_tokens"])
         if request.get("reasoning_max_tokens") is None:
-            if request.get("enable_thinking"):
-                request["reasoning_max_tokens"] = max(int(request["max_tokens"] * 0.8), 1)
-        else:
-            if not request.get("enable_thinking"):
-                request["reasoning_max_tokens"] = None
+            request["reasoning_max_tokens"] = max(int(request["max_tokens"] * 0.8), 1)
         data_processor_logger.info(f"Processed request {request}")
 
         return request
