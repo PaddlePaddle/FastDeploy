@@ -154,7 +154,8 @@ class Ernie4_5Processor(BaseDataProcessor):
             request.set("top_p", _SAMPLING_EPS)
         if self.reasoning_parser:
             real_req_id = request.request_id.split("_")[0]
-            if real_req_id in self.model_status_dict:
+            model_status = self.model_status_dict.get(real_req_id)
+            if model_status is None:
                 model_status = self.reasoning_parser.get_model_status(request.prompt_token_ids)
                 self.model_status_dict[real_req_id] = model_status
             request.enable_thinking = model_status == "think_start"
@@ -236,7 +237,8 @@ class Ernie4_5Processor(BaseDataProcessor):
             request["top_p"] = _SAMPLING_EPS
         if self.reasoning_parser:
             real_req_id = request["request_id"].split("_")[0]
-            if real_req_id not in self.model_status_dict:
+            model_status = self.model_status_dict.get(real_req_id)
+            if model_status is None:
                 model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
                 self.model_status_dict[real_req_id] = model_status
             request["enable_thinking"] = model_status == "think_start"
@@ -357,7 +359,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             if token_ids[-1] == self.tokenizer.eos_token_id:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
-        response_dict["outputs"]["raw_prediction"] = delta_text
+        response_dict["outputs"]["completion_tokens"] = delta_text
         if self.reasoning_parser:
             reasoning_delta_message = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,

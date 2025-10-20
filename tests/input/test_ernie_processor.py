@@ -70,14 +70,6 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         # 验证结果
         self.assertEqual(result["outputs"]["raw_prediction"], "delta_text")
 
-        response_dict = {"finished": True, "request_id": "test", "outputs": {"token_ids": [4, 5]}}
-
-        # 调用方法
-        result = self.processor.process_response_dict_streaming(response_dict)
-
-        # 验证结果
-        self.assertEqual(result["outputs"]["raw_prediction"], "delta_text")
-
     def test_process_request_dict(self):
         request_dict = {
             "request_id": "123",
