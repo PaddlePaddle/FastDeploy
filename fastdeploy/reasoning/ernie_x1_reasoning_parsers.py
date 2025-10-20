@@ -131,8 +131,8 @@ class ErnieX1ReasoningParser(ReasoningParser):
                     reasoning_content = model_output[:think_end_pos]
                     remaining = model_output[think_end_pos + len(self.think_end_token) :].lstrip("\n")
                 else:
-                    reasoning_content = model_output
-                    remaining = ""
+                    reasoning_content = ""
+                    remaining = model_output
             else:
                 remaining = model_output.lstrip("\n")
 

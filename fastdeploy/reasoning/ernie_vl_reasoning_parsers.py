@@ -126,11 +126,10 @@ class ErnieVLReasoningParser(ReasoningParser):
         Returns:
             tuple[Optional[str], Optional[str]]: reasoning content and content
         """
-
         # Check if the model output contains the </think> tokens.
         if model_status == "think_start":
             if self.think_end_token not in model_output:
-                return model_output, ""
+                return "", model_output
             reasoning_content, _, content = model_output.partition(self.think_end_token)
             final_content = content or ""
             return reasoning_content, final_content
