@@ -123,8 +123,8 @@ class DealerConnectionManager:
                 raw_data = await dealer.read()
                 response = msgpack.unpackb(raw_data[-1])
                 request_id = response[-1]["request_id"]
-                if "cmpl" == request_id[:4]:
-                    request_id = request_id.rsplit("_", 1)[0]
+                if request_id[:4] in ["cmpl", "embd"]:
+                    request_id = request_id.rsplit("-", 1)[0]
                 elif "chatcmpl" == request_id[:8]:
                     request_id = request_id.rsplit("_", 1)[0]
                 async with self.lock:

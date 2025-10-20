@@ -15,6 +15,7 @@
 """
 
 import base64
+from collections.abc import AsyncGenerator
 from typing import Literal, Union
 
 import numpy as np
@@ -103,7 +104,9 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
                 request_dict["prompt"] = prompt
                 request_dicts.append(request_dict)
         else:
-            request_dicts = [self._request_to_dict(ctx)]
+            request_dict = self._request_to_dict(ctx)
+            request_dict["request_id"] = f"{ctx.request_id}-0"
+            request_dicts = [request_dict]
         return request_dicts
 
     async def create_embedding(self, request: EmbeddingRequest):
@@ -118,9 +121,20 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
             request_id=request_id,
         )
 
-        generation = self.handle(ctx)
-        async for response in generation:
-            return response
+        idx = 0
+        response: EmbeddingResponse = None
+        generators: AsyncGenerator[EmbeddingResponse, None] = self.handle(ctx)
+        async for r in generators:
+            r.data[0].index = idx
+            idx += 1
+            if response is None:
+                response = r
+            else:
+                response.data.append(r.data[0])
+                response.usage.prompt_tokens += r.usage.prompt_tokens
+                response.usage.total_tokens += r.usage.total_tokens
+
+        return response
 
     @override
     def _build_response(self, ctx: ServeContext):
