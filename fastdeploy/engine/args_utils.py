@@ -129,7 +129,7 @@ class EngineArgs:
     """
     Maximum number of tokens in the encoder cache.
     """
-    max_processor_cache: float = 4
+    max_processor_cache: float = -1
     """
     Maximum number of bytes(in GiB) in the processor cache.
     """
