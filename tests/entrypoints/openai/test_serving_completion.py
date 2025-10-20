@@ -142,6 +142,7 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         request: CompletionRequest = Mock()
         request.prompt = "Hello, world!"
         request.echo = True
+        request.n = 2
         request_id = "test_request_id"
         created_time = 1655136000
         model_name = "test_model"
@@ -155,7 +156,7 @@ class TestOpenAIServingCompletion(unittest.TestCase):
             model_name=model_name,
             prompt_batched_token_ids=prompt_batched_token_ids,
             completion_batched_token_ids=completion_batched_token_ids,
-            text_after_process_list=["1", "1"],
+            prompt_tokens_list=["1", "1"],
         )
 
         assert completion_response.id == request_id
