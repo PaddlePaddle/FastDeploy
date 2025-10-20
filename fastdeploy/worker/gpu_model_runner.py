@@ -780,7 +780,10 @@ class GPUModelRunner(ModelRunnerBase):
         if not self.is_pooling_model:
             return []
 
+        print("model", model)
+        print("model.pooler", model.pooler)
         supported_tasks = list(model.pooler.get_supported_tasks())
+        print("supported_tasks", supported_tasks)
 
         if self.cache_config.enable_chunked_prefill and "encode" in supported_tasks:
             supported_tasks.remove("encode")
@@ -1422,6 +1425,7 @@ class GPUModelRunner(ModelRunnerBase):
     ) -> PoolerOutput:
         output_size = dict[PoolingTask, float]()
         for task in self.get_supported_pooling_tasks():
+
             output = self._dummy_pooler_run_task(hidden_states, task)
             output_size[task] = output.get_data_nbytes()
             del output
@@ -1517,7 +1521,7 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         post_process(
-            sampler_output=sampler_output,
+            sampler_or_pooler_output=sampler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
             block_size=self.cache_config.block_size,
@@ -1865,8 +1869,48 @@ class GPUModelRunner(ModelRunnerBase):
         # 4. Compute logits, Sample
         if self.is_pooling_model:
             # num_scheduled_tokens = int(self.share_inputs["seq_lens_this_time"][:num_running_requests].sum())
-            output = self._pool(hidden_states, num_running_requests)
-            return output
+            pooler_output = self._pool(hidden_states, num_running_requests)
+
+            model_output_data = ModelOutputData(
+                next_tokens=self.share_inputs["next_tokens"],
+                stop_flags=self.share_inputs["stop_flags"],
+                step_idx=self.share_inputs["step_idx"],
+                max_dec_len=self.share_inputs["max_dec_len"],
+                pre_ids=self.share_inputs["pre_ids"],
+                seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
+                eos_token_id=self.share_inputs["eos_token_id"],
+                not_need_stop=self.share_inputs["not_need_stop"],
+                input_ids=self.share_inputs["input_ids"],
+                stop_nums=self.share_inputs["stop_nums"],
+                seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
+                seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+                is_block_step=self.share_inputs["is_block_step"],
+                full_hidden_states=model_output,
+                msg_queue_id=self.parallel_config.msg_queue_id,
+                mp_rank=self.parallel_config.tensor_parallel_rank,
+                use_ep=self.parallel_config.use_ep,
+                draft_tokens=None,
+                actual_draft_token_num=None,
+                accept_tokens=None,
+                accept_num=None,
+                enable_thinking=None,
+                think_end_id=-1,
+                need_think_end=None,
+                reasoning_index=None,
+                stop_token_ids=self.share_inputs["stop_seqs"],
+                stop_seqs_len=self.share_inputs["stop_seqs_len"],
+                prompt_lens=self.share_inputs["prompt_lens"],
+            )
+            post_process(
+                sampler_or_pooler_output=pooler_output,
+                model_output=model_output_data,
+                share_inputs=self.share_inputs,
+                block_size=self.cache_config.block_size,
+                save_each_rank=self.parallel_config.use_ep,
+                speculative_decoding=self.speculative_decoding,
+                skip_save_output=False,
+                async_output_queue=self.async_output_queue,
+            )
         else:
             logits = self.model.compute_logits(hidden_states)
 
@@ -1959,8 +2003,9 @@ class GPUModelRunner(ModelRunnerBase):
             skip_save_output = True
         else:
             skip_save_output = False
+
         post_process(
-            sampler_output=sampler_output,
+            sampler_or_pooler_output=sampler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
             block_size=self.cache_config.block_size,
@@ -2049,7 +2094,9 @@ class GPUModelRunner(ModelRunnerBase):
             output = raw_output.data if int(seq_len) == int(prompt_len) else None
             pooler_output.append(output)
 
-        print("pooler_output", pooler_output)
+        pooler_output = PoolerOutput(
+            outputs=pooler_output,
+        )
 
         return pooler_output
 

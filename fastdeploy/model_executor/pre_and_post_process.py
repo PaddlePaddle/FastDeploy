@@ -15,7 +15,7 @@
 """
 
 import queue
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
 import numpy as np
 import paddle
@@ -81,7 +81,7 @@ else:
         speculate_step_reschedule,
     )
 
-
+from fastdeploy.output.pooler import PoolerOutput
 from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput, SamplerOutput
 
@@ -163,17 +163,29 @@ def pre_process(
     )
 
 
-def _build_stream_transfer_data(output_tokens: np.ndarray):
+def _build_stream_transfer_data(output_tokens: np.ndarray, pooler_output: None):
     """Split output_tokens and output"""
-    output_tokens = output_tokens.reshape([-1]).numpy()
-    output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
 
     stream_transfer_datas = []
-    for bid, output_token_per_sample in enumerate(output_tokens_lists):
-        stream_transfer_data = StreamTransferData(
-            decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
-        )
-        stream_transfer_datas.append(stream_transfer_data)
+    if output_tokens is not None:
+
+        output_tokens = output_tokens.reshape([-1]).numpy()
+        output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
+
+        for bid, output_token_per_sample in enumerate(output_tokens_lists):
+            stream_transfer_data = StreamTransferData(
+                decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
+            )
+            stream_transfer_datas.append(stream_transfer_data)
+    elif pooler_output is not None:
+        if isinstance(pooler_output, paddle.Tensor):
+            pooler_output = pooler_output.numpy()
+
+        for bid in range(pooler_output.shape[0]):
+            stream_transfer_data = StreamTransferData(
+                decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
+            )
+            stream_transfer_datas.append(stream_transfer_data)
     return stream_transfer_datas
 
 
@@ -395,7 +407,7 @@ def post_process_specualate(
 
 
 def post_process(
-    sampler_output: SamplerOutput,
+    sampler_or_pooler_output: Union[SamplerOutput, PoolerOutput],
     model_output: ModelOutputData,
     share_inputs: Dict[str, paddle.Tensor],
     block_size: int = 64,
@@ -405,18 +417,29 @@ def post_process(
     async_output_queue: queue.Queue = None,
 ) -> None:
     """Post-processing steps after completing a single token generation."""
-    if speculative_decoding:
-        post_process_specualate(sampler_output, model_output, save_each_rank, skip_save_output)
-    else:
-        post_process_normal(
-            sampler_output,
+
+    print("sampler_or_pooler_output", sampler_or_pooler_output)
+    if isinstance(sampler_or_pooler_output, PoolerOutput):
+        post_process_pooling(
+            sampler_or_pooler_output,
             model_output,
-            share_inputs,
-            block_size,
             save_each_rank,
             skip_save_output,
             async_output_queue,
         )
+    else:
+        if speculative_decoding:
+            post_process_specualate(sampler_or_pooler_output, model_output, save_each_rank, skip_save_output)
+        else:
+            post_process_normal(
+                sampler_or_pooler_output,
+                model_output,
+                share_inputs,
+                block_size,
+                save_each_rank,
+                skip_save_output,
+                async_output_queue,
+            )
 
 
 def step_cuda(
@@ -698,3 +721,17 @@ def rebuild_padding(
     else:
         raise RuntimeError("Not supported platform")
     return hidden_states
+
+
+def post_process_pooling(
+    pooler_output: PoolerOutput,
+    model_output: ModelOutputData,
+    save_each_rank: bool = False,
+    skip_save_output: bool = False,
+    async_output_queue: queue.Queue = None,
+) -> None:
+    if not skip_save_output:
+        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+            if save_each_rank or model_output.mp_rank == 0:
+                output = _build_stream_transfer_data(output_tokens=None, pooler_output=pooler_output)
+                async_output_queue.put(output)
