@@ -86,5 +86,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Count for cache_transfer_manager process error
     "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),
 
+    # Used for debugging, specifying a path to serialize model weights, empty indicates no serialization.
+    "FD_DEBUG_SERIALIZE_MODEL_PATH": lambda: os.getenv("FD_DEBUG_SERIALIZE_MODEL_PATH", ""),
+
 }
 ```

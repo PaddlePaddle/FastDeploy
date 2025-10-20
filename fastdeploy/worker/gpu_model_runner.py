@@ -1138,6 +1138,18 @@ class GPUModelRunner(ModelRunnerBase):
         # 4. Init proposer for speculative method
         self._init_speculative_proposer()
 
+        if envs.FD_DEBUG_SERIALIZE_MODEL_PATH:
+            state_dict = self.model.state_dict()
+            paddle.distributed.barrier()
+            rank = paddle.distributed.get_rank()
+            for key, value in state_dict.items():
+                try:
+                    np.save(f"{envs.FD_DEBUG_SERIALIZE_MODEL_PATH}/{rank}/{key}.npy", value.numpy())
+                    logger.info(f"{key} has been saved.")
+                except:
+                    logger.info(f"{key} save failed!")
+            exit(0)
+
     def get_model(self) -> nn.Layer:
         """Get current model"""
         return self.model
@@ -1248,8 +1260,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         # NOTE:(changwenbin) Determine whether it is Multi-Head Latent Attention,
         # To rationalize the allocation of kvcache.
-        from fastdeploy import envs
-
         self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
         for i in range(self.model_config.num_hidden_layers):
             key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
