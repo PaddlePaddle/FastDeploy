@@ -18,6 +18,7 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
 
     async def test_add_request(self):
         request = {
+            "request_id": "test-request-id",
             "chat_template_kwargs": {"enable_thinking": True},
             "prompt_token_ids": [1],
             "chat_template": "Hello",
@@ -27,9 +28,10 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
 
         await self.engine_client.add_requests(request)
         assert "chat_template" in request["chat_template_kwargs"], "'chat_template' not found in 'chat_template_kwargs"
-        assert "tools" in request["chat_template_kwargs"], "'tools' not found in 'chat_template_kwargs'"
+        # assert "tools" in request["chat_template_kwargs"], "'tools' not found in 'chat_template_kwargs'"
         assert request["chat_template_kwargs"]["chat_template"] == "Hello"
-        assert request["chat_template_kwargs"]["tools"] == [1]
+        assert request["tools"] == [1]
+        # assert request["chat_template_kwargs"]["tools"] == [1]
 
 
 if __name__ == "__main__":
