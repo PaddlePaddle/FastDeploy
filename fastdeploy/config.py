@@ -125,6 +125,7 @@ class ErnieArchitectures:
         "Ernie4_5_ForCausalLM",
         "Ernie4_5_MoeForCausalLM",
         "Ernie4_5_VLMoeForConditionalGeneration",
+        "Ernie4_5_VLMoeForProcessRewardModel",
     }
 
     @classmethod
