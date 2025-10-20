@@ -1,3 +1,5 @@
+[简体中文](../zh/get_started/quick_start_qwen.md)
+
 # Deploy QWEN3-0.6b in 10 Minutes
 
 Before deployment, ensure your environment meets the following requirements:

@@ -23,12 +23,14 @@ import traceback
 import uuid
 from typing import Any, Optional, Union
 
+from pydantic import ValidationError
 from tqdm import tqdm
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.chat_utils import load_chat_template
+from fastdeploy.entrypoints.openai.protocol import ChatCompletionToolsParam
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.utils import (
     deprecated_kwargs_warning,
@@ -204,6 +206,7 @@ class LLM:
         use_tqdm: bool = True,
         chat_template_kwargs: Optional[dict[str, Any]] = None,
         chat_template: Optional[str] = None,
+        tools: Optional[Union[ChatCompletionToolsParam, list[ChatCompletionToolsParam]]] = None,
         stream: bool = False,
     ):
         """
@@ -243,6 +246,12 @@ class LLM:
         if chat_template is None:
             chat_template = self.chat_template
 
+        validated_tools = None
+        if tools is not None:
+            try:
+                validated_tools = self._validate_tools(tools)
+            except ValueError as e:
+                raise RuntimeError(f"Failed to validate 'tools' parameter in chat method: {e}") from e
         messages_len = len(messages)
         for i in range(messages_len):
             messages[i] = {"messages": messages[i]}
@@ -251,6 +260,7 @@ class LLM:
             sampling_params=sampling_params,
             chat_template_kwargs=chat_template_kwargs,
             chat_template=chat_template,
+            tools=validated_tools,
         )
 
         topk_logprobs = sampling_params[0].logprobs if sampling_params_len > 1 else sampling_params.logprobs
@@ -310,6 +320,8 @@ class LLM:
             if current_sampling_params.guided_decoding is not None:
                 guided_decoding_dict = current_sampling_params.guided_decoding.to_dict()
                 tasks.update(guided_decoding_dict)
+            if kwargs.get("tools") is not None:
+                tasks["tools"] = kwargs.get("tools")
             self.llm_engine.add_requests(tasks, current_sampling_params, **kwargs)
         return req_ids
 
@@ -557,6 +569,60 @@ class LLM:
             incremental_result.prompt = prompts
 
         return incremental_result
+
+    def _validate_tools(self, raw_tools: Any) -> Optional[list[dict]]:
+        """
+        Validate the format of the `tools` parameter for chat requests.
+        Valid inputs are accepted and standardized, while invalid inputs raise ValueError.
+        Empty dict/list will be returned as None.
+
+        Args:
+            raw_tools: Raw `tools` parameter obtained from kwargs (can be any type)
+
+        Returns:
+            Optional[List[Dict[str, Any]]]: Standardized list of valid tool dictionaries if validation passes;
+            None if `raw_tools` is None or empty (empty dict/list).
+
+        Raises:
+            ValueError: Raised when input type is invalid or format does not meet standards.
+        """
+        if raw_tools is None:
+            return None
+        if isinstance(raw_tools, ChatCompletionToolsParam):
+            return [raw_tools]
+        if isinstance(raw_tools, list) and all(isinstance(t, ChatCompletionToolsParam) for t in raw_tools):
+            if not raw_tools:
+                return None
+            else:
+                return raw_tools
+
+        if not isinstance(raw_tools, dict) and not isinstance(raw_tools, list):
+            raise ValueError(
+                f"Invalid tools top-level type! Expected None, dict (single tool) or list (multiple tools), "
+                f"but got type '{type(raw_tools).__name__}' (value: {raw_tools})."
+            )
+        tools_list: list[dict[str, Any]] = [raw_tools] if isinstance(raw_tools, dict) else raw_tools
+
+        if not tools_list:
+            return None
+
+        validated_tools = []
+        for idx, tool in enumerate(tools_list):
+            if not isinstance(tool, dict):
+                raise ValueError(
+                    f"Invalid element type in tools list! At index {idx}, "
+                    f"expected dict (tool definition), but got type '{type(tool).__name__}' (value: {tool})."
+                )
+
+            try:
+                validated_tool_obj = ChatCompletionToolsParam.model_validate(tool)
+                validated_tools.append(validated_tool_obj.model_dump())
+            except ValidationError as e:
+                raise ValueError(
+                    f"Invalid tool format at index {idx} in tools list! " f"Tool content: {tool}\nError details: {e}"
+                ) from e
+
+        return validated_tools
 
 
 if __name__ == "__main__":

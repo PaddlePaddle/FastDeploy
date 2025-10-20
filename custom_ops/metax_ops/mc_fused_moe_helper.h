@@ -1,18 +1,3 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-
 #include "mctlass/numeric_conversion.h"
 #include "mctlassEx/mctlassEx.h"
 #include "fused_moe_helper.h"
@@ -45,63 +30,75 @@ void mc_grouped_gemm_basic_kernel(
   mctlassExMatrixLayout_t matLayoutC;
 
   // mat A: (m, k)
-  mctlassExMatrixLayoutCreate(&matLayoutA, mctlassExDataType::MCTLASS_EX_BF16, m, k, k);
-  mctlassExMatrixLayoutSetAttribute(matLayoutA,        mctlassExMatrixLayoutAttribute_t::MCTLASS_EX_MATRIX_LAYOUT_ORDER,
+  mctlassExMatrixLayoutCreate(&matLayoutA, mctlassExDataType::MCTLASS_EX_DATATYPE_BF16, m, k, k);
+  mctlassExMatrixLayoutSetAttribute(matLayoutA, mctlassExMatrixLayoutAttribute_t::MCTLASS_EX_MATRIX_LAYOUT_ORDER,
                                               &majorA, sizeof(mctlassExOrder_t));
+  mctlassExMatrixLayoutSetAttribute(matLayoutA, mctlassExMatrixLayoutAttribute_t::MCTLASS_EX_MATRIX_LAYOUT_BATCH_COUNT,
+                                              &numExperts, sizeof(int));
   // mat B: (num_experts, n, k)
-  mctlassExMatrixLayoutCreate(&matLayoutB, mctlassExDataType::MCTLASS_EX_INT8, k, n, k);
+  mctlassExMatrixLayoutCreate(&matLayoutB, mctlassExDataType::MCTLASS_EX_DATATYPE_INT8, k, n, k);
   mctlassExMatrixLayoutSetAttribute(matLayoutB, mctlassExMatrixLayoutAttribute_t::MCTLASS_EX_MATRIX_LAYOUT_ORDER,
                                               &majorB, sizeof(mctlassExOrder_t));
   mctlassExMatrixLayoutSetAttribute(matLayoutB, mctlassExMatrixLayoutAttribute_t::MCTLASS_EX_MATRIX_LAYOUT_BATCH_COUNT,
                                               &numExperts, sizeof(int));
   // mat C: (m, n)
-  mctlassExMatrixLayoutCreate(&matLayoutC, mctlassExDataType::MCTLASS_EX_BF16, m, n, n);
+  mctlassExMatrixLayoutCreate(&matLayoutC, mctlassExDataType::MCTLASS_EX_DATATYPE_BF16, m, n, n);
   mctlassExMatrixLayoutSetAttribute(matLayoutC, mctlassExMatrixLayoutAttribute_t::MCTLASS_EX_MATRIX_LAYOUT_ORDER,
                                               &majorC, sizeof(mctlassExOrder_t));
+  mctlassExMatrixLayoutSetAttribute(matLayoutC, mctlassExMatrixLayoutAttribute_t::MCTLASS_EX_MATRIX_LAYOUT_BATCH_COUNT,
+                                              &numExperts, sizeof(int));
   // bias: (num_experts, n)
   // scale: (num, n)
 
   mctlassExDesc_t mctlass_desc;
   mctlassExCreateDesc(&mctlass_desc);
-  mctlassExDataType input_type = mctlassExDataType::MCTLASS_EX_BF16;
-  mctlassExDataType scale_type = mctlassExDataType::MCTLASS_EX_INT8;
-  mctlassExDataType compute_type = mctlassExDataType::MCTLASS_EX_FP32;
-  mctlassExEpilogueType epilogue_type = mctlassExEpilogueType::MCTLASS_EX_GEMM_DEFAULT;
+  mctlassExDataType input_type = mctlassExDataType::MCTLASS_EX_DATATYPE_BF16;
+  mctlassExDataType scale_type = mctlassExDataType::MCTLASS_EX_DATATYPE_INT8;
+  mctlassExDataType compute_type = mctlassExDataType::MCTLASS_EX_DATATYPE_FP32;
+  mctlassExEpilogueType epilogue_type = mctlassExEpilogueType::MCTLASS_EX_EPILOGUE_TYPE_DEFAULT;
   if (ptrBias) {
-    epilogue_type = mctlassExEpilogueType::MCTLASS_EX_GEMM_BIAS_PERGROUP;
+    epilogue_type = mctlassExEpilogueType::MCTLASS_EX_EPILOGUE_TYPE_BIAS;
   }
   // set scale
-  mctlassExDescSetAttribute(mctlass_desc, mctlassExDescAttributes_t::MCTLASS_EX_GEMM_DESC_B_SCALE_POINTER,
+  mctlassExDescSetAttribute(mctlass_desc, mctlassExDescAttributes_t::MCTLASS_EX_DESC_B_SCALE_POINTER,
                                       &ptrScale, sizeof(ptrScale));
-  mctlassExDescSetAttribute(mctlass_desc, mctlassExDescAttributes_t::MCTLASS_EX_GEMM_DESC_B_SCALE_TYPE,
-                                      &scale_type, sizeof(mctlassExDataType));
+  mctlassExDescSetAttribute(mctlass_desc, mctlassExDescAttributes_t::MCTLASS_EX_DESC_B_SCALE_TYPE,
+                                      &input_type, sizeof(mctlassExDataType));
   // set bias
   if (ptrBias) {
-    mctlassExDescSetAttribute(mctlass_desc, mctlassExDescAttributes_t::MCTLASS_EX_GEMM_DESC_BIAS_POINTER,
+    mctlassExDescSetAttribute(mctlass_desc, mctlassExDescAttributes_t::MCTLASS_EX_DESC_BIAS_POINTER,
                                     &ptrBias, sizeof(ptrBias));
   }
   // set coumpute type
-  mctlassExDescSetAttribute(mctlass_desc, mctlassExDescAttributes_t::MCTLASS_EX_GEMM_DESC_COMPUTE_TYPE,
+  mctlassExDescSetAttribute(mctlass_desc, mctlassExDescAttributes_t::MCTLASS_EX_DESC_COMPUTE_TYPE,
                                       &compute_type, sizeof(mctlassExDataType));
   // set epilogue type
-  mctlassExDescSetAttribute(mctlass_desc, mctlassExDescAttributes_t::MCTLASS_EX_GEMM_DESC_EPILOGUE_TYPE,
+  mctlassExDescSetAttribute(mctlass_desc, mctlassExDescAttributes_t::MCTLASS_EX_DESC_EPILOGUE_TYPE,
                                       &epilogue_type, sizeof(mctlassExEpilogueType));
 
-  const mctlassExContiguousGroupedGemmAlgo_t algo = mctlassExContiguousGroupedGemmAlgo_t::MCTLASS_EX_CONTIGUOUS_GROUPED_ALGO_SEGPTR;
-  int blocksizeM = mctlassExContiguousGroupedGemmGetBlocksizeM(handle, mctlass_desc, matLayoutA, matLayoutB, matLayoutC, &algo);
-  mctlassExContiguousGroupedGemmComputeMNumTilesIndptr(handle, mctlass_desc, matLayoutA, matLayoutB, matLayoutC, &algo, ptrSegInd, ptrMNumTilesInd, numExperts, blocksizeM);
+  const mctlassExContiguousGroupedGemmAlgo_t algo = mctlassExContiguousGroupedGemmAlgo_t::MCTLASS_EX_CONTIGUOUS_GROUPED_ALGO_DEFAULT;
+  mctlassExContiguousGroupedDesc_t contiguous_group_desc;
+  mctlassExContiguousGroupedDescCreate(&contiguous_group_desc,
+                                        ptrSegInd,
+                                        nullptr,
+                                        ptrMNumTilesInd,
+                                        1);
+  int blocksizeM;
+  mctlassExContiguousGroupedGemmGetBlocksizeM(handle, mctlass_desc, matLayoutA, matLayoutB, matLayoutC, &algo, &blocksizeM);
+  mctlassExContiguousGroupedGemmComputeMNumTilesIndptr(handle, mctlass_desc, matLayoutA, matLayoutB, matLayoutC, &algo, contiguous_group_desc, numExperts, blocksizeM, stream);
 
   mctlassExContiguousGroupedGemmBasic(handle, mctlass_desc,
                                       ptrA, matLayoutA,
                                       ptrB, matLayoutB,
                                       ptrC, matLayoutC,
-                                      ptrSegInd, nullptr, ptrMNumTilesInd,
+                                      contiguous_group_desc,
                                       &algo, nullptr, 0, stream);
 
   mctlassExHandleDestroy(handle);
   mctlassExMatrixLayoutDestroy(matLayoutA);
   mctlassExMatrixLayoutDestroy(matLayoutB);
   mctlassExMatrixLayoutDestroy(matLayoutC);
+  mctlassExContiguousGroupedDescDestroy(contiguous_group_desc);
   mctlassExDestroyDesc(mctlass_desc);
   mcFreeAsync(ptrMNumTilesInd, stream);
 }
@@ -334,8 +331,8 @@ class McMoeHelper {
                                         total_rows_before_expert_,
                                         stream);
 
-      mctlassExOrder_t row_major = mctlassExOrder_t::MCTLASS_EX_ROWMAJOR_ORDER;
-      mctlassExOrder_t column_major = mctlassExOrder_t::MCTLASS_EX_COLUMNMAJOR_ORDER;
+      mctlassExOrder_t row_major = mctlassExOrder_t::MCTLASS_EX_ORDER_ROW_MAJOR;
+      mctlassExOrder_t column_major = mctlassExOrder_t::MCTLASS_EX_ORDER_COLUMN_MAJOR;
 
       mc_grouped_gemm_basic_kernel<ElementA, ElementB, ElementC>(
           reinterpret_cast<const ElementA *>(permuted_data_),

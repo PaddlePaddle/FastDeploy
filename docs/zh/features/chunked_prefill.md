@@ -1,3 +1,5 @@
+[English](../../features/chunked_prefill.md)
+
 # Chunked Prefill 与 128K 长文推理部署
 
 Chunked Prefill 采用分块策略，将预填充（Prefill）阶段请求拆解为小规模子任务，与解码（Decode）请求混合批处理执行。可以更好地平衡计算密集型（Prefill）和访存密集型（Decode）操作，优化GPU资源利用率，减少单次Prefill的计算量和显存占用，从而降低显存峰值，避免显存不足的问题。
