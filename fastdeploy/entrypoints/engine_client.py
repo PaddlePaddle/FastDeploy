@@ -158,7 +158,7 @@ class EngineClient:
                 await self.data_processor.process_request_dict(task, self.max_model_len)
             else:
                 self.data_processor.process_request_dict(task, self.max_model_len)
-            
+
             if self.enable_mm and self.enable_prefix_caching:
                 if self._check_mm_disable_prefix_cache(task):
                     api_server_logger.error(
