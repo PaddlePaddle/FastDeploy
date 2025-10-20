@@ -170,7 +170,10 @@ std::vector<paddle::Tensor> tritonmoe_preprocess_kernel(const paddle::Tensor& to
       run_align_kernel(128);
     } else if (num_experts == 160) {
       run_align_kernel(160);
-    } else {
+    } else if (num_experts == 32) {
+      run_align_kernel(32);
+    }
+    else {
       PD_THROW("Not support num_experts: %d", num_experts);
     }
 

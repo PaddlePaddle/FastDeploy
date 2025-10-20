@@ -65,6 +65,7 @@ def append_attention(
     kv_signal_data: Optional[paddle.Tensor] = None,
     q_norm_weight: Optional[paddle.Tensor] = None,
     k_norm_weight: Optional[paddle.Tensor] = None,
+    sinks: Optional[paddle.Tensor] = None,
     rms_norm_eps: float = 1e-6,
     compute_type: str = "bf16",
     cache_quant_type: str = "none",
@@ -81,6 +82,7 @@ def append_attention(
     speculate_max_draft_token_num: int = 1,
     causal: bool = True,
     speculate_decoder: bool = False,
+    sliding_window: int = 0,
 ) -> paddle.Tensor:
     """
     append_attention
@@ -122,6 +124,7 @@ def append_attention(
             kv_signal_data,
             q_norm_weight,
             k_norm_weight,
+            sinks,
             rms_norm_eps,
             compute_type,
             cache_quant_type,
@@ -138,6 +141,7 @@ def append_attention(
             speculate_max_draft_token_num,
             causal,
             speculate_decoder,
+            sliding_window,
         )
         return out
     else:
@@ -184,6 +188,7 @@ def append_attention_with_output(
     kv_signal_data: Optional[paddle.Tensor] = None,
     q_norm_weight: Optional[paddle.Tensor] = None,
     k_norm_weight: Optional[paddle.Tensor] = None,
+    sinks: Optional[paddle.Tensor] = None,
     rms_norm_eps: float = 1e-6,
     compute_type: str = "bf16",
     cache_quant_type: str = "none",
@@ -200,6 +205,7 @@ def append_attention_with_output(
     speculate_max_draft_token_num: int = 1,
     causal: bool = True,
     speculate_decoder: bool = False,
+    sliding_window: int = 0,
 ) -> None:
     """
     append_attention
@@ -242,6 +248,7 @@ def append_attention_with_output(
             kv_signal_data,
             q_norm_weight,
             k_norm_weight,
+            sinks,
             rms_norm_eps,
             compute_type,
             cache_quant_type,
@@ -258,6 +265,7 @@ def append_attention_with_output(
             speculate_max_draft_token_num,
             causal,
             speculate_decoder,
+            sliding_window,
         )
     else:
         raise NotImplementedError

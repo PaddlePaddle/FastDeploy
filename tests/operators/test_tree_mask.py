@@ -278,6 +278,7 @@ class TestTreeMask(unittest.TestCase):
                 None,  # kv_signal_data
                 self.q_norm_weight_tensor if use_qknorm else None,  # q_norm_weight
                 self.k_norm_weight_tensor if use_qknorm else None,  # k_norm_weight
+                None,  # sinks
                 1e-6,
                 "bf16",
                 "none",
@@ -294,6 +295,7 @@ class TestTreeMask(unittest.TestCase):
                 decoder_step_token_num,
                 True,
                 decoder_step_token_num > 1,
+                0,
             )
             paddle.device.synchronize()
         e_time = time.time()

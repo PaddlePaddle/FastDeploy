@@ -261,6 +261,67 @@ class DeepseekScalingRotaryEmbedding(nn.Layer):
         return query, key
 
 
+class GptOssScalingRotaryEmbedding:
+    def __init__(
+        self,
+        rotary_dim,
+        base=10000,
+        compression_ratio=1.0,
+        scale=1,
+        mscale=1,
+        original_max_position_embeddings=8192,
+        extrapolation_factor=1,
+        attn_factor=1,
+        beta_fast=32,
+        beta_slow=1,
+        use_neox_rotary_style=False,
+    ):
+        super().__init__()
+        self.rotary_dim = rotary_dim
+        self.compression_ratio = compression_ratio
+        self.base = base
+        self.original_max_position_embeddings = original_max_position_embeddings
+        self.extrapolation_factor = extrapolation_factor
+        self.scale = scale
+        self.mscale = mscale
+        self.attn_factor = attn_factor
+        self.beta_fast = beta_fast
+        self.beta_slow = beta_slow
+        self.use_neox_rotary_style = use_neox_rotary_style
+
+    def __call__(self, position_ids):
+        seq_length = position_ids.shape[-1]
+        pos_freqs = self.base ** (paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
+        inv_freq_extrapolation = 1.0 / pos_freqs
+        inv_freq_interpolation = 1.0 / (self.scale * pos_freqs)
+
+        low, high = yarn_find_correction_range(
+            self.beta_fast, self.beta_slow, self.rotary_dim, self.base, self.original_max_position_embeddings
+        )
+        inv_freq_mask = (1 - yarn_linear_ramp_mask(low, high, self.rotary_dim // 2)) * self.extrapolation_factor
+        indices = inv_freq_interpolation * (1 - inv_freq_mask) + inv_freq_extrapolation * inv_freq_mask
+
+        _mscale = paddle.to_tensor(yarn_get_mscale(self.scale, self.mscale) * self.attn_factor, dtype="float32")
+
+        position_ids = position_ids / self.compression_ratio
+        sinusoid_inp = position_ids.unsqueeze(-1).astype("float32") * indices.unsqueeze(0)
+
+        if self.use_neox_rotary_style:
+            sinusoid_inp = paddle.concat([sinusoid_inp, sinusoid_inp], axis=-1).reshape(
+                (1, seq_length, 1, self.rotary_dim)
+            )
+
+        pos_emb = paddle.concat([paddle.cos(sinusoid_inp) * _mscale, paddle.sin(sinusoid_inp) * _mscale], axis=0)
+
+        if self.use_neox_rotary_style:
+            pos_emb = paddle.reshape(pos_emb, (-1, 1, seq_length, 1, self.rotary_dim))
+        else:
+            pos_emb = paddle.reshape(pos_emb, (-1, 1, seq_length, 1, self.rotary_dim // 2))
+
+        pos_emb.stop_gradient = True
+        return pos_emb
+
+
 def get_rope_impl(
     rotary_dim: int,
     base: 10000.0,
@@ -273,11 +334,22 @@ def get_rope_impl(
     """
 
     architecture = model_config.architectures[0]
-    if model_config is None or architecture.startswith("Qwen"):
+    if architecture.startswith("Qwen"):
         rotary_emb_layer = QwenRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
         rotary_emb = rotary_emb_layer(position_ids)
     elif architecture.startswith("Glm"):
         rotary_emb_layer = GlmRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
+        rotary_emb = rotary_emb_layer(position_ids)
+    elif architecture.startswith("GptOss"):
+        rotary_emb_layer = GptOssScalingRotaryEmbedding(
+            rotary_dim=model_config.head_dim,
+            base=model_config.rope_theta,
+            original_max_position_embeddings=model_config.rope_scaling["original_max_position_embeddings"],
+            scale=model_config.rope_scaling["factor"],
+            beta_fast=model_config.rope_scaling["beta_fast"],
+            beta_slow=model_config.rope_scaling["beta_slow"],
+            use_neox_rotary_style=True,
+        )
         rotary_emb = rotary_emb_layer(position_ids)
     else:
         rotary_emb_layer = ErnieRotaryEmbedding(rotary_dim, base, partial_rotary_factor)

@@ -81,6 +81,7 @@ std::vector<paddle::Tensor> AppendAttention(
     const paddle::optional<paddle::Tensor> &kv_signal_data,
     const paddle::optional<paddle::Tensor>& q_norm_weight,
     const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const paddle::optional<paddle::Tensor>& sinks,
     const float rms_norm_eps,
     const std::string &compute_dtype, const std::string &cache_quant_type_str,
     const bool use_neox_rotary_style, const bool rope_3d,
@@ -89,7 +90,8 @@ std::vector<paddle::Tensor> AppendAttention(
     const int encoder_block_shape_q, const int decoder_block_shape_q,
     const int max_partition_size, const int encoder_max_partition_size,
     const int speculate_max_draft_token_num, const bool causal,
-    const bool speculate_decoder);
+    const bool speculate_decoder,
+    const int sliding_window);
 
 std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const paddle::Tensor &qkv, const paddle::Tensor &key_cache,
@@ -124,6 +126,7 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const paddle::optional<paddle::Tensor> &kv_signal_data,
     const paddle::optional<paddle::Tensor>& q_norm_weight,
     const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const paddle::optional<paddle::Tensor>& sinks,
     const float rms_norm_eps,
     const std::string &compute_dtype, const std::string &cache_quant_type_str,
     const bool use_neox_rotary_style, const bool rope_3d,
@@ -132,7 +135,8 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const int encoder_block_shape_q, const int decoder_block_shape_q,
     const int max_partition_size, const int encoder_max_partition_size,
     const int speculate_max_draft_token_num, const bool causal,
-    const bool speculate_decoder);
+    const bool speculate_decoder,
+    const int sliding_window);
 
 std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::Tensor &qkv, const paddle::Tensor &key_cache,
@@ -248,15 +252,18 @@ std::vector<std::vector<int>> GetExpertTokenNum(const paddle::Tensor &topk_ids,
 paddle::Tensor MoeExpertFFNFunc(
     const paddle::Tensor& permute_input,
     const paddle::Tensor& tokens_expert_prefix_sum,
-    const paddle::Tensor& up_gate_proj_weight, const paddle::Tensor& down_proj_weight,
+    const paddle::Tensor& up_gate_proj_weight,
+    const paddle::Tensor& down_proj_weight,
     const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
     const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_in_scale,
     const paddle::optional<paddle::Tensor>& expert_idx_per_token,
-    const std::string& quant_method, const bool used_in_ep_low_latency,
+    const std::string& quant_method,
+    const bool used_in_ep_low_latency,
     const int estimate_total_token_nums,
-    const int hadamard_block_size);
+    const int hadamard_block_size,
+    const std::string& activation);
 
 paddle::Tensor MoeExpertFFNWint2Func(
     const paddle::Tensor& permute_input,
