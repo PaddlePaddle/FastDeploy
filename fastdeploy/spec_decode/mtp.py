@@ -44,6 +44,8 @@ from fastdeploy.model_executor.ops.gpu import (
     mtp_save_first_token,
     mtp_step_paddle,
     share_external_data,
+    speculate_get_logits,
+    speculate_save_output_topk,
 )
 from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
 
@@ -72,6 +74,7 @@ class MTPProposer(Proposer):
         self.target_model_inputs = target_model_inputs
         self.mtp_strategy = self.speculative_config.mtp_strategy
         self.hybrid_mode = self.mtp_strategy == "with_ngram" and self.max_draft_token_num > self.num_model_steps
+        self.enable_logprob = self.model_config.enable_logprob
 
         # [mixed, prefill, decoder]
         self.role = "mixed"
@@ -405,6 +408,22 @@ class MTPProposer(Proposer):
                 self.target_model_inputs["seq_lens_this_time"], fill_value=-1, dtype="int32"
             )
         self.input_ids_len = paddle.zeros(shape=[self.max_num_seqs, 1], dtype="int64").cpu()
+        self.model_inputs["temp_scaled_logprobs"] = self.target_model_inputs["temp_scaled_logprobs"]
+        self.model_inputs["top_p_normalized_logprobs"] = self.target_model_inputs["top_p_normalized_logprobs"]
+        self.model_inputs["accept_num"] = self.target_model_inputs["accept_num"]
+        self.model_inputs["accept_tokens"] = self.target_model_inputs["accept_tokens"]
+        self.model_inputs["draft_logits"] = self.target_model_inputs["draft_logits"]
+        self.model_inputs["first_token_hidden_states"] = paddle.full(
+            [self.max_num_seqs, self.model_config.hidden_size], -1
+        )
+        self.model_inputs["batch_token_num"] = paddle.full(shape=[self.max_num_seqs], fill_value=0, dtype="int32")
+        self.model_inputs["next_token_num"] = paddle.full(shape=[self.max_num_seqs], fill_value=0, dtype="int32")
+        self.model_inputs["cu_batch_token_offset"] = paddle.full_like(
+            self.target_model_inputs["cu_batch_token_offset"], fill_value=0, dtype="int32"
+        )
+        self.model_inputs["cu_next_token_offset"] = paddle.full(
+            shape=[self.max_num_seqs + 1], fill_value=0, dtype="int32"
+        )
 
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int):
 
@@ -734,6 +753,10 @@ class MTPProposer(Proposer):
                     min_dec_lens=self.model_inputs["min_dec_len"],
                     bad_words_token_ids=self.model_inputs["bad_tokens"],
                     eos_token_ids=self.model_inputs["eos_token_id"],
+                    max_num_logprobs=20 if self.enable_logprob else None,
+                    temp_scaled_logprobs=self.model_inputs["temp_scaled_logprobs"],
+                    top_p_normalized_logprobs=self.model_inputs["top_p_normalized_logprobs"],
+                    share_inputs=self.model_inputs,
                 )
 
                 if self.num_model_steps > 1:
@@ -754,17 +777,47 @@ class MTPProposer(Proposer):
                     self.model_inputs["seq_lens_encoder"],
                     self.model_inputs["output_padding_offset"],
                     self.model_config.max_model_len,
+                    self.model_inputs["first_token_hidden_states"],
+                    self.enable_logprob if substep == 0 else False,
                 )
 
                 # 4. Compute logits, Sample
                 logits = self.model.compute_logits(hidden_states)
+                if self.enable_logprob and substep == 0:
+                    first_token_logits = self.model.compute_logits(self.model_inputs["first_token_hidden_states"])
 
-                sampled_token_ids = self.sampler(
+                    speculate_get_logits(
+                        self.model_inputs["draft_logits"],
+                        self.model_inputs["next_token_num"],
+                        self.model_inputs["batch_token_num"],
+                        self.model_inputs["cu_next_token_offset"],
+                        self.model_inputs["cu_batch_token_offset"],
+                        logits,
+                        first_token_logits,
+                        self.model_inputs["seq_lens_this_time"],
+                        self.model_inputs["seq_lens_encoder"],
+                    )
+
+                sampled_token_ids, sampler_output = self.sampler(
                     logits,
                     self.sampling_metadata,
                     self.max_model_len,
                     self.model_inputs,
                 )
+
+                if substep == 0 and sampler_output.logprobs_tensors is not None:
+                    real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
+                    speculate_save_output_topk(
+                        sampler_output.sampled_token_ids,
+                        sampler_output.logprobs_tensors.logprob_token_ids,
+                        sampler_output.logprobs_tensors.logprobs,
+                        sampler_output.logprobs_tensors.selected_token_ranks,
+                        self.model_inputs["batch_token_num"][:real_bsz],
+                        self.model_inputs["cu_batch_token_offset"][:real_bsz],
+                        self.model_inputs["not_need_stop"],
+                        4,  # mtype
+                        self.local_rank,
+                    )
 
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(sampled_token_ids, 0)

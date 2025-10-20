@@ -68,6 +68,7 @@ else:
         speculate_get_padding_offset,
         speculate_get_seq_lens_output,
         speculate_save_output,
+        speculate_save_output_topk,
         speculate_set_value_by_flags_and_idx,
         speculate_step_paddle,
         speculate_step_system_cache,
@@ -334,7 +335,10 @@ def post_process_normal(
 
 
 def post_process_specualate(
-    model_output: ModelOutputData, save_each_rank: bool = False, skip_save_output: bool = False
+    sampler_output: SamplerOutput,
+    model_output: ModelOutputData,
+    save_each_rank: bool = False,
+    skip_save_output: bool = False,
 ):
     """"""
     speculate_update(
@@ -352,16 +356,29 @@ def post_process_specualate(
     )
 
     if not skip_save_output:
-        speculate_save_output(
-            model_output.accept_tokens,
-            model_output.accept_num,
-            model_output.not_need_stop,
-            model_output.seq_lens_decoder,
-            model_output.prompt_lens,
-            model_output.mp_rank,
-            save_each_rank,
-            envs.ENABLE_V1_KVCACHE_SCHEDULER,
-        )
+        if sampler_output.logprobs_tensors is None:
+            speculate_save_output(
+                model_output.accept_tokens,
+                model_output.accept_num,
+                model_output.not_need_stop,
+                model_output.seq_lens_decoder,
+                model_output.prompt_lens,
+                model_output.mp_rank,
+                save_each_rank,
+                envs.ENABLE_V1_KVCACHE_SCHEDULER,
+            )
+        else:
+            speculate_save_output_topk(
+                sampler_output.sampled_token_ids,
+                sampler_output.logprobs_tensors.logprob_token_ids,
+                sampler_output.logprobs_tensors.logprobs,
+                sampler_output.logprobs_tensors.selected_token_ranks,
+                sampler_output.token_num_per_batch,
+                sampler_output.cu_batch_token_offset,
+                model_output.not_need_stop,
+                3,  # mtype
+                model_output.mp_rank,
+            )
 
     # Update pre_ids through accept tokens
 
@@ -389,7 +406,7 @@ def post_process(
 ) -> None:
     """Post-processing steps after completing a single token generation."""
     if speculative_decoding:
-        post_process_specualate(model_output, save_each_rank, skip_save_output)
+        post_process_specualate(sampler_output, model_output, save_each_rank, skip_save_output)
     else:
         post_process_normal(
             sampler_output,
@@ -597,6 +614,8 @@ def rebuild_padding(
     seq_lens_encoder: paddle.Tensor,
     output_padding_offset: Optional[paddle.Tensor] = None,
     max_input_length: Optional[int] = None,
+    first_token_out: Optional[paddle.Tensor] = None,
+    enable_logprob: Optional[bool] = False,
 ):
     """
     Args:
@@ -612,7 +631,9 @@ def rebuild_padding(
             seq_lens_decoder,
             seq_lens_encoder,
             output_padding_offset,
+            first_token_out,
             max_input_length,
+            enable_logprob,
         )
     elif current_platform.is_dcu():
         from fastdeploy.model_executor.ops.gpu import rebuild_padding
