@@ -1,3 +1,5 @@
+[简体中文](zh/supported_models.md)
+
 # Supported Models
 
 FastDeploy currently supports the following models, which can be downloaded automatically during FastDeploy deployment.Specify the ``model`` parameter as the model name in the table below to automatically download model weights (all supports resumable downloads). The following three download sources are supported:

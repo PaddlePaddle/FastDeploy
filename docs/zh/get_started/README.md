@@ -1,6 +1,6 @@
-[简体中文](../zh/get_started/README.md)
+[English](../../get_started/README.md)
 
-# Get Started
+# 快速入门
 
 - [Deploy ERNIE-4.5-0.3B-Paddle in 10 Minutes](quick_start.md)
 - [Deploy ERNIE-4.5-VL-28B-A3B-Paddle Multimodal Model in 10 Minutes](quick_start_vl.md)
