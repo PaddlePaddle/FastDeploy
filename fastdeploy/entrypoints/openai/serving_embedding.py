@@ -100,12 +100,12 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
 
             for idx, prompt in enumerate(request_prompts):
                 request_dict = self._request_to_dict(ctx)
-                request_dict["request_id"] = f"{ctx.request_id}-{idx}"
+                request_dict["request_id"] = f"{ctx.request_id}_{idx}"
                 request_dict["prompt"] = prompt
                 request_dicts.append(request_dict)
         else:
             request_dict = self._request_to_dict(ctx)
-            request_dict["request_id"] = f"{ctx.request_id}-0"
+            request_dict["request_id"] = f"{ctx.request_id}_0"
             request_dicts = [request_dict]
         return request_dicts
 
