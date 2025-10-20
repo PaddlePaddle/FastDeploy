@@ -1,3 +1,5 @@
+[简体中文](../zh/features/sampling.md)
+
 # Sampling Strategies
 
 Sampling strategies are used to determine how to select the next token from the output probability distribution of a model. FastDeploy currently supports multiple sampling strategies including Top-p, Top-k_Top-p, and Min-p Sampling.

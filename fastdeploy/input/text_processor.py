@@ -417,7 +417,7 @@ class DataProcessor(BaseDataProcessor):
         delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
         if is_end:
             full_text = previous_texts + delta_text
-            response_dict["outputs"]["raw_prediction"] = full_text
+            response_dict["outputs"]["completion_tokens"] = full_text
             response_dict["outputs"]["text"] = full_text
             if self.reasoning_parser:
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
@@ -453,7 +453,7 @@ class DataProcessor(BaseDataProcessor):
             if token_ids[-1] in self.eos_token_ids:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
-        response_dict["outputs"]["raw_prediction"] = delta_text
+        response_dict["outputs"]["completion_tokens"] = delta_text
         if self.reasoning_parser:
             reasoning_delta_message = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,
@@ -559,7 +559,7 @@ class DataProcessor(BaseDataProcessor):
             return_tensors="pd",
             **kwargs,
         )
-        request["text_after_process"] = spliced_message
+        request["prompt_tokens"] = spliced_message
         req_id = None
         tokens = self.tokenizer.tokenize(spliced_message)
         if isinstance(request, dict):

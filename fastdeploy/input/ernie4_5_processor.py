@@ -203,7 +203,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 if isinstance(prompt, list):  # if prompt is a token id list
                     request["prompt_token_ids"] = prompt
                 else:
-                    request["text_after_process"] = prompt
+                    request["prompt_tokens"] = prompt
                     tokens = self.tokenizer.tokenize(prompt)
                     token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
                     request["prompt_token_ids"] = token_ids
@@ -334,7 +334,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 if tool_call_info.tools_called:
                     response_dict["outputs"]["tool_call"] = tool_call_info.tool_calls
                     response_dict["outputs"]["text"] = tool_call_info.content
-            response_dict["outputs"]["raw_prediction"] = full_text
+            response_dict["outputs"]["completion_tokens"] = full_text
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
             if req_id.split("_")[0] in self.model_status_dict:
@@ -416,7 +416,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             add_special_tokens=False,
             **kwargs,
         )
-        request_or_messages["text_after_process"] = spliced_message
+        request_or_messages["prompt_tokens"] = spliced_message
         req_id = None
         if isinstance(request_or_messages, dict):
             req_id = request_or_messages.get("request_id", None)
