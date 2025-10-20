@@ -39,6 +39,7 @@ from fastdeploy.config import (
     ParallelConfig,
     PlasAttentionConfig,
     SpeculativeConfig,
+    StructuredOutputsConfig,
 )
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
@@ -333,6 +334,8 @@ class PaddleDisWorkerProc:
                         self.worker.model_runner,
                         self.parallel_config.engine_worker_queue_port,
                     )
+                    logger.info(f"current task queue data: {self.task_queue.num_tasks()}")
+                    self.task_queue.clear_data()
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
 
@@ -402,9 +405,9 @@ class PaddleDisWorkerProc:
 
             if num_blocks_local <= 0:
                 raise ValueError(
-                    "The total number of blocks cannot be less than zero."
-                    "Please increase gpu_memory_utilization"
-                    "Or decrease max_num_batched_tokens(max model length) "
+                    "The total number of blocks cannot be less than zero. "
+                    "Please increase gpu_memory_utilization "
+                    "Or decrease max_num_batched_tokens(max model length)."
                 )
 
             if self.ranks > 1:
@@ -424,7 +427,7 @@ class PaddleDisWorkerProc:
                 )
                 self.get_profile_block_num_signal.value[0] = num_blocks_local
         else:
-            num_blocks_local = self.fd_config.parallel_config.total_block_num
+            num_blocks_local = self.fd_config.cache_config.total_block_num
         logger.info(f"------- num_blocks_global: {num_blocks_local} --------")
 
         # 4. init kv_cache with accurate num_blocks
@@ -748,6 +751,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     early_stop_config = EarlyStopConfig(args.early_stop_config)
 
+    structured_outputs_config: StructuredOutputsConfig = StructuredOutputsConfig(args=vars(args))
+
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
     model_config.pretrained_config.tensor_parallel_degree = parallel_config.tensor_parallel_size
@@ -796,7 +801,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     if not current_platform.is_cuda() and not current_platform.is_xpu():
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-    if parallel_config.guided_decoding_backend != "off":
+    if structured_outputs_config.guided_decoding_backend != "off":
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported guided_decoding.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
@@ -817,6 +822,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         scheduler_config=scheduler_config,
         ips=args.ips,
         plas_attention_config=plas_attention_config,
+        structured_outputs_config=structured_outputs_config,
     )
     update_fd_config_for_mm(fd_config)
     if fd_config.load_config.load_choices == "default_v1" and not v1_loader_support(fd_config):

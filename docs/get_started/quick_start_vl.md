@@ -1,3 +1,5 @@
+[简体中文](../zh/get_started/quick_start_vl.md)
+
 # Deploy ERNIE-4.5-VL-28B-A3B-Paddle Multimodal Model in 10 Minutes
 
 Before deployment, please ensure your environment meets the following requirements:

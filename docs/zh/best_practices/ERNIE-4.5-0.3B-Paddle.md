@@ -1,3 +1,5 @@
+[English](../../best_practices/ERNIE-4.5-0.3B-Paddle.md)
+
 # ERNIE-4.5-0.3B
 ## 一、环境准备
 ### 1.1 支持情况

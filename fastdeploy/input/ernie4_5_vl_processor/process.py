@@ -587,3 +587,4 @@ class DataProcessor:
         req = pickle.dumps((mm_hashes, mm_items))
         socket.send_multipart([b"", req])
         data_processor_logger.info(f"Update cache of mm_hashes: {mm_hashes}")
+
