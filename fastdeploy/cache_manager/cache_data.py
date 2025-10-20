@@ -25,11 +25,11 @@ DISABLE_PREFIX_CACHE_MM_MODEL: set[str] = {
 }
 
 
-def is_mm_model_disable_prefix_cache(model_config):
+def is_mm_model_disable_prefix_cache(model_arch):
     """
     check if the model architecture is in DISABLE_PREFIX_CACHE_MM_MODEL
     """
-    return model_config._architecture in DISABLE_PREFIX_CACHE_MM_MODEL
+    return model_arch in DISABLE_PREFIX_CACHE_MM_MODEL
 
 
 class CacheStatus(Enum):
