@@ -383,10 +383,6 @@ class GCUModelRunner(ModelRunnerBase):
         self.share_inputs["max_dec_len"] = paddle.full(
             [max_num_seqs, 1], self.model_config.max_model_len, dtype="int64"
         )
-        self.share_inputs["min_length"] = paddle.full([max_num_seqs, 1], self.model_config.min_length, dtype="int64")
-        self.share_inputs["max_length"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.max_model_len, dtype="int64"
-        )
         self.seq_lens_this_time_buffer = paddle.full(max_num_seqs, 0, dtype="int32")
         self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -834,10 +830,6 @@ class GCUModelRunner(ModelRunnerBase):
                 ),
                 accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
                 accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
-                enable_thinking=(self.share_inputs["enable_thinking"] if self.enable_mm else None),
-                think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
-                need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
-                reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
             )
 
             post_process(
@@ -1062,10 +1054,6 @@ class GCUModelRunner(ModelRunnerBase):
             ),
             accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
-            enable_thinking=(self.share_inputs["enable_thinking"] if self.enable_mm else None),
-            think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
-            need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
-            reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
         )
 
         if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":

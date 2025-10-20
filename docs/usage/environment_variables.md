@@ -80,11 +80,13 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to use Machete for wint4 dense GEMM.
     "FD_USE_MACHETE": lambda: os.getenv("FD_USE_MACHETE", "0"),
 
+    # Used to truncate the string inserted during thinking when reasoning in a model. (</think> for ernie4_5_vl, \n</think>\n\n for ernie_x1)
+    "FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR": lambda: os.getenv("FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR", "</think>"),
+
     # Timeout for cache_transfer_manager process exit
     "FD_CACHE_PROC_EXIT_TIMEOUT": lambda: int(os.getenv("FD_CACHE_PROC_EXIT_TIMEOUT", "600")),
 
     # Count for cache_transfer_manager process error
     "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),
-
 }
 ```

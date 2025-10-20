@@ -912,6 +912,38 @@ void SaveOutMmsgStatic(const paddle::Tensor& x,
                        int64_t rank_id,
                        bool save_each_rank);
 
+void LimitThinkingContentLengthV1(const paddle::Tensor &next_tokens,
+            const paddle::Tensor &max_think_lens,
+            const paddle::Tensor &step_idx,
+            const paddle::Tensor &limit_think_status,
+            const int64_t think_end_id);
+
+void LimitThinkingContentLengthV2(const paddle::Tensor &next_tokens,
+                                  const paddle::Tensor &max_think_lens,
+                                  const paddle::Tensor &step_idx,
+                                  const paddle::Tensor &limit_think_status,
+                                  const int64_t think_end_id,
+                                  const int64_t line_break_id);
+
+void SpeculateLimitThinkingContentLengthV1(
+    const paddle::Tensor& next_tokens,
+    const paddle::Tensor& max_think_lens,
+    const paddle::Tensor& step_idx,
+    const paddle::Tensor& limit_think_status,
+    const paddle::Tensor& accept_num,
+    const paddle::Tensor& seq_lens_decoder,
+    const int64_t think_end_id);
+
+void SpeculateLimitThinkingContentLengthV2(
+    const paddle::Tensor& next_tokens,
+    const paddle::Tensor& max_think_lens,
+    const paddle::Tensor& step_idx,
+    const paddle::Tensor& limit_think_status,
+    const paddle::Tensor& accept_num,
+    const paddle::Tensor& seq_lens_decoder,
+    const int64_t think_end_id,
+    const int64_t line_break_id);
+
 void SpeculateGetLogits(const paddle::Tensor &draft_logits,
                         const paddle::Tensor &next_token_num,
                         const paddle::Tensor &batch_token_num,
@@ -1319,6 +1351,14 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("min_p_sampling", &MinPSamplingFromProbs, "min_p_sampling function");
 
   m.def("save_output", &SaveOutMmsgStatic, "save_output function");
+
+  m.def("limit_thinking_content_length_v1", &LimitThinkingContentLengthV1, "limit_thinking_content_length_v1 function");
+
+  m.def("limit_thinking_content_length_v2", &LimitThinkingContentLengthV2, "limit_thinking_content_length_v2 function");
+
+  m.def("speculate_limit_thinking_content_length_v1", &SpeculateLimitThinkingContentLengthV1, "speculate limit thinking content length function");
+
+  m.def("speculate_limit_thinking_content_length_v2", &SpeculateLimitThinkingContentLengthV2, "speculate limit thinking content length function");
 
   m.def("speculate_get_logits", &SpeculateGetLogits, "speculate_get_logits function");
 

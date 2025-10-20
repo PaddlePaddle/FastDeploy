@@ -185,7 +185,6 @@ async def lifespan(app: FastAPI):
         port=int(args.engine_worker_queue_port[args.local_data_parallel_id]),
         limit_mm_per_prompt=args.limit_mm_per_prompt,
         mm_processor_kwargs=args.mm_processor_kwargs,
-        # args.enable_mm,
         reasoning_parser=args.reasoning_parser,
         data_parallel_size=args.data_parallel_size,
         enable_logprob=args.enable_logprob,

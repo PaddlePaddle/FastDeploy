@@ -21,6 +21,7 @@ import json
 import typing
 from pathlib import Path
 
+from fastdeploy.config import ModelConfig
 from fastdeploy.entrypoints.cli.types import CLISubcommand
 from fastdeploy.input.preprocess import InputPreprocessor
 
@@ -199,7 +200,7 @@ def main(args: argparse.Namespace) -> None:
         return
 
     # 初始化tokenizer
-    preprocessor = InputPreprocessor(model_name_or_path=args.model_name_or_path, enable_mm=args.enable_mm)
+    preprocessor = InputPreprocessor(model_config=ModelConfig({"model": args.model_name_or_path}))
     tokenizer = preprocessor.create_processor().tokenizer
 
     # 执行操作

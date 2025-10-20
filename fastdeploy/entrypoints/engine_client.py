@@ -37,7 +37,6 @@ from fastdeploy.inter_communicator import (
     ZmqIpcClient,
 )
 from fastdeploy.metrics.work_metrics import work_process_metrics
-from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import (
     EngineError,
@@ -62,7 +61,6 @@ class EngineClient:
         port,
         limit_mm_per_prompt,
         mm_processor_kwargs,
-        # enable_mm=False,
         reasoning_parser=None,
         data_parallel_size=1,
         enable_logprob=False,
@@ -71,20 +69,15 @@ class EngineClient:
         enable_prefix_caching=None,
         splitwise_role=None,
     ):
-        architectures = ModelConfig({"model": model_name_or_path}).architectures[0]
-        if MultimodalRegistry.contains_model(architectures):
-            self.enable_mm = True
-        else:
-            self.enable_mm = False
-
+        model_config = ModelConfig({"model": model_name_or_path})
         input_processor = InputPreprocessor(
-            tokenizer,
+            model_config,
             reasoning_parser,
             limit_mm_per_prompt,
             mm_processor_kwargs,
-            self.enable_mm,
             tool_parser,
         )
+        self.enable_mm = model_config.enable_mm
         self.enable_logprob = enable_logprob
         self.reasoning_parser = reasoning_parser
         self.data_processor = input_processor.create_processor()

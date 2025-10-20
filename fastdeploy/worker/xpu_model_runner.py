@@ -193,45 +193,6 @@ def xpu_post_process(
         update_inputs,
     )
 
-    # handle vl:
-    if model_output.enable_thinking:
-        exists_think_end = sampled_token_ids == model_output.think_end_id
-        paddle.assign(
-            paddle.where(
-                exists_think_end,
-                model_output.need_think_end - 1,
-                model_output.need_think_end,
-            ),
-            model_output.need_think_end,
-        )
-
-        paddle.assign(
-            paddle.where(
-                model_output.need_think_end.cast("bool"),
-                model_output.reasoning_index - 1,
-                model_output.reasoning_index,
-            ),
-            model_output.reasoning_index,
-        )
-
-        stop_wo_think = (
-            (sampled_token_ids == model_output.eos_token_id.T).any(axis=1, keepdim=True)
-            | (model_output.reasoning_index == 0)
-        ) & (model_output.need_think_end > 0)
-        sampled_token_ids = paddle.where(
-            stop_wo_think,
-            model_output.think_end_id,
-            sampled_token_ids,
-        )
-        paddle.assign(
-            paddle.where(
-                stop_wo_think,
-                model_output.need_think_end - 1,
-                model_output.need_think_end,
-            ),
-            model_output.need_think_end,
-        )
-
     # 1. Set stop value
     paddle.assign(
         paddle.where(
@@ -466,11 +427,6 @@ class XPUModelRunner(ModelRunnerBase):
                     else:
                         position_ids = None
 
-                    enable_thinking = request.get("enable_thinking", True)
-                    enable_thinking = enable_thinking if enable_thinking is not None else True
-                    self.share_inputs["enable_thinking"][:] = enable_thinking
-                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
-                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)
                     self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
                         position_ids, request.get("max_tokens", 2048)
                     )
@@ -605,11 +561,6 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["prompt_lens"][idx : idx + 1] = length
 
             if self.enable_mm:
-                enable_thinking = request.get("enable_thinking", True)
-                enable_thinking = enable_thinking if enable_thinking is not None else True
-                self.share_inputs["enable_thinking"][:] = enable_thinking
-                self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
-                self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)
                 self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
                     position_ids, request.get("max_tokens", 2048)
                 )
@@ -730,10 +681,6 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["max_dec_len"] = paddle.full(
             [max_num_seqs, 1], self.model_config.max_model_len, dtype="int64"
         )
-        self.share_inputs["min_length"] = paddle.full([max_num_seqs, 1], self.model_config.min_length, dtype="int64")
-        self.share_inputs["max_length"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.max_model_len, dtype="int64"
-        )
         self.share_inputs["seq_lens_this_time"] = paddle.full(max_num_seqs, 0, dtype="int32")
         self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -824,9 +771,6 @@ class XPUModelRunner(ModelRunnerBase):
                 dtype="float32",
             )
             self.share_inputs["image_features"] = None
-            self.share_inputs["need_think_end"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-            self.share_inputs["enable_thinking"] = paddle.full(shape=[1], fill_value=True, dtype="bool")
-            self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
     def _prepare_inputs(self, is_dummy_run=False) -> None:
         """Prepare the model inputs"""
@@ -1158,10 +1102,6 @@ class XPUModelRunner(ModelRunnerBase):
             actual_draft_token_num=None,
             accept_tokens=None,
             accept_num=None,
-            enable_thinking=(self.share_inputs["enable_thinking"] if self.enable_mm else None),
-            think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
-            need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
-            reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
