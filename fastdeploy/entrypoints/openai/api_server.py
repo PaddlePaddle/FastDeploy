@@ -503,8 +503,8 @@ def launch_api_server() -> None:
         "workers": args.workers,
         "worker_class": "uvicorn.workers.UvicornWorker",
         "loglevel": "info",
-        "log_config": UVICORN_CONFIG,
-        "timeout_graceful_shutdown": args.timeout_graceful_shutdown,
+        "graceful_timeout": args.timeout_graceful_shutdown,
+        "timeout": args.timeout,
     }
 
     try:
