@@ -194,11 +194,11 @@ class EngineClient:
             if self.enable_mm and self.enable_prefix_caching:
                 if self._check_mm_disable_prefix_cache(task):
                     api_server_logger.error(
-                        f"The current service does not support processing requests containing multimodal data when prefix cache is enabled. Please send only text-based requests or disable prefix cache"
+                        "The current service does not support processing requests containing multimodal data when prefix cache is enabled. Please send only text-based requests or disable prefix cache"
                     )
                     raise EngineError(
                         "The current service does not support processing requests containing multimodal data when prefix cache is enabled. Please send only text-based requests or disable prefix cache",
-                        error_code=400
+                        error_code=400,
                     )
 
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
