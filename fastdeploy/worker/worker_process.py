@@ -42,8 +42,8 @@ from fastdeploy.config import (
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import ExistTaskStatus, IPCSignal, ModelWeightsStatus
-from fastdeploy.model_executor import is_paddle_support_v1_loader
 from fastdeploy.model_executor.layers.quantization import get_quantization_config
+from fastdeploy.model_executor.utils import is_paddle_support_v1_loader
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import get_logger, parse_quantization
 from fastdeploy.worker.worker_base import WorkerBase
