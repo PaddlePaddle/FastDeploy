@@ -29,6 +29,7 @@ for subdir in "$run_path"*/; do
                 exit_code=$?
                 set -e
                 ps -ef | grep "${FD_CACHE_QUEUE_PORT}" | grep -v grep | awk '{print $2}' | xargs -r kill -9
+                ps -ef | grep "${FD_ENGINE_QUEUE_PORT}" | grep -v grep | awk '{print $2}' | xargs -r kill -9
 
                 if [ $exit_code -ne 0 ]; then
                     if [ -f "${subdir%/}/log/workerlog.0" ]; then

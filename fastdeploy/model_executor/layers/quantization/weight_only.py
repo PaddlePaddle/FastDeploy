@@ -79,18 +79,11 @@ class WeightOnlyConfig(QuantConfigBase):
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if current_platform.is_xpu():
             if isinstance(layer, FusedMoE):
-                if layer.ep_size > 1:
-                    from fastdeploy.model_executor.layers.backends import (
-                        XPUWeightOnlyMoeEpMethod,
-                    )
+                from fastdeploy.model_executor.layers.backends import (
+                    XPUWeightOnlyMoEMethod,
+                )
 
-                    return XPUWeightOnlyMoeEpMethod(self)
-                else:
-                    from fastdeploy.model_executor.layers.backends import (
-                        XPUWeightOnlyMoEMethod,
-                    )
-
-                    return XPUWeightOnlyMoEMethod(self)
+                return XPUWeightOnlyMoEMethod(self)
             else:
                 from fastdeploy.model_executor.layers.backends import (
                     XPUWeightOnlyLinearMethod,
@@ -123,10 +116,18 @@ class WeightOnlyConfig(QuantConfigBase):
         elif current_platform.is_maca():
             if isinstance(layer, FusedMoE):
                 from fastdeploy.model_executor.layers.backends import (
+                    MetaxCutlassWeightOnlyMoEMethod,
                     MetaxTritonWeightOnlyMoEMethod,
                 )
 
-                return MetaxTritonWeightOnlyMoEMethod(self)
+                if layer.use_method == "cutlass":
+
+                    return MetaxCutlassWeightOnlyMoEMethod(self)
+                elif layer.use_method == "triton":
+
+                    return MetaxTritonWeightOnlyMoEMethod(self)
+                else:
+                    raise ValueError(f"Unsupported MOE backend {layer.use_method}")
             else:
 
                 return GPUWeightOnlyLinearMethod(self)

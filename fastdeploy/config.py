@@ -125,6 +125,7 @@ class ErnieArchitectures:
         "Ernie4_5_ForCausalLM",
         "Ernie4_5_MoeForCausalLM",
         "Ernie4_5_VLMoeForConditionalGeneration",
+        "Ernie4_5_VLMoeForProcessRewardModel",
     }
 
     @classmethod
@@ -181,13 +182,12 @@ class ModelConfig:
         self.model = ""
         self.is_quantized = False
         self.max_model_len = 0
-        self.dtype = ""
+        self.dtype = "bfloat16"
         self.enable_logprob = False
         self.enable_redundant_experts = False
         self.redundant_experts_num = 0
         self.seed = 0
         self.quantization = None
-        self.reasoning_parser = None
         self.pad_token_id: int = -1
         self.eos_tokens_lens: int = 2
         self.lm_head_fp32: bool = False
@@ -529,27 +529,10 @@ class ParallelConfig:
         self.data_parallel_size = 1  # DP degree
         self.enable_expert_parallel = False
         self.local_data_parallel_id = 0
-        # The embedding weight distributed on your gpu cards is divided by row or column.
-        # Defaults to False means divide by row. When vocab_size can not be divided by world_size
-        # but hidden_size can, we can consider split embedding weight by column.
-        """
-        From old wersion worker args
-        TODO(gongshaotian): Reclassify
-        """
-        # Set default block num for profile run
-        self.total_block_num: int = 2000
-        # block size
-        self.block_size: int = 64
         # Engine worker queue port
         self.engine_worker_queue_port: str = "9923"
-        # Max model len
-        self.max_model_len: int = 3072  # max_seq_len
         # cuda visible devices
         self.device_ids: str = "0"
-        # Input dtype
-        self.dtype: str = "bfloat16"
-        # Encoder's decoder num
-        self.enc_dec_block_num: int = 1
         # First token id
         self.first_token_id: int = 1
         # Process ID of engine
@@ -557,10 +540,6 @@ class ParallelConfig:
         # Do profile or not
         self.do_profile: bool = False
 
-        # guided decoding backend
-        self.guided_decoding_backend: str = None
-        # disable any whitespace for guided decoding
-        self.disable_any_whitespace: bool = True
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
         self.disable_custom_all_reduce: bool = False
@@ -1145,12 +1124,6 @@ class PoolerConfig:
     """
 
 
-class LoRAConfig:
-    """LoRA Config"""
-
-    pass
-
-
 class CacheConfig:
     """
     Configuration for the KV cache.
@@ -1381,6 +1354,25 @@ class CommitConfig:
         logger.info("=============================================================")
 
 
+class StructuredOutputsConfig:
+    """
+    Configuration for structured outputs
+    """
+
+    def __init__(
+        self,
+        args,
+    ) -> None:
+        self.reasoning_parser: Optional[str] = None
+        self.guided_decoding_backend: Optional[str] = None
+        # disable any whitespace for guided decoding
+        self.disable_any_whitespace: bool = True
+
+        for key, value in args.items():
+            if hasattr(self, key) and value != "None":
+                setattr(self, key, value)
+
+
 class FDConfig:
     """
     The configuration class which contains all fastdeploy-related configuration. This
@@ -1401,8 +1393,8 @@ class FDConfig:
         graph_opt_config: GraphOptimizationConfig = None,
         plas_attention_config: PlasAttentionConfig = None,
         speculative_config: SpeculativeConfig = None,
+        structured_outputs_config: StructuredOutputsConfig = None,
         tokenizer: str = None,
-        max_model_len: int = 8192,
         ips: str = None,
         use_warmup: bool = False,
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
@@ -1411,9 +1403,6 @@ class FDConfig:
         max_num_partial_prefills: int = 1,
         max_long_partial_prefills: int = 1,
         long_prefill_token_threshold: int = 0,
-        reasoning_parser: str = None,
-        guided_decoding_backend: Optional[str] = None,
-        disable_any_whitespace: bool = False,
         early_stop_config: Optional[Dict[str, Any]] = None,
         tool_parser: str = None,
         test_mode=False,
@@ -1431,18 +1420,20 @@ class FDConfig:
         self.decoding_config: DecodingConfig = decoding_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
         self.plas_attention_config: Optional[PlasAttentionConfig] = plas_attention_config
+        self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
         # Initialize cuda graph capture list
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.scheduler_config.max_num_seqs)
 
         if self.graph_opt_config.cudagraph_only_prefill:
             self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=512)
+        elif self.speculative_config is not None and self.speculative_config.method == "mtp":
+            max_shape = self.scheduler_config.max_num_seqs * (self.speculative_config.num_speculative_tokens + 1)
+            if max_shape % 2 == 1:
+                max_shape = max_shape + 1
+            self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=min(512, max_shape))
         else:
             self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=self.scheduler_config.max_num_seqs)
-
-        # TODO(wangmingkai02): change graph_opt_level=2 when using static mode with cinn
-        if self.graph_opt_config.graph_opt_level == 2:
-            self.graph_opt_config.graph_opt_level = 1
 
         self.tokenizer = tokenizer
         self.ips = ips
@@ -1465,7 +1456,6 @@ class FDConfig:
                 if ip == self.host_ip:
                     self.node_rank = idx
 
-        self.max_model_len = max_model_len
         self.limit_mm_per_prompt = limit_mm_per_prompt
         self.mm_processor_kwargs = mm_processor_kwargs
         self.use_warmup = use_warmup
@@ -1473,9 +1463,7 @@ class FDConfig:
         self.max_num_partial_prefills = max_num_partial_prefills
         self.max_long_partial_prefills = max_long_partial_prefills
         self.long_prefill_token_threshold = long_prefill_token_threshold
-        self.reasoning_parser = reasoning_parser
-        self.guided_decoding_backend = guided_decoding_backend
-        self.disable_any_whitespace = disable_any_whitespace
+
         self._str_to_list("innode_prefill_ports", int)
 
         if envs.FD_FOR_TORCH_MODEL_FORMAT:
@@ -1497,12 +1485,12 @@ class FDConfig:
         else:
             self.worker_num_per_node = num_ranks
 
-        self.device_ids = ",".join([str(i) for i in range(self.worker_num_per_node)])
-        self.device_ids = os.getenv("CUDA_VISIBLE_DEVICES", self.device_ids)
+        self.parallel_config.device_ids = ",".join([str(i) for i in range(self.worker_num_per_node)])
+        self.parallel_config.device_ids = os.getenv("CUDA_VISIBLE_DEVICES", self.parallel_config.device_ids)
         if current_platform.is_xpu():
-            self.device_ids = os.getenv("XPU_VISIBLE_DEVICES", self.device_ids)
+            self.parallel_config.device_ids = os.getenv("XPU_VISIBLE_DEVICES", self.parallel_config.device_ids)
         if current_platform.is_intel_hpu():
-            self.device_ids = os.getenv("HPU_VISIBLE_DEVICES", self.device_ids)
+            self.parallel_config.device_ids = os.getenv("HPU_VISIBLE_DEVICES", self.parallel_config.device_ids)
 
         self.read_from_config()
         self.postprocess()
@@ -1515,9 +1503,9 @@ class FDConfig:
         """
         calculate some parameters
         """
-        self.local_device_ids = self.device_ids.split(",")[: self.parallel_config.tensor_parallel_size]
+        self.local_device_ids = self.parallel_config.device_ids.split(",")[: self.parallel_config.tensor_parallel_size]
 
-        if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node:
+        if self.parallel_config.tensor_parallel_size <= self.worker_num_per_node or self.node_rank == 0:
             self.is_master = True
             self.master_ip = "0.0.0.0"
         else:
@@ -1529,29 +1517,32 @@ class FDConfig:
         if self.scheduler_config.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
                 if paddle.is_compiled_with_xpu():
-                    self.scheduler_config.max_num_batched_tokens = self.max_model_len
+                    self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
                 else:
                     self.scheduler_config.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.cache_config.enable_chunked_prefill:
                     self.scheduler_config.max_num_batched_tokens = 2048
                 else:
-                    self.scheduler_config.max_num_batched_tokens = self.max_model_len
+                    self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
 
         if self.long_prefill_token_threshold == 0:
-            self.long_prefill_token_threshold = int(self.max_model_len * 0.04)
+            self.long_prefill_token_threshold = int(self.model_config.max_model_len * 0.04)
 
         self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
-        self.cache_config.max_block_num_per_seq = int(self.max_model_len // self.cache_config.block_size)
+        self.cache_config.max_block_num_per_seq = int(self.model_config.max_model_len // self.cache_config.block_size)
         if self.model_config is not None and self.model_config.enable_mm:
             self.cache_config.enable_prefix_caching = False
 
-        if self.guided_decoding_backend == "auto":
+        if (
+            self.structured_outputs_config is not None
+            and self.structured_outputs_config.guided_decoding_backend == "auto"
+        ):
             if current_platform.is_xpu() or self.speculative_config.method is not None:
                 logger.warning("Speculative Decoding and XPU currently do not support Guided decoding, set off.")
-                self.guided_decoding_backend = "off"
+                self.structured_outputs_config.guided_decoding_backend = "off"
             else:
-                self.guided_decoding_backend = "xgrammar"
+                self.structured_outputs_config.guided_decoding_backend = "xgrammar"
 
         if self.scheduler_config.splitwise_role == "mixed":
             self.model_config.moe_phase = MoEPhase(phase="prefill")
@@ -1571,7 +1562,9 @@ class FDConfig:
             f"but now it's {self.scheduler_config.max_num_seqs}."
         )
         assert self.nnode >= 1, f"nnode: {self.nnode} should no less than 1"
-        assert self.max_model_len >= 16, f"max_model_len: {self.max_model_len} should be larger than 16"
+        assert (
+            self.model_config.max_model_len >= 16
+        ), f"max_model_len: {self.model_config.max_model_len} should be larger than 16"
         assert (
             self.scheduler_config.max_num_seqs >= 1
         ), f"max_num_seqs: {self.scheduler_config.max_num_seqs} should be larger than 1"
@@ -1580,10 +1573,11 @@ class FDConfig:
             f"should be larger than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs}"
         )
         assert (
-            self.scheduler_config.max_num_batched_tokens <= self.max_model_len * self.scheduler_config.max_num_seqs
+            self.scheduler_config.max_num_batched_tokens
+            <= self.model_config.max_model_len * self.scheduler_config.max_num_seqs
         ), (
             f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} should be larger"
-            f"than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs} * max_model_len: {self.max_model_len}"
+            f"than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs} * max_model_len: {self.model_config.max_model_len}"
         )
         assert (
             self.max_num_partial_prefills >= 1
@@ -1604,9 +1598,9 @@ class FDConfig:
 
         if not self.cache_config.enable_chunked_prefill:
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                assert self.scheduler_config.max_num_batched_tokens >= self.max_model_len, (
+                assert self.scheduler_config.max_num_batched_tokens >= self.model_config.max_model_len, (
                     f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} "
-                    f"should be larger than or equal to max_model_len: {self.max_model_len}"
+                    f"should be larger than or equal to max_model_len: {self.model_config.max_model_len}"
                 )
         else:
             assert self.scheduler_config.max_num_batched_tokens >= self.cache_config.block_size, (
@@ -1618,20 +1612,23 @@ class FDConfig:
             assert (
                 self.cache_config.enable_chunked_prefill is True
             ), "Chunked prefill must be enabled to set max_num_partial_prefills > 1"
-            assert self.long_prefill_token_threshold < self.max_model_len, (
+            assert self.long_prefill_token_threshold < self.model_config.max_model_len, (
                 f"long_prefill_token_threshold: {self.long_prefill_token_threshold} should be less than"
-                f" max_model_len: {self.max_model_len}"
+                f" max_model_len: {self.model_config.max_model_len}"
             )
 
-        if self.guided_decoding_backend is not None:
-            assert self.guided_decoding_backend in [
+        if (
+            self.structured_outputs_config is not None
+            and self.structured_outputs_config.guided_decoding_backend is not None
+        ):
+            assert self.structured_outputs_config.guided_decoding_backend in [
                 "xgrammar",
                 "XGrammar",
                 "auto",
                 "off",
-            ], f"Only support xgrammar、auto guided decoding backend, but got {self.guided_decoding_backend}."
+            ], f"Only support xgrammar、auto guided decoding backend, but got {self.structured_outputs_config.guided_decoding_backend}."
 
-            if self.guided_decoding_backend != "off":
+            if self.structured_outputs_config.guided_decoding_backend != "off":
                 # TODO: speculative decoding support guided_decoding
                 assert (
                     self.speculative_config.method is None

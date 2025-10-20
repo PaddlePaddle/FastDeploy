@@ -106,6 +106,8 @@ class SamplerOutput:
     # PLACEHOLDER_TOKEN_ID (-1 by default) is used for padding.
     sampled_token_ids: paddle.Tensor
     logprobs_tensors: Optional[LogprobsTensors]
+    token_num_per_batch: Optional[paddle.Tensor] = None
+    cu_batch_token_offset: Optional[paddle.Tensor] = None
 
 
 @dataclass
@@ -250,6 +252,11 @@ class ModelOutputData:
     """
     stop_seqs_len: paddle.Tensor = None
 
+    """
+        the length of input prompt
+    """
+    prompt_lens: paddle.Tensor = None
+
 
 @dataclass
 class ModelRunnerOutput:
@@ -276,3 +283,8 @@ class ModelRunnerOutput:
         [num_reqs, num_spec_tokens]
     """
     spec_token_ids: Optional[list[list[int]]]
+
+    """
+    [num_reqs, hidden_size]
+    """
+    pooler_output: list[Optional[paddle.Tensor]]

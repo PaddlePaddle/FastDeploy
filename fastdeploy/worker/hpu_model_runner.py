@@ -24,6 +24,7 @@ import paddle.nn as nn
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
+from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce_custom
 from fastdeploy.engine.request import Request
 
 # from fastdeploy.spec_decode import MTPProposer, NgramProposer
@@ -318,7 +319,7 @@ class HPUModelRunner(ModelRunnerBase):
         self.speculative_decoding = self.speculative_method is not None
 
         self.guided_backend = None
-        if self.fd_config.parallel_config.guided_decoding_backend != "off":
+        if self.fd_config.structured_outputs_config.guided_decoding_backend != "off":
             self.guided_backend = get_guided_backend(fd_config=self.fd_config)
 
         #  Sampler
@@ -535,7 +536,7 @@ class HPUModelRunner(ModelRunnerBase):
         """Set dummy prefill inputs to share_inputs"""
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
         max_dec_len = expected_decode_len + 1
-        full_length = min(num_tokens // batch_size, self.parallel_config.max_model_len - max_dec_len)
+        full_length = min(num_tokens // batch_size, self.model_config.max_model_len - max_dec_len)
         input_length = int(full_length * self.cache_config.kv_cache_ratio)
         block_num = (
             input_length + self.cache_config.block_size - 1
@@ -568,11 +569,9 @@ class HPUModelRunner(ModelRunnerBase):
         self.MAX_INFER_SEED = 9223372036854775806
         self.share_inputs = {}
 
-        self.share_inputs["pre_ids"] = paddle.full(
-            [max_num_seqs, self.parallel_config.max_model_len], -1, dtype="int64"
-        )
+        self.share_inputs["pre_ids"] = paddle.full([max_num_seqs, self.model_config.max_model_len], -1, dtype="int64")
         self.share_inputs["input_ids"] = paddle.full(
-            [max_num_seqs, self.parallel_config.max_model_len], self.model_config.pad_token_id, dtype="int64"
+            [max_num_seqs, self.model_config.max_model_len], self.model_config.pad_token_id, dtype="int64"
         )
         self.share_inputs["eos_token_id"] = paddle.full([self.model_config.eos_tokens_lens, 1], 0, dtype="int64")
         self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
@@ -627,7 +626,7 @@ class HPUModelRunner(ModelRunnerBase):
         self.share_inputs["system_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int32")
 
         self.share_inputs["ids_remove_padding"] = paddle.full(
-            [max_num_seqs * self.parallel_config.max_model_len], 0, dtype="int64"
+            [max_num_seqs * self.model_config.max_model_len], 0, dtype="int64"
         )
         self.share_inputs["cum_offsets"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["padding_offset"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -638,7 +637,7 @@ class HPUModelRunner(ModelRunnerBase):
         self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
 
         # Initialize rotary position embedding
-        tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
+        tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
         # TODO(gongshaotian): move to models
         self.share_inputs["rope_emb"] = get_rope(
             rotary_dim=self.model_config.head_dim,
@@ -649,15 +648,15 @@ class HPUModelRunner(ModelRunnerBase):
 
         # Set block tables
         pre_max_block_num = (
-            self.parallel_config.max_model_len + self.cache_config.block_size - 1
+            self.model_config.max_model_len + self.cache_config.block_size - 1
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
         self.share_inputs["block_tables"] = paddle.full([max_num_seqs, pre_max_block_num], -1, dtype="int32").cpu()
 
         # Initialize free list
         free_list = list(
             range(
-                self.parallel_config.total_block_num - 2,
-                int(self.parallel_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
+                self.cache_config.total_block_num - 2,
+                int(self.cache_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
                 -1,
             )
         )
@@ -673,7 +672,7 @@ class HPUModelRunner(ModelRunnerBase):
         if self.speculative_decoding:
             max_draft_token_num = self.speculative_config.num_speculative_tokens
             self.share_inputs["input_ids_cpu"] = paddle.full(
-                shape=[max_num_seqs, self.parallel_config.max_model_len], fill_value=1, dtype="int64"
+                shape=[max_num_seqs, self.model_config.max_model_len], fill_value=1, dtype="int64"
             ).cpu()
             self.share_inputs["accept_tokens"] = paddle.full(
                 shape=[max_num_seqs, max_draft_token_num + 1], fill_value=0, dtype="int64"
@@ -714,7 +713,7 @@ class HPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_encoder"],
             self.share_inputs["seq_lens_decoder"],
             self.cache_config.block_size,
-            self.parallel_config.dtype,
+            self.model_config.dtype,
         )
         is_prompt = is_prompt.item() == 1 if is_prompt.item() > 0 else None
         if is_prompt is True:
@@ -859,7 +858,7 @@ class HPUModelRunner(ModelRunnerBase):
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(max_num_blocks=max_block_num)
 
         for i in range(self.model_config.num_hidden_layers):
-            cache_type = self.parallel_config.dtype
+            cache_type = self.model_config.dtype
             cache_kvs["key_caches_{}".format(i)] = paddle.full(
                 shape=kv_cache_shape,
                 fill_value=0,
@@ -946,7 +945,7 @@ class HPUModelRunner(ModelRunnerBase):
             if self.parallel_config.tensor_parallel_size > 1:
                 dtype = sampled_token_ids.dtype
                 sampled_token_ids = sampled_token_ids.to("float32")
-                paddle.distributed.broadcast(sampled_token_ids, 0)
+                tensor_model_parallel_all_reduce_custom(sampled_token_ids)
                 sampled_token_ids = sampled_token_ids.to(dtype)
 
             # 6. post process
@@ -983,7 +982,7 @@ class HPUModelRunner(ModelRunnerBase):
             # 7. Updata 'infer_seed' and step_cuda()
             self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
             self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
-            step_intel_hpu(self.share_inputs, self.cache_config.block_size, self.parallel_config.max_model_len)
+            step_intel_hpu(self.share_inputs, self.cache_config.block_size, self.model_config.max_model_len)
 
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
                 break
@@ -1082,9 +1081,7 @@ class HPUModelRunner(ModelRunnerBase):
 
     def warm_up_bucket(self) -> None:
         max_prefill_batch = 3  # Hard-Code in FastDeploy/fastdeploy/engine/config.py
-        warmup_max_model_len = min(
-            int(os.environ.get("HPU_WARMUP_MODEL_LEN", 4096)), self.parallel_config.max_model_len
-        )
+        warmup_max_model_len = min(int(os.environ.get("HPU_WARMUP_MODEL_LEN", 4096)), self.model_config.max_model_len)
         prefill_batchs = []
         prefill_batch_step = int(os.environ.get("BATCH_STEP_PREFILL", 1))
         current_prefill_batch = prefill_batch_step
@@ -1176,7 +1173,7 @@ class HPUModelRunner(ModelRunnerBase):
         capture_sizes = self.cudagraph_capture_sizes.copy()
         for batch_size in sorted(capture_sizes, reverse=True):
             self._dummy_run(
-                num_tokens=self.parallel_config.max_model_len,
+                num_tokens=self.model_config.max_model_len,
                 batch_size=batch_size,
                 in_capturing=True,
                 expected_decode_len=expected_decode_len,
@@ -1276,7 +1273,7 @@ class HPUModelRunner(ModelRunnerBase):
         if self.parallel_config.tensor_parallel_size > 1:
             dtype = sampled_token_ids.dtype
             sampled_token_ids = sampled_token_ids.to("float32")
-            paddle.distributed.broadcast(sampled_token_ids, 0)
+            tensor_model_parallel_all_reduce_custom(sampled_token_ids)
             sampled_token_ids = sampled_token_ids.to(dtype)
         if self.is_hpu_perf_breakdown_sync_mode:
             sampled_token_ids.cpu()
@@ -1309,7 +1306,7 @@ class HPUModelRunner(ModelRunnerBase):
             accept_num=self.share_inputs["accept_num"] if self.speculative_decoding else None,
         )
 
-        # if self.speculative_config.method in ["mtp"] and self.parallel_config.splitwise_role == "prefill":
+        # if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
         #     skip_save_output = True
         # else:
         #     skip_save_output = False
@@ -1334,7 +1331,7 @@ class HPUModelRunner(ModelRunnerBase):
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
         self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
         start_time = time.time()
-        step_intel_hpu(self.share_inputs, self.cache_config.block_size, self.parallel_config.max_model_len)
+        step_intel_hpu(self.share_inputs, self.cache_config.block_size, self.model_config.max_model_len)
         end_time = time.time()
         execution_time = (end_time - start_time) * 1000
         hpu_model_runner_profile_logger.info(f"StepPaddle execution time(ms): {execution_time}, BT={real_bs}")
@@ -1379,7 +1376,7 @@ class HPUModelRunner(ModelRunnerBase):
 
         # Initialize kv cache for profile run. After profile run kv cache will be reset.
         # TODO(gongshaotian): Optimize the management logic of kvcache
-        self.num_gpu_blocks = self.parallel_config.total_block_num
+        self.num_gpu_blocks = self.cache_config.total_block_num
         self.initialize_kv_cache()
 
         # 1. Profile with multimodal encoder & encoder cache
