@@ -209,7 +209,6 @@ class PrefixCacheManager:
         )
 
         # Run command to launch cache transfer managers
-        logger.info(f"create_cache_tensor: {create_cache_tensor}")
         log_dir = envs.FD_LOG_DIR
         cache_manager_processes = []
         for i in range(tensor_parallel_size):
@@ -240,7 +239,7 @@ class PrefixCacheManager:
                 + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                 + (" --create_cache_tensor" if create_cache_tensor else "")
-                + f" >{log_dir}/launch_cache_manager_{int(device_ids[i])}.log 2>&1"
+                + f" >{log_dir}/launch_cache_transfer_manager_{int(device_ids[i])}.log 2>&1"
             )
             logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
             cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
@@ -257,7 +256,9 @@ class PrefixCacheManager:
         if exit_code is None:
             logger.info("Launch cache transfer manager successful")
         else:
-            logger.info("Launch cache transfer manager failed, see launch_cache_manager.log for more information")
+            logger.info(
+                "Launch cache transfer manager failed, see launch_cache_transfer_manager.log for more information"
+            )
 
         # Start additional threads
         if cache_config.enable_hierarchical_cache and self.num_cpu_blocks > 0:
