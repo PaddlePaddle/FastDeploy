@@ -379,7 +379,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         inputs = request.multimodal_inputs
         if request.with_image:
-            vision_inputs = {}
+            vision_inputs = inputs
             if self.encoder_cache:
                 (
                     vision_inputs["input_ids"],
@@ -420,7 +420,14 @@ class GPUModelRunner(ModelRunnerBase):
                 image_features = self.extract_vision_features(vision_inputs)
 
             # part of the first image may be already cached
-            actual_image_token_num = paddle.sum(vision_inputs["input_ids"] == self.model_config.im_patch_id)
+            if "ernie" in self.model_config.model_type:
+                actual_image_token_num = paddle.sum(vision_inputs["input_ids"] == self.model_config.im_patch_id)
+            elif "qwen" in self.model_config.model_type:
+                actual_image_token_num = paddle.sum(
+                    vision_inputs["input_ids"] == vision_inputs["image_patch_id"]
+                ) + paddle.sum(vision_inputs["input_ids"] == vision_inputs["video_patch_id"])
+            else:
+                raise ValueError(f"multiple modalities model {self.model_config.model_type} is not supported")
             self.share_inputs["image_features"] = image_features[-actual_image_token_num:]
         else:
             self.share_inputs["image_features"] = None

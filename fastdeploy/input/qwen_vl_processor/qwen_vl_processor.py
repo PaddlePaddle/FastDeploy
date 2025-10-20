@@ -47,6 +47,7 @@ class QwenVLProcessor(TextProcessor):
         mm_processor_kwargs=None,
         reasoning_parser_obj=None,
         tool_parser_obj=None,
+        enable_processor_cache=False,
     ):
         """
         Initialize QwenVLProcessor instance.
@@ -65,6 +66,7 @@ class QwenVLProcessor(TextProcessor):
         processor_kwargs = self._parse_processor_kwargs(mm_processor_kwargs)
         self.processor = DataProcessor(
             model_path=model_name_or_path,
+            enable_processor_cache=enable_processor_cache,
             tokens_per_second=config.vision_config.tokens_per_second,
             tokenizer=self.tokenizer,
             **processor_kwargs,
@@ -306,7 +308,24 @@ class QwenVLProcessor(TextProcessor):
         Returns:
             dict: Packed output dictionary with all required fields
         """
+        if not outputs["images"]:
+            outputs["images"] = None  # No images case
+            outputs["grid_thw"] = None  # No spatial dimensions
+            outputs["image_type_ids"] = None  # No type IDs
+        else:
+            outputs["images"] = np.vstack(outputs["images"])  # Stack image features vertically
+            outputs["grid_thw"] = np.vstack(outputs["grid_thw"])  # Stack spatial dimensions
+            outputs["image_type_ids"] = np.array(outputs["image_type_ids"])  # Convert to numpy array
+
+        # Convert all outputs to numpy arrays with appropriate types
+        outputs["input_ids"] = np.array(outputs["input_ids"], dtype=np.int64)  # Token IDs as int64
+        outputs["token_type_ids"] = np.array(outputs["token_type_ids"], dtype=np.int64)  # Type IDs as int64
+        outputs["position_ids"] = np.concatenate(
+            outputs["position_ids"], axis=1, dtype=np.int64
+        )  # Concatenate position ID
+
         outputs["image_patch_id"] = self.processor.image_token_id
         outputs["video_patch_id"] = self.processor.video_token_id
         outputs["position_ids"] = outputs["position_ids"].transpose(1, 0)
+
         return outputs

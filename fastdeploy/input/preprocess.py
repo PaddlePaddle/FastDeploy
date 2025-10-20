@@ -132,5 +132,6 @@ class InputPreprocessor:
                         limit_mm_per_prompt=self.limit_mm_per_prompt,
                         mm_processor_kwargs=self.mm_processor_kwargs,
                         reasoning_parser_obj=reasoning_parser_obj,
+                        enable_processor_cache=self.enable_processor_cache,
                     )
         return self.processor
