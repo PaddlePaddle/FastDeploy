@@ -1007,6 +1007,15 @@ class GPUModelRunner(ModelRunnerBase):
                 dtype="int64",
             )
             self.share_inputs["step_seq_lens_this_time"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+            # For MTP Logprob
+            self.share_inputs["draft_logits"] = paddle.full(
+                [max_num_seqs * (self.speculative_config.num_speculative_tokens + 1), self.model_config.vocab_size],
+                -1,
+                dtype="float32",
+            )
+            self.share_inputs["cu_batch_token_offset"] = paddle.full(
+                shape=[max_num_seqs + 1], fill_value=0, dtype="int32"
+            )
 
         if self.enable_mm:
             head_dim = self.model_config.head_dim
@@ -1504,10 +1513,11 @@ class GPUModelRunner(ModelRunnerBase):
             skip_save_output=True,
             async_output_queue=self.async_output_queue,
         )
-
         if self.speculative_decoding:
             if self.speculative_method == "mtp":
-                self.proposer.run(full_hidden_states=model_output)
+                self.proposer.run(
+                    full_hidden_states=model_output, step_use_cudagraph=self.forward_meta.step_use_cudagraph
+                )
             else:
                 self.proposer.run(share_inputs=self.share_inputs)
 
@@ -1868,13 +1878,12 @@ class GPUModelRunner(ModelRunnerBase):
                 )
 
         else:
-            self.sampler(
+            sampler_output = self.sampler(
                 logits,
                 self.sampling_metadata,
                 self.model_config.max_model_len,
                 self.share_inputs,
             )
-            sampler_output = None
             if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(
                     self.share_inputs["accept_tokens"],
@@ -1951,7 +1960,9 @@ class GPUModelRunner(ModelRunnerBase):
         # 6. Speculative decode
         if self.speculative_decoding:
             if self.speculative_method == "mtp":
-                self.proposer.run(full_hidden_states=model_output)
+                self.proposer.run(
+                    full_hidden_states=model_output, step_use_cudagraph=self.forward_meta.step_use_cudagraph
+                )
             else:
                 self.proposer.run(share_inputs=self.share_inputs)
 
