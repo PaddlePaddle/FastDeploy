@@ -1,3 +1,5 @@
+[简体中文](../zh/online_serving/graceful_shutdown_service.md)
+
 # Graceful Service Node Shutdown Solution
 
 ## 1. Core Objective

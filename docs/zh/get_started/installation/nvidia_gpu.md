@@ -1,3 +1,5 @@
+[English](../../../get_started/installation/nvidia_gpu.md)
+
 # NVIDIA CUDA GPU Installation
 
 在环境满足如下条件前提下

@@ -1,3 +1,5 @@
+[简体中文](../zh/usage/environment_variables.md)
+
 # FastDeploy Environment Variables
 
 FastDeploy's environment variables are defined in `fastdeploy/envs.py` at the root of the repository. Below is the documentation:
@@ -77,6 +79,12 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # Whether to use Machete for wint4 dense GEMM.
     "FD_USE_MACHETE": lambda: os.getenv("FD_USE_MACHETE", "1"),
+
+    # Timeout for cache_transfer_manager process exit
+    "FD_CACHE_PROC_EXIT_TIMEOUT": lambda: int(os.getenv("FD_CACHE_PROC_EXIT_TIMEOUT", "600")),
+
+    # Count for cache_transfer_manager process error
+    "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),
 
 }
 ```
