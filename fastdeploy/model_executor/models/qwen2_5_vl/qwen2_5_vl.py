@@ -294,9 +294,9 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         # Due to the fact that the framework only has image_features,
         # it currently does not support mixing images and videos
         # TODO(wangyafeng) Consider supporting the input of video_features in the future
-        if image_token_num > 0:
+        if image_token_num.item() > 0:
             input_embeddings[image_mask] = image_features.cast(self.model._dtype)
-        if video_token_num > 0:
+        if video_token_num.item() > 0:
             input_embeddings[video_mask] = image_features.cast(self.model._dtype)
 
         return input_embeddings
