@@ -483,7 +483,7 @@ class XPUWeightOnlyMoEMethod(XPUMoEMethod):
                 layer.top_k,
                 False,  # moe group, used in deepseek
             )
-            if layer.tp_size > 1:
+            if layer.reduce_results and layer.tp_size > 1:
                 tensor_model_parallel_all_reduce(fused_moe_out)
             return fused_moe_out
 
