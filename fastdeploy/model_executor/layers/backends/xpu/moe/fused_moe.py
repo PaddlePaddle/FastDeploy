@@ -483,7 +483,7 @@ class XPUWeightOnlyMoEMethod(XPUMoEMethod):
                 layer.top_k,
                 False,  # moe group, used in deepseek
             )
-            if layer.tp_size > 1:
+            if layer.reduce_results and layer.tp_size > 1:
                 tensor_model_parallel_all_reduce(fused_moe_out)
             return fused_moe_out
 
@@ -644,7 +644,7 @@ class XPUW4A8MoEMethod(XPUMoEMethod):
             layer.down_proj_weight,
             None,  # moe_ffn1_bias
             None,  # moe_ffn2_bias
-            getattr(layer, "up_gate_proj_in_scale", None),
+            (ffn1_act_scale_per_token if hasattr(layer, "up_gate_proj_in_scale") else None),
             getattr(layer, "down_proj_in_scale", None),
             getattr(layer, "up_gate_proj_weight_scale", None),
             getattr(layer, "down_proj_weight_scale", None),
