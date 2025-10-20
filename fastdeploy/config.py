@@ -30,7 +30,6 @@ from typing_extensions import assert_never
 import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfigBase
-from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.transformer_utils.config import get_pooling_config
@@ -225,26 +224,22 @@ class ModelConfig:
 
         self.ori_vocab_size = args.get("ori_vocab_size", self.vocab_size)
         self.think_end_id = args.get("think_end_id", -1)
+        self.im_patch_id = args.get("image_patch_id", -1)
+        self.line_break_id = args.get("line_break_id", -1)
 
-        architectures = self.architectures[0]
+        self._post_init()
 
-        if MultimodalRegistry.contains_model(architectures):
-            self.enable_mm = True
-        else:
-            self.enable_mm = False
-
+    def _post_init(self):
         self.is_unified_ckpt = check_unified_ckpt(self.model)
-
-        self.override_name_from_config()
-        self.read_from_env()
-        self.read_model_config()
         self.runner_type = self._get_runner_type(self.architectures, self.runner)
         self.convert_type = self._get_convert_type(self.architectures, self.runner_type, self.convert)
-
         registry = self.registry
         is_generative_model = registry.is_text_generation_model(self.architectures, self)
         is_pooling_model = registry.is_pooling_model(self.architectures, self)
         is_multimodal_model = registry.is_multimodal_model(self.architectures, self)
+        self.is_reasoning_model = registry.is_reasoning_model(self.architectures, self)
+
+        self.enable_mm = is_multimodal_model
 
         if self.runner_type == "generate" and not is_generative_model:
             if is_multimodal_model:
@@ -269,6 +264,9 @@ class ModelConfig:
         self._architecture = arch
 
         self.pooler_config = self._init_pooler_config()
+        self.override_name_from_config()
+        self.read_from_env()
+        self.read_model_config()
 
     @property
     def registry(self):
@@ -1282,21 +1280,6 @@ class CacheConfig:
         logger.info("=============================================================")
 
 
-class DecodingConfig:
-    """
-    Configuration for decoding
-    """
-
-    def __init__(
-        self,
-        args,
-    ):
-        self.pad_token_id = None
-        for key, value in args.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
-
-
 class CommitConfig:
     """
     Configuration for tracking version information from version.txt
@@ -1388,7 +1371,6 @@ class FDConfig:
         commit_config: CommitConfig = CommitConfig(),
         scheduler_config: SchedulerConfig = None,
         device_config: DeviceConfig = None,
-        decoding_config: DecodingConfig = None,
         quant_config: QuantConfigBase = None,
         graph_opt_config: GraphOptimizationConfig = None,
         plas_attention_config: PlasAttentionConfig = None,
@@ -1417,7 +1399,6 @@ class FDConfig:
         self.quant_config: Optional[QuantConfigBase] = quant_config
         self.graph_opt_config: Optional[GraphOptimizationConfig] = graph_opt_config
         self.early_stop_config: Optional[EarlyStopConfig] = early_stop_config
-        self.decoding_config: DecodingConfig = decoding_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
         self.plas_attention_config: Optional[PlasAttentionConfig] = plas_attention_config
         self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
