@@ -1,3 +1,5 @@
+[简体中文](zh/offline_inference.md)
+
 # Offline Inference
 
 ## 1. Usage

@@ -120,10 +120,11 @@ class OpenAIServingChat:
             api_server_logger.info(f"create chat completion request: {request_id}")
             prompt_tokens = None
             try:
-                current_req_dict = request.to_dict_for_infer(request_id)
+                current_req_dict = request.to_dict_for_infer(f"{request_id}_0")
                 if "chat_template" not in current_req_dict:
                     current_req_dict["chat_template"] = self.chat_template
                 current_req_dict["arrival_time"] = time.time()
+                # preprocess the req_dict
                 prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)
                 prompt_tokens = current_req_dict.get("prompt_tokens")
                 if isinstance(prompt_token_ids, np.ndarray):
@@ -182,11 +183,11 @@ class OpenAIServingChat:
         """
         created_time = int(time.time())
         chunk_object_type: str = "chat.completion.chunk"
+        num_choices = 1 if request.n is None else request.n
         first_iteration = True
-        previous_num_tokens = 0
+        previous_num_tokens = [0] * num_choices
         num_prompt_tokens = 0
-        num_choices = 1
-        tool_called = False
+        tool_called = [False] * num_choices
         max_streaming_response_tokens = (
             request.max_streaming_response_tokens
             if request.max_streaming_response_tokens is not None
@@ -218,8 +219,12 @@ class OpenAIServingChat:
         api_server_logger.info(f"create chat completion request: {request_id}")
 
         try:
-            dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id)
-            dealer.write([b"", request_id.encode("utf-8")])
+            dealer, response_queue = await self.engine_client.connection_manager.get_connection(
+                request_id, num_choices
+            )
+            request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
+            for rid in request_ids:
+                dealer.write([b"", rid.encode("utf-8")])
             choices = []
             current_waiting_time = 0
             response_processor = ChatResponseProcessor(
@@ -255,6 +260,7 @@ class OpenAIServingChat:
                 )
 
                 async for res in generator:
+                    idx = int(res["request_id"].split("_")[-1])
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
 
@@ -310,7 +316,7 @@ class OpenAIServingChat:
 
                     output = res["outputs"]
                     output_top_logprobs = output["top_logprobs"]
-                    previous_num_tokens += len(output["token_ids"])
+                    previous_num_tokens[idx] += len(output["token_ids"])
                     logprobs_res: Optional[LogProbs] = None
                     if request.logprobs and output_top_logprobs is not None:
                         logprobs_res = self._create_chat_logprobs(
@@ -328,7 +334,6 @@ class OpenAIServingChat:
                         delta_message.multimodal_content = output["multipart"]
                     else:
                         delta_message.content = output["text"]
-
                     if not res["finished"] and "delta_message" in output:
                         delta_message_output = output["delta_message"]
                         if delta_message_output is None:
@@ -337,10 +342,10 @@ class OpenAIServingChat:
                         delta_message.reasoning_content = delta_message_output.reasoning_content or ""
                         if delta_message_output.tool_calls:
                             delta_message.tool_calls = delta_message_output.tool_calls
-                            tool_called = True
+                            tool_called[idx] = True
 
                     choice = ChatCompletionResponseStreamChoice(
-                        index=0,
+                        index=idx,
                         delta=delta_message,
                         logprobs=logprobs_res,
                         arrival_time=arrival_time,
@@ -352,9 +357,9 @@ class OpenAIServingChat:
                         )
                         has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
                         max_tokens = request.max_completion_tokens or request.max_tokens
-                        if has_no_token_limit or previous_num_tokens != max_tokens:
+                        if has_no_token_limit or previous_num_tokens[idx] != max_tokens:
                             choice.finish_reason = "stop"
-                            if tool_called:
+                            if tool_called[idx]:
                                 choice.finish_reason = "tool_calls"
                         else:
                             choice.finish_reason = "length"
@@ -371,8 +376,8 @@ class OpenAIServingChat:
                     if include_continuous_usage:
                         chunk.usage = UsageInfo(
                             prompt_tokens=num_prompt_tokens,
-                            completion_tokens=previous_num_tokens,
-                            total_tokens=num_prompt_tokens + previous_num_tokens,
+                            completion_tokens=previous_num_tokens[idx],
+                            total_tokens=num_prompt_tokens + previous_num_tokens[idx],
                         )
                     choices.append(choice)
 
@@ -384,7 +389,7 @@ class OpenAIServingChat:
                         choices = []
 
             if include_usage:
-                completion_tokens = previous_num_tokens
+                completion_tokens = sum(previous_num_tokens)
                 usage = UsageInfo(
                     prompt_tokens=num_prompt_tokens,
                     completion_tokens=completion_tokens,
@@ -423,26 +428,32 @@ class OpenAIServingChat:
         Full chat completion generator.
         """
         created_time = int(time.time())
-        final_res = None
+        num_choices = 1 if request.n is None else request.n
         enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
         if enable_thinking is None:
             enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
 
         include_stop_str_in_output = request.include_stop_str_in_output
         try:
-            dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id)
-            dealer.write([b"", request_id.encode("utf-8")])
-            final_res = None
-            previous_num_tokens = 0
+            dealer, response_queue = await self.engine_client.connection_manager.get_connection(
+                request_id, num_choices
+            )
+            # dealer.write([b"", request_id.encode("utf-8")])
+            request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
+            for rid in request_ids:
+                dealer.write([b"", rid.encode("utf-8")])
+            previous_num_tokens = [0] * num_choices
             current_waiting_time = 0
-            logprob_contents = []
-            completion_token_ids = []
+            logprob_contents = [[] for _ in range(num_choices)]
+            completion_token_ids = [[] for _ in range(num_choices)]
+            num_cached_tokens = [0] * num_choices
             response_processor = ChatResponseProcessor(
                 data_processor=self.engine_client.data_processor,
                 enable_mm_output=self.enable_mm_output,
                 decoder_base_url=self.tokenizer_base_url,
             )
-            while True:
+            choices = []
+            while num_choices > 0:
                 if self.engine_client.check_model_weight_status():
                     return ErrorResponse(
                         error=ErrorInfo(
@@ -465,8 +476,6 @@ class OpenAIServingChat:
                     await asyncio.sleep(0.1)
                     continue
 
-                task_is_finished = False
-
                 generator = response_processor.process_response_chat(
                     response,
                     stream=False,
@@ -476,9 +485,10 @@ class OpenAIServingChat:
                 async for data in generator:
                     if data.get("error_code", 200) != 200:
                         raise ValueError("{}".format(data["error_msg"]))
+                    idx = int(data["request_id"].split("_")[-1])
                     # api_server_logger.debug(f"Client {request_id} received: {data}")
-                    previous_num_tokens += len(data["outputs"]["token_ids"])
-                    completion_token_ids.extend(data["outputs"]["token_ids"])
+                    previous_num_tokens[idx] += len(data["outputs"]["token_ids"])
+                    completion_token_ids[idx].extend(data["outputs"]["token_ids"])
                     # The logprob for handling the response
                     output = data["outputs"]
                     output_top_logprobs = output["top_logprobs"]
@@ -487,68 +497,34 @@ class OpenAIServingChat:
                             output_top_logprobs, request.logprobs, request.top_logprobs
                         )
                         if logprobs_res and logprobs_res.content is not None:
-                            logprob_contents.extend(logprobs_res.content)
+                            logprob_contents[idx].extend(logprobs_res.content)
                     if data["finished"]:
-                        final_res = data
-                        task_is_finished = True
-                        break
-                if task_is_finished:
-                    break
+                        num_choices -= 1
+                        choice = await self._create_chat_completion_choice(
+                            data=data,
+                            request=request,
+                            prompt_token_ids=prompt_token_ids,
+                            prompt_tokens=prompt_tokens,
+                            completion_token_ids=completion_token_ids[idx],
+                            num_cached_tokens=num_cached_tokens,
+                            logprob_contents=logprob_contents,
+                            response_processor=response_processor,
+                        )
+                        choices.append(choice)
         finally:
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
             api_server_logger.info(f"release {self.engine_client.semaphore.status()}")
 
-        choices = []
-        output = final_res["outputs"]
-        message = ChatMessage(
-            role="assistant",
-            reasoning_content=output.get("reasoning_content"),
-            tool_calls=output.get("tool_call"),
-            prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
-            completion_token_ids=completion_token_ids if request.return_token_ids else None,
-            prompt_tokens=prompt_tokens if request.return_token_ids else None,
-            completion_tokens=output.get("completion_tokens") if request.return_token_ids else None,
-        )
-
-        if response_processor.enable_multimodal_content():
-            message.multimodal_content = output.get("multipart")
-        else:
-            message.content = output["text"]
-
-        logprobs_full_res = None
-        if logprob_contents:
-            logprobs_full_res = LogProbs(content=logprob_contents)
-
-        choice = ChatCompletionResponseChoice(
-            index=0,
-            message=message,
-            logprobs=logprobs_full_res,
-            finish_reason=None,
-        )
-        has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
-        max_tokens = request.max_completion_tokens or request.max_tokens
-        if has_no_token_limit or previous_num_tokens != max_tokens:
-            choice.finish_reason = "stop"
-            if output.get("tool_call"):
-                choice.finish_reason = "tool_calls"
-        else:
-            choice.finish_reason = "length"
-
-        if final_res.get("error_msg") is not None and "Recover" in final_res["error_msg"]:
-            choice.finish_reason = "recover_stop"
-
-        choices.append(choice)
-
         num_prompt_tokens = len(prompt_token_ids)
-        num_generated_tokens = previous_num_tokens
+        num_generated_tokens = sum(previous_num_tokens)
         usage = UsageInfo(
             prompt_tokens=num_prompt_tokens,
             completion_tokens=num_generated_tokens,
             total_tokens=num_prompt_tokens + num_generated_tokens,
-            prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=final_res.get("num_cached_tokens", 0)),
+            prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=sum(num_cached_tokens)),
         )
-        work_process_metrics.e2e_request_latency.observe(time.time() - final_res["metrics"]["request_start_time"])
+        choices = sorted(choices, key=lambda x: x.index)
         res = ChatCompletionResponse(
             id=request_id,
             created=created_time,
@@ -558,6 +534,64 @@ class OpenAIServingChat:
         )
         api_server_logger.info(f"Chat response: {res.model_dump_json()}")
         return res
+
+    async def _create_chat_completion_choice(
+        self,
+        data: dict,
+        request: ChatCompletionRequest,
+        prompt_token_ids: list,
+        prompt_tokens: str,
+        completion_token_ids: list,
+        num_cached_tokens: list,
+        logprob_contents: list,
+        response_processor: ChatResponseProcessor,
+    ) -> ChatCompletionResponseChoice:
+        idx = int(data["request_id"].split("_")[-1])
+        output = data["outputs"]
+        previous_num_tokens = len(data["outputs"]["token_ids"])
+
+        if output is not None and output.get("metrics") and output["metrics"].get("request_start_time"):
+            work_process_metrics.e2e_request_latency.observe(
+                time.time() - output.get("metrics").get("request_start_time")
+            )
+        message = ChatMessage(
+            role="assistant",
+            reasoning_content=output.get("reasoning_content"),
+            tool_calls=output.get("tool_call"),
+            prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
+            completion_token_ids=completion_token_ids if request.return_token_ids else None,
+            prompt_tokens=prompt_tokens if request.return_token_ids else None,
+            completion_tokens=output.get("completion_tokens") if request.return_token_ids else None,
+        )
+        if response_processor.enable_multimodal_content():
+            message.multimodal_content = output.get("multipart")
+        else:
+            message.content = output["text"]
+
+        logprobs_full_res = None
+        if logprob_contents[idx]:
+            logprobs_full_res = LogProbs(content=logprob_contents[idx])
+
+        has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
+        max_tokens = request.max_completion_tokens or request.max_tokens
+        num_cached_tokens[idx] = output.get("num_cached_tokens", 0)
+
+        finish_reason = "stop"
+        if has_no_token_limit or previous_num_tokens != max_tokens:
+            finish_reason = "stop"
+            if output.get("tool_call"):
+                finish_reason = "tool_calls"
+        else:
+            finish_reason = "length"
+        if output.get("error_msg") is not None and "Recover" in output["error_msg"]:
+            finish_reason = "recover_stop"
+
+        return ChatCompletionResponseChoice(
+            index=idx,
+            message=message,
+            logprobs=logprobs_full_res,
+            finish_reason=finish_reason,
+        )
 
     def _create_chat_logprobs(
         self,

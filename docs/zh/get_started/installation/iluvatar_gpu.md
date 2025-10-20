@@ -1,3 +1,5 @@
+[English](../../../get_started/installation/iluvatar_gpu.md)
+
 # 如何在天数机器上运行 ERNIE-4.5-300B-A47B-BF16 & ERNIE-4.5-21B-A3B
 
 ## 准备机器
@@ -408,4 +410,149 @@ python3 -u bench_gsm8k.py --port 8188 --num-questions 1319 --num-shots 5 --paral
 Accuracy: 0.962
 Invaild: 0.000
 Latency: 17332.728 s
+```
+
+# 如何在天数机器上运行ERNIE-4.5-VL-28B-A3B-Paddle model
+
+## 准备机器
+首先运行ERNIE-4.5-VL-28B-A3B-Paddle模型需要`TP=2`, 所以您需要准备以下配置的机器：:
+
+| CPU | Memory | Card | Hard Disk|
+| :---: | :---: | :---: | :---: |
+| x86 | 1TB| 2xBI150| 1TB|
+
+## 准备镜像
+拉取镜像：
+
+```bash
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
+```
+
+## 准备容器
+### 启动容器
+
+```bash
+docker run -itd --name paddle_infer -v /usr/src:/usr/src -v /lib/modules:/lib/modules -v /dev:/dev -v /home/paddle:/home/paddle --privileged --cap-add=ALL --pid=host ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
+docker exec -it paddle_infer bash
+```
+
+/home/paddle 为模型文件、whl包、脚本所在目录。
+
+### Install paddle
+
+```bash
+pip3 install paddlepaddle==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+pip3 install paddle-iluvatar-gpu==3.0.0.dev20250926 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
+```
+获取Paddle的最新安装版本： [PaddlePaddle Installation](https://www.paddlepaddle.org.cn/)
+
+### 安装FastDeploy
+```bash
+pip3 install fastdeploy_iluvatar_gpu==2.3.0.dev0 -i https://www.paddlepaddle.org.cn/packages/stable/ixuca/ --extra-index-url https://mirrors.aliyun.com/pypi/simple/
+```
+
+## 准备推理demo脚本
+
+脚本列表如下所示:
+
+`run_demo_vl.sh`:
+
+```bash
+#!/bin/bash
+export PADDLE_XCCL_BACKEND=iluvatar_gpu
+export INFERENCE_MSG_QUEUE_ID=232132
+export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
+export FD_SAMPLING_CLASS=rejection
+export FD_DEBUG=1
+python3 run_demo_vl.py
+```
+
+`run_demo_vl.py`:
+
+```python
+import io
+import requests
+from PIL import Image
+
+from fastdeploy.entrypoints.llm import LLM
+from fastdeploy.engine.sampling_params import SamplingParams
+from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
+
+
+PATH = "/home/paddle/ERNIE-4.5-VL-28B-A3B-Paddle"
+tokenizer = Ernie4_5Tokenizer.from_pretrained(PATH)
+
+messages = [
+    {
+        "role": "user",
+        "content": [
+            {"type":"image_url", "image_url": {"url":"https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg"}},
+            {"type":"text", "text":"图中的文物属于哪个年代"}
+        ]
+     }
+]
+prompt = tokenizer.apply_chat_template(messages, tokenize=False)
+images, videos = [], []
+for message in messages:
+    content = message["content"]
+    if not isinstance(content, list):
+        continue
+    for part in content:
+        if part["type"] == "image_url":
+            url = part["image_url"]["url"]
+            image_bytes = requests.get(url).content
+            img = Image.open(io.BytesIO(image_bytes))
+            images.append(img)
+        elif part["type"] == "video_url":
+            url = part["video_url"]["url"]
+            video_bytes = requests.get(url).content
+            videos.append({
+                "video": video_bytes,
+                "max_frames": 30
+            })
+
+sampling_params = SamplingParams(temperature=0.1, max_tokens=6400)
+llm = LLM(model=PATH, tensor_parallel_size=2, max_model_len=32768, block_size=16, quantization="wint8", limit_mm_per_prompt={"image": 100}, reasoning_parser="ernie-45-vl")
+outputs = llm.generate(prompts={
+    "prompt": prompt,
+    "multimodal_data": {
+        "image": images,
+        "video": videos
+    }
+}, sampling_params=sampling_params)
+# Output results
+for output in outputs:
+    prompt = output.prompt
+    generated_text = output.outputs.text
+    reasoning_text = output.outputs.reasoning_content
+    print(f"generated_text={generated_text}")
+```
+
+## 运行demo
+
+```bash
+./run_demo_vl.sh
+```
+
+打印如下log:
+
+```
+[2025-09-23 10:13:10,844] [    INFO] - Using download source: huggingface
+[2025-09-23 10:13:10,844] [    INFO] - loading configuration file /home/paddle/ERNIE-4.5-VL-28B-A3B-Paddle/preprocessor_config.json
+[2025-09-23 10:13:10,845] [    INFO] - Using download source: huggingface
+[2025-09-23 10:13:10,845] [    INFO] - Loading configuration file /home/paddle/ERNIE-4.5-VL-28B-A3B-Paddle/generation_config.json
+/usr/local/lib/python3.10/site-packages/paddleformers/generation/configuration_utils.py:250: UserWarning: using greedy search strategy. However, `temperature` is set to `0.2` -- this flag is only used in sample-based generation modes. You should set `decode_strategy="greedy_search" ` or
+unset `temperature`. This was detected when initializing the generation config instance, which means the corresponding file may hold incorrect parameterization and should be fixed.
+  warnings.warn(
+/usr/local/lib/python3.10/site-packages/paddleformers/generation/configuration_utils.py:255: UserWarning: using greedy search strategy. However, `top_p` is set to `0.8` -- this flag is only used in sample-based generation modes. You should set `decode_strategy="greedy_search" ` or unset
+`top_p`. This was detected when initializing the generation config instance, which means the corresponding file may hold incorrect parameterization and should be fixed.                                                                                                            warnings.warn(
+INFO     2025-09-23 10:13:11,969 3880245 engine.py[line:136] Waiting worker processes ready...
+Loading Weights: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [02:21<00:00,  1.41s/it]
+Loading Layers: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:15<00:00,  6.65it/s]
+INFO     2025-09-23 10:15:53,672 3880245 engine.py[line:173] Worker processes are launched with 181.2426426410675 seconds.
+prompts: 100%|███████████████████████████████████| 1/1 [01:52<00:00, 112.74s/it, est. speed input: 0.00 toks/s, output: 0.00 toks/s]
+generated_text=
+图中的文物是**北齐释迦牟尼佛像**，属于**北齐（公元550年－577年）**的文物。
+
+这件佛像具有典型的北齐风格，佛像结跏趺坐于莲花座上，身披通肩袈裟，面部圆润，神态安详，体现了北齐佛教艺术的独特魅力。
 ```
