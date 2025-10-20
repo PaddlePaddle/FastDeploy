@@ -157,7 +157,7 @@ def free_tensor(tensor):
     del tensor
 
 
-def default_weight_loader(fd_config: FDConfig) -> None:
+def default_weight_loader(fd_config: FDConfig = None) -> None:
     """Default weight loader"""
 
     def fn(param, loaded_weight, shard_id: Optional[Union[int, str]] = None):
@@ -169,7 +169,7 @@ def default_weight_loader(fd_config: FDConfig) -> None:
             loaded_weight = get_tensor(loaded_weight)
             loaded_weight = loaded_weight.transpose([1, 0])
         # Tensor parallelism splits the weight along the output_dim
-        if output_dim is not None and fd_config.parallel_config.tensor_parallel_size > 1:
+        if output_dim is not None and fd_config is not None and fd_config.parallel_config.tensor_parallel_size > 1:
             dim = -1 if output_dim else 0
             if isinstance(loaded_weight, paddle.Tensor):
                 size = loaded_weight.shape[dim]
@@ -203,6 +203,22 @@ def is_pre_sliced_weight(model_path):
         f for f in os.listdir(model_path) if f.startswith("rank") and os.path.isdir(os.path.join(model_path, f))
     ]
     return len(rank_dirs) > 1
+
+
+def is_paddle_support_v1_loader():
+    src_shape = [32, 32]
+    tgt_shape = [1, 32, 64]
+    src_tensor = paddle.ones(src_shape, dtype="float32")
+    tgt_tensor = paddle.zeros(tgt_shape, dtype="float32")
+    for exp_id in range(tgt_shape[0]):
+        # gate
+        gate_tgt = tgt_tensor[exp_id][..., : tgt_shape[2] // 2]
+        gate_tgt.copy_(src_tensor, False)
+        # up
+        up_tgt = tgt_tensor[exp_id][..., tgt_shape[2] // 2 :]
+        up_tgt.copy_(src_tensor, False)
+    is_same = bool(paddle.all(tgt_tensor == 1))
+    return is_same
 
 
 def v1_loader_support(fd_config):
@@ -241,6 +257,10 @@ def v1_loader_support(fd_config):
             return False
     if fd_config.model_config.architectures[0] in _v1_no_support_archs:
         _err_msg(f"v1 loader currently does not support {fd_config.model_config.architectures[0]}")
+        return False
+
+    if not is_paddle_support_v1_loader():
+        _err_msg("The installed Paddle does not support v1 loader")
         return False
     return True
 

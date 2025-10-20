@@ -1,3 +1,5 @@
+[简体中文](../zh/features/disaggregated.md)
+
 # Disaggregated Deployment
 
 Large model inference consists of two phases: Prefill and Decode, which are compute-intensive and memory access-intensive respectively. Deploying Prefill and Decode separately in certain scenarios can improve hardware utilization, effectively increase throughput, and reduce overall sentence latency.

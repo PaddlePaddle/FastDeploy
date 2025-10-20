@@ -128,10 +128,10 @@ class EngineService:
             )
 
         self.guided_decoding_checker = None
-        if self.cfg.guided_decoding_backend != "off":
+        if self.cfg.structured_outputs_config.guided_decoding_backend != "off":
             self.guided_decoding_checker = schema_checker(
-                self.cfg.guided_decoding_backend,
-                disable_any_whitespace=self.cfg.disable_any_whitespace,
+                self.cfg.structured_outputs_config.guided_decoding_backend,
+                disable_any_whitespace=self.cfg.structured_outputs_config.disable_any_whitespace,
             )
         self._init_worker_monitor_signals()
 
@@ -697,9 +697,7 @@ class EngineService:
                     time.sleep(0.001)
                     continue
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
-                    if self.scheduler.get_unhandled_request_num() <= envs.FD_EP_MAX_PREFETCH_TASK_NUM and (
-                        not is_fetching
-                    ):
+                    if not is_fetching:
                         get_request_pool.submit(_fetch_request)
 
                 else:
