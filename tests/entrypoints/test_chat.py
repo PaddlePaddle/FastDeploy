@@ -60,7 +60,7 @@ class TestChat(unittest.TestCase):
     def test_chat(self):
         outputs = self.llm.chat(messages=self.PROMPTS, sampling_params=None)
         self.assertEqual(len(self.PROMPTS), len(outputs))
-        self.assertEqual(outputs[-1].num_cached_tokens == outputs[-2].num_cached_tokens)
+        self.assertEqual(outputs[-1].num_cached_tokens, outputs[-2].num_cached_tokens)
         self.assertEqual(outputs[-1].num_cached_token, 64)
 
     def test_chat_with_tools(self):
