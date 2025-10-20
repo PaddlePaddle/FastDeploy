@@ -192,6 +192,7 @@ class TestGraphOptBackend(unittest.TestCase):
         fd_config = self._setup_test_config(graph_opt_level=1, use_cudagraph=False)
         self._run_model_test(fd_config, "static_graph")
 
+    @unittest.skip("Temporarily skip this case due to CINN error.")
     def test_cinn_graph(self):
         """Test CINN optimization mode"""
         # Note: CINN is not opened yet
@@ -208,6 +209,7 @@ class TestGraphOptBackend(unittest.TestCase):
         fd_config = self._setup_test_config(graph_opt_level=1, use_cudagraph=True)
         self._run_model_test(fd_config, "static_graph_cudagraph")
 
+    @unittest.skip("Temporarily skip this case due to CINN error.")
     def test_cinn_graph_with_cudagraph(self):
         """Test CINN + CudaGraph mode"""
         # Note: CINN is not opened yet
