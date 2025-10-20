@@ -338,9 +338,7 @@ class OpenAIServingChat:
                     )
                     if res["finished"]:
                         num_choices -= 1
-                        work_process_metrics.e2e_request_latency.observe(
-                            time.time() - res["metrics"]["request_start_time"]
-                        )
+                        work_process_metrics.obs_value("e2e_request_latency", time.time() - res["metrics"]["request_start_time"])
                         has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
                         max_tokens = request.max_completion_tokens or request.max_tokens
                         if has_no_token_limit or previous_num_tokens != max_tokens:
@@ -533,7 +531,7 @@ class OpenAIServingChat:
             total_tokens=num_prompt_tokens + num_generated_tokens,
             prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=final_res.get("num_cached_tokens", 0)),
         )
-        work_process_metrics.e2e_request_latency.observe(time.time() - final_res["metrics"]["request_start_time"])
+        work_process_metrics.obs_value("e2e_request_latency", time.time() - final_res["metrics"]["request_start_time"])
         res = ChatCompletionResponse(
             id=request_id,
             created=created_time,
