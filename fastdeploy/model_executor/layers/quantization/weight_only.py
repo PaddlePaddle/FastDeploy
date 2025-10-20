@@ -162,6 +162,7 @@ class WeightOnlyConfig(QuantConfigBase):
                     _ENABLE_MACHETE
                     and envs.FD_USE_MACHETE == "1"
                     and not layer.is_quantized
+                    and not layer.fd_config.load_config.dynamic_load_weight
                     and layer.weight_shape[1]
                     and layer.weight_shape[1] % 128 == 0
                 ):

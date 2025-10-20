@@ -22,6 +22,8 @@ project_root = os.path.abspath(os.path.join(current_dir, ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+os.environ["FD_USE_MACHETE"] = "0"
+
 from tests.model_loader.utils import (
     check_tokens_id_and_text_close,
     form_model_get_output_topp0,
@@ -41,10 +43,7 @@ model_param_map = {
         "quantizations": [
             {
                 "quant_type": "wint4",
-                "env": {
-                    "FD_ENABLE_MODEL_LOAD_CACHE": "1",
-                    "FD_USE_MACHETE": "0",
-                },
+                "env": {"FD_ENABLE_MODEL_LOAD_CACHE": "1"},
             }
         ],
     }
@@ -87,11 +86,6 @@ def test_model_cache(
     monkeypatch,
 ) -> None:
     model_path = get_paddle_model_path(model_name_or_path)
-
-    if env:
-        for k, v in env.items():
-            if k == "FD_ENABLE_MODEL_LOAD_CACHE":
-                continue
 
     fd_outputs_v1 = run_with_timeout(
         target=form_model_get_output_topp0,
