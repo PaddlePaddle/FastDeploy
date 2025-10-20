@@ -63,9 +63,15 @@ class EngineClient:
         self.enable_prefix_caching = enable_prefix_caching
         if MultimodalRegistry.contains_model(architectures):
             self.enable_mm = True
-            self.disable_prefix_mm = MultimodalRegistry.contains_mm_disable_prefix_cache_model(architectures)
         else:
             self.enable_mm = False
+
+        if self.enable_mm and self.enable_prefix_caching:
+            from fastdeploy.cache_manager.cache_data import (
+                is_mm_model_disable_prefix_cache,
+            )
+
+            self.disable_prefix_mm = is_mm_model_disable_prefix_cache(architectures)
 
         input_processor = InputPreprocessor(
             tokenizer,

@@ -27,20 +27,9 @@ class MultimodalRegistry:
         "Ernie5ForCausalLM",
     }
 
-    mm_disable_prefix_cache_models: set[str] = {
-        "Ernie5ForCausalLM",
-    }
-
     @classmethod
     def contains_model(cls, name: str) -> bool:
         """
         Check if the given name exists in registry.
         """
         return name in cls.mm_models
-
-    @classmethod
-    def contains_mm_disable_prefix_cache_model(cls, name: str) -> bool:
-        """
-        Check if the given name exists in registry.
-        """
-        return name in cls.mm_disable_prefix_cache_models
