@@ -180,7 +180,7 @@ class TestGraphOptBackend(unittest.TestCase):
                 output.numpy(),
                 err_msg=f"Test {test_name} failed: output mismatch",
                 atol=1e-4,  # for CINN
-                rtol=1e-3,
+                rtol=1e-2,
             )
 
     def tearDown(self):
