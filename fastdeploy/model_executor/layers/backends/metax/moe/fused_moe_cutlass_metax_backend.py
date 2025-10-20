@@ -1,4 +1,5 @@
-# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+"""
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
 
 import paddle
 from paddle import nn
@@ -110,7 +112,7 @@ class MetaxCutlassMoEMethod(MoEMethodBase):
             False,
         )
         if layer.reduce_results and layer.tp_size > 1:
-            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out)
+            tensor_model_parallel_all_reduce(fused_moe_out, layer.fd_config.parallel_config.tp_group)
 
         return fused_moe_out
 

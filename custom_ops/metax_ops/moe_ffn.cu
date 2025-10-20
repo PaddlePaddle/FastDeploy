@@ -1,18 +1,18 @@
 // Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
-//
+
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-//
+
 //     http://www.apache.org/licenses/LICENSE-2.0
-//
+
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
+// BUILD_MARK
 #pragma once
 #include "mc_fused_moe_helper.h"
 #include "helper.h"
@@ -47,8 +47,8 @@ void McMoeFFNKernel(const paddle::Tensor& permute_input,
       {expanded_active_expert_rows, inter_size}, input_type, place);
   auto fc1_out_ptr = fc1_out_tensor.data<data_t>();
 
-  mctlassExOrder_t row_major = mctlassExOrder_t::MCTLASS_EX_ROWMAJOR_ORDER;
-  mctlassExOrder_t column_major = mctlassExOrder_t::MCTLASS_EX_COLUMNMAJOR_ORDER;
+  mctlassExOrder_t row_major = mctlassExOrder_t::MCTLASS_EX_ORDER_ROW_MAJOR;
+  mctlassExOrder_t column_major = mctlassExOrder_t::MCTLASS_EX_ORDER_COLUMN_MAJOR;
 
   // ffn1
   auto fc1_expert_biases =
@@ -131,7 +131,7 @@ std::vector<paddle::Tensor> MoeExpertFFN(
     //                                           ffn_out);
     //   break;
     default:
-      PD_THROW("Only support bf16 for MoeExpertFFN");
+      PD_THROW("Unsupported data type for MoeExpertFFN");
   }
   return {ffn_out};
 }

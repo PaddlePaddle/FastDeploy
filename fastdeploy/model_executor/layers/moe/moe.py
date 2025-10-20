@@ -56,6 +56,13 @@ def get_moe_method():
 
         return HpuMoEMethod(None)
         # return HpuTensorWiseFP8MoEMethod(None)
+
+    elif current_platform.is_maca():
+        from fastdeploy.model_executor.layers.backends import (
+            MetaxCutlassWeightOnlyMoEMethod,
+        )
+
+        return MetaxCutlassWeightOnlyMoEMethod(None)
     raise NotImplementedError
 
 
