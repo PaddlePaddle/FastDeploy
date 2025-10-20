@@ -86,6 +86,13 @@ class EngineClient:
         self.enable_splitwise = splitwise_role != "mixed"
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
 
+        if self.enable_mm and self.enable_prefix_caching:
+            from fastdeploy.cache_manager.cache_data import (
+                is_mm_model_disable_prefix_cache,
+            )
+
+            self.disable_prefix_mm = is_mm_model_disable_prefix_cache(model_config)
+
         if tensor_parallel_size <= max_chips_per_node:
             self.is_master = True
         else:
