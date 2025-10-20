@@ -26,6 +26,11 @@ elif current_platform.is_xpu():
         text_image_gather_scatter,
         text_image_index_out,
     )
+elif current_platform.is_iluvatar():
+    from fastdeploy.model_executor.ops.iluvatar import (
+        text_image_gather_scatter,
+        text_image_index_out,
+    )
 else:
     raise ImportError("Unsupported platform, only support CUDA and XPU")
 
