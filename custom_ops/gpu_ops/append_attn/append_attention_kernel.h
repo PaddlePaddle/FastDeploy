@@ -40,6 +40,8 @@ void CascadeAppendAttentionKernel(
         shift_bias,  // [num_kv_heads, head_dim]
     const paddle::optional<paddle::Tensor>&
         smooth_weight,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        sinks,  // [num_heads]
     const paddle::Tensor& seq_lens_q,
     const paddle::Tensor& seq_lens_kv,
     const paddle::Tensor& seq_lens_encoder,
@@ -63,7 +65,8 @@ void CascadeAppendAttentionKernel(
     const bool is_decoder,
     const bool enable_prefill,
     cudaStream_t& stream,
-    paddle::Tensor* out) {
+    paddle::Tensor* out,
+    const int sliding_window) {
     if (cache_quant_type_str == "none") {
         CascadeAppendAttentionC16Kernel<T, OutT>(meta_data,
                                                 qkv,
@@ -76,6 +79,7 @@ void CascadeAppendAttentionKernel(
                                                 cache_v_zp,
                                                 shift_bias,
                                                 smooth_weight,
+                                                sinks,
                                                 seq_lens_q,
                                                 seq_lens_kv,
                                                 seq_lens_encoder,
@@ -98,7 +102,8 @@ void CascadeAppendAttentionKernel(
                                                 is_decoder,
                                                 enable_prefill,
                                                 stream,
-                                                out);
+                                                out,
+                                                sliding_window);
     } else if (cache_quant_type_str == "cache_int8") {
         CascadeAppendAttentionC8Kernel<T, OutT, false>(meta_data,
                                                 qkv,
@@ -111,6 +116,7 @@ void CascadeAppendAttentionKernel(
                                                 cache_v_zp,
                                                 shift_bias,
                                                 smooth_weight,
+                                                sinks,
                                                 seq_lens_q,
                                                 seq_lens_kv,
                                                 seq_lens_encoder,
@@ -134,7 +140,8 @@ void CascadeAppendAttentionKernel(
                                                 enable_prefill,
                                                 cache_quant_type_str,
                                                 stream,
-                                                out);
+                                                out,
+                                                sliding_window);
     } else if (cache_quant_type_str == "cache_fp8" or cache_quant_type_str == "block_wise_fp8") {
         CascadeAppendAttentionC8Kernel<T, OutT, true>(meta_data,
                                                 qkv,
@@ -147,6 +154,7 @@ void CascadeAppendAttentionKernel(
                                                 cache_v_zp,
                                                 shift_bias,
                                                 smooth_weight,
+                                                sinks,
                                                 seq_lens_q,
                                                 seq_lens_kv,
                                                 seq_lens_encoder,
@@ -170,7 +178,8 @@ void CascadeAppendAttentionKernel(
                                                 enable_prefill,
                                                 cache_quant_type_str,
                                                 stream,
-                                                out);
+                                                out,
+                                                sliding_window);
     } else if (cache_quant_type_str == "cache_int4_zp") {
         CascadeAppendAttentionC4Kernel<T, OutT>(meta_data,
                                                 qkv,
@@ -183,6 +192,7 @@ void CascadeAppendAttentionKernel(
                                                 cache_v_zp,
                                                 shift_bias,
                                                 smooth_weight,
+                                                sinks,
                                                 seq_lens_q,
                                                 seq_lens_kv,
                                                 seq_lens_encoder,
@@ -205,7 +215,8 @@ void CascadeAppendAttentionKernel(
                                                 is_decoder,
                                                 enable_prefill,
                                                 stream,
-                                                out);
+                                                out,
+                                                sliding_window);
     } else {
         PD_THROW(
             "cache_quant_type_str should be one of [none, cache_int8, "
