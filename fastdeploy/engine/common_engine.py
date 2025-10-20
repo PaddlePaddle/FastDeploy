@@ -718,6 +718,8 @@ class EngineSevice:
                             content.outputs.token_ids = token_ids
                             content.outputs.text = delta_text
                             new_contents.append(content)
+                        elif content.finished:
+                            new_contents.append(content)
                         else:
                             llm_logger.warning(
                                 f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
