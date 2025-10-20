@@ -225,7 +225,7 @@ def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
     )
     parser.add_argument(
         "--timeout-graceful-shutdown",
-        default=30,
+        default=0,
         type=int,
         help="timeout for graceful shutdown in seconds (used by gunicorn)",
     )
