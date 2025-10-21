@@ -16,7 +16,7 @@
 
 from dataclasses import dataclass
 from typing import Dict, Optional
-
+from fastdeploy.model_executor.logits_processor import LogitsProcessor
 import paddle
 
 
@@ -54,6 +54,7 @@ class SamplingMetadata:
     temp_scaled_logprobs: Optional[paddle.Tensor] = None
     top_p_normalized_logprobs: Optional[paddle.Tensor] = None
     share_inputs: Optional[Dict[str, paddle.Tensor]] = None
+    logits_processors: Optional[list[LogitsProcessor]] = None
     # Add for HPU post-processing
     seq_lens_encoder: Optional[paddle.Tensor] = None
     seq_lens_decoder: Optional[paddle.Tensor] = None

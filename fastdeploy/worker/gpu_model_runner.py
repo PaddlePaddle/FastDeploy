@@ -81,6 +81,7 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
+from fastdeploy.model_executor.logits_processor import init_logits_processors
 
 
 class GPUModelRunner(ModelRunnerBase):
@@ -446,6 +447,9 @@ class GPUModelRunner(ModelRunnerBase):
                 ] = np.array(request.get("stop_token_ids"), dtype="int64")
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
+
+            # For logits processors
+            self.share_inputs["logit_bias"][idx] = request.get("logit_bias", None)
 
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
@@ -981,6 +985,10 @@ class GPUModelRunner(ModelRunnerBase):
                 dtype="float32",
             )
             self.share_inputs["image_features"] = None
+        
+        # For logits processors
+        self.share_inputs["logits_processors"] = init_logits_processors(self.fd_config)
+        self.share_inputs["logit_bias"] = [None] * max_num_seqs
 
     def _prepare_inputs(self) -> None:
         """Prepare the model inputs"""
@@ -1059,6 +1067,7 @@ class GPUModelRunner(ModelRunnerBase):
             stop_flags=self.share_inputs["stop_flags"],
             temp_scaled_logprobs=self.share_inputs["temp_scaled_logprobs"],
             top_p_normalized_logprobs=self.share_inputs["top_p_normalized_logprobs"],
+            logits_processors=self.share_inputs["logits_processors"],
             share_inputs=self.share_inputs,
         )
 
@@ -1689,6 +1698,10 @@ class GPUModelRunner(ModelRunnerBase):
         skip_idx_list = self._get_skip_idx(model_forward_batch)
         self._prepare_inputs()
         self.sampler.pre_process(skip_idx_list)
+        
+        # 1.1 Update state of logits processor
+        for proc in self.sampling_metadata.logits_processors:
+            proc.update_state(model_forward_batch, self.share_inputs)
 
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,

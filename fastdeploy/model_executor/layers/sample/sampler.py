@@ -51,9 +51,9 @@ def top_p_normalize_probs_paddle(
     return paddle.zeros_like(probs_sort).put_along_axis_(indices=probs_idx, values=probs_sort, axis=-1)
 
 
-class SamplerProcessor:
+class GuidedDecoding:
     """
-    SamplingProcessor for guided decoding.
+    processor for guided decoding.
     """
 
     def __init__(self):
@@ -73,7 +73,7 @@ class SamplerProcessor:
         future: Optional[Any] = None,
         prefill_tokens: List[int] = [],
     ):
-        """add logits processor to SamplerProcessor"""
+        """add logits processor to GuidedDecoding"""
         with self.logits_lock:
             if future is None:
                 if ids in self.logits_processor:
@@ -214,7 +214,7 @@ class Sampler(nn.Layer):
         else:
             raise NotImplementedError
 
-        self.processor = SamplerProcessor()
+        self.guided_encoding = GuidedDecoding()
         # Can only be created when fd_config.early_stopper_config.enable_early_stop = True
         if (
             fd_config is not None
@@ -227,19 +227,19 @@ class Sampler(nn.Layer):
 
     def set_reasoning_parser(self, reasoning_parser: Optional[ReasoningParser] = None):
         """set reasoning parser"""
-        self.processor.apply_reasoning_parser(reasoning_parser)
+        self.guided_encoding.apply_reasoning_parser(reasoning_parser)
 
     def apply_logits_processor(self, ids: int, future: Optional[Any] = None, prefill_tokens: List[int] = []):
         """apply logits processor to sampler"""
-        self.processor.add_logits_processor(ids, future, prefill_tokens)
+        self.guided_encoding.add_logits_processor(ids, future, prefill_tokens)
 
     def pre_process(self, skip_idx_list: List[int] = []):
         """pre process before running"""
-        self.processor.pre_process(skip_idx_list)
+        self.guided_encoding.pre_process(skip_idx_list)
 
     def post_process(self, next_tokens: paddle.Tensor, skip_idx_list: List[int] = []):
         """post process after running"""
-        self.processor.update_output_tokens(next_tokens, skip_idx_list)
+        self.guided_encoding.update_output_tokens(next_tokens, skip_idx_list)
 
     def compute_logprobs(
         self,
@@ -329,7 +329,9 @@ class Sampler(nn.Layer):
         skip_idx_list: List[int] = [],
     ) -> SamplerOutput:
         """ """
-        logits = self.processor.apply_token_mask(logits, skip_idx_list)
+        logits = self.guided_encoding.apply_token_mask(logits, skip_idx_list)
+        for proc in sampling_metadata.logits_processors:
+            logits = proc.apply(logits)
 
         num_logprobs = sampling_metadata.max_num_logprobs
         if num_logprobs is not None:
