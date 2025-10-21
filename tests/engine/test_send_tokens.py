@@ -1,13 +1,7 @@
-import unittest
-from unittest.mock import MagicMock, patch
 import time
-
-
-
-
 from unittest import TestCase
-from unittest.mock import patch, MagicMock
-import time
+from unittest.mock import MagicMock, patch
+
 
 class TestZmqSendGeneratedTokens(TestCase):
     @patch("time.sleep", return_value=None)
@@ -41,6 +35,7 @@ class TestZmqSendGeneratedTokens(TestCase):
             self.obj.running = False
 
         import threading
+
         threading.Thread(target=stop_running).start()
 
         self.obj._zmq_send_generated_tokens()
