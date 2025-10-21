@@ -511,7 +511,7 @@ class OpenAIServingChat:
                             logprob_contents[idx].extend(logprobs_res.content)
                     if data["finished"]:
                         num_choices -= 1
-                        reasoning_num_tokens[idx] = data["outputs"].get("reasoning_token_ids", 0)
+                        reasoning_num_tokens[idx] = data["outputs"].get("reasoning_token_num", 0)
                         choice = await self._create_chat_completion_choice(
                             data=data,
                             request=request,
