@@ -1,3 +1,5 @@
+[简体中文](zh/index.md)
+
 # FastDeploy
 
 **FastDeploy** is an inference and deployment toolkit for large language models and visual language models based on PaddlePaddle. It delivers **production-ready, out-of-the-box deployment solutions** with core acceleration technologies:

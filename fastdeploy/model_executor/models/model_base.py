@@ -12,7 +12,7 @@
 import importlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
+from enum import IntFlag, auto
 from functools import lru_cache
 from typing import Dict, List, Optional, Tuple, Type, Union
 
@@ -26,19 +26,15 @@ from fastdeploy.config import (
     iter_architecture_defaults,
     try_match_architecture_defaults,
 )
-from fastdeploy.model_executor.models.interfaces_base import (
-    determine_model_category,
-    get_default_pooling_type,
-    is_multimodal_model,
-    is_pooling_model,
-    is_text_generation_model,
-)
+from fastdeploy.model_executor.models.interfaces_base import get_default_pooling_type
 
 
-class ModelCategory(Enum):
-    TEXT_GENERATION = "text_generation"
-    MULTIMODAL = "multimodal"
-    EMBEDDING = "embedding"
+class ModelCategory(IntFlag):
+    TEXT_GENERATION = auto()
+    MULTIMODAL = auto()
+    EMBEDDING = auto()
+    REASONING = auto()
+    REWARD = auto()
 
 
 @dataclass(frozen=True)
@@ -47,18 +43,22 @@ class ModelInfo:
     category: ModelCategory
     is_text_generation: bool
     is_multimodal: bool
+    is_reasoning: bool
     is_pooling: bool
     module_path: str
     default_pooling_type: str
 
     @staticmethod
-    def from_model_cls(model_cls: Type[nn.Layer], module_path: str = "") -> "ModelInfo":
+    def from_model_cls(
+        model_cls: Type[nn.Layer], module_path: str = "", category: ModelCategory = None
+    ) -> "ModelInfo":
         return ModelInfo(
             architecture=model_cls.__name__,
-            category=determine_model_category(model_cls.__name__),
-            is_text_generation=is_text_generation_model(model_cls),
-            is_multimodal=is_multimodal_model(model_cls.__name__),
-            is_pooling=is_pooling_model(model_cls),
+            category=category,
+            is_text_generation=ModelCategory.TEXT_GENERATION in category,
+            is_multimodal=ModelCategory.MULTIMODAL in category,
+            is_reasoning=ModelCategory.REASONING in category,
+            is_pooling=ModelCategory.EMBEDDING in category,
             default_pooling_type=get_default_pooling_type(model_cls),
             module_path=module_path,
         )
@@ -83,6 +83,7 @@ class LazyRegisteredModel(BaseRegisteredModel):
     module_name: str
     module_path: str
     class_name: str
+    category: ModelCategory
 
     def load_model_cls(self) -> Type[nn.Layer]:
         try:
@@ -94,7 +95,7 @@ class LazyRegisteredModel(BaseRegisteredModel):
 
     def inspect_model_cls(self) -> ModelInfo:
         model_cls = self.load_model_cls()
-        return ModelInfo.from_model_cls(model_cls, self.module_name)
+        return ModelInfo.from_model_cls(model_cls, self.module_name, self.category)
 
 
 @lru_cache(maxsize=128)
@@ -126,6 +127,7 @@ class ModelRegistry:
                 module_name=model_info["module_name"],
                 module_path=model_info["module_path"],
                 class_name=model_info["class_name"],
+                category=model_info["category"],
             )
             self.models[arch] = model
             self._registered_models[arch] = model
@@ -228,8 +230,7 @@ class ModelRegistry:
 
         def _register(model_cls):
             # Traditional registration for ModelForCasualLM subclasses
-            if issubclass(model_cls, ModelForCasualLM) and model_cls is not ModelForCasualLM:
-                cls._arch_to_model_cls[model_cls.name()] = model_cls
+            cls._arch_to_model_cls[model_cls.name()] = model_cls
 
             # Enhanced decorator-style registration
             if architecture and module_name:
@@ -315,6 +316,17 @@ class ModelRegistry:
             model_info = self._try_inspect_model_cls(arch)
             if model_info is not None:
                 return model_info.is_multimodal
+        return False
+
+    def is_reasoning_model(self, architectures: Union[str, List[str]], model_config: ModelConfig = None) -> bool:
+        """Check if it's a reasoning model"""
+        if isinstance(architectures, str):
+            architectures = [architectures]
+
+        for arch in architectures:
+            model_info = self._try_inspect_model_cls(arch)
+            if model_info is not None:
+                return model_info.is_reasoning
         return False
 
     def is_text_generation_model(self, architectures: Union[str, List[str]], model_config: ModelConfig = None) -> bool:
