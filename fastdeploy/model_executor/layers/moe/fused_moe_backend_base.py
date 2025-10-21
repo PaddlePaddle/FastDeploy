@@ -233,3 +233,30 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
                 "weight_need_transpose": extra_weight_attrs.get("model_format") == "torch",
             },
         )
+
+        if layer.with_bias:
+            layer.up_gate_proj_bias = layer.create_parameter(
+                shape=[layer.num_experts, layer.moe_intermediate_size * 2],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            layer.down_proj_bias = layer.create_parameter(
+                shape=[layer.num_experts, layer.hidden_size],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+            set_weight_attrs(
+                layer.up_gate_proj_bias,
+                {
+                    "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                    "model_format": extra_weight_attrs.get("model_format", ""),
+                },
+            )
+            set_weight_attrs(
+                layer.down_proj_bias,
+                {
+                    "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                    "model_format": extra_weight_attrs.get("model_format", ""),
+                },
+            )

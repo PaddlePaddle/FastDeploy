@@ -527,6 +527,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 None,  # kv_signal_data
                 q_norm_weight,  # q_norm_weight
                 k_norm_weight,  # k_norm_weight
+                None,  # sinks
                 1e-6,
                 "fp16",
                 "none",  # cache_quant_type
@@ -543,6 +544,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 speculate_max_draft_token_num + 1,  # speculate_max_draft_token_num
                 True,  # causal
                 False,  # speculate_decoder
+                -1,
             )
         paddle.device.synchronize()
         end_time = time.time()

@@ -81,6 +81,7 @@ std::vector<paddle::Tensor> AppendAttention(
     const paddle::optional<paddle::Tensor> &kv_signal_data,
     const paddle::optional<paddle::Tensor>& q_norm_weight,
     const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const paddle::optional<paddle::Tensor>& sinks,
     const float rms_norm_eps,
     const std::string &compute_dtype, const std::string &cache_quant_type_str,
     const bool use_neox_rotary_style, const bool rope_3d,
@@ -89,7 +90,8 @@ std::vector<paddle::Tensor> AppendAttention(
     const int encoder_block_shape_q, const int decoder_block_shape_q,
     const int max_partition_size, const int encoder_max_partition_size,
     const int speculate_max_draft_token_num, const bool causal,
-    const bool speculate_decoder);
+    const bool speculate_decoder,
+    const int sliding_window);
 
 std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const paddle::Tensor &qkv, const paddle::Tensor &key_cache,
@@ -124,6 +126,7 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const paddle::optional<paddle::Tensor> &kv_signal_data,
     const paddle::optional<paddle::Tensor>& q_norm_weight,
     const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const paddle::optional<paddle::Tensor>& sinks,
     const float rms_norm_eps,
     const std::string &compute_dtype, const std::string &cache_quant_type_str,
     const bool use_neox_rotary_style, const bool rope_3d,
@@ -132,7 +135,8 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const int encoder_block_shape_q, const int decoder_block_shape_q,
     const int max_partition_size, const int encoder_max_partition_size,
     const int speculate_max_draft_token_num, const bool causal,
-    const bool speculate_decoder);
+    const bool speculate_decoder,
+    const int sliding_window);
 
 std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::Tensor &qkv, const paddle::Tensor &key_cache,
@@ -248,15 +252,18 @@ std::vector<std::vector<int>> GetExpertTokenNum(const paddle::Tensor &topk_ids,
 paddle::Tensor MoeExpertFFNFunc(
     const paddle::Tensor& permute_input,
     const paddle::Tensor& tokens_expert_prefix_sum,
-    const paddle::Tensor& up_gate_proj_weight, const paddle::Tensor& down_proj_weight,
+    const paddle::Tensor& up_gate_proj_weight,
+    const paddle::Tensor& down_proj_weight,
     const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
     const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_in_scale,
     const paddle::optional<paddle::Tensor>& expert_idx_per_token,
-    const std::string& quant_method, const bool used_in_ep_low_latency,
+    const std::string& quant_method,
+    const bool used_in_ep_low_latency,
     const int estimate_total_token_nums,
-    const int hadamard_block_size);
+    const int hadamard_block_size,
+    const std::string& activation);
 
 paddle::Tensor MoeExpertFFNWint2Func(
     const paddle::Tensor& permute_input,
@@ -341,7 +348,9 @@ paddle::Tensor RebuildPaddingFunc(
     const paddle::Tensor &seq_lens_decoder,
     const paddle::Tensor &seq_lens_encoder,
     const paddle::optional<paddle::Tensor> &output_padding_offset,
-    int max_input_length);
+    const paddle::optional<paddle::Tensor> &first_token_out,
+    int max_input_length,
+    bool enable_logprob);
 
 void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
                        const paddle::Tensor &stop_flags,
@@ -903,6 +912,64 @@ void SaveOutMmsgStatic(const paddle::Tensor& x,
                        int64_t rank_id,
                        bool save_each_rank);
 
+void LimitThinkingContentLengthV1(const paddle::Tensor &next_tokens,
+            const paddle::Tensor &max_think_lens,
+            const paddle::Tensor &step_idx,
+            const paddle::Tensor &limit_think_status,
+            const int64_t think_end_id);
+
+void LimitThinkingContentLengthV2(const paddle::Tensor &next_tokens,
+                                  const paddle::Tensor &max_think_lens,
+                                  const paddle::Tensor &step_idx,
+                                  const paddle::Tensor &limit_think_status,
+                                  const int64_t think_end_id,
+                                  const int64_t line_break_id);
+
+void SpeculateLimitThinkingContentLengthV1(
+    const paddle::Tensor& next_tokens,
+    const paddle::Tensor& max_think_lens,
+    const paddle::Tensor& step_idx,
+    const paddle::Tensor& limit_think_status,
+    const paddle::Tensor& accept_num,
+    const paddle::Tensor& seq_lens_decoder,
+    const int64_t think_end_id);
+
+void SpeculateLimitThinkingContentLengthV2(
+    const paddle::Tensor& next_tokens,
+    const paddle::Tensor& max_think_lens,
+    const paddle::Tensor& step_idx,
+    const paddle::Tensor& limit_think_status,
+    const paddle::Tensor& accept_num,
+    const paddle::Tensor& seq_lens_decoder,
+    const int64_t think_end_id,
+    const int64_t line_break_id);
+
+void SpeculateGetLogits(const paddle::Tensor &draft_logits,
+                        const paddle::Tensor &next_token_num,
+                        const paddle::Tensor &batch_token_num,
+                        const paddle::Tensor &cu_next_token_offset,
+                        const paddle::Tensor &cu_batch_token_offset,
+                        const paddle::Tensor &logits,
+                        const paddle::Tensor &first_token_logits,
+                        const paddle::Tensor &seq_lens_this_time,
+                        const paddle::Tensor &seq_lens_encoder);
+
+void SpeculateInsertFirstToken(const paddle::Tensor &token_ids,
+                               const paddle::Tensor &accept_tokens,
+                               const paddle::Tensor &next_tokens,
+                               const paddle::Tensor &cu_next_token_offset,
+                               const paddle::Tensor &cu_batch_token_offset,
+                               const paddle::Tensor &seq_lens_this_time,
+                               const paddle::Tensor &seq_lens_encoder);
+
+void SpeculateGetTargetLogits(const paddle::Tensor &target_logits,
+                              const paddle::Tensor &logits,
+                              const paddle::Tensor &cu_batch_token_offset,
+                              const paddle::Tensor &ori_cu_batch_token_offset,
+                              const paddle::Tensor &seq_lens_this_time,
+                              const paddle::Tensor &seq_lens_encoder,
+                              const paddle::Tensor &accept_num);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("get_expert_token_num", &GetExpertTokenNum, py::arg("topk_ids"),
@@ -1284,4 +1351,18 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("min_p_sampling", &MinPSamplingFromProbs, "min_p_sampling function");
 
   m.def("save_output", &SaveOutMmsgStatic, "save_output function");
+
+  m.def("limit_thinking_content_length_v1", &LimitThinkingContentLengthV1, "limit_thinking_content_length_v1 function");
+
+  m.def("limit_thinking_content_length_v2", &LimitThinkingContentLengthV2, "limit_thinking_content_length_v2 function");
+
+  m.def("speculate_limit_thinking_content_length_v1", &SpeculateLimitThinkingContentLengthV1, "speculate limit thinking content length function");
+
+  m.def("speculate_limit_thinking_content_length_v2", &SpeculateLimitThinkingContentLengthV2, "speculate limit thinking content length function");
+
+  m.def("speculate_get_logits", &SpeculateGetLogits, "speculate_get_logits function");
+
+  m.def("speculate_insert_first_token", &SpeculateInsertFirstToken, "speculate_insert_first_token function");
+
+  m.def("speculate_get_target_logits", &SpeculateGetTargetLogits, "speculate_get_target_logits function");
 }
