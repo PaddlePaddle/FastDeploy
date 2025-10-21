@@ -175,12 +175,13 @@ class MoEMethodBase(QuantMethodBase):
         Paddle Cutlass compute Fused MoE.
         """
         if layer.ep_size > 1:
-            if layer.fd_config.model_config.moe_phase.phase == "prefill" and layer.layer_idx == 0:
-                if layer.fd_config.scheduler_config.splitwise_role == "mixed":
+            is_moe_start_layer = layer.layer_idx == layer.fd_config.model_config.moe_layer_start_index
+            if layer.fd_config.model_config.moe_phase.phase == "prefill":
+                if layer.fd_config.scheduler_config.splitwise_role == "mixed" and is_moe_start_layer:
                     self.ep_prefill_runner.clean_low_latency_buffer()
                 return self.apply_ep_prefill(layer, x, gate)
             else:
-                if layer.fd_config.scheduler_config.splitwise_role == "mixed" and layer.layer_idx == 0:
+                if layer.fd_config.scheduler_config.splitwise_role == "mixed" and is_moe_start_layer:
                     self.ep_decoder_runner.clean_low_latency_buffer()
                 return self.apply_ep_decode(layer, x, gate)
         else:
@@ -233,3 +234,30 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
                 "weight_need_transpose": extra_weight_attrs.get("model_format") == "torch",
             },
         )
+
+        if layer.with_bias:
+            layer.up_gate_proj_bias = layer.create_parameter(
+                shape=[layer.num_experts, layer.moe_intermediate_size * 2],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            layer.down_proj_bias = layer.create_parameter(
+                shape=[layer.num_experts, layer.hidden_size],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+            set_weight_attrs(
+                layer.up_gate_proj_bias,
+                {
+                    "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                    "model_format": extra_weight_attrs.get("model_format", ""),
+                },
+            )
+            set_weight_attrs(
+                layer.down_proj_bias,
+                {
+                    "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
+                    "model_format": extra_weight_attrs.get("model_format", ""),
+                },
+            )

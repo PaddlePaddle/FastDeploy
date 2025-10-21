@@ -227,7 +227,14 @@ def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
         "--timeout-graceful-shutdown",
         default=0,
         type=int,
-        help="timeout for graceful shutdown in seconds (used by uvicorn)",
+        help="timeout for graceful shutdown in seconds (used by gunicorn).Setting it to 0 has the effect of infinite timeouts by disabling timeouts for all workers entirely.",
+    )
+
+    parser.add_argument(
+        "--timeout",
+        default=0,
+        type=int,
+        help="Workers silent for more than this many seconds are killed and restarted.Value is a positive number or 0. Setting it to 0 has the effect of infinite timeouts by disabling timeouts for all workers entirely.",
     )
 
     parser = EngineArgs.add_cli_args(parser)
