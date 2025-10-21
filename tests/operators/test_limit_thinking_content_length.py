@@ -16,7 +16,6 @@
 
 import unittest
 
-import numpy as np
 import paddle
 
 from fastdeploy.model_executor.ops.gpu import (
@@ -30,7 +29,6 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
 
     def test_normal_thinking_phase_no_limit_reached(self):
         """Test normal thinking phase when step < max_think_len"""
-        batch_size = 2
         next_tokens = paddle.to_tensor([[100], [200]], dtype="int64")
         max_think_lens = paddle.to_tensor([10, 15], dtype="int32")
         step_idx = paddle.to_tensor([[5], [8]], dtype="int64")
@@ -38,9 +36,7 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         think_end_id = 999
 
         # Run operator
-        limit_thinking_content_length_v1(
-            next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id
-        )
+        limit_thinking_content_length_v1(next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id)
 
         # Verify: tokens unchanged, status unchanged
         assert next_tokens.numpy()[0, 0] == 100
@@ -50,7 +46,6 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
 
     def test_force_truncation_when_max_think_len_exceeded(self):
         """Test force truncation when step >= max_think_len"""
-        batch_size = 2
         next_tokens = paddle.to_tensor([[100], [200]], dtype="int64")
         max_think_lens = paddle.to_tensor([5, 8], dtype="int32")
         step_idx = paddle.to_tensor([[5], [10]], dtype="int64")  # Both exceed or equal limit
@@ -58,15 +53,13 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         think_end_id = 999
 
         # Run operator
-        limit_thinking_content_length_v1(
-            next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id
-        )
+        limit_thinking_content_length_v1(next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id)
 
-        # Verify: tokens replaced with think_end_id, status changed to 1
+        # Verify: tokens replaced with think_end_id, status changed to 2
         assert next_tokens.numpy()[0, 0] == 999  # Replaced
         assert next_tokens.numpy()[1, 0] == 999  # Replaced
-        assert limit_think_status.numpy()[0] == 1  # Status updated
-        assert limit_think_status.numpy()[1] == 1  # Status updated
+        assert limit_think_status.numpy()[0] == 2  # Status updated
+        assert limit_think_status.numpy()[1] == 2  # Status updated
 
     def test_model_naturally_generates_think_end_id(self):
         """Test when model naturally generates think_end_id"""
@@ -77,9 +70,7 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         think_end_id = 999
 
         # Run operator
-        limit_thinking_content_length_v1(
-            next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id
-        )
+        limit_thinking_content_length_v1(next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id)
 
         # Verify: token unchanged (already think_end_id), status changed to 2
         assert next_tokens.numpy()[0, 0] == 999
@@ -94,9 +85,7 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         think_end_id = 999
 
         # Run operator
-        limit_thinking_content_length_v1(
-            next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id
-        )
+        limit_thinking_content_length_v1(next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id)
 
         # Verify: status changed to 2
         assert limit_think_status.numpy()[0] == 2
@@ -110,9 +99,7 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         think_end_id = 999
 
         # Run operator
-        limit_thinking_content_length_v1(
-            next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id
-        )
+        limit_thinking_content_length_v1(next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id)
 
         # Verify: nothing changed
         assert next_tokens.numpy()[0, 0] == 100
@@ -127,9 +114,7 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         think_end_id = 999
 
         # Run operator
-        limit_thinking_content_length_v1(
-            next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id
-        )
+        limit_thinking_content_length_v1(next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id)
 
         # Verify: nothing changed
         assert next_tokens.numpy()[0, 0] == 100
@@ -137,7 +122,6 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
 
     def test_mixed_batch(self):
         """Test batch with different sequences in different states"""
-        batch_size = 4
         next_tokens = paddle.to_tensor([[100], [200], [999], [300]], dtype="int64")
         max_think_lens = paddle.to_tensor([10, 5, 8, -1], dtype="int32")
         step_idx = paddle.to_tensor([[3], [5], [4], [100]], dtype="int64")
@@ -145,18 +129,16 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         think_end_id = 999
 
         # Run operator
-        limit_thinking_content_length_v1(
-            next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id
-        )
+        limit_thinking_content_length_v1(next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id)
 
         # Verify each sequence
         # Seq 0: step 3 < max 10, status 0, token unchanged
         assert next_tokens.numpy()[0, 0] == 100
         assert limit_think_status.numpy()[0] == 0
 
-        # Seq 1: step 5 >= max 5, force inject think_end_id, status -> 1
+        # Seq 1: step 5 >= max 5, force inject think_end_id, status -> 2
         assert next_tokens.numpy()[1, 0] == 999
-        assert limit_think_status.numpy()[1] == 1
+        assert limit_think_status.numpy()[1] == 2
 
         # Seq 2: step 4 < max 8, but token is think_end_id, status -> 2
         assert next_tokens.numpy()[2, 0] == 999
@@ -237,7 +219,7 @@ class TestLimitThinkingContentLengthV2(unittest.TestCase):
             next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id, line_break_id
         )
         assert next_tokens.numpy()[0, 0] == 888  # line_break_id
-        assert limit_think_status.numpy()[0] == 2  # Move to status 2
+        assert limit_think_status.numpy()[0] == 3  # Move to status 3
 
     def test_model_naturally_generates_think_end_id(self):
         """Test when model naturally generates think_end_id"""
