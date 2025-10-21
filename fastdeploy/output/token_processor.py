@@ -251,6 +251,7 @@ class TokenProcessor:
 
             if task.pooling_params is not None:
                 pooler_output = stream_data.pooler_output
+                llm_logger.info(f"xxxxxxpooler_output:{pooler_output}")
                 if isinstance(pooler_output, np.ndarray):
                     pooler_output = pooler_output.tolist()
                 result = PoolingRequestOutput(
@@ -302,7 +303,7 @@ class TokenProcessor:
                 ) or (rank_id == 0):
                     receive_datas = self.zmq_server.recv_pyobj()
                     assert isinstance(receive_datas, list)
-                    llm_logger.debug(f"token_processor receive_data {receive_datas}")
+                    llm_logger.info(f"token_processor receive_data {receive_datas}")
 
                     self._reschedule_preempt_task_use_zmq(receive_datas)
 

@@ -35,8 +35,8 @@ class StreamTransferData:
     """StreamTransferData"""
 
     decoder_state: DecoderState
-    tokens: np.array
     batch_id: int
+    tokens: Optional[np.array] = None
     speculaive_decoding: bool = False
     logprobs: Optional[np.array] = None
     accept_tokens: Optional[np.array] = None

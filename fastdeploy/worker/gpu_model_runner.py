@@ -200,6 +200,7 @@ class GPUModelRunner(ModelRunnerBase):
         while True:
             try:
                 output = self.async_output_queue.get()
+                logger.info(f"outputxxxxxx:{output}")
                 self.zmq_client.send_pyobj(output)
             except Exception as e:
                 logger.exception("Exception in async output loop: %s", e)
@@ -1911,6 +1912,7 @@ class GPUModelRunner(ModelRunnerBase):
                 skip_save_output=False,
                 async_output_queue=self.async_output_queue,
             )
+
         else:
             logits = self.model.compute_logits(hidden_states)
 

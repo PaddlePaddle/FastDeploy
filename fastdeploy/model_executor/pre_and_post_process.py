@@ -163,7 +163,7 @@ def pre_process(
     )
 
 
-def _build_stream_transfer_data(output_tokens: np.ndarray, pooler_output: None):
+def _build_stream_transfer_data(output_tokens: np.ndarray, pooler_outputs: None):
     """Split output_tokens and output"""
 
     stream_transfer_datas = []
@@ -177,14 +177,19 @@ def _build_stream_transfer_data(output_tokens: np.ndarray, pooler_output: None):
                 decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
             )
             stream_transfer_datas.append(stream_transfer_data)
-    elif pooler_output is not None:
-        if isinstance(pooler_output, paddle.Tensor):
-            pooler_output = pooler_output.numpy()
+    elif pooler_outputs is not None:
+        for bid, pooler_output in enumerate(pooler_outputs):
+            if pooler_output.dtype == paddle.bfloat16:
+                pooler_output = pooler_output.astype("float32")
 
-        for bid in range(pooler_output.shape[0]):
+            pooler_output = pooler_output.numpy()
+            if pooler_output.dtype != np.float32:
+                pooler_output = pooler_output.astype(np.float32)
+
             stream_transfer_data = StreamTransferData(
-                decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
+                decoder_state=DecoderState.TEXT, pooler_output=pooler_output, batch_id=bid
             )
+            print("stream_transfer_data", stream_transfer_data)
             stream_transfer_datas.append(stream_transfer_data)
     return stream_transfer_datas
 
@@ -733,5 +738,7 @@ def post_process_pooling(
     if not skip_save_output:
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
             if save_each_rank or model_output.mp_rank == 0:
-                output = _build_stream_transfer_data(output_tokens=None, pooler_output=pooler_output)
+                output = _build_stream_transfer_data(output_tokens=None, pooler_outputs=pooler_output.outputs)
+
                 async_output_queue.put(output)
+                print("output", output)
