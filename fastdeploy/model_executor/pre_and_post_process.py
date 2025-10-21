@@ -291,7 +291,7 @@ def xpu_pre_process(
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = speculate_get_padding_offset_v2(
+        ) = speculate_get_padding_offset(
             input_ids,
             draft_tokens,
             cum_offsets_now,

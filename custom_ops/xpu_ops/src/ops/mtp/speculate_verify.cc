@@ -46,7 +46,9 @@ void SpeculateVerify(const paddle::Tensor &accept_tokens,
                      int max_seq_len,
                      int verify_window,
                      bool enable_topp,
-                     bool benchmark_mode) {
+                     bool benchmark_mode,
+                     bool accept_all_drafts) {
+  // TODO(chenhuan09):support accept_all_drafts
   auto bsz = accept_tokens.shape()[0];
   int real_bsz = seq_lens_this_time.shape()[0];
   auto max_draft_tokens = draft_tokens.shape()[1];
@@ -254,7 +256,8 @@ PD_BUILD_STATIC_OP(speculate_verify)
     .Attrs({"max_seq_len: int",
             "verify_window: int",
             "enable_topp: bool",
-            "benchmark_mode: bool"})
+            "benchmark_mode: bool",
+            "accept_all_drafts: bool"})
     .SetInplaceMap({{"accept_tokens", "accept_tokens_out"},
                     {"accept_num", "accept_num_out"},
                     {"step_idx", "step_idx_out"},
