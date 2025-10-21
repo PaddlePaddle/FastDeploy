@@ -16,6 +16,10 @@
 #include "moba_attn/moba_attn_utils.hpp"
 #include "moba_attn/moba_attn.h"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
+
 template <typename T, int kBlockSize, int kHeadDim>
 __global__ void get_kv_from_cache_c16_kernel(
         T * k_input,
@@ -251,7 +255,7 @@ std::vector<paddle::Tensor> GetCurCuSeqLenk(
     return {cu_seq_q_pack, cu_seqlens_k, q_pack_tokens_cpu};
 }
 
-PD_BUILD_OP(get_kv_from_cache)
+PD_BUILD_STATIC_OP(get_kv_from_cache)
     .Inputs({
         "k_input",
         "v_input",
@@ -277,7 +281,7 @@ PD_BUILD_OP(get_kv_from_cache)
                     {"v_input", "v_input_out"}})
     .SetKernelFn(PD_KERNEL(GetKVFromCache));
 
-PD_BUILD_OP(get_cur_cu_seq_len_k)
+PD_BUILD_STATIC_OP(get_cur_cu_seq_len_k)
     .Inputs({
             "seq_lens_encoder",
             "seq_lens_decoder",

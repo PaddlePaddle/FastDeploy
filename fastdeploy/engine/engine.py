@@ -426,7 +426,6 @@ class LLMEngine:
             "ENABLE_FASTDEPLOY_LOAD_MODEL_CONCURRENCY": 0,
             "LOAD_STATE_DICT_THREAD_NUM": len(self.cfg.parallel_config.device_ids.split(",")),
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
-            "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
             "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 1024)),
         }

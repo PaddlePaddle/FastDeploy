@@ -18,6 +18,10 @@
 #include <stdio.h>
 #include "paddle/extension.h"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
+
 bool is_in_end(const int64_t id, const int64_t *end_ids, int length) {
     bool flag = false;
     for (int i = 0; i < length; i++) {
@@ -49,6 +53,8 @@ void set_value_by_flags(bool *stop_flags,
         }
         if (!beam_search && is_in_end(topk_ids[bi], end_ids, end_length)) {
             stop_flags[bi] = true;
+            topk_ids[bi] = end_ids[0];
+            next_tokens[bi] = end_ids[0];
         }
     }
 }
