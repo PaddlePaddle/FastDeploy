@@ -13,26 +13,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-import paddle
-from typing import List, Dict
 
-from fastdeploy import SamplingParams
-from fastdeploy.model_executor.logits_processor.base import LogitsProcessor
+from typing import Dict, List
+
+import paddle
+
 from fastdeploy.config import FDConfig
-from fastdeploy.utils import llm_logger
 from fastdeploy.engine.request import Request
+from fastdeploy.model_executor.logits_processor.base import LogitsProcessor
+from fastdeploy.utils import llm_logger
+
 
 class LogitBiasLogitsProcessor(LogitsProcessor):
     """
+    Maintains per-request logit biases and applies them to logits.
     """
 
     def __init__(self, fd_config: FDConfig):
         self.fd_config = fd_config
-        self.biases: dict[str, dict[int, float]] = {}    # req_id -> {tok_id -> bias}
+        self.biases: dict[str, dict[int, float]] = {}  # req_id -> {tok_id -> bias}
         self.device = paddle.device.get_device()
         self.bias_indices = (
-            paddle.zeros([], dtype="int32").to(self.device), 
-            paddle.zeros([], dtype="int32").to(self.device)
+            paddle.zeros([], dtype="int32").to(self.device),
+            paddle.zeros([], dtype="int32").to(self.device),
         )
         self.bias_tensor: paddle.Tensor = paddle.zeros([]).to(self.device)
         self.skipped = False
@@ -63,7 +66,7 @@ class LogitBiasLogitsProcessor(LogitsProcessor):
             if logit_bias is not None and request_id not in self.biases:  # new request
                 self.biases[request_id] = logit_bias.copy()
                 need_updates = True
-        
+
         # Remove bias states for requests that are no longer in the batch
         for request_id in list(self.biases):
             if request_id not in batch_req_slot_map:
@@ -88,8 +91,7 @@ class LogitBiasLogitsProcessor(LogitsProcessor):
             self.bias_tensor = paddle.tensor(biases, dtype="float32").to(self.device)
 
     def apply(self, logits: paddle.Tensor) -> paddle.Tensor:
-        """ Apply logit bias to logits: [batch_size, vocab_size] """
+        """Apply logit bias to logits: [batch_size, vocab_size]"""
         if not self.skipped:
             logits[self.bias_indices] += self.bias_tensor
         return logits
-

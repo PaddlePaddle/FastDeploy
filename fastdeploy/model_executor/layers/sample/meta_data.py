@@ -16,8 +16,10 @@
 
 from dataclasses import dataclass
 from typing import Dict, Optional
-from fastdeploy.model_executor.logits_processor import LogitsProcessor
+
 import paddle
+
+from fastdeploy.model_executor.logits_processor import LogitsProcessor
 
 
 @dataclass

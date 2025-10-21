@@ -172,7 +172,7 @@ class SamplingParams:
                 for k, v in self.logit_bias.items():
                     proc_logit_bias[int(k)] = float(v)
             except:
-                raise TypeError(f"can not cast logit_bias items to int -> float")
+                raise TypeError("can not cast logit_bias items to int -> float")
             self.logit_bias = proc_logit_bias
         self._verify_args()
 
@@ -223,7 +223,8 @@ class SamplingParams:
             if not isinstance(self.logit_bias, dict):
                 raise TypeError(f"logit_bias must be a dict, but got {type(self.logit_bias)}")
             elif not all(isinstance(k, int) and isinstance(v, float) for k, v in self.logit_bias.items()):
-                raise TypeError(f"logit_bias got incorrect key/value type, expected int -> float")
+                raise TypeError("logit_bias got incorrect key/value type, expected int -> float")
+
 
 @dataclass
 class BeamSearchParams:

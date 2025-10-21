@@ -14,9 +14,12 @@
 # limitations under the License.
 """
 
-from paddle import Tensor
 from abc import ABC, abstractmethod
+
+from paddle import Tensor
+
 from fastdeploy.config import FDConfig
+
 
 class LogitsProcessor(ABC):
     @abstractmethod

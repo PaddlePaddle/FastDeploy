@@ -17,8 +17,10 @@
 from .base import LogitsProcessor
 from .builtin import LogitBiasLogitsProcessor
 
+
 def init_logits_processors(fd_config):
     # return []
     return [LogitBiasLogitsProcessor(fd_config)]
+
 
 __all__ = ["LogitsProcessor", "LogitBiasLogitsProcessor", "init_logits_processors"]
