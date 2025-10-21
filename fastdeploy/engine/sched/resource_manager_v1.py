@@ -32,7 +32,7 @@ from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import llm_logger
+from fastdeploy.utils import envs, llm_logger
 
 
 @dataclass
@@ -172,6 +172,8 @@ class ResourceManagerV1(ResourceManager):
         )
 
         self.need_block_num_map = dict()
+        self.orig_max_num_seqs = max_num_seqs  # max_num_seqs user definded
+        self.finished_request_num_without_preempted = 0
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
@@ -269,6 +271,9 @@ class ResourceManagerV1(ResourceManager):
                 # The request can be scheduled.
                 can_schedule = True
                 break
+        # if trigger preempt, we decrease max_seq_len to current running length
+        self.max_seq_len = len(self.running)
+        self.finished_request_num_without_preempted = 0
         return can_schedule
 
     def _get_num_new_tokens(self, request, token_budget):
@@ -542,7 +547,7 @@ class ResourceManagerV1(ResourceManager):
             # schedule the WAITING requests.
             if not preempted_reqs:
                 while self.waiting and token_budget > 0:
-                    if len(self.running) == self.max_num_seqs:
+                    if len(self.running) >= self.max_num_seqs:
                         break
                     if (self.config.model_config.enable_mm or paddle.is_compiled_with_xpu()) and self.exist_prefill(
                         scheduled_reqs
@@ -891,6 +896,10 @@ class ResourceManagerV1(ResourceManager):
                     del self.requests[req_id]
                     if req_id in self.req_dict:
                         del self.req_dict[req_id]
+                self.finished_request_num_without_preempted += 1
+                if self.finished_request_num_without_preempted > envs.FD_DYNAMIC_MAX_SEQ_NUM_RECOVER_THREASHOLD:
+                    self.max_num_seqs = self.orig_max_num_seqs  # recover max_num_seq to original user defined
+                    self.finished_request_num_without_preempted = 0
         except Exception as e:
             llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")
 
