@@ -194,8 +194,9 @@ def xpu_post_process(
     )
 
     # handle vl:
-    if model_output.enable_thinking:
-        exists_think_end = sampled_token_ids == model_output.think_end_id
+    if model_output.think_end_id != -1:
+        thinking_mask = model_output.enable_thinking
+        exists_think_end = (sampled_token_ids == model_output.think_end_id) & thinking_mask
         paddle.assign(
             paddle.where(
                 exists_think_end,
@@ -205,19 +206,20 @@ def xpu_post_process(
             model_output.need_think_end,
         )
 
+        reasoning_index_update_cond = model_output.need_think_end.cast("bool") & thinking_mask
+
         paddle.assign(
             paddle.where(
-                model_output.need_think_end.cast("bool"),
+                reasoning_index_update_cond,
                 model_output.reasoning_index - 1,
                 model_output.reasoning_index,
             ),
             model_output.reasoning_index,
         )
 
-        stop_wo_think = (
-            (sampled_token_ids == model_output.eos_token_id.T).any(axis=1, keepdim=True)
-            | (model_output.reasoning_index == 0)
-        ) & (model_output.need_think_end > 0)
+        stop_wo_think = ((model_output.reasoning_index == 0)) & (model_output.need_think_end > 0)
+
+        stop_wo_think = stop_wo_think & thinking_mask
         sampled_token_ids = paddle.where(
             stop_wo_think,
             model_output.think_end_id,
@@ -465,15 +467,26 @@ class XPUModelRunner(ModelRunnerBase):
                         ).unsqueeze([0])
                     else:
                         position_ids = None
-
-                    enable_thinking = request.get("enable_thinking", True)
-                    enable_thinking = enable_thinking if enable_thinking is not None else True
-                    self.share_inputs["enable_thinking"][:] = enable_thinking
-                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
-                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)
                     self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
                         position_ids, request.get("max_tokens", 2048)
                     )
+
+                if request.get("enable_thinking", False):
+                    # Enable thinking
+                    req_reasoning_max_tokens = request.get("reasoning_max_tokens")
+                    req_max_tokens = request.get("max_tokens")
+                    final_reasoning_tokens = (
+                        req_reasoning_max_tokens if req_reasoning_max_tokens is not None else req_max_tokens
+                    )
+
+                    self.share_inputs["enable_thinking"][idx : idx + 1] = True
+                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 1
+                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = final_reasoning_tokens
+                else:
+                    # Disable thinking
+                    self.share_inputs["enable_thinking"][idx : idx + 1] = False
+                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 0
+                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = 0
 
                 if len(request.output_token_ids) == 0:
                     input_ids = request.prompt_token_ids
@@ -605,15 +618,27 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["prompt_lens"][idx : idx + 1] = length
 
             if self.enable_mm:
-                enable_thinking = request.get("enable_thinking", True)
-                enable_thinking = enable_thinking if enable_thinking is not None else True
-                self.share_inputs["enable_thinking"][:] = enable_thinking
-                self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
-                self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)
                 self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
                     position_ids, request.get("max_tokens", 2048)
                 )
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
+
+            if request.get("enable_thinking", False):
+                # Enable thinking
+                req_reasoning_max_tokens = request.get("reasoning_max_tokens")
+                req_max_tokens = request.get("max_tokens")
+                final_reasoning_tokens = (
+                    req_reasoning_max_tokens if req_reasoning_max_tokens is not None else req_max_tokens
+                )
+
+                self.share_inputs["enable_thinking"][idx : idx + 1] = True
+                self.share_inputs["need_think_end"][idx : idx + 1, :] = 1
+                self.share_inputs["reasoning_index"][idx : idx + 1, :] = final_reasoning_tokens
+            else:
+                # Disable thinking
+                self.share_inputs["enable_thinking"][idx : idx + 1] = False
+                self.share_inputs["need_think_end"][idx : idx + 1, :] = 0
+                self.share_inputs["reasoning_index"][idx : idx + 1, :] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
                 res = request.get(attr, default_value)
