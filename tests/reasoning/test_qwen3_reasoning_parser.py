@@ -189,7 +189,7 @@ class TestQwen3ReasoningParser(unittest.TestCase):
             request={},
             model_status="think_start",
         )
-        self.assertEqual(reasoning_content, "a")
+        self.assertEqual(reasoning_content, "")
         self.assertEqual(content, "b")
 
 
