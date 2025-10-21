@@ -155,7 +155,7 @@ jobs:
           ./llm-deploy-linux-amd64 -python python3.10 \
           -model_name ERNIE-4.5-0.3B-Paddle \
           -model_path /MODELDATA \
-          --skip install
+          --skip install,model
 
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
