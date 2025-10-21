@@ -1,3 +1,4 @@
+"""
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
 
 import paddle
 from paddle import nn
@@ -44,6 +46,7 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
         """process_prequanted_weights"""
         pass
 
+    @paddle.no_grad()
     def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
         Triton MoE create weight process.
@@ -100,6 +103,7 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
             ),
         )
 
+    @paddle.no_grad()
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
         Triton MoE load weight process.
@@ -109,8 +113,6 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
         assert len(down_proj_weights) == layer.num_local_experts
 
         algo = layer.quant_method.quant_config.name()
-
-        assert algo == "wint8"
 
         assert up_gate_proj_weights[0].shape == [
             layer.hidden_size,
@@ -151,31 +153,42 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
         """
         Triton compute Fused MoE.
         """
+        gate_out = gate(x.cast("float32"))
         token_num = x.shape[0]
+        top_k = layer.top_k
         num_local_experts = layer.num_local_experts
         top_k = layer.top_k
         moe_intermediate_size = layer.moe_intermediate_size
         hidden_size = layer.hidden_size
 
-        gate_out = gate(x.cast("float32"))
         topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
             gate_out,
             layer.gate_correction_bias,
-            top_k,
-            True,  # apply_norm_weight,
+            layer.top_k,
+            True,  # apply_norm_weight
             False,
         )
+
         up_gate_proj_out = paddle.empty(
             [token_num * top_k, moe_intermediate_size * 2],
             dtype=x.dtype,
         )
 
-        config = {
-            "BLOCK_SIZE_M": 32,
-            "BLOCK_SIZE_N": 64,
-            "BLOCK_SIZE_K": 64,
-            "GROUP_SIZE_M": 4,
-        }
+        if self.quant_config is not None:
+            config = {
+                "BLOCK_SIZE_M": 32,
+                "BLOCK_SIZE_N": 64,
+                "BLOCK_SIZE_K": 64,
+                "GROUP_SIZE_M": 4,
+            }
+        else:
+            config = {
+                "BLOCK_SIZE_M": 32,
+                "BLOCK_SIZE_N": 64,
+                "BLOCK_SIZE_K": 64,
+                "GROUP_SIZE_M": 4,
+            }
+
         sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess(
             topk_ids, num_local_experts, config["BLOCK_SIZE_M"]
         )
@@ -282,5 +295,5 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
         down_proj_out.reshape_([token_num, top_k, hidden_size])
         out = down_proj_out.sum(axis=1)
         if layer.tp_size > 1:
-            out = tensor_model_parallel_all_reduce(out)
+            tensor_model_parallel_all_reduce(out, layer.fd_config.parallel_config.tp_group)
         return out

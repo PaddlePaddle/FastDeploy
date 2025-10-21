@@ -972,7 +972,7 @@ class EngineService:
 
         threading.Thread(target=receiver_loop, daemon=True).start()
 
-    def start_cache_service(self, device_ids, ipc_signal_suffix, create_cache_tensor):
+    def start_cache_service(self, device_ids, ipc_signal_suffix):
         return self.resource_manager.cache_manager.launch_cache_manager(
             cache_config=self.cfg.cache_config,
             tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,
@@ -982,7 +982,7 @@ class EngineService:
                 self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
             ),
             pid_suffix=ipc_signal_suffix,
-            create_cache_tensor=create_cache_tensor,
+            create_cache_tensor=False,
         )
 
     def check_and_free_block_tables(self):

@@ -59,6 +59,14 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         layer.up_gate_proj_weight.set_value(stacked_up_gate_proj_weights)
         layer.down_proj_weight.set_value(stacked_down_proj_weights)
 
+        if layer.with_bias:
+            up_gate_proj_bias, down_proj_bias = layer.extract_moe_ffn_bias(state_dict)
+            stacked_up_gate_proj_bias = paddle.stack(up_gate_proj_bias, axis=0)
+            stacked_down_proj_bias = paddle.stack(down_proj_bias, axis=0)
+
+            layer.up_gate_proj_bias.set_value(stacked_up_gate_proj_bias)
+            layer.down_proj_bias.set_value(stacked_down_proj_bias)
+
     def compute_ffn(
         self,
         layer: nn.Layer,
@@ -72,12 +80,13 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         Paddle Cutlass compute Fused MoE.
         """
         if current_platform.is_iluvatar():
-            return fastdeploy.model_executor.ops.iluvatar.moe_expert_ffn(
+            ffn_out_without_down_proj_bias = fastdeploy.model_executor.ops.iluvatar.moe_expert_ffn(
                 permute_input,
                 token_nums_per_expert,
                 getattr(layer, self.added_weight_attrs[0]),
                 getattr(layer, self.added_weight_attrs[1]),
-                None,
+                # None,
+                (layer.up_gate_proj_bias if hasattr(layer, "up_gate_proj_bias") else None),
                 (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
                 (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
                 (layer.down_proj_in_scale if hasattr(layer, "down_proj_in_scale") else None),
@@ -85,21 +94,28 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 self.moe_quant_type,
                 used_in_ep_low_latency,
             )
-        return fastdeploy.model_executor.ops.gpu.moe_expert_ffn(
-            permute_input,
-            token_nums_per_expert,
-            getattr(layer, self.added_weight_attrs[0]),
-            getattr(layer, self.added_weight_attrs[1]),
-            None,
-            (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
-            (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
-            (layer.down_proj_in_scale if hasattr(layer, "down_proj_in_scale") else None),
-            expert_idx_per_token,
-            self.moe_quant_type,
-            used_in_ep_low_latency,
-            estimate_total_token_nums,
-            getattr(layer.moe_quant_config, "hadamard_block_size", 128),
-        )
+        else:
+            ffn_out_without_down_proj_bias = fastdeploy.model_executor.ops.gpu.moe_expert_ffn(
+                permute_input,
+                token_nums_per_expert,
+                getattr(layer, self.added_weight_attrs[0]),
+                getattr(layer, self.added_weight_attrs[1]),
+                # None,
+                (layer.up_gate_proj_bias if hasattr(layer, "up_gate_proj_bias") else None),
+                (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
+                (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
+                (layer.down_proj_in_scale if hasattr(layer, "down_proj_in_scale") else None),
+                expert_idx_per_token,
+                self.moe_quant_type,
+                used_in_ep_low_latency,
+                estimate_total_token_nums,
+                getattr(layer.moe_quant_config, "hadamard_block_size", 128),
+                layer.activation,
+            )
+        if layer.with_bias:
+            down_proj_bias_expand = paddle.index_select(layer.down_proj_bias, expert_idx_per_token, axis=0)
+            ffn_out_without_down_proj_bias = paddle.add(ffn_out_without_down_proj_bias, down_proj_bias_expand)
+        return ffn_out_without_down_proj_bias
 
     def apply_ep_prefill(
         self,
@@ -144,7 +160,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 token_all_num,
                 self.moe_quant_type,
             )
-            if self.moe_quant_type != "w4a8" and self.moe_quant_type != "w4afp8":
+            if not layer.with_bias and self.moe_quant_type != "w4a8" and self.moe_quant_type != "w4afp8":
                 # only w4a8 and w4afp8 need expert_idx_per_token
                 # Other need not this tensor, so we make it None.
                 expert_idx_per_token = None
@@ -277,7 +293,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 topk_only_mode=False,
             )
 
-        if self.moe_quant_type != "w4a8" and self.moe_quant_type != "w4afp8":
+        if not layer.with_bias and self.moe_quant_type != "w4a8" and self.moe_quant_type != "w4afp8":
             # only w4a8 need expert_idx_per_token
             # Other need not this tensor, so we make it None.
             expert_idx_per_token = None
@@ -452,6 +468,28 @@ class CutlassW4A8MoEMethod(CutlassMoEMethod):
         )
 
         self.create_w4a8_scale_weights(layer, layer.weight_key_map)
+
+        if layer.with_bias:
+            layer.up_gate_proj_bias = layer.create_parameter(
+                shape=[layer.num_experts, layer.moe_intermediate_size * 2],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            layer.down_proj_bias = layer.create_parameter(
+                shape=[layer.num_experts, layer.hidden_size],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            set_weight_attrs(
+                layer.up_gate_proj_bias,
+                extra_weight_attrs,
+            )
+            set_weight_attrs(
+                layer.down_proj_bias,
+                extra_weight_attrs,
+            )
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
@@ -772,6 +810,28 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
         )
 
         self.create_w4afp8_scale_weights(layer, layer.weight_key_map)
+
+        if layer.with_bias:
+            layer.up_gate_proj_bias = layer.create_parameter(
+                shape=[layer.num_experts, layer.moe_intermediate_size * 2],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            layer.down_proj_bias = layer.create_parameter(
+                shape=[layer.num_experts, layer.hidden_size],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            set_weight_attrs(
+                layer.up_gate_proj_bias,
+                extra_weight_attrs,
+            )
+            set_weight_attrs(
+                layer.down_proj_bias,
+                extra_weight_attrs,
+            )
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
@@ -1107,6 +1167,28 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
             }
             set_weight_attrs(layer.up_gate_proj_weight_scale, scale_extra_weight_attrs)
             set_weight_attrs(layer.down_proj_weight_scale, scale_extra_weight_attrs)
+
+        if layer.with_bias:
+            layer.up_gate_proj_bias = layer.create_parameter(
+                shape=[layer.num_experts, layer.moe_intermediate_size * 2],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            layer.down_proj_bias = layer.create_parameter(
+                shape=[layer.num_experts, layer.hidden_size],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            set_weight_attrs(
+                layer.up_gate_proj_bias,
+                extra_weight_attrs,
+            )
+            set_weight_attrs(
+                layer.down_proj_bias,
+                extra_weight_attrs,
+            )
 
     def process_weights_after_loading(self, layer):
         """ """
