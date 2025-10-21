@@ -11,11 +11,11 @@ class DummyDataProcessor:
 
 
 class TestDecodeToken(unittest.TestCase):
-    @patch("fastdeploy.engine.common_engine.EngineService.__init__", return_value=None)
+    @patch("fastdeploy.engine.common_engine.EngineSevice.__init__", return_value=None)
     def setUp(self, mock_init):
-        from fastdeploy.engine.common_engine import EngineService
+        from fastdeploy.engine.common_engine import EngineSevice
 
-        self.obj = EngineService(None)
+        self.obj = EngineSevice(None)
         self.obj.data_processor = DummyDataProcessor()
 
     @patch("fastdeploy.engine.common_engine.envs.FD_ENABLE_RETURN_TEXT", True)

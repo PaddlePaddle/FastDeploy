@@ -5,11 +5,11 @@ from unittest.mock import MagicMock, patch
 
 class TestZmqSendGeneratedTokens(TestCase):
     @patch("time.sleep", return_value=None)
-    @patch("fastdeploy.engine.common_engine.EngineService.__init__", return_value=None)
+    @patch("fastdeploy.engine.common_engine.EngineSevice.__init__", return_value=None)
     def setUp(self, mock_init, mock_sleep):
-        from fastdeploy.engine.common_engine import EngineService
+        from fastdeploy.engine.common_engine import EngineSevice
 
-        self.obj = EngineService(None)
+        self.obj = EngineSevice(None)
         self.obj.running = True
 
         # mock 依赖组件
