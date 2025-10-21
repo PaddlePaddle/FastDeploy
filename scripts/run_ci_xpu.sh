@@ -197,7 +197,7 @@ cd xDeepEP
 bash build.sh
 cd -
 
-python tests/ci_use/XPU_45T/test_ep.py
+python tests/ci_use/XPU_45T/run_ep.py
 ep_exit_code=$?
 
 if [ ${ep_exit_code} -ne 0 ]; then
