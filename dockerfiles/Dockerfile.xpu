@@ -1,32 +1,54 @@
-FROM ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddlenlp:llm-base-gcc12.3-xpu-xft20250402-v1.1
-ARG PADDLE_VERSION=3.1.0
-ARG FD_VERSION=2.0.0
+FROM ccr - 2vdh3abv - pub.cnc.bj.baidubce.com / paddlepaddle / paddlenlp : llm -
+    base - gcc12 .3 - xpu - xft20250402 - v1 .1 ARG PADDLE_VERSION =
+    3.1.0 ARG FD_VERSION = 2.0.0
 
-WORKDIR /workspace
+                           WORKDIR /
+                           workspace
 
-ENV http_proxy=http://agent.baidu.com:8891
-ENV https_proxy=http://agent.baidu.com:8891
+                               ENV http_proxy = http
+    :  // agent.baidu.com:8891
+       ENV https_proxy =
+           http :  // agent.baidu.com:8891
 
-RUN echo "\
+                   RUN echo
+                   "\
 deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy main restricted universe multiverse \n\
 deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy-updates main restricted universe multiverse \n\
-deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy-backports main restricted universe multiverse" > /etc/apt/sources.list
+deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy-backports main restricted universe multiverse" >
+                   / etc / apt /
+                           sources.list
 
-RUN apt-get update && apt-get install -y libibverbs-dev librdmacm-dev cmake pybind11-dev
+                               RUN apt -
+                       get update&& apt - get install - y libibverbs -
+                       dev librdmacm - dev cmake pybind11 -
+                       dev
 
-# uninstall existing package
-RUN python -m pip uninstall paddlepaddle-gpu paddlepaddle-xpu -y
-# install paddlepaddle-xpu
-RUN python -m pip install --no-cache-dir --progress-bar off paddlepaddle-xpu==${PADDLE_VERSION} -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
+#uninstall existing package
+                           RUN python -
+                       m pip uninstall paddlepaddle - gpu paddlepaddle - xpu -
+                       y
+#install paddlepaddle - xpu
+                           RUN python -
+                       m pip install-- no - cache - dir-- progress -
+                       bar off paddlepaddle - xpu ==
+           ${PADDLE_VERSION} -
+               i https :  // www.paddlepaddle.org.cn/packages/stable/xpu-p800/
 
-RUN python -m pip install --no-cache-dir fastdeploy-xpu==${FD_VERSION} -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+                          RUN python -
+                          m pip install-- no - cache - dir fastdeploy - xpu ==
+           ${FD_VERSION} -
+               i https
+    :  // www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/
+       // --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
-RUN mkdir -p /workspace/deps && cd /workspace/deps && \
-    wget https://klx-sdk-release-public.su.bcebos.com/xre/kl3-release/5.0.21.21/xre-Linux-x86_64-5.0.21.21.tar.gz && \
+       RUN mkdir -
+       p / workspace / deps&& cd / workspace /
+           deps&& wget https
+    :  //klx-sdk-release-public.su.bcebos.com/xre/kl3-release/5.0.21.21/xre-Linux-x86_64-5.0.21.21.tar.gz && \
     tar -zxf xre-Linux-x86_64-5.0.21.21.tar.gz && mv xre-Linux-x86_64-5.0.21.21 xre
 
-ENV PATH=/workspace/deps/xre/bin:$PATH
+       ENV PATH = / workspace / deps / xre /
+                  bin : $PATH
 
-ENV http_proxy=""
-ENV https_proxy=""
-ENV no_proxy=""
+                            ENV http_proxy = "" ENV https_proxy =
+                      "" ENV no_proxy = ""
