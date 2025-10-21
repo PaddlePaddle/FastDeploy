@@ -798,39 +798,6 @@ class MTPProposer(Proposer):
             if self.model_inputs["not_need_stop"]:
                 self.model_inputs["substep"] = substep
                 # Remove padding
-                (
-                    ids_remove_padding,
-                    batch_id_per_token,
-                    cu_seqlens_q,
-                    cu_seqlens_k,
-                    output_cum_offsets,
-                    output_padding_offset,
-                ) = pre_process(
-                    self.model_inputs["input_ids"],
-                    self.model_inputs["seq_lens_this_time"],
-                    True,
-                    self.model_inputs["draft_tokens"],
-                    self.model_inputs["seq_lens_encoder"],
-                    self.model_inputs["seq_lens_decoder"],
-                )
-
-                # Initialize forward meta data
-                self.model_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
-                self.model_inputs["batch_id_per_token"][:] = -1
-                self.model_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
-                self.model_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
-
-                # For speculative decoding
-                self.model_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
-                self.model_inputs["output_padding_offset"].copy_(output_padding_offset, False)
-
-                # Initialize forward meta data
-                self._initialize_forward_meta(step_use_cudagraph=step_use_cudagraph)
-                self.forward_meta.batch_id_per_token.copy_(batch_id_per_token, False)
-
-                # Padding inputs for cuda graph
-                self.padding_cudagraph_inputs()
-
                 self.forward_meta = xpu_pre_process(
                                         self.model_inputs["input_ids"],
                                         self.model_inputs["seq_lens_this_time"],
@@ -870,7 +837,7 @@ class MTPProposer(Proposer):
                     previous_hidden_states=self.model_inputs["target_hidden_states"],
                     forward_meta=self.forward_meta,
                 )
-                hidden_states = xpu_process_output(model_output, None, self.forward_meta, self.model_inputs)
+                hidden_states = xpu_process_output(model_output, self.model_inputs["cum_offsets"], self.forward_meta, self.model_inputs)
                 # 4. Compute logits, Sample
                 logits = self.model.compute_logits(hidden_states)
                 sampled_token_ids, sampler_output = self.sampler(
@@ -1037,7 +1004,6 @@ class MTPProposer(Proposer):
                 self._post_process(sampled_token_ids)
                 if substep != self.num_model_steps - 1:
                     self._get_self_hidden_states(hidden_states)
-
 
     def _get_self_hidden_states(self, hidden_states):
         target_hidden_states = eagle_get_self_hidden_states(

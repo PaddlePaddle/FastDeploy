@@ -1149,7 +1149,7 @@ class XPUModelRunner(ModelRunnerBase):
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
             )
-        hidden_states = xpu_process_output(model_output, None, self.forward_meta, self.share_inputs)
+        hidden_states = xpu_process_output(model_output, self.share_inputs["cum_offsets"], self.forward_meta, self.share_inputs)
 
         # 4. Compute logits, Sample
         logits = self.model.compute_logits(hidden_states)

@@ -180,7 +180,7 @@ class XPUAttentionBackend(AttentionBackend):
             qkv,
             forward_meta.caches[2 * layer.layer_id],
             forward_meta.caches[2 * layer.layer_id + 1],
-            forward_meta.seq_lens_this_time if forward_meta.seq_lens_this_time is not None else forward_meta.cum_offsets,
+            forward_meta.cum_offsets,
             metadata.rotary_embs,
             metadata.block_tables,
             forward_meta.prefix_block_tables,

@@ -84,6 +84,7 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffsetV2(
   PD_CHECK(r == 0, "XPU speculate_remove_padding failed");
 
   return {x_remove_padding,
+          cum_offsets_out,
           batch_id_per_token,
           cu_seqlens_q,
           cu_seqlens_k};  // , enc_token_num, dec_token_num};
@@ -123,6 +124,7 @@ PD_BUILD_STATIC_OP(speculate_get_padding_offset_v2)
              "seq_len",
              "seq_lens_encoder"})
     .Outputs({"x_remove_padding",
+              "cum_offsets_out",
               "batch_id_per_token",
               "cu_seqlens_q",
               "cu_seqlens_k"})

@@ -288,6 +288,7 @@ def xpu_pre_process(
     if use_speculate_method:
         (
             ids_remove_padding,
+            cum_offsets,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
@@ -316,6 +317,7 @@ def xpu_pre_process(
         )
         share_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
         share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
+        
     else:
         (
             ids_remove_padding,
@@ -324,7 +326,7 @@ def xpu_pre_process(
             cu_seqlens_q,
             cu_seqlens_k,
         ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
-        share_inputs["cum_offsets"] = cum_offsets
+    share_inputs["cum_offsets"] = cum_offsets
 
 
     share_inputs["ids_remove_padding"] = None  # set this after adjust batch
@@ -340,7 +342,7 @@ def xpu_pre_process(
         seq_lens_encoder=share_inputs["seq_lens_encoder"],
         seq_lens_decoder=share_inputs["seq_lens_decoder"],
         seq_lens_this_time=share_inputs["seq_lens_this_time"],
-        cum_offsets=None if use_speculate_method else share_inputs["cum_offsets"],
+        cum_offsets=cum_offsets,
         batch_id_per_token=share_inputs["batch_id_per_token"],
         cu_seqlens_q=share_inputs["cu_seqlens_q"],
         cu_seqlens_k=share_inputs["cu_seqlens_k"],
@@ -382,7 +384,7 @@ def xpu_pre_process(
     if not use_speculate_method:
         adjusted_input = adjust_batch(
             ids_remove_padding.reshape([-1, 1]),
-            cum_offsets if not use_speculate_method else seq_lens_this_time,
+            cum_offsets,
             xpu_forward_meta.encoder_seq_lod,
             xpu_forward_meta.encoder_batch_idx,
             xpu_forward_meta.decoder_batch_idx,
@@ -415,7 +417,7 @@ def xpu_process_output(
     output_padding_offset = share_inputs.get("output_padding_offset", None)
     hiddden_states = gather_next_token(
         forward_output,
-        cum_offsets if cum_offsets is not None else xpu_forward_meta.seq_lens_this_time,
+        cum_offsets,
         xpu_forward_meta.encoder_seq_lod,
         xpu_forward_meta.encoder_batch_map,
         xpu_forward_meta.decoder_batch_map,
