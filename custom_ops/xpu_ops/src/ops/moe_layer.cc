@@ -145,7 +145,8 @@ std::vector<paddle::Tensor> MoeLayerKernel(
                                         ? up_gate_proj_weight_scale.get_ptr()->data<float>()
                                         : nullptr),
                 xftblock_tw,
-                std::vector<int64_t>{expert_num, inter_dim, hidden_dim});
+                std::vector<int64_t>{expert_num, inter_dim, hidden_dim}
+            );
 
             xdown_proj_w = std::make_shared<xftblock::Tensor>(
                 const_cast<TW *>(down_proj_weight.data<TW>()), nullptr,
@@ -153,7 +154,8 @@ std::vector<paddle::Tensor> MoeLayerKernel(
                                         ? down_proj_weight_scale.get_ptr()->data<float>()
                                         : nullptr),
                 xftblock_tw,
-                std::vector<int64_t>{expert_num, hidden_dim, outer_dim});
+                std::vector<int64_t>{expert_num, hidden_dim, outer_dim}
+            );
         }
         std::shared_ptr<xftblock::Tensor> xup_gate_proj_bias;
         std::shared_ptr<xftblock::Tensor> xdown_proj_bias;
@@ -226,8 +228,9 @@ MoeLayer(const paddle::Tensor &x, const paddle::Tensor &gate_weight,
                quant_method == "weight_only_int4") {
         APPLY_MOE_LAYER_KERNEL(paddle::bfloat16, int4_t);
     } else {
-        PD_THROW("MoeLayer not support x_type==%d, w_type==%d",
-                 static_cast<int>(x_type), static_cast<int>(w_type));
+        PD_THROW("MoeLayer not support x_type=", static_cast<int>(x_type),
+                 ", w_type=", static_cast<int>(w_type),
+                 ", quant_method=", quant_method);
         return {};
     }
 #undef APPLY_MOE_LAYER_KERNEL

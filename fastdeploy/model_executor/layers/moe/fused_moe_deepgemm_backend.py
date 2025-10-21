@@ -341,7 +341,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         # 4. Compute ffn
         if token_all_num > 0:
-            logger.info(f"token_all_num {token_all_num}")
+            logger.debug(f"token_all_num {token_all_num}")
             (recv_x, recv_x_scale) = recv_x
 
             token_nums_this_rank = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)
@@ -512,6 +512,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 layer.top_k,
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
+                getattr(layer, "renormalize", True),
             )
         else:
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
@@ -593,6 +594,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             1.0,
         )[0]
         if layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(tmp_ffn_out)
+            tmp_ffn_out = tensor_model_parallel_all_reduce(tmp_ffn_out)
 
         return tmp_ffn_out

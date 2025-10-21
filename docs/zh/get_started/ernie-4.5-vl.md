@@ -1,3 +1,5 @@
+[English](../../get_started/ernie-4.5-vl.md)
+
 # ERNIE-4.5-VL多模态模型
 
 本文档讲解如何部署ERNIE-4.5-VL多模态模型，支持用户使用多模态数据与模型进行对话交互(包含思考Reasoning)，在开始部署前，请确保你的硬件环境满足如下条件：
@@ -27,7 +29,7 @@ export ENABLE_V1_KVCACHE_SCHEDULER=1
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-VL-424B-A47B-Paddle \
        --port 8180 --engine-worker-queue-port 8181 \
-       --cache-queue-port 8182 --metrics-port 8182 \
+       --cache-queue-port 8183 --metrics-port 8182 \
        --tensor-parallel-size 8 \
        --quantization wint4 \
        --max-model-len 32768 \

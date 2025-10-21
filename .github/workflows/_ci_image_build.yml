@@ -29,7 +29,7 @@ jobs:
     outputs:
       docker_name_precheck: ${{ steps.docker_build.outputs.docker_name_precheck }}
     steps:
-      - name: Code Prepare
+      - name: Docker Build
         id: docker_build
         shell: bash
         env:
@@ -53,7 +53,7 @@ jobs:
               fi
             '
 
-            wget -q ${fd_archive_url}
+            wget -q --no-proxy ${fd_archive_url}
             tar -xf FastDeploy.tar.gz
             rm -rf FastDeploy.tar.gz
             cd FastDeploy

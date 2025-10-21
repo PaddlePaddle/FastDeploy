@@ -1,3 +1,4 @@
+[简体中文](../zh/features/early_stop.md)
 
 # Early Stopping
 

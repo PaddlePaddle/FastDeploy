@@ -32,6 +32,7 @@ on:
 jobs:
   run_tests_logprob:
     runs-on: [self-hosted, GPU-h20-1Cards]
+    timeout-minutes: 60
     steps:
       - name: Code Prepare
         shell: bash
@@ -47,7 +48,7 @@ jobs:
             ${docker_image} /bin/bash -c '
             rm -rf /workspace/*
             '
-            wget -q ${paddletest_archive_url}
+            wget -q --no-proxy ${paddletest_archive_url}
             tar -xf PaddleTest.tar.gz
             rm -rf PaddleTest.tar.gz
             cd PaddleTest
@@ -147,6 +148,7 @@ jobs:
           --skip install
 
           cd PaddleTest/framework/ServeTest
+          ps -ef | grep "${FD_CACHE_QUEUE_PORT}" | grep -v grep | awk "{print \$2}" | xargs -r kill -9
           ps -ef | grep "${FD_ENGINE_QUEUE_PORT}" | grep -v grep | awk "{print \$2}" | xargs -r kill -9
           python3.10 deploy.py > dd.log 2>&1 &
           sleep 3

@@ -1,3 +1,5 @@
+[简体中文](../zh/features/plugins.md)
+
 # FastDeploy Plugin Mechanism Documentation
 
 FastDeploy supports a plugin mechanism that allows users to extend functionality without modifying the core code. Plugins are automatically discovered and loaded through Python's `entry_points` mechanism.
@@ -18,7 +20,7 @@ Assuming you have a custom model class `MyModelForCasualLM` and a pretrained cla
 
 ```python
 # File: fd_add_dummy_model/__init__.py or fd_add_dummy_model/register.py
-from fastdeploy.model_registry import ModelRegistry
+from fastdeploy.model_executor.models.model_base import ModelRegistry
 from my_custom_model import MyModelForCasualLM, MyPretrainedModel
 from fastdeploy.config import ErnieArchitectures
 

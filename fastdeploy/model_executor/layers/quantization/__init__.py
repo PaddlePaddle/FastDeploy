@@ -16,6 +16,8 @@ quantization module
 """
 from typing import Dict, List, Type
 
+from fastdeploy.utils import parse_quantization
+
 from .quant_base import QuantConfigBase
 
 QUANTIZATION_METHODS: List[str] = [
@@ -35,6 +37,8 @@ QUANTIZATION_METHODS: List[str] = [
 
 
 def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
+    if args.quantization is not None and isinstance(args.quantization, str):
+        args.quantization = parse_quantization(args.quantization)
     # 1.model_config.is_quantized
     # TODO(bukejiyu)  model_config.is_quantized is v0 only need to be removed in future
     if model_config.model_format == "torch":
@@ -81,6 +85,8 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
     else:
         if not quantization_config.get("is_quantized"):
             quantization_config["is_quantized"] = model_config.is_quantized
+        if args.dynamic_load_weight and quantization_config is not None:
+            quantization_config["is_quantized"] = True
         quant_cls = get_quantization_config(quant_config_name)
         quant_config = quant_cls.from_config(quantization_config)
     return quant_config
