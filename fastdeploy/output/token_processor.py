@@ -260,7 +260,6 @@ class TokenProcessor:
                     request_start_time=task.arrival_time,
                 )
 
-
             if task.pooling_params is not None:
                 pooler_output = stream_data.pooler_output
                 if isinstance(pooler_output, np.ndarray):
