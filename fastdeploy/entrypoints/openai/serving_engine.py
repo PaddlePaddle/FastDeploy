@@ -20,7 +20,7 @@ import traceback
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
-from typing import Any, ClassVar, Dict, Generic, Optional, TypeVar, Union
+from typing import Any, ClassVar, Generic, Optional, TypeVar, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 from typing_extensions import override
@@ -42,10 +42,11 @@ class ServeContext(
 ):
     # Shared across all requests
     request: RequestT
-    request_output: Optional[Union[RequestOutput, PoolingRequestOutput]] = None
     model_name: str
     request_id: str
     created_time: int = Field(default_factory=lambda: int(time.time()))
+    preprocess_requests: Optional[list[dict]] = None
+    request_output: Optional[Union[RequestOutput, PoolingRequestOutput]] = None
 
     # `protected_namespaces` resolves Pydantic v2's warning
     # on conflict with protected namespace "model_"
@@ -136,7 +137,7 @@ class OpenAIServing(ABC, Generic[RequestT]):
         pass
 
     @abstractmethod
-    async def _preprocess(self, ctx: ServeContext) -> Dict:
+    async def _preprocess(self, ctx: ServeContext):
         """Preprocess the request into engine format"""
         pass
 
@@ -239,9 +240,10 @@ class ZmqOpenAIServing(OpenAIServing):
         return [self._request_to_dict(ctx)]
 
     @override
-    async def _preprocess(self, ctx: ServeContext) -> Dict:
+    async def _preprocess(self, ctx: ServeContext):
         """Preprocess the request into engine format"""
         request_dicts = self._request_to_batch_dicts(ctx)
+        ctx.preprocess_requests = request_dicts
         for request_dict in request_dicts:
             api_server_logger.info(f"batch add request_id: {request_dict['request_id']}, request: {request_dict}")
             await self.engine_client.format_and_add_data(request_dict)
@@ -261,17 +263,26 @@ class ZmqOpenAIServing(OpenAIServing):
         request_dict["chat_template_kwargs"] = chat_template_kwargs
 
     @override
-    async def _prepare_generators(self, ctx: ServeContext) -> AsyncGenerator[RequestOutput]:
+    async def _prepare_generators(self, ctx: ServeContext) -> AsyncGenerator[dict]:
         """Prepare a generator of responses"""
         request_id = ctx.request_id
         try:
-            dealer, response_queue = await self.engine_client.connection_manager.get_connection(request_id)
-            dealer.write([b"", request_id.encode("utf-8")])
+            num_choices = len(ctx.preprocess_requests)
+            dealer, request_output_queue = await self.engine_client.connection_manager.get_connection(
+                request_id, num_choices
+            )
+            for pr in ctx.preprocess_requests:
+                dealer.write([b"", pr["request_id"].encode("utf-8")])
             # if self.engine_client.check_model_weight_status():
             #     raise ValueError("Engine is clearing model weight")
-            responses = await asyncio.wait_for(response_queue.get(), timeout=60)
-            for response in responses:
-                yield response
+            while num_choices > 0:
+                request_output_dicts = await asyncio.wait_for(request_output_queue.get(), timeout=60)
+                for request_output_dict in request_output_dicts:
+                    api_server_logger.debug(f"Received RequestOutput: {request_output_dict}")
+                    if request_output_dict["finished"] is True:
+                        num_choices -= 1
+                    yield request_output_dict
+
         except Exception as e:
             raise ValueError(f"Error processing response: {str(e)}")
         finally:

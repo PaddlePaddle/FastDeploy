@@ -29,7 +29,14 @@ import paddle
 import zmq
 
 from fastdeploy import envs
-from fastdeploy.engine.request import CompletionOutput, RequestMetrics, RequestOutput
+from fastdeploy.engine.request import (
+    CompletionOutput,
+    PoolingOutput,
+    PoolingRequestOutput,
+    Request,
+    RequestMetrics,
+    RequestOutput,
+)
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcServer
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
@@ -49,7 +56,6 @@ class TokenProcessor:
     """
 
     def __init__(self, cfg, cached_generated_tokens, engine_worker_queue, split_connector):
-
         paddle.device.set_device("cpu")
         self.cfg = cfg
         self.cached_generated_tokens = cached_generated_tokens
@@ -231,7 +237,7 @@ class TokenProcessor:
             if self.resource_manager.stop_flags[i]:
                 continue
 
-            task = self.resource_manager.tasks_list[i]
+            task: Request = self.resource_manager.tasks_list[i]
 
             task_id = task.request_id
             token_ids = stream_data.tokens  # numpy.array
@@ -254,27 +260,40 @@ class TokenProcessor:
                     request_start_time=task.arrival_time,
                 )
 
-            result = RequestOutput(
-                request_id=task_id,
-                outputs=CompletionOutput(
-                    index=i,
-                    send_idx=self.tokens_counter[task_id],
-                    token_ids=[],
-                    draft_token_ids=[],
-                ),
-                finished=False,
-                metrics=metrics,
-            )
-
-            if self.tokens_counter[task_id] == 0:
-                if task.messages is not None:
-                    result.prompt = task.messages
-            result.num_cached_tokens = task.num_cached_tokens
-
-            is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
-            result = self._process_per_token(task, i, token_ids, result, is_prefill)
-            if not is_prefill or self.cfg.scheduler_config.name == "splitwise":
+            if task.pooling_params is not None:
+                pooler_output = stream_data.pooler_output
+                if isinstance(pooler_output, np.ndarray):
+                    pooler_output = pooler_output.tolist()
+                result = PoolingRequestOutput(
+                    request_id=task_id,
+                    finished=True,
+                    metrics=metrics,
+                    prompt_token_ids=task.prompt_token_ids,
+                    outputs=PoolingOutput(data=pooler_output),
+                )
+                self._recycle_resources(task_id, i, task, result, False)
                 batch_result.append(result)
+            else:
+                result = RequestOutput(
+                    request_id=task_id,
+                    outputs=CompletionOutput(
+                        index=i,
+                        send_idx=self.tokens_counter[task_id],
+                        token_ids=[],
+                        draft_token_ids=[],
+                    ),
+                    finished=False,
+                    metrics=metrics,
+                )
+                if self.tokens_counter[task_id] == 0:
+                    if task.messages is not None:
+                        result.prompt = task.messages
+                    result.num_cached_tokens = task.num_cached_tokens
+
+                is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
+                result = self._process_per_token(task, i, token_ids, result, is_prefill)
+                if not is_prefill or self.cfg.scheduler_config.name == "splitwise":
+                    batch_result.append(result)
 
         return batch_result
 
