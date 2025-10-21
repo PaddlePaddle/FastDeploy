@@ -91,12 +91,12 @@ class TestQwenVLProcessor(unittest.TestCase):
         config.vision_config.tokens_per_second = 2
 
         self.patcher_parse_image = patch(
-            "fastdeploy.entrypoints.chat_utils.MultiModalPartParser.parse_image", return_value=mock_pil_image(480, 640)
+            "fastdeploy.entrypoints.chat_utils.MultimodalPartParser.parse_image", return_value=mock_pil_image(480, 640)
         )
         self.patcher_parse_image.start()
 
         self.patcher_parse_video = patch(
-            "fastdeploy.entrypoints.chat_utils.MultiModalPartParser.parse_video", return_value=b"123"
+            "fastdeploy.entrypoints.chat_utils.MultimodalPartParser.parse_video", return_value=b"123"
         )
         self.patcher_parse_video.start()
 
