@@ -1513,7 +1513,6 @@ class FDConfig:
         if (
             (self.speculative_config is not None and self.speculative_config.method is not None)
             or (self.model_config is not None and self.model_config.enable_mm is True)
-            or (self.load_config is not None and self.load_config.dynamic_load_weight is True)
             or (self.scheduler_config.splitwise_role != "mixed")
         ):
             self.graph_opt_config.use_cudagraph = False
@@ -1642,11 +1641,12 @@ class FDConfig:
                 assert (
                     self.model_config.enable_mm is not True
                 ), "CUDAGraph cannot be applied to multimodal model temporarily"
-        if self.graph_opt_config.graph_opt_level > 0 or self.graph_opt_config.use_cudagraph:
+        if self.graph_opt_config.graph_opt_level > 0:
             if self.load_config is not None:
                 assert (
                     self.load_config.dynamic_load_weight is False
                 ), "Static graph cannot be used in RL scene temporarily"
+
         if int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 1:
             assert (
                 int(envs.FD_DISABLED_RECOVER) == 0
