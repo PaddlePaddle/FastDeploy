@@ -1510,14 +1510,12 @@ class FDConfig:
                 self.structured_outputs_config.guided_decoding_backend = "xgrammar"
 
         # Adjustment GraphOptConfig
-        if (
-            (self.scheduler_config.splitwise_role != "mixed")
-            or (self.model_config is not None and self.model_config.enable_mm is True)
-            or (self.load_config is not None and self.load_config.dynamic_load_weight is True)
+        if (self.scheduler_config.splitwise_role != "mixed") or (
+            self.load_config is not None and self.load_config.dynamic_load_weight is True
         ):
             self.graph_opt_config.use_cudagraph = False
             logger.info(
-                "CUDAGraph does not support to be started together with MultiModel temporarily, but has been automatically closed!"
+                "CUDAGraph does not support to be started together with PD Disaggregation temporarily, but has been automatically closed!"
             )
         if self.load_config is not None and self.load_config.dynamic_load_weight is True:
             self.graph_opt_config.graph_opt_level = 0
@@ -1632,11 +1630,6 @@ class FDConfig:
             self.scheduler_config.check()
 
         # Check graph optimization config
-        if self.graph_opt_config.use_cudagraph:
-            if self.model_config is not None:
-                assert (
-                    self.model_config.enable_mm is not True
-                ), "CUDAGraph cannot be applied to multimodal model temporarily"
         if self.graph_opt_config.graph_opt_level > 0 or self.graph_opt_config.use_cudagraph:
             if self.load_config is not None:
                 assert (
