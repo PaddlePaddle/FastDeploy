@@ -49,6 +49,8 @@ void set_value_by_flags(bool *stop_flags,
         }
         if (!beam_search && is_in_end(topk_ids[bi], end_ids, end_length)) {
             stop_flags[bi] = true;
+            topk_ids[bi] = end_ids[0];
+            next_tokens[bi] = end_ids[0];
         }
     }
 }
