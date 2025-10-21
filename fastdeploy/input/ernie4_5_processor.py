@@ -310,6 +310,8 @@ class Ernie4_5Processor(BaseDataProcessor):
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
+                reasoning_tokens = self.tokenizer.tokenize(reasoning_content)
+                response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
             else:
                 response_dict["outputs"]["text"] = full_text
             if self.tool_parser_obj:

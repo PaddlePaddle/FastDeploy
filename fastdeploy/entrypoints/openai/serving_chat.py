@@ -29,6 +29,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionResponseStreamChoice,
     ChatCompletionStreamResponse,
     ChatMessage,
+    CompletionTokenUsageInfo,
     DeltaMessage,
     ErrorInfo,
     ErrorResponse,
@@ -186,6 +187,7 @@ class OpenAIServingChat:
         num_choices = 1 if request.n is None else request.n
         first_iteration = True
         previous_num_tokens = [0] * num_choices
+        reasoning_num_tokens = [0] * num_choices
         num_prompt_tokens = 0
         tool_called = [False] * num_choices
         max_streaming_response_tokens = (
@@ -309,6 +311,7 @@ class OpenAIServingChat:
                                     completion_tokens=0,
                                     total_tokens=num_prompt_tokens,
                                     prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cached_tokens),
+                                    completion_tokens_details=CompletionTokenUsageInfo(reasoning_tokens=0),
                                 )
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)} \n\n"
                             api_server_logger.info(f"Chat Streaming response send_idx 0: {chunk.model_dump_json()}")
@@ -340,6 +343,8 @@ class OpenAIServingChat:
                             continue
                         delta_message.content = delta_message_output.content or ""
                         delta_message.reasoning_content = delta_message_output.reasoning_content or ""
+                        if delta_message.reasoning_content:
+                            reasoning_num_tokens[idx] += len(output["token_ids"])
                         if delta_message_output.tool_calls:
                             delta_message.tool_calls = delta_message_output.tool_calls
                             tool_called[idx] = True
@@ -378,6 +383,9 @@ class OpenAIServingChat:
                             prompt_tokens=num_prompt_tokens,
                             completion_tokens=previous_num_tokens[idx],
                             total_tokens=num_prompt_tokens + previous_num_tokens[idx],
+                            completion_tokens_details=CompletionTokenUsageInfo(
+                                reasoning_tokens=reasoning_num_tokens[idx]
+                            ),
                         )
                     choices.append(choice)
 
@@ -390,10 +398,12 @@ class OpenAIServingChat:
 
             if include_usage:
                 completion_tokens = sum(previous_num_tokens)
+                reasoning_tokens = sum(reasoning_num_tokens)
                 usage = UsageInfo(
                     prompt_tokens=num_prompt_tokens,
                     completion_tokens=completion_tokens,
                     total_tokens=num_prompt_tokens + completion_tokens,
+                    completion_tokens_details=CompletionTokenUsageInfo(reasoning_tokens=reasoning_tokens),
                 )
                 chunk = ChatCompletionStreamResponse(
                     id=request_id,
@@ -443,6 +453,7 @@ class OpenAIServingChat:
             for rid in request_ids:
                 dealer.write([b"", rid.encode("utf-8")])
             previous_num_tokens = [0] * num_choices
+            reasoning_num_tokens = [0] * num_choices
             current_waiting_time = 0
             logprob_contents = [[] for _ in range(num_choices)]
             completion_token_ids = [[] for _ in range(num_choices)]
@@ -500,6 +511,7 @@ class OpenAIServingChat:
                             logprob_contents[idx].extend(logprobs_res.content)
                     if data["finished"]:
                         num_choices -= 1
+                        reasoning_num_tokens[idx] = data["outputs"].get("reasoning_token_ids", 0)
                         choice = await self._create_chat_completion_choice(
                             data=data,
                             request=request,
@@ -518,11 +530,13 @@ class OpenAIServingChat:
 
         num_prompt_tokens = len(prompt_token_ids)
         num_generated_tokens = sum(previous_num_tokens)
+        num_reasoning_tokens = sum(reasoning_num_tokens)
         usage = UsageInfo(
             prompt_tokens=num_prompt_tokens,
             completion_tokens=num_generated_tokens,
             total_tokens=num_prompt_tokens + num_generated_tokens,
             prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=sum(num_cached_tokens)),
+            completion_tokens_details=CompletionTokenUsageInfo(reasoning_tokens=num_reasoning_tokens),
         )
         choices = sorted(choices, key=lambda x: x.index)
         res = ChatCompletionResponse(
