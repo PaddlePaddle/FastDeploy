@@ -316,12 +316,18 @@ class OpenAIServingChat:
 
                     output = res["outputs"]
                     output_top_logprobs = output["top_logprobs"]
+                    output_draft_top_logprobs = output["draft_top_logprobs"]
                     previous_num_tokens[idx] += len(output["token_ids"])
                     logprobs_res: Optional[LogProbs] = None
+                    draft_logprobs_res: Optional[LogProbs] = None
                     if request.logprobs and output_top_logprobs is not None:
                         logprobs_res = self._create_chat_logprobs(
                             output_top_logprobs, request.logprobs, request.top_logprobs
                         )
+                        if request.include_draft_logprobs and output_draft_top_logprobs is not None:
+                            draft_logprobs_res = self._create_chat_logprobs(
+                                output_draft_top_logprobs, request.logprobs, request.top_logprobs
+                            )
 
                     delta_message = DeltaMessage(
                         reasoning_content="",
@@ -348,6 +354,7 @@ class OpenAIServingChat:
                         index=idx,
                         delta=delta_message,
                         logprobs=logprobs_res,
+                        draft_logprobs=draft_logprobs_res,
                         arrival_time=arrival_time,
                     )
                     if res["finished"]:
@@ -444,7 +451,9 @@ class OpenAIServingChat:
                 dealer.write([b"", rid.encode("utf-8")])
             previous_num_tokens = [0] * num_choices
             current_waiting_time = 0
+
             logprob_contents = [[] for _ in range(num_choices)]
+            draft_logprob_contents = [[] for _ in range(num_choices)]
             completion_token_ids = [[] for _ in range(num_choices)]
             num_cached_tokens = [0] * num_choices
             response_processor = ChatResponseProcessor(
@@ -492,12 +501,23 @@ class OpenAIServingChat:
                     # The logprob for handling the response
                     output = data["outputs"]
                     output_top_logprobs = output["top_logprobs"]
+                    output_draft_top_logprobs = output["draft_top_logprobs"]
                     if output_top_logprobs is not None:
+                        # logprobs
                         logprobs_res = self._create_chat_logprobs(
                             output_top_logprobs, request.logprobs, request.top_logprobs
                         )
                         if logprobs_res and logprobs_res.content is not None:
                             logprob_contents[idx].extend(logprobs_res.content)
+
+                        # draft_logprobs
+                        if request.include_draft_logprobs and output_draft_top_logprobs is not None:
+                            draft_logprobs_res = self._create_chat_logprobs(
+                                output_draft_top_logprobs, request.logprobs, request.top_logprobs
+                            )
+                            if draft_logprobs_res and draft_logprobs_res.content is not None:
+                                draft_logprob_contents[idx].extend(draft_logprobs_res.content)
+
                     if data["finished"]:
                         num_choices -= 1
                         choice = await self._create_chat_completion_choice(
