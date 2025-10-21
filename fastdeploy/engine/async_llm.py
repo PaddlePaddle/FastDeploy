@@ -214,7 +214,7 @@ class AsyncLLMEngine:
 
         self.input_processor = InputPreprocessor(
             cfg.tokenizer,
-            cfg.reasoning_parser,
+            cfg.structured_outputs_config.reasoning_parser,
             cfg.limit_mm_per_prompt,
             cfg.mm_processor_kwargs,
             cfg.model_config.enable_mm,
@@ -266,7 +266,7 @@ class AsyncLLMEngine:
 
         # If block number is specified and model is deployed in splitwise mode, start cache manager first
         if not self.do_profile and self.cfg.scheduler_config.splitwise_role != "mixed":
-            device_ids = self.cfg.device_ids.split(",")
+            device_ids = self.cfg.parallel_config.device_ids.split(",")
             self.cache_manager_processes = self.engine_service.start_cache_service(
                 device_ids, self.ipc_signal_suffix, True
             )
@@ -302,7 +302,7 @@ class AsyncLLMEngine:
         if self.do_profile:
             self._stop_profile()
         elif self.cfg.cache_config.enable_prefix_caching:
-            device_ids = self.cfg.device_ids.split(",")
+            device_ids = self.cfg.parallel_config.device_ids.split(",")
             self.cache_manager_processes = self.engine_service.start_cache_service(
                 device_ids, self.ipc_signal_suffix, False
             )
@@ -722,7 +722,7 @@ class AsyncLLMEngine:
         """
         variables = {
             "ENABLE_FASTDEPLOY_LOAD_MODEL_CONCURRENCY": 0,
-            "LOAD_STATE_DICT_THREAD_NUM": len(self.cfg.device_ids.split(",")),
+            "LOAD_STATE_DICT_THREAD_NUM": len(self.cfg.parallel_config.device_ids.split(",")),
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
@@ -799,11 +799,11 @@ class AsyncLLMEngine:
         if self.cfg.ips is not None:
             ips = ",".join(self.cfg.ips)
         arguments = (
-            f" --devices {self.cfg.device_ids} {py_script}"
+            f" --devices {self.cfg.parallel_config.device_ids} {py_script}"
             f" --max_num_seqs {self.cfg.scheduler_config.max_num_seqs} --max_model_len {self.cfg.model_config.max_model_len}"
             f" --gpu_memory_utilization {self.cfg.cache_config.gpu_memory_utilization}"
             f" --model {self.cfg.model_config.model!s}"
-            f" --device_ids {self.cfg.device_ids}"
+            f" --device_ids {self.cfg.parallel_config.device_ids}"
             f" --tensor_parallel_size {self.cfg.parallel_config.tensor_parallel_size}"
             f" --engine_worker_queue_port {ports}"
             f" --pod_ip {self.cfg.master_ip}"
@@ -823,10 +823,10 @@ class AsyncLLMEngine:
             f" --think_end_id {self.cfg.model_config.think_end_id}"
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
             f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
-            f" --guided_decoding_backend {self.cfg.guided_decoding_backend}"
+            f" --guided_decoding_backend {self.cfg.structured_outputs_config.guided_decoding_backend}"
             f" --load_strategy {self.cfg.load_config.load_strategy}"
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
-            f" --reasoning_parser {self.cfg.reasoning_parser}"
+            f" --reasoning_parser {self.cfg.structured_outputs_config.reasoning_parser}"
             f" --load_choices {self.cfg.load_config.load_choices}"
             f" --plas_attention_config '{self.cfg.plas_attention_config.to_json_string()}'"
             f" --ips {ips}"
@@ -842,7 +842,7 @@ class AsyncLLMEngine:
             "enable_chunked_prefill": self.cfg.cache_config.enable_chunked_prefill,
             "do_profile": self.do_profile,
             "dynamic_load_weight": self.cfg.load_config.dynamic_load_weight,
-            "disable_any_whitespace": self.cfg.disable_any_whitespace,
+            "disable_any_whitespace": self.cfg.structured_outputs_config.disable_any_whitespace,
             "disable_custom_all_reduce": self.cfg.parallel_config.disable_custom_all_reduce,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
@@ -873,7 +873,7 @@ class AsyncLLMEngine:
         self.cfg.cache_config.reset(num_gpu_blocks)
         self.engine_service.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
-            device_ids = self.cfg.device_ids.split(",")
+            device_ids = self.cfg.parallel_config.device_ids.split(",")
             self.cache_manager_processes = self.engine_service.start_cache_service(
                 device_ids, self.ipc_signal_suffix, self.cfg.scheduler_config.splitwise_role != "mixed"
             )
