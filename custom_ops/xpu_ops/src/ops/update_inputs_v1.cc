@@ -17,7 +17,7 @@
 #include "paddle/phi/core/enforce.h"
 #include "xpu/plugin.h"
 
-void UpdateInputesV1(const paddle::Tensor &stop_flags,
+void UpdateInputsV1(const paddle::Tensor &stop_flags,
                      const paddle::Tensor &not_need_stop,  // only on cpu
                      const paddle::Tensor &seq_lens_this_time,
                      const paddle::Tensor &seq_lens_encoder,
@@ -101,4 +101,4 @@ PD_BUILD_OP(update_inputs_v1)
                     {"stop_flags", "stop_flags_out"},
                     {"step_seq_lens_decoder", "step_seq_lens_decoder_out"},
                     {"is_block_step", "is_block_step_out"}})
-    .SetKernelFn(PD_KERNEL(UpdateInputesV1));
+    .SetKernelFn(PD_KERNEL(UpdateInputsV1));

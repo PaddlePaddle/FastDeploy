@@ -46,7 +46,7 @@ __global__ void update_inputs_beam_kernel(
   __syncthreads();
 }
 
-void UpdateInputesBeam(
+void UpdateInputsBeam(
                    const paddle::Tensor& beam_width,
                    const paddle::Tensor& seq_lens_this_time,
                    const paddle::Tensor& seq_lens_encoder,
@@ -86,4 +86,4 @@ PD_BUILD_STATIC_OP(update_inputs_beam)
                     {"seq_lens_encoder", "seq_lens_encoder_out"},
                     {"input_ids", "input_ids_out"},
                     {"logits", "logits_out"}})
-    .SetKernelFn(PD_KERNEL(UpdateInputesBeam));
+    .SetKernelFn(PD_KERNEL(UpdateInputsBeam));
