@@ -39,6 +39,20 @@ class DummyTokenizer:
         return self.vocab
 
 
+class MissingTokenTokenizer:
+    def __init__(self):
+        self.vocab = {
+            "</think>": 100,
+            "<think>": 101,
+            "<tool_call>": 102,
+            "</tool_call>": 103,
+        }
+
+    def get_vocab(self):
+        """Return vocab dict for testing."""
+        return self.vocab
+
+
 class TestReasoningParser(ReasoningParser):
     def is_reasoning_end(self, input_ids):
         """
@@ -128,6 +142,17 @@ class TestErnieX1ReasoningParser(unittest.TestCase):
         self.parser = ErnieX1ReasoningParser(DummyTokenizer())
         self.request = ChatCompletionRequest(model="test", messages=[{"role": "user", "content": "test message"}])
         self.tokenizer = DummyTokenizer()
+
+    def test_missing_token(self):
+        with self.assertRaises(RuntimeError) as context:
+            ErnieX1ReasoningParser(MissingTokenTokenizer())
+        exception_message = str(context.exception)
+        expected_message_part = "ernie x1 reasoning parser could not find the following token ids"
+        self.assertIn(expected_message_part, exception_message)
+
+    def test_get_model_status(self):
+        model_status = self.parser.get_model_status([88, 99, 104])
+        self.assertEqual(model_status, "response_start")
 
     # ---- Streaming parsing ----
     def test_streaming_thinking_content(self):
@@ -227,6 +252,78 @@ class TestErnieX1ReasoningParser(unittest.TestCase):
             )
         )
 
+    def test_extract_reasoning_content_streaming(self):
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="hello</think>",
+            current_text="hello</think><response>",
+            delta_text="</think><response>",
+            previous_token_ids=[],
+            current_token_ids=[],
+            delta_token_ids=[100, 200],
+            model_status="think_start",
+        )
+        self.assertEqual(msg.content, "")
+        self.assertEqual(msg.reasoning_content, "")
+
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="hello</think>",
+            current_text="hello</think><response>hi",
+            delta_text="</think><response>hi",
+            previous_token_ids=[],
+            current_token_ids=[],
+            delta_token_ids=[100, 200],
+            model_status="think_start",
+        )
+        self.assertEqual(msg.content, "hi")
+        self.assertEqual(msg.reasoning_content, "")
+
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="",
+            current_text="hello</think><response>hi",
+            delta_text="hello</think><response>hi",
+            previous_token_ids=[],
+            current_token_ids=[],
+            delta_token_ids=[100, 200],
+            model_status="think_start",
+        )
+        self.assertEqual(msg.content, "hi")
+        self.assertEqual(msg.reasoning_content, "hello")
+
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="hello</think><response>",
+            current_text="hello</think><response>hi",
+            delta_text="hi",
+            previous_token_ids=[],
+            current_token_ids=[],
+            delta_token_ids=[100, 200],
+            model_status="think_end",
+        )
+        self.assertEqual(msg.content, "hi")
+        self.assertEqual(msg.reasoning_content, None)
+
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="hello</think><response>",
+            current_text="hello</think><response>hi",
+            delta_text="hi",
+            previous_token_ids=[],
+            current_token_ids=[],
+            delta_token_ids=[100, 200],
+            model_status="response_start",
+        )
+        self.assertEqual(msg.content, "hi")
+        self.assertEqual(msg.reasoning_content, None)
+
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="hello</think><response>hi</response>",
+            current_text="hello</think><response>hi</response>end",
+            delta_text="end",
+            previous_token_ids=[],
+            current_token_ids=[],
+            delta_token_ids=[100, 200],
+            model_status="response_start",
+        )
+        self.assertEqual(msg, None)
+
     def test_streaming_tool_call(self):
         msg = self.parser.extract_reasoning_content_streaming(
             previous_text="</think>",
@@ -237,7 +334,6 @@ class TestErnieX1ReasoningParser(unittest.TestCase):
             delta_token_ids=[self.parser.vocab["<tool_call>"]],
             model_status="think_start",
         )
-        print(msg)
         self.assertIsNone(msg)
 
     # ---- Batch parsing ----
@@ -270,6 +366,13 @@ class TestErnieX1ReasoningParser(unittest.TestCase):
         reasoning, response = self.parser.extract_reasoning_content(text, self.request, "think_start")
         self.assertEqual(reasoning, "abc\n")
         self.assertEqual(response, "line1\nline2\n")
+
+    def test_extract_reasoning_content(self):
+        reasoning_content, response_content = self.parser.extract_reasoning_content(
+            model_output="hello", request=self.request, model_status="response_start"
+        )
+        self.assertEqual(reasoning_content, "")
+        self.assertEqual(response_content, "hello")
 
 
 if __name__ == "__main__":

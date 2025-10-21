@@ -89,8 +89,7 @@ class ErnieX1ReasoningParser(ReasoningParser):
             return None
 
         if model_status == "think_start":
-            if self.think_end_token_id in delta_token_ids:
-                reasoning_content = ""
+            if self.think_end_token in delta_text:
                 response_content = ""
                 end_index = delta_text.find(self.think_end_token)
                 reasoning_content = delta_text[:end_index]
