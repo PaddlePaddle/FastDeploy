@@ -103,7 +103,7 @@ void LimitThinkingContentLengthV2(const paddle::Tensor &next_tokens,
         batch_size);
 }
 
-PD_BUILD_OP(limit_thinking_content_length_v2)
+PD_BUILD_STATIC_OP(limit_thinking_content_length_v2)
     .Inputs({"next_tokens", "max_think_lens", "step_idx", "limit_think_status"})
     .Attrs({"think_end_id: int64_t", "line_break_id: int64_t"})
     .Outputs({"next_tokens_out"})
