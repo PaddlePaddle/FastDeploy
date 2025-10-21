@@ -1,10 +1,12 @@
 import os
+
 import psutil
+
 from fastdeploy import LLM, SamplingParams
 
+
 def test_fd_ep():
-    """
-    """
+    """ """
 
     msg1 = [
         {"role": "system", "content": ""},
@@ -18,7 +20,7 @@ def test_fd_ep():
     # 模型路径与设备配置
     model = os.getenv("model_path", "/home/ERNIE-4.5-300B-A47B-Paddle")
     xpu_visible_devices = os.getenv("XPU_VISIBLE_DEVICES", "0")
-    xpu_device_num = len(xpu_visible_devices.split(','))
+    xpu_device_num = len(xpu_visible_devices.split(","))
 
     enable_expert_parallel = True
     if enable_expert_parallel:
