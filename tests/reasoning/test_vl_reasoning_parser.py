@@ -111,8 +111,8 @@ class TestErnieVLReasoningParser(unittest.TestCase):
             request={},
             model_status="think_start",
         )
-        self.assertEqual(reasoning_content, "a")
-        self.assertEqual(content, "")
+        self.assertEqual(reasoning_content, "")
+        self.assertEqual(content, "a")
 
         reasoning_content, content = self.parser.extract_reasoning_content(
             model_output="a</think>b",
