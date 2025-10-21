@@ -14,11 +14,8 @@
 # limitations under the License.
 """
 
-from typing import Dict, List
-
 import paddle
 
-from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.model_executor.logits_processor.base import LogitsProcessor
 from fastdeploy.utils import llm_logger
@@ -29,8 +26,7 @@ class LogitBiasLogitsProcessor(LogitsProcessor):
     Maintains per-request logit biases and applies them to logits.
     """
 
-    def __init__(self, fd_config: FDConfig):
-        self.fd_config = fd_config
+    def __init__(self):
         self.biases: dict[str, dict[int, float]] = {}  # req_id -> {tok_id -> bias}
         self.device = paddle.device.get_device()
         self.bias_indices = (
@@ -45,7 +41,7 @@ class LogitBiasLogitsProcessor(LogitsProcessor):
         outcome of argmax in greedy sampling."""
         return False
 
-    def update_state(self, batch: List[Request], share_inputs: Dict):
+    def update_state(self, batch: list[Request] | None, share_inputs: dict):
 
         if batch is None:
             self.skipped = True
@@ -54,12 +50,12 @@ class LogitBiasLogitsProcessor(LogitsProcessor):
             self.skipped = False
 
         need_updates = False
-        batch_req_slot_map: dict = {}
-        for request in batch:
+        req_id_batch_id_map: dict = {}
+        for batch_id, request in enumerate(batch):
             # Get request_id (a unique string) and its slot_id in running batch
             request_id: str = request.request_id
             slot_id: int = request.idx
-            batch_req_slot_map[request_id] = slot_id
+            req_id_batch_id_map[request_id] = batch_id
 
             # Insert bias states for this request
             logit_bias = share_inputs["logit_bias"][slot_id]
@@ -69,23 +65,23 @@ class LogitBiasLogitsProcessor(LogitsProcessor):
 
         # Remove bias states for requests that are no longer in the batch
         for request_id in list(self.biases):
-            if request_id not in batch_req_slot_map:
+            if request_id not in req_id_batch_id_map:
                 self.biases.pop(request_id)
                 need_updates = True
 
         if need_updates:
             # Make bias indices and bias tensor
-            slot_ids: list[int] = []
+            batch_ids: list[int] = []
             token_ids: list[int] = []
             biases: list[float] = []
             for request_id, tok_id_bias_map in self.biases.items():
-                slot_ids.extend([batch_req_slot_map[request_id]] * len(tok_id_bias_map))
+                batch_ids.extend([req_id_batch_id_map[request_id]] * len(tok_id_bias_map))
                 token_ids.extend(tok_id_bias_map.keys())
                 biases.extend(tok_id_bias_map.values())
-            llm_logger.debug(f"slot_ids={slot_ids}, token_ids={token_ids}, biases={biases}")
+            llm_logger.debug(f"batch_ids={batch_ids}, token_ids={token_ids}, biases={biases}")
 
             self.bias_indices = (
-                paddle.tensor(slot_ids, dtype="int32").to(self.device),
+                paddle.tensor(batch_ids, dtype="int32").to(self.device),
                 paddle.tensor(token_ids, dtype="int32").to(self.device),
             )
             self.bias_tensor = paddle.tensor(biases, dtype="float32").to(self.device)

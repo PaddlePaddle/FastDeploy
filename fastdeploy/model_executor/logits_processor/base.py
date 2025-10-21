@@ -18,12 +18,10 @@ from abc import ABC, abstractmethod
 
 from paddle import Tensor
 
-from fastdeploy.config import FDConfig
-
 
 class LogitsProcessor(ABC):
     @abstractmethod
-    def __init__(self, fd_config: FDConfig) -> None:
+    def __init__(self) -> None:
         raise NotImplementedError
 
     @abstractmethod
