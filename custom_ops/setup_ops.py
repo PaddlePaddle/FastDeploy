@@ -251,6 +251,7 @@ if paddle.is_compiled_with_rocm():
     )
 elif paddle.is_compiled_with_cuda():
     sources = [
+        "gpu_ops/helper.cu",
         "gpu_ops/save_with_output_msg.cc",
         "gpu_ops/get_output.cc",
         "gpu_ops/get_output_msg_with_topk.cc",
@@ -499,7 +500,7 @@ elif paddle.is_compiled_with_cuda():
             sources=sources,
             extra_compile_args={"cxx": cc_compile_args, "nvcc": nvcc_compile_args},
             libraries=["cublasLt"],
-            extra_link_args=["-lcuda"],
+            extra_link_args=["-lcuda", "-lnvidia-ml"],
         ),
         packages=find_packages(where="third_party/DeepGEMM"),
         package_dir={"": "third_party/DeepGEMM"},

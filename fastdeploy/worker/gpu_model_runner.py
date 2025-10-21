@@ -28,6 +28,7 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
+    GPUMemoryChecker,
     profile_run_guard,
     sot_warmup_guard,
 )
@@ -155,6 +156,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
         self.cudagraph_only_prefill = self.graph_opt_config.cudagraph_only_prefill
+        self.mem_checker = GPUMemoryChecker(device_id=self.device_id, print_debug_info=False)
 
         # Initialize share inputs
         self._init_share_inputs(self.scheduler_config.max_num_seqs)
@@ -1660,67 +1662,90 @@ class GPUModelRunner(ModelRunnerBase):
         time_before_capture = time.perf_counter()
         expected_decode_len = 1
         capture_sizes = self.cudagraph_capture_sizes.copy()
-        if self.fd_config.graph_opt_config.cudagraph_only_prefill:
-            for num_tokens in sorted(capture_sizes, reverse=True):
-                self._dummy_run(
-                    num_tokens=num_tokens,
-                    batch_size=self.scheduler_config.max_num_seqs,
-                    in_capturing=True,
-                    expected_decode_len=expected_decode_len,
-                    capture_prefill=True,
-                )
-                logger.info(
-                    f"Warm up the model with the num_tokens:{num_tokens}, expected_decode_len:{expected_decode_len}"
-                )
-        elif self.speculative_decoding and self.speculative_method == "mtp":
-            # Capture Target Model without bsz 1
-            for batch_size in sorted(capture_sizes, reverse=True):
-                if batch_size == 1:
-                    logger.info("Skip token_num = 1, when capture target model for mtp")
-                else:
-                    assert batch_size % 2 == 0
+        try:
+            if self.fd_config.graph_opt_config.cudagraph_only_prefill:
+                for num_tokens in sorted(capture_sizes, reverse=True):
                     self._dummy_run(
-                        num_tokens=self.scheduler_config.max_num_batched_tokens,
-                        batch_size=int(batch_size / 2),
+                        num_tokens=num_tokens,
+                        batch_size=self.scheduler_config.max_num_seqs,
                         in_capturing=True,
-                        expected_decode_len=1,
+                        expected_decode_len=expected_decode_len,
+                        capture_prefill=True,
                     )
-                    logger.info(f"Warm up the Target model with the num_tokens:{batch_size}, expected_decode_len:{1}")
-            # Capture Draft Model without bsz 1
-            # NOTE(liujundong): expected_decode_len = 1, will affect mtp capture in cudagraph
-            for batch_size in sorted(capture_sizes, reverse=True):
-                if batch_size == 1:
-                    logger.info("Skip token_num = 1, when capture Draft model for mtp")
-                else:
-                    assert batch_size % 2 == 0
+                    logger.info(
+                        f"Warm up the model with the num_tokens:{num_tokens}, expected_decode_len:{expected_decode_len}"
+                    )
+            elif self.speculative_decoding and self.speculative_method == "mtp":
+                # Capture Target Model without bsz 1
+                for batch_size in sorted(capture_sizes, reverse=True):
+                    if batch_size == 1:
+                        logger.info("Skip token_num = 1, when capture target model for mtp")
+                    else:
+                        assert batch_size % 2 == 0
+                        self._dummy_run(
+                            num_tokens=self.scheduler_config.max_num_batched_tokens,
+                            batch_size=int(batch_size / 2),
+                            in_capturing=True,
+                            expected_decode_len=1,
+                        )
+                        logger.info(
+                            f"Warm up the Target model with the num_tokens:{batch_size}, expected_decode_len:{1}"
+                        )
+                # Capture Draft Model without bsz 1
+                # NOTE(liujundong): expected_decode_len = 1, will affect mtp capture in cudagraph
+                for batch_size in sorted(capture_sizes, reverse=True):
+                    if batch_size == 1:
+                        logger.info("Skip token_num = 1, when capture Draft model for mtp")
+                    else:
+                        assert batch_size % 2 == 0
+                        self._dummy_run(
+                            num_tokens=self.scheduler_config.max_num_batched_tokens,
+                            batch_size=int(batch_size / 2),
+                            in_capturing=True,
+                            expected_decode_len=3,
+                            accept_all_drafts=True,
+                        )
+                        logger.info(
+                            f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}"
+                        )
+                # Capture Draft Model with bsz 1
+                if 1 in capture_sizes:
                     self._dummy_run(
                         num_tokens=self.scheduler_config.max_num_batched_tokens,
-                        batch_size=int(batch_size / 2),
+                        batch_size=int(1),
                         in_capturing=True,
                         expected_decode_len=3,
-                        accept_all_drafts=True,
+                        accept_all_drafts=False,
                     )
                     logger.info(f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}")
-            # Capture Draft Model with bsz 1
-            if 1 in capture_sizes:
-                self._dummy_run(
-                    num_tokens=self.scheduler_config.max_num_batched_tokens,
-                    batch_size=int(1),
-                    in_capturing=True,
-                    expected_decode_len=3,
-                    accept_all_drafts=False,
-                )
-                logger.info(f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}")
 
-        else:
-            for batch_size in sorted(capture_sizes, reverse=True):
-                self._dummy_run(
-                    num_tokens=self.scheduler_config.max_num_batched_tokens,
-                    batch_size=batch_size,
-                    in_capturing=True,
-                    expected_decode_len=expected_decode_len,
-                )
-                logger.info(f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}")
+            else:
+                for batch_size in sorted(capture_sizes, reverse=True):
+                    self._dummy_run(
+                        num_tokens=self.scheduler_config.max_num_batched_tokens,
+                        batch_size=batch_size,
+                        in_capturing=True,
+                        expected_decode_len=expected_decode_len,
+                    )
+                    logger.info(
+                        f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}"
+                    )
+        except RuntimeError as e:
+            if "out of memory" in str(e):
+                raise RuntimeError(
+                    "CUDA out of memory occurred when warming up CUDAGraph "
+                    f"with the capture sizes {capture_sizes}. Please try "
+                    "lowering `max_num_seqs` or `gpu_memory_utilization` when "
+                    "initializing the engine."
+                ) from e
+            if "CUDA error(700)" in str(e):
+                raise RuntimeError(
+                    "CUDA error(700), an illegal memory access was encountered, "
+                    "when warming up CUDAGraph. Please try to set the startup parameter: "
+                    "--graph-optimization-config '{\"use_cudagraph\": false}' to close CUDAGraph"
+                ) from e
+            else:
+                raise e
 
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
@@ -1818,8 +1843,8 @@ class GPUModelRunner(ModelRunnerBase):
             self.model_config.max_model_len,
         )
 
-        logits = None
         # 4. Compute logits, Sample
+        logits = None
         if hasattr(self.model, "is_pooling_model") and self.model.is_pooling_model:
             # TODO(lizexu123) The execution of the pooling function have not been implemented yet.
             pass
@@ -1937,7 +1962,6 @@ class GPUModelRunner(ModelRunnerBase):
         # 7. Update 'infer_seed' and step_cuda()
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
         self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
-
         if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             step_cuda(
                 self.share_inputs,

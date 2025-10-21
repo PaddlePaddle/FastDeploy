@@ -121,9 +121,8 @@ def setup_and_run_server():
         "--quantization",
         "wint4",
         "--no-enable-prefix-caching",
-        "--use-cudagraph",
         "--graph-optimization-config",
-        '{"cudagraph_capture_sizes": [1]}',
+        '{"use_cudagraph":true, "cudagraph_capture_sizes": [1]}',
     ]
 
     # Start subprocess in new process group

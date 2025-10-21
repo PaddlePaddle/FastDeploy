@@ -112,7 +112,6 @@ def setup_and_run_server():
         "128",
         "--quantization",
         "wint4",
-        "--use-cudagraph",
         "--graph-optimization-config",
         '{"cudagraph_capture_sizes": [1]}',
         "--guided-decoding-backend",
