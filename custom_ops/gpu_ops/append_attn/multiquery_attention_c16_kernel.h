@@ -32,6 +32,7 @@ void MultiQueryAppendAttention(
     const paddle::optional<paddle::Tensor> &attn_mask,
     const paddle::optional<paddle::Tensor> &shift_bias,
     const paddle::optional<paddle::Tensor> &smooth_weight,
+    const paddle::optional<paddle::Tensor> &sinks,
     const paddle::Tensor &seq_lens_q,
     const paddle::Tensor &seq_lens_kv,
     const paddle::Tensor &seq_lens_encoder,
@@ -51,4 +52,5 @@ void MultiQueryAppendAttention(
     const int speculate_max_draft_token_num,
     const bool is_decoder,
     cudaStream_t &stream,
-    paddle::Tensor *out);
+    paddle::Tensor *out,
+    const int sliding_window);
