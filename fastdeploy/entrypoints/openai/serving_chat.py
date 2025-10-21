@@ -510,7 +510,7 @@ class OpenAIServingChat:
                         if logprobs_res and logprobs_res.content is not None:
                             logprob_contents[idx].extend(logprobs_res.content)
 
-                        # draf_logprobs
+                        # draft_logprobs
                         if request.include_draft_logprobs and output_draft_top_logprobs is not None:
                             draft_logprobs_res = self._create_chat_logprobs(
                                 output_draft_top_logprobs, request.logprobs, request.top_logprobs
