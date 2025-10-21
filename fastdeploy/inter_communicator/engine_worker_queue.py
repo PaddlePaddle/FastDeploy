@@ -297,7 +297,7 @@ class EngineWorkerQueue:
         raise ConnectionError(f"TaskQueue cannot connect {self.address}")
 
     @staticmethod
-    def to_tensor(tasks: List[Any]):
+    def to_tensor(tasks):
         """
         Convert NumPy arrays in multimodal inputs to PaddlePaddle tensors.
 
@@ -305,17 +305,21 @@ class EngineWorkerQueue:
             tasks: List of tasks containing multimodal inputs.
         """
         try:
-            if envs.FD_ENABLE_MM_TENSOR_CONVERT:
-                for task in tasks:
+            if envs.FD_ENABLE_MULTIMODAL_TENSOR_TRANSFER:
+                llm_logger.debug(f"Convert image to tensor, type: {type(tasks)}")
+                batch_tasks, _ = tasks
+                for task in batch_tasks:
                     if not hasattr(task, "multimodal_inputs"):
                         continue
                     images = task.multimodal_inputs["images"]
-                    task.multimodal_inputs["images"] = paddle.to_tensor(images)
+                    if isinstance(images, np.ndarray):
+                        llm_logger.debug(f"Convert image to tensor, shape: {images.shape}")
+                        task.multimodal_inputs["images"] = paddle.to_tensor(images)
         except Exception as e:
             llm_logger.warning(f"Failed to convert to tensor: {e}")
 
     @staticmethod
-    def to_numpy(tasks: List[Any]):
+    def to_numpy(tasks):
         """
         Convert PaddlePaddle tensors in multimodal inputs to NumPy arrays.
 
@@ -323,13 +327,15 @@ class EngineWorkerQueue:
             tasks: List of tasks containing multimodal inputs.
         """
         try:
-            if envs.FD_ENABLE_MM_TENSOR_CONVERT:
-                for task in tasks:
-                    if not hasattr(task, "multimodal_inputs"):
-                        continue
-                    images = task.multimodal_inputs.get("images", None)
-                    if isinstance(images, paddle.Tensor):
-                        task.multimodal_inputs["images"] = images.numpy()
+            if envs.FD_ENABLE_MULTIMODAL_TENSOR_TRANSFER:
+                for batch_tasks, _ in tasks:
+                    for task in batch_tasks:
+                        if not hasattr(task, "multimodal_inputs"):
+                            continue
+                        images = task.multimodal_inputs.get("images", None)
+                        if isinstance(images, paddle.Tensor):
+                            llm_logger.debug(f"Convert image to numpy, shape: {images.shape}")
+                            task.multimodal_inputs["images"] = images.numpy()
         except Exception as e:
             llm_logger.warning(f"Failed to convert to numpy: {e}")
 
@@ -366,9 +372,9 @@ class EngineWorkerQueue:
         self.lock.acquire()
 
         # 多模态输入转换为numpy
+        tasks.extend(self.tasks)
         EngineWorkerQueue.to_numpy(tasks)
 
-        tasks.extend(self.tasks)
         self.client_read_flag[self.client_id] = 1
         all_client_read: bool = np.sum(self.client_read_flag) == self.num_client
         if all_client_read:
