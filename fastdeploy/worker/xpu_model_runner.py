@@ -346,10 +346,6 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["penalty_score"][idx : idx + 1] = request.get("repetition_penalty", 1.0)
             self.share_inputs["frequency_score"][idx : idx + 1] = request.get("frequency_penalty", 0.0)
             self.share_inputs["presence_score"][idx : idx + 1] = request.get("presence_penalty", 0.0)
-            self.share_inputs["temp_scaled_logprobs"][idx : idx + 1] = request.get("temp_scaled_logprobs", False)
-            self.share_inputs["top_p_normalized_logprobs"][idx : idx + 1] = request.get(
-                "top_p_normalized_logprobs", False
-            )
             self.share_inputs["min_dec_len"][idx : idx + 1] = request.get("min_tokens", 1)
             self.share_inputs["max_dec_len"][idx : idx + 1] = request.get(
                 "max_tokens", self.model_config.max_model_len

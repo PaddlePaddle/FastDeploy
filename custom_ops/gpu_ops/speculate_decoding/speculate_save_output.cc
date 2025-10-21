@@ -23,9 +23,6 @@
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
 
-#define GET_OUTPUT_DEBUG
-#define SAVE_WITH_OUTPUT_DEBUG
-
 #include "speculate_msg.h"
 
 void SpeculateSaveWithOutputMsg(const paddle::Tensor& accept_tokens,
