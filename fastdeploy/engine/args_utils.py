@@ -354,10 +354,6 @@ class EngineArgs:
     """
     SplitWise Use, Results Writer Batch Size
     """
-    use_cudagraph: bool = False
-    """
-    Flags to enable Cuda Graph
-    """
     graph_optimization_config: Optional[Dict[str, Any]] = None
     """
     Configuration for graph optimization backend execution.
@@ -416,8 +412,6 @@ class EngineArgs:
         # if self.dynamic_load_weight:
         #     self.enable_prefix_caching = False
         if self.enable_logprob:
-            if self.speculative_config is not None:
-                raise NotImplementedError("Logprob does not support speculation_config.")
             if not current_platform.is_cuda():
                 raise NotImplementedError("Only CUDA platform supports logprob.")
         if self.speculative_config is not None:
@@ -589,16 +583,10 @@ class EngineArgs:
             "More complex quantization methods need to be configured via the config file.",
         )
         model_group.add_argument(
-            "--use-cudagraph",
-            action="store_true",
-            default=EngineArgs.use_cudagraph,
-            help="Flags to enable cuda graph.",
-        )
-        model_group.add_argument(
             "--graph-optimization-config",
             type=json.loads,
             default=EngineArgs.graph_optimization_config,
-            help="",
+            help="Configuration for graph optimization",
         )
         model_group.add_argument(
             "--plas-attention-config",
@@ -1059,7 +1047,6 @@ class EngineArgs:
         parallel_cfg = ParallelConfig(all_dict)
         scheduler_cfg = self.create_scheduler_config()
         graph_opt_cfg = self.create_graph_optimization_config()
-        graph_opt_cfg.update_use_cudagraph(self.use_cudagraph)
         plas_attention_config = self.create_plas_attention_config()
 
         early_stop_cfg = self.create_early_stop_config()

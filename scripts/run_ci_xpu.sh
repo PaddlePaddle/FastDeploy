@@ -176,3 +176,33 @@ if [ ${kv_block_test_exit_code} -ne 0 ]; then
     echo "kv block相关测试失败，请检查pr代码"
     exit 1
 fi
+
+echo "============================开始EP并行测试!============================"
+sleep 5
+rm -rf log/*
+rm -f core*
+xpu-smi
+export XPU_VISIBLE_DEVICES="0,1,2,3"
+export BKCL_ENABLE_XDR=1
+export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
+export BKCL_TRACE_TOPO=1
+export BKCL_PCIE_RING=1
+export XSHMEM_MODE=1
+export XSHMEM_QP_NUM_PER_RANK=32
+export BKCL_RDMA_VERBS=1
+
+wget -q https://paddle-qa.bj.bcebos.com/xpu_third_party/xDeepEP.tar.gz
+tar -xzf xDeepEP.tar.gz
+cd xDeepEP
+bash build.sh
+cd -
+
+python tests/ci_use/XPU_45T/run_ep.py
+ep_exit_code=$?
+
+if [ ${ep_exit_code} -ne 0 ]; then
+    echo "log/workerlog.0"
+    cat log/workerlog.0
+    echo "EP并行 相关测试失败，请检查pr代码"
+    exit 1
+fi
