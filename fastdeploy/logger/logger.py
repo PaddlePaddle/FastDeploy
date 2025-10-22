@@ -156,6 +156,6 @@ class FastDeployLogger:
             console_handler.propagate = False
 
         # 设置propagate（保持原有逻辑）
-        logger.propagate = False
+        # logger.propagate = False
 
         return logger
