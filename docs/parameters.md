@@ -37,9 +37,9 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```long_prefill_token_threshold``` | `int` | When Chunked Prefill is enabled, requests with token count exceeding this value are considered long requests, default: max_model_len*0.04 |
 | ```static_decode_blocks``` | `int` | During inference, each request is forced to allocate corresponding number of blocks from Prefill's KVCache for Decode use, default: 2 |
 | ```reasoning_parser``` | `str` | Specify the reasoning parser to extract reasoning content from model output |
-| ```use_cudagraph```                | `bool`      | Whether to use cuda graph, default False. It is recommended to read [graph_optimization.md](./features/graph_optimization.md) carefully before opening. Custom all-reduce needs to be enabled at the same time in multi-card scenarios. |
-| ```graph_optimization_config```    | `dict[str]`       | Can configure parameters related to calculation graph optimization, the default value is'{"use_cudagraph":false, "graph_opt_level":0, "cudagraph_capture_sizes": null }'，Detailed description reference [graph_optimization.md](./features/graph_optimization.md)|
-| ```enable_custom_all_reduce``` | `bool` | Enable Custom all-reduce, default: False |
+| ```use_cudagraph```                | `bool`      | __[DEPRECATED]__ CUDAGraph is enabled by default since version 2.3. It is recommended to read [graph_optimization.md](./features/graph_optimization.md) carefully before opening. |
+| ```graph_optimization_config```    | `dict[str]`       | Can configure parameters related to calculation graph optimization, the default value is'{"use_cudagraph":true, "graph_opt_level":0}'，Detailed description reference [graph_optimization.md](./features/graph_optimization.md)|
+| ```disable_custom_all_reduce``` | `bool` | Disable Custom all-reduce, default: False |
 | ```splitwise_role``` | `str` | Whether to enable splitwise inference, default value: mixed, supported parameters: ["mixed", "decode", "prefill"] |
 | ```innode_prefill_ports``` | `str` | Internal engine startup ports for prefill instances (only required for single-machine PD separation), default: None |
 | ```guided_decoding_backend``` | `str` | Specify the guided decoding backend to use, supports `auto`, `xgrammar`, `off`, default: `off` |
