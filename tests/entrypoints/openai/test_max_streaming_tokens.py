@@ -472,14 +472,14 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         response_data = [
             {
                 "request_id": "test-request-id_0",
-                "outputs": {"token_ids": [1], "text": "a", "top_logprobs": None},
+                "outputs": {"token_ids": [1], "text": "a", "top_logprobs": None, "draft_top_logprobs": None},
                 "metrics": {"first_token_time": 0.1, "inference_start_time": 0.1, "request_start_time": 0.0},
                 "finished": False,
                 "num_cached_tokens": 5,
             },
             {
                 "request_id": "test-request-id_0",
-                "outputs": {"token_ids": [2, 3], "text": "bc", "top_logprobs": None},
+                "outputs": {"token_ids": [2, 3], "text": "bc", "top_logprobs": None, "draft_top_logprobs": None},
                 "metrics": {"arrival_time": 0.3, "first_token_time": None, "request_start_time": 0.0},
                 "finished": True,
             },
@@ -581,16 +581,26 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             [
                 {
                     "request_id": "test-request-id_0",
-                    "outputs": {"token_ids": [10], "text": "a", "top_logprobs": None},
-                    "metrics": {"first_token_time": 0.1, "inference_start_time": 0.1, "request_start_time": 0.0},
+                    "outputs": {"token_ids": [10], "text": "a", "top_logprobs": None, "draft_top_logprobs": None},
+                    "metrics": {
+                        "arrival_time": 0.3,
+                        "first_token_time": 0.1,
+                        "inference_start_time": 0.1,
+                        "request_start_time": 0.0,
+                    },
                     "finished": False,
                 }
             ],
             [
                 {
                     "request_id": "test-request-id_0",
-                    "outputs": {"token_ids": [2], "text": "bc", "top_logprobs": None},
-                    "metrics": {"arrival_time": 0.3, "first_token_time": None, "request_start_time": 0.0},
+                    "outputs": {"token_ids": [2], "text": "bc", "top_logprobs": None, "draft_top_logprobs": None},
+                    "metrics": {
+                        "arrival_time": 0.3,
+                        "first_token_time": 0.1,
+                        "inference_start_time": 0.1,
+                        "request_start_time": 0.0,
+                    },
                     "finished": True,
                 }
             ],
