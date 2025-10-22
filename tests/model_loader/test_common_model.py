@@ -25,6 +25,7 @@ if project_root not in sys.path:
 from tests.model_loader.utils import (
     check_tokens_id_and_text_close,
     form_model_get_output_topp0,
+    form_model_get_output_topp1,
     get_paddle_model_path,
     run_with_timeout,
 )
@@ -48,6 +49,7 @@ model_param_map = {
     "Qwen2-7B-Instruct": {
         "quantizations": ["wint4"],
     },
+    "Qwen2.5-VL-7B-Instruct": {"quantizations": ["wint4"], "is_mm": True},
     "Qwen3-30B-A3B": {
         "tensor_parallel_size": 2,
         "quantizations": [
@@ -95,6 +97,7 @@ for model, cfg in model_param_map.items():
                 quant,
                 cfg.get("max_tokens", 32),
                 env,
+                cfg.get("is_mm", False),
                 marks=[pytest.mark.core_model],
                 id=f"{model}.{quant}.{backend}",
             )
@@ -102,7 +105,7 @@ for model, cfg in model_param_map.items():
 
 
 @pytest.mark.parametrize(
-    "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens,env",
+    "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens,env,is_mm",
     params,
 )
 def test_common_model(
@@ -113,6 +116,7 @@ def test_common_model(
     max_tokens: int,
     quantization: str,
     env,
+    is_mm: bool,
     monkeypatch,
 ) -> None:
     model_path = get_paddle_model_path(model_name_or_path)
@@ -120,8 +124,9 @@ def test_common_model(
         for k, v in env.items():
             monkeypatch.setenv(k, v)
 
+    form_model_get_output = form_model_get_output_topp0 if not is_mm else form_model_get_output_topp1
     fd_outputs_v0 = run_with_timeout(
-        target=form_model_get_output_topp0,
+        target=form_model_get_output,
         args=(
             fd_runner,
             model_path,
@@ -136,7 +141,7 @@ def test_common_model(
         ),
     )
     fd_outputs_v1 = run_with_timeout(
-        target=form_model_get_output_topp0,
+        target=form_model_get_output,
         args=(
             fd_runner,
             model_path,
