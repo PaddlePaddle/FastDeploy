@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #pragma once
 
-#include "helper.h"
 #include "fused_moe_helper.h"
 #include "fused_moe_op.h"
+#include "helper.h"
 
 template <paddle::DataType T>
 void MoeReduceKernel(const paddle::Tensor& ffn_out,
@@ -51,7 +50,6 @@ void MoeReduceKernel(const paddle::Tensor& ffn_out,
       routed_scaling_factor,
       stream);
 }
-
 
 std::vector<paddle::Tensor> MoeExpertReduce(
     const paddle::Tensor& ffn_out,
@@ -106,7 +104,6 @@ std::vector<paddle::Tensor> MoeExpertReduce(
   return {output};
 }
 
-
 std::vector<std::vector<int64_t>> MoeExpertReduceInferShape(
     const std::vector<int64_t>& ffn_out_shape,
     const std::vector<int64_t>& top_k_weight_shape,
@@ -128,7 +125,6 @@ std::vector<paddle::DataType> MoeExpertReduceInferDtype(
     const paddle::optional<paddle::DataType>& ffn2_bias_dtype) {
   return {ffn_out_dtype};
 }
-
 
 PD_BUILD_OP(moe_expert_reduce)
     .Inputs({"ffn_out",

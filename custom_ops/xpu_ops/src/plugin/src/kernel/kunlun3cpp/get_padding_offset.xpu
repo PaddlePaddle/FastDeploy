@@ -36,8 +36,8 @@ __global__ void get_padding_offset(int *batch_id_per_token,
       }
       mfence_lm();
       LM2GM(batch_id_per_token_lm,
-                  batch_id_per_token + i * max_seq_len - cum_offsets_lm[0] + j,
-                  cur_len * sizeof(int));
+            batch_id_per_token + i * max_seq_len - cum_offsets_lm[0] + j,
+            cur_len * sizeof(int));
     }
     if (cid == 0) {
       int cum_seq_len = (i + 1) * max_seq_len - cum_offsets_lm[1];

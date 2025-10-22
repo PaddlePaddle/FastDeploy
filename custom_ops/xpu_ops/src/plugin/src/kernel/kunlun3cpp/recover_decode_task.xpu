@@ -6,15 +6,15 @@ namespace xpu3 {
 namespace plugin {
 
 __global__ void recover_decode_task(bool *stop_flags,
-                                   int *seq_lens_this_time,
-                                   int *seq_lens_encoder,
-                                   int *seq_lens_decoder,
-                                   int *step_seq_lens_decoder,
-                                   int *block_tables,
-                                   bool *is_block_step,
-                                   const int bsz,
-                                   const int block_num_per_seq,
-                                   const int block_size) {
+                                    int *seq_lens_this_time,
+                                    int *seq_lens_encoder,
+                                    int *seq_lens_decoder,
+                                    int *step_seq_lens_decoder,
+                                    int *block_tables,
+                                    bool *is_block_step,
+                                    const int bsz,
+                                    const int block_num_per_seq,
+                                    const int block_size) {
   int cid = core_id();
   int ncores = core_num();
   int clusterid = cluster_id();
@@ -23,15 +23,17 @@ __global__ void recover_decode_task(bool *stop_flags,
   int nthreads = nclusters * ncores;
   // if (clusterid != 0) return;
   for (; thread_idx < bsz; thread_idx += nthreads) {
-    if(is_block_step[thread_idx] == true) {
-      // int *block_table_now = block_tables + thread_idx * block_num_per_seq;
-      if (block_tables[thread_idx * block_num_per_seq + step_seq_lens_decoder[thread_idx] / block_size] != -1) {
-          // can be recovered for decoding
-          is_block_step[thread_idx] = false;
-          seq_lens_this_time[thread_idx]= 1;
-          stop_flags[thread_idx] = false;
-          seq_lens_encoder[thread_idx] = 0;
-          seq_lens_decoder[thread_idx] = step_seq_lens_decoder[thread_idx];
+    if (is_block_step[thread_idx] == true) {
+      // int *block_table_now = block_tables + thread_idx *
+      // block_num_per_seq;
+      if (block_tables[thread_idx * block_num_per_seq +
+                       step_seq_lens_decoder[thread_idx] / block_size] != -1) {
+        // can be recovered for decoding
+        is_block_step[thread_idx] = false;
+        seq_lens_this_time[thread_idx] = 1;
+        stop_flags[thread_idx] = false;
+        seq_lens_encoder[thread_idx] = 0;
+        seq_lens_decoder[thread_idx] = step_seq_lens_decoder[thread_idx];
       }
     }
   }

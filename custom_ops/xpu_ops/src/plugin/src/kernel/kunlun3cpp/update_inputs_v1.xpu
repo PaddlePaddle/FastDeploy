@@ -4,32 +4,30 @@
 // #include <stdio.h>
 // using namespace std;
 
-#include "xpu/kernel/xtdk_io.h"
 #include "xpu/kernel/xtdk.h"
+#include "xpu/kernel/xtdk_io.h"
 
 namespace xpu3 {
 namespace plugin {
 
 __global__ void update_inputs_v1(bool *not_need_stop,
-                                     int *seq_lens_this_time,
-                                     int *seq_lens_encoder,
-                                     int *seq_lens_decoder,
-                                     int *step_seq_lens_decoder,
-                                     int64_t *prompt_lens,
-                                     int64_t *topk_ids,
-                                     int64_t *input_ids,
-                                     int *block_tables,
-                                     const int64_t *stop_nums,
-                                     bool *stop_flags,
-                                     bool *is_block_step,
-                                     const int64_t *next_tokens,
-                                     const int bsz,
-                                     const int max_bsz,
-                                     const int input_ids_stride,
-                                     const int block_num_per_seq,
-                                     const int block_size) {
-
-
+                                 int *seq_lens_this_time,
+                                 int *seq_lens_encoder,
+                                 int *seq_lens_decoder,
+                                 int *step_seq_lens_decoder,
+                                 int64_t *prompt_lens,
+                                 int64_t *topk_ids,
+                                 int64_t *input_ids,
+                                 int *block_tables,
+                                 const int64_t *stop_nums,
+                                 bool *stop_flags,
+                                 bool *is_block_step,
+                                 const int64_t *next_tokens,
+                                 const int bsz,
+                                 const int max_bsz,
+                                 const int input_ids_stride,
+                                 const int block_num_per_seq,
+                                 const int block_size) {
   // std::cout << "seq_lens_this_time " << seq_lens_this_time[0] << std::endl;
   int cid = core_id();
   int ncores = core_num();
@@ -41,74 +39,83 @@ __global__ void update_inputs_v1(bool *not_need_stop,
   const int max_bs = 1024;
   __shared__ bool stop_flags_sm[max_bs];
   __shared__ int stop_flags_int_sm[max_bs];
-  if(cid == 0){
+  if (cid == 0) {
     GM2SM(stop_flags, stop_flags_sm, sizeof(bool) * bsz);
   }
   sync_all();
 
-  for(int i = cid; i < bsz; i+= ncores){
-    if(i < bsz){
-        stop_flags_sm[i] = stop_flags[i];
-        stop_flags_int_sm[i] = static_cast<int64_t>(stop_flags_sm[i]);
-    }else{
-        stop_flags_sm[i] = true;
-        stop_flags_int_sm[i] = 1;
+  for (int i = cid; i < bsz; i += ncores) {
+    if (i < bsz) {
+      stop_flags_sm[i] = stop_flags[i];
+      stop_flags_int_sm[i] = static_cast<int64_t>(stop_flags_sm[i]);
+    } else {
+      stop_flags_sm[i] = true;
+      stop_flags_int_sm[i] = 1;
     }
-    if(i<bsz){
-        int seq_len_this_time_update = 0;
-        int seq_len_decoder_update = 0;
-        int seq_lens_encoder_update = 0;
-        if(stop_flags_sm[i]){
-            LM2GM(&seq_len_this_time_update, seq_lens_this_time + i, sizeof(int));
+    if (i < bsz) {
+      int seq_len_this_time_update = 0;
+      int seq_len_decoder_update = 0;
+      int seq_lens_encoder_update = 0;
+      if (stop_flags_sm[i]) {
+        LM2GM(&seq_len_this_time_update, seq_lens_this_time + i, sizeof(int));
+        LM2GM(&seq_len_decoder_update, seq_lens_decoder + i, sizeof(int));
+        LM2GM(&seq_lens_encoder_update, seq_lens_encoder + i, sizeof(int));
+      } else {
+        GM2LM(seq_lens_this_time + i, &seq_len_this_time_update, sizeof(int));
+        GM2LM(seq_lens_decoder + i, &seq_len_decoder_update, sizeof(int));
+        GM2LM(seq_lens_encoder + i, &seq_lens_encoder_update, sizeof(int));
+        int sum_of_seq_lens_this_time_and_seq_lens_decoder =
+            seq_len_this_time_update + seq_len_decoder_update;
+        int prompt_lens_update = 0;
+        GM2LM(prompt_lens + i, &prompt_lens_update, sizeof(int64_t));
+        // decoding
+        if (sum_of_seq_lens_this_time_and_seq_lens_decoder >=
+            prompt_lens_update) {
+          seq_len_decoder_update =
+              seq_len_this_time_update + seq_len_decoder_update;
+          LM2GM(&seq_len_decoder_update, seq_lens_decoder + i, sizeof(int));
+          seq_len_this_time_update = 1;
+          LM2GM(&seq_len_this_time_update, seq_lens_this_time + i, sizeof(int));
+          seq_lens_encoder_update = 0;
+          LM2GM(&seq_lens_encoder_update, seq_lens_encoder + i, sizeof(int));
+          int64_t input_ids_update;
+          GM2LM(next_tokens + i, &input_ids_update, sizeof(int64_t));
+          LM2GM(&input_ids_update,
+                input_ids + i * input_ids_stride,
+                sizeof(int64_t));
+          // to judge whether block is not enough
+          if (seq_len_this_time_update != 0 &&
+              block_tables[i * block_num_per_seq +
+                           seq_len_decoder_update / block_size] == -1) {
+            is_block_step[i] = true;
+            seq_len_this_time_update = 0;
+            LM2GM(
+                &seq_len_this_time_update, seq_lens_this_time + i, sizeof(int));
+            stop_flags_sm[i] = true;
+            SM2GM(stop_flags_sm + i, stop_flags + i, sizeof(bool));
+            LM2GM(&seq_len_decoder_update,
+                  step_seq_lens_decoder + i,
+                  sizeof(int));
+            seq_len_decoder_update = 0;
             LM2GM(&seq_len_decoder_update, seq_lens_decoder + i, sizeof(int));
-            LM2GM(&seq_lens_encoder_update, seq_lens_encoder + i, sizeof(int));
-        }else{
-            GM2LM(seq_lens_this_time+i, &seq_len_this_time_update, sizeof(int));
-            GM2LM(seq_lens_decoder+i, &seq_len_decoder_update, sizeof(int));
-            GM2LM(seq_lens_encoder+i, &seq_lens_encoder_update, sizeof(int));
-            int sum_of_seq_lens_this_time_and_seq_lens_decoder = seq_len_this_time_update + seq_len_decoder_update;
-            int prompt_lens_update = 0;
-            GM2LM(prompt_lens+i, &prompt_lens_update, sizeof(int64_t));
-            // decoding
-            if(sum_of_seq_lens_this_time_and_seq_lens_decoder >= prompt_lens_update){
-                seq_len_decoder_update = seq_len_this_time_update + seq_len_decoder_update;
-                LM2GM(&seq_len_decoder_update, seq_lens_decoder+i, sizeof(int));
-                seq_len_this_time_update = 1;
-                LM2GM(&seq_len_this_time_update, seq_lens_this_time + i, sizeof(int));
-                seq_lens_encoder_update = 0;
-                LM2GM(&seq_lens_encoder_update, seq_lens_encoder + i, sizeof(int));
-                int64_t input_ids_update;
-                GM2LM(next_tokens + i, &input_ids_update, sizeof(int64_t));
-                LM2GM(&input_ids_update, input_ids + i * input_ids_stride, sizeof(int64_t));
-                // to judge whether block is not enough
-                if(seq_len_this_time_update != 0 && block_tables[i * block_num_per_seq + seq_len_decoder_update/block_size] == -1){
-                    is_block_step[i] = true;
-                    seq_len_this_time_update = 0;
-                    LM2GM(&seq_len_this_time_update, seq_lens_this_time + i, sizeof(int));
-                    stop_flags_sm[i] = true;
-                    SM2GM(stop_flags_sm+i, stop_flags+i, sizeof(bool));
-                    LM2GM(&seq_len_decoder_update, step_seq_lens_decoder+i, sizeof(int));
-                    seq_len_decoder_update = 0;
-                    LM2GM(&seq_len_decoder_update, seq_lens_decoder + i, sizeof(int));
-                    seq_len_decoder_update = 0;
-                    LM2GM(&seq_len_decoder_update, seq_lens_decoder + i, sizeof(int));
-                    stop_flags_int_sm[i] = 1;
-                }
-            }else{
-                stop_flags_sm[i] = true;
-                SM2GM(stop_flags_sm+i, stop_flags+i, sizeof(bool));
-                seq_len_this_time_update = 0;
-                LM2GM(&seq_len_this_time_update, seq_lens_this_time + i, sizeof(int));
-                seq_len_decoder_update = 0;
-                seq_lens_encoder_update = 0;
-                LM2GM(&seq_len_decoder_update, seq_lens_decoder + i, sizeof(int));
-                LM2GM(&seq_lens_encoder_update, seq_lens_encoder + i, sizeof(int));
-                int64_t topk_ids_update = -1;
-                LM2GM(&topk_ids_update, topk_ids + i, sizeof(int64_t));
-                stop_flags_int_sm[i] = 1;
-            }
-
+            seq_len_decoder_update = 0;
+            LM2GM(&seq_len_decoder_update, seq_lens_decoder + i, sizeof(int));
+            stop_flags_int_sm[i] = 1;
+          }
+        } else {
+          stop_flags_sm[i] = true;
+          SM2GM(stop_flags_sm + i, stop_flags + i, sizeof(bool));
+          seq_len_this_time_update = 0;
+          LM2GM(&seq_len_this_time_update, seq_lens_this_time + i, sizeof(int));
+          seq_len_decoder_update = 0;
+          seq_lens_encoder_update = 0;
+          LM2GM(&seq_len_decoder_update, seq_lens_decoder + i, sizeof(int));
+          LM2GM(&seq_lens_encoder_update, seq_lens_encoder + i, sizeof(int));
+          int64_t topk_ids_update = -1;
+          LM2GM(&topk_ids_update, topk_ids + i, sizeof(int64_t));
+          stop_flags_int_sm[i] = 1;
         }
+      }
     }
   }
   sync_all();

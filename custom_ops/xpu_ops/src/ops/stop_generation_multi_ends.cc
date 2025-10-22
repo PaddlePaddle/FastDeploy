@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "paddle/extension.h"
-#include "xpu/plugin.h"
-#include <cstdlib>
 #include <fcntl.h>
 #include <paddle/phi/backends/xpu/xpu_context.h>
 #include <stdio.h>
@@ -24,6 +21,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <cstdlib>
+#include "paddle/extension.h"
+#include "xpu/plugin.h"
 
 void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
                        const paddle::Tensor &stop_flags,
@@ -31,22 +31,25 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
                        const paddle::Tensor &end_ids,
                        const paddle::Tensor &next_tokens,
                        const bool beam_search) {
-    PD_CHECK(topk_ids.dtype() == paddle::DataType::INT64);
-    PD_CHECK(stop_flags.dtype() == paddle::DataType::BOOL);
-    phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
-    auto dev_ctx =
-        paddle::experimental::DeviceContextPool::Instance().Get(place);
-    auto xpu_ctx = static_cast<const phi::XPUContext *>(dev_ctx);
-    std::vector<int64_t> shape = topk_ids.shape();
-    int64_t bs_now = shape[0];
-    int64_t end_length = end_ids.shape()[0];
-    int r = baidu::xpu::api::plugin::set_stop_value_multi_ends<int64_t>(
-        xpu_ctx->x_context(), const_cast<bool *>(stop_flags.data<bool>()),
-        const_cast<int64_t *>(topk_ids.data<int64_t>()),
-        const_cast<int64_t *>(next_tokens.data<int64_t>()),
-        end_ids.data<int64_t>(), seq_lens.data<int>(), bs_now, end_length,
-        beam_search);
-    PD_CHECK(r == 0, "xpu::plugin::set_stop_value_multi_ends failed.");
+  PD_CHECK(topk_ids.dtype() == paddle::DataType::INT64);
+  PD_CHECK(stop_flags.dtype() == paddle::DataType::BOOL);
+  phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
+  auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
+  auto xpu_ctx = static_cast<const phi::XPUContext *>(dev_ctx);
+  std::vector<int64_t> shape = topk_ids.shape();
+  int64_t bs_now = shape[0];
+  int64_t end_length = end_ids.shape()[0];
+  int r = baidu::xpu::api::plugin::set_stop_value_multi_ends<int64_t>(
+      xpu_ctx->x_context(),
+      const_cast<bool *>(stop_flags.data<bool>()),
+      const_cast<int64_t *>(topk_ids.data<int64_t>()),
+      const_cast<int64_t *>(next_tokens.data<int64_t>()),
+      end_ids.data<int64_t>(),
+      seq_lens.data<int>(),
+      bs_now,
+      end_length,
+      beam_search);
+  PD_CHECK(r == 0, "xpu::plugin::set_stop_value_multi_ends failed.");
 }
 
 PD_BUILD_OP(set_stop_value_multi_ends)

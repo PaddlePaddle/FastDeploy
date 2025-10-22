@@ -18,32 +18,31 @@
 #include "xpu/plugin.h"
 
 void RecoverDecodeTask(const paddle::Tensor &stop_flags,
-                   const paddle::Tensor &seq_lens_this_time,
-                   const paddle::Tensor &seq_lens_encoder,
-                   const paddle::Tensor &seq_lens_decoder,
-                   const paddle::Tensor &step_seq_lens_decoder,
-                   const paddle::Tensor &block_tables,
-                   const paddle::Tensor &is_block_step,
-                   const int block_size) {
-phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
-    auto dev_ctx =
-        paddle::experimental::DeviceContextPool::Instance().Get(place);
-    auto xpu_ctx = static_cast<const phi::XPUContext *>(dev_ctx);
-    const int bsz = seq_lens_this_time.shape()[0];
-    const int block_num_per_seq = block_tables.shape()[1];
-    int r = baidu::xpu::api::plugin::recover_decode_task(
-        xpu_ctx->x_context(),
-        const_cast<bool *>(stop_flags.data<bool>()),
-        const_cast<int *>(seq_lens_this_time.data<int>()),
-        const_cast<int *>(seq_lens_encoder.data<int>()),
-        const_cast<int *>(seq_lens_decoder.data<int>()),
-        const_cast<int *>(step_seq_lens_decoder.data<int>()),
-        const_cast<int *>(block_tables.data<int>()),
-        const_cast<bool *>(is_block_step.data<bool>()),
-        bsz,
-        block_num_per_seq,
-        block_size);
-    PD_CHECK(r == 0, "baidu::xpu::api::plugin::recover_decode_task failed.");
+                       const paddle::Tensor &seq_lens_this_time,
+                       const paddle::Tensor &seq_lens_encoder,
+                       const paddle::Tensor &seq_lens_decoder,
+                       const paddle::Tensor &step_seq_lens_decoder,
+                       const paddle::Tensor &block_tables,
+                       const paddle::Tensor &is_block_step,
+                       const int block_size) {
+  phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
+  auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
+  auto xpu_ctx = static_cast<const phi::XPUContext *>(dev_ctx);
+  const int bsz = seq_lens_this_time.shape()[0];
+  const int block_num_per_seq = block_tables.shape()[1];
+  int r = baidu::xpu::api::plugin::recover_decode_task(
+      xpu_ctx->x_context(),
+      const_cast<bool *>(stop_flags.data<bool>()),
+      const_cast<int *>(seq_lens_this_time.data<int>()),
+      const_cast<int *>(seq_lens_encoder.data<int>()),
+      const_cast<int *>(seq_lens_decoder.data<int>()),
+      const_cast<int *>(step_seq_lens_decoder.data<int>()),
+      const_cast<int *>(block_tables.data<int>()),
+      const_cast<bool *>(is_block_step.data<bool>()),
+      bsz,
+      block_num_per_seq,
+      block_size);
+  PD_CHECK(r == 0, "baidu::xpu::api::plugin::recover_decode_task failed.");
 }
 
 PD_BUILD_OP(recover_decode_task)

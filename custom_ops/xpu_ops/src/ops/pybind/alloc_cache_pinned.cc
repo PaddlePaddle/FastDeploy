@@ -14,9 +14,9 @@
 
 #include <sys/mman.h>          // NOLINT
 #include "cuda_runtime_api.h"  // NOLINT
+#include "ops/pybind/pybind.h"
 #include "paddle/extension.h"
 #include "xpu/runtime.h"
-#include "ops/pybind/pybind.h"
 
 void check_xpu_error(int error) {
   if (error != XPU_SUCCESS) {

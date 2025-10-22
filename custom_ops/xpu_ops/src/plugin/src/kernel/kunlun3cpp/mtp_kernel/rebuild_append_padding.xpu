@@ -15,72 +15,72 @@ __global__ void RebuildAppendPaddingKernel(const T *full_hidden_states,
                                            int dim_embed,
                                            int elem_nums,
                                            T *out) {
-    int ncores = core_num();
-    int cid = core_id();
-    int tid = cid * cluster_num() + cluster_id();
-    int nthreads = cluster_num() * ncores;
-    int64_t mstart = -1;
-    int64_t mend = -1;
-    int64_t nstart = -1;
-    int64_t nend = -1;
-    partition2d<int64_t>(tid,
-                         nthreads,
-                         elem_nums / dim_embed,
-                         dim_embed,
-                         &mstart,
-                         &mend,
-                         &nstart,
-                         &nend);
+  int ncores = core_num();
+  int cid = core_id();
+  int tid = cid * cluster_num() + cluster_id();
+  int nthreads = cluster_num() * ncores;
+  int64_t mstart = -1;
+  int64_t mend = -1;
+  int64_t nstart = -1;
+  int64_t nend = -1;
+  partition2d<int64_t>(tid,
+                       nthreads,
+                       elem_nums / dim_embed,
+                       dim_embed,
+                       &mstart,
+                       &mend,
+                       &nstart,
+                       &nend);
 
-    const int64_t BUFFER_LEN = rounddown(6144 / sizeof(T), 64);
-    __simd__ T lm_full_hidden_states[BUFFER_LEN];
-    int output_padding_offset_val, cum_offset_val, seq_len_encoder_val,
-        seq_len_decoder_val;
+  const int64_t BUFFER_LEN = rounddown(6144 / sizeof(T), 64);
+  __simd__ T lm_full_hidden_states[BUFFER_LEN];
+  int output_padding_offset_val, cum_offset_val, seq_len_encoder_val,
+      seq_len_decoder_val;
 
-    for (int64_t _m = mstart; _m < mend; _m++) {
-        int out_token_id = _m;
-        GM2LM(output_padding_offset + out_token_id,
-              &output_padding_offset_val,
-              sizeof(int));
-        int ori_token_id = out_token_id + output_padding_offset_val;
-        int bi = ori_token_id / max_seq_len;
-        GM2LM_ASYNC(seq_len_encoder + bi, &seq_len_encoder_val, sizeof(int));
-        GM2LM(seq_len_decoder + bi, &seq_len_decoder_val, sizeof(int));
-        int seq_id = 0;
-        if (seq_len_encoder_val == 0 and seq_len_decoder_val == 0) {
-            continue;
-        } else if (seq_len_encoder_val != 0) {
-            seq_id = seq_len_encoder_val - 1;
-        }
-        GM2LM(cum_offset + bi, &cum_offset_val, sizeof(int));
-        int input_token_id = ori_token_id - cum_offset_val + seq_id;
-        for (int64_t _n = nstart; _n < nend; _n += BUFFER_LEN) {
-            int64_t read_size = min(BUFFER_LEN, nend - _n);
-            // out[i] = full_hidden_states[(i / dim_embed +
-            // output_padding_offset[i / dim_embed] - cum_offset[(i / dim_embed
-            // + output_padding_offset[i / dim_embed]) / max_seq_len] + seq_id)
-            // * dim_embed + i % dim_embed]
-            GM2LM(full_hidden_states + input_token_id * dim_embed + _n,
-                  lm_full_hidden_states,
-                  read_size * sizeof(T));
-            LM2GM(lm_full_hidden_states,
-                  out + _m * dim_embed + _n,
-                  read_size * sizeof(T));
-        }
+  for (int64_t _m = mstart; _m < mend; _m++) {
+    int out_token_id = _m;
+    GM2LM(output_padding_offset + out_token_id,
+          &output_padding_offset_val,
+          sizeof(int));
+    int ori_token_id = out_token_id + output_padding_offset_val;
+    int bi = ori_token_id / max_seq_len;
+    GM2LM_ASYNC(seq_len_encoder + bi, &seq_len_encoder_val, sizeof(int));
+    GM2LM(seq_len_decoder + bi, &seq_len_decoder_val, sizeof(int));
+    int seq_id = 0;
+    if (seq_len_encoder_val == 0 and seq_len_decoder_val == 0) {
+      continue;
+    } else if (seq_len_encoder_val != 0) {
+      seq_id = seq_len_encoder_val - 1;
     }
+    GM2LM(cum_offset + bi, &cum_offset_val, sizeof(int));
+    int input_token_id = ori_token_id - cum_offset_val + seq_id;
+    for (int64_t _n = nstart; _n < nend; _n += BUFFER_LEN) {
+      int64_t read_size = min(BUFFER_LEN, nend - _n);
+      // out[i] = full_hidden_states[(i / dim_embed +
+      // output_padding_offset[i / dim_embed] - cum_offset[(i / dim_embed
+      // + output_padding_offset[i / dim_embed]) / max_seq_len] + seq_id)
+      // * dim_embed + i % dim_embed]
+      GM2LM(full_hidden_states + input_token_id * dim_embed + _n,
+            lm_full_hidden_states,
+            read_size * sizeof(T));
+      LM2GM(lm_full_hidden_states,
+            out + _m * dim_embed + _n,
+            read_size * sizeof(T));
+    }
+  }
 }
 
-#define _XPU_DEF_REBUILD_APPEND_PADDING_KERNEL(T)           \
-    template __global__ void RebuildAppendPaddingKernel<T>( \
-        const T *full_hidden_states,                        \
-        const int *cum_offset,                              \
-        const int *seq_len_encoder,                         \
-        const int *seq_len_decoder,                         \
-        const int *output_padding_offset,                   \
-        int max_seq_len,                                    \
-        int dim_embed,                                      \
-        int elem_nums,                                      \
-        T *out);
+#define _XPU_DEF_REBUILD_APPEND_PADDING_KERNEL(T)         \
+  template __global__ void RebuildAppendPaddingKernel<T>( \
+      const T *full_hidden_states,                        \
+      const int *cum_offset,                              \
+      const int *seq_len_encoder,                         \
+      const int *seq_len_decoder,                         \
+      const int *output_padding_offset,                   \
+      int max_seq_len,                                    \
+      int dim_embed,                                      \
+      int elem_nums,                                      \
+      T *out);
 
 _XPU_DEF_REBUILD_APPEND_PADDING_KERNEL(bfloat16);
 _XPU_DEF_REBUILD_APPEND_PADDING_KERNEL(float16);

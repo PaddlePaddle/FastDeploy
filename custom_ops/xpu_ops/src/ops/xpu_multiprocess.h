@@ -24,60 +24,60 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <vector>
 #include <xpu/runtime.h>
 #include <xpu/version.h>
+#include <vector>
 
 struct shmStruct {
-    size_t nprocesses;
+  size_t nprocesses;
 #if XPURT_VERSION_MAJOR == 5
-    XPUIpcMemHandle memHandle;
+  XPUIpcMemHandle memHandle;
 #endif
-    uint64_t data_ptr_addr;
+  uint64_t data_ptr_addr;
 };
 
 struct sharedMemoryInfo {
-    void *addr;
-    size_t size;
-    int shmFd;
+  void *addr;
+  size_t size;
+  int shmFd;
 };
 
-static int sharedMemoryCreate(const char *name, size_t sz,
+static int sharedMemoryCreate(const char *name,
+                              size_t sz,
                               sharedMemoryInfo *info) {
-    info->size = sz;
+  info->size = sz;
 
-    info->shmFd = shm_open(name, O_RDWR | O_CREAT, 0777);
-    PD_CHECK(info->shmFd >= 0, "shm_open failed");
+  info->shmFd = shm_open(name, O_RDWR | O_CREAT, 0777);
+  PD_CHECK(info->shmFd >= 0, "shm_open failed");
 
-    int status = ftruncate(info->shmFd, sz);
-    PD_CHECK(status == 0, "ftruncate failed");
+  int status = ftruncate(info->shmFd, sz);
+  PD_CHECK(status == 0, "ftruncate failed");
 
-    info->addr =
-        mmap(0, sz, PROT_READ | PROT_WRITE, MAP_SHARED, info->shmFd, 0);
-    PD_CHECK(info->addr != NULL, "mmap failed");
+  info->addr = mmap(0, sz, PROT_READ | PROT_WRITE, MAP_SHARED, info->shmFd, 0);
+  PD_CHECK(info->addr != NULL, "mmap failed");
 
-    return 0;
+  return 0;
 }
 
-static int sharedMemoryOpen(const char *name, size_t sz,
+static int sharedMemoryOpen(const char *name,
+                            size_t sz,
                             sharedMemoryInfo *info) {
-    info->size = sz;
+  info->size = sz;
 
-    info->shmFd = shm_open(name, O_RDWR, 0777);
-    PD_CHECK(info->shmFd >= 0, "shm_open failed");
+  info->shmFd = shm_open(name, O_RDWR, 0777);
+  PD_CHECK(info->shmFd >= 0, "shm_open failed");
 
-    info->addr =
-        mmap(0, sz, PROT_READ | PROT_WRITE, MAP_SHARED, info->shmFd, 0);
-    PD_CHECK(info->addr != nullptr, "mmap failed");
+  info->addr = mmap(0, sz, PROT_READ | PROT_WRITE, MAP_SHARED, info->shmFd, 0);
+  PD_CHECK(info->addr != nullptr, "mmap failed");
 
-    return 0;
+  return 0;
 }
 
 static void sharedMemoryClose(sharedMemoryInfo *info) {
-    if (info->addr) {
-        munmap(info->addr, info->size);
-    }
-    if (info->shmFd) {
-        close(info->shmFd);
-    }
+  if (info->addr) {
+    munmap(info->addr, info->size);
+  }
+  if (info->shmFd) {
+    close(info->shmFd);
+  }
 }

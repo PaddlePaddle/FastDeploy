@@ -18,18 +18,17 @@
 namespace xpu3 {
 namespace plugin {
 template <typename T>
-__attribute__((global)) void text_image_gather_scatter(
-    T* input,
-    T* text_input,
-    T* image_input,
-    int* token_type_ids,
-    int* text_index,
-    int* image_index,
-    int64_t token_num,
-    int64_t text_token_num,
-    int64_t image_token_num,
-    int64_t hidden_size,
-    bool is_scatter);
+__attribute__((global)) void text_image_gather_scatter(T* input,
+                                                       T* text_input,
+                                                       T* image_input,
+                                                       int* token_type_ids,
+                                                       int* text_index,
+                                                       int* image_index,
+                                                       int64_t token_num,
+                                                       int64_t text_token_num,
+                                                       int64_t image_token_num,
+                                                       int64_t hidden_size,
+                                                       bool is_scatter);
 }  // namespace plugin
 }  // namespace xpu3
 
@@ -41,18 +40,17 @@ namespace plugin {
 template <typename T>
 static int cpu_wrapper(
     Context* ctx,
-    T* input,           // shape [token_num, hidden_size]
-    T* text_input,      // shape [text_token_num, hidden_size]
-    T* image_input,     // shape [image_token_num, hidden_size]
-    int* token_type_ids,// shape [token_num], 0 for text, 1 for image
-    int* text_index,    // shape [token_num], mapping from input to text_input
-    int* image_index,   // shape [token_num], mapping from input to image_input
+    T* input,             // shape [token_num, hidden_size]
+    T* text_input,        // shape [text_token_num, hidden_size]
+    T* image_input,       // shape [image_token_num, hidden_size]
+    int* token_type_ids,  // shape [token_num], 0 for text, 1 for image
+    int* text_index,      // shape [token_num], mapping from input to text_input
+    int* image_index,  // shape [token_num], mapping from input to image_input
     int64_t token_num,
     int64_t text_token_num,
     int64_t image_token_num,
     int64_t hidden_size,
     bool is_scatter) {
-
   if (is_scatter) {
     // Scatter mode: input -> text_input/image_input
     for (int64_t i = 0; i < token_num; i++) {
@@ -106,36 +104,42 @@ static int cpu_wrapper(
 }
 
 template <typename T>
-static int xpu3_wrapper(
-    Context* ctx,
-    T* input,
-    T* text_input,
-    T* image_input,
-    int* token_type_ids,
-    int* text_index,
-    int* image_index,
-    int64_t token_num,
-    int64_t text_token_num,
-    int64_t image_token_num,
-    int64_t hidden_size,
-    bool is_scatter) {
-  xpu3::plugin::text_image_gather_scatter<T> <<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
-    input, text_input, image_input, token_type_ids, text_index, image_index,
-    token_num, text_token_num, image_token_num, hidden_size, is_scatter
-  );
+static int xpu3_wrapper(Context* ctx,
+                        T* input,
+                        T* text_input,
+                        T* image_input,
+                        int* token_type_ids,
+                        int* text_index,
+                        int* image_index,
+                        int64_t token_num,
+                        int64_t text_token_num,
+                        int64_t image_token_num,
+                        int64_t hidden_size,
+                        bool is_scatter) {
+  xpu3::plugin::text_image_gather_scatter<T>
+      <<<ctx->ncluster(), 64, ctx->xpu_stream>>>(input,
+                                                 text_input,
+                                                 image_input,
+                                                 token_type_ids,
+                                                 text_index,
+                                                 image_index,
+                                                 token_num,
+                                                 text_token_num,
+                                                 image_token_num,
+                                                 hidden_size,
+                                                 is_scatter);
   return api::SUCCESS;
 }
-
 
 template <typename T>
 int text_image_gather_scatter(
     Context* ctx,
-    T* input,           // shape [token_num, hidden_size]
-    T* text_input,      // shape [text_token_num, hidden_size]
-    T* image_input,     // shape [image_token_num, hidden_size]
-    int* token_type_ids,// shape [token_num], 0 for text, 1 for image
-    int* text_index,    // shape [token_num], mapping from input to text_input
-    int* image_index,   // shape [token_num], mapping from input to image_input
+    T* input,             // shape [token_num, hidden_size]
+    T* text_input,        // shape [text_token_num, hidden_size]
+    T* image_input,       // shape [image_token_num, hidden_size]
+    int* token_type_ids,  // shape [token_num], 0 for text, 1 for image
+    int* text_index,      // shape [token_num], mapping from input to text_input
+    int* image_index,  // shape [token_num], mapping from input to image_input
     int64_t token_num,
     int64_t text_token_num,
     int64_t image_token_num,
@@ -143,14 +147,23 @@ int text_image_gather_scatter(
     bool is_scatter) {
   WRAPPER_CHECK_CTX(ctx);
   WRAPPER_DUMP_FUNCTION_T1(ctx, "text_image_gather_scatter", T);
-  WRAPPER_DUMP_PARAM6(ctx, input, text_input, image_input, token_type_ids, text_index, image_index);
-  WRAPPER_DUMP_PARAM5(ctx, token_num, text_token_num, image_token_num, hidden_size, is_scatter);
+  WRAPPER_DUMP_PARAM6(ctx,
+                      input,
+                      text_input,
+                      image_input,
+                      token_type_ids,
+                      text_index,
+                      image_index);
+  WRAPPER_DUMP_PARAM5(
+      ctx, token_num, text_token_num, image_token_num, hidden_size, is_scatter);
   WRAPPER_DUMP(ctx);
   WRAPPER_CHECK_PTR(ctx, T, token_num * hidden_size, input);
-  if (text_token_num != 0) {  // avoiding text_input tensor with shape [0, hidden_size]
+  if (text_token_num !=
+      0) {  // avoiding text_input tensor with shape [0, hidden_size]
     WRAPPER_CHECK_PTR(ctx, T, text_token_num * hidden_size, text_input);
   }
-  if (image_token_num != 0) { // avoiding image_input tensor with shape [0, hidden_size]
+  if (image_token_num !=
+      0) {  // avoiding image_input tensor with shape [0, hidden_size]
     WRAPPER_CHECK_PTR(ctx, T, image_token_num * hidden_size, image_input);
   }
   WRAPPER_CHECK_PTR(ctx, int, token_num, token_type_ids);
@@ -159,23 +172,48 @@ int text_image_gather_scatter(
   WRAPPER_ASSERT_EQ(ctx, token_num, text_token_num + image_token_num);
 
   if (ctx->dev().type() == api::kCPU) {
-    return cpu_wrapper<T>(
-      ctx, input, text_input, image_input, token_type_ids, text_index, image_index,
-      token_num, text_token_num, image_token_num, hidden_size, is_scatter
-    );
+    return cpu_wrapper<T>(ctx,
+                          input,
+                          text_input,
+                          image_input,
+                          token_type_ids,
+                          text_index,
+                          image_index,
+                          token_num,
+                          text_token_num,
+                          image_token_num,
+                          hidden_size,
+                          is_scatter);
   }
   if (ctx->dev().type() == api::kXPU3) {
-    return xpu3_wrapper<T>(
-      ctx, input, text_input, image_input, token_type_ids, text_index, image_index,
-      token_num, text_token_num, image_token_num, hidden_size, is_scatter
-    );
+    return xpu3_wrapper<T>(ctx,
+                           input,
+                           text_input,
+                           image_input,
+                           token_type_ids,
+                           text_index,
+                           image_index,
+                           token_num,
+                           text_token_num,
+                           image_token_num,
+                           hidden_size,
+                           is_scatter);
   }
   WRAPPER_UNIMPLEMENTED(ctx);
 }
 
-
-template int text_image_gather_scatter(
-    Context*, bfloat16*, bfloat16*, bfloat16*, int*, int*, int*, const int64_t, const int64_t, const int64_t, const int64_t, bool);
+template int text_image_gather_scatter(Context*,
+                                       bfloat16*,
+                                       bfloat16*,
+                                       bfloat16*,
+                                       int*,
+                                       int*,
+                                       int*,
+                                       const int64_t,
+                                       const int64_t,
+                                       const int64_t,
+                                       const int64_t,
+                                       bool);
 }  // namespace plugin
 }  // namespace api
 }  // namespace xpu
