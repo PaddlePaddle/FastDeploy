@@ -12,69 +12,84 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "xpu/plugin.h"
-#include "xpu/refactor/impl_public/wrapper_check.h"
 #include <algorithm>
 #include <numeric>
+#include "xpu/plugin.h"
+#include "xpu/refactor/impl_public/wrapper_check.h"
 
 namespace xpu3 {
 namespace plugin {
 
-__attribute__((global)) void
-limit_thinking_content_length_kernel_v1(
-    int64_t *next_tokens,
-    const int *max_think_lens,
-    const int64_t *step_idx,
-    int *limit_think_status,
+__attribute__((global)) void limit_thinking_content_length_kernel_v1(
+    int64_t* next_tokens,
+    const int* max_think_lens,
+    const int64_t* step_idx,
+    int* limit_think_status,
     const int64_t think_end_id,
     const int bs);
 
-} // namespace plugin
-} // namespace xpu3
+}  // namespace plugin
+}  // namespace xpu3
 
 namespace baidu {
 namespace xpu {
 namespace api {
 namespace plugin {
 
-static int xpu3_wrapper(Context *ctx,int64_t *next_tokens,
-    const int *max_think_lens,
-    const int64_t *step_idx,
-    int *limit_think_status,
-    const int64_t think_end_id,
-    const int bs) {
-    using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-    auto limit_thinking_content_length_kernel_v1 = xpu3::plugin::limit_thinking_content_length_kernel_v1;
-    limit_thinking_content_length_kernel_v1<<<1, 64, ctx->xpu_stream>>>(
-        reinterpret_cast<XPU_INT64 *>(next_tokens), max_think_lens,
-                        reinterpret_cast<const XPU_INT64 *>(step_idx), limit_think_status, think_end_id,bs);
-    return api::SUCCESS;
+static int xpu3_wrapper(Context* ctx,
+                        int64_t* next_tokens,
+                        const int* max_think_lens,
+                        const int64_t* step_idx,
+                        int* limit_think_status,
+                        const int64_t think_end_id,
+                        const int bs) {
+  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
+  auto limit_thinking_content_length_kernel_v1 =
+      xpu3::plugin::limit_thinking_content_length_kernel_v1;
+  limit_thinking_content_length_kernel_v1<<<1, 64, ctx->xpu_stream>>>(
+      reinterpret_cast<XPU_INT64*>(next_tokens),
+      max_think_lens,
+      reinterpret_cast<const XPU_INT64*>(step_idx),
+      limit_think_status,
+      think_end_id,
+      bs);
+  return api::SUCCESS;
 }
 
-int limit_thinking_content_length_kernel_v1(Context *ctx, int64_t *next_tokens,
-    const int *max_think_lens,
-    const int64_t *step_idx,
-    int *limit_think_status,
-    const int64_t think_end_id,
-    const int bs) {
-    WRAPPER_CHECK_CTX(ctx);
-    WRAPPER_DUMP_FUNCTION_T1(ctx, "limit_thinking_content_length_kernel_v1", int);
-    WRAPPER_DUMP_PARAM5(ctx, next_tokens, max_think_lens,
-                        step_idx, limit_think_status, think_end_id);
-    WRAPPER_DUMP_PARAM1(ctx, bs);
+int limit_thinking_content_length_kernel_v1(Context* ctx,
+                                            int64_t* next_tokens,
+                                            const int* max_think_lens,
+                                            const int64_t* step_idx,
+                                            int* limit_think_status,
+                                            const int64_t think_end_id,
+                                            const int bs) {
+  WRAPPER_CHECK_CTX(ctx);
+  WRAPPER_DUMP_FUNCTION_T1(ctx, "limit_thinking_content_length_kernel_v1", int);
+  WRAPPER_DUMP_PARAM5(ctx,
+                      next_tokens,
+                      max_think_lens,
+                      step_idx,
+                      limit_think_status,
+                      think_end_id);
+  WRAPPER_DUMP_PARAM1(ctx, bs);
 
-    WRAPPER_DUMP(ctx);
-    if (ctx->dev().type() == api::kCPU) {
-        assert(false);
-    }
-    if (ctx->dev().type() == api::kXPU2 || ctx->dev().type() == api::kXPU3) {
-        return xpu3_wrapper(ctx, next_tokens, max_think_lens,
-                        step_idx, limit_think_status, think_end_id,bs);
-    }
-    WRAPPER_UNIMPLEMENTED(ctx);
+  WRAPPER_DUMP(ctx);
+  if (ctx->dev().type() == api::kCPU) {
+    assert(false);
+  }
+  if (ctx->dev().type() == api::kXPU2 || ctx->dev().type() == api::kXPU3) {
+    return xpu3_wrapper(ctx,
+                        next_tokens,
+                        max_think_lens,
+                        step_idx,
+                        limit_think_status,
+                        think_end_id,
+                        bs);
+  }
+  WRAPPER_UNIMPLEMENTED(ctx);
 }
 
-} // namespace plugin
-} // namespace api
-} // namespace xpu
-} // namespace baidu
+}  // namespace plugin
+}  // namespace api
+}  // namespace xpu
+}  // namespace baidu
