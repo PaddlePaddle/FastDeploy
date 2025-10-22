@@ -435,6 +435,8 @@ class DataProcessor(BaseDataProcessor):
                     response_dict["outputs"]["text"] = tool_call_info.content
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
+            if req_id in self.model_status_dict:
+                del self.model_status_dict[req_id]
         return response_dict
 
     def process_response_dict_streaming(self, response_dict, **kwargs):

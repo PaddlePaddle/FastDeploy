@@ -61,7 +61,7 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
     def test_process_response_dict_streaming_normal_case(self):
         """测试正常情况下的流式响应处理"""
         # 准备输入
-        response_dict = {"finished": False, "request_id": "req1", "outputs": {"token_ids": [4, 5]}}
+        response_dict = {"finished": False, "request_id": "test", "outputs": {"token_ids": [4, 5]}}
         kwargs = {"enable_thinking": True}
 
         # 调用方法
