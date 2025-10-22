@@ -1,3 +1,5 @@
+[English](../../usage/log.md)
+
 # 日志说明
 
 FastDeploy 在部署过程中，会产生如下日志文件，各日志含义说明

@@ -1,3 +1,5 @@
+[English](../../../get_started/installation/metax_gpu.md)
+
 # 使用 Metax GPU C550 运行ERNIE 4.5 系列模型
 
 FastDeploy在Metax C550上对ERNIE 4.5系列模型进行了深度适配和优化，实现了推理入口和GPU的统一，无需修改即可完成推理任务的迁移。

@@ -72,10 +72,10 @@ void AppendAttentionKernel(
     const paddle::optional<paddle::Tensor>& cache_v_zp,
     const paddle::optional<paddle::Tensor>& out_linear_shifts,
     const paddle::optional<paddle::Tensor>& out_linear_smooths,
-    const paddle::optional<paddle::Tensor>& mask_offset,
     const paddle::optional<paddle::Tensor>& kv_signal_data,
     const paddle::optional<paddle::Tensor>& q_norm_weight,
     const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const paddle::optional<paddle::Tensor>& sinks,
     const float rms_norm_eps,
     const std::string& cache_quant_type_str,
     const bool use_neox_rotary_style,
@@ -90,7 +90,8 @@ void AppendAttentionKernel(
     const int encoder_max_partition_size,
     const int speculate_max_draft_token_num,
     const bool causal,
-    const bool speculate_decoder) {
+    const bool speculate_decoder,
+    const int sliding_window) {
   typedef PDTraits<D> traits_;
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
@@ -146,6 +147,7 @@ void AppendAttentionKernel(
           cache_v_zp,
           out_linear_shifts,
           out_linear_smooths,
+          sinks,
           seq_lens_this_time,
           seq_lens_decoder,
           seq_lens_encoder,
@@ -169,7 +171,8 @@ void AppendAttentionKernel(
           lambda_is_decoder,
           lambda_enable_prefill,
           lambda_stream,
-          &fmha_out);
+          &fmha_out,
+          sliding_window);
   };
 
   if (max_enc_len_this_time > 0) {
@@ -428,6 +431,7 @@ std::vector<paddle::Tensor> AppendAttention(
     const paddle::optional<paddle::Tensor>& kv_signal_data,
     const paddle::optional<paddle::Tensor>& q_norm_weight,
     const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const paddle::optional<paddle::Tensor>& sinks,
     const float rms_norm_eps,
     const std::string& compute_dtype,
     const std::string& cache_quant_type_str,
@@ -443,7 +447,8 @@ std::vector<paddle::Tensor> AppendAttention(
     const int encoder_max_partition_size,
     const int speculate_max_draft_token_num,
     const bool causal,
-    const bool speculate_decoder) {
+    const bool speculate_decoder,
+    const int sliding_window) {
   AppendAttnMetaData meta_data;
 
   const auto& qkv_dims = qkv.dims();
@@ -550,10 +555,10 @@ std::vector<paddle::Tensor> AppendAttention(
           cache_v_zp,
           out_linear_shifts,
           out_linear_smooths,
-          mask_offset,
           kv_signal_data,
           q_norm_weight,
           k_norm_weight,
+          sinks,
           rms_norm_eps,
           cache_quant_type_str,
           use_neox_rotary_style,
@@ -568,7 +573,8 @@ std::vector<paddle::Tensor> AppendAttention(
           encoder_max_partition_size,
           speculate_max_draft_token_num,
           causal,
-          speculate_decoder);
+          speculate_decoder,
+          sliding_window);
   };
 
 
@@ -593,7 +599,7 @@ std::vector<paddle::Tensor> AppendAttention(
   return {paddle::Tensor{}};
 }
 
-void AppendAttentionWithOutput(
+std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const paddle::Tensor& qkv,
     const paddle::Tensor& key_cache,
     const paddle::Tensor& value_cache,
@@ -630,6 +636,7 @@ void AppendAttentionWithOutput(
     const paddle::optional<paddle::Tensor>& kv_signal_data,
     const paddle::optional<paddle::Tensor>& q_norm_weight,
     const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const paddle::optional<paddle::Tensor>& sinks,
     const float rms_norm_eps,
     const std::string& compute_dtype,
     const std::string& cache_quant_type_str,
@@ -645,7 +652,8 @@ void AppendAttentionWithOutput(
     const int encoder_max_partition_size,
     const int speculate_max_draft_token_num,
     const bool causal,
-    const bool speculate_decoder) {
+    const bool speculate_decoder,
+    const int sliding_window) {
   AppendAttnMetaData meta_data;
 
   const auto& qkv_dims = qkv.dims();
@@ -704,10 +712,10 @@ void AppendAttentionWithOutput(
           cache_v_zp,
           out_linear_shifts,
           out_linear_smooths,
-          mask_offset,
           kv_signal_data,
           q_norm_weight,
           k_norm_weight,
+          sinks,
           rms_norm_eps,
           cache_quant_type_str,
           use_neox_rotary_style,
@@ -722,7 +730,8 @@ void AppendAttentionWithOutput(
           encoder_max_partition_size,
           speculate_max_draft_token_num,
           causal,
-          speculate_decoder);
+          speculate_decoder,
+          sliding_window);
   };
 
   phi::dtype::float16 fp16_dtype;
@@ -756,6 +765,8 @@ void AppendAttentionWithOutput(
       break;
     }
   }
+
+  return {fmha_out};
 }
 
 
@@ -795,6 +806,7 @@ std::vector<std::vector<int64_t>> AppendAttentionInferShape(
     const paddle::optional<std::vector<int64_t>>& kv_signal_data_shape,
     const paddle::optional<std::vector<int64_t>>& q_norm_weight_shape,
     const paddle::optional<std::vector<int64_t>>& k_norm_weight_shape,
+    const paddle::optional<std::vector<int64_t>>& sinks_shape,
     const float rms_norm_eps,
     const std::string& compute_dtype,
     const std::string& cache_quant_type_str,
@@ -810,7 +822,8 @@ std::vector<std::vector<int64_t>> AppendAttentionInferShape(
     const int encoder_max_partition_size,
     const int speculate_max_draft_token_num,
     const bool causal,
-    const bool speculate_decoder) {
+    const bool speculate_decoder,
+    const int sliding_window) {
   const int token_num = qkv_shape[0];
   const int kv_num_heads = key_cache_shape[1];
   int head_dim = key_cache_shape[3];
@@ -858,6 +871,7 @@ std::vector<paddle::DataType> AppendAttentionInferDtype(
     const paddle::optional<paddle::DataType>& kv_signal_data_dtype,
     const paddle::optional<paddle::DataType>& q_norm_weight_dtype,
     const paddle::optional<paddle::DataType>& k_norm_weight_dtype,
+    const paddle::optional<paddle::DataType>& sinks_dtype,
     const float rms_norm_eps,
     const std::string& compute_dtype,
     const std::string& cache_quant_type_str,
@@ -873,7 +887,8 @@ std::vector<paddle::DataType> AppendAttentionInferDtype(
     const int encoder_max_partition_size,
     const int speculate_max_draft_token_num,
     const bool causal,
-    const bool speculate_decoder) {
+    const bool speculate_decoder,
+    const int sliding_window) {
   if (compute_dtype == "bf16") {
     if (out_linear_in_scale > 0.0) {
       if (fabs(quant_max_bound - 127.0f) < 0.000001) {
@@ -940,6 +955,7 @@ std::vector<std::vector<int64_t>> AppendAttentionWithOutputInferShape(
     const paddle::optional<std::vector<int64_t>>& kv_signal_data_shape,
     const paddle::optional<std::vector<int64_t>>& q_norm_weight_shape,
     const paddle::optional<std::vector<int64_t>>& k_norm_weight_shape,
+    const paddle::optional<std::vector<int64_t>>& sinks_shape,
     const float rms_norm_eps,
     const std::string& compute_dtype,
     const std::string& cache_quant_type_str,
@@ -955,7 +971,8 @@ std::vector<std::vector<int64_t>> AppendAttentionWithOutputInferShape(
     const int encoder_max_partition_size,
     const int speculate_max_draft_token_num,
     const bool causal,
-    const bool speculate_decoder) {
+    const bool speculate_decoder,
+    const int sliding_window) {
   return {fmha_out_shape};
 }
 
@@ -996,6 +1013,7 @@ std::vector<paddle::DataType> AppendAttentionWithOutputInferDtype(
     const paddle::optional<paddle::DataType>& kv_signal_data_dtype,
     const paddle::optional<paddle::DataType>& q_norm_weight_dtype,
     const paddle::optional<paddle::DataType>& k_norm_weight_dtype,
+    const paddle::optional<paddle::DataType>& sinks_dtype,
     const float rms_norm_eps,
     const std::string& compute_dtype,
     const std::string& cache_quant_type_str,
@@ -1011,7 +1029,8 @@ std::vector<paddle::DataType> AppendAttentionWithOutputInferDtype(
     const int encoder_max_partition_size,
     const int speculate_max_draft_token_num,
     const bool causal,
-    const bool speculate_decoder) {
+    const bool speculate_decoder,
+    const int sliding_window) {
   return {fmha_out_dtype};
 }
 
@@ -1052,7 +1071,8 @@ PD_BUILD_STATIC_OP(append_attention)
              paddle::Optional("mask_offset"),
              paddle::Optional("kv_signal_data"),
              paddle::Optional("q_norm_weight"),
-             paddle::Optional("k_norm_weight")})
+             paddle::Optional("k_norm_weight"),
+             paddle::Optional("sinks")})
     .Outputs({"fmha_out"})
     .Attrs({"rms_norm_eps: float",
             "compute_type: std::string",
@@ -1070,6 +1090,7 @@ PD_BUILD_STATIC_OP(append_attention)
             "speculate_max_draft_token_num: int",
             "causal: bool",
             "speculate_decoder: bool",
+            "sliding_window: int",
             })
     .SetKernelFn(PD_KERNEL(AppendAttention))
     .SetInferShapeFn(PD_INFER_SHAPE(AppendAttentionInferShape))
@@ -1111,11 +1132,10 @@ PD_BUILD_STATIC_OP(append_attention_with_output)
              paddle::Optional("mask_offset"),
              paddle::Optional("kv_signal_data"),
              paddle::Optional("q_norm_weight"),
-             paddle::Optional("k_norm_weight")})
-    .Outputs({"fmha_out_out", "qkv_out", "key_cache_out", "value_cache_out"})
-    .SetInplaceMap({{"fmha_out", "fmha_out_out"},
-                    {"key_cache", "key_cache_out"},
-                    {"value_cache", "value_cache_out"}})
+             paddle::Optional("k_norm_weight"),
+             paddle::Optional("sinks")})
+    .Outputs({"fmha_out_out"})
+    .SetInplaceMap({{"fmha_out", "fmha_out_out"}})
     .Attrs({"rms_norm_eps: float",
             "compute_type: std::string",
             "cache_quant_type: std::string",
@@ -1132,6 +1152,7 @@ PD_BUILD_STATIC_OP(append_attention_with_output)
             "speculate_max_draft_token_num: int",
             "causal: bool",
             "speculate_decoder: bool",
+            "sliding_window: int",
             })
     .SetKernelFn(PD_KERNEL(AppendAttentionWithOutput))
     .SetInferShapeFn(PD_INFER_SHAPE(AppendAttentionWithOutputInferShape))

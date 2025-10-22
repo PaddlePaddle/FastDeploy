@@ -1,3 +1,5 @@
+[简体中文](../zh/get_started/quick_start.md)
+
 # Deploy ERNIE-4.5-0.3B-Paddle in 10 Minutes
 
 Before deployment, ensure your environment meets the following requirements:
