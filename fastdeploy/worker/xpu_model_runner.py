@@ -425,12 +425,12 @@ class XPUModelRunner(ModelRunnerBase):
                     else:
                         self.share_inputs["image_features"] = None
 
-                rope_3d_position_ids["position_ids_idx"].append(idx)
-                rope_3d_position_ids["position_ids_lst"].append(request.multimodal_inputs["position_ids"])
-                rope_3d_position_ids["position_ids_offset"].append(
-                    length + rope_3d_position_ids["position_ids_offset"][-1]
-                )
-                rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
+                    rope_3d_position_ids["position_ids_idx"].append(idx)
+                    rope_3d_position_ids["position_ids_lst"].append(request.multimodal_inputs["position_ids"])
+                    rope_3d_position_ids["position_ids_offset"].append(
+                        length + rope_3d_position_ids["position_ids_offset"][-1]
+                    )
+                    rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
 
                 if len(request.output_token_ids) == 0:
                     input_ids = request.prompt_token_ids
