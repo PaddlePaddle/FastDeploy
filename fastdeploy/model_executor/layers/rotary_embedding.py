@@ -494,12 +494,14 @@ class ErnieVlRotaryEmbedding3D:
 
             rot_emb[0] = cos_thw
             rot_emb[1] = sin_thw
-            
+
             if current_platform.is_iluvatar():
-                rot_emb = paddle.stack([rot_emb, rot_emb], axis=-1).reshape([2, 1, self.max_position, 1, self.rotary_dim])
-            
+                rot_emb = paddle.stack([rot_emb, rot_emb], axis=-1).reshape(
+                    [2, 1, self.max_position, 1, self.rotary_dim]
+                )
+
             rot_emb_list.append(rot_emb)
-        
+
         return rot_emb_list
 
 
@@ -652,7 +654,7 @@ def get_rope_3d(
         rotary_emb3d_layer = QwenVlRotaryEmbedding3D(
             rotary_dim, base, partial_rotary_factor, max_position, freq_allocation
         )
-    elif "qf" in model_type:
+    elif "paddleocr" in model_type:
         rotary_emb3d_layer = QwenVlRotaryEmbedding3D(
             rotary_dim, base, partial_rotary_factor, max_position, freq_allocation
         )

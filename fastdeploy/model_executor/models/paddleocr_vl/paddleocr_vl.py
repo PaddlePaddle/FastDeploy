@@ -46,7 +46,7 @@ from .siglip import SiglipVisionModel
 
 
 @support_graph_optimization
-class QFVLModel(nn.Layer):
+class PaddleOCRVLModel(nn.Layer):
     def __init__(
         self,
         fd_config: FDConfig = None,
@@ -126,12 +126,12 @@ class QFVLModel(nn.Layer):
 
 
 @ModelRegistry.register_model_class(
-    architecture="QFVLForConditionalGeneration",
-    module_name="qf_vl.qf_vl",
+    architecture="PaddleOCRVLForConditionalGeneration",
+    module_name="paddleocr_vl.paddleocr_vl",
     category=ModelCategory.MULTIMODAL,
     primary_use=ModelCategory.MULTIMODAL,
 )
-class QFVLForConditionalGeneration(ModelForCasualLM):
+class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
     def __init__(self, fd_config):
         super().__init__(fd_config)
 
@@ -139,7 +139,7 @@ class QFVLForConditionalGeneration(ModelForCasualLM):
         self.config = config
         self.mlp_AR = Projector(config, config.vision_config, prefix="mlp_AR")
         self.visual = SiglipVisionModel(config.vision_config, prefix="visual")
-        self.model = QFVLModel(fd_config)
+        self.model = PaddleOCRVLModel(fd_config)
         self.vocab_size = config.vocab_size
         self.lm_head = ParallelLMHead(
             fd_config=fd_config,
@@ -179,7 +179,7 @@ class QFVLForConditionalGeneration(ModelForCasualLM):
 
     @classmethod
     def name(self):
-        return "QFVLForConditionalGeneration"
+        return "PaddleOCRVLForConditionalGeneration"
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
@@ -220,7 +220,7 @@ class QFVLForConditionalGeneration(ModelForCasualLM):
         return hidden_states
 
 
-class QFVLPretrainedModel(PretrainedModel):
+class PaddleOCRVLPretrainedModel(PretrainedModel):
 
     config_class = FDConfig
 
@@ -232,7 +232,7 @@ class QFVLPretrainedModel(PretrainedModel):
 
     @classmethod
     def arch_name(self):
-        return "QFVLForConditionalGeneration"
+        return "PaddleOCRVLForConditionalGeneration"
 
     from fastdeploy.model_executor.models.tp_utils import TensorSplitMode as tsm
     from fastdeploy.model_executor.models.utils import LayerIdPlaceholder as layerid

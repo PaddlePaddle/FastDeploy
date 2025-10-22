@@ -23,7 +23,7 @@ from fastdeploy.utils import data_processor_logger
 from .process import DataProcessor
 
 
-class QFVLProcessor(TextProcessor):
+class PaddleOCRVLProcessor(TextProcessor):
     """
     PaddleOCR Vision-Language processor for handling multimodal inputs.
 
@@ -49,7 +49,7 @@ class QFVLProcessor(TextProcessor):
         tool_parser_obj=None,
     ):
         """
-        Initialize QFVLProcessor instance.
+        Initialize PaddleOCRVLProcessor instance.
 
         Args:
             config: Model configuration object

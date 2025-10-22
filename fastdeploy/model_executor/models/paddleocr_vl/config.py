@@ -18,7 +18,7 @@ from paddleformers.transformers.configuration_utils import PretrainedConfig
 
 
 class PPOCRVisionConfig(PretrainedConfig):
-    model_type = "qfvl"
+    model_type = "paddleocr_vl"
     base_config_key = "vision_config"
 
     def __init__(
@@ -55,8 +55,8 @@ class PPOCRVisionConfig(PretrainedConfig):
         self.tokens_per_second = tokens_per_second
 
 
-class QFVLConfig(PretrainedConfig):
-    model_type = "qfvl"
+class PaddleOCRConfig(PretrainedConfig):
+    model_type = "paddleocr_vl"
     keys_to_ignore_at_inference = ["past_key_values"]
     sub_configs = {"vision_config": PPOCRVisionConfig}
 
