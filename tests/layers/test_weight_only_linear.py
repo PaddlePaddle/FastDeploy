@@ -105,8 +105,8 @@ class WeightOnlyLinearWrapper(paddle.nn.Layer):
 
 class TestWeightOnlyLinear(unittest.TestCase):
     def setUp(self) -> None:
-        self.model_config = self.build_model_config()
         self.model_name_or_path = None
+        self.model_config = self.build_model_config()
 
     def build_model_config(self) -> ModelConfig:
         model_path = os.getenv("MODEL_PATH")
@@ -195,23 +195,22 @@ class TestWeightOnlyLinear(unittest.TestCase):
         for use_machete in ["0", "1"]:
             os.environ["FD_USE_MACHETE"] = use_machete
             self.run_wint_linear("qkv_proj")
-        if self.model_name_or_path:
-            shutil.rmtree(self.model_name_or_path)
 
     def test_out_linear(self):
         print("================Test OUT Quantized Linear Layer================")
         for use_machete in ["0", "1"]:
             os.environ["FD_USE_MACHETE"] = use_machete
             self.run_wint_linear("o_proj")
-        if self.model_name_or_path:
-            shutil.rmtree(self.model_name_or_path)
 
     def test_both_linear(self):
         print("===========Test both OUT and QKV Quantized Linear Layer=========")
         for use_machete in ["0", "1"]:
             os.environ["FD_USE_MACHETE"] = use_machete
             self.run_wint_linear("out_proj+qkv_proj")
+
+    def tearDown(self) -> None:
         if self.model_name_or_path:
+            print("Remove tmp model config file")
             shutil.rmtree(self.model_name_or_path)
 
 
