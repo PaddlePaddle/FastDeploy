@@ -15,6 +15,6 @@
 """
 
 from .process import DataProcessor
-from .qf_vl_processor import QFVLProcessor
+from .qf_vl_processor import PaddleOCRVLProcessor
 
-__all__ = ["DataProcessor", "QFVLProcessor"]
+__all__ = ["DataProcessor", "PaddleOCRVLProcessor"]

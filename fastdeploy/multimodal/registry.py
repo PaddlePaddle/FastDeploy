@@ -25,7 +25,7 @@ class MultimodalRegistry:
         "Ernie5MoeForCausalLM",
         "Qwen2_5_VLForConditionalGeneration",
         "Ernie5ForCausalLM",
-        "QFVLForConditionalGeneration",
+        "PaddleOCRVLForConditionalGeneration",
     }
 
     @classmethod

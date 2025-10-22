@@ -120,10 +120,10 @@ class InputPreprocessor:
                         reasoning_parser_obj=reasoning_parser_obj,
                         tool_parser_obj=tool_parser_obj,
                     )
-                elif "QFVL" in architectures:
-                    from fastdeploy.input.qf_vl_processor import QFVLProcessor
+                elif "PaddleOCRVL" in architectures:
+                    from fastdeploy.input.qf_vl_processor import PaddleOCRVLProcessor
 
-                    self.processor = QFVLProcessor(
+                    self.processor = PaddleOCRVLProcessor(
                         config=config,
                         model_name_or_path=self.model_name_or_path,
                         limit_mm_per_prompt=self.limit_mm_per_prompt,

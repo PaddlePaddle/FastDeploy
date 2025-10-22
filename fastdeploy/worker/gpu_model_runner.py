@@ -941,7 +941,9 @@ class GPUModelRunner(ModelRunnerBase):
 
         if self.enable_mm:
             head_dim = self.model_config.head_dim
-            if "qwen" in self.model_config.model_type or "qf" in self.model_config.model_type:  # neox style = True
+            if (
+                "qwen" in self.model_config.model_type or "paddleocr" in self.model_config.model_type
+            ):  # neox style = True
                 rope_head_dim = head_dim
             else:  # neox style = False
                 rope_head_dim = head_dim // 2
@@ -2069,7 +2071,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         return image_features
 
-    def extract_vision_features_qf(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
+    def extract_vision_features_paddleocr(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
         assert inputs["images"] is not None
         grid_thw = inputs["grid_thw"]
         images = inputs["images"]
@@ -2116,8 +2118,8 @@ class GPUModelRunner(ModelRunnerBase):
             return self.extract_vision_features_ernie(inputs)
         elif "qwen" in self.model_config.model_type:
             return self.extract_vision_features_qwen(inputs)
-        elif "qf" in self.model_config.model_type:
-            return self.extract_vision_features_qf(inputs)
+        elif "paddleocr" in self.model_config.model_type:
+            return self.extract_vision_features_paddleocr(inputs)
         else:
             raise ValueError(f"multiple modalities model {self.model_config.model_type} is not supported")
 
