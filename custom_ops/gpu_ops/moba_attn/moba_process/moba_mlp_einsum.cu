@@ -16,6 +16,9 @@
 #include "moba_attn/moba_attn_utils.hpp"
 #include "moba_attn/moba_attn.h"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
 
 template <typename T, int moba_block_size, int kHeadDim, int kMaxN>
 __global__ void moba_mlp_einsum_kernel(
@@ -207,7 +210,7 @@ std::vector<paddle::Tensor> MobaMlpEinsum(
     return {k_gate_weight};
 }
 
-PD_BUILD_OP(moba_mlp_einsum)
+PD_BUILD_STATIC_OP(moba_mlp_einsum)
     .Inputs({
         "k_input",
         "attn_gate_weight",
