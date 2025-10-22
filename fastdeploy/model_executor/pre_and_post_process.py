@@ -732,7 +732,9 @@ def rebuild_padding(
             seq_lens_decoder,
             seq_lens_encoder,
             output_padding_offset,
+            first_token_out,
             max_input_length,
+            enable_logprob,
         )
     elif current_platform.is_gcu():
         from fastdeploy.model_executor.ops.gcu import rebuild_padding
