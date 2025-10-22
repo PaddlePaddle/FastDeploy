@@ -47,11 +47,12 @@ if args.enable_mm:
 rollout_config = RolloutModelConfig(**init_kwargs)
 actor_eval_model = RolloutModel(rollout_config)
 
-content = ""
-for k, v in actor_eval_model.state_dict().items():
-    content += f"{k}\n"
-for k, v in actor_eval_model.get_name_mappings_to_training().items():
-    content += f"{k}:{v}\n"
+content = "".join(
+    sorted(
+        [f"{k}\n" for k, v in actor_eval_model.state_dict().items()]
+        + [f"{k}:{v}\n" for k, v in actor_eval_model.get_name_mappings_to_training().items()]
+    )
+)
 
 
 def compare_strings_line_by_line(a: str, b: str) -> bool:
