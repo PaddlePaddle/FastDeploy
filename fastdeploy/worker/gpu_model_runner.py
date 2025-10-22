@@ -2382,10 +2382,10 @@ class GPUModelRunner(ModelRunnerBase):
     @paddle.no_grad()
     def prepare_rope3d(
         self, position_ids: paddle.Tensor, max_len_lst: list[int], cumsum_seqlens: list[int]
-    ) -> paddle.Tensor:
+    ) -> list[paddle.Tensor]:
         """prepare_rope3d"""
 
-        rope_emb = get_rope_3d(
+        rope_emb_lst = get_rope_3d(
             position_ids=position_ids,
             rotary_dim=self.model_config.head_dim,
             partial_rotary_factor=1.0,
@@ -2396,4 +2396,4 @@ class GPUModelRunner(ModelRunnerBase):
             max_len_lst=max_len_lst,
             cumsum_seqlens=cumsum_seqlens,
         )
-        return rope_emb
+        return rope_emb_lst
