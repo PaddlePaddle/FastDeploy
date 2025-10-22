@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import paddle
+
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention import IluvatarAttnBackend
@@ -29,6 +31,8 @@ class IluvatarModelRunner(GPUModelRunner):
         rank: int,
         local_rank: int,
     ):
+        # Iluvatar does not support cudagraph
+        fd_config.graph_opt_config.use_cudagraph = False
         super(IluvatarModelRunner, self).__init__(
             fd_config=fd_config, device=device, device_id=device_id, rank=rank, local_rank=local_rank
         )
@@ -36,8 +40,24 @@ class IluvatarModelRunner(GPUModelRunner):
         assert self.guided_backend is None, "Iluvatar does not support guided decoding"
         assert not envs.ENABLE_V1_KVCACHE_SCHEDULER, "Iluvatar does not support v1 kvcache scheduler"
         assert not self.cache_config.enable_prefix_caching, "Iluvatar does not support prefix caching"
+        self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
+        assert not self.mla_cache, "Iluvatar does not support MLA"
+        assert not self.use_cudagraph, "Iluvatar does not support cudagraph"
+        if self.enable_mm:
+            assert (
+                not self.cache_config.enable_chunked_prefill
+            ), "Iluvatar does not support chunked prefill for VL model"
+        # VL neox style = True
+        if self.enable_mm:
+            emb_shape = self.share_inputs["rope_emb"].shape
+            emb_shape[-1] *= 2
+            self.share_inputs["rope_emb"] = paddle.full(
+                shape=emb_shape,
+                fill_value=0,
+                dtype="float32",
+            )
 
-    def initialize_attn_backend(self) -> None:
+    def _initialize_attn_backend(self) -> None:
         """
         Initialize attention backends
         """

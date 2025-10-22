@@ -1,3 +1,5 @@
+[简体中文](../zh/features/graph_optimization.md)
+
 # Graph optimization technology in FastDeploy
 
 FastDeploy's `GraphOptimizationBackend` integrates a variety of graph optimization technologies:
@@ -18,7 +20,7 @@ FastDeploy's `GraphOptimizationBackend` design architecture is as follows, **som
 ## 1. GraphOptimizationBackend Current usage restrictions
 In the CUDAGraph multi-device inference task, you need to use the Custom all-reduce operator to perform multi-card all-reduce.
 
-Before version 2.2, the CUDAGraph was not enabled by default. the Custom all-reduce operators was enabled by default.
+Before version 2.3, CUDAGraph and Custom all reduce were not enabled by default. Since version 2.3, CUDAGraph and Custom all reduce have been enabled by default.
 
 ### 1.1 The multi-device scene needs to be enabled Custom all-reduce
 The `FLAGS_max_partition_size` environment variable controls the `gridDim` execution configuration of Kernel in CascadeAppend Attention, and dynamic execution configuration will cause CUDAGraph execution to fail.
@@ -33,13 +35,12 @@ The `FLAGS_max_partition_size` environment variable controls the `gridDim` execu
 
 ## 2. GraphOptimizationBackend related configuration parameters
 Currently, only user configuration of the following parameters is supported：
-+ `use_cudagraph` : bool = False
-+ `graph_optimization_config` :  Dict[str, Any]
++ `graph-optimization-config` :  Dict[str, Any]
   + `graph_opt_level`: int = 0
-  + `use_cudagraph`: bool = False
-  + `cudagraph_capture_sizes` : List[int] = None
+  + `use_cudagraph`: bool = True
+  + `cudagraph_capture_sizes` : List[int]
 
-CudaGrpah can be enabled by setting `--use-cudagraph` or `--graph-optimization-config '{"use_cudagraph":true}'`. Using two different methods to set the use graph simultaneously may cause conflicts.
+Before version 2.3, it needs to be enabled through `--use-cudagraph`.CUDAGraph has been enabled by default in some scenarios at the beginning of version 2.3. CUDAGraph will be automatically closed for functions that are not compatible with CUDAGraph (speculative decoding, multi-mode model).You can also manually control the CUDAGraph by setting `--graph-optimization-config` .
 
 The `graph_opt_level` parameter within `--graph-optimization-config` is used to configure the graph optimization level, with the following available options:
 + `0`: Use Dynamic compute graph, default to 0

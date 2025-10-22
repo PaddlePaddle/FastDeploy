@@ -16,6 +16,9 @@
 #include "moba_attn/moba_attn_utils.hpp"
 #include "moba_attn/moba_attn.h"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
 
 template <typename T, int knthreads, int moba_block_size, int kBlockMaxN, int searchtimes>
 __global__ void qk_gate_sort_decoder_kernel(
@@ -221,7 +224,7 @@ std::vector<paddle::Tensor> QkSortDecoder(
     }
 }
 
-PD_BUILD_OP(moba_qk_sort_decoder)
+PD_BUILD_STATIC_OP(moba_qk_sort_decoder)
     .Inputs({
         "qk_gate_weight",
         "seq_len_encoder",

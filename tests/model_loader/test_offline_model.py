@@ -44,6 +44,8 @@ model_param_map = {
                 "env": {"DG_NVCC_OVERRIDE_CPP_STANDARD": "17"},
             },
         ],
+        "max_num_seqs": 1,
+        "graph_optimization_config": {"use_cudagraph": False},
     },
 }
 
@@ -58,6 +60,7 @@ for model, cfg in model_param_map.items():
             pytest.param(
                 model,
                 cfg.get("tensor_parallel_size", 1),
+                cfg.get("max_num_seqs", 1),
                 cfg.get("max_model_len", 1024),
                 quant,
                 cfg.get("max_tokens", 32),
@@ -69,13 +72,14 @@ for model, cfg in model_param_map.items():
 
 
 @pytest.mark.parametrize(
-    "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens,env",
+    "model_name_or_path,tensor_parallel_size,max_num_seqs,max_model_len,quantization,max_tokens,env",
     params,
 )
 def test_offline_model(
     fd_runner,
     model_name_or_path: str,
     tensor_parallel_size: int,
+    max_num_seqs: int,
     max_model_len: int,
     max_tokens: int,
     quantization: str,
@@ -93,6 +97,7 @@ def test_offline_model(
             fd_runner,
             torch_model_path,
             tensor_parallel_size,
+            max_num_seqs,
             max_model_len,
             max_tokens,
             quantization,

@@ -64,6 +64,8 @@ __global__ void set_value_by_flags(bool *stop_flags,
             }
             if (!beam_search && is_in_end(topk_ids[bid], end_ids, end_length)) {
                 stop_flags[bid] = true;
+                topk_ids[bid] = end_ids[0];
+                next_tokens[bid] = end_ids[0];
             }
         }
         // dealing stop_seqs

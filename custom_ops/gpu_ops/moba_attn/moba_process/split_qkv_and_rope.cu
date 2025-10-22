@@ -16,6 +16,10 @@
 #include "moba_attn/moba_attn_utils.hpp"
 #include "moba_attn/moba_attn.h"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
+
 template <typename input_type, int moba_block_size, int kBlockM, int kMaxN, int tokens_per_block, bool need_k_mean>
 __global__ void fused_block_mean_and_rope_kernel(
         const input_type *qkv_input,
@@ -341,7 +345,7 @@ void FusedBlockMeanAndRope(
 
 
 
-PD_BUILD_OP(fused_block_mean_and_rope)
+PD_BUILD_STATIC_OP(fused_block_mean_and_rope)
     .Inputs({
         "qkv_out",
         "k_block_means",
