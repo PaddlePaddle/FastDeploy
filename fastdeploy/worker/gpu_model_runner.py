@@ -2257,7 +2257,7 @@ class GPUModelRunner(ModelRunnerBase):
             grid_thw = None
 
         if one["position_ids"] is not None:
-            position_ids = paddle.to_tensor(one["position_ids"], dtype="int64").unsqueeze([0])
+            position_ids = paddle.to_tensor(one["position_ids"], dtype="int64")
         else:
             position_ids = None
 

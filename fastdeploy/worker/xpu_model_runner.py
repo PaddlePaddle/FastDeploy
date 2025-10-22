@@ -576,7 +576,7 @@ class XPUModelRunner(ModelRunnerBase):
             if self.enable_mm:
                 self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
                     position_ids, [request.get("max_tokens", 2048)], [0, length]
-                )
+                )[0]
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
@@ -1267,7 +1267,7 @@ class XPUModelRunner(ModelRunnerBase):
             grid_thw = None
 
         if one["position_ids"] is not None:
-            position_ids = paddle.to_tensor(one["position_ids"], dtype="int64").unsqueeze([0])
+            position_ids = paddle.to_tensor(one["position_ids"], dtype="int64")
         else:
             position_ids = None
 
