@@ -628,6 +628,7 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
   const int token_id = blockIdx.x;
 
   const int bid = batch_id_per_token[token_id];
+  if (bid == -1) return; // NOTE(gongshaotian): For CUDAGraph padding
 
   const int start_token_idx = cu_seqlens_q[bid];
   const int head_idx = blockIdx.y * NUM_WARPS + wid;
