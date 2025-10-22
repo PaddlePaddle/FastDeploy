@@ -717,7 +717,15 @@ class EngineService:
                         and (not is_fetching)
                         and self.exist_prefill_task_signal.value[0] == 0
                     ):
-                        get_request_pool.submit(_fetch_request)
+                        # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
+                        try:
+                            get_request_pool.submit(_fetch_request)
+                        except RuntimeError as e:
+                            if "shutdown" in str(e):
+                                llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")
+                                break
+                            else:
+                                raise
                 # 2. Schedule requests
                 tasks = self.resource_manager.schedule()
                 # 3. Send to engine
