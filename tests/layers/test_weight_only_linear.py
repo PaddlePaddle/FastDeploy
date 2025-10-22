@@ -109,7 +109,7 @@ class TestWeightOnlyLinear(unittest.TestCase):
         self.model_config = self.build_model_config()
 
     def build_model_config(self) -> ModelConfig:
-        model_path = os.getenv("MODEL_PATH")
+        model_path = os.getenv("TEST_MODEL_PATH")
         if model_path:
             model_cofig_path = model_path
         else:
