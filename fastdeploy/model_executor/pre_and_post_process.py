@@ -735,6 +735,36 @@ def post_process_pooling(
     skip_save_output: bool = False,
     async_output_queue: queue.Queue = None,
 ) -> None:
+
+    paddle.assign(
+        paddle.where(
+            model_output.stop_flags,
+            model_output.step_idx,
+            model_output.step_idx + 1,
+        ),
+        model_output.step_idx,
+    )
+    length_cond = paddle.greater_equal(model_output.step_idx, model_output.max_dec_len)
+
+    paddle.assign(
+        paddle.logical_or(model_output.stop_flags, length_cond),
+        model_output.stop_flags,
+    )
+    if current_platform.is_cuda() or current_platform.is_iluvatar() or current_platform.is_dcu():
+        dummy_tokens = paddle.full_like(model_output.next_tokens, -1, dtype="int64")
+        set_stop_value_multi_ends(
+            dummy_tokens,
+            model_output.stop_flags,
+            model_output.seq_lens_this_time,
+            model_output.eos_token_id,
+            model_output.next_tokens,
+            model_output.pre_ids,
+            model_output.step_idx,
+            model_output.stop_token_ids,
+            model_output.stop_seqs_len,
+            is_pooling=True,
+        )
+
     if not skip_save_output:
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
             if save_each_rank or model_output.mp_rank == 0:

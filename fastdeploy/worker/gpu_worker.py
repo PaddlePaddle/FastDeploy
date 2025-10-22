@@ -16,6 +16,7 @@
 
 import gc
 import time
+import traceback
 from typing import List, Optional
 
 import paddle
@@ -190,8 +191,13 @@ class GpuWorker(WorkerBase):
         num_running_request: int = None,
     ) -> Optional[ModelRunnerOutput]:
         """ """
-        output = self.model_runner.execute_model(model_forward_batch, num_running_request)
-        return output
+        try:
+            output = self.model_runner.execute_model(model_forward_batch, num_running_request)
+            return output
+        except Exception as e:
+            traceback.print_exc()
+            logger.error(f"model_runner.execute_model failed, {str(e)}")
+            raise e
 
     def preprocess_new_task(self, req_dicts: List[Request], num_running_requests: int) -> None:
         """Process new requests and then start the decode loop
