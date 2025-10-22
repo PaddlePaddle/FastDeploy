@@ -319,6 +319,7 @@ def post_process_normal(
             model_output.stop_token_ids,
             model_output.stop_seqs_len,
             False,
+            is_pooling=False,
         )  # multi ends
     elif current_platform.is_maca():
         set_stop_value_multi_ends(
@@ -332,6 +333,7 @@ def post_process_normal(
             model_output.stop_token_ids,
             model_output.stop_seqs_len,
             False,
+            is_pooling=False,
         )  # multi ends
     else:
         set_stop_value_multi_ends(
@@ -494,11 +496,11 @@ def post_process(
         post_process_pooling(
             sampler_or_pooler_output,
             model_output,
+            share_inputs,
+            block_size,
             save_each_rank,
             skip_save_output,
             async_output_queue,
-            think_end_id,
-            line_break_id,
         )
     else:
         if speculative_decoding:
@@ -801,11 +803,17 @@ def rebuild_padding(
 def post_process_pooling(
     pooler_output: PoolerOutput,
     model_output: ModelOutputData,
+    share_inputs: Dict[str, paddle.Tensor],
+    block_size: int = 64,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
     async_output_queue: queue.Queue = None,
 ) -> None:
 
+    paddle.assign(
+        paddle.ones_like(model_output.stop_flags, dtype="bool"),
+        model_output.stop_flags,
+    )
     paddle.assign(
         paddle.where(
             model_output.stop_flags,
@@ -820,6 +828,7 @@ def post_process_pooling(
         paddle.logical_or(model_output.stop_flags, length_cond),
         model_output.stop_flags,
     )
+
     if current_platform.is_cuda() or current_platform.is_iluvatar() or current_platform.is_dcu():
         dummy_tokens = paddle.full_like(model_output.next_tokens, -1, dtype="int64")
         set_stop_value_multi_ends(
@@ -832,8 +841,30 @@ def post_process_pooling(
             model_output.step_idx,
             model_output.stop_token_ids,
             model_output.stop_seqs_len,
-            is_pooling=True,
+            False,
+            True,
         )
+
+    with paddle.framework._no_check_dy2st_diff():
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            dummy_sampled_tokens = paddle.full_like(model_output.next_tokens, -1, dtype="int64")
+
+            update_inputs_v1(
+                model_output.stop_flags,
+                model_output.not_need_stop,
+                model_output.seq_lens_this_time,
+                model_output.seq_lens_encoder,
+                model_output.seq_lens_decoder,
+                share_inputs["step_seq_lens_decoder"],
+                share_inputs["prompt_lens"],
+                dummy_sampled_tokens,
+                model_output.input_ids,
+                share_inputs["block_tables"],
+                model_output.stop_nums,
+                model_output.next_tokens,
+                model_output.is_block_step,
+                block_size,
+            )
 
     if not skip_save_output:
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
