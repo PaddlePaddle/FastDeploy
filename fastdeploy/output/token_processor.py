@@ -646,6 +646,10 @@ class TokenProcessor:
                     if not (envs.FD_ENABLE_INTERNAL_ADAPTER and token_id in task.eos_token_ids):
                         result.outputs.token_ids.append(token_id)
                     task.output_token_ids.append(token_id)
+                    if (task.num_total_tokens - 1) % self.cfg.cache_config.block_size == 0:
+                        self.resource_manager.cache_output_tokens(
+                            task
+                        )  # when enable prefix caching, cache kv cache for output tokens
                     if self.use_logprobs:
                         if self.cfg.speculative_config.method:
                             result.outputs.logprob = float(scores[i, batch_token_index, 0])
