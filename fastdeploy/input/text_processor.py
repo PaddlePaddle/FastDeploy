@@ -270,10 +270,10 @@ class DataProcessor(BaseDataProcessor):
             request.set("top_p", _SAMPLING_EPS)
         if self.reasoning_parser:
             real_req_id = request.request_id.split("_")[0]
-            model_status = self.model_status_dict.get(real_req_id)
-            if model_status is None:
-                model_status = self.reasoning_parser.get_model_status(request.prompt_token_ids)
-                self.model_status_dict[real_req_id] = model_status
+            n = request.get("n", 1)
+            model_status = self.reasoning_parser.get_model_status(request.prompt_token_ids)
+            for idx in range(n):
+                self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
             request.enable_thinking = model_status == "think_start"
 
         data_processor_logger.info(f"Processed request: {request}")
@@ -351,10 +351,10 @@ class DataProcessor(BaseDataProcessor):
             request["top_p"] = _SAMPLING_EPS
         if self.reasoning_parser:
             real_req_id = request["request_id"].split("_")[0]
-            model_status = self.model_status_dict.get(real_req_id)
-            if model_status is None:
-                model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
-                self.model_status_dict[real_req_id] = model_status
+            model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
+            n = request.get("n", 1)
+            for idx in range(n):
+                self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
             request["enable_thinking"] = model_status == "think_start"
 
         data_processor_logger.info(f"Processed request dict: {request}")
@@ -382,7 +382,7 @@ class DataProcessor(BaseDataProcessor):
         response_dict.outputs.text = full_text
         if self.reasoning_parser:
             reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
-                full_text, response_dict, self.model_status_dict.get(req_id.split("_")[0])
+                full_text, response_dict, self.model_status_dict[req_id]
             )
             response_dict.outputs.text = text
             response_dict.outputs.reasoning_content = reasoning_content
@@ -392,8 +392,8 @@ class DataProcessor(BaseDataProcessor):
             if tool_call_info.tools_called:
                 response_dict.outputs.tool_calls = tool_call_info.tool_calls
                 response_dict.outputs.text = tool_call_info.content
-        if req_id.split("_")[0] in self.model_status_dict:
-            del self.model_status_dict[req_id.split("_")[0]]
+        if req_id in self.model_status_dict:
+            del self.model_status_dict[req_id]
         data_processor_logger.info(f"req_id:{req_id}, token_ids: {token_ids}")
 
         return response_dict
@@ -423,7 +423,7 @@ class DataProcessor(BaseDataProcessor):
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(
                     full_text,
                     response_dict,
-                    self.model_status_dict.get(req_id.split("_")[0]),
+                    self.model_status_dict[req_id],
                 )
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
@@ -464,7 +464,7 @@ class DataProcessor(BaseDataProcessor):
                 previous_token_ids,
                 previous_token_ids + token_ids,
                 token_ids,
-                self.model_status_dict.get(req_id.split("_")[0]),
+                self.model_status_dict[req_id],
             )
             response_dict["outputs"]["delta_message"] = reasoning_delta_message
         if self.tool_parser_obj:
@@ -488,8 +488,8 @@ class DataProcessor(BaseDataProcessor):
             del self.decode_status[req_id]
             if req_id in self.tool_parser_dict:
                 del self.tool_parser_dict[req_id]
-            if req_id.split("_")[0] in self.model_status_dict:
-                del self.model_status_dict[req_id.split("_")[0]]
+            if req_id in self.model_status_dict:
+                del self.model_status_dict[req_id]
         return response_dict
 
     def process_response_dict(self, response_dict, **kwargs):
