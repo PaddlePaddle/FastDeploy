@@ -24,6 +24,7 @@ import paddle.nn as nn
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
+from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce_custom
 from fastdeploy.engine.request import Request
 
 # from fastdeploy.spec_decode import MTPProposer, NgramProposer
@@ -318,7 +319,7 @@ class HPUModelRunner(ModelRunnerBase):
         self.speculative_decoding = self.speculative_method is not None
 
         self.guided_backend = None
-        if self.fd_config.parallel_config.guided_decoding_backend != "off":
+        if self.fd_config.structured_outputs_config.guided_decoding_backend != "off":
             self.guided_backend = get_guided_backend(fd_config=self.fd_config)
 
         #  Sampler
@@ -591,10 +592,6 @@ class HPUModelRunner(ModelRunnerBase):
         self.share_inputs["max_dec_len"] = paddle.full(
             [max_num_seqs, 1], self.model_config.max_model_len, dtype="int64"
         )
-        self.share_inputs["min_length"] = paddle.full([max_num_seqs, 1], self.model_config.min_length, dtype="int64")
-        self.share_inputs["max_length"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.max_model_len, dtype="int64"
-        )
         self.share_inputs["seq_lens_this_time"] = paddle.full(max_num_seqs, 0, dtype="int32")
         self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -654,8 +651,8 @@ class HPUModelRunner(ModelRunnerBase):
         # Initialize free list
         free_list = list(
             range(
-                self.parallel_config.total_block_num - 2,
-                int(self.parallel_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
+                self.cache_config.total_block_num - 2,
+                int(self.cache_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
                 -1,
             )
         )
@@ -712,7 +709,7 @@ class HPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_encoder"],
             self.share_inputs["seq_lens_decoder"],
             self.cache_config.block_size,
-            self.parallel_config.dtype,
+            self.model_config.dtype,
         )
         is_prompt = is_prompt.item() == 1 if is_prompt.item() > 0 else None
         if is_prompt is True:
@@ -857,7 +854,7 @@ class HPUModelRunner(ModelRunnerBase):
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(max_num_blocks=max_block_num)
 
         for i in range(self.model_config.num_hidden_layers):
-            cache_type = self.parallel_config.dtype
+            cache_type = self.model_config.dtype
             cache_kvs["key_caches_{}".format(i)] = paddle.full(
                 shape=kv_cache_shape,
                 fill_value=0,
@@ -944,7 +941,7 @@ class HPUModelRunner(ModelRunnerBase):
             if self.parallel_config.tensor_parallel_size > 1:
                 dtype = sampled_token_ids.dtype
                 sampled_token_ids = sampled_token_ids.to("float32")
-                paddle.distributed.broadcast(sampled_token_ids, 0)
+                tensor_model_parallel_all_reduce_custom(sampled_token_ids)
                 sampled_token_ids = sampled_token_ids.to(dtype)
 
             # 6. post process
@@ -1272,7 +1269,7 @@ class HPUModelRunner(ModelRunnerBase):
         if self.parallel_config.tensor_parallel_size > 1:
             dtype = sampled_token_ids.dtype
             sampled_token_ids = sampled_token_ids.to("float32")
-            paddle.distributed.broadcast(sampled_token_ids, 0)
+            tensor_model_parallel_all_reduce_custom(sampled_token_ids)
             sampled_token_ids = sampled_token_ids.to(dtype)
         if self.is_hpu_perf_breakdown_sync_mode:
             sampled_token_ids.cpu()
@@ -1375,7 +1372,7 @@ class HPUModelRunner(ModelRunnerBase):
 
         # Initialize kv cache for profile run. After profile run kv cache will be reset.
         # TODO(gongshaotian): Optimize the management logic of kvcache
-        self.num_gpu_blocks = self.parallel_config.total_block_num
+        self.num_gpu_blocks = self.cache_config.total_block_num
         self.initialize_kv_cache()
 
         # 1. Profile with multimodal encoder & encoder cache

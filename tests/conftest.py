@@ -23,6 +23,7 @@ class FDRunner:
         self,
         model_name_or_path: str,
         tensor_parallel_size: int = 1,
+        max_num_seqs: int = 1,
         max_model_len: int = 1024,
         load_choices: str = "default",
         quantization: str = "None",
@@ -35,12 +36,16 @@ class FDRunner:
             ports_to_clean.append(kwargs["engine_worker_queue_port"])
         clean_ports(ports_to_clean)
         time.sleep(5)
+        graph_optimization_config = {"use_cudagraph": False}
         self.llm = LLM(
             model=model_name_or_path,
             tensor_parallel_size=tensor_parallel_size,
+            max_num_seqs=max_num_seqs,
             max_model_len=max_model_len,
             load_choices=load_choices,
             quantization=quantization,
+            max_num_batched_tokens=max_model_len,
+            graph_optimization_config=graph_optimization_config,
             **kwargs,
         )
 
