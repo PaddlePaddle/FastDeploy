@@ -56,7 +56,9 @@ from typing import Callable, Optional
 
 # [N,2] -> every line is [config_name, enable_xxx_name]
 # Make sure enable_xxx equal to config.enable_xxx
-ARGS_CORRECTION_LIST = [["early_stop_config", "enable_early_stop"], ["graph_optimization_config", "use_cudagraph"]]
+ARGS_CORRECTION_LIST = [
+    ["early_stop_config", "enable_early_stop"],
+]
 
 FASTDEPLOY_SUBCMD_PARSER_EPILOG = (
     "Tip: Use `fastdeploy [serve|run-batch|bench <bench_type>] "

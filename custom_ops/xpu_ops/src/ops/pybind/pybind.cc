@@ -33,13 +33,13 @@ void prof_start();
 
 void prof_stop();
 
-void InitKVSignalPerQuery(const paddle::Tensor &seq_lens_encoder_tensor,
-                          const paddle::Tensor &seq_lens_this_time_tensor,
-                          const paddle::Tensor &seq_lens_decoder_tensor,
+void InitKVSignalPerQuery(const paddle::Tensor& seq_lens_encoder_tensor,
+                          const paddle::Tensor& seq_lens_this_time_tensor,
+                          const paddle::Tensor& seq_lens_decoder_tensor,
                           const int rank,
                           const int num_layers);
 
-void GetOutputKVSignal(const paddle::Tensor &x,
+void GetOutputKVSignal(const paddle::Tensor& x,
                        int64_t rank_id,
                        bool wait_flag);
 
@@ -70,8 +70,8 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::optional<paddle::Tensor>& smooth,
     const paddle::optional<paddle::Tensor>& kv_signal_data_cpu,
     const paddle::optional<paddle::Tensor>& cachekv_signal_thread_cpu,
-    const std::string &pos_emb_type="NORMAL",
-    bool rope_3d=false);
+    const std::string& pos_emb_type = "NORMAL",
+    bool rope_3d = false);
 
 std::vector<paddle::Tensor> MoERedundantTopKSelect(
     const paddle::Tensor& gating_logits,
@@ -477,7 +477,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("bias"),
         py::arg("weight_dtype"),
         py::arg("arch"),
-        py::arg("group_size")=-1);
+        py::arg("group_size") = -1);
 
   m.def("ep_moe_expert_combine",
         &MoeEPCombine,
