@@ -90,6 +90,8 @@ class ExpertService:
 
         start_time = time.time()
         self.engine.start()
+        if envs.FD_ENABLE_RETURN_TEXT:
+            self.engine.create_data_processor()
         if self.cfg.scheduler_config.name == "dp":
             self.cfg.init_cache_info()
             assert (request_queues_for_dp_ipc is not None) and (result_queue_for_dp_ipc is not None)
