@@ -988,4 +988,4 @@ def test_thinking_logic_flag(openai_client, capsys):
             "chat_template_kwargs": {"enable_thinking": False},
         },
     )
-    assert response_case_3.choices[0].message.reasoning_content is None
+    assert response_case_3.choices[0].message.reasoning_content == ""
