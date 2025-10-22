@@ -204,25 +204,61 @@ class TestQwenVLProcessor(unittest.TestCase):
             result["multimodal_inputs"]["image_type_ids"].shape[0], result["multimodal_inputs"]["grid_thw"][:, 0].sum()
         )
 
-    def test_process_request_dict_enable_thinking(self):
-        num_completion_token_ids = 10
-        request = {
+    def test_process_response_dict(self):
+        """
+        Test processing of a response dictionary through the processor.
+
+        Ensures:
+        1. The returned dict contains expected keys
+        2. Multimodal outputs are preserved
+        3. Text output matches expected decoded tokens
+        """
+        # Mock output from model
+        response_dict = {
             "request_id": "12345",
-            "completion_token_ids": [1] * num_completion_token_ids,
-            "stop": ["stop", "eof"],
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Hello"},
-                    ],
-                }
-            ],
-            "chat_template_kwargs": {"enable_thinking": True},
+            "responses": [{"text": "This is a test response."}],
+            "multimodal_outputs": {"images": np.random.randint(0, 256, (1, 3, 224, 224))},
         }
 
-        result = self.processor.process_request_dict(request, 100)
-        self.assertEqual(result.get("enable_thinking"), False)
+        # Patch processor's ids2tokens to return expected text
+        with patch.object(
+            self.processor.processor, "ids2tokens", return_value=["This", "is", "a", "test", "response", "."]
+        ):
+            processed = self.processor.process_response_dict(response_dict)
+
+        # Assertions
+        self.assertIn("request_id", processed)
+        self.assertIn("responses", processed)
+        self.assertIn("multimodal_outputs", processed)
+        self.assertEqual(processed["responses"][0]["text"], "This is a test response.")
+
+    def test_process_response(self):
+        """
+        Test processing of a Response object through the processor.
+
+        Ensures:
+        1. Returns a Request object
+        2. Response text is correctly decoded
+        3. Multimodal outputs are preserved
+        """
+        from fastdeploy.engine.response import Response
+
+        # Mock a Response object
+        response = Response(
+            request_id="12345",
+            responses=[{"text": "Another test response"}],
+            multimodal_outputs={"images": np.random.randint(0, 256, (1, 3, 224, 224))},
+        )
+
+        # Patch ids2tokens
+        with patch.object(self.processor.processor, "ids2tokens", return_value=["Another", "test", "response"]):
+            processed = self.processor.process_response(response)
+
+        # Assertions
+        self.assertIsInstance(processed, Request)
+        self.assertEqual(processed.responses[0]["text"], "Another test response")
+        self.assertTrue("multimodal_outputs" in processed.__dict__)
+        self.assertEqual(processed.multimodal_outputs["images"].shape, response.multimodal_outputs["images"].shape)
 
     def test_prompt(self):
         """

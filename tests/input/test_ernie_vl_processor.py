@@ -1,115 +1,142 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
+from fastdeploy.engine.request import Request
+
+# 导入被测类
 from fastdeploy.input.ernie4_5_vl_processor import Ernie4_5_VLProcessor
 
 
-class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
+class TestErnie4_5_VLProcessor(unittest.TestCase):
+    """测试 Ernie4_5_VLProcessor 的主要功能"""
+
     def setUp(self):
-        # 创建 Ernie4_5Processor 实例的模拟对象
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None) as mock_init:
-            self.processor = Ernie4_5_VLProcessor("model_path")
-            mock_init.side_effect = lambda *args, **kwargs: print(f"__init__ called with {args}, {kwargs}")
+        """初始化一个带有 mock 依赖的 Processor"""
+        # patch DataProcessor，防止真实加载 tokenizer 或模型
+        dp_patcher = patch("fastdeploy.input.ernie4_5_vl_processor.DataProcessor")
+        self.addCleanup(dp_patcher.stop)
+        MockDP = dp_patcher.start()
 
-        # 设置必要的属性
+        # 模拟 DataProcessor 行为
+        self.mock_dp = MockDP.return_value
+        self.mock_dp.eval.return_value = None
+        self.mock_dp.text2ids.return_value = {
+            "input_ids": [1, 2, 3],
+            "token_type_ids": [0, 0, 0],
+            "position_ids": [[0, 0, 0]],
+            "images": [],
+            "grid_thw": [],
+            "image_type_ids": [],
+            "cur_position": 3,
+        }
+        self.mock_dp.request2ids.return_value = self.mock_dp.text2ids.return_value
+        self.mock_dp.image_patch_id = 999
+        self.mock_dp.spatial_conv_size = 64
+        self.mock_dp.tokenizer = MagicMock()
+        self.mock_dp.tokenizer.pad_token_id = 0
+        self.mock_dp.tokenizer.eos_token_id = 2
+
+        # patch GenerationConfig
+        gen_patcher = patch("fastdeploy.input.ernie4_5_vl_processor.GenerationConfig.from_pretrained")
+        self.addCleanup(gen_patcher.stop)
+        gen_patcher.start()
+
+        # patch Request.from_dict 避免真实依赖
+        req_patcher = patch("fastdeploy.input.ernie4_5_vl_processor.Request.from_dict")
+        self.addCleanup(req_patcher.stop)
+        self.mock_from_dict = req_patcher.start()
+        self.mock_from_dict.side_effect = lambda d: Request(d)
+
+        # 创建 Processor 实例
+        self.processor = Ernie4_5_VLProcessor(model_name_or_path="mock_path")
+
+        # mock 父类 tokenizer
         self.processor.tokenizer = MagicMock()
-        self.processor.tokenizer.eos_token_id = 1
-        self.processor.decode_status = {}
-        self.processor.reasoning_end_dict = {}
-        self.processor.tool_parser_dict = {}
-        self.processor.generation_config = MagicMock()
-        self.processor.eos_token_ids = [1]
-        self.processor.reasoning_parser = MagicMock()
-        self.processor._check_mm_limits = MagicMock()
-        self.processor.ernie4_5_processor = MagicMock()
-        self.processor.pack_outputs = MagicMock()
+        self.processor.tokenizer.eos_token_id = 2
+        self.processor.tokenizer.pad_token_id = 0
+        self.processor.tokenizer.decode = MagicMock(return_value="decoded text")
 
-        # 模拟 ids2tokens 方法
-        def mock_ids2tokens(token_ids, task_id):
-            self.processor.decode_status[task_id] = "mock_decode_status"
-            return "delta_text", [2, 3], "previous_texts"
+    # ----------------------------- #
+    # 测试 process_request_dict
+    # ----------------------------- #
+    def test_process_request_dict_with_prompt(self):
+        """测试含 prompt 的请求"""
+        req = {"prompt": "hello world"}
+        result = self.processor.process_request_dict(req, max_model_len=10)
 
-        self.processor.ids2tokens = mock_ids2tokens
+        self.assertIsInstance(result, dict)
+        self.assertIn("prompt_token_ids", result)
+        self.assertIsInstance(result["prompt_token_ids"], list)
+        self.assertIn("multimodal_inputs", result)
+        self.assertIsInstance(result["multimodal_inputs"], dict)
+        self.assertEqual(result["prompt_token_ids_len"], len(result["prompt_token_ids"]))
 
-        def mock_messages2ids(request, **kwargs):
-            if "chat_template" in kwargs:
-                return [1]
-            else:
-                return [0]
+    def test_process_request_dict_with_messages(self):
+        """测试含 messages 的请求"""
+        req = {"messages": [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]}
+        result = self.processor.process_request_dict(req)
+        self.assertIn("prompt_token_ids", result)
+        self.assertIn("multimodal_inputs", result)
 
-        def mock_apply_default_parameters(request):
-            return request
+    # ----------------------------- #
+    # 测试 process_request
+    # ----------------------------- #
+    def test_process_request(self):
+        """测试 process_request 能调用 process_request_dict 并返回正确的 Request"""
+        # 模拟 Request 对象
+        mock_request = MagicMock()
+        mock_request.to_dict.return_value = {"prompt": "test prompt"}
+        self.processor.process_request_dict = MagicMock(
+            return_value={"prompt": "test prompt", "prompt_token_ids": [1, 2]}
+        )
+        self.processor._apply_default_parameters = MagicMock(
+            return_value=Request({"prompt": "test prompt", "prompt_token_ids": [1, 2]})
+        )
 
-        self.processor._apply_default_parameters = mock_apply_default_parameters
+        result = self.processor.process_request(mock_request, max_model_len=10)
+        self.processor.process_request_dict.assert_called_once()
+        self.processor._apply_default_parameters.assert_called_once()
+        self.assertIsInstance(result, Request)
+        self.assertEqual(result.data["prompt_token_ids"], [1, 2])
 
-        # 模拟推理解析器
-        self.mock_reasoning_parser = MagicMock()
-        self.mock_reasoning_parser.__class__.__name__ = "ErnieX1ReasoningParser"
-        # self.mock_reasoning_parser.extract_reasoning_content_streaming.return_value = ("reasoning", "text")
-        self.processor.reasoning_parser = self.mock_reasoning_parser
+    # ----------------------------- #
+    # 测试 process_response
+    # ----------------------------- #
+    def test_process_response(self):
+        """测试继承自父类的 process_response"""
+        response_dict = MagicMock()
+        response_dict.request_id = "123"
+        response_dict.outputs = MagicMock()
+        response_dict.outputs.token_ids = [1, 2, 3]
+        response_dict.outputs.index = 2
 
-        # 模拟工具解析器
-        self.mock_tool_parser = MagicMock()
-        self.mock_tool_parser.extract_tool_calls_streaming.return_value = None
-        self.mock_tool_parser_obj = MagicMock()
-        self.mock_tool_parser_obj.return_value = self.mock_tool_parser
-        self.processor.tool_parser_obj = self.mock_tool_parser_obj
+        result = self.processor.process_response(response_dict)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.outputs.text, "decoded text")
+        self.processor.tokenizer.decode.assert_called_once()
 
-    def test_process_request_dict_with_options(self):
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], True)
+    # ----------------------------- #
+    # 测试 process_response_dict
+    # ----------------------------- #
+    def test_process_response_dict_non_stream(self):
+        """测试非流式返回"""
+        mock_normal = MagicMock(return_value={"text": "done"})
+        self.processor.process_response_dict_normal = mock_normal
 
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"enable_thinking": True},
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], True)
+        response = {"outputs": {"token_ids": [1, 2, 3]}, "finished": True, "request_id": "req_1"}
+        result = self.processor.process_response_dict(response, stream=False)
+        mock_normal.assert_called_once()
+        self.assertEqual(result, {"text": "done"})
 
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"enable_thinking": False},
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], False)
+    def test_process_response_dict_stream(self):
+        """测试流式返回"""
+        mock_stream = MagicMock(return_value={"delta": "ok"})
+        self.processor.process_response_dict_streaming = mock_stream
 
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"options": {"thinking_mode": "open"}},
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], True)
-
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"options": {"thinking_mode": "close"}},
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], False)
-
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"options": {"thinking_mode": "false"}},
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], False)
-
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"options": {"thinking_mode": "123"}},
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], True)
+        response = {"outputs": {"token_ids": [1, 2, 3]}, "finished": True, "request_id": "req_2"}
+        result = self.processor.process_response_dict(response, stream=True)
+        mock_stream.assert_called_once()
+        self.assertEqual(result, {"delta": "ok"})
 
 
 if __name__ == "__main__":

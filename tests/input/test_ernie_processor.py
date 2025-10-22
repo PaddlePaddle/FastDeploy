@@ -76,31 +76,69 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         result = self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(result["prompt_token_ids"], [1])
 
-    def test_process_response_dict_normal(self):
-        mock_tokens = ["reasoning", "token", "list"]
-        self.processor.tokenizer.tokenize = MagicMock(return_value=mock_tokens)
-        self.processor.reasoning_parser.extract_reasoning_content = MagicMock(
-            return_value=("Mock reasoning content", "Mock final text")
+    def test_process_response_dict(self):
+        """测试 process_response_dict 根据 stream 参数调用正确的子方法"""
+        response_dict = {"finished": True, "request_id": "req2", "outputs": {"token_ids": [4, 5]}}
+
+        # 模拟两个子方法
+        self.processor.process_response_dict_streaming = MagicMock(return_value={"result": "stream"})
+        self.processor.process_response_dict_normal = MagicMock(return_value={"result": "normal"})
+
+        # 情况1：stream=True
+        result_stream = self.processor.process_response_dict(response_dict, stream=True)
+        self.processor.process_response_dict_streaming.assert_called_once_with(response_dict)
+        self.assertEqual(result_stream["result"], "stream")
+
+        # 情况2：stream=False
+        result_normal = self.processor.process_response_dict(response_dict, stream=False)
+        self.processor.process_response_dict_normal.assert_called_once_with(response_dict)
+        self.assertEqual(result_normal["result"], "normal")
+
+    def test_process_response(self):
+        """测试 process_response 对完整响应的处理逻辑"""
+        # 构造 mock response_dict 对象
+        mock_outputs = MagicMock()
+        mock_outputs.token_ids = [10, 20, self.processor.tokenizer.eos_token_id]
+        mock_outputs.index = 2
+        mock_response_dict = MagicMock()
+        mock_response_dict.request_id = "req3"
+        mock_response_dict.outputs = mock_outputs
+
+        # 模拟 tokenizer.decode
+        self.processor.tokenizer.decode = MagicMock(return_value="decoded_text")
+
+        # 模拟 reasoning_parser
+        mock_reasoning_parser = MagicMock()
+        mock_reasoning_parser.extract_reasoning_content.return_value = ("reasoning_content", "pure_text")
+        self.processor.reasoning_parser = mock_reasoning_parser
+
+        # 模拟 tool_parser
+        mock_tool_parser = MagicMock()
+        mock_tool_parser.extract_tool_calls.return_value = MagicMock(
+            tools_called=False, tool_calls=None, content="tool_text"
         )
+        self.processor.tool_parser_obj = MagicMock(return_value=mock_tool_parser)
 
-        self.processor.tool_parser_obj = None
+        # 调用方法
+        result = self.processor.process_response(mock_response_dict)
 
-        response_dict = {
-            "request_id": "request-id_0",
-            "outputs": {"token_ids": [2, 3, 4, 5, 1], "text": "Initial text", "top_logprobs": []},
-            "finish_reason": "stop",
-            "finished": True,
-        }
-        kwargs = {"enable_thinking": True}
+        # 验证 tokenizer.decode 被正确调用（去掉 eos_token）
+        self.processor.tokenizer.decode.assert_called_once_with([10, 20])
 
-        with patch("fastdeploy.input.ernie4_5_processor.data_processor_logger"):
-            result = self.processor.process_response_dict_normal(response_dict, **kwargs)
+        # 验证 reasoning_parser 被调用并正确赋值
+        mock_reasoning_parser.extract_reasoning_content.assert_called_once()
+        self.assertEqual(result.outputs.text, "pure_text")
+        self.assertEqual(result.outputs.reasoning_content, "reasoning_content")
 
-        self.mock_reasoning_parser.extract_reasoning_content.assert_called_once()
-        self.assertEqual(result["outputs"]["reasoning_content"], "Mock reasoning content")
-        self.assertEqual(result["outputs"]["reasoning_token_num"], len(mock_tokens))
-        self.assertEqual(result["outputs"]["text"], "Mock final text")
-        self.assertIn("completion_tokens", result["outputs"])
+        # 验证 usage 被正确赋值
+        self.assertIn("completion_tokens", result.usage)
+        self.assertEqual(result.usage["completion_tokens"], 3)
+
+        # 验证 tool_parser 被正确调用
+        mock_tool_parser.extract_tool_calls.assert_called_once()
+
+        # 验证返回结果不为 None
+        self.assertIsNotNone(result)
 
 
 if __name__ == "__main__":

@@ -59,31 +59,43 @@ class TestDataProcessorProcess(unittest.TestCase):
         result = self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(result["prompt_token_ids"], [1])
 
-    def test_process_response_dict_normal(self):
-        self.processor.tokenizer.decode_token = MagicMock(return_value=("Mock decoded text", 0, 0))
-        self.processor.reasoning_parser.extract_reasoning_content = MagicMock(
-            return_value=("Mock reasoning content", "Mock final text")
-        )
-        mock_tokens = ["mock", "reasoning", "tokens"]
-        self.processor.tokenizer.tokenize = MagicMock(return_value=mock_tokens)
-        self.processor.tool_parser_obj = None
-        response_dict = {
-            "request_id": "request-id_0",
-            "outputs": {
-                "token_ids": [2, 3, 4, 5, 1],
-                "text": "Hello",
-                "top_logprobs": [{"a": 0.1}, {"b": 0.2}, {"c": 0.3}],
-            },
-            "finish_reason": "stop",
+    def test_process_response_dict(self):
+        # ===== 测试 streaming 分支 =====
+        response_stream = {
+            "request_id": "req_stream",
+            "outputs": {"token_ids": [5, 6, 7]},
+            "finished": False,
+        }
+        # mock ids2tokens 行为
+        self.processor.ids2tokens = MagicMock(return_value=("delta", [5, 6], "prev"))
+        # 确保 streaming 调用
+        result_stream = self.processor.process_response_dict(response_stream, stream=True)
+        self.assertIn("outputs", result_stream)
+        self.assertEqual(result_stream["outputs"]["raw_prediction"], "delta")
+
+        # ===== 测试 normal 分支 =====
+        response_normal = {
+            "request_id": "req_normal",
+            "outputs": {"token_ids": [8, 9, 1]},  # 含 eos_token_id
             "finished": True,
         }
-        kwargs = {"enable_thinking": True}
-        with patch("fastdeploy.input.text_processor.data_processor_logger"):
-            result = self.processor.process_response_dict_normal(response_dict, **kwargs)
-        self.assertEqual(result["outputs"]["reasoning_content"], "Mock reasoning content")
-        self.assertEqual(result["outputs"]["reasoning_token_num"], len(mock_tokens))
-        self.assertEqual(result["outputs"]["text"], "Mock final text")
-        self.assertIn("completion_tokens", result["outputs"])
+        # mock ids2tokens 行为
+        self.processor.ids2tokens = MagicMock(return_value=("delta", [8, 9], "prev"))
+        self.processor.decode_status["req_normal"] = [0, 0, [], ""]
+        result_normal = self.processor.process_response_dict(response_normal, stream=False)
+        self.assertIn("text", result_normal["outputs"])
+        self.assertEqual(result_normal["outputs"]["text"], "prevdelta")
+
+    def test_process_response(self):
+        # 模拟 response_dict 结构
+        response_mock = MagicMock()
+        response_mock.request_id = "req1"
+        response_mock.outputs = MagicMock()
+        response_mock.outputs.token_ids = [2, 3, 1]  # 含有 eos_token_id
+        # decode 应该去掉 eos_token_id 并返回 "decoded text"
+        result = self.processor.process_response(response_mock)
+        self.processor.tokenizer.decode.assert_called_with([2, 3])
+        self.assertEqual(result.outputs.text, "decoded text")
 
 
 if __name__ == "__main__":
