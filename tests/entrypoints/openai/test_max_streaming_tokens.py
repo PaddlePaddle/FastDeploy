@@ -391,6 +391,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                         "raw_prediction": "raw_answer_0",
                     },
                     "finished": True,
+                    "previous_num_tokens": 2,
                 },
                 "mock_request": ChatCompletionRequest(
                     model="test", messages=[], return_token_ids=True, max_tokens=10, n=2
@@ -417,6 +418,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                         "raw_prediction": None,
                     },
                     "finished": True,
+                    "previous_num_tokens": 1,
                 },
                 "mock_request": ChatCompletionRequest(
                     model="test", messages=[], return_token_ids=True, max_tokens=5, n=2
@@ -443,8 +445,10 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         for idx, case in enumerate(test_cases):
             actual_choice = await self.chat_serving._create_chat_completion_choice(
-                data=case["test_data"],
+                output=case["test_data"]["outputs"],
+                index=idx,
                 request=case["mock_request"],
+                previous_num_tokens=case["test_data"]["previous_num_tokens"],
                 prompt_token_ids=prompt_token_ids,
                 prompt_tokens=prompt_tokens,
                 completion_token_ids=completion_token_ids[idx],
