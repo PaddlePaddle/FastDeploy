@@ -66,6 +66,16 @@ class PromptTokenUsageInfo(BaseModel):
     """
 
     cached_tokens: Optional[int] = None
+    image_tokens: Optional[int] = None
+    video_tokens: Optional[int] = None
+
+
+class CompletionTokenUsageInfo(BaseModel):
+    """
+    Completion-related token usage info.
+    """
+
+    image_tokens: Optional[int] = None
 
 
 class UsageInfo(BaseModel):
@@ -77,6 +87,7 @@ class UsageInfo(BaseModel):
     total_tokens: int = 0
     completion_tokens: Optional[int] = 0
     prompt_tokens_details: Optional[PromptTokenUsageInfo] = None
+    completion_tokens_details: Optional[CompletionTokenUsageInfo] = None
 
 
 class ModelPermission(BaseModel):

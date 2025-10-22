@@ -30,8 +30,10 @@ from fastdeploy.entrypoints.openai.protocol import (
     CompletionResponseChoice,
     CompletionResponseStreamChoice,
     CompletionStreamResponse,
+    CompletionTokenUsageInfo,
     ErrorInfo,
     ErrorResponse,
+    PromptTokenUsageInfo,
     UsageInfo,
 )
 from fastdeploy.utils import (
@@ -369,6 +371,8 @@ class OpenAIServingCompletion:
                 req_id = f"{request_id}_{i}"
                 dealer.write([b"", req_id.encode("utf-8")])  # 发送多路请求
             output_tokens = [0] * num_choices
+            num_cache_tokens = [0] * num_choices
+            num_image_tokens = [0] * num_choices
             inference_start_time = [0] * num_choices
             first_iteration = [True] * num_choices
             tool_called = [False] * num_choices
@@ -457,7 +461,9 @@ class OpenAIServingCompletion:
                             draft_logprobs_res = self._create_completion_logprobs(
                                 output_draft_top_logprobs, request.logprobs, 0
                             )
-                    output_tokens[idx] += 1
+                    output_tokens[idx] += len(output.get("token_ids", [])) or 0
+                    num_cache_tokens[idx] += output.get("num_cache_tokens") or 0
+                    num_image_tokens[idx] += output.get("num_image_tokens") or 0
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
                         text=output["text"],
@@ -524,6 +530,10 @@ class OpenAIServingCompletion:
                                         prompt_batched_token_ids[idx // (1 if request.n is None else request.n)]
                                     )
                                     + output_tokens[idx],
+                                    prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cache_tokens[idx]),
+                                    completion_tokens_details=CompletionTokenUsageInfo(
+                                        image_tokens=num_image_tokens[idx]
+                                    ),
                                 ),
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
@@ -553,6 +563,8 @@ class OpenAIServingCompletion:
         choices: List[CompletionResponseChoice] = []
         num_prompt_tokens = 0
         num_generated_tokens = 0
+        num_cache_tokens = 0
+        num_image_tokens = 0
 
         for idx in range(len(final_res_batch)):
             final_res = final_res_batch[idx]
@@ -607,12 +619,16 @@ class OpenAIServingCompletion:
             num_generated_tokens += final_res["output_token_ids"]
 
             num_prompt_tokens += len(prompt_token_ids)
+            num_cache_tokens += output.get("num_cache_tokens") or 0
+            num_image_tokens += output.get("num_image_tokens") or 0
 
         num_prompt_tokens = num_prompt_tokens // (1 if request.n is None else request.n)
         usage = UsageInfo(
             prompt_tokens=num_prompt_tokens,
             completion_tokens=num_generated_tokens,
             total_tokens=num_prompt_tokens + num_generated_tokens,
+            prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cache_tokens),
+            completion_tokens_details=CompletionTokenUsageInfo(image_tokens=num_image_tokens),
         )
         del request
 
