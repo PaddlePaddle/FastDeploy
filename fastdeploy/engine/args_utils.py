@@ -26,6 +26,7 @@ from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
     ConvertOption,
+    DecodingConfig,
     EarlyStopConfig,
     FDConfig,
     GraphOptimizationConfig,
@@ -399,6 +400,16 @@ class EngineArgs:
     Flag to specify the dtype of lm_head as FP32. Default is False (Using model default dtype).
     """
 
+    logits_processors: Optional[List[str]] = None
+    """
+    A list of FQCNs (Fully Qualified Class Names) of logits processors supported by the service.
+    A fully qualified class name (FQCN) is a string that uniquely identifies a class within a Python module.
+
+    - To enable builtin logits processors, add builtin module paths and class names to the list. Currently support:
+        - fastdeploy.model_executor.logits_processor:LogitBiasLogitsProcessor
+    - To enable custom logits processors, add your dotted paths to module and class names to the list.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -646,6 +657,13 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.lm_head_fp32,
             help="Specify the dtype of lm_head weight as float32.",
+        )
+        model_group.add_argument(
+            "--logits-processors",
+            type=str,
+            nargs="+",
+            default=EngineArgs.logits_processors,
+            help="FQCNs (Fully Qualified Class Names) of logits processors supported by the service.",
         )
 
         # Parallel processing parameters group
@@ -1054,6 +1072,7 @@ class EngineArgs:
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg
         cache_cfg = CacheConfig(all_dict)
+        dec_cfg = DecodingConfig(all_dict)
         load_cfg = LoadConfig(all_dict)
         parallel_cfg = ParallelConfig(all_dict)
         scheduler_cfg = self.create_scheduler_config()
@@ -1091,4 +1110,5 @@ class EngineArgs:
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             early_stop_config=early_stop_cfg,
+            decoding_config=dec_cfg,
         )

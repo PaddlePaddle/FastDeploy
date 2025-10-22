@@ -1006,6 +1006,9 @@ class PlasAttentionConfig:
         """
         return json.dumps({key: value for key, value in self.__dict__.items() if value is not None})
 
+    def __str__(self) -> str:
+        return json.dumps({key: value for key, value in self.__dict__.items()})
+
 
 class EarlyStopConfig:
     def __init__(
@@ -1106,6 +1109,9 @@ class LoadConfig:
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+
+    def __str__(self) -> str:
+        return json.dumps({key: value for key, value in self.__dict__.items()})
 
 
 class PoolerConfig:
@@ -1317,9 +1323,13 @@ class DecodingConfig:
         args,
     ):
         self.pad_token_id = None
+        self.logits_processors = None
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+
+    def __str__(self) -> str:
+        return json.dumps({key: value for key, value in self.__dict__.items()})
 
 
 class CommitConfig:

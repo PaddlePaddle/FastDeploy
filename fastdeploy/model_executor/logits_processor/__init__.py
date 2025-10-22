@@ -14,13 +14,42 @@
 # limitations under the License.
 """
 
+from importlib import import_module
+
 from .base import LogitsProcessor
 from .builtin import LogitBiasLogitsProcessor
 
 
-def init_logits_processors(fd_config):
-    # return []
-    return [LogitBiasLogitsProcessor()]
+def load_class(spec: str):
+    """
+    Load a class from a string spec in the form 'package.module:ClassName'.
+    """
+    try:
+        if ":" in spec:
+            module_path, class_name = spec.split(":", 1)
+        else:
+            module_path = "fastdeploy.model_executor.logits_processor"
+            class_name = spec
+        module = import_module(module_path)
+        obj = getattr(module, class_name)
+        return obj
+    except ValueError as e:
+        raise ValueError(f"Invalid spec {spec!r}; expected 'module:ClassName'.") from e
+    except ImportError as e:
+        raise ImportError(f"Failed to import module {module_path}") from e
+    except AttributeError as e:
+        raise AttributeError(f"Module {module_path} does not have attribute {class_name}") from e
 
 
-__all__ = ["LogitsProcessor", "LogitBiasLogitsProcessor", "init_logits_processors"]
+def build_logits_processors(fd_config):
+    logit_procs = []
+    for fqcn in fd_config.decoding_config.logits_processors or []:
+        logit_procs.append(load_class(fqcn)())
+    return logit_procs
+
+
+__all__ = [
+    "build_logits_processors",
+    "LogitsProcessor",
+    "LogitBiasLogitsProcessor",
+]

@@ -539,6 +539,8 @@ class LLMEngine:
             f" --convert {self.cfg.model_config.convert}"
             f" --override-pooler-config {self.cfg.model_config.override_pooler_config}"
         )
+        if self.cfg.decoding_config.logits_processors is not None:
+            arguments += f" --logits-processors {' '.join(self.cfg.decoding_config.logits_processors)}"
 
         worker_append_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,

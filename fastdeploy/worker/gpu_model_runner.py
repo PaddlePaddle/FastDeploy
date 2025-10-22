@@ -78,7 +78,7 @@ from fastdeploy import envs
 from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
 from fastdeploy.model_executor.forward_meta import ForwardMeta
-from fastdeploy.model_executor.logits_processor import init_logits_processors
+from fastdeploy.model_executor.logits_processor import build_logits_processors
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
@@ -987,8 +987,9 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["image_features"] = None
 
         # For logits processors
-        self.share_inputs["logits_processors"] = init_logits_processors(self.fd_config)
+        self.share_inputs["logits_processors"] = build_logits_processors(self.fd_config)
         self.share_inputs["logit_bias"] = [None] * max_num_seqs
+        logger.info(f"Enabled logits processors: {self.share_inputs['logits_processors']}")
 
     def _prepare_inputs(self) -> None:
         """Prepare the model inputs"""
