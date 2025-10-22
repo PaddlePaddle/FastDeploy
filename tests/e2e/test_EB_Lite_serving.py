@@ -305,6 +305,20 @@ def test_non_streaming_chat_finish_reason(openai_client):
     assert hasattr(response, "choices")
     assert response.choices[0].finish_reason == "length"
 
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},
+            {"role": "user", "content": "List 3 countries and their capitals."},
+        ],
+        temperature=1,
+        max_completion_tokens=5,
+        stream=False,
+    )
+
+    assert hasattr(response, "choices")
+    assert response.choices[0].finish_reason == "length"
+
 
 # Streaming test
 def test_streaming_chat(openai_client, capsys):
@@ -1312,6 +1326,21 @@ def test_streaming_chat_finish_reason(openai_client):
         ],
         temperature=1,
         max_tokens=5,
+        stream=True,
+    )
+
+    for chunk in response:
+        last_token = chunk.choices[0].finish_reason
+    assert last_token == "length"
+
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},
+            {"role": "user", "content": "List 3 countries and their capitals."},
+        ],
+        temperature=1,
+        max_completion_tokens=5,
         stream=True,
     )
 
