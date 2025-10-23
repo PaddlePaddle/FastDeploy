@@ -480,7 +480,7 @@ def parse_args():
         help="model dir",
     )
     parser.add_argument("-mbs", "--max_num_seqs", type=int, default=34, help="max batch size")
-    parser.add_argument("--total_block_num", type=int, default=2000)
+    parser.add_argument("--num_gpu_blocks_override", type=int, default=1024)
     parser.add_argument("--block_size", type=int, default=64)
     parser.add_argument("--pod_ip", type=str, default="127.0.0.1")
     parser.add_argument("--engine_worker_queue_port", type=str, default="9923")
@@ -801,8 +801,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         plas_attention_config=plas_attention_config,
         structured_outputs_config=structured_outputs_config,
     )
-    # cache_config would not init total_block_num, total_block_num has been set in postprocess function which invoked by init func, so reset here
-    cache_config.reset(args.total_block_num)
     update_fd_config_for_mm(fd_config)
     if fd_config.load_config.load_choices == "default_v1" and not v1_loader_support(fd_config):
         fd_config.load_config.load_choices = "default"
