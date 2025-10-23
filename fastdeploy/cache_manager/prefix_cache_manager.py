@@ -1074,11 +1074,11 @@ class PrefixCacheManager:
 
         assert start_idx < end_idx, f"start_idx {start_idx} >= end_idx {end_idx}"
         assert (
-            start_idx >= 0 and start_idx < request.prompt_token_ids_len
-        ), f"start_idx {start_idx} out of range {request.prompt_token_ids_len}"
+            start_idx >= 0 and start_idx < request.num_total_tokens
+        ), f"start_idx {start_idx} out of range {request.num_total_tokens}"
         assert (
-            end_idx >= 0 and end_idx <= request.prompt_token_ids_len
-        ), f"end_idx {end_idx} out of range {request.prompt_token_ids_len}"
+            end_idx >= 0 and end_idx <= request.num_total_tokens
+        ), f"end_idx {end_idx} out of range {request.num_total_tokens}"
         assert len(mm_inputs["mm_positions"]) == len(
             mm_inputs["mm_hashes"]
         ), f"mm_positions {len(mm_inputs['mm_positions'])} != mm_hashes {len(mm_inputs['mm_hashes'])}"
@@ -1171,7 +1171,7 @@ class PrefixCacheManager:
                     f"req_id {request.request_id} revert nodes error, revert_tokens: {revert_tokens}, nodes: {last_block_id}, "
                     f"match_gpu_block_ids: {match_gpu_block_ids}, match_cpu_block_ids: {match_cpu_block_ids}"
                 )
-        return gpu_match_token_num, cpu_match_token_num
+        return gpu_match_token_num, cpu_match_token_num, matche_nodes[-1]
 
     def mm_match_block(self, request, block_size):
         """
@@ -1263,7 +1263,11 @@ class PrefixCacheManager:
             matched_token_num = gpu_match_token_num + cpu_match_token_num
             is_chunked, chunk_idx = self.is_chunked_mm_input(request.multimodal_inputs, matched_token_num)
             if is_chunked:
-                gpu_match_token_num, cpu_match_token_num = self._revert_match_blocks(
+                (
+                    gpu_match_token_num,
+                    cpu_match_token_num,
+                    current_match_node,
+                ) = self._revert_match_blocks(
                     request=request,
                     matched_token_num=matched_token_num,
                     block_size=block_size,
