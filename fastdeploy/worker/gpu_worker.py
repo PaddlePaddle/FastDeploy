@@ -95,6 +95,12 @@ class GpuWorker(WorkerBase):
         """
         return self.model_runner.exist_prefill()
 
+    def exist_decode(self):
+        """
+        check whether prefill stage exist
+        """
+        return self.model_runner.exist_decode()
+
     def determine_available_memory(self) -> int:
         """
         Profiles the peak memory usage of the model to determine how much

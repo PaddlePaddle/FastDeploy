@@ -396,6 +396,16 @@ class EngineArgs:
     Flag to specify the dtype of lm_head as FP32. Default is False (Using model default dtype).
     """
 
+    enable_attention_dp_balance: bool = False
+    """
+    Flag to enable attention dp balance
+    """
+
+    attention_dp_time_out_iters: int = 0
+    """
+    Max waiting steps to sync all dp for prefill tasks available
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -824,6 +834,21 @@ class EngineArgs:
             help="ports for rdma communication.",
         )
 
+        perf_group.add_argument(
+            "--enable_attention_dp_balance",
+            type=bool,
+            action="store_true",
+            default=EngineArgs.enable_attention_dp_balance,
+            help="enable attention dp balance",
+        )
+
+        perf_group.add_argument(
+            "--attention_dp_time_out_iters",
+            type=int,
+            default=EngineArgs.gpu_memory_utilization,
+            help="max waiting steps to sync all dp for prefill tasks available",
+        )
+
         # Scheduler parameters group
         scheduler_group = parser.add_argument_group("Scheduler")
         scheduler_group.add_argument(
@@ -1078,4 +1103,6 @@ class EngineArgs:
             graph_opt_config=graph_opt_cfg,
             plas_attention_config=plas_attention_config,
             early_stop_config=early_stop_cfg,
+            enable_attention_dp_balance=self.enable_attention_dp_balance,
+            attention_dp_time_out_iters=self.attention_dp_time_out_iters,
         )
