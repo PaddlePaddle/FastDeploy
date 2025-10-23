@@ -1123,6 +1123,7 @@ class PrefixCacheManager:
         block_size,
         chunk_idx,
         match_node_ids,
+        matche_nodes,
         match_gpu_block_ids,
         match_cpu_block_ids,
         gpu_match_token_num,
@@ -1131,29 +1132,33 @@ class PrefixCacheManager:
     ):
         position = request.multimodal_inputs["mm_positions"][chunk_idx]
         revert_tokens = matched_token_num - position.offset
+        match_block_ids = [node.block_id for node in matche_nodes]
         logger.warning(
-            f"match_block: req_id {request.request_id} revert tokens: {revert_tokens} from matched nodes: {match_node_ids}"
+            f"match_block: req_id {request.request_id} revert tokens: {revert_tokens} from matched nodes: {match_block_ids}"
         )
         while revert_tokens >= block_size:
-            if len(match_node_ids) == 0:
+            if len(matche_nodes) == 0:
                 logger.error(f"req_id {request.request_id} revert nodes error, tokens: {revert_tokens}")
                 break
             revert_tokens -= block_size
-            revert_node_id = match_node_ids.pop()
-            if revert_node_id in match_gpu_block_ids:
-                match_gpu_block_ids.remove(revert_node_id)
+            revert_block = matche_nodes.pop()
+            revert_block_id = revert_block.block_id
+            if revert_block_id in match_gpu_block_ids:
+                match_gpu_block_ids.remove(revert_block_id)
+                match_node_ids.remove(revert_block.node_id)
                 gpu_match_token_num -= block_size
-            elif revert_node_id in match_cpu_block_ids:
-                match_cpu_block_ids.remove(revert_node_id)
+            elif revert_block_id in match_cpu_block_ids:
+                match_cpu_block_ids.remove(revert_block_id)
+                match_node_ids.remove(revert_block.node_id)
                 cpu_match_token_num -= block_size
             else:
                 logger.error(
-                    f"req_id {request.request_id} revert nodes error, nodes: {revert_node_id}, "
+                    f"req_id {request.request_id} revert nodes error, nodes: {revert_block_id}, "
                     f"match_gpu_block_ids: {match_gpu_block_ids}, match_cpu_block_ids: {match_cpu_block_ids}"
                 )
                 break
-            if revert_node_id in swap_node_ids:
-                swap_node_ids.remove(revert_node_id)
+            if revert_block_id in swap_node_ids:
+                swap_node_ids.remove(revert_block_id)
 
         if revert_tokens > 0:
             last_node_id = match_node_ids[-1]
@@ -1263,6 +1268,7 @@ class PrefixCacheManager:
                     block_size=block_size,
                     chunk_idx=chunk_idx,
                     match_node_ids=match_node_ids,
+                    matche_nodes=matche_nodes,
                     match_gpu_block_ids=match_gpu_block_ids,
                     match_cpu_block_ids=match_cpu_block_ids,
                     gpu_match_token_num=gpu_match_token_num,
