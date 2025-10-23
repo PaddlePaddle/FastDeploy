@@ -27,7 +27,6 @@ import numpy as np
 
 from fastdeploy.engine.common_engine import EngineService
 from fastdeploy.inter_communicator import IPCSignal
-from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.utils import console_logger, envs, llm_logger
 
 
