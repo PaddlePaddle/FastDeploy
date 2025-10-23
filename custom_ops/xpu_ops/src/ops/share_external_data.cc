@@ -30,8 +30,9 @@ std::vector<paddle::Tensor> ShareExternalData(const paddle::Tensor &input,
   void *data_ptr_addr = nullptr;
   if (use_ipc) {
 #if XPURT_VERSION_MAJOR == 5
-    int ret = xpu_ipc_open_memhandle(
-        &data_ptr_addr, *(XPUIpcMemHandle *)&shm->memHandle, 0x01);  // NOLINT
+    int ret = xpu_ipc_open_memhandle(&data_ptr_addr,
+                                     *(XPUIpcMemHandle *)&shm->memHandle,
+                                     0x01);  // NOLINT
     PD_CHECK(ret == XPU_SUCCESS, "xpu_ipc_open_memhandle failed");
 #elif XPURT_VERSION_MAJOR == 4
     PD_THROW("kl2 not support prefix cache");

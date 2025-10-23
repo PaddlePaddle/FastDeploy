@@ -38,7 +38,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --cache-queue-port ${FD_CACHE_QUEUE_PORT} \
        --quantization wint8 \
        --max-model-len 32768 \
-       --max-num-seqs 256 \
+       --max-num-seqs 1 \
        --gpu-memory-utilization 0.9 \
        --model "$MODEL_PATH" \
        --load-strategy ipc_snapshot \

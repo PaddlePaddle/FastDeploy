@@ -1,3 +1,5 @@
+[English](../offline_inference.md)
+
 # 离线推理
 
 ## 1. 使用方式
@@ -92,7 +94,7 @@ from PIL import Image
 
 from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.engine.sampling_params import SamplingParams
-from fastdeploy.input.ernie_tokenizer import Ernie4_5Tokenizer
+from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 
 PATH = "baidu/ERNIE-4.5-VL-28B-A3B-Paddle"
 tokenizer = Ernie4_5Tokenizer.from_pretrained(PATH)

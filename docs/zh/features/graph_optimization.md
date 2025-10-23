@@ -1,3 +1,5 @@
+[English](../../features/graph_optimization.md)
+
 # FastDeploy 中的图优化技术
 FastDeploy 的 `GraphOptimizationBackend` 中集成了多种图优化技术:
 
@@ -17,9 +19,9 @@ FastDeploy 的 `GraphOptimizationBackend` 设计架构如下，**部分功能仍
 
 ## 1. GraphOptimizationBackend 当前使用限制
 ### 1.1 多卡场景需要开启 Custom all-reduce
-在 CUDAGraph 多卡推理任务中需要使用 Custom all-reduce 算子进行多卡 all-reduce，
+在 CUDAGraph 多卡推理任务中需要使用 Custom all-reduce 算子进行多卡 all-reduce。
 
-在 2.2 版本之前，CUDAGraph 未默认开启，Custom all-reduce 算子默认开启。
+2.3 版本之前，CUDAGraph 和 Custom all-reduce 都未默认开启，2.3 版本开始已默认开启。
 
 ### 1.2 FLAGS_max_partition_size 相关的 Kernel 的动态执行配置导致 CUDAGraph 执行失败
 `FLAGS_max_partition_size` 环境变量控制了 CascadeAppend Attention 中 Kernel 的`gridDim` 执行配置 , 而动态的执行配置会导致 CUDAGraph 执行失败。
@@ -37,13 +39,12 @@ FastDeploy 的 `GraphOptimizationBackend` 设计架构如下，**部分功能仍
 
 当前仅支持用户配置以下参数：
 
-+ `use_cudagraph` : bool = False
-+ `graph_optimization_config` :  Dict[str, Any]
++ `graph-optimization-config` :  Dict[str, Any]
   + `graph_opt_level`: int = 0
-  + `use_cudagraph`: bool = False
-  + `cudagraph_capture_sizes` : List[int] = None
+  + `use_cudagraph`: bool = True
+  + `cudagraph_capture_sizes` : List[int]
 
-可以通过设置 `--use-cudagraph` 或 `--graph-optimization-config '{"use_cudagraph":true}'` 开启 CudaGrpah。
+在2.3版本之前需要通过`--use-cudagraph`启用。2.3版本开始 CUDAGraph 已经默认开启，对于暂时不能兼容 CUDAGraph 的功能（投机解码、多模模型推理）CUDAGraph 会自动关闭。也可以通过设置 `--graph-optimization-config` 手动控制 CUDAGraph。
 
 `--graph-optimization-config` 中的 `graph_opt_level` 参数用于配置图优化等级，可选项如下：
 

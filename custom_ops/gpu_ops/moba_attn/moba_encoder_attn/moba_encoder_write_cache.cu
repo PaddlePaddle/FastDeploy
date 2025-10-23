@@ -15,6 +15,9 @@
 #include "paddle/extension.h"
 #include "moba_attn/moba_attn.h"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
 
 template <typename T, int kBlockSize, int kHeadDim>
 __global__ void write_encoder_cachekv_c16(
@@ -135,7 +138,7 @@ void MobaEncoderAttnWriteCacheKv(
     }
 }
 
-PD_BUILD_OP(moba_encoder_attn_write_cache_kv)
+PD_BUILD_STATIC_OP(moba_encoder_attn_write_cache_kv)
     .Inputs({
         "k_input",
         "v_input",

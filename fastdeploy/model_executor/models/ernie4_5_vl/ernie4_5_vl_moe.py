@@ -300,7 +300,7 @@ class Ernie4_5_VLMoE(nn.Layer):
         if self.num_shared_experts > 0:
             hidden_states += shared_experts_out
         if self.tp_size > 1:
-            tensor_model_parallel_all_reduce(hidden_states)
+            hidden_states = tensor_model_parallel_all_reduce(hidden_states)
         return hidden_states
 
 
@@ -548,6 +548,12 @@ class Ernie4_5_VLModel(nn.Layer):
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="Ernie4_5_VLMoeForConditionalGeneration",
+    module_name="ernie4_5_vl.ernie4_5_vl_moe",
+    category=ModelCategory.MULTIMODAL,
+    primary_use=ModelCategory.MULTIMODAL,
+)
 class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
     """
     Ernie4_5_VLMoeForConditionalGeneration
@@ -678,6 +684,13 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         expert_id = None
         shard_id = None
         for loaded_weight_name, loaded_weight in weights_iterator:
+            loaded_weight_name = (
+                self.process_weights_before_loading_fn(loaded_weight_name)
+                if getattr(self, "process_weights_before_loading_fn", None)
+                else loaded_weight_name
+            )
+            if loaded_weight_name is None:
+                continue
             for param_name, weight_name, exp_id, shard_id in all_param_mapping:
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
                 if model_param_name.startswith("model.") and self.fd_config.model_config.model_format == "torch":
@@ -792,12 +805,6 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         self.ernie.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
-@ModelRegistry.register_model_class(
-    architecture="Ernie4_5_VLMoeForConditionalGeneration",
-    module_name="ernie4_5_vl.ernie4_5_vl_moe",
-    category=ModelCategory.MULTIMODAL,
-    primary_use=ModelCategory.MULTIMODAL,
-)
 class Ernie4_5_VLPretrainedModel(PretrainedModel):
     """
     Ernie4_5_MoePretrainedModel

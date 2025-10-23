@@ -1,0 +1,9 @@
+quantization: wint4
+load_choices: "default_v1"
+graph_optimization_config:
+  use_cudagraph: True
+  use_unique_memory_pool: True
+enable_prefix_caching: False
+max_num_seqs: 256
+max_model_len: 32768
+tensor_parallel_size: 8

@@ -12,13 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "paddle/extension.h"
-#include "xpu/plugin.h"
-#include "xpu/xpuml.h"
-#include <cstdlib>
 #include <fcntl.h>
 #include <paddle/phi/backends/xpu/xpu_context.h>
-#include <random>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,29 +21,34 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <cstdlib>
+#include <random>
+#include "paddle/extension.h"
+#include "xpu/plugin.h"
+#include "xpu/xpuml.h"
 
 std::vector<paddle::Tensor> GetTotalGlobalMemory(int64_t device_id) {
-    if (device_id == -1) {
-        device_id = phi::backends::xpu::GetXPUCurrentDeviceId();
-    }
+  if (device_id == -1) {
+    device_id = phi::backends::xpu::GetXPUCurrentDeviceId();
+  }
 
-    paddle::Tensor total_global_memory =
-        paddle::zeros({1}, paddle::DataType::INT64);
-    xpumlDevice_t device_handle;
-    xpumlInit();
-    xpumlDeviceGetHandleByIndex(device_id, &device_handle);
-    xpumlMemory_t device_memory;
-    xpumlDeviceGetMemoryInfo(device_handle, &device_memory);
-    total_global_memory.data<int64_t>()[0] = device_memory.totalGlobalMemory;
-    return {total_global_memory};
+  paddle::Tensor total_global_memory =
+      paddle::zeros({1}, paddle::DataType::INT64);
+  xpumlDevice_t device_handle;
+  xpumlInit();
+  xpumlDeviceGetHandleByIndex(device_id, &device_handle);
+  xpumlMemory_t device_memory;
+  xpumlDeviceGetMemoryInfo(device_handle, &device_memory);
+  total_global_memory.data<int64_t>()[0] = device_memory.totalGlobalMemory;
+  return {total_global_memory};
 }
 
 std::vector<std::vector<int64_t>> GetTotalGlobalMemoryInferShape() {
-    return {{1}};
+  return {{1}};
 }
 
 std::vector<paddle::DataType> GetTotalGlobalMemoryInferDtype() {
-    return {paddle::DataType::INT64};
+  return {paddle::DataType::INT64};
 }
 
 PD_BUILD_OP(xpu_get_total_global_memory)
