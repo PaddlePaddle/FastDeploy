@@ -394,7 +394,6 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(
                     input_ids[prefill_start_index:prefill_end_index]
                 )
-                print("self.share_inputs['input_ids']", self.share_inputs["input_ids"])
                 encoder_block_num = len(request.block_tables)
                 self.share_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
@@ -779,10 +778,7 @@ class GPUModelRunner(ModelRunnerBase):
         if not self.is_pooling_model:
             return []
 
-        print("model", model)
-        print("model.pooler", model.pooler)
         supported_tasks = list(model.pooler.get_supported_tasks())
-        print("supported_tasks", supported_tasks)
 
         if self.cache_config.enable_chunked_prefill and "encode" in supported_tasks:
             supported_tasks.remove("encode")
@@ -1418,7 +1414,7 @@ class GPUModelRunner(ModelRunnerBase):
         for task in self.get_supported_pooling_tasks():
 
             output = self._dummy_pooler_run_task(hidden_states, task)
-            output_size[task] = output.get_data_nbytes()
+            output_size[task] = sum(o.numel() * o.element_size() if hasattr(o, "numel") else 0 for o in output)
             del output
 
         max_task = max(output_size.items(), key=lambda x: x[1])[0]
@@ -1851,8 +1847,6 @@ class GPUModelRunner(ModelRunnerBase):
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
 
-        # print("input_ids", self.share_inputs["ids_remove_padding"])
-
         # 3. Execute model
         if self.enable_mm:
             model_output = self.model(
@@ -1861,7 +1855,6 @@ class GPUModelRunner(ModelRunnerBase):
                 self.forward_meta,
             )
         else:
-            print("ids_remove_padding", self.share_inputs["ids_remove_padding"])
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,

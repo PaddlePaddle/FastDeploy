@@ -388,7 +388,8 @@ void UpdateInputesV1(const paddle::Tensor &stop_flags,
                    const paddle::Tensor &stop_nums,
                    const paddle::Tensor &next_tokens,
                    const paddle::Tensor &is_block_step,
-                   const int block_size);
+                   const int block_size,
+                   const bool is_pooling_task);
 
 void RecoverDecodeTask(const paddle::Tensor &stop_flags,
                    const paddle::Tensor &seq_lens_this_time,

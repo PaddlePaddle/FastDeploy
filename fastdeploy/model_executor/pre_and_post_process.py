@@ -265,7 +265,6 @@ def _build_stream_transfer_data(output_tokens: np.ndarray, pooler_outputs: None)
             stream_transfer_data = StreamTransferData(
                 decoder_state=DecoderState.TEXT, pooler_output=pooler_output, batch_id=bid
             )
-            print("stream_transfer_data", stream_transfer_data)
             stream_transfer_datas.append(stream_transfer_data)
     return stream_transfer_datas
 
@@ -363,6 +362,7 @@ def post_process_normal(
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,
+                False,  # ✅ 改为位置参数，表示 is_pooling_task=False
             )
         else:
             update_inputs(
@@ -491,7 +491,6 @@ def post_process(
 ) -> None:
     """Post-processing steps after completing a single token generation."""
 
-    print("sampler_or_pooler_output", sampler_or_pooler_output)
     if isinstance(sampler_or_pooler_output, PoolerOutput):
         post_process_pooling(
             sampler_or_pooler_output,
@@ -811,10 +810,6 @@ def post_process_pooling(
 ) -> None:
 
     paddle.assign(
-        paddle.ones_like(model_output.stop_flags, dtype="bool"),
-        model_output.stop_flags,
-    )
-    paddle.assign(
         paddle.where(
             model_output.stop_flags,
             model_output.step_idx,
@@ -849,6 +844,10 @@ def post_process_pooling(
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             dummy_sampled_tokens = paddle.full_like(model_output.next_tokens, -1, dtype="int64")
 
+            paddle.assign(
+                paddle.ones_like(model_output.stop_flags, dtype="bool"),
+                model_output.stop_flags,
+            )
             update_inputs_v1(
                 model_output.stop_flags,
                 model_output.not_need_stop,
@@ -864,6 +863,7 @@ def post_process_pooling(
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,
+                True,
             )
 
     if not skip_save_output:
@@ -872,4 +872,3 @@ def post_process_pooling(
                 output = _build_stream_transfer_data(output_tokens=None, pooler_outputs=pooler_output.outputs)
 
                 async_output_queue.put(output)
-                print("output", output)
