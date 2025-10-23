@@ -362,7 +362,8 @@ class PaddleDisWorkerProc:
                     for request in req_dicts:
                         if request.task_type.value == RequestType.PREFILL.value:
                             tmp_need_cached_prefills.append(request)
-                attention_dp_cached_prefill_tasks.append(tmp_need_cached_prefills)
+                if tmp_need_cached_prefills:
+                    attention_dp_cached_prefill_tasks.append(tmp_need_cached_prefills)
                 for request in tmp_need_cached_prefills:
                     req_dicts.remove(request)
                 # judge whether all ranks have prefill tasks
