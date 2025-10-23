@@ -129,6 +129,7 @@ class LinearBase(nn.Layer):
         self.with_bias = with_bias
         self.add_bias = add_bias
         self.prefix = prefix
+        self.is_quantized = fd_config.model_config.is_quantized
         # key
         if weight_key:
             self.weight_key = f"{prefix}.{weight_key}"
@@ -392,6 +393,7 @@ class ColumnParallelLinear(LinearBase):
         with_bias: bool = False,
         add_bias: bool = False,
         skip_quant: bool = False,
+        weight_dtype="",
     ):
         """
         Initializes a linear layer and provides additional parameters required for inference and quantization.
@@ -420,6 +422,7 @@ class ColumnParallelLinear(LinearBase):
             with_bias=with_bias,
             add_bias=add_bias,
             skip_quant=skip_quant,
+            weight_dtype=weight_dtype,
         )
 
         assert self.quant_method is not None
@@ -795,6 +798,7 @@ class RowParallelLinear(LinearBase):
         add_bias: bool = False,
         reduce_results: bool = True,
         skip_quant: bool = False,
+        weight_dtype="",
     ):
         """
         Initialize a linear layer with additional parameters for inference and quantization.
@@ -829,6 +833,7 @@ class RowParallelLinear(LinearBase):
             with_bias=with_bias,
             add_bias=add_bias,
             skip_quant=skip_quant,
+            weight_dtype=weight_dtype,
         )
         if add_bias:
             assert with_bias, "with_bias must be True when add_bias is True."
@@ -846,12 +851,6 @@ class RowParallelLinear(LinearBase):
             if self.with_bias:
                 # col parallel
                 _set_var_distributed(self.bias, split_axis=0)
-                set_weight_attrs(
-                    self.bias,
-                    {
-                        "output_dim": False,
-                    },
-                )
 
         self.reduce_results = reduce_results
 
@@ -862,7 +861,7 @@ class RowParallelLinear(LinearBase):
             out = paddle.matmul(x, self.weight)
 
         if self.reduce_results and self.nranks > 1:
-            tensor_model_parallel_all_reduce(out, self.tp_group)
+            out = tensor_model_parallel_all_reduce(out, self.tp_group)
         if not self.fd_config.quant_config and self.add_bias:
             out = paddle.add(out, self.bias)
         return out

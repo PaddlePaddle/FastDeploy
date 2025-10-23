@@ -53,9 +53,14 @@ class ExpertService:
         end_pos = start_pos + self.cfg.parallel_config.tensor_parallel_size
         if cfg.scheduler_config.splitwise_role != "mixed":
             self.cfg.cache_config.rdma_comm_ports = self.cfg.cache_config.rdma_comm_ports[start_pos:end_pos]
-        self.cfg.local_device_ids = self.cfg.device_ids.split(",")[start_pos:end_pos]
+        self.cfg.local_device_ids = self.cfg.parallel_config.device_ids.split(",")[start_pos:end_pos]
         llm_logger.info(f"local_data_parallel_id: {local_data_parallel_id}")
         self.cfg.disaggregate_info = None
+
+        if self.cfg.cache_config.num_gpu_blocks_override is None:
+            self.do_profile = True
+        else:
+            self.do_profile = False
 
         if cfg.scheduler_config.splitwise_role != "mixed":
             if len(self.cfg.cache_config.pd_comm_port) == 1:
@@ -85,6 +90,8 @@ class ExpertService:
 
         start_time = time.time()
         self.engine.start()
+        if envs.FD_ENABLE_RETURN_TEXT:
+            self.engine.create_data_processor()
         if self.cfg.scheduler_config.name == "dp":
             self.cfg.init_cache_info()
             assert (request_queues_for_dp_ipc is not None) and (result_queue_for_dp_ipc is not None)
@@ -97,9 +104,6 @@ class ExpertService:
             ipc_signal_suffix = self.cfg.parallel_config.engine_worker_queue_port[0]
 
         llm_logger.info(f"start expert service {local_data_parallel_id}")
-        if self.cfg.scheduler_config.splitwise_role != "mixed":
-            ipc_signal_suffix_cache = self.cfg.parallel_config.engine_worker_queue_port[local_data_parallel_id]
-            self.engine.start_cache_service(self.cfg.local_device_ids, ipc_signal_suffix_cache)
 
         if self.cfg.scheduler_config.name == "splitwise":
             self.cfg.init_cache_info()
@@ -130,10 +134,41 @@ class ExpertService:
             )
             self.launched_expert_service_signal.value[local_rank] = 1
 
+        if self.cfg.scheduler_config.splitwise_role != "mixed" or self.cfg.cache_config.enable_prefix_caching:
+            if self.do_profile:
+                get_profile_block_num = np.zeros([1], dtype=np.int32)
+                while True:
+                    try:
+                        self.get_profile_block_num_signal = IPCSignal(
+                            name="get_profile_block_num",
+                            array=get_profile_block_num,
+                            dtype=np.int32,
+                            suffix=int(self.cfg.parallel_config.engine_worker_queue_port[0]),
+                            create=False,
+                        )
+                        break
+                    except:
+                        time.sleep(1)
+                self.reset_kvcache_blocks()
+            ipc_signal_suffix_cache = self.cfg.parallel_config.engine_worker_queue_port[local_data_parallel_id]
+            self.cache_manager_processes = self.engine.start_cache_service(
+                self.cfg.local_device_ids,
+                ipc_signal_suffix_cache,
+                create_cache_tensor=(self.cfg.scheduler_config.splitwise_role != "mixed"),
+            )
+
         console_logger.info(
             f"Worker processes(rank {local_rank}) are launched with {time.time() - start_time} seconds."
         )
         return True
+
+    def reset_kvcache_blocks(self):
+        self.do_profile = 0
+        while self.get_profile_block_num_signal.value[0] == 0:
+            time.sleep(1)
+        num_gpu_blocks = self.get_profile_block_num_signal.value[0]
+        self.cfg.cache_config.reset(num_gpu_blocks)
+        self.engine.resource_manager.reset_cache_config(self.cfg.cache_config)
 
     def _exit_sub_services(self):
         """
@@ -142,7 +177,6 @@ class ExpertService:
 
         if hasattr(self, "cache_manager_processes"):
             self.engine.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
-            self.engine.resource_manager.cache_manager.cache_ready_signal.clear()
             for p in self.cache_manager_processes:
                 llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:

@@ -268,6 +268,56 @@ jobs:
           ls
           python ${push_file} ${filename} ${target_path}
 
+  images_build:
+    name: Run FD Image Build
+    needs: [clone, publish_pre_check, build_sm8090]
+    runs-on: [self-hosted, Docker-Build]
+    if: |
+      github.event.repository.fork == false &&
+      (
+        (github.event_name == 'push' && github.ref_type == 'tag') ||
+        (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag')
+      )
+    env:
+      FD_VERSION: ${{ needs.publish_pre_check.outputs.fd_version }}
+      PADDLEVERSION: ${{ needs.publish_pre_check.outputs.compile_use_paddle_version }}
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+    steps:
+      - name: Images Build
+        shell: bash
+        env:
+          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
+          fd_archive_url: ${FASTDEPLOY_ARCHIVE_URL}
+        run: |
+          set -x
+          FULL_REPO="${{ github.repository }}"
+          REPO_NAME="${FULL_REPO##*/}"
+
+          # Clean the repository directory before starting
+          docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+          -e "REPO_NAME=${REPO_NAME}" \
+          ${docker_image} /bin/bash -c '
+            if [ -d ${REPO_NAME} ]; then
+              echo "Directory ${REPO_NAME} exists, removing it..."
+              rm -rf ${REPO_NAME}*
+            fi
+          '
+          wget -q --no-proxy ${fd_archive_url}
+          tar -xf FastDeploy.tar.gz
+          rm -rf FastDeploy.tar.gz
+          cd FastDeploy
+          git config --global user.name "FastDeployCI"
+          git config --global user.email "fastdeploy_ci@example.com"
+          git log -n 3 --oneline
+
+          PRODUCT_NAME=ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:${FD_VERSION}
+          docker build --no-cache -t ${PRODUCT_NAME} -f Dockerfile.gpu . \
+            --network host \
+            --build-arg PADDLE_VERSION=${PADDLEVERSION} \
+            --build-arg FD_VERSION=${FD_VERSION}
+
+          docker push ${PRODUCT_NAME}
+
   unittest_coverage:
     name: Run FastDeploy Unit Tests and Coverage
     needs: [clone,build_sm8090]

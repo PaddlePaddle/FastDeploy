@@ -1,3 +1,5 @@
+[简体中文](../zh/features/disaggregated.md)
+
 # Disaggregated Deployment
 
 Large model inference consists of two phases: Prefill and Decode, which are compute-intensive and memory access-intensive respectively. Deploying Prefill and Decode separately in certain scenarios can improve hardware utilization, effectively increase throughput, and reduce overall sentence latency.
@@ -73,10 +75,10 @@ Refer to the example code `offline_disaggregated_demo.py` in the `fastdeploy/dem
 
 #### Prerequisite: Redis
 
-> **⚠️ NOTE**  
-> **Redis requirement: version 6.2.0 or higher**  
+> **⚠️ NOTE**
+> **Redis requirement: version 6.2.0 or higher**
 > Versions below this may not support the required commands.
-> 
+>
 * Installation via `conda`
 
 ```bash

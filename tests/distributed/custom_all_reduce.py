@@ -57,7 +57,7 @@ class Test(unittest.TestCase):
             data_custom_ar = paddle.rand([m, n], dtype="bfloat16")
             data_paddle = data_custom_ar.clone()
             if fa.should_custom_ar(data_custom_ar):
-                fa.custom_all_reduce(data_custom_ar)
+                data_custom_ar = fa.custom_all_reduce(data_custom_ar)
             dist.all_reduce(data_paddle)
             if dist.get_rank() == 0:
                 np.testing.assert_allclose(

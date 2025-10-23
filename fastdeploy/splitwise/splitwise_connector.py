@@ -375,7 +375,7 @@ class SplitwiseConnector:
                 if tasks[i].disaggregate_info["transfer_protocol"] == "ipc":
                     cache_info = {
                         "request_id": tasks[i].request_id,
-                        "device_ids": self.cfg.device_ids.split(","),
+                        "device_ids": self.cfg.parallel_config.device_ids.split(","),
                         "transfer_protocol": "ipc",
                         "dest_block_ids": tasks[i].disaggregate_info["block_tables"],
                     }
@@ -387,14 +387,20 @@ class SplitwiseConnector:
                         f"{tasks[i].disaggregate_info['cache_info']['rdma']['ip']}:"
                         + f"{tasks[i].disaggregate_info['cache_info']['rdma']['port']}"
                     )
-                    cache_info = {
-                        "request_id": tasks[i].request_id,
-                        "device_ids": self.cfg.device_ids.split(","),
-                        "ip": self.cfg.host_ip,
-                        "rdma_ports": self.cfg.disaggregate_info["cache_info"]["rdma"]["rdma_port"],
-                        "transfer_protocol": "rdma",
-                        "dest_block_ids": tasks[i].disaggregate_info["block_tables"],
-                    }
+                    if tasks[i].get("error_msg", None) is not None:
+                        cache_info = {
+                            "request_id": tasks[i].request_id,
+                            "error_msg": tasks[i].get("error_msg"),
+                        }
+                    else:
+                        cache_info = {
+                            "request_id": tasks[i].request_id,
+                            "device_ids": self.cfg.parallel_config.device_ids.split(","),
+                            "ip": self.cfg.host_ip,
+                            "rdma_ports": self.cfg.disaggregate_info["cache_info"]["rdma"]["rdma_port"],
+                            "transfer_protocol": "rdma",
+                            "dest_block_ids": tasks[i].disaggregate_info["block_tables"],
+                        }
                     if addr not in temp_cache_info:
                         temp_cache_info[addr] = []
 

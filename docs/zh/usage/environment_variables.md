@@ -1,3 +1,5 @@
+[English](../../usage/environment_variables.md)
+
 # FastDeploy 环境变量说明
 
 FastDeploy 的环境变量保存在了代码库根目录下 fastdeploy/envs.py 文件中，以下是其对应的中文版说明：
@@ -77,5 +79,14 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # 是否使用 Machete 后端的 wint4 GEMM.
     "FD_USE_MACHETE": lambda: os.getenv("FD_USE_MACHETE", "0"),
+
+    # Used to truncate the string inserted during thinking when reasoning in a model. (</think> for ernie4_5_vl, \n</think>\n\n for ernie_x1)
+    "FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR": lambda: os.getenv("FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR", "</think>"),
+
+    # cache_transfer_manager 进程残留时退出等待超时时间
+    "FD_CACHE_PROC_EXIT_TIMEOUT": lambda: int(os.getenv("FD_CACHE_PROC_EXIT_TIMEOUT", "600")),
+
+    # cache_transfer_manager 进程残留时连续错误阈值
+    "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),
 }
 ```

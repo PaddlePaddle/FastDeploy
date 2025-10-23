@@ -116,6 +116,16 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Max pre-fetch requests number in PD
     "FD_EP_MAX_PREFETCH_TASK_NUM": lambda: int(os.getenv("FD_EP_MAX_PREFETCH_TASK_NUM", "8")),
     "FD_ENABLE_MODEL_LOAD_CACHE": lambda: bool(int(os.getenv("FD_ENABLE_MODEL_LOAD_CACHE", "0"))),
+    # Whether to clear cpu cache when clearing model weights.
+    "FD_ENABLE_SWAP_SPACE_CLEARING": lambda: int(os.getenv("FD_ENABLE_SWAP_SPACE_CLEARING", "0")),
+    # enable return text, used when FD_ENABLE_INTERNAL_ADAPTER=1
+    "FD_ENABLE_RETURN_TEXT": lambda: bool(int(os.getenv("FD_ENABLE_RETURN_TEXT", "0"))),
+    # Used to truncate the string inserted during thinking when reasoning in a model. (</think> for ernie4_5_vl, \n</think>\n\n for ernie_x1)
+    "FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR": lambda: os.getenv("FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR", "</think>"),
+    # Timeout for cache_transfer_manager process exit
+    "FD_CACHE_PROC_EXIT_TIMEOUT": lambda: int(os.getenv("FD_CACHE_PROC_EXIT_TIMEOUT", "600")),
+    # Count for cache_transfer_manager process error
+    "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),
 }
 
 

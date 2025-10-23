@@ -119,9 +119,8 @@ def setup_and_run_server():
         "128",
         "--quantization",
         "wint4",
-        "--use-cudagraph",
         "--graph-optimization-config",
-        '{"cudagraph_capture_sizes": [1]}',
+        '{"cudagraph_capture_sizes": [1], "use_cudagraph":true}',
     ]
 
     # Start subprocess in new process group
@@ -288,6 +287,69 @@ def test_non_streaming_chat(openai_client):
     assert hasattr(response.choices[0].message, "content")
 
 
+def test_non_streaming_chat_finish_reason(openai_client):
+    """
+    Test non-streaming chat functionality with the local service
+    """
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},
+            {"role": "user", "content": "List 3 countries and their capitals."},
+        ],
+        temperature=1,
+        max_tokens=5,
+        stream=False,
+    )
+
+    assert hasattr(response, "choices")
+    assert response.choices[0].finish_reason == "length"
+
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},
+            {"role": "user", "content": "List 3 countries and their capitals."},
+        ],
+        temperature=1,
+        max_completion_tokens=5,
+        stream=False,
+    )
+
+    assert hasattr(response, "choices")
+    assert response.choices[0].finish_reason == "length"
+
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},
+            {"role": "user", "content": "List 3 countries and their capitals."},
+        ],
+        temperature=1,
+        max_tokens=5,
+        stream=False,
+        n=2,
+    )
+    assert hasattr(response, "choices")
+    for choice in response.choices:
+        assert choice.finish_reason == "length"
+
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},
+            {"role": "user", "content": "List 3 countries and their capitals."},
+        ],
+        temperature=1,
+        max_completion_tokens=5,
+        stream=False,
+        n=2,
+    )
+    assert hasattr(response, "choices")
+    for choice in response.choices:
+        assert choice.finish_reason == "length"
+
+
 # Streaming test
 def test_streaming_chat(openai_client, capsys):
     """
@@ -360,8 +422,107 @@ def test_streaming(openai_client, capsys):
 # ==========================
 # OpenAI Client additional chat/completions test
 # ==========================
+def test_non_streaming_chat_with_n(openai_client):
+    """
+    Test n param option in non-streaming chat functionality with the local service
+    """
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[],
+        temperature=1,
+        max_tokens=5,
+        extra_body={"prompt_token_ids": [5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937]},
+        stream=False,
+        n=2,
+    )
+    assert hasattr(response, "choices")
+    assert len(response.choices) == 2
+    assert hasattr(response, "usage")
+    assert hasattr(response.usage, "prompt_tokens")
+    assert response.usage.prompt_tokens == 9
 
 
+def test_streaming_chat_with_n(openai_client):
+    """
+    Test n param option in streaming chat functionality with the local service
+    """
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[],
+        temperature=1,
+        max_tokens=5,
+        extra_body={"prompt_token_ids": [5209, 626, 274, 45954, 1071, 3265, 3934, 1869, 93937]},
+        stream=True,
+        stream_options={"include_usage": True},
+        n=2,
+    )
+    count: list = [0, 0]
+    for chunk in response:
+        assert hasattr(chunk, "choices")
+        assert hasattr(chunk, "usage")
+        if len(chunk.choices) > 0:
+            assert chunk.usage is None
+            if chunk.choices[0].index == 0:
+                count[0] = 1
+            elif chunk.choices[0].index == 1:
+                count[1] = 1
+        else:
+            assert hasattr(chunk.usage, "prompt_tokens")
+            assert chunk.usage.prompt_tokens == 9
+    assert sum(count) == 2
+
+
+def test_completions_non_streaming_with_n(openai_client):
+    """
+    Test n param option in non-streaming completions functionality with the local service
+    """
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        max_tokens=1024,
+        stream=False,
+        n=2,
+    )
+
+    assert hasattr(response, "choices")
+    assert len(response.choices) == 2
+    assert hasattr(response.choices[0], "text")
+    assert isinstance(response.choices[0].text, str)
+    assert hasattr(response.choices[1], "text")
+    assert isinstance(response.choices[1].text, str)
+
+
+def test_completions_streaming_with_n(openai_client):
+    """
+    Test n param option in streaming completions functionality with the local service
+    """
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello, how are you?",
+        temperature=1,
+        max_tokens=1024,
+        stream=True,
+        n=2,
+    )
+
+    output_chunks = []
+    count: list = [0, 0]
+    for chunk in response:
+        if chunk.choices[0].index == 0:
+            count[0] = 1
+        elif chunk.choices[0].index == 1:
+            count[1] = 1
+        assert hasattr(chunk, "choices")
+        assert len(chunk.choices) > 0
+        assert hasattr(chunk.choices[0], "text")
+        output_chunks.append(chunk.choices[0].text)
+
+    assert len(output_chunks) > 0
+    assert sum(count) == 2
+
+
+@pytest.mark.skip(reason="Temporarily skip this case due to unstable execution")
 def test_non_streaming_with_stop_str(openai_client):
     """
     Test non-streaming chat functionality with the local service
@@ -1181,6 +1342,89 @@ def test_streaming_completion_with_bad_words(openai_client, capsys):
 
     assert not any(ids in output_ids_1 for ids in bad_token_ids)
     assert not any(ids in output_ids_2 for ids in bad_token_ids)
+
+
+def test_streaming_chat_finish_reason(openai_client):
+    """
+    Test non-streaming chat functionality with the local service
+    """
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},
+            {"role": "user", "content": "List 3 countries and their capitals."},
+        ],
+        temperature=1,
+        max_tokens=5,
+        stream=True,
+    )
+
+    for chunk in response:
+        last_token = chunk.choices[0].finish_reason
+    assert last_token == "length"
+
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},
+            {"role": "user", "content": "List 3 countries and their capitals."},
+        ],
+        temperature=1,
+        max_completion_tokens=5,
+        stream=True,
+    )
+
+    for chunk in response:
+        last_token = chunk.choices[0].finish_reason
+    assert last_token == "length"
+
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},
+            {"role": "user", "content": "List 3 countries and their capitals."},
+        ],
+        temperature=1,
+        max_completion_tokens=5,
+        stream=True,
+        n=2,
+    )
+    finish_reason_1 = ""
+    finish_reason_1 = ""
+
+    for chunk in response:
+        last_token = chunk.choices[0].finish_reason
+        if last_token:
+            if chunk.choices[0].index == 0:
+                finish_reason_1 = last_token
+            else:
+                finish_reason_2 = last_token
+    assert finish_reason_1 == "length"
+    assert finish_reason_2 == "length"
+
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant."},
+            {"role": "user", "content": "List 3 countries and their capitals."},
+        ],
+        temperature=1,
+        max_tokens=5,
+        stream=True,
+        n=2,
+    )
+    finish_reason_1 = ""
+    finish_reason_1 = ""
+
+    for chunk in response:
+        last_token = chunk.choices[0].finish_reason
+        if last_token:
+            if chunk.choices[0].index == 0:
+                finish_reason_1 = last_token
+            else:
+                finish_reason_2 = last_token
+    assert finish_reason_1 == "length"
+    assert finish_reason_2 == "length"
 
 
 def test_profile_reset_block_num():

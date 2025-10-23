@@ -19,7 +19,7 @@
 
 template <int THREADBLOCK_SIZE>
 __global__ void
-GetMaxLenKernel(const int *seq_lens, const int *seq_lens_this_time,
+GetMaxLenKernel(const int *seq_lens_decoder, const int *seq_lens_this_time,
                 const int *seq_lens_encoder,
                 const int *seq_lens_this_time_merged,
                 const int *seq_lens_encoder_merged, const int *seq_mapping,
@@ -37,41 +37,27 @@ GetMaxLenKernel(const int *seq_lens, const int *seq_lens_this_time,
   int max_just_dec_merged_len_this_time_this_thread = 0;
   int max_system_len_this_thread = 0;
   int max_dec_len_without_system_this_thread = 0;
+  int max_len_kv_this_thread = 0;
   for (int i = tid; i < batch_size; i += blockDim.x) {
     const int seq_len_this_time = seq_lens_this_time[i];
+    const int seq_len_decoder = seq_lens_decoder[i];
     max_len_this_time_this_thread =
         max(seq_len_this_time, max_len_this_time_this_thread);
     max_len_encoder_this_thread =
         max(seq_lens_encoder[i], max_len_encoder_this_thread);
-    max_len_decoder_this_thread = max(seq_lens[i], max_len_decoder_this_thread);
+    max_len_decoder_this_thread = max(seq_len_decoder, max_len_decoder_this_thread);
     if (seq_len_this_time <= 0)
       continue;
-    const int max_just_dec_len_now = seq_lens_encoder[i] > 0 ? 0 : seq_lens[i];
+    const int max_just_dec_len_now = seq_lens_encoder[i] > 0 ? 0 : seq_len_decoder;
     max_len_this_thread =
-        max(seq_lens[i] + seq_len_this_time, max_len_this_thread);
+        max(seq_len_decoder + seq_len_this_time, max_len_this_thread);
     max_just_dec_len_this_thread =
         max(max_just_dec_len_this_thread, max_just_dec_len_now);
-    if (system_lens) {
-      const int real_bid = seq_mapping[i];
-      const int system_len_now = system_lens[real_bid];
-      max_system_len_this_thread =
-          max(max_system_len_this_thread, system_len_now);
-      max_dec_len_without_system_this_thread =
-          max(max_dec_len_without_system_this_thread,
-              max_just_dec_len_now - system_len_now);
-    }
-  }
-  if (system_lens) {
-    for (int i = tid; i < batch_size; i += blockDim.x) {
-      const int ori_seq_len_this_time = seq_lens_this_time_merged[i];
-      if (ori_seq_len_this_time <= 0)
-        continue;
-      const int max_just_dec_merged_len_this_time_now =
-          seq_lens_encoder_merged[i] > 0 ? 0 : ori_seq_len_this_time;
-      max_just_dec_merged_len_this_time_this_thread =
-          max(max_just_dec_merged_len_this_time_this_thread,
-              max_just_dec_merged_len_this_time_now);
-    }
+
+    if (seq_len_decoder == 0)
+      continue;
+    max_len_kv_this_thread =
+        max(seq_len_this_time + seq_len_decoder, max_len_kv_this_thread);
   }
   int total_max_len_this_time =
       BlockReduce(temp_storage)
@@ -94,6 +80,8 @@ GetMaxLenKernel(const int *seq_lens, const int *seq_lens_this_time,
   int total_dec_len_without_system =
       BlockReduce(temp_storage)
           .Reduce(max_dec_len_without_system_this_thread, MaxOp<int>());
+  int total_max_len_kv =
+      BlockReduce(temp_storage).Reduce(max_len_kv_this_thread, MaxOp<int>());
   if (tid == 0) {
     max_lens[0] = total_max_len_this_time;
     max_lens[1] = total_max_len_encoder;
@@ -103,6 +91,7 @@ GetMaxLenKernel(const int *seq_lens, const int *seq_lens_this_time,
     max_lens[5] = total_just_dec_merged;
     max_lens[6] = total_system_len;
     max_lens[7] = total_dec_len_without_system;
+    max_lens[8] = total_max_len_kv;
   }
 }
 
@@ -208,25 +197,55 @@ __global__ void split_q_block(const int *__restrict__ seq_lens_q,
                               const int *__restrict__ seq_lens_encoder,
                               int *__restrict__ batch_ids,
                               int *__restrict__ tile_ids_per_batch,
-                              int *__restrict__ num_blocks_x, const int bsz,
+                              int *__restrict__ num_blocks_x,
+                              const int bsz,
                               const int num_rows_per_block,
                               const int group_size) {
-  if (threadIdx.x == 0) {
-    int gridx = 0;
-    int index = 0;
-    for (uint32_t bid = 0; bid < bsz; bid++) {
+  // one block one warp
+  const int lane_id = threadIdx.x % warpSize;
+  int prev_offset = 0;
+
+  // loop on warp tile：[base, base+32)
+  for (int base = 0; base < bsz; base += warpSize) {
+    const int bid = base + lane_id;
+
+    // calculate loop_times for bid
+    int loop_times = 0;
+    if (bid < bsz) {
       int seq_len = seq_lens_q[bid];
       if (seq_lens_encoder && seq_lens_encoder[bid] > 0) {
         seq_len = 0;
       }
-      const int loop_times = div_up(seq_len * group_size, num_rows_per_block);
-      for (uint32_t tile_id = 0; tile_id < loop_times; tile_id++) {
-        batch_ids[index] = bid;
-        tile_ids_per_batch[index++] = tile_id;
-      }
-      gridx += loop_times;
+      loop_times = div_up(seq_len * group_size, num_rows_per_block);
     }
-    *num_blocks_x = gridx;
+
+    // prefix sum for each lane, get the start offset in this tile
+    // inclusive scan
+    int x = loop_times;
+    for (int offset = 1; offset < warpSize; offset <<= 1) {
+      int y = __shfl_up_sync(0xffffffff, x, offset);
+      if (lane_id >= offset) x += y;
+    }
+    // exclusive prefix sum
+    int bid_offset = x - loop_times;
+    int tile_sum = __shfl_sync(0xffffffff, x, warpSize - 1);
+
+    // write batch_ids and tile_ids_per_batch
+    if (bid < bsz && loop_times > 0) {
+      int write_base = prev_offset + bid_offset;
+      for (int t = 0; t < loop_times; ++t) {
+        int pos = write_base + t;
+        batch_ids[pos] = bid;
+        tile_ids_per_batch[pos] = t;
+      }
+    }
+
+    // for next warp tile
+    prev_offset += tile_sum;
+  }
+
+  if (threadIdx.x == 0) {
+    *num_blocks_x = prev_offset;
   }
 }
 
@@ -256,29 +275,6 @@ __global__ void split_kv_block(const int *__restrict__ seq_lens_decoder,
   }
 }
 
-template <int THREADBLOCK_SIZE>
-__global__ void
-get_max_len_kv_ernel(int *max_seq_lens_out, const int *seq_lens_this_time,
-                     const int *seq_lens_decoder, const int batch_size) {
-  const int tid = threadIdx.x;
-
-  typedef cub::BlockReduce<int, THREADBLOCK_SIZE> BlockReduce;
-  __shared__ typename BlockReduce::TempStorage temp_storage;
-
-  int max_len_this_thread = 0;
-  for (int i = tid; i < batch_size; i += blockDim.x) {
-    if (seq_lens_decoder[i] == 0)
-      continue;
-    max_len_this_thread =
-        max(seq_lens_this_time[i] + seq_lens_decoder[i], max_len_this_thread);
-  }
-  int total =
-      BlockReduce(temp_storage).Reduce(max_len_this_thread, MaxOp<int>());
-  if (tid == 0) {
-    *max_seq_lens_out = total;
-  }
-}
-
 void GetBlockShapeAndSplitKVBlock(
     const paddle::Tensor &seq_lens_encoder,
     const paddle::Tensor &seq_lens_decoder,
@@ -295,7 +291,6 @@ void GetBlockShapeAndSplitKVBlock(
     paddle::Tensor &kv_batch_ids,               // Inplace
     paddle::Tensor &kv_tile_ids_per_batch,      // Inplace
     paddle::Tensor &kv_num_blocks_x_cpu,        // Inplace, CPU
-    paddle::Tensor &max_len_kv_cpu,             // Inplace, CPU
     const int encoder_block_shape_q,
     const int decoder_block_shape_q,
     const int group_size,
@@ -319,20 +314,13 @@ void GetBlockShapeAndSplitKVBlock(
   int max_just_dec_merged_len_this_time = max_len_cpu_ptr[5];
   int max_system_len = max_len_cpu_ptr[6];
   int max_just_dec_len_without_system = max_len_cpu_ptr[7];
-
-  auto max_len_kv =
-      GetEmptyTensor({1}, paddle::DataType::INT32, seq_lens_decoder.place());
-  get_max_len_kv_ernel<128><<<1, 128, 0, stream>>>(
-      max_len_kv.data<int>(), seq_lens_this_time.data<int>(),
-      seq_lens_decoder.data<int>(), bsz);
-
-
-  max_len_kv_cpu.copy_(max_len_kv, max_len_kv_cpu.place(), false);
+  int max_kv_len_this_time = max_len_cpu_ptr[8];
 
   // decoder
   if (max_dec_len_this_time > 0) {
-    const bool mla_use_tensorcore = GetMlaUseTensorcore();
-    if (mla_use_tensorcore && group_size <= 64) {
+
+    const bool mla_backend = checkAttentionBackend();
+    if (mla_backend && group_size <= 64) {
       const int set_chunk_size = get_mla_dec_chunk_size(bsz);
 
       PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
@@ -396,28 +384,40 @@ void GetBlockShapeAndSplitKVBlock(
           chunk_size);
 
     } else {
-        // Note:(changwenbin)In order to adapt to cudagraph, the maximum value should be taken here
-        const uint32_t decoder_max_tile_size_per_bs_q = div_up((decoder_step_token_num * group_size), decoder_block_shape_q);
-        const uint32_t decoder_batch_shape = bsz * 1024 * decoder_max_tile_size_per_bs_q;
+      // Note:(changwenbin)In order to adapt to cudagraph, the maximum value
+      // should be taken here
+      const uint32_t decoder_max_tile_size_per_bs_q =
+          div_up((decoder_step_token_num * group_size), decoder_block_shape_q);
+      const uint32_t decoder_batch_shape =
+          bsz * 1024 * decoder_max_tile_size_per_bs_q;
 
-        PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_batch_ids.data<int>(), 0, decoder_batch_shape * sizeof(int32_t), stream));
-        PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_tile_ids_per_batch.data<int>(), 0, decoder_batch_shape * sizeof(int32_t), stream));
-        PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(decoder_num_blocks_device.data<int>(), 0, sizeof(int32_t), stream));
+      PADDLE_ENFORCE_GPU_SUCCESS(
+          cudaMemsetAsync(decoder_batch_ids.data<int>(),
+                          0,
+                          decoder_batch_shape * sizeof(int32_t),
+                          stream));
+      PADDLE_ENFORCE_GPU_SUCCESS(
+          cudaMemsetAsync(decoder_tile_ids_per_batch.data<int>(),
+                          0,
+                          decoder_batch_shape * sizeof(int32_t),
+                          stream));
+      PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
+          decoder_num_blocks_device.data<int>(), 0, sizeof(int32_t), stream));
 
-        split_q_block<<<1, 32, 0, stream>>>(
-            seq_lens_this_time.data<int>(),
-            seq_lens_encoder.data<int>(),
-            decoder_batch_ids.data<int>(),
-            decoder_tile_ids_per_batch.data<int>(),
-            decoder_num_blocks_device.data<int>(),
-            bsz,
-            decoder_block_shape_q,
-            group_size);
+      split_q_block<<<1, 32, 0, stream>>>(
+          seq_lens_this_time.data<int>(),
+          seq_lens_encoder.data<int>(),
+          decoder_batch_ids.data<int>(),
+          decoder_tile_ids_per_batch.data<int>(),
+          decoder_num_blocks_device.data<int>(),
+          bsz,
+          decoder_block_shape_q,
+          group_size);
 
-        decoder_num_blocks_cpu.copy_(
-            decoder_num_blocks_device, decoder_num_blocks_cpu.place(), false);
-        PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
-            decoder_chunk_size_device.data<int>(), 64, sizeof(int32_t), stream));
+      decoder_num_blocks_cpu.copy_(
+          decoder_num_blocks_device, decoder_num_blocks_cpu.place(), false);
+      PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
+        decoder_chunk_size_device.data<int>(), 64, sizeof(int32_t), stream));
     }
   } else {
       PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
@@ -462,6 +462,32 @@ void GetBlockShapeAndSplitKVBlock(
 
 }
 
+std::vector<std::vector<int64_t>> GetBlockShapeAndSplitKVBlockInferShape(
+    const std::vector<int64_t> &seq_lens_encoder,
+    const std::vector<int64_t> &seq_lens_decoder,
+    const std::vector<int64_t> &seq_lens_this_time,
+    const int encoder_block_shape_q,
+    const int decoder_block_shape_q,
+    const int group_size,
+    const int block_size,
+    const int decoder_step_token_num
+) {
+  return {};
+}
+
+std::vector<paddle::DataType> GetBlockShapeAndSplitKVBlockInferDtype(
+    const paddle::DataType &seq_lens_encoder,
+    const paddle::DataType &seq_lens_decoder,
+    const paddle::DataType &seq_lens_this_time,
+    const int encoder_block_shape_q,
+    const int decoder_block_shape_q,
+    const int group_size,
+    const int block_size,
+    const int decoder_step_token_num
+) {
+  return {};
+}
+
 PD_BUILD_STATIC_OP(get_block_shape_and_split_kv_block)
     .Inputs({
       "seq_lens_encoder",
@@ -479,7 +505,6 @@ PD_BUILD_STATIC_OP(get_block_shape_and_split_kv_block)
       "kv_batch_ids",
       "kv_tile_ids_per_batch",
       "kv_num_blocks_x_cpu",
-      "max_len_kv_cpu"
     })
     .Outputs({
 
@@ -491,4 +516,6 @@ PD_BUILD_STATIC_OP(get_block_shape_and_split_kv_block)
       "block_size: int",
       "decoder_step_token_num: int"
     })
-    .SetKernelFn(PD_KERNEL(GetBlockShapeAndSplitKVBlock));
+    .SetKernelFn(PD_KERNEL(GetBlockShapeAndSplitKVBlock))
+    .SetInferShapeFn(PD_INFER_SHAPE(GetBlockShapeAndSplitKVBlockInferShape))
+    .SetInferDtypeFn(PD_INFER_DTYPE(GetBlockShapeAndSplitKVBlockInferDtype));
