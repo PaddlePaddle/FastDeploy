@@ -30,7 +30,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
 )
 from fastdeploy.model_executor.layers.rotary_embedding import (
-    MMRotaryEmbedding3D,
+    Ernie5RotaryEmbedding3D,
     get_rope,
 )
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
@@ -94,7 +94,7 @@ class MTPProposer(Proposer):
         self._initialize_attn_backend()
 
         if self.enable_mm:
-            self.rotary_emb = MMRotaryEmbedding3D(
+            self.rotary_emb = Ernie5RotaryEmbedding3D(
                 rotary_dim=self.model_config.head_dim,
                 base=self.model_config.rope_theta,
                 partial_rotary_factor=1.0,
