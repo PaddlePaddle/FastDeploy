@@ -370,10 +370,8 @@ class ResourceManagerV1(ResourceManager):
                         break
 
                     request = self.waiting[0]
-                    if (
-                        self._is_mm_request(request)
-                        or self.exist_mm_prefill(scheduled_reqs)
-                        or (paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs))
+                    if (self._is_mm_request(request) and self.exist_mm_prefill(scheduled_reqs)) or (
+                        paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)
                     ):
                         break
 
