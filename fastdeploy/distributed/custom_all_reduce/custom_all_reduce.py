@@ -48,7 +48,7 @@ class CustomAllreduce:
     _SUPPORTED_WORLD_SIZES = [2, 4, 6, 8]
 
     # max_size: max supported allreduce size
-    def __init__(self, group: Group, max_size: int = 8192 * 1024) -> None:
+    def __init__(self, group: Group, max_size: int = 8192 * 1024 * 32 * 2) -> None:
         """
         Args:
             device: the device to bind the CustomAllreduce to. If None,
@@ -92,7 +92,7 @@ class CustomAllreduce:
         # 8*world_size bytes where world_size is at most 8. Allocating 8MB
         # is enough for 131072 such tuples. The largest model I've seen only
         # needs less than 10000 of registered tuples.
-        self.rank_data = paddle.empty([8 * 1024 * 1024], dtype=paddle.uint8)
+        self.rank_data = paddle.empty([8192 * 1024 * 32 * 2], dtype=paddle.uint8)
 
         self.max_size = max_size
         self.world_size = world_size

@@ -33,7 +33,7 @@ def capture_custom_allreduce():
         yield
 
 
-def use_custom_allreduce(custom_all_reduce_max_bytes: int = 8192 * 1024):
+def use_custom_allreduce(custom_all_reduce_max_bytes: int = 8192 * 1024 * 32 * 2):
     hcg = fleet.get_hybrid_communicate_group()
     model_parallel_group = hcg.get_model_parallel_group()
     global _TP_AR
