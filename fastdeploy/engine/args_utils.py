@@ -386,6 +386,11 @@ class EngineArgs:
     Flag to specify the dtype of lm_head as FP32. Default is False (Using model default dtype).
     """
 
+    disable_chunked_mm_input: bool = False
+    """
+    Disable chunked_mm_input for multi-model inference.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -395,8 +400,6 @@ class EngineArgs:
         if self.splitwise_role == "decode":
             self.enable_prefix_caching = False
         if self.speculative_config is not None:
-            self.enable_prefix_caching = False
-        if self.enable_mm:
             self.enable_prefix_caching = False
         if not current_platform.is_cuda():
             self.enable_prefix_caching = False
@@ -808,6 +811,12 @@ class EngineArgs:
             type=lambda s: s.split(",") if s else None,
             default=EngineArgs.rdma_comm_ports,
             help="ports for rdma communication.",
+        )
+        perf_group.add_argument(
+            "--disable-chunked-mm-input",
+            action="store_true",
+            default=EngineArgs.disable_chunked_mm_input,
+            help="Disable chunked mm input.",
         )
 
         # Scheduler parameters group
