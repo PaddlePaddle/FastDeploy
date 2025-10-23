@@ -574,7 +574,6 @@ class OpenAIServingChat:
         self,
         data: dict,
         request: ChatCompletionRequest,
-        previous_num_tokens: int,
         prompt_token_ids: list,
         prompt_tokens: str,
         completion_token_ids: list,
