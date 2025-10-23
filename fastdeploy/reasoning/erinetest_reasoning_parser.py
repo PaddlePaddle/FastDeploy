@@ -21,8 +21,8 @@ from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest, DeltaM
 from fastdeploy.reasoning import ReasoningParser, ReasoningParserManager
 
 
-@ReasoningParserManager.register_module("test")
-class TestReasoningParser(ReasoningParser):
+@ReasoningParserManager.register_module("erine-test")
+class ErineTestReasoningParser(ReasoningParser):
     """
     Reasoning parser for ernir_vl model.
 
