@@ -437,7 +437,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         prompt_token_ids = [1, 2]
         prompt_tokens = "test_prompt"
-        logprob_contents = [[], []]
+        logprob_contents = [[{"token": "hello", "logprob": 0.1}], [{"token": "hello", "logprob": 0.1}]]
         mock_response_processor = Mock()
         mock_response_processor.enable_multimodal_content.return_value = False
         completion_token_ids = [[], []]
@@ -469,6 +469,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
             self.assertEqual(num_cached_tokens[expected["index"]], expected["num_cached_tokens"])
             self.assertEqual(actual_choice.finish_reason, expected["finish_reason"])
+            assert actual_choice.logprobs is not None
 
 
 if __name__ == "__main__":
