@@ -1510,11 +1510,6 @@ class FDConfig:
                 self.structured_outputs_config.guided_decoding_backend = "xgrammar"
 
         # Adjustment GraphOptConfig
-        if self.scheduler_config.splitwise_role != "mixed":
-            self.graph_opt_config.use_cudagraph = False
-            logger.info(
-                "CUDAGraph does not support to be started together with PD Disaggregation temporarily, but has been automatically closed!"
-            )
         if self.load_config is not None and self.load_config.dynamic_load_weight is True:
             self.graph_opt_config.graph_opt_level = 0
             logger.info(
