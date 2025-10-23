@@ -1161,14 +1161,14 @@ class PrefixCacheManager:
                 swap_node_ids.remove(revert_block_id)
 
         if revert_tokens > 0:
-            last_node_id = match_node_ids[-1]
-            if last_node_id in match_gpu_block_ids:
+            last_block_id = match_block_ids[-1]
+            if last_block_id in match_gpu_block_ids:
                 gpu_match_token_num -= revert_tokens
-            elif last_node_id in match_cpu_block_ids:
+            elif last_block_id in match_cpu_block_ids:
                 cpu_match_token_num -= revert_tokens
             else:
                 logger.error(
-                    f"req_id {request.request_id} revert nodes error, revert_tokens: {revert_tokens}, nodes: {last_node_id}, "
+                    f"req_id {request.request_id} revert nodes error, revert_tokens: {revert_tokens}, nodes: {last_block_id}, "
                     f"match_gpu_block_ids: {match_gpu_block_ids}, match_cpu_block_ids: {match_cpu_block_ids}"
                 )
 
