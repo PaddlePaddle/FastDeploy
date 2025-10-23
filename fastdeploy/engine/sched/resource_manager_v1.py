@@ -288,7 +288,7 @@ class ResourceManagerV1(ResourceManager):
 
     def exist_mm_prefill(self, scheduled_reqs):
         for request in scheduled_reqs:
-            if request.task_type == RequestType.MM_PREFILL and self._is_mm_request(request):
+            if request.task_type == RequestType.PREFILL and self._is_mm_request(request):
                 return True
         return False
 
