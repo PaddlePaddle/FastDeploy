@@ -25,6 +25,7 @@ from paddleformers.transformers.activations import ACT2FN
 from paddleformers.transformers.model_utils import PretrainedModel
 
 from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.model_executor.utils import slice_fn
 
 from .config import PPOCRVisionConfig
 
@@ -55,6 +56,48 @@ def apply_rotary_pos_emb_vision(x, cos, sin):
     return x_embed.astype(orig_dtype)
 
 
+class QKVLinear(nn.Linear):
+    def __init__(self, config, in_features, out_features, weight_attr=None, bias_attr=None):
+        super().__init__(in_features, out_features, weight_attr, bias_attr)
+        self.config = config
+        self.in_features = in_features
+        self.out_features = out_features
+        self.embed_dim = config.hidden_size
+        self.num_heads = config.num_attention_heads
+        self.head_dim = self.embed_dim // self.num_heads
+        assert self.head_dim * self.num_heads == self.embed_dim
+        self.weight.weight_loader = self.weight_loader
+        self.bias.weight_loader = self.weight_loader
+
+    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        # Tensor parallelism splits the weight along the output_dim
+        loaded_weight = get_tensor(loaded_weight)
+        if not param._is_initialized():
+            param.initialize()
+        if loaded_shard_id == "q":
+            param_shard_offset = 0
+            param_shard_size = self.num_heads * self.head_dim
+        elif loaded_shard_id == "k":
+            param_shard_offset = self.num_heads * self.head_dim
+            param_shard_size = self.num_heads * self.head_dim
+        else:
+            # loaded_shard_id == "v"
+            param_shard_offset = self.num_heads * self.head_dim * 2
+            param_shard_size = self.num_heads * self.head_dim
+
+        param = slice_fn(param, self.out_features, start=param_shard_offset, end=param_shard_offset + param_shard_size)
+        assert param.shape == loaded_weight.shape, (
+            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+        )
+        # Ensure loaded weight dtype matches model param dtype
+        if loaded_weight.dtype != param.dtype:
+            if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
+                loaded_weight = loaded_weight.view(param.dtype)
+            else:
+                loaded_weight = loaded_weight.cast(param.dtype)
+        param.copy_(loaded_weight, False)
+
+
 class SiglipAttention(nn.Layer):
     def __init__(self, config):
         super().__init__()
@@ -65,7 +108,7 @@ class SiglipAttention(nn.Layer):
         assert self.head_dim * self.num_heads == self.embed_dim
         self.scale = self.head_dim**-0.5
 
-        self.qkv_proj = nn.Linear(self.embed_dim, self.embed_dim * 3, bias_attr=True)
+        self.qkv_proj = QKVLinear(config, self.embed_dim, self.embed_dim * 3, bias_attr=True)
         self.out_proj = nn.Linear(self.embed_dim, self.embed_dim)
 
     def forward(
@@ -254,6 +297,8 @@ class SiglipMLP(nn.Layer):
     def __init__(self, config):
         super().__init__()
         self.config = config
+        if config.hidden_act == "gelu_pytorch_tanh":
+            config.hidden_act = "silu"
         self.activation_fn = ACT2FN[config.hidden_act]
 
         self.fc1 = nn.Linear(config.hidden_size, config.intermediate_size)

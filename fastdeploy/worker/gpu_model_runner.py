@@ -386,13 +386,11 @@ class GPUModelRunner(ModelRunnerBase):
                 else:
                     prompt_token_ids = request.prompt_token_ids
                 input_ids = prompt_token_ids + request.output_token_ids
-
                 logger.debug(
                     f"Handle prefill request {request} at idx {idx}, "
                     f"{prefill_start_index=}, {prefill_end_index=}, "
                     f"need_prefilled_token_num={len(input_ids)}"
                 )
-
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(
                     input_ids[prefill_start_index:prefill_end_index]
                 )
@@ -617,7 +615,7 @@ class GPUModelRunner(ModelRunnerBase):
 
                 if self.enable_mm:
                     self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
-                        position_ids, [request.get("max_tokens", 2048)], [0, length]
+                        position_ids, [request.get("max_tokens", 2048)], [0, position_ids.shape[0]]
                     )[0]
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
 

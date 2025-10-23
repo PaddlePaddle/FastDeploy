@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import re
 from functools import partial
 from typing import Dict, Optional, Union
 
@@ -39,6 +40,10 @@ from fastdeploy.model_executor.models.model_base import (
     ModelCategory,
     ModelForCasualLM,
     ModelRegistry,
+)
+from fastdeploy.model_executor.utils import (
+    default_weight_loader,
+    process_weights_after_loading,
 )
 
 from .projector import Projector
@@ -159,6 +164,56 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         )
 
     @paddle.no_grad()
+    def load_weights(self, weights_iterator) -> None:
+        """
+        Load model parameters from a given weights_iterator object.
+
+        Args:
+            weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
+        """
+
+        stacked_params_mapping = [
+            # (param_name, shard_name, shard_id)
+            ("qkv_proj", "q_proj", "q"),
+            ("qkv_proj", "k_proj", "k"),
+            ("qkv_proj", "v_proj", "v"),
+            ("up_gate_proj", "gate_proj", "gate"),
+            ("up_gate_proj", "up_proj", "up"),
+            ("embed_tokens.embeddings", "embed_tokens", None),
+            ("lm_head.linear", "lm_head", None),
+        ]
+
+        params_dict = dict(self.named_parameters())
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        for loaded_weight_name, loaded_weight in weights_iterator:
+            loaded_weight_name = (
+                self.process_weights_before_loading_fn(loaded_weight_name)
+                if getattr(self, "process_weights_before_loading_fn", None)
+                else loaded_weight_name
+            )
+            if loaded_weight_name is None:
+                continue
+            for param_name, weight_name, shard_id in stacked_params_mapping:
+                if weight_name not in loaded_weight_name:
+                    continue
+                model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                if model_param_name not in params_dict:
+                    continue
+                param = params_dict[model_param_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                weight_loader(param, loaded_weight, shard_id)
+                break
+            else:
+                model_param_name = loaded_weight_name
+                if model_param_name not in params_dict:
+                    continue
+                param = params_dict[model_param_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                weight_loader(param, loaded_weight)
+            model_sublayer_name = re.sub(r"\.(weight)$", "", model_param_name)
+            process_weights_after_loading_fn(model_sublayer_name, param)
+
+    @paddle.no_grad()
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
         """
         Load model parameters from a given state dictionary.
@@ -168,6 +223,9 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
+        params_dict = dict(self.named_parameters())
+        for key in params_dict.keys():
+            print(key)
         self.model.load_state_dict(state_dict)
         self.visual.load_state_dict(state_dict)
         self.projector.load_state_dict(state_dict)
