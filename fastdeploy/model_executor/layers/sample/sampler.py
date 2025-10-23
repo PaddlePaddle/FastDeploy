@@ -217,7 +217,7 @@ class Sampler(nn.Layer):
             raise NotImplementedError
 
         self.processor = SamplerProcessor()
-        self.logprobs_mode = logprobs_mode
+        self.logprobs_mode = fd_config.model_config.logprobs_mode if fd_config is not None else logprobs_mode
         # Can only be created when fd_config.early_stopper_config.enable_early_stop = True
         if (
             fd_config is not None
@@ -440,14 +440,14 @@ class SpeculativeSampler(nn.Layer):
     Sampler for speculative generation.
     """
 
-    def __init__(self, fd_config: FDConfig, logprobs_mode: str = "raw_logprobs"):
+    def __init__(self, fd_config: FDConfig):
         """ """
         super().__init__()
         if current_platform.is_cuda():
             self.forward = self.forward_cuda
         else:
             raise NotImplementedError
-        self.logprobs_mode = logprobs_mode
+        self.logprobs_mode = fd_config.model_config.logprobs_mode
         self.speculative_verify_window = fd_config.speculative_config.verify_window
         self.speculative_max_candidate_len = fd_config.speculative_config.max_candidate_len
         self.speculative_benchmark_mode = fd_config.speculative_config.benchmark_mode
@@ -684,14 +684,14 @@ class SpeculativeSampler(nn.Layer):
 class MTPSampler(nn.Layer):
     """ """
 
-    def __init__(self, fd_config: FDConfig, logprobs_mode: str = "raw_logprobs"):
+    def __init__(self, fd_config: FDConfig):
         """ """
         super().__init__()
         if current_platform.is_cuda():
             self.forward = self.forward_cuda
         else:
             raise NotImplementedError
-        self.logprobs_mode = logprobs_mode
+        self.logprobs_mode = fd_config.model_config.logprobs_mode
 
     def pre_process(self, skip_idx_list: List[int] = []):
         """pre process before running"""
