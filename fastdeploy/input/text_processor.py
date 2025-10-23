@@ -454,6 +454,13 @@ class DataProcessor(BaseDataProcessor):
                 token_ids,
             )
             response_dict["outputs"]["delta_message"] = reasoning_delta_message
+            reasoning_content = (
+                reasoning_delta_message.reasoning_content
+                if reasoning_delta_message and reasoning_delta_message.reasoning_content
+                else None
+            )
+            reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
+            response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
         if self.tool_parser_obj:
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)

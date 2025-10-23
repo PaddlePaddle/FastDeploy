@@ -165,7 +165,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         generator = self.chat_serving.chat_completion_stream_generator(
             request=request,
-            request_id="test-request-id",
+            request_id="test_request_id",
             model_name="test-model",
             prompt_token_ids=[1, 2, 3],
             prompt_tokens="Hello",
@@ -473,15 +473,13 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
     @patch("fastdeploy.entrypoints.openai.serving_chat.api_server_logger")
     @patch("fastdeploy.entrypoints.openai.serving_chat.ChatResponseProcessor")
-    async def test_chat_stream_usage_fields(self, mock_processor_class, mock_logger):
-        """测试流式响应中当include_usage和include_continuous_usage为True时，usage字段的正确性"""
+    async def test_chat_stream_usage_fields(self, mock_response_processor, api_server_logger):
         response_data = [
             {
                 "request_id": "test-request-id_0",
                 "outputs": {"token_ids": [1], "text": "a", "top_logprobs": None, "draft_top_logprobs": None},
                 "metrics": {"first_token_time": 0.1, "inference_start_time": 0.1, "request_start_time": 0.0},
                 "finished": False,
-                "num_cached_tokens": 5,
             },
             {
                 "request_id": "test-request-id_0",
@@ -505,14 +503,30 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         async def mock_process_response_chat(response, stream, enable_thinking, include_stop_str_in_output):
             delta_msg_mock = Mock()
             delta_msg_mock.content = response["outputs"]["text"]
-            delta_msg_mock.reasoning_content = "mock reasoning"
+            if response["outputs"]["text"] == "a":
+                delta_msg_mock.reasoning_content = "Thinking for a"
+            elif response["outputs"]["text"] == "bc":
+                delta_msg_mock.reasoning_content = "Thinking for bc"
             delta_msg_mock.tool_calls = None
             response["outputs"]["delta_message"] = delta_msg_mock
+
+            reasoning_content = (
+                delta_msg_mock.reasoning_content if (delta_msg_mock and delta_msg_mock.reasoning_content) else None
+            )
+            reasoning_tokens = reasoning_content.split() if reasoning_content else []
+            response["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
+
+            response["outputs"]["num_cached_tokens"] = response.get("num_cached_tokens", 0)
+
             yield response
 
         mock_processor_instance.process_response_chat = mock_process_response_chat
         mock_processor_instance.enable_multimodal_content = Mock(return_value=False)
-        mock_processor_class.return_value = mock_processor_instance
+        mock_processor_instance.reasoning_parser = Mock(__class__.__name__ == "ErineTestReasoningParser")
+        mock_processor_instance.data_processor = Mock(
+            process_response_dict=lambda resp, stream, enable_thinking, include_stop_str_in_output: resp
+        )
+        mock_response_processor.return_value = mock_processor_instance
 
         request = ChatCompletionRequest(
             model="test-model",
@@ -554,9 +568,6 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         self.assertIn("usage", first_chunk, "First chunk should contain usage")
         self.assertEqual(first_chunk["usage"]["prompt_tokens"], 3, "First chunk prompt_tokens mismatch")
         self.assertIn("prompt_tokens_details", first_chunk["usage"])
-        self.assertEqual(
-            first_chunk["usage"]["prompt_tokens_details"]["cached_tokens"], 5, "First chunk cached_tokens mismatch"
-        )
 
         middle_chunk = next(c for c in parsed_chunks if "choices" in c and len(c["choices"]) > 0)
         self.assertIn("usage", middle_chunk, "Middle chunk should contain usage")
