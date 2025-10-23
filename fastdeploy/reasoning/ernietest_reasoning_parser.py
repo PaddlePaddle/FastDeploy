@@ -22,7 +22,7 @@ from fastdeploy.reasoning import ReasoningParser, ReasoningParserManager
 
 
 @ReasoningParserManager.register_module("erine-test")
-class ErineTestReasoningParser(ReasoningParser):
+class ErnieTestReasoningParser(ReasoningParser):
     """
     Reasoning parser for ernir_vl model.
 
@@ -48,9 +48,9 @@ class ErineTestReasoningParser(ReasoningParser):
         self.tool_begin_token_id = self.vocab.get(self.tool_begin_token)
 
         if self.think_end_token_id is None:
-            raise RuntimeError("Test reasoning parser could not locate think end " "tokens in the tokenizer!")
+            raise RuntimeError("Test reasoning parser could not locate think end tokens in the tokenizer!")
         if self.tool_begin_token_id is None:
-            raise RuntimeError("Test reasoning parser could not locate tool begin " "tokens in the tokenizer!")
+            raise RuntimeError("Test reasoning parser could not locate tool begin tokens in the tokenizer!")
 
     def is_reasoning_end(self, input_ids: list[int]) -> bool:
         return self.think_end_token_id in input_ids
@@ -88,7 +88,7 @@ class ErineTestReasoningParser(ReasoningParser):
                 else:
                     return None
             elif len(reasoning_content) > 0 or len(content) > 0:
-                return DeltaMessage(reasoning_content=reasoning_content, content=content)
+                return DeltaMessage(reasoning_content=reasoning_content, content=delta_text[index:])
             else:
                 return None
         elif self.think_end_token_id in previous_token_ids:
@@ -96,7 +96,7 @@ class ErineTestReasoningParser(ReasoningParser):
             if self.tool_begin_token_id in delta_token_ids:
                 return None
             elif content:
-                return DeltaMessage(content=content)
+                return DeltaMessage(content=delta_text)
             else:
                 return None
         else:
