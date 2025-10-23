@@ -269,7 +269,7 @@ class DataProcessor:
             add_generation_prompt=request.get("add_generation_prompt", True),
             **chat_template_kwargs,
         )
-        request["text_after_process"] = prompt
+        request["prompt_tokens"] = prompt
 
         outputs = self.text2ids(prompt, images, videos, image_uuid, video_uuid)
 
