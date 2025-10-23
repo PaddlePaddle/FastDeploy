@@ -667,6 +667,7 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
 
 
 void SpeculateVerify(
+    const paddle::Tensor &sampled_token_ids,
     const paddle::Tensor &accept_tokens, const paddle::Tensor &accept_num,
     const paddle::Tensor &step_idx, const paddle::Tensor &stop_flags,
     const paddle::Tensor &seq_lens_encoder,
