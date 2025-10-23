@@ -164,8 +164,6 @@ class TestQwenVLProcessor(unittest.TestCase):
         self.assertEqual(
             result.multimodal_inputs["image_type_ids"].shape[0], result.multimodal_inputs["grid_thw"][:, 0].sum()
         )
-        self.assertEqual(result.multimodal_inputs["pic_cnt"], 1)
-        self.assertEqual(result.multimodal_inputs["video_cnt"], 1)
 
     def test_process_request_dict(self):
         """
@@ -205,8 +203,6 @@ class TestQwenVLProcessor(unittest.TestCase):
         self.assertEqual(
             result["multimodal_inputs"]["image_type_ids"].shape[0], result["multimodal_inputs"]["grid_thw"][:, 0].sum()
         )
-        self.assertEqual(result["multimodal_inputs"]["pic_cnt"], 1)
-        self.assertEqual(result["multimodal_inputs"]["video_cnt"], 1)
 
     def test_prompt(self):
         """
@@ -241,8 +237,6 @@ class TestQwenVLProcessor(unittest.TestCase):
         self.assertEqual(
             result.multimodal_inputs["image_type_ids"].shape[0], result.multimodal_inputs["grid_thw"][:, 0].sum()
         )
-        self.assertEqual(result.multimodal_inputs["pic_cnt"], 1)
-        self.assertEqual(result.multimodal_inputs["video_cnt"], 1)
 
     def test_message_and_prompt(self):
         """

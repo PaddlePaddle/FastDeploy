@@ -192,7 +192,6 @@ class DataProcessor:
             "image_type_ids": [],
             "labels": [],
             "cur_position": 0,
-            "pic_cnt": 0,
             "video_cnt": 0,
             "mm_positions": [],
             "mm_hashes": [],

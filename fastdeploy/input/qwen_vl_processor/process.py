@@ -141,7 +141,6 @@ class DataProcessor:
             "image_type_ids": [],
             "labels": [],
             "cur_position": 0,
-            "pic_cnt": 0,
             "video_cnt": 0,
             "fps": [],
             "mm_positions": [],
@@ -312,9 +311,9 @@ class DataProcessor:
         outputs["input_ids"].extend(tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * num_tokens)
 
-        position_ids = self._compute_text_positions(outputs["cur_position"], num_tokens)
-        outputs["position_ids"].append(position_ids)
-        outputs["cur_position"] = position_ids.max() + 1
+        pos_ids = self._compute_text_positions(outputs["cur_position"], num_tokens)
+        outputs["position_ids"].append(pos_ids)
+        outputs["cur_position"] = pos_ids.max() + 1
 
     def _compute_text_positions(self, start_pos: int, num_tokens: int) -> np.ndarray:
         """

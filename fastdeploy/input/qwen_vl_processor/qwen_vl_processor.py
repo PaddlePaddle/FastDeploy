@@ -276,7 +276,7 @@ class QwenVLProcessor(TextProcessor):
 
         return request
 
-    def append_completion_tokens(self, outputs, completion_token_ids):
+    def append_completion_tokens(self, multimodal_inputs, completion_token_ids):
         """
         Append completion tokens to existing outputs.
 
@@ -284,19 +284,14 @@ class QwenVLProcessor(TextProcessor):
             outputs: Current model outputs
             completion_token_ids: completion tokens to append
         """
-        out = {"input_ids": [], "token_type_ids": [], "position_ids": [], "cur_position": outputs["cur_position"]}
-        self.processor._add_text(completion_token_ids, out)
 
-        outputs["input_ids"] = np.concatenate(
-            [outputs["input_ids"], np.array(out["input_ids"], dtype=np.int64)], axis=0
-        )
-        outputs["token_type_ids"] = np.concatenate(
-            [outputs["token_type_ids"], np.array(out["token_type_ids"], dtype=np.int64)], axis=0
-        )
-        outputs["position_ids"] = np.concatenate(
-            [outputs["position_ids"], out["position_ids"][0]], axis=1, dtype=np.int64
-        )
-        outputs["cur_position"] = out["cur_position"]
+        num_tokens = len(completion_token_ids)
+        multimodal_inputs["input_ids"].extend(completion_token_ids)
+        multimodal_inputs["token_type_ids"].extend([0] * num_tokens)
+
+        pos_ids = self.processor._compute_text_positions(multimodal_inputs["cur_position"], num_tokens)
+        multimodal_inputs["position_ids"].append(pos_ids)
+        multimodal_inputs["cur_position"] += num_tokens
 
     def pack_outputs(self, outputs):
         """
