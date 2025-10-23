@@ -1119,16 +1119,16 @@ class PrefixCacheManager:
     def _revert_match_blocks(
         self,
         request,
-        matched_token_num,
-        block_size,
-        chunk_idx,
-        match_node_ids,
-        matche_nodes,
-        match_gpu_block_ids,
-        match_cpu_block_ids,
-        gpu_match_token_num,
-        cpu_match_token_num,
-        swap_node_ids,
+        matched_token_num: int,
+        block_size: int,
+        chunk_idx: int,
+        match_node_ids: list,
+        matche_nodes: list,
+        match_gpu_block_ids: list,
+        match_cpu_block_ids: list,
+        gpu_match_token_num: int,
+        cpu_match_token_num: int,
+        swap_node_ids: list,
     ):
         position = request.multimodal_inputs["mm_positions"][chunk_idx]
         revert_tokens = matched_token_num - position.offset
@@ -1161,7 +1161,7 @@ class PrefixCacheManager:
                 swap_node_ids.remove(revert_block_id)
 
         if revert_tokens > 0:
-            last_block_id = match_block_ids[-1]
+            last_block_id = matche_nodes[-1].block_id
             if last_block_id in match_gpu_block_ids:
                 gpu_match_token_num -= revert_tokens
             elif last_block_id in match_cpu_block_ids:
@@ -1171,6 +1171,7 @@ class PrefixCacheManager:
                     f"req_id {request.request_id} revert nodes error, revert_tokens: {revert_tokens}, nodes: {last_block_id}, "
                     f"match_gpu_block_ids: {match_gpu_block_ids}, match_cpu_block_ids: {match_cpu_block_ids}"
                 )
+        return gpu_match_token_num, cpu_match_token_num
 
     def mm_match_block(self, request, block_size):
         """
@@ -1262,7 +1263,7 @@ class PrefixCacheManager:
             matched_token_num = gpu_match_token_num + cpu_match_token_num
             is_chunked, chunk_idx = self.is_chunked_mm_input(request.multimodal_inputs, matched_token_num)
             if is_chunked:
-                self._revert_match_blocks(
+                gpu_match_token_num, cpu_match_token_num = self._revert_match_blocks(
                     request=request,
                     matched_token_num=matched_token_num,
                     block_size=block_size,
