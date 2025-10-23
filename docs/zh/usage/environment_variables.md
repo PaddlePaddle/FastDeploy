@@ -78,7 +78,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ENABLE_MODEL_LOAD_CACHE": lambda: bool(int(os.getenv("FD_ENABLE_MODEL_LOAD_CACHE", "0"))),
 
     # 是否使用 Machete 后端的 wint4 GEMM.
-    "FD_USE_MACHETE": lambda: os.getenv("FD_USE_MACHETE", "0"),
+    "FD_USE_MACHETE": lambda: os.getenv("FD_USE_MACHETE", "1"),
 
     # Used to truncate the string inserted during thinking when reasoning in a model. (</think> for ernie4_5_vl, \n</think>\n\n for ernie_x1)
     "FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR": lambda: os.getenv("FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR", "</think>"),
@@ -87,6 +87,5 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_CACHE_PROC_EXIT_TIMEOUT": lambda: int(os.getenv("FD_CACHE_PROC_EXIT_TIMEOUT", "600")),
 
     # cache_transfer_manager 进程残留时连续错误阈值
-    "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),
-}
+    "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),}
 ```
