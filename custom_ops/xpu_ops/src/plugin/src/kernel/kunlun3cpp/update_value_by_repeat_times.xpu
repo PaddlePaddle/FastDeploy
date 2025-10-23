@@ -6,16 +6,16 @@
 namespace xpu3 {
 namespace plugin {
 
-__device__ void do_cast(const int* xlm, float* ylm, int64_t len) {
-    for (int64_t i = 0; i < len; i += 32) {
-        int32x16_t xl = vload_lm_int32x16(xlm + i);
-        int32x16_t xh = vload_lm_int32x16(xlm + i + 16);
-        float32x16_t yl = vfix2float(xl);
-        float32x16_t yh = vfix2float(xh);
-        vstore_lm_float32x16(ylm + i, yl);
-        vstore_lm_float32x16(ylm + i + 16, yh);
-    }
-    mfence_lm();
+__device__ void do_cast(const int *xlm, float *ylm, int64_t len) {
+  for (int64_t i = 0; i < len; i += 32) {
+    int32x16_t xl = vload_lm_int32x16(xlm + i);
+    int32x16_t xh = vload_lm_int32x16(xlm + i + 16);
+    float32x16_t yl = vfix2float(xl);
+    float32x16_t yh = vfix2float(xh);
+    vstore_lm_float32x16(ylm + i, yl);
+    vstore_lm_float32x16(ylm + i + 16, yh);
+  }
+  mfence_lm();
 }
 
 template <typename T>
@@ -124,7 +124,8 @@ __global__ void update_value_by_repeat_times_simd(
   int nthreads = cluster_num() * ncores;
   int start = -1;
   int end = -1;
-  partition(thread_id, nthreads, static_cast<int>(bs * length), 16, &start, &end);
+  partition(
+      thread_id, nthreads, static_cast<int>(bs * length), 16, &start, &end);
 
   const int param_len = 256;
   // ncores = 64 for xpu3
@@ -178,14 +179,28 @@ __global__ void update_value_by_repeat_times_simd(
       alpha = alpha_buf[param_idx];
       beta = beta_buf[param_idx];
       gamma = gamma_buf[param_idx];
-      time_mask = svneq_float32x16(0.f, time_); // time != 0 mask
-      logit_mask = svle_float32x16(0.f, logits_); // logit >= 0 mask
-      time_ = svmul_float32x16(beta, time_); // time * beta
-      time_ = svadd_float32x16(gamma, time_); // time * beta + gamma
-      logits_ = svmul_float32x16_mh(alpha, logits_, logits_, (time_mask & ~logit_mask)); // when time != 0 && logit < 0, do alpha * logit
-      logits_ = svmul_float32x16_mh(1.0f / alpha, logits_, logits_, (time_mask & logit_mask)); // when time != 0 && >=0, do logit / alpha
-      logits_ = vvsub_float32x16_mh(logits_, time_, logits_, time_mask); // when time != 0, do logit = logit - time * beta - gamma;
-      logits_ = svmul_float32x16(1.0f / temperature, logits_); // logit / temperature
+      time_mask = svneq_float32x16(0.f, time_);    // time != 0 mask
+      logit_mask = svle_float32x16(0.f, logits_);  // logit >= 0 mask
+      time_ = svmul_float32x16(beta, time_);       // time * beta
+      time_ = svadd_float32x16(gamma, time_);      // time * beta + gamma
+      logits_ = svmul_float32x16_mh(
+          alpha,
+          logits_,
+          logits_,
+          (time_mask & ~logit_mask));  // when time != 0 && logit < 0, do
+                                       // alpha * logit
+      logits_ = svmul_float32x16_mh(
+          1.0f / alpha,
+          logits_,
+          logits_,
+          (time_mask & logit_mask));  // when time != 0 && >=0, do logit / alpha
+      logits_ = vvsub_float32x16_mh(logits_,
+                                    time_,
+                                    logits_,
+                                    time_mask);  // when time != 0, do logit =
+                                                 // logit - time * beta - gamma;
+      logits_ = svmul_float32x16(1.0f / temperature,
+                                 logits_);  // logit / temperature
       vstore_lm_float32x16(logits_lm + j, logits_);
     }
     mfence_lm();
@@ -195,14 +210,14 @@ __global__ void update_value_by_repeat_times_simd(
 }
 
 #define _XPU_DEF__UPDATE_VALUE_BY_REPEAT_TIMES_SIMD(DATA_TYPE) \
-  template __global__ void update_value_by_repeat_times_simd(   \
-      const int *repeat_times,                             \
-      const DATA_TYPE *penalty_scores,                     \
-      const DATA_TYPE *frequency_score,                    \
-      const DATA_TYPE *presence_score,                     \
-      const float *temperatures,                           \
-      DATA_TYPE *logits,                                   \
-      const int64_t bs,                                    \
+  template __global__ void update_value_by_repeat_times_simd(  \
+      const int *repeat_times,                                 \
+      const DATA_TYPE *penalty_scores,                         \
+      const DATA_TYPE *frequency_score,                        \
+      const DATA_TYPE *presence_score,                         \
+      const float *temperatures,                               \
+      DATA_TYPE *logits,                                       \
+      const int64_t bs,                                        \
       const int64_t length);
 _XPU_DEF__UPDATE_VALUE_BY_REPEAT_TIMES_SIMD(float);
 _XPU_DEF__UPDATE_VALUE_BY_REPEAT_TIMES_SIMD(float16);

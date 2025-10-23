@@ -155,11 +155,12 @@ jobs:
           ./llm-deploy-linux-amd64 -python python3.10 \
           -model_name ERNIE-4.5-0.3B-Paddle \
           -model_path /MODELDATA \
-          --skip install
+          --skip install,model
 
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
           pushd tests/ce/deploy
+          ps -ef | grep "${FD_CACHE_QUEUE_PORT}" | grep -v grep | awk "{print \$2}" | xargs -r kill -9
           ps -ef | grep "${FD_ENGINE_QUEUE_PORT}" | grep -v grep | awk "{print \$2}" | xargs -r kill -9
           python3.10 deploy.py > dd.log 2>&1 &
           sleep 3

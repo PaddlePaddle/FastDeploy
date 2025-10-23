@@ -145,7 +145,7 @@ jobs:
           ./llm-deploy-linux-amd64 -python python3.10 \
           -model_name ERNIE-4.5-0.3B-Paddle \
           -model_path /MODELDATA \
-          --skip install
+          --skip install,model
 
           cd PaddleTest/framework/ServeTest
           ps -ef | grep "${FD_CACHE_QUEUE_PORT}" | grep -v grep | awk "{print \$2}" | xargs -r kill -9
