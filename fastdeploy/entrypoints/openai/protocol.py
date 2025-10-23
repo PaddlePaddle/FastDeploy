@@ -66,6 +66,8 @@ class PromptTokenUsageInfo(BaseModel):
     """
 
     cached_tokens: Optional[int] = None
+    image_tokens: Optional[int] = None
+    video_tokens: Optional[int] = None
 
 
 class UsageInfo(BaseModel):

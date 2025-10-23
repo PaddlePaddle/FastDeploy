@@ -180,6 +180,8 @@ class DataProcessor:
             "cur_position": 0,
             "pic_cnt": 0,
             "video_cnt": 0,
+            "num_image_tokens": 0,
+            "num_video_tokens": 0,
         }
 
         IMAGE_PLACEHOLDER = "<|image@placeholder|>"
@@ -234,6 +236,8 @@ class DataProcessor:
             "cur_position": 0,
             "pic_cnt": 0,
             "video_cnt": 0,
+            "num_image_tokens": 0,
+            "num_video_tokens": 0,
         }
 
         messages = parse_chat_messages(request.get("messages"))
@@ -315,6 +319,7 @@ class DataProcessor:
 
         outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
+        outputs["num_image_tokens"] += num_tokens
 
         pos_ids = self._compute_3d_positions(1, patches_h, patches_w, outputs["cur_position"])
         outputs["position_ids"].extend(pos_ids)
@@ -359,6 +364,7 @@ class DataProcessor:
 
         outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
+        outputs["num_video_tokens"] += num_tokens
 
         pos_ids = self._compute_3d_positions(num_frames, patches_h, patches_w, outputs["cur_position"])
         outputs["position_ids"].extend(pos_ids)

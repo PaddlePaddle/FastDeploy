@@ -445,10 +445,8 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         for idx, case in enumerate(test_cases):
             actual_choice = await self.chat_serving._create_chat_completion_choice(
-                output=case["test_data"]["outputs"],
-                index=idx,
+                data=case["test_data"],
                 request=case["mock_request"],
-                previous_num_tokens=case["test_data"]["previous_num_tokens"],
                 prompt_token_ids=prompt_token_ids,
                 prompt_tokens=prompt_tokens,
                 completion_token_ids=completion_token_ids[idx],
