@@ -261,7 +261,7 @@ jobs:
               echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_ENV
             fi
           fi
-          
+
           HAS_FAILED_TESTS=false
           unittest_result="failed_tests.log"
           if [ -s ${unittest_result} ]; then
