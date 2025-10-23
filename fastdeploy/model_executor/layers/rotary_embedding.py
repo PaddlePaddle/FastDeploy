@@ -520,9 +520,9 @@ def get_rope_3d(
     return rotary_emb_3d
 
 
-class MMRotaryEmbedding3D:
+class Ernie5RotaryEmbedding3D:
     """
-    MMRotaryEmbedding3D
+    Ernie5RotaryEmbedding3D
     """
 
     def __init__(
