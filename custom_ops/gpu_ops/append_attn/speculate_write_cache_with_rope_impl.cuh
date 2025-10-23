@@ -27,7 +27,7 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
     T* __restrict__ value_cache,  // [num_blocks, gqa_group_size, block_size,
                                   // head_size // 2]
     T* __restrict__ q_out,
-    const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
+    const int* __restrict__ block_tables,        // [bsz, max_blocks_per_seq]
     const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens_decoder,  // [bsz]
@@ -68,7 +68,8 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
 
   const int64_t hidden_size = (num_heads + 2 * gqa_group_size) * head_size;
   const int half_head_size = head_size / 2;
-  for (int global_hi = global_warp_idx; global_hi < all_head_dim; global_hi += all_warp_num) {
+  for (int global_hi = global_warp_idx; global_hi < all_head_dim;
+       global_hi += all_warp_num) {
     int64_t linear_index = global_hi * head_size + threadIdx.x * VecSize;
     const int token_id = linear_index / hidden_size;
     const int ori_bi = batch_id_per_token[token_id];
@@ -85,7 +86,7 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
     const int* block_table_now = block_tables + ori_bi * max_blocks_per_seq;
     const int block_idx = block_table_now[write_seq_id / block_size];
     if (block_idx < 0) {
-      return ;  // NOTE(gongshaotian): For CUDAGraph padding
+      return;  // NOTE(gongshaotian): For CUDAGraph padding
     }
     const int block_offset = write_seq_id % block_size;
 
@@ -103,7 +104,8 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
     if (hi < num_heads + gqa_group_size) {
       // q k rope
       const int64_t emb_idx = write_seq_id * half_head_size + h_bias / 2;
-      uint32_t new_emb_idx = rope_3d ? emb_idx + ori_bi * max_seq_len * head_size : emb_idx;
+      uint32_t new_emb_idx =
+          rope_3d ? emb_idx + ori_bi * max_seq_len * head_size : emb_idx;
       Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
       Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
     }
@@ -137,20 +139,23 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
     }
     if (hi < (num_heads + gqa_group_size)) {
       WelfordWarpAllReduce<float, 32>(thread_m2, &warp_m2);
-      float row_variance =
-          max(warp_m2 / head_size, 0.0f);
+      float row_variance = max(warp_m2 / head_size, 0.0f);
       float row_inv_var = Rsqrt(row_variance + rms_norm_eps);
       if (hi < num_heads) {
-        Load<float, VecSize>(&q_norm_weight[threadIdx.x * VecSize], &q_norm_vec);
-        #pragma unroll
+        Load<float, VecSize>(&q_norm_weight[threadIdx.x * VecSize],
+                             &q_norm_vec);
+#pragma unroll
         for (int i = 0; i < VecSize; i++) {
-          bias_vec[i] = static_cast<T>(tmp_vec[i] * row_inv_var * q_norm_vec[i]);
+          bias_vec[i] =
+              static_cast<T>(tmp_vec[i] * row_inv_var * q_norm_vec[i]);
         }
       } else {
-        Load<float, VecSize>(&k_norm_weight[threadIdx.x * VecSize], &k_norm_vec);
-        #pragma unroll
+        Load<float, VecSize>(&k_norm_weight[threadIdx.x * VecSize],
+                             &k_norm_vec);
+#pragma unroll
         for (int i = 0; i < VecSize; i++) {
-          bias_vec[i] = static_cast<T>(tmp_vec[i] * row_inv_var * k_norm_vec[i]);
+          bias_vec[i] =
+              static_cast<T>(tmp_vec[i] * row_inv_var * k_norm_vec[i]);
         }
       }
     }
@@ -180,7 +185,7 @@ __global__ void append_clear_cache_int8_block(
     uint8_t* __restrict__ value_cache,  // [num_blocks, gqa_group_size,
                                         // block_size, head_size // 2]
     const int* __restrict__ seq_lens,
-    const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
+    const int* __restrict__ block_tables,        // [bsz, max_blocks_per_seq]
     const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens_encoder,  // [bsz]
@@ -246,7 +251,6 @@ __global__ void append_clear_cache_int8_block(
   }
 }
 
-
 template <int VecSize = 4, int HeadDim = 128>
 __global__ void append_clear_cache_int4_block(
     uint8_t* __restrict__ key_cache,    // [num_blocks, gqa_group_size,
@@ -254,7 +258,7 @@ __global__ void append_clear_cache_int4_block(
     uint8_t* __restrict__ value_cache,  // [num_blocks, gqa_group_size,
                                         // block_size, head_size // 2]
     const int* __restrict__ seq_lens,
-    const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
+    const int* __restrict__ block_tables,        // [bsz, max_blocks_per_seq]
     const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens_encoder,  // [bsz]
@@ -332,7 +336,7 @@ __global__ void append_speculate_cache_rope_kernel(
     T* __restrict__ value_cache,  // [num_blocks, gqa_group_size, block_size,
                                   // head_size // 2]
     T* __restrict__ q_out,
-    const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
+    const int* __restrict__ block_tables,        // [bsz, max_blocks_per_seq]
     const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens_decoder,  // [bsz]
@@ -383,7 +387,7 @@ __global__ void append_speculate_cache_rope_kernel(
     const int* block_table_now = block_tables + ori_bi * max_blocks_per_seq;
     const int block_idx = block_table_now[write_seq_id / block_size];
     if (block_idx < 0) {
-      return ;  // NOTE(gongshaotian): For CUDAGraph padding
+      return;  // NOTE(gongshaotian): For CUDAGraph padding
     }
     const int block_offset = write_seq_id % block_size;
 
@@ -401,7 +405,8 @@ __global__ void append_speculate_cache_rope_kernel(
     if (hi < num_heads + gqa_group_size) {
       // q k rope
       const int64_t emb_idx = write_seq_id * half_head_size + h_bias / 2;
-      int64_t new_emb_idx = rope_3d ? emb_idx + ori_bi * max_seq_len * head_size : emb_idx;
+      int64_t new_emb_idx =
+          rope_3d ? emb_idx + ori_bi * max_seq_len * head_size : emb_idx;
       Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
       Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
     }
@@ -459,7 +464,7 @@ __global__ void append_speculate_cache_neox_rope_kernel(
     T* __restrict__ value_cache,  // [num_blocks, gqa_group_size, block_size,
                                   // head_size // 2]
     T* __restrict__ qkv_out,
-    const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
+    const int* __restrict__ block_tables,        // [bsz, max_blocks_per_seq]
     const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens_decoder,  // [bsz]
@@ -510,7 +515,7 @@ __global__ void append_speculate_cache_neox_rope_kernel(
     const int* block_table_now = block_tables + ori_bi * max_blocks_per_seq;
     const int block_idx = block_table_now[write_seq_id / block_size];
     if (block_idx < 0) {
-      return ;  // NOTE(gongshaotian): For CUDAGraph padding
+      return;  // NOTE(gongshaotian): For CUDAGraph padding
     }
     const int block_offset = write_seq_id % block_size;
 
@@ -532,7 +537,8 @@ __global__ void append_speculate_cache_neox_rope_kernel(
     if (hi < num_heads + gqa_group_size) {
       // q k rope
       const int64_t emb_idx = write_seq_id * head_size + h_bias;
-      int64_t new_emb_idx = rope_3d ? emb_idx + ori_bi * max_seq_len * head_size * 2: emb_idx;
+      int64_t new_emb_idx =
+          rope_3d ? emb_idx + ori_bi * max_seq_len * head_size * 2 : emb_idx;
       Load<float, VecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
       Load<float, VecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
     }
@@ -592,14 +598,14 @@ template <typename T,
           int HeadDim = 128,
           bool IsFP8 = false>
 __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
-    const T* __restrict__ quant_qkv,  // [num_head, num_heads + 2 *
+    const T* __restrict__ quant_qkv,    // [num_head, num_heads + 2 *
                                         // gqa_group_size, head_size]
     uint8_t* __restrict__ key_cache,    // [num_blocks, gqa_group_size,
                                         // block_size, head_size // 2]
     uint8_t* __restrict__ value_cache,  // [num_blocks, gqa_group_size,
                                         // block_size, head_size // 2]
     T* __restrict__ qkv_out,
-    const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
+    const int* __restrict__ block_tables,        // [bsz, max_blocks_per_seq]
     const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
@@ -628,7 +634,7 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
   const int token_id = blockIdx.x;
 
   const int bid = batch_id_per_token[token_id];
-  if (bid == -1) return; // NOTE(gongshaotian): For CUDAGraph padding
+  if (bid == -1) return;  // NOTE(gongshaotian): For CUDAGraph padding
 
   const int start_token_idx = cu_seqlens_q[bid];
   const int head_idx = blockIdx.y * NUM_WARPS + wid;
@@ -646,10 +652,12 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
   if (head_idx < num_heads) {
     cache_offset = 0;
   } else if (head_idx < num_heads + 2 * gqa_group_size) {
-    cache_offset = block_idx * gqa_group_size * block_size + (head_idx - num_heads) % gqa_group_size * block_size + block_offset;
+    cache_offset = block_idx * gqa_group_size * block_size +
+                   (head_idx - num_heads) % gqa_group_size * block_size +
+                   block_offset;
   }
-  T *cache_k_scale_now = cache_k_scale + cache_offset;
-  T *cache_v_scale_now = cache_v_scale + cache_offset;
+  T* cache_k_scale_now = cache_k_scale + cache_offset;
+  T* cache_v_scale_now = cache_v_scale + cache_offset;
 
   float thread_m2 = 0.0f;
   float warp_m2 = 0.0f;
@@ -677,7 +685,8 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
 
       // q rope
       const uint32_t emb_idx = write_seq_id * half_head_size + head_bias / 2;
-      uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
+      uint32_t new_emb_idx =
+          rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
       Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
       Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
 #pragma unroll
@@ -690,22 +699,20 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
         float tmp1 = input_left * cos_tmp - input_right * sin_tmp;
         float tmp2 = input_right * cos_tmp + input_left * sin_tmp;
         thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
-        bias_vec[2 * i] =
-            static_cast<T>(tmp1);
-        bias_vec[2 * i + 1] =
-            static_cast<T>(tmp2);
+        bias_vec[2 * i] = static_cast<T>(tmp1);
+        bias_vec[2 * i + 1] = static_cast<T>(tmp2);
       }
       // qk norm
       if (q_norm_weight) {
         WelfordWarpAllReduce<float, 32>(thread_m2, &warp_m2);
-        float row_variance =
-            max(warp_m2 / HeadDim, 0.0f);
+        float row_variance = max(warp_m2 / HeadDim, 0.0f);
         float row_inv_var = Rsqrt(row_variance + rms_norm_eps);
         LoadOutScaleT q_norm_vec;
         Load<float, VecSize>(&q_norm_weight[lane_id * VecSize], &q_norm_vec);
-        #pragma unroll
+#pragma unroll
         for (int i = 0; i < VecSize; i++) {
-          bias_vec[i] = static_cast<T>(static_cast<float>(bias_vec[i]) * row_inv_var * q_norm_vec[i]);
+          bias_vec[i] = static_cast<T>(static_cast<float>(bias_vec[i]) *
+                                       row_inv_var * q_norm_vec[i]);
         }
       }
       Store<T, VecSize>(bias_vec, &qkv_out_now[bias_idx]);
@@ -741,7 +748,8 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
     const int v_head_idx = head_idx - num_heads - gqa_group_size;
     if (head_idx < num_heads + gqa_group_size) {
       const uint32_t emb_idx = write_seq_id * half_head_size + head_bias / 2;
-      uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
+      uint32_t new_emb_idx =
+          rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
       Load<float, 1>(&cos_emb[new_emb_idx], &cos_emb_vec1);
       Load<float, 1>(&cos_emb[new_emb_idx + 4], &cos_emb_vec2);
       Load<float, 1>(&sin_emb[new_emb_idx], &sin_emb_vec1);
@@ -756,10 +764,8 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
       float tmp1 = input_left * cos_tmp - input_right * sin_tmp;
       float tmp2 = input_right * cos_tmp + input_left * sin_tmp;
       thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
-      bias_vec1[0] =
-          static_cast<T>(tmp1);
-      bias_vec1[1] =
-          static_cast<T>(tmp2);
+      bias_vec1[0] = static_cast<T>(tmp1);
+      bias_vec1[1] = static_cast<T>(tmp2);
     } else {
       bias_vec1[0] = static_cast<T>(input_left);
       bias_vec1[1] = static_cast<T>(input_right);
@@ -773,10 +779,8 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
       float tmp1 = input_left * cos_tmp - input_right * sin_tmp;
       float tmp2 = input_right * cos_tmp + input_left * sin_tmp;
       thread_m2 += tmp1 * tmp1 + tmp2 * tmp2;
-      bias_vec2[0] =
-          static_cast<T>(tmp1);
-      bias_vec2[1] =
-          static_cast<T>(tmp2);
+      bias_vec2[0] = static_cast<T>(tmp1);
+      bias_vec2[1] = static_cast<T>(tmp2);
     } else {
       bias_vec2[0] = static_cast<T>(input_left);
       bias_vec2[1] = static_cast<T>(input_right);
@@ -785,16 +789,18 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
       if (head_idx < num_heads + gqa_group_size) {
         LoadOutScaleT k_norm_vec1, k_norm_vec2;
         Load<float, HALF_K_VEC_SIZE>(&k_norm_weight[head_bias], &k_norm_vec1);
-        Load<float, HALF_K_VEC_SIZE>(&k_norm_weight[head_bias + 8], &k_norm_vec2);
+        Load<float, HALF_K_VEC_SIZE>(&k_norm_weight[head_bias + 8],
+                                     &k_norm_vec2);
         // qk norm
         WelfordWarpAllReduce<float, 32>(thread_m2, &warp_m2);
-        float row_variance =
-            max(warp_m2 / HeadDim, 0.0f);
+        float row_variance = max(warp_m2 / HeadDim, 0.0f);
         float row_inv_var = Rsqrt(row_variance + rms_norm_eps);
 
         for (int i = 0; i < HALF_K_VEC_SIZE; i++) {
-          bias_vec1[i] = static_cast<T>(static_cast<float>(bias_vec1[i]) * row_inv_var * k_norm_vec1[i]);
-          bias_vec2[i] = static_cast<T>(static_cast<float>(bias_vec2[i]) * row_inv_var * k_norm_vec2[i]);
+          bias_vec1[i] = static_cast<T>(static_cast<float>(bias_vec1[i]) *
+                                        row_inv_var * k_norm_vec1[i]);
+          bias_vec2[i] = static_cast<T>(static_cast<float>(bias_vec2[i]) *
+                                        row_inv_var * k_norm_vec2[i]);
         }
       }
     }
@@ -807,7 +813,8 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
     }
 #pragma unroll
     for (int m_offset = 16; m_offset > 0; m_offset /= 2) {
-      local_max = __hmax(local_max, __shfl_xor_sync(0xffffffff, local_max, m_offset));
+      local_max =
+          __hmax(local_max, __shfl_xor_sync(0xffffffff, local_max, m_offset));
     }
 
     scale = __hdiv(448, local_max);
@@ -822,8 +829,10 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
 
 #pragma unroll
     for (uint32_t i = 0; i < HALF_K_VEC_SIZE; i++) {
-      cache_vec[i] = QuantToC8<T,true, IsFP8, RoundType>(scale, bias_vec1[i], max_bound, min_bound);
-      cache_vec[i + HALF_K_VEC_SIZE] = QuantToC8<T,true, IsFP8, RoundType>(scale, bias_vec2[i], max_bound, min_bound);
+      cache_vec[i] = QuantToC8<T, true, IsFP8, RoundType>(
+          scale, bias_vec1[i], max_bound, min_bound);
+      cache_vec[i + HALF_K_VEC_SIZE] = QuantToC8<T, true, IsFP8, RoundType>(
+          scale, bias_vec2[i], max_bound, min_bound);
     }
     if (head_idx < num_heads + gqa_group_size) {
       const int start_block_16 =
@@ -868,7 +877,7 @@ __global__ void append_speculate_cache_int8_rope_kernel(
     uint8_t* __restrict__ value_cache,  // [num_blocks, gqa_group_size,
                                         // block_size, head_size // 2]
     T* __restrict__ qkv_out,
-    const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
+    const int* __restrict__ block_tables,        // [bsz, max_blocks_per_seq]
     const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
@@ -934,7 +943,8 @@ __global__ void append_speculate_cache_int8_rope_kernel(
 
       // q rope
       const uint32_t emb_idx = write_seq_id * half_head_size + head_bias / 2;
-      uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
+      uint32_t new_emb_idx =
+          rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
       Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
       Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
       if (qkv_out_scales) {
@@ -996,7 +1006,8 @@ __global__ void append_speculate_cache_int8_rope_kernel(
     T scale;
     if (head_idx < num_heads + gqa_group_size) {
       const uint32_t emb_idx = write_seq_id * half_head_size + head_bias / 2;
-      uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
+      uint32_t new_emb_idx =
+          rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
       Load<float, 1>(&cos_emb[new_emb_idx], &cos_emb_vec1);
       Load<float, 1>(&cos_emb[new_emb_idx + 4], &cos_emb_vec2);
       Load<float, 1>(&sin_emb[new_emb_idx], &sin_emb_vec1);
@@ -1058,8 +1069,10 @@ __global__ void append_speculate_cache_int8_rope_kernel(
     }
 #pragma unroll
     for (uint32_t i = 0; i < HALF_K_VEC_SIZE; i++) {
-      cache_vec[i] = QuantToC8<T,true, IsFP8, RoundType>(scale, bias_vec1[i], max_bound, min_bound);
-      cache_vec[i + HALF_K_VEC_SIZE] = QuantToC8<T,true, IsFP8, RoundType>(scale, bias_vec2[i], max_bound, min_bound);
+      cache_vec[i] = QuantToC8<T, true, IsFP8, RoundType>(
+          scale, bias_vec1[i], max_bound, min_bound);
+      cache_vec[i + HALF_K_VEC_SIZE] = QuantToC8<T, true, IsFP8, RoundType>(
+          scale, bias_vec2[i], max_bound, min_bound);
     }
     if (head_idx < num_heads + gqa_group_size) {
       const int start_block_16 =
@@ -1103,7 +1116,7 @@ __global__ void append_speculate_cache_int8_neox_rope_kernel(
     uint8_t* __restrict__ value_cache,  // [num_blocks, gqa_group_size,
                                         // block_size, head_size // 2]
     T* __restrict__ qkv_out,
-    const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
+    const int* __restrict__ block_tables,        // [bsz, max_blocks_per_seq]
     const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
@@ -1172,7 +1185,8 @@ __global__ void append_speculate_cache_int8_neox_rope_kernel(
 
       // q rope
       const uint32_t emb_idx = write_seq_id * HeadDim + head_bias;
-      uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim * 2 : emb_idx;
+      uint32_t new_emb_idx =
+          rope_3d ? emb_idx + bid * max_seq_len * HeadDim * 2 : emb_idx;
       Load<float, VecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
       Load<float, VecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
       if (qkv_out_scales) {
@@ -1269,7 +1283,8 @@ __global__ void append_speculate_cache_int8_neox_rope_kernel(
 
         T scale;
         const uint32_t emb_idx = write_seq_id * HeadDim + head_bias;
-        uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim * 2 : emb_idx;
+        uint32_t new_emb_idx =
+            rope_3d ? emb_idx + bid * max_seq_len * HeadDim * 2 : emb_idx;
         Load<float, HALF_K_VEC_SIZE>(&cos_emb[new_emb_idx], &cos_emb_vec1);
         Load<float, HALF_K_VEC_SIZE>(&cos_emb[new_emb_idx + 8], &cos_emb_vec2);
         Load<float, HALF_K_VEC_SIZE>(&sin_emb[new_emb_idx], &sin_emb_vec1);
@@ -1484,7 +1499,7 @@ __global__ void append_speculate_cache_int4_rope_kernel(
     uint8_t* __restrict__ value_cache,  // [num_blocks, gqa_group_size,
                                         // block_size, head_size // 2]
     T* __restrict__ qkv_out,
-    const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
+    const int* __restrict__ block_tables,        // [bsz, max_blocks_per_seq]
     const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
@@ -1563,7 +1578,8 @@ __global__ void append_speculate_cache_int4_rope_kernel(
       // Load<float, VecSize>(&qkv_out_scales[bias_idx], &out_scale_vec);
       // q rope
       const uint32_t emb_idx = write_seq_id * half_head_size + head_bias / 2;
-      uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
+      uint32_t new_emb_idx =
+          rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
       Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
       Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
 #pragma unroll
@@ -1654,7 +1670,8 @@ __global__ void append_speculate_cache_int4_rope_kernel(
     //                              &out_scale_vec2);
     if (head_idx < num_heads + gqa_group_size) {
       const uint32_t emb_idx = write_seq_id * half_head_size + head_bias / 2;
-      uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
+      uint32_t new_emb_idx =
+          rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
       Load<float, 1>(&cos_emb[new_emb_idx], &cos_emb_vec1);
       Load<float, 1>(&cos_emb[new_emb_idx + 4], &cos_emb_vec2);
       Load<float, 1>(&sin_emb[new_emb_idx], &sin_emb_vec1);
@@ -1761,7 +1778,6 @@ __global__ void append_speculate_cache_int4_rope_kernel(
       }
       Store<uint8_t, K_VEC_SIZE>(cache_vec, &key_cache[tgt_cache_idx]);
     } else {
-
       const uint32_t base_tgt_cache_idx =
           block_idx * gqa_group_size * HeadDim * half_block_size +
           kv_head_idx * HeadDim * half_block_size +
@@ -1830,7 +1846,7 @@ __global__ void append_speculate_cache_int4_neox_rope_kernel(
     uint8_t* __restrict__ value_cache,  // [num_blocks, gqa_group_size,
                                         // block_size, head_size // 2]
     T* __restrict__ qkv_out,
-    const int* __restrict__ block_tables,     // [bsz, max_blocks_per_seq]
+    const int* __restrict__ block_tables,        // [bsz, max_blocks_per_seq]
     const int* __restrict__ batch_id_per_token,  // [num_tokens]
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
@@ -2002,7 +2018,8 @@ __global__ void append_speculate_cache_int4_neox_rope_kernel(
                                      &right_out_scale_vec2);
 
         const uint32_t emb_idx = write_seq_id * HeadDim + head_bias;
-        uint32_t new_emb_idx = rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
+        uint32_t new_emb_idx =
+            rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
         Load<float, HALF_K_VEC_SIZE>(&cos_emb[new_emb_idx], &cos_emb_vec1);
         Load<float, HALF_K_VEC_SIZE>(&cos_emb[new_emb_idx + 8], &cos_emb_vec2);
         Load<float, HALF_K_VEC_SIZE>(&sin_emb[new_emb_idx], &sin_emb_vec1);
@@ -2039,7 +2056,6 @@ __global__ void append_speculate_cache_int4_neox_rope_kernel(
               static_cast<T>(input_left * cos_tmp - input_right * sin_tmp);
           right_bias_vec1[i] =
               static_cast<T>(input_right * cos_tmp + input_left * sin_tmp);
-
 
           input_left = static_cast<float>(left_src_vec2[i]);
           input_right = static_cast<float>(right_src_vec2[i]);
