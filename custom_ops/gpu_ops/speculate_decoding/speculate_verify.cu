@@ -89,7 +89,6 @@ __global__ void speculate_verify(
 
   if (!(is_block_step[bid] || bid >= real_bsz)) {
     const int start_token_id = bid * max_seq_len - output_cum_offsets[bid];
-    const int64_t* sampled_token_id_now = sampled_token_ids + static_cast<int64_t>(start_token_id);
 
     if (stop_flags[bid]) {
       stop_flag_now_int = 1;
@@ -99,6 +98,7 @@ __global__ void speculate_verify(
           verify_tokens + start_token_id * max_candidate_len;
       auto *draft_tokens_now = draft_tokens + bid * max_draft_tokens;
       auto *actual_candidate_len_now = actual_candidate_len + start_token_id;
+      auto* sampled_token_id_now = sampled_token_ids + start_token_id;
 
       int i = 0;
       // printf("seq_lens_this_time[%d]-1: %d \n",bid,
@@ -254,7 +254,7 @@ __global__ void speculate_verify(
         step_idx[bid]++;
         if (use_target_sampling) {
           accept_token = sampled_token_id_now[i];
-        } else if (ENABLE_TOPP) {
+                  } else if (ENABLE_TOPP) {
           auto actual_candidate_len_value =
               actual_candidate_len_now[i] > max_candidate_len
                   ? max_candidate_len
