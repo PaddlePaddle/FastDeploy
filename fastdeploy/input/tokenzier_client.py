@@ -163,7 +163,7 @@ class AsyncTokenizerClient:
                         resp.raise_for_status()
                         if resp.json().get("code") != 0:
                             raise RuntimeError(f"Tokenize task creation failed, {resp.json().get('message')}")
-                        break
+                        return resp.json().get("result")
                     except Exception as e:
                         data_processor_logger.error(f"Attempt to decode_request {attempt + 1} failed: {e}")
                         if attempt == max_retries - 1:
@@ -171,6 +171,5 @@ class AsyncTokenizerClient:
                                 f"Max retries of decode_request reached. Giving up. request is {request}"
                             )
                         time.sleep(10)
-                return resp.json().get("result")
             except httpx.RequestError as e:
                 raise RuntimeError(f"Failed to decode: {e}") from e
