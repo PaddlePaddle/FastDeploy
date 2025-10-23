@@ -38,9 +38,17 @@ if current_platform.is_xpu():
 else:
     from paddle.nn.quant import weight_only_linear
 
+from fastdeploy.model_executor.layers.quantization.ops.machete_mm import _ENABLE_MACHETE
+
 from ..moe import FusedMoE
 from ..utils import get_tensor
 from .quant_base import QuantConfigBase, QuantMethodBase
+
+if _ENABLE_MACHETE:
+    from fastdeploy.model_executor.layers.quantization.ops import (
+        machete_quantize_and_pack,
+        machete_wint_mm,
+    )
 
 
 class WeightOnlyConfig(QuantConfigBase):
@@ -154,14 +162,11 @@ class WeightOnlyConfig(QuantConfigBase):
                 else:
                     raise ValueError(f"Unsupported MOE backend {layer.use_method}")
             else:
-                from fastdeploy.model_executor.layers.quantization.ops.machete_mm import (
-                    _ENABLE_MACHETE,
-                )
-
                 if (
                     _ENABLE_MACHETE
                     and envs.FD_USE_MACHETE == "1"
                     and not layer.is_quantized
+                    and not layer.fd_config.load_config.dynamic_load_weight
                     and layer.weight_shape[1]
                     and layer.weight_shape[1] % 128 == 0
                 ):
@@ -406,9 +411,6 @@ class MacheteWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         raise NotImplementedError("Machete kernel doesn't support prequant. Please set FD_USE_MACHETE to 0.")
 
     def process_loaded_weights(self, layer, weight) -> None:
-        from fastdeploy.model_executor.layers.quantization.ops import (
-            machete_quantize_and_pack,
-        )
 
         # Using group scale for machete, group size is 128
         quanted_weight_tensor, weight_scale_tensor = machete_quantize_and_pack(
@@ -421,7 +423,6 @@ class MacheteWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         layer.weight_scale.set_value(weight_scale_tensor.astype(paddle.get_default_dtype()))
 
     def apply(self, layer, x):
-        from fastdeploy.model_executor.layers.quantization.ops import machete_wint_mm
 
         # Using group scale for machete, group size is 128
         linear_out = machete_wint_mm(
