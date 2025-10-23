@@ -48,6 +48,7 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```dynamic_load_weight``` | `int` | Whether to enable dynamic weight loading, default: 0 |
 | ```enable_expert_parallel``` | `bool` | Whether to enable expert parallel |
 | ```enable_logprob``` | `bool` | Whether to enable return log probabilities of the output tokens or not. If true, returns the log probabilities of each output token returned in the content of message.If logrpob is not used, this parameter can be omitted when starting |
+| ```logprobs_mode``` | `str` | Indicates the content returned in the logprobs. Supported mode: `raw_logprobs`, `processed_logprobs`, `raw_logits`, `processed_logits`. Raw means the values before applying logit processors, like bad words. Processed means the values after applying such processors. |
 | ```served_model_name```| `str`| The model name used in the API. If not specified, the model name will be the same as the --model argument |
 | ```revision``` | `str` | The specific model version to use. It can be a branch name, a tag name, or a commit id. If unspecified, will use the default version. |
 | ```chat_template``` | `str` | Specify the template used for model concatenation, It supports both string input and file path input. The default value is None. If not specified, the model's default template will be used. |

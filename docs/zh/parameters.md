@@ -46,6 +46,7 @@
 | ```dynamic_load_weight```          | `int`       | 是否动态加载权重，默认0 |
 | ```enable_expert_parallel```       | `bool`      | 是否启用专家并行 |
 | ```enable_logprob```       | `bool`      | 是否启用输出token返回logprob。如果未使用 logrpob，则在启动时可以省略此参数。 |
+| ```logprobs_mode```       | `str`      | 指定logprobs中返回的内容。支持的模式：`raw_logprobs`、`processed_logprobs'、`raw_logits`,`processed_logits'。processed表示logits应用温度、惩罚、禁止词处理后计算的logprobs。|
 | ```served_model_name```       | `str`      | API 中使用的模型名称，如果未指定，模型名称将与--model参数相同 |
 | ```revision```       | `str`      | 自动下载模型时，用于指定模型的Git版本，分支名或tag |
 | ```chat_template```       | `str`      | 指定模型拼接使用的模板，支持字符串与文件路径，默认为None，如未指定，则使用模型默认模板 |
