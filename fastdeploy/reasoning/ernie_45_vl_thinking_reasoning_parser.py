@@ -21,8 +21,8 @@ from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest, DeltaM
 from fastdeploy.reasoning import ReasoningParser, ReasoningParserManager
 
 
-@ReasoningParserManager.register_module("erine-test")
-class ErnieTestReasoningParser(ReasoningParser):
+@ReasoningParserManager.register_module("erine-45-vl-thinking")
+class Ernie45VLThinkingReasoningParser(ReasoningParser):
     """
     Reasoning parser for ernir_vl model.
 
@@ -37,7 +37,6 @@ class ErnieTestReasoningParser(ReasoningParser):
         super().__init__(tokenizer)
         self.think_end_token = "</think>"
         self.tool_begin_token = "<tool_call>"
-        self.newline_char = "\n"
 
         if not self.model_tokenizer:
             raise ValueError(
@@ -45,12 +44,9 @@ class ErnieTestReasoningParser(ReasoningParser):
             )
 
         self.think_end_token_id = self.vocab.get(self.think_end_token)
-        self.tool_begin_token_id = self.vocab.get(self.tool_begin_token)
 
         if self.think_end_token_id is None:
             raise RuntimeError("Test reasoning parser could not locate think end tokens in the tokenizer!")
-        if self.tool_begin_token_id is None:
-            raise RuntimeError("Test reasoning parser could not locate tool begin tokens in the tokenizer!")
 
     def is_reasoning_end(self, input_ids: list[int]) -> bool:
         return self.think_end_token_id in input_ids
@@ -75,14 +71,14 @@ class ErnieTestReasoningParser(ReasoningParser):
         # Skip single special tokens
         if len(delta_token_ids) == 1 and delta_token_ids[0] == self.think_end_token_id:
             return None
-        if self.tool_begin_token_id in previous_token_ids:
+        if self.tool_begin_token in previous_text:
             return None
         if self.think_end_token_id in delta_token_ids:
             end_index = delta_text.find(self.think_end_token)
             reasoning_content = delta_text[:end_index]
             index = end_index + len(self.think_end_token)
-            content = delta_text[index:].lstrip(self.newline_char)
-            if self.tool_begin_token_id in delta_token_ids:
+            content = delta_text[index:].lstrip("\n")
+            if self.tool_begin_token in content:
                 if len(reasoning_content) > 0:
                     return DeltaMessage(reasoning_content=reasoning_content)
                 else:
@@ -92,8 +88,8 @@ class ErnieTestReasoningParser(ReasoningParser):
             else:
                 return None
         elif self.think_end_token_id in previous_token_ids:
-            content = delta_text.lstrip(self.newline_char)
-            if self.tool_begin_token_id in delta_token_ids:
+            content = delta_text.lstrip("\n")
+            if self.tool_begin_token in delta_text:
                 return None
             elif content:
                 return DeltaMessage(content=delta_text)
@@ -118,7 +114,11 @@ class ErnieTestReasoningParser(ReasoningParser):
 
         # Check if the model output contains the </think> tokens.
         if self.think_end_token not in model_output:
-            return "", model_output
+            if self.tool_begin_token not in model_output:
+                return "", model_output
+            else:
+                content, _, _ = model_output.partition(self.tool_begin_token)
+                return "", content
         reasoning_content, _, content = model_output.partition(self.think_end_token)
         if self.tool_begin_token not in content:
             final_content = content or ""
