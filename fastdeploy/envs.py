@@ -55,7 +55,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Set moe backend."cutlass","marlin" and "triton" can be set currently.
     "FD_MOE_BACKEND": lambda: os.getenv("FD_MOE_BACKEND", "cutlass"),
     # Whether to use Machete for wint4 dense gemm.
-    "FD_USE_MACHETE": lambda: os.getenv("FD_USE_MACHETE", "0"),
+    "FD_USE_MACHETE": lambda: os.getenv("FD_USE_MACHETE", "1"),
     # Set whether to disable recompute the request when the KV cache is full.
     "FD_DISABLED_RECOVER": lambda: os.getenv("FD_DISABLED_RECOVER", "0"),
     # Set triton kernel JIT compilation directory.
