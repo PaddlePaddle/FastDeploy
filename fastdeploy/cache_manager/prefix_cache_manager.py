@@ -1159,11 +1159,11 @@ class PrefixCacheManager:
 
         assert start_idx < end_idx, f"start_idx {start_idx} >= end_idx {end_idx}"
         assert (
-            start_idx >= 0 and start_idx < request.prompt_token_ids_len
-        ), f"start_idx {start_idx} out of range {request.prompt_token_ids_len}"
+            start_idx >= 0 and start_idx < request.num_total_tokens
+        ), f"start_idx {start_idx} out of range {request.num_total_tokens}"
         assert (
-            end_idx >= 0 and end_idx <= request.prompt_token_ids_len
-        ), f"end_idx {end_idx} out of range {request.prompt_token_ids_len}"
+            end_idx >= 0 and end_idx <= request.num_total_tokens
+        ), f"end_idx {end_idx} out of range {request.num_total_tokens}"
         assert len(mm_inputs["mm_positions"]) == len(
             mm_inputs["mm_hashes"]
         ), f"mm_positions {len(mm_inputs['mm_positions'])} != mm_hashes {len(mm_inputs['mm_hashes'])}"
