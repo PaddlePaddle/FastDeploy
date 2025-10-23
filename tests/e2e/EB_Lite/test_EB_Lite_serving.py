@@ -30,7 +30,7 @@ import requests
 FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8133))
 FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
-FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8234))
+FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8334))
 
 # List of ports to clean before and after tests
 PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT]
@@ -55,8 +55,14 @@ def kill_process_on_port(port: int):
     """
     try:
         output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
+        current_pid = os.getpid()
+        parent_pid = os.getppid()
         for pid in output.splitlines():
-            os.kill(int(pid), signal.SIGKILL)
+            pid = int(pid)
+            if pid in (current_pid, parent_pid):
+                print(f"Skip killing current process (pid={pid}) on port {port}")
+                continue
+            os.kill(pid, signal.SIGKILL)
             print(f"Killed process on port {port}, pid={pid}")
     except subprocess.CalledProcessError:
         pass
@@ -113,7 +119,7 @@ def setup_and_run_server():
         "--quantization",
         "wint4",
         "--graph-optimization-config",
-        '{"cudagraph_capture_sizes": [1]}',
+        '{"cudagraph_capture_sizes": [1], "use_cudagraph":true}',
         "--guided-decoding-backend",
         "auto",
     ]
