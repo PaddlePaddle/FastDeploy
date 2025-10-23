@@ -371,9 +371,9 @@ class EngineWorkerQueue:
         tasks: List[Any] = list()
         self.lock.acquire()
 
-        # 多模态输入转换为numpy
         tasks.extend(self.tasks)
-        EngineWorkerQueue.to_numpy(tasks)
+        # 多模态输入转换为numpy
+        # EngineWorkerQueue.to_numpy(tasks)
 
         self.client_read_flag[self.client_id] = 1
         all_client_read: bool = np.sum(self.client_read_flag) == self.num_client
