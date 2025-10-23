@@ -362,7 +362,7 @@ class PaddleDisWorkerProc:
                     for request in req_dicts:
                         if request.task_type.value == RequestType.PREFILL.value:
                             tmp_need_cached_prefills.append(request)
-                attention_dp_cached_prefill_tasks.extend(tmp_need_cached_prefills)
+                attention_dp_cached_prefill_tasks.append(tmp_need_cached_prefills)
                 for request in tmp_need_cached_prefills:
                     req_dicts.remove(request)
                 # judge whether all ranks have prefill tasks
@@ -374,14 +374,14 @@ class PaddleDisWorkerProc:
                 if if_only_prefill:  # all ranks have prefill tasks
                     # add a prefill task to current step
                     if len(attention_dp_cached_prefill_tasks) > 0:
-                        req_dicts.append(attention_dp_cached_prefill_tasks.pop(0))
+                        req_dicts.extend(attention_dp_cached_prefill_tasks.pop(0))
                     attention_dp_wait_prefill_iters = 0
                 else:
                     # wait until all ranks have prefill tasks or reached timeout
                     attention_dp_wait_prefill_iters += 1
                     if attention_dp_wait_prefill_iters > self.fd_config.attention_dp_time_out_iters:
                         if len(attention_dp_cached_prefill_tasks) > 0:
-                            req_dicts.append(attention_dp_cached_prefill_tasks.pop(0))
+                            req_dicts.extend(attention_dp_cached_prefill_tasks.pop(0))
                         attention_dp_wait_prefill_iters = 0
 
             if len(req_dicts) > 0:
