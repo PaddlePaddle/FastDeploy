@@ -92,7 +92,7 @@ class TestLogitsProcessor(unittest.TestCase):
         batch_id = 0
         for slot_id, flag in enumerate(self.stop_flags):
             if not flag:
-                logit_bias = self.logits_processors_args[batch_id].get("logit_bias") or {}
+                logit_bias = self.logits_processors_args[slot_id].get("logit_bias") or {}
                 for token_id, bias in logit_bias.items():
                     expected_logits[batch_id, token_id] += bias
                 batch_id += 1
@@ -115,7 +115,7 @@ class TestLogitsProcessor(unittest.TestCase):
         batch_id = 0
         for slot_id, flag in enumerate(self.stop_flags):
             if not flag:
-                logit_bias = self.logits_processors_args[batch_id].get("logit_bias") or {}
+                logit_bias = self.logits_processors_args[slot_id].get("logit_bias") or {}
                 for token_id, bias in logit_bias.items():
                     expected_logits[batch_id, token_id] += bias
                 batch_id += 1
@@ -139,7 +139,7 @@ class TestLogitsProcessor(unittest.TestCase):
         batch_id = 0
         for slot_id, flag in enumerate(self.stop_flags):
             if not flag:
-                logit_bias = self.logits_processors_args[batch_id].get("logit_bias") or {}
+                logit_bias = self.logits_processors_args[slot_id].get("logit_bias") or {}
                 for token_id, bias in logit_bias.items():
                     expected_logits[batch_id, token_id] += bias
                 batch_id += 1
