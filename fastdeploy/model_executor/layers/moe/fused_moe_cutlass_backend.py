@@ -836,6 +836,19 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                         default_initializer=paddle.nn.initializer.Constant(0),
                     ),
                 )
+        else:
+            if layer.ep_size > 1:
+                for in_scale_name in ["up_gate_proj_in_scale"]:
+                    setattr(
+                        layer,
+                        in_scale_name,
+                        layer.create_parameter(
+                            shape=[layer.num_local_experts],
+                            dtype="float32",
+                            default_initializer=paddle.nn.initializer.Constant(0),
+                        ),
+                    )
+
 
         # weight_scales
         setattr(
