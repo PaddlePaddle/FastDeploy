@@ -491,7 +491,11 @@ def launch_api_server() -> None:
     """
     启动http服务
     """
-    if not is_port_available(args.host, args.port):
+    for _ in range(3):
+        if is_port_available(args.host, args.port):
+            break          
+        time.sleep(0.5)    
+    else:
         raise Exception(f"The parameter `port`:{args.port} is already in use.")
 
     api_server_logger.info(f"launch Fastdeploy api server... port: {args.port}")
@@ -561,7 +565,11 @@ def run_metrics_server():
 
 def launch_metrics_server():
     """Metrics server running the sub thread"""
-    if not is_port_available(args.host, args.metrics_port):
+    for _ in range(3):
+        if is_port_available(args.host, args.port):
+            break          
+        time.sleep(0.5)    
+    else:
         raise Exception(f"The parameter `metrics_port`:{args.metrics_port} is already in use.")
 
     prom_dir = cleanup_prometheus_files(True)
@@ -641,7 +649,11 @@ def launch_controller_server():
     if args.controller_port < 0:
         return
 
-    if not is_port_available(args.host, args.controller_port):
+    for _ in range(3):
+        if is_port_available(args.host, args.port):
+            break          
+        time.sleep(0.5)    
+    else:
         raise Exception(f"The parameter `controller_port`:{args.controller_port} is already in use.")
 
     controller_server_thread = threading.Thread(target=run_controller_server, daemon=True)
