@@ -142,9 +142,9 @@ class ResourceManagerV1(ResourceManager):
             return False
 
         if (
-            len(inputs.get("video_feature_urls", [])) > 0
-            or len(inputs.get("image_feature_urls", [])) > 0
-            or len(inputs.get("audio_feature_urls", [])) > 0
+            (inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0)
+            or (inputs.get("image_feature_urls") is not None and len(inputs["image_feature_urls"]) > 0)
+            or (inputs.get("audio_feature_urls") is not None and len(inputs["audio_feature_urls"]) > 0)
         ):
             return True
         elif (
