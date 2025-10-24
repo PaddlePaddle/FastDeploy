@@ -45,6 +45,8 @@ from fastdeploy.model_executor.ops.xpu import (
     adjust_batch,
     get_infer_param,
     get_padding_offset,
+    limit_thinking_content_length_v1,
+    limit_thinking_content_length_v2,
     recover_decode_task,
     set_data_ipc,
     share_external_data,
@@ -185,6 +187,8 @@ def xpu_post_process(
     share_inputs: Dict[str, paddle.Tensor],
     block_size: int = 64,
     skip_save_output: bool = False,
+    think_end_id: int = None,
+    line_break_id: int = None,
 ) -> None:
     """ """
     from fastdeploy.model_executor.ops.xpu import (
@@ -192,6 +196,34 @@ def xpu_post_process(
         set_stop_value_multi_ends,
         update_inputs,
     )
+
+    if think_end_id > 0:
+        limit_strategy = envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR
+        max_think_lens = share_inputs["max_think_lens"]
+        step_idx = share_inputs["step_idx"]
+        limit_think_status = share_inputs["limit_think_status"]
+        if limit_strategy == "</think>":
+            # for ernie4_5_vl
+            limit_thinking_content_length_v1(
+                sampled_token_ids,
+                max_think_lens,
+                step_idx,
+                limit_think_status,
+                think_end_id,
+            )
+        elif limit_strategy == "\n</think>\n\n":
+            # for ernie_x1
+            assert line_break_id > 0
+            limit_thinking_content_length_v2(
+                sampled_token_ids,
+                max_think_lens,
+                step_idx,
+                limit_think_status,
+                think_end_id,
+                line_break_id,
+            )
+        else:
+            raise NotImplementedError(f"Not support {limit_strategy=} for limit thinking content length.")
 
     # 1. Set stop value
     paddle.assign(
@@ -433,6 +465,15 @@ class XPUModelRunner(ModelRunnerBase):
                     )
                     rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
 
+                if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
+                    # Enable thinking
+                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
+                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                else:
+                    # Disable thinking
+                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+
                 if len(request.output_token_ids) == 0:
                     input_ids = request.prompt_token_ids
                 else:
@@ -449,8 +490,6 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
                     request.block_tables, dtype="int32"
                 )
-                if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
-                    has_decode_task = True
                 self.share_inputs["stop_flags"][idx : idx + 1] = False
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = prefill_start_index
                 self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length
@@ -471,6 +510,8 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
                     request.block_tables, dtype="int32"
                 )
+                if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
+                    has_decode_task = True
                 continue
             else:  # preempted task
                 logger.debug(f"Handle preempted request {request} at idx {idx}")
@@ -579,6 +620,15 @@ class XPUModelRunner(ModelRunnerBase):
                     position_ids, [request.get("max_tokens", 2048)], [0, position_ids.shape[0]]
                 )[0]
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
+
+            if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
+                # Enable thinking
+                self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
+                self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+            else:
+                # Disable thinking
+                self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
                 res = request.get(attr, default_value)
@@ -725,6 +775,10 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["ori_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["system_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["system_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int32")
+
+        # Initialize thinking related buffers
+        self.share_inputs["max_think_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
+        self.share_inputs["limit_think_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
@@ -1125,6 +1179,8 @@ class XPUModelRunner(ModelRunnerBase):
             share_inputs=self.share_inputs,
             block_size=self.cache_config.block_size,
             skip_save_output=is_dummy_run,
+            think_end_id=self.model_config.think_end_id,
+            line_break_id=self.model_config.line_break_id,
         )
 
         # 7. Updata 'infer_seed' and step_paddle()

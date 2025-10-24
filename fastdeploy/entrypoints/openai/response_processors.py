@@ -99,7 +99,8 @@ class ChatResponseProcessor:
                                 image_ret = await self.decoder_client.decode_image(
                                     request=ImageDecodeRequest(req_id=req_id, data=all_tokens)
                                 )
-                                image["url"] = image_ret["http_url"]
+                                if image_ret is not None:
+                                    image["url"] = image_ret["http_url"]
                             image_output = self._end_image_code_request_output
                             image_output["outputs"]["multipart"] = [image]
                             image_output["outputs"]["token_ids"] = all_tokens
@@ -138,10 +139,13 @@ class ChatResponseProcessor:
                             if self.decoder_client:
                                 req_id = part["request_output"]["request_id"]
                                 all_tokens = part["request_output"]["outputs"]["token_ids"]
+
                                 image_ret = await self.decoder_client.decode_image(
                                     request=ImageDecodeRequest(req_id=req_id, data=all_tokens)
                                 )
-                                image["url"] = image_ret["http_url"]
+
+                                if image_ret is not None:
+                                    image["url"] = image_ret["http_url"]
                             multipart.append(image)
 
                     lasrt_request_output = self._multipart_buffer[-1]["request_output"]
