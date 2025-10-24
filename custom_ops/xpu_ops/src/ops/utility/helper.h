@@ -15,8 +15,6 @@
 #pragma once
 
 #include <fcntl.h>
-#include <fstream>
-#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,47 +22,56 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <fstream>
+#include <iostream>
 
+#include <paddle/phi/backends/xpu/xpu_context.h>
 #include "paddle/extension.h"
 #include "paddle/phi/core/allocator.h"
 #include "paddle/phi/core/dense_tensor.h"
 #include "xpu/plugin.h"
-#include <paddle/phi/backends/xpu/xpu_context.h>
 
-template <paddle::DataType D> class PDTraits;
+template <paddle::DataType D>
+class PDTraits;
 
-template <> class PDTraits<paddle::DataType::FLOAT32> {
-  public:
-    typedef float DataType;
-    typedef float data_t;
+template <>
+class PDTraits<paddle::DataType::FLOAT32> {
+ public:
+  typedef float DataType;
+  typedef float data_t;
 };
 
-template <> class PDTraits<paddle::DataType::FLOAT16> {
-  public:
-    typedef float16 DataType;
-    typedef paddle::float16 data_t;
+template <>
+class PDTraits<paddle::DataType::FLOAT16> {
+ public:
+  typedef float16 DataType;
+  typedef paddle::float16 data_t;
 };
 
-template <> class PDTraits<paddle::DataType::BFLOAT16> {
-  public:
-    typedef bfloat16 DataType;
-    typedef paddle::bfloat16 data_t;
+template <>
+class PDTraits<paddle::DataType::BFLOAT16> {
+ public:
+  typedef bfloat16 DataType;
+  typedef paddle::bfloat16 data_t;
 };
 
-template <> class PDTraits<paddle::DataType::INT8> {
-  public:
-    typedef int8_t DataType;
-    typedef int8_t data_t;
+template <>
+class PDTraits<paddle::DataType::INT8> {
+ public:
+  typedef int8_t DataType;
+  typedef int8_t data_t;
 };
 
-template <> class PDTraits<paddle::DataType::UINT8> {
-  public:
-    typedef uint8_t DataType;
-    typedef uint8_t data_t;
+template <>
+class PDTraits<paddle::DataType::UINT8> {
+ public:
+  typedef uint8_t DataType;
+  typedef uint8_t data_t;
 };
 
-template <> class PDTraits<paddle::DataType::INT64> {
-  public:
-    typedef int64_t DataType;
-    typedef int64_t data_t;
+template <>
+class PDTraits<paddle::DataType::INT64> {
+ public:
+  typedef int64_t DataType;
+  typedef int64_t data_t;
 };

@@ -168,8 +168,7 @@ jobs:
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
           git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
-          # python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
-          python -m pip install paddlepaddle-gpu==3.3.0.dev20251012 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
           pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
           python -m pip install -r scripts/unittest_requirement.txt
@@ -195,50 +194,103 @@ jobs:
           coverage xml -o python_coverage_all.xml
           COVERAGE_EXIT_CODE=0
           if [[ "$IS_PR" == "true" ]]; then
+            echo "Running diff coverage for PR..."
             diff-cover python_coverage_all.xml --diff-file=diff.txt --fail-under=80 --json-report diff_coverage.json || COVERAGE_EXIT_CODE=9
             python scripts/generate_diff_coverage_xml.py diff.txt python_coverage_all.xml
           else
-            echo "Not a PR, skipping diff-cover"
+            echo "Running full coverage"
+            coverage report -m > full_coverage_report.txt
+            python scripts/generate_full_coverage_csv.py full_coverage_report.txt full_coverage_report.csv
           fi
           echo "COVERAGE_EXIT_CODE=${COVERAGE_EXIT_CODE}" >> exit_code.env
           '
           if [ -f FastDeploy/exit_code.env ]; then
             cat FastDeploy/exit_code.env >> $GITHUB_ENV
           fi
-      - name: Upload unit resule and diff coverage to bos
+      - name: Upload coverage and unit test results to BOS
         id: cov_upload
         shell: bash
+        env:
+          IS_PR: ${{ github.event_name == 'pull_request' }}
+          GITHUB_SHA: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
+          PR_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           cd FastDeploy
-          commit_id=${{ github.event.pull_request.head.sha }}
-          pr_num=${{ github.event.pull_request.number }}
-          target_path=paddle-github-action/PR/FastDeploy/${pr_num}/${commit_id}/SM${compile_arch//,/_}
-          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py -O bos_tools.py
+          python -m pip install -q bce-python-sdk==0.9.29
+          wget -q --no-proxy --no-check-certificate \
+            https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py \
+            -O bos_tools.py
           push_file=$(realpath bos_tools.py)
-          python -m pip install bce-python-sdk==0.9.29
-          diff_cov_file="diff_coverage.xml"
-          if [ -f ${diff_cov_file} ];then
-            python ${push_file} ${diff_cov_file} ${target_path}/CoverageData
-            target_path_stripped="${target_path#paddle-github-action/}"
-            DIFF_COV_FILE_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${diff_cov_file}
-            echo "diff_cov_file_url=${DIFF_COV_FILE_URL}" >> $GITHUB_OUTPUT
-            echo "diff_cov_file_url=${DIFF_COV_FILE_URL}" >> $GITHUB_ENV
+
+          if [[ "$IS_PR" == "true" ]]; then
+            commit_id=${PR_COMMIT_SHA}
+            pr_num=${PR_NUMBER}
+            target_path=paddle-github-action/PR/FastDeploy/${pr_num}/${commit_id}/SM${compile_arch//,/_}
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+            commit_id=${{ github.sha }}
+            tag_name=${{ github.ref_name }}
+            target_path=paddle-github-action/TAG/FastDeploy/${tag_name}/${commit_id}/SM${compile_arch//,/_}
+            target_path_latest=paddle-github-action/TAG/FastDeploy/${tag_name}/latest/SM${compile_arch//,/_}
+            target_path_stripped_latest="${target_path_latest#paddle-github-action/}"
+          else
+            commit_id=${{ github.sha }}
+            branch_name=${{ github.ref_name }}
+            target_path=paddle-github-action/BRANCH/FastDeploy/${branch_name}/${commit_id}/SM${compile_arch//,/_}
+            target_path_latest=paddle-github-action/BRANCH/FastDeploy/${branch_name}/latest/SM${compile_arch//,/_}
+            target_path_stripped_latest="${target_path_latest#paddle-github-action/}"
           fi
-          diff_cov_result_json="diff_coverage.json"
-          if [ -f ${diff_cov_result_json} ];then
-            python ${push_file} ${diff_cov_result_json} ${target_path}/CoverageData
-            target_path_stripped="${target_path#paddle-github-action/}"
-            DIFF_COV_JSON_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${diff_cov_result_json}
-            echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_OUTPUT
-            echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_ENV
+
+          target_path_stripped="${target_path#paddle-github-action/}"
+
+          if [[ "$IS_PR" == "true" ]]; then
+            diff_cov_file="diff_coverage.xml"
+            if [ -f ${diff_cov_file} ]; then
+              python ${push_file} ${diff_cov_file} ${target_path}/CoverageData
+              DIFF_COV_FILE_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${diff_cov_file}
+              echo "diff_cov_file_url=${DIFF_COV_FILE_URL}" >> $GITHUB_OUTPUT
+              echo "diff_cov_file_url=${DIFF_COV_FILE_URL}" >> $GITHUB_ENV
+            fi
+
+            diff_cov_result_json="diff_coverage.json"
+            if [ -f ${diff_cov_result_json} ]; then
+              python ${push_file} ${diff_cov_result_json} ${target_path}/CoverageData
+              DIFF_COV_JSON_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${diff_cov_result_json}
+              echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_OUTPUT
+              echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_ENV
+            fi
           fi
+
+          HAS_FAILED_TESTS=false
           unittest_result="failed_tests.log"
-          if [ -s ${unittest_result} ];then
+          if [ -s ${unittest_result} ]; then
+            HAS_FAILED_TESTS=true
             python ${push_file} ${unittest_result} ${target_path}/UnitTestResult
-            target_path_stripped="${target_path#paddle-github-action/}"
             UNIT_TEST_RESULT_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/UnitTestResult/${unittest_result}
             echo "unittest_failed_url=${UNIT_TEST_RESULT_URL}" >> $GITHUB_OUTPUT
             echo "unittest_failed_url=${UNIT_TEST_RESULT_URL}" >> $GITHUB_ENV
+          fi
+
+          if [[ "$IS_PR" != "true" ]]; then
+            full_cov_file="full_coverage_report.txt"
+            full_cov_csv="full_coverage_report.csv"
+
+            if [ -f ${full_cov_file} ]; then
+              python ${push_file} ${full_cov_file} ${target_path}/CoverageData
+              python ${push_file} ${full_cov_file} ${target_path_latest}/CoverageData
+              FULL_COV_FILE_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${full_cov_file}
+              echo "full_coverage_report_url=${FULL_COV_FILE_URL}" >> $GITHUB_OUTPUT
+              echo "full_coverage_report_url=${FULL_COV_FILE_URL}" >> $GITHUB_ENV
+            fi
+
+            if [ "$HAS_FAILED_TESTS" = false ] && [ -f ${full_cov_csv} ]; then
+              python ${push_file} ${full_cov_csv} ${target_path}/CoverageData
+              python ${push_file} ${full_cov_csv} ${target_path_latest}/CoverageData
+              FULL_COV_CSV_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${full_cov_csv}
+              echo "full_coverage_csv_url=${FULL_COV_CSV_URL}" >> $GITHUB_OUTPUT
+              echo "full_coverage_csv_url=${FULL_COV_CSV_URL}" >> $GITHUB_ENV
+            fi
           fi
       - name: Check Unit Test Success
         shell: bash

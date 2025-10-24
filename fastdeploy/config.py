@@ -30,7 +30,6 @@ from typing_extensions import assert_never
 import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfigBase
-from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.transformer_utils.config import get_pooling_config
@@ -125,6 +124,7 @@ class ErnieArchitectures:
         "Ernie4_5_ForCausalLM",
         "Ernie4_5_MoeForCausalLM",
         "Ernie4_5_VLMoeForConditionalGeneration",
+        "Ernie4_5_VLMoeForProcessRewardModel",
     }
 
     @classmethod
@@ -224,26 +224,22 @@ class ModelConfig:
 
         self.ori_vocab_size = args.get("ori_vocab_size", self.vocab_size)
         self.think_end_id = args.get("think_end_id", -1)
+        self.im_patch_id = args.get("image_patch_id", -1)
+        self.line_break_id = args.get("line_break_id", -1)
 
-        architectures = self.architectures[0]
+        self._post_init()
 
-        if MultimodalRegistry.contains_model(architectures):
-            self.enable_mm = True
-        else:
-            self.enable_mm = False
-
+    def _post_init(self):
         self.is_unified_ckpt = check_unified_ckpt(self.model)
-
-        self.override_name_from_config()
-        self.read_from_env()
-        self.read_model_config()
         self.runner_type = self._get_runner_type(self.architectures, self.runner)
         self.convert_type = self._get_convert_type(self.architectures, self.runner_type, self.convert)
-
         registry = self.registry
         is_generative_model = registry.is_text_generation_model(self.architectures, self)
         is_pooling_model = registry.is_pooling_model(self.architectures, self)
         is_multimodal_model = registry.is_multimodal_model(self.architectures, self)
+        self.is_reasoning_model = registry.is_reasoning_model(self.architectures, self)
+
+        self.enable_mm = is_multimodal_model
 
         if self.runner_type == "generate" and not is_generative_model:
             if is_multimodal_model:
@@ -268,6 +264,9 @@ class ModelConfig:
         self._architecture = arch
 
         self.pooler_config = self._init_pooler_config()
+        self.override_name_from_config()
+        self.read_from_env()
+        self.read_model_config()
 
     @property
     def registry(self):
@@ -786,7 +785,7 @@ class GraphOptimizationConfig:
         """
         self.sot_warmup_sizes: list[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 32, 64, 128]
         """  Number of warmup runs for SOT warmup. """
-        self.use_cudagraph: bool = False
+        self.use_cudagraph: bool = True
         """Sizes to capture cudagraph.
         - None (default): capture sizes are inferred from llm config.
         - list[int]: capture sizes are specified as given."""
@@ -822,7 +821,7 @@ class GraphOptimizationConfig:
         """ Record maps mapped from real shape to captured size to reduce runtime overhead """
         self.real_shape_to_captured_size: dict[int, int] = None
         """ Whether to use shared memory pool for multi capture_size """
-        self.use_unique_memory_pool: bool = False
+        self.use_unique_memory_pool: bool = True
 
         # CINN Config ...
         if args is not None:
@@ -908,22 +907,6 @@ class GraphOptimizationConfig:
             assert (
                 len(self.cudagraph_capture_sizes) > 0
             ), "In graph optimization config, When opening the CUDA graph, it is forbidden to set the capture sizes to an empty list."
-
-    def update_use_cudagraph(self, argument: bool):
-        """
-        Unified user specifies the use_cudagraph parameter through two methods,
-        '--use-cudagraph' and '--graph-optimization-config'
-        """
-        if self.use_cudagraph is None:
-            # User only set '--use-cudagraph'
-            self.use_cudagraph = argument
-        else:
-            # User both set '--use-cudagraph' and '--graph-optimization-config'
-            if self.use_cudagraph is False and argument is True:
-                raise ValueError(
-                    "Invalid parameter: Cannot set --use-cudagraph and --graph-optimization-config '{\"use_cudagraph\":false}' simultaneously."
-                )
-            argument = self.use_cudagraph
 
 
 class PlasAttentionConfig:
@@ -1161,7 +1144,7 @@ class CacheConfig:
             self.kv_cache_ratio = 1.0
         else:
             self.kv_cache_ratio = 0.75
-        self.enc_dec_block_num = 0 if current_platform.is_maca() else envs.FD_ENC_DEC_BLOCK_NUM
+        self.enc_dec_block_num = envs.FD_ENC_DEC_BLOCK_NUM
         self.prealloc_dec_block_slot_num_threshold = 12
         self.cache_dtype = "bfloat16"
         self.model_cfg = None
@@ -1281,21 +1264,6 @@ class CacheConfig:
         logger.info("=============================================================")
 
 
-class DecodingConfig:
-    """
-    Configuration for decoding
-    """
-
-    def __init__(
-        self,
-        args,
-    ):
-        self.pad_token_id = None
-        for key, value in args.items():
-            if hasattr(self, key):
-                setattr(self, key, value)
-
-
 class CommitConfig:
     """
     Configuration for tracking version information from version.txt
@@ -1387,7 +1355,6 @@ class FDConfig:
         commit_config: CommitConfig = CommitConfig(),
         scheduler_config: SchedulerConfig = None,
         device_config: DeviceConfig = None,
-        decoding_config: DecodingConfig = None,
         quant_config: QuantConfigBase = None,
         graph_opt_config: GraphOptimizationConfig = None,
         plas_attention_config: PlasAttentionConfig = None,
@@ -1416,7 +1383,6 @@ class FDConfig:
         self.quant_config: Optional[QuantConfigBase] = quant_config
         self.graph_opt_config: Optional[GraphOptimizationConfig] = graph_opt_config
         self.early_stop_config: Optional[EarlyStopConfig] = early_stop_config
-        self.decoding_config: DecodingConfig = decoding_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
         self.plas_attention_config: Optional[PlasAttentionConfig] = plas_attention_config
         self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
@@ -1543,6 +1509,16 @@ class FDConfig:
             else:
                 self.structured_outputs_config.guided_decoding_backend = "xgrammar"
 
+        # Adjustment GraphOptConfig
+        if self.load_config is not None and self.load_config.dynamic_load_weight is True:
+            self.graph_opt_config.graph_opt_level = 0
+            logger.info(
+                "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
+            )
+        if self.device_config is not None and self.device_config.device_type != "cuda":
+            self.graph_opt_config.use_cudagraph = False
+            logger.info(f"CUDAGraph only support on GPU, current device type is {self.device_config.device_type}!")
+
         if self.scheduler_config.splitwise_role == "mixed":
             self.model_config.moe_phase = MoEPhase(phase="prefill")
         elif self.scheduler_config.splitwise_role == "prefill":
@@ -1645,6 +1621,13 @@ class FDConfig:
 
         if self.scheduler_config is not None:
             self.scheduler_config.check()
+
+        # Check graph optimization config
+        if self.graph_opt_config.graph_opt_level > 0:
+            if self.load_config is not None:
+                assert (
+                    self.load_config.dynamic_load_weight is False
+                ), "Static graph cannot be used in RL scene temporarily"
 
         if int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 1:
             assert (

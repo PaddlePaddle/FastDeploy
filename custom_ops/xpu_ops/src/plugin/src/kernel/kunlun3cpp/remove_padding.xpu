@@ -30,8 +30,8 @@ __global__ void remove_padding(int64_t *x_remove_padding,
             input_lm,
             sizeof(int64_t) * cur_len);
       LM2GM(input_lm,
-                  x_remove_padding + i * sequence_length - cum_offset_lm + j,
-                  sizeof(int64_t) * cur_len);
+            x_remove_padding + i * sequence_length - cum_offset_lm + j,
+            sizeof(int64_t) * cur_len);
     }
   }
 }

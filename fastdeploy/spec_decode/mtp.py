@@ -44,6 +44,8 @@ from fastdeploy.model_executor.ops.gpu import (
     mtp_save_first_token,
     mtp_step_paddle,
     share_external_data,
+    speculate_get_logits,
+    speculate_save_output_topk,
 )
 from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
 
@@ -72,6 +74,7 @@ class MTPProposer(Proposer):
         self.target_model_inputs = target_model_inputs
         self.mtp_strategy = self.speculative_config.mtp_strategy
         self.hybrid_mode = self.mtp_strategy == "with_ngram" and self.max_draft_token_num > self.num_model_steps
+        self.enable_logprob = self.model_config.enable_logprob
 
         # [mixed, prefill, decoder]
         self.role = "mixed"
@@ -80,7 +83,6 @@ class MTPProposer(Proposer):
         self._init_model_inputs()
 
         # CUDA Graph
-        self.use_cudagraph = self.graph_opt_config.use_cudagraph
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
 
@@ -119,6 +121,11 @@ class MTPProposer(Proposer):
             num_tokens // batch_size,
             self.model_config.max_model_len - max_dec_len,
         )
+
+        # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
+        if self.fd_config.parallel_config.enable_expert_parallel:
+            input_length = min(input_length, 32)
+
         block_num = (
             input_length + self.cache_config.block_size - 1
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
@@ -401,6 +408,22 @@ class MTPProposer(Proposer):
                 self.target_model_inputs["seq_lens_this_time"], fill_value=-1, dtype="int32"
             )
         self.input_ids_len = paddle.zeros(shape=[self.max_num_seqs, 1], dtype="int64").cpu()
+        self.model_inputs["temp_scaled_logprobs"] = self.target_model_inputs["temp_scaled_logprobs"]
+        self.model_inputs["top_p_normalized_logprobs"] = self.target_model_inputs["top_p_normalized_logprobs"]
+        self.model_inputs["accept_num"] = self.target_model_inputs["accept_num"]
+        self.model_inputs["accept_tokens"] = self.target_model_inputs["accept_tokens"]
+        self.model_inputs["draft_logits"] = self.target_model_inputs["draft_logits"]
+        self.model_inputs["first_token_hidden_states"] = paddle.full(
+            [self.max_num_seqs, self.model_config.hidden_size], -1
+        )
+        self.model_inputs["batch_token_num"] = paddle.full(shape=[self.max_num_seqs], fill_value=0, dtype="int32")
+        self.model_inputs["next_token_num"] = paddle.full(shape=[self.max_num_seqs], fill_value=0, dtype="int32")
+        self.model_inputs["cu_batch_token_offset"] = paddle.full_like(
+            self.target_model_inputs["cu_batch_token_offset"], fill_value=0, dtype="int32"
+        )
+        self.model_inputs["cu_next_token_offset"] = paddle.full(
+            shape=[self.max_num_seqs + 1], fill_value=0, dtype="int32"
+        )
 
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int):
 
@@ -551,7 +574,7 @@ class MTPProposer(Proposer):
         self.model_inputs["not_need_stop"][0] = True
         self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
 
-    def _initialize_forward_meta(self):
+    def _initialize_forward_meta(self, step_use_cudagraph: bool = False):
         """
         Initialize forward meta and attention meta data
         """
@@ -587,23 +610,7 @@ class MTPProposer(Proposer):
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
-        # Update Batch type for cuda graph
-        only_decode_batch = True
-        prefill_exists = None
-
-        # Mix ep in single node
-        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
-            only_decode_batch_list = []
-            prefill_exists = self.exist_prefill()
-            paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
-            only_decode_batch = all(only_decode_batch_list)
-            self.fd_config.model_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
-
-        self.forward_meta.step_use_cudagraph = (
-            self.use_cudagraph
-            and only_decode_batch
-            and not (prefill_exists if prefill_exists is not None else self.exist_prefill())
-        )
+        self.forward_meta.step_use_cudagraph = step_use_cudagraph
 
     def exist_prefill(self):
         """
@@ -689,9 +696,12 @@ class MTPProposer(Proposer):
                 self.parallel_config.use_ep,
             )
 
-    def _propose(self):
+    def _propose(self, step_use_cudagraph: bool = False):
         """
-        Main process for MTP inference
+        Main process for MTP inference.
+        Args:
+        step_use_cudagraph: bool
+            Whether to use cuda graph. Use the target model flag to avoid hanging problems with EP.
         """
         for substep in range(self.num_model_steps):
             if self.model_inputs["not_need_stop"]:
@@ -715,7 +725,7 @@ class MTPProposer(Proposer):
 
                 # Initialize forward meta data
                 self.model_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
-                self.model_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
+                self.model_inputs["batch_id_per_token"][:] = -1
                 self.model_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
                 self.model_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
 
@@ -724,7 +734,8 @@ class MTPProposer(Proposer):
                 self.model_inputs["output_padding_offset"].copy_(output_padding_offset, False)
 
                 # Initialize forward meta data
-                self._initialize_forward_meta()
+                self._initialize_forward_meta(step_use_cudagraph=step_use_cudagraph)
+                self.forward_meta.batch_id_per_token.copy_(batch_id_per_token, False)
 
                 # Padding inputs for cuda graph
                 self.padding_cudagraph_inputs()
@@ -742,6 +753,10 @@ class MTPProposer(Proposer):
                     min_dec_lens=self.model_inputs["min_dec_len"],
                     bad_words_token_ids=self.model_inputs["bad_tokens"],
                     eos_token_ids=self.model_inputs["eos_token_id"],
+                    max_num_logprobs=20 if self.enable_logprob else None,
+                    temp_scaled_logprobs=self.model_inputs["temp_scaled_logprobs"],
+                    top_p_normalized_logprobs=self.model_inputs["top_p_normalized_logprobs"],
+                    share_inputs=self.model_inputs,
                 )
 
                 if self.num_model_steps > 1:
@@ -752,7 +767,7 @@ class MTPProposer(Proposer):
                     previous_hidden_states=self.model_inputs["target_hidden_states"],
                     forward_meta=self.forward_meta,
                 )
-                if self.use_cudagraph:
+                if self.forward_meta.step_use_cudagraph:
                     model_output = model_output[: self.real_token_num]
                 hidden_states = rebuild_padding(
                     model_output,
@@ -762,17 +777,47 @@ class MTPProposer(Proposer):
                     self.model_inputs["seq_lens_encoder"],
                     self.model_inputs["output_padding_offset"],
                     self.model_config.max_model_len,
+                    self.model_inputs["first_token_hidden_states"],
+                    self.enable_logprob if substep == 0 else False,
                 )
 
                 # 4. Compute logits, Sample
                 logits = self.model.compute_logits(hidden_states)
+                if self.enable_logprob and substep == 0:
+                    first_token_logits = self.model.compute_logits(self.model_inputs["first_token_hidden_states"])
 
-                sampled_token_ids = self.sampler(
+                    speculate_get_logits(
+                        self.model_inputs["draft_logits"],
+                        self.model_inputs["next_token_num"],
+                        self.model_inputs["batch_token_num"],
+                        self.model_inputs["cu_next_token_offset"],
+                        self.model_inputs["cu_batch_token_offset"],
+                        logits,
+                        first_token_logits,
+                        self.model_inputs["seq_lens_this_time"],
+                        self.model_inputs["seq_lens_encoder"],
+                    )
+
+                sampled_token_ids, sampler_output = self.sampler(
                     logits,
                     self.sampling_metadata,
                     self.max_model_len,
                     self.model_inputs,
                 )
+
+                if substep == 0 and sampler_output.logprobs_tensors is not None:
+                    real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
+                    speculate_save_output_topk(
+                        sampler_output.sampled_token_ids,
+                        sampler_output.logprobs_tensors.logprob_token_ids,
+                        sampler_output.logprobs_tensors.logprobs,
+                        sampler_output.logprobs_tensors.selected_token_ranks,
+                        self.model_inputs["batch_token_num"][:real_bsz],
+                        self.model_inputs["cu_batch_token_offset"][:real_bsz],
+                        self.model_inputs["not_need_stop"],
+                        4,  # mtype
+                        self.local_rank,
+                    )
 
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(sampled_token_ids, 0)
@@ -871,10 +916,10 @@ class MTPProposer(Proposer):
         self.target_model_inputs["draft_tokens"][:] = draft_tokens.cuda()
         self.target_model_inputs["seq_lens_this_time"][:] = seq_lens_this_time.cuda()
 
-    def _run_impl(self, full_hidden_states):
-        """"""
+    def _run_impl(self, full_hidden_states: paddle.Tensor, step_use_cudagraph: bool = False):
+        """Execute Draft Model"""
         self._prepare_inputs(full_hidden_states)
-        self._propose()
+        self._propose(step_use_cudagraph=step_use_cudagraph)
         self._update_status()
         if self.hybrid_mode:
             self._extend_draft_token_with_ngram_match()
@@ -891,7 +936,7 @@ class MTPProposer(Proposer):
         # In init_attention_metadata, the decode buffer has already been cleared
 
         # To adapt to CUDA Graph, keep the forward pass at the maximum batch size.
-        if self.use_cudagraph:
+        if self.forward_meta.step_use_cudagraph:
             self.forward_meta.seq_lens_this_time = self.seq_lens_this_time_buffer
             self.real_token_num = self.forward_meta.ids_remove_padding.shape[0]
         return
