@@ -824,22 +824,6 @@ def post_process_pooling(
         model_output.stop_flags,
     )
 
-    if current_platform.is_cuda() or current_platform.is_iluvatar() or current_platform.is_dcu():
-        dummy_tokens = paddle.full_like(model_output.next_tokens, -1, dtype="int64")
-        set_stop_value_multi_ends(
-            dummy_tokens,
-            model_output.stop_flags,
-            model_output.seq_lens_this_time,
-            model_output.eos_token_id,
-            model_output.next_tokens,
-            model_output.pre_ids,
-            model_output.step_idx,
-            model_output.stop_token_ids,
-            model_output.stop_seqs_len,
-            False,
-            True,
-        )
-
     with paddle.framework._no_check_dy2st_diff():
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             dummy_sampled_tokens = paddle.full_like(model_output.next_tokens, -1, dtype="int64")

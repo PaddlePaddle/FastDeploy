@@ -361,8 +361,7 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
                        const paddle::Tensor &step_idx,
                        const paddle::Tensor &stop_seqs,
                        const paddle::Tensor &stop_seqs_len,
-                       const bool beam_search,
-                       const bool is_pooling);
+                       const bool beam_search);
 
 
 void UpdateInputes(const paddle::Tensor &stop_flags,

@@ -118,8 +118,6 @@ __global__ void update_inputs_kernel_v1(bool *not_need_stop,
     int64_t stop_sum = BlockReduce(temp_storage).Sum(stop_flag_now_int);
     if (thread_idx == 0) {
         not_need_stop[0] = stop_sum < stop_nums[0];
-        printf("[CUDA DEBUG] Stop sum: %lld / %lld, not_need_stop=%d\n",
-               stop_sum, stop_nums[0], not_need_stop[0]);
     }
 }
 

@@ -2107,51 +2107,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         return pooler_output
 
-    def _schedule_cache_and_update_buffer(
-        self, model_forward_batch: Optional[List[Request]], num_running_request: int
-    ) -> None:
-
-        # Update 'infer_seed' and step_cuda()
-        self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
-        self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
-
-        if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            step_cuda(
-                self.share_inputs,
-                self.cache_config.block_size,
-                self.cache_config.enc_dec_block_num,
-                self.speculative_config,
-                self.cache_config.enable_prefix_caching,
-            )
-
-            self._update_chunked_prefill(model_forward_batch)
-            self._add_cache(model_forward_batch)
-        elif self.speculative_decoding:
-            speculate_schedule_cache(
-                self.share_inputs["draft_tokens"],
-                self.share_inputs["block_tables"],
-                self.share_inputs["stop_flags"],
-                self.share_inputs["prompt_lens"],
-                self.share_inputs["seq_lens_this_time"],
-                self.share_inputs["seq_lens_encoder"],
-                self.share_inputs["seq_lens_decoder"],
-                self.share_inputs["step_seq_lens_decoder"],
-                self.share_inputs["step_draft_tokens"],
-                self.share_inputs["step_seq_lens_this_time"],
-                self.share_inputs["accept_num"],
-                self.share_inputs["accept_tokens"],
-                self.share_inputs["is_block_step"],
-                self.share_inputs["not_need_stop"],
-                self.share_inputs["stop_nums"],
-                self.cache_config.block_size,
-                self.speculative_config.num_speculative_tokens,
-            )
-
-        # Copy seq_lens_this_time buffer
-        self.seq_lens_this_time_buffer[:num_running_request].copy_(
-            self.share_inputs["seq_lens_this_time"][:num_running_request], False
-        )
-
     def _add_cache(self, model_forward_batch) -> None:
         """
         Add cache for guided decoding.

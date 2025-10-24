@@ -38,21 +38,12 @@ __global__ void set_value_by_flags(bool *stop_flags,
                                    const int stop_seqs_bs,
                                    const int stop_seqs_max_len,
                                    bool beam_search,
-                                   bool prefill_one_step_stop,
-                                   bool is_pooling) {
+                                   bool prefill_one_step_stop) {
     int tid = threadIdx.x;
     int bid = blockIdx.x;
     if (tid >= stop_seqs_bs) return;
     if (bid < bs) {
         if(tid == 0){
-            if (is_pooling)
-            {
-                if(prefill_one_step_stop)
-                {
-                    stop_flags[bid] = true;
-                }
-                return;
-            }
             if (prefill_one_step_stop) {
                 stop_flags[bid] = true;
                 if (seq_lens[bid] == 0) {
@@ -78,7 +69,6 @@ __global__ void set_value_by_flags(bool *stop_flags,
             }
         }
         // dealing stop_seqs
-        if (is_pooling) return;
         const int stop_seq_len = (stop_seqs_len + bid * stop_seqs_bs)[tid];
         if (stop_seq_len <= 0) return;
         const int64_t *stop_seq_now = stop_seqs + bid * stop_seqs_bs + tid * stop_seqs_max_len;
@@ -111,8 +101,7 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
                        const paddle::Tensor &step_idx,
                        const paddle::Tensor &stop_seqs,
                        const paddle::Tensor &stop_seqs_len,
-                       const bool beam_search,
-                       const bool is_pooling) {
+                       const bool beam_search) {
     PD_CHECK(topk_ids.dtype() == paddle::DataType::INT64);
     PD_CHECK(stop_flags.dtype() == paddle::DataType::BOOL);
     bool prefill_one_step_stop = false;
@@ -151,13 +140,12 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
         stop_seqs_bs,
         stop_seqs_max_len,
         beam_search,
-        prefill_one_step_stop,
-        is_pooling);
+        prefill_one_step_stop);
 }
 
 PD_BUILD_STATIC_OP(set_stop_value_multi_ends)
     .Inputs({"topk_ids", "stop_flags", "seq_lens", "end_ids", "next_tokens", "pre_ids", "step_idx", "stop_seqs", "stop_seqs_len"})
-    .Attrs({"beam_search: bool","is_pooling:bool"})
+    .Attrs({"beam_search: bool"})
     .Outputs({"topk_ids_out", "stop_flags_out", "next_tokens_out"})
     .SetInplaceMap({{"topk_ids", "topk_ids_out"},
                     {"stop_flags", "stop_flags_out"},
