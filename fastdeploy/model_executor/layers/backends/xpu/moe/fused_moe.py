@@ -14,8 +14,6 @@
 # limitations under the License.
 """
 
-import os
-
 import paddle
 from paddle import nn
 
@@ -246,11 +244,8 @@ class XPUMoEMethod(MoEMethodBase):
         """
         if self.moe_quant_type in ["w16a16"]:
             using_ep_moe_algo = False
-        elif self.moe_quant_type in ["w4a8"]:
-            using_ep_moe_algo = True
         else:
-            using_ep_moe_algo = int(os.environ.get("USING_EP_MOE_ALGO", 0)) != 0
-            print(f"using_ep_moe_algo: {using_ep_moe_algo}")
+            using_ep_moe_algo = True
 
         if using_ep_moe_algo:
             fused_moe_out = self.apply_tp_scatter_op(layer, x, gate)
