@@ -6,8 +6,8 @@ echo "$DIR"
 python -m pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 python -m pip install -r requirements.txt
-python -m pip install jsonschema aistudio_sdk==0.3.5
-python -m pip install xgrammar==0.1.19 torch==2.6.0
+# python -m pip install jsonschema aistudio_sdk==0.3.5
+# python -m pip install xgrammar==0.1.19 torch==2.6.0
 
 failed_files=()
 run_path="$DIR/../tests/ci_use/"
@@ -24,10 +24,10 @@ for subdir in "$run_path"*/; do
                 echo "Running pytest on $(realpath "$file")"
                 echo "------------------------------------------------------------"
 
-                set +e
+                # set +e
                 timeout 600 python -m pytest --disable-warnings -sv "$file"
                 exit_code=$?
-                set -e
+                # set -e
                 ps -ef | grep "${FD_CACHE_QUEUE_PORT}" | grep -v grep | awk '{print $2}' | xargs -r kill -9
                 ps -ef | grep "${FD_ENGINE_QUEUE_PORT}" | grep -v grep | awk '{print $2}' | xargs -r kill -9
 
@@ -52,7 +52,7 @@ for subdir in "$run_path"*/; do
                     fi
 
                     failed_files+=("$subdir$file")
-                    exit 1
+                    # exit 1
                 fi
                 echo "------------------------------------------------------------"
             fi
