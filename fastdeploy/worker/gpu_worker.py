@@ -101,6 +101,12 @@ class GpuWorker(WorkerBase):
         """
         return self.model_runner.exist_decode()
 
+    def get_real_bsz(self):
+        """
+        Get real bsz
+        """
+        return self.model_runner.get_real_bsz()
+
     def determine_available_memory(self) -> int:
         """
         Profiles the peak memory usage of the model to determine how much

@@ -836,7 +836,6 @@ class EngineArgs:
 
         perf_group.add_argument(
             "--enable_attention_dp_balance",
-            type=bool,
             action="store_true",
             default=EngineArgs.enable_attention_dp_balance,
             help="enable attention dp balance",

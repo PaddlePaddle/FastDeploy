@@ -324,7 +324,6 @@ class PaddleDisWorkerProc:
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
             req_dicts = []
-            num_running_requests = 0
             if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
                 self.insert_step = True
@@ -337,12 +336,6 @@ class PaddleDisWorkerProc:
                 for req_dict, bsz in tasks:
                     num_running_requests = int(bsz)
                     req_dicts.extend(req_dict)
-
-                req_ids = [req.request_id for req in req_dicts]
-                logger.info(
-                    f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
-                    f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
-                )
 
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 if self.ranks > 1:
@@ -386,8 +379,17 @@ class PaddleDisWorkerProc:
                         attention_dp_wait_prefill_iters = 0
 
             if len(req_dicts) > 0:
+                req_ids = [req.request_id for req in req_dicts]
                 # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts, num_running_requests)
+                if self.enable_attention_dp_balance:  # real_bsz may be different with scheduler's view
+                    self.worker.preprocess_new_task(req_dicts, None)
+                    num_running_requests = self.worker.get_real_bsz()
+                else:
+                    self.worker.preprocess_new_task(req_dicts, num_running_requests)
+                logger.info(
+                    f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
+                    f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
+                )
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             self.worker.execute_model(req_dicts, num_running_requests)
@@ -712,9 +714,7 @@ def parse_args():
 
     parser.add_argument(
         "--enable_attention_dp_balance",
-        type=bool,
         action="store_true",
-        default=False,
         help="enable attention dp balance",
     )
 
