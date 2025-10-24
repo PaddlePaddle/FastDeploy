@@ -22,7 +22,22 @@ from .builtin import LogitBiasLogitsProcessor
 
 def load_class(spec: str):
     """
-    Load a class from a string spec in the form 'package.module:ClassName'.
+    Load a class from a string spec.
+
+    If the spec is in the form 'package.module:ClassName', loads ClassName from the specified module.
+    If the spec does not contain a colon, it is treated as the name of a builtin class from
+    'fastdeploy.model_executor.logits_processor'.
+
+    Args:
+        spec (str): The class specifier string.
+
+    Returns:
+        type: The loaded class object.
+
+    Raises:
+        ValueError: If the spec is invalid.
+        ImportError: If the module cannot be imported.
+        AttributeError: If the class cannot be found in the module.
     """
     try:
         if ":" in spec:
