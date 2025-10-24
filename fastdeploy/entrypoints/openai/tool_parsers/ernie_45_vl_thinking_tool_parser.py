@@ -65,6 +65,8 @@ class Ernie45VLThinkingToolParser(ToolParser):
 
         self.tool_call_start_token_id = self.vocab.get(self.tool_call_start_token)
         self.tool_call_end_token_id = self.vocab.get(self.tool_call_end_token)
+        if self.tool_call_start_token_id is None:
+            self.tool_call_start_token_id = -1
 
         if not self.model_tokenizer:
             raise ValueError(
@@ -228,7 +230,7 @@ class Ernie45VLThinkingToolParser(ToolParser):
         request: dict,
     ) -> Union[DeltaMessage, None]:
 
-        if self.tool_call_start_token not in current_text:
+        if self.tool_call_start_token_id not in current_token_ids:
             return DeltaMessage(content=delta_text)
         # Skip empty chunks
         if len(delta_text.strip()) == 0:

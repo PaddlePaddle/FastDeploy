@@ -44,6 +44,9 @@ class Ernie45VLThinkingReasoningParser(ReasoningParser):
             )
 
         self.think_end_token_id = self.vocab.get(self.think_end_token)
+        self.tool_begin_token_id = self.vocab.get(self.tool_begin_token)
+        if self.tool_begin_token_id is None:
+            self.tool_begin_token_id = -1
 
         if self.think_end_token_id is None:
             raise RuntimeError("Test reasoning parser could not locate think end tokens in the tokenizer!")
@@ -71,30 +74,30 @@ class Ernie45VLThinkingReasoningParser(ReasoningParser):
         # Skip single special tokens
         if len(delta_token_ids) == 1 and delta_token_ids[0] == self.think_end_token_id:
             return None
-        if self.tool_begin_token in current_text:
+        if self.tool_begin_token_id in previous_token_ids:
             return None
         if self.think_end_token_id in delta_token_ids:
             end_index = delta_text.find(self.think_end_token)
             reasoning_content = delta_text[:end_index]
             index = end_index + len(self.think_end_token)
             content = delta_text[index:].lstrip("\n")
-            if self.tool_begin_token in content:
+            if self.tool_begin_token_id in delta_token_ids:
                 if len(reasoning_content) > 0:
                     return DeltaMessage(reasoning_content=reasoning_content)
-                else:
-                    return None
-            else:
+                return None
+            if len(content) > 0:
                 return DeltaMessage(reasoning_content=reasoning_content, content=delta_text[index:])
+            elif len(reasoning_content) > 0:
+                return DeltaMessage(reasoning_content=reasoning_content)
+            return None
         elif self.think_end_token_id in previous_token_ids:
+            if self.tool_begin_token_id in delta_token_ids:
+                return None
             content = delta_text.lstrip("\n")
-            if self.tool_begin_token in delta_text:
-                return None
-            elif content:
+            if len(content) > 0:
                 return DeltaMessage(content=delta_text)
-            else:
-                return None
-        else:
-            return DeltaMessage(reasoning_content=delta_text)
+            return None
+        return DeltaMessage(reasoning_content=delta_text)
 
     def extract_reasoning_content(
         self, model_output: str, request: ChatCompletionRequest
