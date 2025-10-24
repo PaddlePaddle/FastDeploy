@@ -1,3 +1,5 @@
+[English](../../usage/kunlunxin_xpu_deployment.md)
+
 ## 支持的模型
 |模型名|上下文长度|量化|所需卡数|部署命令|最低版本要求|
 |-|-|-|-|-|-|
@@ -45,7 +47,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 or
 `export XPU_VISIBLE_DEVICES="4,5,6,7"`
 
-更多参数可以参考 [参数说明](../../parameters.md)。
+更多参数可以参考 [参数说明](../parameters.md)。
 
 全部支持的模型可以在上方的 *支持的模型* 章节找到。
 

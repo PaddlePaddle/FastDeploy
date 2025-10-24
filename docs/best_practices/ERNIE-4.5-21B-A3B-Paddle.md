@@ -1,3 +1,5 @@
+[简体中文](../zh/best_practices/ERNIE-4.5-21B-A3B-Paddle.md)
+
 # ERNIE-4.5-21B-A3B
 ## Environmental Preparation
 ### 1.1 Hardware requirements
@@ -88,10 +90,8 @@ Notes:
 CUDAGraph is a GPU computing acceleration technology provided by NVIDIA. It achieves efficient execution and optimization of GPU tasks by capturing CUDA operation sequences into a graph structure. The core idea of CUDAGraph is to encapsulate a series of GPU computing and memory operations into a re-executable graph, thereby reducing CPU-GPU communication overhead, reducing kernel startup latency, and improving overall computing performance.
 
 **How to enable:**
-Add the following lines to the startup parameters
-```
---use-cudagraph
-```
+Before version 2.3, it needs to be enabled through `--use-cudagraph`.
+CUDAGraph has been enabled by default in some scenarios at the beginning of version 2.3. CUDAGraph will be automatically closed for functions that are not compatible with CUDAGraph (speculative decoding, RL training, multi-mode model).
 Notes:
 - Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../features/graph_optimization.md) for related configuration parameter descriptions
 

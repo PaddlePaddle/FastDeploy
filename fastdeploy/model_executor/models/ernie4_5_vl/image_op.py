@@ -16,7 +16,7 @@
 
 from fastdeploy.platforms import current_platform
 
-if current_platform.is_cuda():
+if current_platform.is_cuda() or current_platform.is_maca():
     from fastdeploy.model_executor.ops.gpu import (
         text_image_gather_scatter,
         text_image_index_out,
@@ -26,7 +26,12 @@ elif current_platform.is_xpu():
         text_image_gather_scatter,
         text_image_index_out,
     )
+elif current_platform.is_iluvatar():
+    from fastdeploy.model_executor.ops.iluvatar import (
+        text_image_gather_scatter,
+        text_image_index_out,
+    )
 else:
-    raise ImportError("Unsupported platform, only support CUDA and XPU")
+    raise ImportError("Unsupported platform, only support CUDA, MACA and XPU")
 
 __all__ = ["text_image_gather_scatter", "text_image_index_out"]

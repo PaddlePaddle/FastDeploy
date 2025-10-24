@@ -22,6 +22,8 @@ project_root = os.path.abspath(os.path.join(current_dir, ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+os.environ["FD_USE_MACHETE"] = "0"
+
 from tests.model_loader.utils import (
     calculate_diff_rate,
     form_model_get_output_topp0,
@@ -75,10 +77,12 @@ def check_result_against_baseline(outputs, baseline_file, threshold=0.05):
 
 hugging_face_model_param_map = {
     "Qwen2.5-7B-Instruct": {
+        "max_num_seqs": 1,
         "tensor_parallel_size": 2,
         "quantizations": ["wint8"],
     },
     "Qwen3-30B-A3B": {
+        "max_num_seqs": 1,
         "tensor_parallel_size": 2,
         "quantizations": ["wint8"],
     },
@@ -91,6 +95,7 @@ for model, cfg in hugging_face_model_param_map.items():
             pytest.param(
                 model,
                 cfg.get("tensor_parallel_size", 2),
+                cfg.get("max_num_seqs", 1),
                 cfg.get("max_model_len", 1024),
                 q,
                 cfg.get("max_tokens", 100),
@@ -100,13 +105,14 @@ for model, cfg in hugging_face_model_param_map.items():
 
 
 @pytest.mark.parametrize(
-    "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens",
+    "model_name_or_path,tensor_parallel_size,max_num_seqs,max_model_len,quantization,max_tokens",
     hf_params,
 )
 def test_model_against_baseline(
     fd_runner,
     model_name_or_path: str,
     tensor_parallel_size: int,
+    max_num_seqs: int,
     max_model_len: int,
     max_tokens: int,
     quantization: str,
@@ -123,6 +129,7 @@ def test_model_against_baseline(
             fd_runner,
             torch_model_path,
             tensor_parallel_size,
+            max_num_seqs,
             max_model_len,
             max_tokens,
             quantization,

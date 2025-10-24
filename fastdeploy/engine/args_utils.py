@@ -36,6 +36,7 @@ from fastdeploy.config import (
     PoolerConfig,
     RunnerOption,
     SpeculativeConfig,
+    StructuredOutputsConfig,
     TaskOption,
 )
 from fastdeploy.platforms import current_platform
@@ -198,7 +199,7 @@ class EngineArgs:
     The amount of CPU memory to offload to.
     """
 
-    cache_queue_port: int = 8003
+    cache_queue_port: str = "8003"
     """
     Port for cache queue.
     """
@@ -353,10 +354,6 @@ class EngineArgs:
     """
     SplitWise Use, Results Writer Batch Size
     """
-    use_cudagraph: bool = False
-    """
-    Flags to enable Cuda Graph
-    """
     graph_optimization_config: Optional[Dict[str, Any]] = None
     """
     Configuration for graph optimization backend execution.
@@ -387,7 +384,7 @@ class EngineArgs:
     Configuration for early stop.
     """
 
-    load_choices: str = "default"
+    load_choices: str = "default_v1"
     """The format of the model weights to load.
         Options include:
         - "default": default loader.
@@ -410,13 +407,11 @@ class EngineArgs:
             self.enable_prefix_caching = False
         if self.speculative_config is not None:
             self.enable_prefix_caching = False
-        if not current_platform.is_cuda():
+        if not current_platform.is_cuda() and not current_platform.is_xpu():
             self.enable_prefix_caching = False
         # if self.dynamic_load_weight:
         #     self.enable_prefix_caching = False
         if self.enable_logprob:
-            if self.speculative_config is not None:
-                raise NotImplementedError("Logprob does not support speculation_config.")
             if not current_platform.is_cuda():
                 raise NotImplementedError("Only CUDA platform supports logprob.")
         if self.speculative_config is not None:
@@ -588,16 +583,10 @@ class EngineArgs:
             "More complex quantization methods need to be configured via the config file.",
         )
         model_group.add_argument(
-            "--use-cudagraph",
-            action="store_true",
-            default=EngineArgs.use_cudagraph,
-            help="Flags to enable cuda graph.",
-        )
-        model_group.add_argument(
             "--graph-optimization-config",
             type=json.loads,
             default=EngineArgs.graph_optimization_config,
-            help="",
+            help="Configuration for graph optimization",
         )
         model_group.add_argument(
             "--plas-attention-config",
@@ -715,7 +704,7 @@ class EngineArgs:
             type=str,
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\
-                 default/new_loader.",
+                 default/default_v1.",
         )
 
         # CacheConfig parameters group
@@ -741,7 +730,7 @@ class EngineArgs:
 
         cache_group.add_argument(
             "--cache-queue-port",
-            type=int,
+            type=lambda s: [int(item.strip()) for item in s.split(",")] if s else None,
             default=EngineArgs.cache_queue_port,
             help="port for cache queue",
         )
@@ -1014,7 +1003,7 @@ class EngineArgs:
                 early_stop_args[k] = v
         return EarlyStopConfig(early_stop_args)
 
-    def create_engine_config(self) -> FDConfig:
+    def create_engine_config(self, port_availability_check=True) -> FDConfig:
         """
         Create and return a Config object based on the current settings.
         """
@@ -1026,11 +1015,7 @@ class EngineArgs:
 
         speculative_cfg = self.create_speculative_config()
         if not self.enable_chunked_prefill:
-            if (
-                current_platform.is_cuda()
-                and self.splitwise_role == "mixed"
-                and (speculative_cfg is None or speculative_cfg.method not in ["mtp"])
-            ):
+            if current_platform.is_cuda() and self.splitwise_role == "mixed":
                 # default enable chunked prefill
                 self.enable_chunked_prefill = True
 
@@ -1062,15 +1047,15 @@ class EngineArgs:
         parallel_cfg = ParallelConfig(all_dict)
         scheduler_cfg = self.create_scheduler_config()
         graph_opt_cfg = self.create_graph_optimization_config()
-        graph_opt_cfg.update_use_cudagraph(self.use_cudagraph)
         plas_attention_config = self.create_plas_attention_config()
 
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
-
-        assert is_port_available(
-            "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
-        ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
+        structured_outputs_config: StructuredOutputsConfig = StructuredOutputsConfig(args=all_dict)
+        if port_availability_check:
+            assert is_port_available(
+                "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
+            ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
 
         return FDConfig(
             model_config=model_cfg,
@@ -1079,13 +1064,12 @@ class EngineArgs:
             cache_config=cache_cfg,
             load_config=load_cfg,
             parallel_config=parallel_cfg,
-            max_model_len=self.max_model_len,
             speculative_config=speculative_cfg,
+            structured_outputs_config=structured_outputs_config,
             ips=self.ips,
             use_warmup=self.use_warmup,
             limit_mm_per_prompt=self.limit_mm_per_prompt,
             mm_processor_kwargs=self.mm_processor_kwargs,
-            reasoning_parser=self.reasoning_parser,
             tool_parser=self.tool_call_parser,
             innode_prefill_ports=self.innode_prefill_ports,
             max_num_partial_prefills=self.max_num_partial_prefills,
@@ -1093,7 +1077,5 @@ class EngineArgs:
             long_prefill_token_threshold=self.long_prefill_token_threshold,
             graph_opt_config=graph_opt_cfg,
             plas_attention_config=plas_attention_config,
-            guided_decoding_backend=self.guided_decoding_backend,
-            disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             early_stop_config=early_stop_cfg,
         )

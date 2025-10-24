@@ -1,3 +1,5 @@
+[简体中文](../zh/usage/kunlunxin_xpu_deployment.md)
+
 ## Supported Models
 |Model Name|Context Length|Quantization|XPUs Required|Deployment Commands|Minimum Version Required|
 |-|-|-|-|-|-|
@@ -45,7 +47,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 or
 `export XPU_VISIBLE_DEVICES="4,5,6,7"`
 
-Refer to [Parameters](../../parameters.md) for more options.
+Refer to [Parameters](../parameters.md) for more options.
 
 All supported models can be found in the *Supported Models* section above.
 

@@ -27,6 +27,10 @@
 #include "softmax.hpp"
 #include "cutlass/arch/reg_reconfig.h"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
+
 template <int kHeadDim>
 auto get_gmem_layout(int token_num, int head_num) {
     return make_layout(
@@ -360,7 +364,7 @@ void MobaEncoderAttn(
 }
 
 
-PD_BUILD_OP(moba_encoder_attn)
+PD_BUILD_STATIC_OP(moba_encoder_attn)
     .Inputs({
         "q_input",
         "k_input",

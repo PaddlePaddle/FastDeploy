@@ -79,7 +79,7 @@ class XPUAttentionBackend(AttentionBackend):
         super().__init__()
         self.attention_metadata: XPUAttentionMetadata = None
         self.block_size: int = fd_config.cache_config.block_size
-        self.max_seq_len: int = fd_config.parallel_config.max_model_len
+        self.max_seq_len: int = fd_config.model_config.max_model_len
         self.rope_theta: float = (
             10000.0 if fd_config.model_config.rope_theta is None else fd_config.model_config.rope_theta
         )
@@ -127,7 +127,6 @@ class XPUAttentionBackend(AttentionBackend):
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,
-        kv_cache_quant_type: str = None,
     ) -> Tuple[int, int, int, int]:
         """
         Calculate kv cache shape
@@ -164,6 +163,12 @@ class XPUAttentionBackend(AttentionBackend):
         k_quant_scale = getattr(layer, "cache_k_scale", None)
         v_quant_scale = getattr(layer, "cache_v_scale", None)
 
+        cache_k_out_scale = getattr(layer, "cache_k_out_scale", None)
+        cache_v_out_scale = getattr(layer, "cache_v_out_scale", None)
+
+        k_zp = getattr(self, "cache_k_zp", None)
+        v_zp = getattr(self, "cache_v_zp", None)
+
         from fastdeploy.model_executor.ops.xpu import block_attn
 
         res = block_attn(
@@ -173,16 +178,26 @@ class XPUAttentionBackend(AttentionBackend):
             forward_meta.cum_offsets,
             metadata.rotary_embs,
             metadata.block_tables,
-            None,
-            k_quant_scale,
-            v_quant_scale,
-            forward_meta.enc_batch,
-            forward_meta.dec_batch,
-            forward_meta.total_enc_len,
+            forward_meta.prefix_block_tables,
+            forward_meta.len_info_cpu,
             forward_meta.encoder_seq_lod_cpu,
+            forward_meta.decoder_seq_lod_cpu,
+            forward_meta.encoder_kv_lod_cpu,
             forward_meta.encoder_batch_map_cpu,
             forward_meta.decoder_context_len_cpu,
+            forward_meta.decoder_context_len_cache_cpu,
             forward_meta.decoder_batch_map_cpu,
+            forward_meta.prefix_len_cpu,
+            k_quant_scale,
+            v_quant_scale,
+            cache_k_out_scale,
+            cache_v_out_scale,
+            k_zp,  # zero_point_quant_scale
+            v_zp,  # zero_point_quant_scale
+            None,  # shift
+            None,  # smooth
+            None,  # kv_signal_data
+            None,  # kv_signal_sender
             forward_meta.pos_emb_type,
             self.rope_3d,
         )
