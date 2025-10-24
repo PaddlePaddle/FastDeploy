@@ -18,8 +18,10 @@ import unittest
 
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest, DeltaMessage
 from fastdeploy.reasoning import ReasoningParser, ReasoningParserManager
+from fastdeploy.reasoning.ernie_45_vl_thinking_reasoning_parser import (
+    Ernie45VLThinkingReasoningParser,
+)
 from fastdeploy.reasoning.ernie_x1_reasoning_parsers import ErnieX1ReasoningParser
-from fastdeploy.reasoning.ernietest_reasoning_parser import ErnieTestReasoningParser
 
 
 class DummyTokenizer:
@@ -262,10 +264,10 @@ class TestErnieX1ReasoningParser(unittest.TestCase):
         self.assertEqual(response, "line1\nline2\n")
 
 
-class TestErineTestReasoningParser(unittest.TestCase):
+class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
     def setUp(self):
         self.tokenizer = DummyTokenizer()
-        self.parser = ErnieTestReasoningParser(tokenizer=self.tokenizer)
+        self.parser = Ernie45VLThinkingReasoningParser(tokenizer=self.tokenizer)
         self.test_request = ChatCompletionRequest(
             model="ernie-test", messages=[{"role": "user", "content": "test prompt"}]
         )
@@ -316,6 +318,19 @@ class TestErineTestReasoningParser(unittest.TestCase):
         )
         self.assertIsNone(result)
 
+    def test_streaming_with_reasoning_and_tool_not_complete(self):
+        result = self.parser.extract_reasoning_content_streaming(
+            previous_text="abc",
+            current_text="abc</think>\n\n<tool",
+            delta_text="</think>\n\n<tool",
+            previous_token_ids=[200, 201, 202],
+            current_token_ids=[200, 201, 202, 100, 200, 101],
+            delta_token_ids=[100, 200, 101],
+        )
+        self.assertIsInstance(result, DeltaMessage)
+        self.assertEqual(result.reasoning_content, "")
+        self.assertEqual(result.content, "\n\n<tool")
+
     def test_streaming_with_reasoning_no_tool(self):
         result = self.parser.extract_reasoning_content_streaming(
             previous_text="abc",
@@ -345,6 +360,13 @@ class TestErineTestReasoningParser(unittest.TestCase):
     def test_batch_no_think_end(self):
         reasoning, content = self.parser.extract_reasoning_content(
             model_output="direct response", request=self.test_request
+        )
+        self.assertEqual(reasoning, "")
+        self.assertEqual(content, "direct response")
+
+    def test_batch_no_think_end_with_tool(self):
+        reasoning, content = self.parser.extract_reasoning_content(
+            model_output="direct response<tool_call>abc", request=self.test_request
         )
         self.assertEqual(reasoning, "")
         self.assertEqual(content, "direct response")

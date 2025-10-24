@@ -45,7 +45,7 @@ from fastdeploy.utils import data_processor_logger
 
 
 @ToolParserManager.register_module("ernie_45-vl-thinking")
-class Ernie45VLThinkingReasoningParser(ToolParser):
+class Ernie45VLThinkingToolParser(ToolParser):
     """
     Tool parser for Ernie model version 4.5.1.
     This parser handles tool calls with newline formats.
@@ -228,7 +228,7 @@ class Ernie45VLThinkingReasoningParser(ToolParser):
         request: dict,
     ) -> Union[DeltaMessage, None]:
 
-        if self.tool_call_start_token_id not in current_token_ids:
+        if self.tool_call_start_token not in current_text:
             return DeltaMessage(content=delta_text)
         # Skip empty chunks
         if len(delta_text.strip()) == 0:
