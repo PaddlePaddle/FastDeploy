@@ -456,7 +456,7 @@ class DataProcessor(BaseDataProcessor):
             response_dict["outputs"]["delta_message"] = reasoning_delta_message
             reasoning_content = (
                 reasoning_delta_message.reasoning_content
-                if reasoning_delta_message and reasoning_delta_message.reasoning_content
+                if (reasoning_delta_message and hasattr(reasoning_delta_message, "reasoning_content"))
                 else None
             )
             reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
