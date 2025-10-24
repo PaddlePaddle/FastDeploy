@@ -332,7 +332,7 @@ class Sampler(nn.Layer):
     ) -> SamplerOutput:
         """ """
         logits = self.guided_encoding.apply_token_mask(logits, skip_idx_list)
-        for proc in sampling_metadata.logits_processors:
+        for proc in sampling_metadata.logits_processors or []:
             logits = proc.apply(logits)
 
         num_logprobs = sampling_metadata.max_num_logprobs
