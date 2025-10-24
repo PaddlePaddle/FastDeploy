@@ -24,12 +24,12 @@ from typing import Any, Dict, Generic, Optional, Union
 import numpy as np
 from typing_extensions import TypeVar
 
+from fastdeploy import envs
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
 from fastdeploy.utils import data_processor_logger
 from fastdeploy.worker.output import LogprobsLists, SampleLogprobs
-from fastdeploy import envs
 
 
 class RequestStatus(Enum):
