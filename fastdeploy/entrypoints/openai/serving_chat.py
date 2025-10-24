@@ -321,6 +321,7 @@ class OpenAIServingChat:
                     output_top_logprobs = output["top_logprobs"]
                     output_draft_top_logprobs = output["draft_top_logprobs"]
                     previous_num_tokens[idx] += len(output["token_ids"])
+                    reasoning_num_tokens[idx] += output.get("reasoning_token_num", 0)
                     logprobs_res: Optional[LogProbs] = None
                     draft_logprobs_res: Optional[LogProbs] = None
                     if request.logprobs and output_top_logprobs is not None:
@@ -349,8 +350,6 @@ class OpenAIServingChat:
                             continue
                         delta_message.content = delta_message_output.content or ""
                         delta_message.reasoning_content = delta_message_output.reasoning_content or ""
-                        if delta_message.reasoning_content:
-                            reasoning_num_tokens[idx] += output["reasoning_token_num"]
                         if delta_message_output.tool_calls:
                             delta_message.tool_calls = delta_message_output.tool_calls
                             tool_called[idx] = True

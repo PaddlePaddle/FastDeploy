@@ -460,6 +460,7 @@ class OpenAIServingCompletion:
                                 output_draft_top_logprobs, request.logprobs, 0
                             )
                     output_tokens[idx] += 1
+                    reasoning_tokens[idx] += output.get("reasoning_token_num", 0)
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
                         text=output["text"],
@@ -478,8 +479,6 @@ class OpenAIServingCompletion:
                             continue
                         delta_message.text = delta_message_output.content or ""
                         delta_message.reasoning_content = delta_message_output.reasoning_content or ""
-                        if delta_message.reasoning_content:
-                            reasoning_tokens[idx] += output["reasoning_token_num"]
                         if delta_message_output.tool_calls:
                             delta_message.tool_calls = delta_message_output.tool_calls
                             tool_called[idx] = True
