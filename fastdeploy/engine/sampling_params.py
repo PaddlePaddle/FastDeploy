@@ -103,7 +103,7 @@ class SamplingParams:
     bad_words: Optional[List[str]] = None
     guided_decoding: Optional[GuidedDecodingParams] = None
     bad_words_token_ids: Optional[List[int]] = None
-    logits_processors_args: dict[int, float] | None = None
+    logits_processors_args: Optional[dict[str, Any]] = None
 
     @classmethod
     def from_dict(cls, req_dict: dict[str, Any]) -> SamplingParams:
