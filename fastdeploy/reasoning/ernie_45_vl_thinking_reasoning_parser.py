@@ -71,7 +71,7 @@ class Ernie45VLThinkingReasoningParser(ReasoningParser):
         # Skip single special tokens
         if len(delta_token_ids) == 1 and delta_token_ids[0] == self.think_end_token_id:
             return None
-        if self.tool_begin_token in previous_text:
+        if self.tool_begin_token in current_text:
             return None
         if self.think_end_token_id in delta_token_ids:
             end_index = delta_text.find(self.think_end_token)
@@ -83,10 +83,8 @@ class Ernie45VLThinkingReasoningParser(ReasoningParser):
                     return DeltaMessage(reasoning_content=reasoning_content)
                 else:
                     return None
-            elif len(reasoning_content) > 0 or len(content) > 0:
-                return DeltaMessage(reasoning_content=reasoning_content, content=delta_text[index:])
             else:
-                return None
+                return DeltaMessage(reasoning_content=reasoning_content, content=delta_text[index:])
         elif self.think_end_token_id in previous_token_ids:
             content = delta_text.lstrip("\n")
             if self.tool_begin_token in delta_text:

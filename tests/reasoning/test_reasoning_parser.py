@@ -296,6 +296,17 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
         )
         self.assertIsNone(result)
 
+    def test_streaming_with_no_reasoning_but_tool(self):
+        result = self.parser.extract_reasoning_content_streaming(
+            previous_text="",
+            current_text="<tool_call>",
+            delta_text="<tool_call>",
+            previous_token_ids=[],
+            current_token_ids=[101],
+            delta_token_ids=[101],
+        )
+        self.assertIsNone(result)
+
     def test_streaming_with_reasoning_new_line(self):
         result = self.parser.extract_reasoning_content_streaming(
             previous_text="abc",
