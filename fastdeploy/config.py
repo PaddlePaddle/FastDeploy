@@ -1346,6 +1346,9 @@ class StructuredOutputsConfig:
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
 
+    def __str__(self) -> str:
+        return json.dumps({key: value for key, value in self.__dict__.items()})
+
 
 class FDConfig:
     """

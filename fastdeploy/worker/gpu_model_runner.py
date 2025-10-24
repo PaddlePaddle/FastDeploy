@@ -468,7 +468,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
             # For logits processors
-            self.share_inputs["logit_bias"][idx] = request.get("logit_bias", None)
+            self.share_inputs["logits_processors_args"][idx] = request.get("logits_processors_args") or {}
 
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
@@ -1019,7 +1019,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # For logits processors
         self.share_inputs["logits_processors"] = build_logits_processors(self.fd_config)
-        self.share_inputs["logit_bias"] = [None] * max_num_seqs
+        self.share_inputs["logits_processors_args"] = [{} for _ in range(max_num_seqs)]
         logger.info(f"Enabled logits processors: {self.share_inputs['logits_processors']}")
 
     def _prepare_inputs(self) -> None:
@@ -1821,7 +1821,10 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 1.1 Update state of logits processor
         for proc in self.sampling_metadata.logits_processors:
-            proc.update_state(model_forward_batch, self.share_inputs)
+            proc.update_state(
+                self.share_inputs["stop_flags"].clone(),
+                self.share_inputs["logits_processors_args"].copy(),
+            )
 
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,

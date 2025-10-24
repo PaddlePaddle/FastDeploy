@@ -13,8 +13,8 @@ class TestLogitsProcessor(unittest.TestCase):
     def setUp(self):
         self.vocab_size = 10
         self.max_num_seqs = 16
-        self.batch = None
-        self.share_inputs = self.create_share_inputs()
+        self.stop_flags = paddle.tensor([True for _ in range(self.max_num_seqs)])
+        self.logits_processors_args = [{} for _ in range(self.max_num_seqs)]
 
     def create_request(self, **kwargs):
         """Create a mock request with specified logit bias"""
@@ -23,34 +23,19 @@ class TestLogitsProcessor(unittest.TestCase):
             setattr(request, k, v)
         return request
 
-    def create_share_inputs(self):
-        """Create a share_inputs dict to mock inference context"""
-        share_inputs = {}
-        share_inputs["logit_bias"] = [None] * self.max_num_seqs
-        return share_inputs
-
     def create_logits(self):
-        return paddle.randn([len(self.batch) if self.batch is not None else 0, self.vocab_size])
+        return paddle.randn([self.get_batch_size(), self.vocab_size])
 
-    def add_request(self, request):
-        # print(f"Adding new request: {request.__dict__}")
-        if self.batch is None:
-            self.batch = [request]
-        else:
-            self.batch.append(request)
-        for req in self.batch:
-            self.share_inputs["logit_bias"][req.idx] = req.logit_bias
-        return
+    def add_request(self, req):
+        self.stop_flags[req.idx] = False
+        self.logits_processors_args[req.idx]["logit_bias"] = req.logit_bias
 
-    def del_request(self, request_id):
-        # print(f"Deleting request with id: {request_id}")
-        del_idx = None
-        for i, req in enumerate(self.batch.copy()):
-            if req.request_id == request_id:
-                self.batch.pop(i)
-                del_idx = req.idx
-                break
-        self.share_inputs["logit_bias"][del_idx] = None
+    def del_request(self, req):
+        self.stop_flags[req.idx] = True
+        self.logits_processors_args[req.idx] = {}
+
+    def get_batch_size(self):
+        return self.max_num_seqs - sum(self.stop_flags)
 
     def test_logit_bias_logit_processor(self):
 
@@ -58,7 +43,7 @@ class TestLogitsProcessor(unittest.TestCase):
 
         print("Phase 1: Empty batch")
         logits = self.create_logits()
-        logits_processor.update_state(self.batch, self.share_inputs)
+        logits_processor.update_state(self.stop_flags, self.logits_processors_args)
         processed_logits = logits_processor.apply(logits)
         self.assertTrue(
             paddle.allclose(processed_logits, logits, atol=1e-6), "Logits should remain unchanged with empty batch"
@@ -72,12 +57,15 @@ class TestLogitsProcessor(unittest.TestCase):
         logits = self.create_logits()
         original_logits = logits.clone()
         expected_logits = logits.clone()
-        logits_processor.update_state(self.batch, self.share_inputs)
+        logits_processor.update_state(self.stop_flags, self.logits_processors_args)
         processed_logits = logits_processor.apply(logits)
-        for i, req in enumerate(self.batch):
-            if req.logit_bias is not None:
-                for token_id, bias in req.logit_bias.items():
-                    expected_logits[i, token_id] += bias
+        batch_id = 0
+        for slot_id, flag in enumerate(self.stop_flags):
+            if not flag:
+                logit_bias = self.logits_processors_args[batch_id].get("logit_bias", {})
+                for token_id, bias in logit_bias.items():
+                    expected_logits[batch_id, token_id] += bias
+                batch_id += 1
         self.assertTrue(
             paddle.allclose(processed_logits, expected_logits, atol=1e-6),
             f"Logits should be modified with req1 biases\n"
@@ -99,12 +87,15 @@ class TestLogitsProcessor(unittest.TestCase):
         logits = self.create_logits()
         original_logits = logits.clone()
         expected_logits = logits.clone()
-        logits_processor.update_state(self.batch, self.share_inputs)
+        logits_processor.update_state(self.stop_flags, self.logits_processors_args)
         processed_logits = logits_processor.apply(logits)
-        for i, req in enumerate(self.batch):
-            if req.logit_bias is not None:
-                for token_id, bias in req.logit_bias.items():
-                    expected_logits[i, token_id] += bias
+        batch_id = 0
+        for slot_id, flag in enumerate(self.stop_flags):
+            if not flag:
+                logit_bias = self.logits_processors_args[batch_id].get("logit_bias") or {}
+                for token_id, bias in logit_bias.items():
+                    expected_logits[batch_id, token_id] += bias
+                batch_id += 1
         self.assertTrue(
             paddle.allclose(processed_logits, expected_logits, atol=1e-6),
             "Logits should be modified with req1 and req2 biases\n"
@@ -115,16 +106,19 @@ class TestLogitsProcessor(unittest.TestCase):
         )
 
         print("Phase 4: Remove first request")
-        self.del_request("req1")
+        self.del_request(request1)
         logits = self.create_logits()
         original_logits = logits.clone()
         expected_logits = logits.clone()
-        logits_processor.update_state(self.batch, self.share_inputs)
+        logits_processor.update_state(self.stop_flags, self.logits_processors_args)
         processed_logits = logits_processor.apply(logits)
-        for i, req in enumerate(self.batch):
-            if req.logit_bias is not None:
-                for token_id, bias in req.logit_bias.items():
-                    expected_logits[i, token_id] += bias
+        batch_id = 0
+        for slot_id, flag in enumerate(self.stop_flags):
+            if not flag:
+                logit_bias = self.logits_processors_args[batch_id].get("logit_bias") or {}
+                for token_id, bias in logit_bias.items():
+                    expected_logits[batch_id, token_id] += bias
+                batch_id += 1
         self.assertTrue(
             paddle.allclose(processed_logits, expected_logits, atol=1e-6),
             "Logits should only have biases from request2 after removal\n"
@@ -140,15 +134,18 @@ class TestLogitsProcessor(unittest.TestCase):
         logits = self.create_logits()
         original_logits = logits.clone()
         expected_logits = logits.clone()
-        logits_processor.update_state(self.batch, self.share_inputs)
+        logits_processor.update_state(self.stop_flags, self.logits_processors_args)
         processed_logits = logits_processor.apply(logits)
-        for i, req in enumerate(self.batch):
-            if req.logit_bias is not None:
-                for token_id, bias in req.logit_bias.items():
-                    expected_logits[i, token_id] += bias
+        batch_id = 0
+        for slot_id, flag in enumerate(self.stop_flags):
+            if not flag:
+                logit_bias = self.logits_processors_args[batch_id].get("logit_bias") or {}
+                for token_id, bias in logit_bias.items():
+                    expected_logits[batch_id, token_id] += bias
+                batch_id += 1
         processed_logits = logits_processor.apply(logits)
         self.assertTrue(
-            paddle.allclose(processed_logits, logits, atol=1e-6),
+            paddle.allclose(processed_logits, expected_logits, atol=1e-6),
             "Logits should remain unchanged with request having no bias\n"
             f"original: {original_logits}\n"
             f"processed: {processed_logits}\n"

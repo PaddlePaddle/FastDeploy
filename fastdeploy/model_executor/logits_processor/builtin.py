@@ -16,9 +16,7 @@
 
 import paddle
 
-from fastdeploy.engine.request import Request
 from fastdeploy.model_executor.logits_processor.base import LogitsProcessor
-from fastdeploy.utils import llm_logger
 
 
 class LogitBiasLogitsProcessor(LogitsProcessor):
@@ -41,53 +39,44 @@ class LogitBiasLogitsProcessor(LogitsProcessor):
         outcome of argmax in greedy sampling."""
         return False
 
-    def update_state(self, batch: list[Request] | None, share_inputs: dict):
+    def update_state(self, stop_flags: list[bool], logits_processors_args: list[dict]):
+        """
+        Build per-step logit-bias state from request slots and move it to device.
 
-        if batch is None:
-            self.skipped = True
-            return
-        else:
-            self.skipped = False
+        Args:
+        stop_flags (list[bool] | None): Per-slot stop indicators for the current
+            micro-batch. `False` means the slot is active; `True` means the slot
+            is finished and should be ignored. If `None`, the method assumes all
+            slots are active.
+        logits_processors_args (list[dict]): Per-slot runtime arguments. Each
+            item may contain `"logit_bias": dict[int, float]` specifying token
+            biases for that slot. Missing or empty maps are treated as no-op.
+        """
 
-        need_updates = False
-        req_id_batch_id_map: dict = {}
-        for batch_id, request in enumerate(batch):
-            # Get request_id (a unique string) and its slot_id in running batch
-            request_id: str = request.request_id
-            slot_id: int = request.idx
-            req_id_batch_id_map[request_id] = batch_id
+        batch_ids: list[int] = []
+        token_ids: list[int] = []
+        biases: list[float] = []
 
-            # Insert bias states for this request
-            logit_bias = share_inputs["logit_bias"][slot_id]
-            if logit_bias is not None and request_id not in self.biases:  # new request
-                self.biases[request_id] = logit_bias.copy()
-                need_updates = True
-
-        # Remove bias states for requests that are no longer in the batch
-        for request_id in list(self.biases):
-            if request_id not in req_id_batch_id_map:
-                self.biases.pop(request_id)
-                need_updates = True
-
-        if need_updates:
-            # Make bias indices and bias tensor
-            batch_ids: list[int] = []
-            token_ids: list[int] = []
-            biases: list[float] = []
-            for request_id, tok_id_bias_map in self.biases.items():
-                batch_ids.extend([req_id_batch_id_map[request_id]] * len(tok_id_bias_map))
+        # Get bias states for each request
+        batch_id = 0
+        for slot_id, flag in enumerate(stop_flags):
+            if not flag:
+                tok_id_bias_map = logits_processors_args[slot_id].get("logit_bias") or {}
+                batch_ids.extend([batch_id] * len(tok_id_bias_map))
                 token_ids.extend(tok_id_bias_map.keys())
                 biases.extend(tok_id_bias_map.values())
-            llm_logger.debug(f"batch_ids={batch_ids}, token_ids={token_ids}, biases={biases}")
+            batch_id += 1
 
-            self.bias_indices = (
-                paddle.tensor(batch_ids, dtype="int32").to(self.device),
-                paddle.tensor(token_ids, dtype="int32").to(self.device),
-            )
-            self.bias_tensor = paddle.tensor(biases, dtype="float32").to(self.device)
+        # Make bias indices and bias tensor
+        self.bias_indices = (
+            paddle.tensor(batch_ids, dtype="int32").to(self.device),
+            paddle.tensor(token_ids, dtype="int32").to(self.device),
+        )
+        self.bias_tensor = paddle.tensor(biases, dtype="float32").to(self.device)
 
     def apply(self, logits: paddle.Tensor) -> paddle.Tensor:
         """Apply logit bias to logits: [batch_size, vocab_size]"""
-        if not self.skipped:
-            logits[self.bias_indices] += self.bias_tensor
+        logits = logits.clone()
+        # NOTE: logits must be cloned before modifying them, otherwise will affect accuracy
+        logits[self.bias_indices] += self.bias_tensor
         return logits

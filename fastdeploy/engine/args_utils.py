@@ -26,7 +26,6 @@ from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
     ConvertOption,
-    DecodingConfig,
     EarlyStopConfig,
     FDConfig,
     GraphOptimizationConfig,
@@ -1061,7 +1060,6 @@ class EngineArgs:
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg
         cache_cfg = CacheConfig(all_dict)
-        dec_cfg = DecodingConfig(all_dict)
         load_cfg = LoadConfig(all_dict)
         parallel_cfg = ParallelConfig(all_dict)
         scheduler_cfg = self.create_scheduler_config()
@@ -1097,5 +1095,4 @@ class EngineArgs:
             graph_opt_config=graph_opt_cfg,
             plas_attention_config=plas_attention_config,
             early_stop_config=early_stop_cfg,
-            decoding_config=dec_cfg,
         )

@@ -103,7 +103,7 @@ class SamplingParams:
     bad_words: Optional[List[str]] = None
     guided_decoding: Optional[GuidedDecodingParams] = None
     bad_words_token_ids: Optional[List[int]] = None
-    logit_bias: dict[int, float] | None = None
+    logits_processors_args: dict[int, float] | None = None
 
     @classmethod
     def from_dict(cls, req_dict: dict[str, Any]) -> SamplingParams:
@@ -137,7 +137,7 @@ class SamplingParams:
         bad_words=None,
         guided_decoding=None,
         bad_words_token_ids=None,
-        logit_bias=None,
+        logits_processors_args=None,
     ) -> SamplingParams:
         """Create instance from command line arguments"""
         return cls(
@@ -160,20 +160,12 @@ class SamplingParams:
             bad_words=bad_words,
             guided_decoding=guided_decoding,
             bad_words_token_ids=bad_words_token_ids,
-            logit_bias=logit_bias,
+            logits_processors_args=logits_processors_args,
         )
 
     def __post_init__(self):
         if self.seed is None:
             self.seed = random.randint(0, 922337203685477580)
-        if self.logit_bias is not None:
-            proc_logit_bias = {}
-            try:
-                for k, v in self.logit_bias.items():
-                    proc_logit_bias[int(k)] = float(v)
-            except:
-                raise TypeError("can not cast logit_bias items to int -> float")
-            self.logit_bias = proc_logit_bias
         self._verify_args()
 
     def _verify_args(self) -> None:
@@ -219,11 +211,23 @@ class SamplingParams:
         if not 0 <= self.seed <= 922337203685477580:
             raise ValueError("seed must be in [0, 922337203685477580], got " f"{self.seed}.")
 
-        if self.logit_bias is not None:
-            if not isinstance(self.logit_bias, dict):
-                raise TypeError(f"logit_bias must be a dict, but got {type(self.logit_bias)}")
-            elif not all(isinstance(k, int) and isinstance(v, float) for k, v in self.logit_bias.items()):
-                raise TypeError("logit_bias got incorrect key/value type, expected int -> float")
+        # Verify logits processors arguments
+        if self.logits_processors_args is not None:
+            if self.logits_processors_args.get("logit_bias") is not None:
+                logit_bias = self.logits_processors_args.get("logit_bias")
+                if not isinstance(logit_bias, dict):
+                    raise TypeError(f"logit_bias must be a dict, but got {type(logit_bias)}")
+                elif not all(isinstance(k, int) and isinstance(v, float) for k, v in logit_bias.items()):
+                    # try to cast the dict to the correct type first
+                    try:
+                        cast_logit_bias = {}
+                        for k, v in logit_bias.items():
+                            cast_logit_bias[int(k)] = float(v)
+                        self.logits_processors_args["logit_bias"] = cast_logit_bias
+                    except:
+                        raise TypeError(
+                            "failed to cast logit_bias to the correct {key -> value} type, expected {int -> float}"
+                        )
 
 
 @dataclass

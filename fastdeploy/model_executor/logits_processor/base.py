@@ -44,7 +44,7 @@ class LogitsProcessor(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def update_state(self) -> None:
+    def update_state(self, stop_flags, logits_processors_args) -> None:
         """Called when there are new output tokens, prior
         to each forward pass.
         """
