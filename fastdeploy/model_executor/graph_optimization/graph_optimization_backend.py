@@ -102,8 +102,8 @@ class GraphOptBackend:
 
     def __init__(self, runnable: Callable, fd_config: FDConfig):
         self.runnable = runnable
+        self.dy_runnable = self.runnable
         self.fd_config = fd_config
-
         self.max_captre_size = fd_config.graph_opt_config.cudagraph_capture_sizes[0]
         if self.fd_config.graph_opt_config.graph_opt_level > 0:
             # 1. Prepare cuda graph input buffers (contain output of subgraphs)
@@ -113,7 +113,6 @@ class GraphOptBackend:
             backend = (
                 ToStaticBackend.CINN if self.fd_config.graph_opt_config.graph_opt_level > 1 else ToStaticBackend.PHI
             )
-            self.dy_runnable = self.runnable
             self.runnable = apply_to_static_optimization(
                 self.runnable.__func__,
                 backend,
