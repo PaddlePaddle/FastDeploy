@@ -64,7 +64,7 @@ class LogitBiasLogitsProcessor(LogitsProcessor):
                 tok_id_bias_map = logits_processors_args[slot_id].get("logit_bias") or {}
                 batch_ids.extend([batch_id] * len(tok_id_bias_map))
                 token_ids.extend(tok_id_bias_map.keys())
-                biases.extend(tok_id_bias_map.values()
+                biases.extend(tok_id_bias_map.values())
                 batch_id += 1
 
         # Make bias indices and bias tensor
