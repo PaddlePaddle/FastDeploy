@@ -307,6 +307,8 @@ class ParallelConfig:
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
         self.disable_custom_all_reduce: bool = False
+        # enable async download features
+        self.enable_async_download_features: bool = False
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)

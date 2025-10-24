@@ -386,6 +386,11 @@ class EngineArgs:
     Flag to specify the dtype of lm_head as FP32. Default is False (Using model default dtype).
     """
 
+    enable_async_download_features: bool = False
+    """
+    Flag to enable async download features. Default is False (disabled).
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -681,6 +686,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_expert_parallel,
             help="Enable expert parallelism.",
+        )
+        parallel_group.add_argument(
+            "--enable-async-download-features",
+            action="store_true",
+            default=EngineArgs.enable_async_download_features,
+            help="Enable async download features.",
         )
 
         # Load group

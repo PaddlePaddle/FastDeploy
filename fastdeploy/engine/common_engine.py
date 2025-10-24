@@ -528,6 +528,9 @@ class EngineSevice:
                 err_msg = f"Error happend while insert task to engine: {e}, {traceback.format_exc()!s}."
                 llm_logger.error(err_msg)
 
+    def _has_features_info(self, task):
+        pass
+
     def _scheduler_task_to_worker_v1(self):
         """
         Insert tasks to worker with scheduler v1 (ENABLE_V1_KVCACHE_SCHEDULER=1).
@@ -559,6 +562,10 @@ class EngineSevice:
             # Fetch requests and add them to the scheduling queue
             for task in tasks:
                 self.resource_manager.add_request(task)
+                if self.cfg.parallel_config.enable_async_download_features:
+                    # 将带有features的请求插入worker异步下载features
+                    if self._has_features_info(task):
+                        self.engine_worker_queue.put_features_task([task])
             is_fetching = False
 
         while self.running:

@@ -88,6 +88,10 @@ class EngineWorkerQueue:
             self.client_read_info_flag_init: List[List[int]] = [
                 [1] * self.num_client for _ in range(self.local_data_parallel_size)
             ]
+            self.features_task_init: List[List[Any]] = [list() for _ in range(self.local_data_parallel_size)]
+            self.client_features_flag_init: List[List[int]] = [
+                [1] * self.num_client for _ in range(self.local_data_parallel_size)
+            ]
             self.lock_info_init: List[threading.Lock] = [
                 threading.Lock() for _ in range(self.local_data_parallel_size)
             ]
@@ -161,6 +165,16 @@ class EngineWorkerQueue:
                 "get_finish_request_barrier",
                 callable=lambda idx: self.finish_request_barrier[idx],
             )
+            QueueManager.register(
+                "get_features_task",
+                callable=lambda idx: self.features_task_init[idx],
+                proxytype=ListProxy,
+            )
+            QueueManager.register(
+                "get_client_features_flag",
+                callable=lambda idx: self.client_features_flag_init[idx],
+                proxytype=ListProxy,
+            )
             self.manager: BaseManager = QueueManager(address=self.address, authkey=self.authkey)
             self.manager.start()
         else:
@@ -180,6 +194,8 @@ class EngineWorkerQueue:
             QueueManager.register("get_disaggregate_requests")
             QueueManager.register("get_available_prefill_instances")
             QueueManager.register("get_finish_request_barrier")
+            QueueManager.register("get_features_task")
+            QueueManager.register("get_client_features_flag")
             self.manager = QueueManager(address=self.address, authkey=self.authkey)
             self._connect_with_retry()
 
@@ -194,6 +210,8 @@ class EngineWorkerQueue:
             self.cache_infos: ListProxy = self.manager.get_cache_infos(self.local_data_parallel_id)
             self.client_read_info_flag: ListProxy = self.manager.get_client_read_info_flag(self.local_data_parallel_id)
             self.lock_info: AcquirerProxy = self.manager.get_lock_info(self.local_data_parallel_id)
+            self.features_task: ListProxy = self.manager.get_features_task(self.local_data_parallel_id)
+            self.client_features_flag: ListProxy = self.manager.get_client_features_flag(self.local_data_parallel_id)
 
             # p/d 分离获取
             self.disaggregate_requests = self.manager.get_disaggregate_requests(self.local_data_parallel_id)
@@ -268,6 +286,54 @@ class EngineWorkerQueue:
             self.tasks[:] = list()
         self.lock.release()
         return tasks, all_client_read
+
+    def get_features_task(self) -> Tuple[List[Any], bool]:
+        """
+        Retrieve features tasks from the shared queue and update read status.
+
+        Returns:
+            tuple: (list of tasks, bool indicating if all clients have read)
+        """
+        tasks: List[Any] = list()
+        self.lock.acquire()
+        tasks.extend(self.features_task)
+        self.client_features_flag[self.client_id] = 1
+        all_client_read: bool = np.sum(self.client_features_flag) == self.num_client
+        if all_client_read:
+            self.features_task[:] = list()
+        self.lock.release()
+        return tasks, all_client_read
+
+    def put_features_task(self, tasks: List[Any]) -> None:
+        """
+        Add features tasks to the shared queue in a thread-safe manner.
+        Waits until all clients have read previous features tasks before adding new ones.
+
+        Args:
+            tasks: Tasks to be added to the queue
+        """
+        self.lock.acquire()
+        while sum(self.client_features_flag) < self.num_client:
+            self.lock.release()
+            time.sleep(0.001)
+            self.lock.acquire()
+
+        self.features_task[:] = list()
+        self.client_features_flag[:] = [0] * self.num_client
+        self.features_task.append(tasks)
+        self.lock.release()
+
+    def num_features_task(self) -> int:
+        """
+        Get current number of features tasks in the queue.
+
+        Returns:
+            int: Total number of features tasks
+        """
+        self.lock.acquire()
+        total_num: int = len(self.features_task)
+        self.lock.release()
+        return total_num
 
     def num_tasks(self) -> int:
         """
