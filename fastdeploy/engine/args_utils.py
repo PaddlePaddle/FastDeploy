@@ -626,6 +626,7 @@ class EngineArgs:
         model_group.add_argument(
             "--logprobs-mode",
             type=str,
+            choices=["raw_logprobs", "processed_logprobs", "processed_logits"],
             default=EngineArgs.logprobs_mode,
             help="Indicates the content returned in the logprobs.",
         )
