@@ -305,19 +305,6 @@ class RewardPoolerHead(PoolerHead):
         return pooled_data
 
 
-def build_output(
-    all_data: Union[paddle.Tensor, list[paddle.Tensor]],
-) -> PoolerOutput:
-    # Pooling models D2H & synchronize occurs here
-    if isinstance(all_data, list):
-        all_data = [d.cpu() for d in all_data]
-    else:
-        all_data = all_data.cpu()
-
-    all_outputs = [PoolingSequenceGroupOutput(data) for data in all_data]
-    return PoolerOutput(outputs=all_outputs)
-
-
 class PoolingMethod(nn.Layer, ABC):
 
     @staticmethod

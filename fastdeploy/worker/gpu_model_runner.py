@@ -1861,19 +1861,9 @@ class GPUModelRunner(ModelRunnerBase):
             )
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
-        hidden_states = rebuild_padding(
-            model_output,
-            self.share_inputs["cu_seqlens_q"],
-            self.share_inputs["seq_lens_this_time"],
-            self.share_inputs["seq_lens_decoder"],
-            self.share_inputs["seq_lens_encoder"],
-            (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
-            self.model_config.max_model_len,
-        )
 
-        # 4. Compute logits, Sample
+        hidden_states = model_output
         if self.is_pooling_model:
-            # num_scheduled_tokens = int(self.share_inputs["seq_lens_this_time"][:num_running_requests].sum())
             pooler_output = self._pool(hidden_states, num_running_requests)
 
             model_output_data = ModelOutputData(
@@ -1921,158 +1911,168 @@ class GPUModelRunner(ModelRunnerBase):
             )
 
             return None
-
         else:
+            hidden_states = rebuild_padding(
+                model_output,
+                self.share_inputs["cu_seqlens_q"],
+                self.share_inputs["seq_lens_this_time"],
+                self.share_inputs["seq_lens_decoder"],
+                self.share_inputs["seq_lens_encoder"],
+                (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
+                self.model_config.max_model_len,
+            )
+
+            # 4. Compute logits, Sample
             logits = self.model.compute_logits(hidden_states)
 
-        if not self.speculative_decoding:
-            set_value_by_flags_and_idx(
-                self.share_inputs["pre_ids"],
-                self.share_inputs["input_ids"],
-                self.share_inputs["seq_lens_this_time"],
-                self.share_inputs["seq_lens_encoder"],
-                self.share_inputs["seq_lens_decoder"],
-                self.share_inputs["step_idx"],
-                self.share_inputs["stop_flags"],
-            )
-            sampler_output = self.sampler(
-                logits,
-                self.sampling_metadata,
-                skip_idx_list,
-            )
-            if self.parallel_config.tensor_parallel_size > 1:
-                paddle.distributed.broadcast(
-                    sampler_output.sampled_token_ids,
-                    self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
-                    group=self.parallel_config.tp_group,
-                )
-        else:
-            sampler_output = self.sampler(
-                logits,
-                self.sampling_metadata,
-                self.model_config.max_model_len,
-                self.share_inputs,
-            )
-            if self.parallel_config.tensor_parallel_size > 1:
-                paddle.distributed.broadcast(
-                    self.share_inputs["accept_tokens"],
-                    self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
-                    group=self.parallel_config.tp_group,
-                )
-                paddle.distributed.broadcast(
-                    self.share_inputs["accept_num"],
-                    self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
-                    group=self.parallel_config.tp_group,
-                )
-                paddle.distributed.broadcast(
+            if not self.speculative_decoding:
+                set_value_by_flags_and_idx(
+                    self.share_inputs["pre_ids"],
+                    self.share_inputs["input_ids"],
+                    self.share_inputs["seq_lens_this_time"],
+                    self.share_inputs["seq_lens_encoder"],
+                    self.share_inputs["seq_lens_decoder"],
                     self.share_inputs["step_idx"],
-                    self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
-                    group=self.parallel_config.tp_group,
-                )
-                paddle.distributed.broadcast(
                     self.share_inputs["stop_flags"],
-                    self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
-                    group=self.parallel_config.tp_group,
                 )
-
-        # 5. Post Process
-        model_output_data = ModelOutputData(
-            next_tokens=self.share_inputs["next_tokens"],
-            stop_flags=self.share_inputs["stop_flags"],
-            step_idx=self.share_inputs["step_idx"],
-            max_dec_len=self.share_inputs["max_dec_len"],
-            pre_ids=self.share_inputs["pre_ids"],
-            seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
-            eos_token_id=self.share_inputs["eos_token_id"],
-            not_need_stop=self.share_inputs["not_need_stop"],
-            input_ids=self.share_inputs["input_ids"],
-            stop_nums=self.share_inputs["stop_nums"],
-            seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
-            seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
-            is_block_step=self.share_inputs["is_block_step"],
-            full_hidden_states=model_output,
-            msg_queue_id=self.parallel_config.msg_queue_id,
-            mp_rank=self.parallel_config.tensor_parallel_rank,
-            use_ep=self.parallel_config.use_ep,
-            draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
-            actual_draft_token_num=(
-                self.share_inputs["actual_draft_token_num"] if self.speculative_decoding else None
-            ),
-            accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
-            accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
-            stop_token_ids=self.share_inputs["stop_seqs"],
-            stop_seqs_len=self.share_inputs["stop_seqs_len"],
-            prompt_lens=self.share_inputs["prompt_lens"],
-        )
-
-        if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
-            skip_save_output = True
-        else:
-            skip_save_output = False
-
-        post_process(
-            sampler_or_pooler_output=sampler_output,
-            model_output=model_output_data,
-            share_inputs=self.share_inputs,
-            block_size=self.cache_config.block_size,
-            save_each_rank=self.parallel_config.use_ep,
-            speculative_decoding=self.speculative_decoding,
-            skip_save_output=skip_save_output,
-            async_output_queue=self.async_output_queue,
-            think_end_id=self.model_config.think_end_id,
-            line_break_id=self.model_config.line_break_id,
-        )
-        if self.guided_backend is not None and sampler_output is not None:
-            self.sampler.post_process(sampler_output.sampled_token_ids, skip_idx_list)
-
-        # 6. Speculative decode
-        if self.speculative_decoding:
-            if self.speculative_method == "mtp":
-                self.proposer.run(
-                    full_hidden_states=model_output, step_use_cudagraph=self.forward_meta.step_use_cudagraph
+                sampler_output = self.sampler(
+                    logits,
+                    self.sampling_metadata,
+                    skip_idx_list,
                 )
+                if self.parallel_config.tensor_parallel_size > 1:
+                    paddle.distributed.broadcast(
+                        sampler_output.sampled_token_ids,
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
             else:
-                self.proposer.run(share_inputs=self.share_inputs)
+                sampler_output = self.sampler(
+                    logits,
+                    self.sampling_metadata,
+                    self.model_config.max_model_len,
+                    self.share_inputs,
+                )
+                if self.parallel_config.tensor_parallel_size > 1:
+                    paddle.distributed.broadcast(
+                        self.share_inputs["accept_tokens"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+                    paddle.distributed.broadcast(
+                        self.share_inputs["accept_num"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+                    paddle.distributed.broadcast(
+                        self.share_inputs["step_idx"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+                    paddle.distributed.broadcast(
+                        self.share_inputs["stop_flags"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
 
-        # 7. Update 'infer_seed' and step_cuda()
-        self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
-        self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
-        if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            step_cuda(
-                self.share_inputs,
-                self.cache_config.block_size,
-                self.cache_config.enc_dec_block_num,
-                self.speculative_config,
-                self.cache_config.enable_prefix_caching,
+            # 5. Post Process
+            model_output_data = ModelOutputData(
+                next_tokens=self.share_inputs["next_tokens"],
+                stop_flags=self.share_inputs["stop_flags"],
+                step_idx=self.share_inputs["step_idx"],
+                max_dec_len=self.share_inputs["max_dec_len"],
+                pre_ids=self.share_inputs["pre_ids"],
+                seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
+                eos_token_id=self.share_inputs["eos_token_id"],
+                not_need_stop=self.share_inputs["not_need_stop"],
+                input_ids=self.share_inputs["input_ids"],
+                stop_nums=self.share_inputs["stop_nums"],
+                seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
+                seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+                is_block_step=self.share_inputs["is_block_step"],
+                full_hidden_states=model_output,
+                msg_queue_id=self.parallel_config.msg_queue_id,
+                mp_rank=self.parallel_config.tensor_parallel_rank,
+                use_ep=self.parallel_config.use_ep,
+                draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
+                actual_draft_token_num=(
+                    self.share_inputs["actual_draft_token_num"] if self.speculative_decoding else None
+                ),
+                accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
+                accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
+                stop_token_ids=self.share_inputs["stop_seqs"],
+                stop_seqs_len=self.share_inputs["stop_seqs_len"],
+                prompt_lens=self.share_inputs["prompt_lens"],
             )
 
-            self._update_chunked_prefill(model_forward_batch)
-            self._add_cache(model_forward_batch)
-        elif self.speculative_decoding:
-            speculate_schedule_cache(
-                self.share_inputs["draft_tokens"],
-                self.share_inputs["block_tables"],
-                self.share_inputs["stop_flags"],
-                self.share_inputs["prompt_lens"],
-                self.share_inputs["seq_lens_this_time"],
-                self.share_inputs["seq_lens_encoder"],
-                self.share_inputs["seq_lens_decoder"],
-                self.share_inputs["step_seq_lens_decoder"],
-                self.share_inputs["step_draft_tokens"],
-                self.share_inputs["step_seq_lens_this_time"],
-                self.share_inputs["accept_num"],
-                self.share_inputs["accept_tokens"],
-                self.share_inputs["is_block_step"],
-                self.share_inputs["not_need_stop"],
-                self.share_inputs["stop_nums"],
-                self.cache_config.block_size,
-                self.speculative_config.num_speculative_tokens,
-            )
+            if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
+                skip_save_output = True
+            else:
+                skip_save_output = False
 
-        self.seq_lens_this_time_buffer[:num_running_requests].copy_(
-            self.share_inputs["seq_lens_this_time"][:num_running_requests], False
-        )
-        return None
+            post_process(
+                sampler_or_pooler_output=sampler_output,
+                model_output=model_output_data,
+                share_inputs=self.share_inputs,
+                block_size=self.cache_config.block_size,
+                save_each_rank=self.parallel_config.use_ep,
+                speculative_decoding=self.speculative_decoding,
+                skip_save_output=skip_save_output,
+                async_output_queue=self.async_output_queue,
+                think_end_id=self.model_config.think_end_id,
+                line_break_id=self.model_config.line_break_id,
+            )
+            if self.guided_backend is not None and sampler_output is not None:
+                self.sampler.post_process(sampler_output.sampled_token_ids, skip_idx_list)
+
+            # 6. Speculative decode
+            if self.speculative_decoding:
+                if self.speculative_method == "mtp":
+                    self.proposer.run(
+                        full_hidden_states=model_output, step_use_cudagraph=self.forward_meta.step_use_cudagraph
+                    )
+                else:
+                    self.proposer.run(share_inputs=self.share_inputs)
+
+            # 7. Update 'infer_seed' and step_cuda()
+            self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
+            self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                step_cuda(
+                    self.share_inputs,
+                    self.cache_config.block_size,
+                    self.cache_config.enc_dec_block_num,
+                    self.speculative_config,
+                    self.cache_config.enable_prefix_caching,
+                )
+
+                self._update_chunked_prefill(model_forward_batch)
+                self._add_cache(model_forward_batch)
+            elif self.speculative_decoding:
+                speculate_schedule_cache(
+                    self.share_inputs["draft_tokens"],
+                    self.share_inputs["block_tables"],
+                    self.share_inputs["stop_flags"],
+                    self.share_inputs["prompt_lens"],
+                    self.share_inputs["seq_lens_this_time"],
+                    self.share_inputs["seq_lens_encoder"],
+                    self.share_inputs["seq_lens_decoder"],
+                    self.share_inputs["step_seq_lens_decoder"],
+                    self.share_inputs["step_draft_tokens"],
+                    self.share_inputs["step_seq_lens_this_time"],
+                    self.share_inputs["accept_num"],
+                    self.share_inputs["accept_tokens"],
+                    self.share_inputs["is_block_step"],
+                    self.share_inputs["not_need_stop"],
+                    self.share_inputs["stop_nums"],
+                    self.cache_config.block_size,
+                    self.speculative_config.num_speculative_tokens,
+                )
+
+            self.seq_lens_this_time_buffer[:num_running_requests].copy_(
+                self.share_inputs["seq_lens_this_time"][:num_running_requests], False
+            )
+            return None
 
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
 
