@@ -16,8 +16,8 @@
  */
 
 #pragma once
-#include <string>
 #include <sstream>
+#include <string>
 #include "cub/cub.cuh"
 
 static const float HALF_FLT_MAX = 65504.F;
