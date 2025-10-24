@@ -387,11 +387,11 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                         "text": "Normal AI response",
                         "reasoning_content": "Normal reasoning",
                         "tool_call": None,
-                        "num_cached_tokens": 3,
                         "raw_prediction": "raw_answer_0",
                     },
                     "finished": True,
                     "previous_num_tokens": 2,
+                    "num_cached_tokens": 3,
                 },
                 "mock_request": ChatCompletionRequest(
                     model="test", messages=[], return_token_ids=True, max_tokens=10, n=2
@@ -410,18 +410,18 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 "test_data": {
                     "request_id": "test_1",
                     "outputs": {
-                        "token_ids": [789],
+                        "token_ids": [123, 456, 789],
                         "text": "Edge case response",
                         "reasoning_content": None,
                         "tool_call": None,
-                        "num_cached_tokens": 0,
                         "raw_prediction": None,
                     },
                     "finished": True,
                     "previous_num_tokens": 1,
+                    "num_cached_tokens": 0,
                 },
                 "mock_request": ChatCompletionRequest(
-                    model="test", messages=[], return_token_ids=True, max_tokens=5, n=2
+                    model="test", messages=[], return_token_ids=True, max_tokens=1, n=2
                 ),
                 "expected": {
                     "index": 1,
@@ -430,7 +430,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "tool_calls": None,
                     "raw_prediction": None,
                     "num_cached_tokens": 0,
-                    "finish_reason": "stop",
+                    "finish_reason": "length",
                 },
             },
         ]
@@ -445,7 +445,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         for idx, case in enumerate(test_cases):
             actual_choice = await self.chat_serving._create_chat_completion_choice(
-                output=case["test_data"]["outputs"],
+                data=case["test_data"],
                 index=idx,
                 request=case["mock_request"],
                 previous_num_tokens=case["test_data"]["previous_num_tokens"],
