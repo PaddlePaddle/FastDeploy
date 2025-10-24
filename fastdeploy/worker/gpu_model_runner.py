@@ -216,7 +216,10 @@ class GPUModelRunner(ModelRunnerBase):
         """
         check whether decode stage exist
         """
-        return int(paddle.max(self.share_inputs["seq_lens_decoder"])) > 0
+        if paddle.any(self.share_inputs["seq_lens_decoder"].cast("int64") >= self.share_inputs["prompt_lens"]):
+            return True
+        else:
+            return False
 
     def only_prefill(self):
         """
@@ -2004,7 +2007,7 @@ class GPUModelRunner(ModelRunnerBase):
     def get_real_bsz(self):
         i = 0
         for i in range(self.share_inputs["stop_flags"].shape[0] - 1, -1, -1):
-            if not self.share_inputs["stop_flags"][i]:
+            if not self.share_inputs["stop_flags"][i][0]:
                 return i + 1
         return i
 
