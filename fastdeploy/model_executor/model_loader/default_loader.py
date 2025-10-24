@@ -43,12 +43,12 @@ class DefaultModelLoader(BaseModelLoader):
 
     def clean_memory_fragments(self, state_dict: dict) -> None:
         """clean_memory_fragments"""
-        if current_platform.is_cuda():
+        if current_platform.is_cuda() or current_platform.is_maca():
             if state_dict:
                 for k, v in state_dict.items():
                     if isinstance(v, paddle.Tensor):
                         v.value().get_tensor()._clear()
-            paddle.device.cuda.empty_cache()
+            paddle.device.empty_cache()
             paddle.device.synchronize()
 
     @measure_time()

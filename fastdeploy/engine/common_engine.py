@@ -1060,7 +1060,8 @@ class EngineService:
         exit sub services
         """
         self.running = False
-        self.engine_worker_queue_server.cleanup()
+        if hasattr(self, "engine_worker_queue_server") and self.engine_worker_queue_server is not None:
+            self.engine_worker_queue_server.cleanup()
         self.exist_task_signal.clear()
         self.exist_swapped_task_signal.clear()
         self.worker_healthy_live_signal.clear()

@@ -17,7 +17,7 @@
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import llm_logger as logger
 
-if current_platform.is_cuda():
+if current_platform.is_cuda() or current_platform.is_maca():
     from fastdeploy.model_executor.ops.gpu import (
         text_image_gather_scatter,
         text_image_index_out,
@@ -35,6 +35,6 @@ elif current_platform.is_iluvatar():
 else:
     text_image_gather_scatter = None
     text_image_index_out = None
-    logger.warning("Unsupported platform, image ops only support CUDA, XPU and Iluvatar")
+    logger.warning("Unsupported platform, image ops only support CUDA, XPU, MACA and Iluvatar")
 
 __all__ = ["text_image_gather_scatter", "text_image_index_out"]
