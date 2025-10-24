@@ -38,6 +38,7 @@ from fastdeploy.engine.request import (
     RequestStatus,
     RequestType,
 )
+from fastdeploy import envs
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
@@ -164,6 +165,7 @@ class ResourceManagerV1(ResourceManager):
         # Priority queues for requests.
         self.waiting: deque[Request] = deque()
         self.running: list[Request] = []
+        self.enable_max_prefill = envs.FD_ENABLE_MAX_PREFILL
         self.finish_execution_pool = ThreadPoolExecutor(max_workers=1)
         self.lock = threading.Lock()
         self.to_be_rescheduled_request_id_set = set()
@@ -608,8 +610,9 @@ class ResourceManagerV1(ResourceManager):
                 while self.waiting and token_budget > 0:
                     if len(self.running) == self.max_num_seqs:
                         break
-                    if (self.config.model_config.enable_mm or paddle.is_compiled_with_xpu()) and self.exist_prefill(
-                        scheduled_reqs
+                    if not self.enable_max_prefill and (
+                        (self.config.model_config.enable_mm or paddle.is_compiled_with_xpu())
+                        and self.exist_prefill(scheduled_reqs)
                     ):
                         break
                     request = self.waiting[0]

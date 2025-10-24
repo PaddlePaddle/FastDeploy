@@ -18,6 +18,7 @@ import threading
 import time
 from typing import Dict, List, Optional, Tuple
 
+from fastdeploy import envs
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.scheduler.data import ScheduledRequest, ScheduledResponse
 from fastdeploy.utils import envs, scheduler_logger
@@ -259,20 +260,21 @@ class LocalScheduler:
                     if required_total_blocks > available_blocks:
                         break
 
-                    if self.enable_chunked_prefill:
-                        if request.prompt_tokens_ids_len > self.long_prefill_token_threshold:
-                            # 长请求
-                            long_partial_requests += 1
-                            if long_partial_requests > self.max_long_partial_prefills:
+                    if not envs.FD_ENABLE_MAX_PREFILL:
+                        if self.enable_chunked_prefill:
+                            if request.prompt_tokens_ids_len > self.long_prefill_token_threshold:
+                                # 长请求
+                                long_partial_requests += 1
+                                if long_partial_requests > self.max_long_partial_prefills:
+                                    break
+                            else:
+                                short_partial_requests += 1
+
+                            if short_partial_requests + long_partial_requests > self.max_num_partial_prefills:
                                 break
                         else:
-                            short_partial_requests += 1
-
-                        if short_partial_requests + long_partial_requests > self.max_num_partial_prefills:
-                            break
-                    else:
-                        if current_prefill_tokens > max_num_batched_tokens:
-                            break
+                            if current_prefill_tokens > max_num_batched_tokens:
+                                break
                     requests.append(request.raw)
             else:
                 for request_id in batch_ids:
