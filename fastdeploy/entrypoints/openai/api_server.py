@@ -17,6 +17,7 @@
 import asyncio
 import json
 import os
+import errno
 import threading
 import time
 import traceback
@@ -489,12 +490,9 @@ def clear_load_weight(request: Request) -> Response:
 
 def launch_api_server() -> None:
     """
-    启动http服务
+    启动 HTTP 服务
     """
-    if not is_port_available(args.host, args.port):
-        raise Exception(f"The parameter `port`:{args.port} is already in use.")
-
-    api_server_logger.info(f"launch Fastdeploy api server... port: {args.port}")
+    api_server_logger.info(f"launch FastDeploy API server... port: {args.port}")
     api_server_logger.info(f"args: {args.__dict__}")
     fd_start_span("FD_START")
 
@@ -509,8 +507,20 @@ def launch_api_server() -> None:
 
     try:
         StandaloneApplication(app, options).run()
+    except OSError as e:
+        # 针对端口被占用的特定处理
+        if e.errno == errno.EADDRINUSE:
+            msg = f"The parameter `port`:{args.port} is already in use."
+            api_server_logger.error(msg)
+            raise Exception(msg)
+        else:
+            msg = f"Unexpected OSError while launching HTTP server: {e}"
+            api_server_logger.error(f"{msg}\n{traceback.format_exc()}")
+            raise Exception(msg)
     except Exception as e:
-        api_server_logger.error(f"launch sync http server error, {e}, {str(traceback.format_exc())}")
+        msg = f"Launch sync HTTP server error: {e}"
+        api_server_logger.error(f"{msg}\n{traceback.format_exc()}")
+        raise Exception(msg)
 
 
 metrics_app = FastAPI()
