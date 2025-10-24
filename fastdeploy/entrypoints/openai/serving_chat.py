@@ -521,7 +521,7 @@ class OpenAIServingChat:
                     if data["finished"]:
                         num_choices -= 1
                         choice = await self._create_chat_completion_choice(
-                            output=output,
+                            data=data,
                             index=idx,
                             request=request,
                             previous_num_tokens=previous_num_tokens[idx],
@@ -559,7 +559,7 @@ class OpenAIServingChat:
 
     async def _create_chat_completion_choice(
         self,
-        output: dict,
+        data: dict,
         index: int,
         request: ChatCompletionRequest,
         previous_num_tokens: int,
@@ -571,6 +571,7 @@ class OpenAIServingChat:
         response_processor: ChatResponseProcessor,
     ) -> ChatCompletionResponseChoice:
 
+        output = data["outputs"]
         if output is not None and output.get("metrics") and output["metrics"].get("request_start_time"):
             work_process_metrics.e2e_request_latency.observe(
                 time.time() - output.get("metrics").get("request_start_time")
@@ -595,7 +596,7 @@ class OpenAIServingChat:
 
         has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
         max_tokens = request.max_completion_tokens or request.max_tokens
-        num_cached_tokens[index] = output.get("num_cached_tokens", 0)
+        num_cached_tokens[index] = data.get("num_cached_tokens", 0)
 
         finish_reason = "stop"
         if has_no_token_limit or previous_num_tokens != max_tokens:
@@ -604,7 +605,7 @@ class OpenAIServingChat:
                 finish_reason = "tool_calls"
         else:
             finish_reason = "length"
-        if output.get("error_msg") is not None and "Recover" in output["error_msg"]:
+        if data.get("error_msg") is not None and "Recover" in data["error_msg"]:
             finish_reason = "recover_stop"
 
         return ChatCompletionResponseChoice(
