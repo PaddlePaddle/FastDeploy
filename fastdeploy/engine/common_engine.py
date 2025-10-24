@@ -538,6 +538,7 @@ class EngineService:
                 chunk_grid_thw = grid_thw[grid_thw_st : grid_thw_st + chunk_image_num[idx]]
                 chunk_patch_num = np.sum(np.prod(chunk_grid_thw, axis=1))
                 chunk_images = inputs["images"][patch_st : patch_st + chunk_patch_num]
+                chunk_position_ids = inputs["position_ids"][input_ids_st : input_ids_st + chunk_seq_len[idx]]
 
                 chunks_info.append(
                     {
@@ -546,7 +547,7 @@ class EngineService:
                         "image_type_ids": (chunk_image_type_ids if chunk_image_type_ids.shape[0] else None),
                         "grid_thw": (chunk_grid_thw if chunk_grid_thw.shape[0] else None),
                         "images": (chunk_images if chunk_images.shape[0] else None),
-                        "position_ids": None,
+                        "position_ids": chunk_position_ids,
                     }
                 )
 

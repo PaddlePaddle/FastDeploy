@@ -84,6 +84,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "ENABLE_V1_KVCACHE_SCHEDULER": lambda: int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "1")),
     # set prealloc block num for decoder
     "FD_ENC_DEC_BLOCK_NUM": lambda: int(os.getenv("FD_ENC_DEC_BLOCK_NUM", "2")),
+    # enbale max prefill of one execute step
+    "FD_ENABLE_MAX_PREFILL": lambda: int(os.getenv("FD_ENABLE_MAX_PREFILL", "0")),
     # Whether to use PLUGINS.
     "FD_PLUGINS": lambda: None if "FD_PLUGINS" not in os.environ else os.environ["FD_PLUGINS"].split(","),
     # set trace attribute job_id.
