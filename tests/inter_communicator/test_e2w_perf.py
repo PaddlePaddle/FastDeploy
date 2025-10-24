@@ -271,7 +271,7 @@ def producer_proc(mock_data, test_sizes, ready_event, done_event):
     )
     for size in test_sizes:
         # data = mock_tasks(size_kb)
-        # mock_data.multimodal_inputs['images'] = None # paddle.to_tensor(mock_data.multimodal_inputs['images'])
+        # mock_data.multimodal_inputs['images'] = paddle.to_tensor(mock_data.multimodal_inputs['images'])
         tasks = [copy.deepcopy(mock_data) for _ in range(size)]
         t1 = time.perf_counter()
         engine_queue.put_tasks((tasks, size))
@@ -315,16 +315,14 @@ def consumer_proc(ready_event, done_event):
             continue
         size_b = 0
         task_size = 0
-        bash_size = 0
         for batch_tasks in tasks:
             task_size += len(batch_tasks)
             for t in batch_tasks:
                 size_b += calc_obj_size(t)
-                bash_size += 1
-        print("\033[32m[Worker]" 
+        print("\033[32m[Worker] " 
               + f"Recved:{size_b/1024:>12.2f} KB,"  
               + f"Perf:num_tasks/get_tasks={(t2 - t1) * 1e3:>7.4f} / {(t3 - t2) * 1e3:>10.4f} ms, "
-              + f"BatchSize:{bash_size:>3}\033[0m\n")
+              + f"num_tasks:{num_tasks:>3}\033[0m\n")
         # 通知生产者可以继续了
         done_event.set()
     print("[Worker] Done.")
@@ -339,8 +337,7 @@ def main():
         local_data_parallel_size=1,
     )
     print(f"[Main] Started engine_worker_queue_server, pid:{engine_worker_queue_server.address}")
-    test_sizes = [150, 150, 150, 150, 150, 150] * 3
-    # test_sizes = [100]
+    test_sizes = [150] * 20
 
     # 用 Event 同步两边
     ready_event = Event()
@@ -374,10 +371,43 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # main()
 
-    # mock_datas, _ = mock_tasks()
-    # mock_data: Request = mock_datas[0]
+    mock_datas, _ = mock_tasks()
+    mock_data: Request = mock_datas[0]
+    # mock_data.multimodal_inputs = None
+
+    t1 = time.perf_counter()
+    print(f"{mock_data}")
+    t2 = time.perf_counter()
+    tasks = [copy.deepcopy(mock_data) for _ in range(100)]
+    t3 = time.perf_counter()
+    print(f"{tasks}")
+    t4 = time.perf_counter()
+    print(f"Perf: print={(t2 - t1) * 1e3}ms")
+    print(f"Perf: copy={(t4 - t3) * 1e3}ms")
+
+    # image_list = []
+    # for task in tasks:
+    #     images = task.multimodal_inputs['images']
+    #     image_list.extend(images[task.image_start: task.image_end])
+    # images_tensor = paddle.to_tensor(image_list, dtype="bfloat16")
+    # print(f"==to_numpy==>{images_tensor}")
+    
+    # time.sleep(10000)
+    
+    
+    # image_list_2 = []
+    # for task in tasks:
+    #     images = task.multimodal_inputs['images']
+    #     images = paddle.to_tensor(images, dtype="bfloat16")
+    #     image_list_2.append(images[task.image_start: task.image_end])
+    # images_tensor_2 = paddle.concat(image_list_2)
+    # print(f"==to_tensor=>{images_tensor_2}")
+
+
+
+
     # tasks = [copy.deepcopy(mock_data) for _ in range(100)]
 
     # t0 = time.perf_counter()
@@ -390,10 +420,14 @@ if __name__ == "__main__":
     # for task in tasks:
     #     images.append(task.multimodal_inputs['images'])
     # tensor = paddle.to_tensor(images)
-    # for task in tasks:
-    #     task.multimodal_inputs['images'] = paddle.to_tensor(task.multimodal_inputs['images'])
     # t2 = time.perf_counter()
     # print(f"Perf: to_tensor={(t2 - t1) * 1e3}ms")
+
+    # tensor.cast(dtype='bfloat16')
+    # # for task in tasks:
+    # #     task.multimodal_inputs['images'] = paddle.to_tensor(task.multimodal_inputs['images'])
+    # t3 = time.perf_counter()
+    # print(f"Perf: cast={(t3 - t2) * 1e3}ms")
 
     # mock, bsz = mock_tasks()
     # task = mock[0]

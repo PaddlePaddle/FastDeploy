@@ -305,7 +305,7 @@ class EngineWorkerQueue:
             tasks: List of tasks containing multimodal inputs.
         """
         try:
-            if envs.FD_ENABLE_MULTIMODAL_TENSOR_TRANSFER:
+            if envs.FD_ENABLE_MAX_PREFILL:
                 llm_logger.debug(f"Convert image to tensor, type: {type(tasks)}")
                 batch_tasks, _ = tasks
                 for task in batch_tasks:
@@ -327,7 +327,7 @@ class EngineWorkerQueue:
             tasks: List of tasks containing multimodal inputs.
         """
         try:
-            if envs.FD_ENABLE_MULTIMODAL_TENSOR_TRANSFER:
+            if envs.FD_ENABLE_MAX_PREFILL:
                 for batch_tasks, _ in tasks:
                     for task in batch_tasks:
                         if not hasattr(task, "multimodal_inputs"):

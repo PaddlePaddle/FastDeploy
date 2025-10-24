@@ -29,7 +29,7 @@ class DummyTask:
 
 class TestEngineWorkerQueue(unittest.TestCase):
     def test_to_tensor_success(self):
-        envs.FD_ENABLE_MULTIMODAL_TENSOR_TRANSFER = 1
+        envs.FD_ENABLE_MAX_PREFILL = 1
         # 模拟 numpy 数组输入（使用 paddle 转 numpy）
         np_images = paddle.randn([2, 3, 224, 224]).numpy()
         task = DummyTask(np_images)
@@ -41,7 +41,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
         self.assertIsInstance(task.multimodal_inputs["images"], paddle.Tensor)
 
     def test_to_tensor_disabled(self):
-        envs.FD_ENABLE_MULTIMODAL_TENSOR_TRANSFER = 0
+        envs.FD_ENABLE_MAX_PREFILL = 0
         # 模拟 numpy 数组输入（使用 paddle 转 numpy）
         np_images = paddle.randn([2, 3, 224, 224]).numpy()
         task = DummyTask(np_images)
@@ -75,7 +75,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
             self.fail(f"Exception should be handled internally, but got: {e}")
 
     def test_to_numpy_success(self):
-        envs.FD_ENABLE_MULTIMODAL_TENSOR_TRANSFER = 1
+        envs.FD_ENABLE_MAX_PREFILL = 1
         # 构造 paddle.Tensor 输入
         tensor_images = paddle.randn([2, 3, 224, 224])
         task = DummyTask(tensor_images)
@@ -88,7 +88,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
 
     def test_to_numpy_disabled(self):
         # 禁用张量转换开关
-        envs.FD_ENABLE_MULTIMODAL_TENSOR_TRANSFER = 0
+        envs.FD_ENABLE_MAX_PREFILL = 0
         # 创建随机张量作为测试输入
         tensor_images = paddle.randn([2, 3, 224, 224])
         # 创建模拟任务
@@ -115,7 +115,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
             self.fail(f"Unexpected exception raised: {e}")
 
     def test_to_numpy_non_tensor_input(self):
-        envs.FD_ENABLE_MULTIMODAL_TENSOR_TRANSFER = 1
+        envs.FD_ENABLE_MAX_PREFILL = 1
         np_images = np.random.randn(2, 3, 224, 224)
         task = DummyTask(np_images)
         tasks = [([task], 1)]
@@ -126,7 +126,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
         self.assertIsInstance(task.multimodal_inputs["images"], np.ndarray)
 
     def test_to_numpy_exception_handling(self):
-        envs.FD_ENABLE_MULTIMODAL_TENSOR_TRANSFER = 1
+        envs.FD_ENABLE_MAX_PREFILL = 1
 
         # 构造错误输入（让 .numpy() 抛异常）
         class BadTensor:

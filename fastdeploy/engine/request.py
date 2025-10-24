@@ -29,6 +29,7 @@ from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
 from fastdeploy.utils import data_processor_logger
 from fastdeploy.worker.output import LogprobsLists, SampleLogprobs
+from fastdeploy import envs
 
 
 class RequestStatus(Enum):
@@ -285,11 +286,20 @@ class Request:
             setattr(self, key, value)
 
     def __repr__(self) -> str:
-        non_none_fields = []
-        for attr, value in vars(self).items():
-            if value is not None and not attr.startswith("_"):
-                non_none_fields.append(f"{attr}={value!r}")
-        return f"Request({', '.join(non_none_fields)})"
+        """Safe string representation that ignores private and None fields."""
+        try:
+            if not envs.FD_DEBUG:
+                return f"Request(request_id={self.request_id})"
+            else:
+                attrs_snapshot = dict(vars(self))
+                non_none_fields = [
+                    f"{attr}={value!r}"
+                    for attr, value in attrs_snapshot.items()
+                    if value is not None and not attr.startswith("_")
+                ]
+                return f"Request({', '.join(non_none_fields)})"
+        except Exception as e:
+            return f"<{self.__class__.__name__} repr failed: {e}>"
 
 
 @dataclass(slots=True)
