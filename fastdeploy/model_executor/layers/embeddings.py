@@ -236,12 +236,9 @@ class VocabParallelEmbedding(nn.Layer):
         output_dim = getattr(param, "output_dim", None)
         packed_dim = getattr(param, "packed_dim", None)
 
-<<<<<<< HEAD
-=======
         if not param._is_initialized():
             param.initialize()
 
->>>>>>> 791b101195fa6b07918d62f49b5c2ad41a61d80a
         loaded_weight = get_tensor(loaded_weight)
         if param.dtype != loaded_weight.dtype:
             if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
@@ -253,11 +250,7 @@ class VocabParallelEmbedding(nn.Layer):
             assert (
                 param.shape == loaded_weight.shape
             ), f"Shape mismatch: param {param.shape} vs loaded_weight {loaded_weight.shape}"
-<<<<<<< HEAD
-            param.set_value(loaded_weight)
-=======
             param.copy_(loaded_weight, False)
->>>>>>> 791b101195fa6b07918d62f49b5c2ad41a61d80a
             return
 
         start_idx = self.shard_indices.org_vocab_start_index
