@@ -23,7 +23,7 @@ from paddle import nn
 from fastdeploy.config import ModelConfig
 from fastdeploy.platforms import current_platform
 
-if current_platform.is_cuda():
+if current_platform.is_cuda() or current_platform.is_maca():
     from fastdeploy.model_executor.ops.gpu import fused_rotary_position_encoding
 
 from .utils import CpuGuard

@@ -20,13 +20,12 @@ import time
 from typing import List, Optional
 
 import paddle
-import pymxsml
 from paddle import nn
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import get_logger, set_random_seed
 from fastdeploy.worker.metax_model_runner import MetaxModelRunner
 from fastdeploy.worker.output import ModelRunnerOutput
 from fastdeploy.worker.worker_base import WorkerBase
@@ -53,23 +52,21 @@ class MetaxWorker(WorkerBase):
         Initialize device and construct model runner
         """
         self.max_chips_per_node = 8
-        if paddle.is_compiled_with_custom_device("metax_gpu"):
-            # Set environment variable
-            self.device_ids = self.parallel_config.device_ids.split(",")
-            self.device = f"metax_gpu:{self.local_rank % self.max_chips_per_node}"
-            paddle.device.set_device(self.device)
-            paddle.set_default_dtype(self.model_config.dtype)
+        # Set environment variable
+        self.device_ids = self.parallel_config.device_ids.split(",")
+        self.device = f"metax_gpu:{self.local_rank % self.max_chips_per_node}"
+        paddle.device.set_device(self.device)
+        paddle.set_default_dtype(self.model_config.dtype)
 
-            gc.collect()
+        gc.collect()
+        paddle.device.empty_cache()
 
-        else:
-            raise RuntimeError(f"Not support device type: {self.device_config.device}")
-
+        set_random_seed(self.fd_config.model_config.seed)
         # Construct model runner
         self.model_runner: MetaxModelRunner = MetaxModelRunner(
             fd_config=self.fd_config,
             device=self.device,
-            device_id=self.device_ids[self.local_rank % self.max_chips_per_node],
+            device_id=int(self.device_ids[self.local_rank % self.max_chips_per_node]),
             rank=self.rank,
             local_rank=self.local_rank,
         )
@@ -99,6 +96,8 @@ class MetaxWorker(WorkerBase):
         if fd_kvache_mem is not None:
             return int(float(fd_kvache_mem) * 1024**3)
         else:
+            import pymxsml
+
             # 1. Record memory state before profile run
             start_time = time.perf_counter()
             Gb = 1024**3
@@ -200,9 +199,10 @@ class MetaxWorker(WorkerBase):
         """
         Perform the warm-up and the graph optimization
         """
-        if self.model_runner.graph_opt_level >= 1:
+        if self.fd_config.graph_opt_config.graph_opt_level >= 1 and not self.model_runner.use_cudagraph:
             self.model_runner.sot_warmup()
-        # Todo Trigger cuda graph capture.
+        # Trigger cuda graph capture
+        self.model_runner.capture_model()
 
     def check_health(self) -> bool:
         """ """
