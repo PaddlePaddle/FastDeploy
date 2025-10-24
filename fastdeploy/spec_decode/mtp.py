@@ -82,7 +82,6 @@ class MTPProposer(Proposer):
         self._init_model_inputs()
 
         # CUDA Graph
-        self.use_cudagraph = False  # TODO(gongshaotian): Use Target Model flag
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
 
@@ -592,7 +591,7 @@ class MTPProposer(Proposer):
             attn_backend.init_attention_metadata(self.forward_meta)
 
         # TODO(gongshaotian): Use CUDAGraph with Draft Model
-        self.forward_meta.step_use_cudagraph = step_use_cudagraph and self.use_cudagraph
+        self.forward_meta.step_use_cudagraph = step_use_cudagraph
 
     def exist_prefill(self):
         """
