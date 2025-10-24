@@ -107,6 +107,8 @@ def setup_and_run_server():
         "128",
         "--limit-mm-per-prompt",
         limit_mm_str,
+        "--load-choices",
+        "default_v1",
     ]
 
     print(cmd)
