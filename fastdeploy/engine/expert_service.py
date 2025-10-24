@@ -27,7 +27,6 @@ import numpy as np
 
 from fastdeploy.engine.common_engine import EngineService
 from fastdeploy.inter_communicator import IPCSignal
-from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.utils import console_logger, envs, llm_logger
 
 
@@ -75,8 +74,6 @@ class ExpertService:
             self.engine.scheduler.reset_nodeid(f"{self.engine.scheduler.infer.nodeid}_{local_data_parallel_id!s}")
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
-        if envs.FD_ENABLE_INTERNAL_ADAPTER:
-            self.internal_adapter = InternalAdapter(cfg=self.cfg, engine=self.engine, dp_rank=local_data_parallel_id)
 
     def start(
         self, ipc_signal_suffix, local_data_parallel_id, request_queues_for_dp_ipc=None, result_queue_for_dp_ipc=None
