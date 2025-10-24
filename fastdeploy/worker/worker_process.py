@@ -727,7 +727,7 @@ def parse_args():
     )
     parser.add_argument(
         "--chunked_moe_size",
-        type="int",
+        type=int,
         default=256,
         help="chunk size of moe input",
     )

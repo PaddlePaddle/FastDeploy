@@ -26,6 +26,7 @@ from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import h2d_copy, slice_fn
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
+import time
 
 try:
     from fastdeploy.model_executor.ops.gpu import noaux_tc, noaux_tc_redundant
@@ -649,22 +650,43 @@ class FusedMoE(nn.Layer):
         chunk_size = self.fd_config.parallel_config.chunked_moe_size
         token_num = x.shape[0]
 
+        # when chunk_size <= 256, force to use low_latency mode of DeepEP to improve performance
+        if chunk_size <= 256:
+            self.fd_config.model_config.moe_phase.phase == "decode"
+
+        if token_num > chunk_size:
+            # if the size of last chunk is leass than half of chunk size, it is merged with the previous chunk
+            if (token_num % chunk_size) > chunk_size // 2:
+                num_chunk = (token_num + chunk_size - 1) // chunk_size
+            else:
+                num_chunk = token_num // chunk_size
+        else:
+            num_chunk = 1
+
+        num_chunk_list = []
+        paddle.distributed.all_gather_object(num_chunk_list, num_chunk)
+        max_num_chunk = max(num_chunk_list)
+        logger.debug(f"num_chunk of moe input: {num_chunk}")
+        
         # input size that are less than a chunk, less than the max size data or empty input 
         # need to be repeated until the max chunk data infer MOE finished.
         logger.info(f"======[Layer_{self.layer_idx}] start chunked moe======")
         if token_num > chunk_size: # chunked moe
             logger.info(f"got into chunked moe")
             out = paddle.zeros_like(x)
-            out_split_list = paddle.tensor_split(out, self.fd_config.parallel_config.moe_num_chunk, axis=0)
-            x_split_list = paddle.tensor_split(x, self.fd_config.parallel_config.moe_num_chunk, axis=0)
+            out_split_list = paddle.tensor_split(out, num_chunk, axis=0)
+            x_split_list = paddle.tensor_split(x, num_chunk, axis=0)
 
-            for i in range(self.fd_config.parallel_config.max_moe_num_chunk):
-                logger.info(f"start infer chunk_{i}")
-                if i <= self.fd_config.parallel_config.moe_num_chunk - 1:
+            if num_chunk == max_num_chunk:
+                for i in range(num_chunk):
                     out_split_list[i] = self.quant_method.apply(self, x_split_list[i], gate)
-                else:
-                    self.quant_method.apply(self, x, gate)
-
+            else: # num_chunk < max_num_chunk
+                for i in range(max_num_chunk):
+                    if i <= num_chunk - 1:
+                        out_split_list[i] = self.quant_method.apply(self, x_split_list[i], gate)
+                    else: # num_chunk <= i < max_num_chunk
+                        self.quant_method.apply(self, x, gate)
+            
             out = paddle.concat(out_split_list, axis=0)
         else: 
             for i in range(self.fd_config.parallel_config.max_moe_num_chunk):

@@ -888,7 +888,7 @@ class EngineArgs:
         )
         parallel_group.add_argument(
             "--chunked-moe-size",
-            action="store_true",
+            type=int,
             default=EngineArgs.chunked_moe_size,
             help="chunked size of moe input.",
         )
