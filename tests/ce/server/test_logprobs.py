@@ -36,7 +36,7 @@ def test_unstream_with_logprobs():
         "prompt_tokens": 22,
         "total_tokens": 25,
         "completion_tokens": 3,
-        "prompt_tokens_details": {"cached_tokens": 0},
+        "prompt_tokens_details": {"cached_tokens": 0, "image_tokens": 0, "video_tokens": 0},
     }
 
 
@@ -68,7 +68,7 @@ def test_unstream_without_logprobs():
         "prompt_tokens": 22,
         "total_tokens": 25,
         "completion_tokens": 3,
-        "prompt_tokens_details": {"cached_tokens": 0},
+        "prompt_tokens_details": {"cached_tokens": 0, "image_tokens": 0, "video_tokens": 0},
     }
 
 
