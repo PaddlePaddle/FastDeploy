@@ -638,4 +638,41 @@ class FusedMoE(nn.Layer):
 
         if self.reduce_results and self.tp_size > 1:
             out = tensor_model_parallel_all_reduce(out, self.tp_group)
+        else:
+            if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.enable_chunked_moe:
+                out = self.forward_chunked_moe(x, gate)
+            else:
+                out = self.forward_normal(x, gate)
+        return out
+
+    def forward_chunked_moe(self, x, gate):
+        chunk_size = self.fd_config.parallel_config.chunked_moe_size
+        token_num = x.shape[0]
+
+        # input size that are less than a chunk, less than the max size data or empty input 
+        # need to be repeated until the max chunk data infer MOE finished.
+        logger.info(f"======[Layer_{self.layer_idx}] start chunked moe======")
+        if token_num > chunk_size: # chunked moe
+            logger.info(f"got into chunked moe")
+            out = paddle.zeros_like(x)
+            out_split_list = paddle.tensor_split(out, self.fd_config.parallel_config.moe_num_chunk, axis=0)
+            x_split_list = paddle.tensor_split(x, self.fd_config.parallel_config.moe_num_chunk, axis=0)
+
+            for i in range(self.fd_config.parallel_config.max_moe_num_chunk):
+                logger.info(f"start infer chunk_{i}")
+                if i <= self.fd_config.parallel_config.moe_num_chunk - 1:
+                    out_split_list[i] = self.quant_method.apply(self, x_split_list[i], gate)
+                else:
+                    self.quant_method.apply(self, x, gate)
+
+            out = paddle.concat(out_split_list, axis=0)
+        else: 
+            for i in range(self.fd_config.parallel_config.max_moe_num_chunk):
+                logger.info(f"start infer chunk_{i}")
+                out = self.quant_method.apply(self, x, gate)
+        logger.info(f"======[Layer_{self.layer_idx}] end chunked moe======")
+        return out
+
+    def forward_normal(self, x, gate):
+        out = self.quant_method.apply(self, x, gate)
         return out
