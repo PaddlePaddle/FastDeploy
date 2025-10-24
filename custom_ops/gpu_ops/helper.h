@@ -595,10 +595,13 @@ inline int get_cuda_max_shared_memory_per_block_opt_in(int const device) {
 #endif
 
 inline int GetSMVersion() {
+#ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
+  return 80;
+#else
   static int sm_version = phi::backends::gpu::GetGPUComputeCapability(
       phi::backends::gpu::GetCurrentDeviceId());
   return sm_version;
-
+#endif
 }
 
 inline bool GetMlaUseTensorcore() {

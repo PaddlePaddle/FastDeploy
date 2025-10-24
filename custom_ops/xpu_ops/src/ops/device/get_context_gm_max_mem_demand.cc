@@ -12,13 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "paddle/extension.h"
-#include "xpu/plugin.h"
-#include "xpu/xpuml.h"
-#include <cstdlib>
 #include <fcntl.h>
 #include <paddle/phi/backends/xpu/xpu_context.h>
-#include <random>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,27 +21,31 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <cstdlib>
+#include <random>
+#include "paddle/extension.h"
+#include "xpu/plugin.h"
+#include "xpu/xpuml.h"
 
 std::vector<paddle::Tensor> GetMaxMemDemand(int64_t device_id) {
-    if (device_id == -1) {
-        device_id = phi::backends::xpu::GetXPUCurrentDeviceId();
-    }
-    phi::XPUPlace place(device_id);
-    auto dev_ctx =
-        paddle::experimental::DeviceContextPool::Instance().Get(place);
-    auto xpu_ctx = static_cast<const phi::XPUContext *>(dev_ctx);
+  if (device_id == -1) {
+    device_id = phi::backends::xpu::GetXPUCurrentDeviceId();
+  }
+  phi::XPUPlace place(device_id);
+  auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
+  auto xpu_ctx = static_cast<const phi::XPUContext *>(dev_ctx);
 
-    paddle::Tensor max_mem_demand = paddle::zeros({1}, paddle::DataType::INT64);
+  paddle::Tensor max_mem_demand = paddle::zeros({1}, paddle::DataType::INT64);
 
-    max_mem_demand.data<int64_t>()[0] =
-        xpu_ctx->x_context()->_gm_mgr.get_max_mem_demand();
-    return {max_mem_demand};
+  max_mem_demand.data<int64_t>()[0] =
+      xpu_ctx->x_context()->_gm_mgr.get_max_mem_demand();
+  return {max_mem_demand};
 }
 
 std::vector<std::vector<int64_t>> GetMaxMemDemandInferShape() { return {{1}}; }
 
 std::vector<paddle::DataType> GetMaxMemDemandInferDtype() {
-    return {paddle::DataType::INT64};
+  return {paddle::DataType::INT64};
 }
 
 PD_BUILD_OP(xpu_get_context_gm_max_mem_demand)

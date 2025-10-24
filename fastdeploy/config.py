@@ -1146,7 +1146,7 @@ class CacheConfig:
             self.kv_cache_ratio = 1.0
         else:
             self.kv_cache_ratio = 0.75
-        self.enc_dec_block_num = 0 if current_platform.is_maca() else envs.FD_ENC_DEC_BLOCK_NUM
+        self.enc_dec_block_num = envs.FD_ENC_DEC_BLOCK_NUM
         self.prealloc_dec_block_slot_num_threshold = 12
         self.cache_dtype = "bfloat16"
         self.model_cfg = None
@@ -1528,16 +1528,6 @@ class FDConfig:
             self.cache_config.max_encoder_cache = 0
 
         # Adjustment GraphOptConfig
-        if (
-            (self.speculative_config is not None and self.speculative_config.method is not None)
-            or (self.model_config is not None and self.model_config.enable_mm is True)
-            or (self.load_config is not None and self.load_config.dynamic_load_weight is True)
-            or (self.scheduler_config.splitwise_role != "mixed")
-        ):
-            self.graph_opt_config.use_cudagraph = False
-            logger.info(
-                "CUDAGraph does not support to be started together with SpeculativeDecode and MultiModel temporarily, but has been automatically closed!"
-            )
         if self.load_config is not None and self.load_config.dynamic_load_weight is True:
             self.graph_opt_config.graph_opt_level = 0
             logger.info(
@@ -1651,20 +1641,12 @@ class FDConfig:
             self.scheduler_config.check()
 
         # Check graph optimization config
-        if self.graph_opt_config.use_cudagraph:
-            if self.speculative_config is not None:
-                assert (
-                    self.speculative_config.method is None
-                ), "CUDAGraph does not support the simultaneous use of Speculative Decoding"
-            if self.model_config is not None:
-                assert (
-                    self.model_config.enable_mm is not True
-                ), "CUDAGraph cannot be applied to multimodal model temporarily"
-        if self.graph_opt_config.graph_opt_level > 0 or self.graph_opt_config.use_cudagraph:
+        if self.graph_opt_config.graph_opt_level > 0:
             if self.load_config is not None:
                 assert (
                     self.load_config.dynamic_load_weight is False
                 ), "Static graph cannot be used in RL scene temporarily"
+
         if int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 1:
             assert (
                 int(envs.FD_DISABLED_RECOVER) == 0

@@ -63,10 +63,10 @@ class Request:
         history: Optional[list[list[str]]],
         tools: Optional[list[Dict]],
         system: Optional[Union[str, list[str]]],
-        sampling_params: Optional[SamplingParams],
-        pooling_params: Optional[PoolingParams],
         eos_token_ids: Optional[list[int]],
         arrival_time: float,
+        sampling_params: Optional[SamplingParams] = None,
+        pooling_params: Optional[PoolingParams] = None,
         preprocess_start_time: Optional[float] = None,
         preprocess_end_time: Optional[float] = None,
         multimodal_inputs: Optional[dict] = None,
@@ -329,6 +329,7 @@ class CompletionOutput:
             "index": self.index,
             "send_idx": self.send_idx,
             "token_ids": self.token_ids,
+            "decode_type": self.decode_type,
             "logprob": self.logprob,
             "top_logprobs": self.top_logprobs,
             "draft_top_logprobs": self.draft_top_logprobs,
@@ -544,6 +545,9 @@ class PoolingOutput:
     def __eq__(self, other: object) -> bool:
         return isinstance(other, self.__class__) and bool((self.data == other.data).all())
 
+    def to_dict(self):
+        return {"data": self.data}
+
 
 _O = TypeVar("_O", default=PoolingOutput)
 
@@ -564,21 +568,30 @@ class PoolingRequestOutput(Generic[_O]):
     outputs: _O
     prompt_token_ids: list[int]
     finished: bool
+    metrics: Optional[RequestMetrics] = (None,)
+    error_code: Optional[int] = (200,)
+    error_msg: Optional[str] = (None,)
 
     def __repr__(self):
         return (
             f"{type(self).__name__}(request_id={self.request_id!r}, "
             f"outputs={self.outputs!r}, "
             f"prompt_token_ids={self.prompt_token_ids}, "
-            f"finished={self.finished})"
+            f"finished={self.finished}, "
+            f"metrics={self.metrics}, "
+            f"error_code={self.error_code}, "
+            f"error_msg={self.error_msg})"
         )
 
     def to_dict(self):
         return {
             "request_id": self.request_id,
-            "outputs": {"data": self.outputs.data},
+            "outputs": None if self.outputs is None else self.outputs.to_dict(),
             "prompt_token_ids": self.prompt_token_ids,
             "finished": self.finished,
+            "metrics": None if self.metrics is None else self.metrics.to_dict(),
+            "error_code": self.error_code,
+            "error_msg": self.error_msg,
         }
 
     @classmethod

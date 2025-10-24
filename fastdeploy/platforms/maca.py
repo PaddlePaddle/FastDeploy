@@ -60,6 +60,9 @@ class MACAPlatform(Platform):
         elif selected_backend == _Backend.APPEND_ATTN:
             logger.info("Using FLASH ATTN backend to instead of attend attention.")
             return "fastdeploy.model_executor.layers.backends.metax.attention.flash_attn_backend.FlashAttentionBackend"
+        elif selected_backend == _Backend.MLA_ATTN:
+            logger.info("Using MLA ATTN backend.")
+            return "fastdeploy.model_executor.layers.backends.metax.attention.mla_attn_metax_backend.MetaxMLAAttentionBackend"
         else:
             raise ValueError(
                 "Invalid attention backend you specified.\n"

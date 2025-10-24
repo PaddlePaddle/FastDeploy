@@ -60,44 +60,48 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchKernel(
   if (std::is_same<TY, int8_t>::value) {
     permute_input =
         paddle::empty({token_nums_this_rank, n}, paddle::DataType::INT8, place);
-    auto ret = infer_ops::moe_ffn_pre_sorted_quant_pe<XPU_TX, int>(
-        xpu_ctx->x_context(),
-        reinterpret_cast<const XPU_TX*>(input.data<TX>()),
-        topk_ids.data<int>(),
-        input_scales.get_ptr()->data<float>(),
-        nullptr,
-        reinterpret_cast<int8_t*>(permute_input.data<int8_t>()),
-        const_cast<int*>(permute_indices_per_token.data<int>()),
-        const_cast<int*>(expert_m.data<int>()),
-        const_cast<int*>(recv_num_tokens_per_expert_list_cumsum.data<int>()),
-        expand_input_scales.data<float>(),
-        m,
-        n,
-        expert_num,
-        topk,
-        block_num,
-        token_nums_this_rank);
-    PD_CHECK(ret == 0, "moe_ep_ffn_pre_sorted failed");
+    if (token_nums_this_rank > 0) {
+      auto ret = infer_ops::moe_ffn_pre_sorted_quant_pe<XPU_TX, int>(
+          xpu_ctx->x_context(),
+          reinterpret_cast<const XPU_TX*>(input.data<TX>()),
+          topk_ids.data<int>(),
+          input_scales.get_ptr()->data<float>(),
+          nullptr,
+          reinterpret_cast<int8_t*>(permute_input.data<int8_t>()),
+          const_cast<int*>(permute_indices_per_token.data<int>()),
+          const_cast<int*>(expert_m.data<int>()),
+          const_cast<int*>(recv_num_tokens_per_expert_list_cumsum.data<int>()),
+          expand_input_scales.data<float>(),
+          m,
+          n,
+          expert_num,
+          topk,
+          block_num,
+          token_nums_this_rank);
+      PD_CHECK(ret == 0, "moe_ep_ffn_pre_sorted failed");
+    }
   } else {
     permute_input = paddle::empty({token_nums_this_rank, n}, input_type, place);
-    auto ret = infer_ops::moe_ep_ffn_pre_sorted<XPU_TX, int>(
-        xpu_ctx->x_context(),
-        reinterpret_cast<const XPU_TX*>(input.data<TX>()),
-        topk_ids.data<int>(),
-        nullptr,
-        reinterpret_cast<XPU_TX*>(permute_input.data<TX>()),
-        const_cast<int*>(permute_indices_per_token.data<int>()),
-        const_cast<int*>(expert_m.data<int>()),
-        const_cast<int*>(recv_num_tokens_per_expert_list_cumsum.data<int>()),
-        m,
-        n,
-        expert_num,
-        topk,
-        block_num,
-        ep_size,
-        ep_rank,
-        token_nums_this_rank);
-    PD_CHECK(ret == 0, "moe_ep_ffn_pre_sorted failed");
+    if (token_nums_this_rank > 0) {
+      auto ret = infer_ops::moe_ep_ffn_pre_sorted<XPU_TX, int>(
+          xpu_ctx->x_context(),
+          reinterpret_cast<const XPU_TX*>(input.data<TX>()),
+          topk_ids.data<int>(),
+          nullptr,
+          reinterpret_cast<XPU_TX*>(permute_input.data<TX>()),
+          const_cast<int*>(permute_indices_per_token.data<int>()),
+          const_cast<int*>(expert_m.data<int>()),
+          const_cast<int*>(recv_num_tokens_per_expert_list_cumsum.data<int>()),
+          m,
+          n,
+          expert_num,
+          topk,
+          block_num,
+          ep_size,
+          ep_rank,
+          token_nums_this_rank);
+      PD_CHECK(ret == 0, "moe_ep_ffn_pre_sorted failed");
+    }
   }
   return {permute_input,
           permute_indices_per_token,

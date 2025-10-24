@@ -89,7 +89,7 @@ std::vector<paddle::Tensor> BlockAttnKernel(
     const paddle::optional<paddle::Tensor>& smooth,
     const paddle::optional<paddle::Tensor>& kv_signal_data_cpu,
     const paddle::optional<paddle::Tensor>& cachekv_signal_thread_cpu,
-    const std::string &pos_emb_type,
+    const std::string& pos_emb_type,
     bool rope_3d) {
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
   auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
@@ -215,8 +215,8 @@ std::vector<paddle::Tensor> BlockAttnKernel(
     param.prefill_len = is_prefix_cache ? param.max_valid_seqlen : -1;
     param.page_attn.block_size = block_size;
     param.page_attn.max_num_blocks_per_seq = prefix_block_num_per_seq;
-    // prefix_block_tables is a subset of block_tables, which is used for prefix
-    // cache
+    // prefix_block_tables is a subset of block_tables, which is used for
+    // prefix cache
     xftblock::Tensor prefix_block_tables_tensor(
         is_prefix_cache ? reinterpret_cast<void*>(const_cast<int32_t*>(
                               prefix_block_tables.data<int32_t>()))
@@ -306,12 +306,12 @@ std::vector<paddle::Tensor> BlockAttnKernel(
                 reinterpret_cast<const XPU_CType*>(key_cache.data<cdata_t>())),
             const_cast<XPU_CType*>(reinterpret_cast<const XPU_CType*>(
                 value_cache.data<cdata_t>())),
-            vsl.usual_lod_vp,       // seq_lod
-            vsl.slot_mapping_vp,    // real_batch
-            prefix_lens_vp,         // start_tokens
-            param.batch_size,       // batch_size
-            1,                      // emb_batch_size
-            rope_max_seqlen,        // max_seqlen
+            vsl.usual_lod_vp,     // seq_lod
+            vsl.slot_mapping_vp,  // real_batch
+            prefix_lens_vp,       // start_tokens
+            param.batch_size,     // batch_size
+            1,                    // emb_batch_size
+            rope_max_seqlen,      // max_seqlen
             param.head_num,
             param.kv_head_num,
             param.head_dim,
@@ -480,7 +480,8 @@ std::vector<paddle::Tensor> BlockAttnKernel(
       api::VectorParam<int32_t> decoder_context_len_vp = {
           const_cast<int32_t*>(decoder_context_len_cpu.data<int32_t>()),
           dec_batch,
-          nullptr};  // use for speculative_attention_decoder seq_len in MTP
+          nullptr};  // use for speculative_attention_decoder seq_len in
+                     // MTP
       api::VectorParam<int32_t> decoder_context_len_cache_vp = {
           const_cast<int32_t*>(decoder_context_len_cache_cpu.data<int32_t>()),
           dec_batch,
@@ -597,49 +598,49 @@ std::vector<paddle::Tensor> BlockAttnKernel(
                                        tfloat32,
                                        int8_wo_t>;
       constexpr int quant_mode = std::is_same_v<XPU_CType, int8_t> ? 3 : 0;
-    ret = baidu::xpu::xfa::speculative_attention_decoder<XPU_XType,
-                                                        XPU_CType,
-                                                        XPU_XType,
-                                                        TGEMM,
-                                                        TGEMM,
-                                                        float,
-                                                        int32_t,
-                                                        quant_mode>(
-        xpu_ctx->x_context(),
-        decode_output_ptr,  // out
-        q_buf_ptr,          // q
-        nullptr,            // k
-        nullptr,            // v
-        reinterpret_cast<const XPU_CType*>(
-            key_cache.data<cdata_t>()),  // k_cache
-        reinterpret_cast<const XPU_CType*>(
-            value_cache.data<cdata_t>()),  // v_cache
-        reinterpret_cast<const int32_t*>(
-            block_tables.data<int32_t>()),  // block_tables
-        decoder_context_len_vp,             // seq_lengths
-        decoder_batch_map_vp,               // valid_batch
-        param.max_batch_size,               // batch_num
-        q_len,                              // qlen
-        max_seq_len,                        // max_seq_len
-        param.head_num,                     // head_num
-        param.head_dim,                     // head_dim
-        param.kv_head_num,                  // kv_head_num
-        nullptr,                            // attn_mask
-        1.0f /
-            std::sqrt(static_cast<float>(param.head_dim)),  // scale 【check】
-        block_size,                                         // block_size
-        max_block_per_seq,  // max_blocks_per_seq
-        -1,                 // max_window_size
-        nullptr,            // q_maxptr
-        has_zp              // k_cache_maxptr
-            ? fake_perhead_scale
-            : quant_k_scale_inv,
-        has_zp  // v_cache_maxptr
-            ? fake_perhead_scale
-            : quant_v_scale_inv,
-        nullptr,          // o_maxptr
-        param.head_dim);  // vo_head_dim
-        PD_CHECK(0, "speculative_attention unimplemented");
+      ret = baidu::xpu::xfa::speculative_attention_decoder<XPU_XType,
+                                                           XPU_CType,
+                                                           XPU_XType,
+                                                           TGEMM,
+                                                           TGEMM,
+                                                           float,
+                                                           int32_t,
+                                                           quant_mode>(
+          xpu_ctx->x_context(),
+          decode_output_ptr,  // out
+          q_buf_ptr,          // q
+          nullptr,            // k
+          nullptr,            // v
+          reinterpret_cast<const XPU_CType*>(
+              key_cache.data<cdata_t>()),  // k_cache
+          reinterpret_cast<const XPU_CType*>(
+              value_cache.data<cdata_t>()),  // v_cache
+          reinterpret_cast<const int32_t*>(
+              block_tables.data<int32_t>()),  // block_tables
+          decoder_context_len_vp,             // seq_lengths
+          decoder_batch_map_vp,               // valid_batch
+          param.max_batch_size,               // batch_num
+          q_len,                              // qlen
+          max_seq_len,                        // max_seq_len
+          param.head_num,                     // head_num
+          param.head_dim,                     // head_dim
+          param.kv_head_num,                  // kv_head_num
+          nullptr,                            // attn_mask
+          1.0f /
+              std::sqrt(static_cast<float>(param.head_dim)),  // scale 【check】
+          block_size,                                         // block_size
+          max_block_per_seq,  // max_blocks_per_seq
+          -1,                 // max_window_size
+          nullptr,            // q_maxptr
+          has_zp              // k_cache_maxptr
+              ? fake_perhead_scale
+              : quant_k_scale_inv,
+          has_zp  // v_cache_maxptr
+              ? fake_perhead_scale
+              : quant_v_scale_inv,
+          nullptr,          // o_maxptr
+          param.head_dim);  // vo_head_dim
+      PD_CHECK(0, "speculative_attention unimplemented");
       PD_CHECK(ret == api::SUCCESS,
                "xfa::speculative_attention_decoder failed.");
       if (!Eq_len) {
@@ -702,11 +703,11 @@ std::vector<paddle::Tensor> BlockAttnKernel(
               reinterpret_cast<const XPU_CType*>(key_cache.data<cdata_t>())),
           const_cast<XPU_CType*>(
               reinterpret_cast<const XPU_CType*>(value_cache.data<cdata_t>())),
-          vsl.usual_lod_vp,       // seq_lod
-          vsl.slot_mapping_vp,    // real_batch
-          param.batch_size,       // batch_size
-          1,                      // emb_batch_size = rotary_embs.dims()[1] = 1
-          rope_max_seqlen,        // max_seqlen
+          vsl.usual_lod_vp,     // seq_lod
+          vsl.slot_mapping_vp,  // real_batch
+          param.batch_size,     // batch_size
+          1,                    // emb_batch_size = rotary_embs.dims()[1] = 1
+          rope_max_seqlen,      // max_seqlen
           param.head_num,
           param.kv_head_num,
           param.head_dim,
@@ -777,7 +778,8 @@ std::vector<paddle::Tensor> BlockAttnKernel(
       ret = xftblock::xft_decoder_core_attenion_block<
           XPU_XType,
           XPU_CType,
-          XPU_XType>(  // TGEMM = XPU_XType TODOlizan03: used high precision
+          XPU_XType>(  // TGEMM = XPU_XType TODOlizan03: used high
+                       // precision
           &xctx,
           &q_buf,
           &key_cache_tensor,
@@ -867,8 +869,8 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::optional<paddle::Tensor>& smooth,
     const paddle::optional<paddle::Tensor>& kv_signal_data_cpu,
     const paddle::optional<paddle::Tensor>& cachekv_signal_thread_cpu,
-    const std::string &pos_emb_type="NORMAL",
-    bool rope_3d=false) {
+    const std::string& pos_emb_type = "NORMAL",
+    bool rope_3d = false) {
 #define APPLY_KERNEL(TX, TC, TS)                                    \
   return BlockAttnKernel<TX, TC, TS>(qkv,                           \
                                      key_cache,                     \

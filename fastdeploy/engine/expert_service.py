@@ -90,6 +90,8 @@ class ExpertService:
 
         start_time = time.time()
         self.engine.start()
+        if envs.FD_ENABLE_RETURN_TEXT:
+            self.engine.create_data_processor()
         if self.cfg.scheduler_config.name == "dp":
             self.cfg.init_cache_info()
             assert (request_queues_for_dp_ipc is not None) and (result_queue_for_dp_ipc is not None)
@@ -152,7 +154,6 @@ class ExpertService:
             self.cache_manager_processes = self.engine.start_cache_service(
                 self.cfg.local_device_ids,
                 ipc_signal_suffix_cache,
-                create_cache_tensor=(self.cfg.scheduler_config.splitwise_role != "mixed"),
             )
 
         console_logger.info(
