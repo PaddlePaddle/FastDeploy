@@ -154,7 +154,6 @@ class ExpertService:
             self.cache_manager_processes = self.engine.start_cache_service(
                 self.cfg.local_device_ids,
                 ipc_signal_suffix_cache,
-                create_cache_tensor=(self.cfg.scheduler_config.splitwise_role != "mixed"),
             )
 
         console_logger.info(
