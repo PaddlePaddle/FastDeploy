@@ -613,6 +613,7 @@ def is_port_available(host, port):
             s.bind((host, port))
             return True
         except OSError as e:
+            print(f"Port {port} unavailable: {e}")
             if e.errno == errno.EADDRINUSE:
                 return False
             return True
