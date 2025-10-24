@@ -112,7 +112,7 @@ class TestQwenVLProcessor(unittest.TestCase):
         }
         limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
 
-        self.model_name_or_path = "/ModelData/Qwen2.5-VL-7B-Instruct"
+        self.model_name_or_path = "/root/paddlejob/workspace/wangxinyu22/Qwen2.5-VL-7B-Instruct-Paddle"
         self.processor = QwenVLProcessor(
             config=config,
             model_name_or_path=self.model_name_or_path,

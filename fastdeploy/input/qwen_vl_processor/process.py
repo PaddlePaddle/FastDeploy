@@ -263,7 +263,7 @@ class DataProcessor:
 
         chat_template_kwargs = request.get("chat_template_kwargs", {})
         prompt = self.tokenizer.apply_chat_template(
-            request,
+            messages,
             tokenize=False,
             add_generation_prompt=request.get("add_generation_prompt", True),
             **chat_template_kwargs,
