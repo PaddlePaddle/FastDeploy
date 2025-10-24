@@ -521,8 +521,10 @@ class OpenAIServingChat:
                     if data["finished"]:
                         num_choices -= 1
                         choice = await self._create_chat_completion_choice(
-                            data=data,
+                            output=output,
+                            index=idx,
                             request=request,
+                            previous_num_tokens=previous_num_tokens[idx],
                             prompt_token_ids=prompt_token_ids,
                             prompt_tokens=prompt_tokens,
                             completion_token_ids=completion_token_ids[idx],
@@ -557,8 +559,10 @@ class OpenAIServingChat:
 
     async def _create_chat_completion_choice(
         self,
-        data: dict,
+        output: dict,
+        index: int,
         request: ChatCompletionRequest,
+        previous_num_tokens: int,
         prompt_token_ids: list,
         prompt_tokens: str,
         completion_token_ids: list,
@@ -566,9 +570,6 @@ class OpenAIServingChat:
         logprob_contents: list,
         response_processor: ChatResponseProcessor,
     ) -> ChatCompletionResponseChoice:
-        idx = int(data["request_id"].split("_")[-1])
-        output = data["outputs"]
-        previous_num_tokens = len(data["outputs"]["token_ids"])
 
         if output is not None and output.get("metrics") and output["metrics"].get("request_start_time"):
             work_process_metrics.e2e_request_latency.observe(
@@ -589,12 +590,12 @@ class OpenAIServingChat:
             message.content = output["text"]
 
         logprobs_full_res = None
-        if logprob_contents[idx]:
-            logprobs_full_res = LogProbs(content=logprob_contents[idx])
+        if logprob_contents[index]:
+            logprobs_full_res = LogProbs(content=logprob_contents[index])
 
         has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
         max_tokens = request.max_completion_tokens or request.max_tokens
-        num_cached_tokens[idx] = output.get("num_cached_tokens", 0)
+        num_cached_tokens[index] = output.get("num_cached_tokens", 0)
 
         finish_reason = "stop"
         if has_no_token_limit or previous_num_tokens != max_tokens:
@@ -607,7 +608,7 @@ class OpenAIServingChat:
             finish_reason = "recover_stop"
 
         return ChatCompletionResponseChoice(
-            index=idx,
+            index=index,
             message=message,
             logprobs=logprobs_full_res,
             finish_reason=finish_reason,

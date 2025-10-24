@@ -54,14 +54,13 @@ __global__ void set_stop_value_multi_ends(bool* stop_flags,
     GM2LM_ASYNC(seq_lens + i, seq_lens_lm, sizeof(int) * readlen);
     mfence();
     for (int j = 0; j < readlen; j++) {
-      if(prefill_one_step_stop){
+      if (prefill_one_step_stop) {
         stop_flags_lm[j] = true;
         if (seq_lens_lm[j] == 0) {
           topk_ids_lm[j] = -1;
         }
         next_tokens_lm[j] = topk_ids_lm[j];
-      }
-      else{
+      } else {
         if (stop_flags_lm[j]) {
           if (seq_lens_lm[j] == 0) {
             topk_ids_lm[j] = -1;

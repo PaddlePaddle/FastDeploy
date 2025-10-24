@@ -13,11 +13,13 @@
 # limitations under the License.
 
 from .attention.flash_attn_backend import FlashAttentionBackend
+from .attention.mla_attn_metax_backend import MetaxMLAAttentionBackend
 from .moe.fused_moe_cutlass_metax_backend import MetaxCutlassWeightOnlyMoEMethod
 from .moe.fused_moe_triton_metax_backend import MetaxTritonWeightOnlyMoEMethod
 
 __all__ = [
     "FlashAttentionBackend",
+    "MetaxMLAAttentionBackend",
     "MetaxTritonWeightOnlyMoEMethod",
     "MetaxCutlassWeightOnlyMoEMethod",
 ]

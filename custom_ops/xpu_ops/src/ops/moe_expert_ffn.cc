@@ -72,7 +72,7 @@ void MoeExpertFFNImpl(xftblock::Tensor* ffn_in,
       is_padding_input ? token_num_info : nullptr,
       expert_num,
       1,  // moe_topk
-      0, // group_size
+      0,  // group_size
       ffn1_out_shape.size() == 2 ? xftblock::MoeFCInputMode::DENSE
                                  : xftblock::MoeFCInputMode::SPARSE);
   PD_CHECK(ret == 0);
@@ -441,6 +441,12 @@ std::vector<paddle::Tensor> MoeExpertFFN(
     const std::string& quant_method,
     const int hadamard_blocksize,
     const int valid_token_num) {
+  if (ffn_in.numel() == 0) {
+    paddle::Tensor ffn2_out =
+        paddle::empty_like(ffn_in, paddle::DataType::BFLOAT16);
+    return {ffn2_out};
+  }
+
   const auto x_type = ffn_in.dtype();
   const auto w_type = ffn1_weight.dtype();
 
