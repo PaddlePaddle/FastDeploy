@@ -249,7 +249,6 @@ class PaddleOCRVLProcessor(TextProcessor):
         # Set default max_tokens if not specified
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))  # Ensure at least 1 token
-        data_processor_logger.info(f"Processed request {request}")
 
         return request
 

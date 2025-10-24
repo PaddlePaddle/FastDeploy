@@ -329,8 +329,8 @@ class GPUModelRunner(ModelRunnerBase):
                     inputs = request.multimodal_inputs
                     if request.with_image:
                         if envs.FD_ENABLE_MAX_PREFILL:
-                            multi_vision_inputs["images_lst"].extend(
-                                inputs["images"][request.image_start : request.image_end]
+                            multi_vision_inputs["images_lst"].append(
+                                inputs["images"][request.image_start : request.image_end].cuda()
                             )
                             multi_vision_inputs["grid_thw_lst"].extend(
                                 inputs["grid_thw"][request.num_image_start : request.num_image_end]
@@ -387,7 +387,7 @@ class GPUModelRunner(ModelRunnerBase):
                     prompt_token_ids = request.prompt_token_ids
                 input_ids = prompt_token_ids + request.output_token_ids
                 logger.debug(
-                    f"Handle prefill request {request} at idx {idx}, "
+                    f"Handle prefill request {request.id} at idx {idx}, "
                     f"{prefill_start_index=}, {prefill_end_index=}, "
                     f"need_prefilled_token_num={len(input_ids)}"
                 )
@@ -2326,7 +2326,7 @@ class GPUModelRunner(ModelRunnerBase):
     def extract_vision_features_paddleocr(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
         if envs.FD_ENABLE_MAX_PREFILL:
             inputs["vit_position_ids_lst"] = np.concatenate(inputs["vit_position_ids_lst"])
-            images = paddle.to_tensor(inputs["images_lst"], dtype="bfloat16")
+            images = paddle.concat(inputs["images_lst"]).cast("bfloat16")
             grid_thw = paddle.to_tensor(inputs["grid_thw_lst"], dtype="int64")
             position_ids = paddle.to_tensor(inputs["vit_position_ids_lst"], dtype="int64")
             cu_seqlens = paddle.cumsum(paddle.to_tensor(inputs["cu_seqlens"])).cast("int32")

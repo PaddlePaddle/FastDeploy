@@ -223,9 +223,6 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        params_dict = dict(self.named_parameters())
-        for key in params_dict.keys():
-            print(key)
         self.model.load_state_dict(state_dict)
         self.visual.load_state_dict(state_dict)
         self.projector.load_state_dict(state_dict)

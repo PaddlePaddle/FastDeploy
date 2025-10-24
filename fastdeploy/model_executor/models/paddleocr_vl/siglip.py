@@ -27,6 +27,11 @@ from paddleformers.transformers.model_utils import PretrainedModel
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import slice_fn
 
+try:
+    from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
+except:
+    flash_attention_v3_varlen = None
+
 from .config import PPOCRVisionConfig
 
 
@@ -111,6 +116,17 @@ class SiglipAttention(nn.Layer):
         self.qkv_proj = QKVLinear(config, self.embed_dim, self.embed_dim * 3, bias_attr=True)
         self.out_proj = nn.Linear(self.embed_dim, self.embed_dim)
 
+        prop = paddle.device.cuda.get_device_properties()
+        cc = prop.major * 10 + prop.minor
+        is_current_sm_supported = cc >= 90
+        is_paddle_supported = any(num >= 90 for num in paddle.version.cuda_archs())
+        if is_current_sm_supported and is_paddle_supported:
+            self.flash_attn_func = flash_attention_v3_varlen
+            self.flash_attn_kwargs = {}
+        else:
+            self.flash_attn_func = flash_attn_unpadded
+            self.flash_attn_kwargs = {"scale": self.scale, "training": False}
+
     def forward(
         self,
         hidden_states: paddle.Tensor,  # [B, L, D]
@@ -141,7 +157,7 @@ class SiglipAttention(nn.Layer):
         q = apply_rotary_pos_emb_vision(q, cos, sin)
         k = apply_rotary_pos_emb_vision(k, cos, sin)
 
-        attn_output, _ = flash_attn_unpadded(
+        attn_output = self.flash_attn_func(
             q,
             k,
             v,
@@ -149,8 +165,9 @@ class SiglipAttention(nn.Layer):
             cu_seqlens,
             max_seqlen,
             max_seqlen,
-            scale=self.scale,
-        )
+            causal=False,
+            **self.flash_attn_kwargs,
+        )[0]
         # --------
 
         attn_output = attn_output.reshape(seq_length, -1)
