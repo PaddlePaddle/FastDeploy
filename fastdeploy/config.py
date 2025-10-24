@@ -1510,9 +1510,7 @@ class FDConfig:
                 self.structured_outputs_config.guided_decoding_backend = "xgrammar"
 
         # Adjustment GraphOptConfig
-        if (self.scheduler_config.splitwise_role != "mixed") or (
-            self.load_config is not None and self.load_config.dynamic_load_weight is True
-        ):
+        if self.scheduler_config.splitwise_role != "mixed":
             self.graph_opt_config.use_cudagraph = False
             logger.info(
                 "CUDAGraph does not support to be started together with PD Disaggregation temporarily, but has been automatically closed!"
@@ -1630,11 +1628,12 @@ class FDConfig:
             self.scheduler_config.check()
 
         # Check graph optimization config
-        if self.graph_opt_config.graph_opt_level > 0 or self.graph_opt_config.use_cudagraph:
+        if self.graph_opt_config.graph_opt_level > 0:
             if self.load_config is not None:
                 assert (
                     self.load_config.dynamic_load_weight is False
                 ), "Static graph cannot be used in RL scene temporarily"
+
         if int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 1:
             assert (
                 int(envs.FD_DISABLED_RECOVER) == 0
