@@ -83,7 +83,7 @@ class TestGraphOptBackend(unittest.TestCase):
         self.input_shape = (4, 8)
         self.dtype = "int32"
         self.model_config = {}
-        self.max_num_seqs = 1
+        self.max_num_seqs = 4
 
         # Create baseline configuration (dynamic graph, no cudagraph)
         baseline_graph_opt_config = GraphOptimizationConfig(args={})
