@@ -602,7 +602,7 @@ class PrefixCacheManager:
                 self.req_leaf_map[req_id] = match_block_node
                 self.leaf_req_map[match_block_node].add(req_id)
                 #  record request cache info
-                self.cache_info[req_id] = (match_block_node, matched_token_num)
+                self.cache_info[req_id] = (match_block_node, len(common_block_ids) * block_size)
                 task.cached_block_num = len(common_block_ids)
                 return common_block_ids, matched_token_num, hit_info
             except Exception as e:
