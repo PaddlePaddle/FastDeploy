@@ -16,6 +16,7 @@
 
 import argparse
 import json
+import threading
 import time
 from typing import Tuple
 
@@ -252,6 +253,27 @@ class PaddleDisWorkerProc:
         model_weights_signal_tensor = paddle.full(shape=[1], fill_value=self.model_weights_signal[0], dtype="int32")
         paddle.distributed.broadcast(model_weights_signal_tensor, src=src, group=group)
         return model_weights_signal_tensor.item()
+
+    def start_async_download_loop(self) -> None:
+        """
+        Start the async download loop.
+        """
+        if not self.parallel_config.enable_async_download_features:
+            return None
+
+        self.start_async_download_thread = threading.Thread(target=self._async_download_loop, daemon=True)
+        self.start_async_download_thread.daemon = True
+        self.start_async_download_thread.start()
+
+    def _async_download_loop(self) -> None:
+        """ """
+        # local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+        while True:
+            if self.task_queue.num_features_task() > 0:
+                pass
+            else:
+                pass
+            time.sleep(0.001)
 
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distrubuted Workers.
@@ -654,6 +676,12 @@ def parse_args():
         help="Flag to specify dtype of lm_head as FP32",
     )
 
+    parser.add_argument(
+        "--enable_async_download_features",
+        action="store_true",
+        help="Enable async download features",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -840,6 +868,9 @@ def run_worker_proc() -> None:
     worker_proc.init_health_status()
 
     worker_proc.start_task_queue_service()
+
+    # Start async download loop
+    worker_proc.start_async_download_loop()
 
     # Start event loop
     worker_proc.event_loop_normal()

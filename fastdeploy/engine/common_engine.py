@@ -529,7 +529,17 @@ class EngineSevice:
                 llm_logger.error(err_msg)
 
     def _has_features_info(self, task):
-        pass
+        inputs = task.multimodal_inputs
+        if inputs is None or len(inputs) == 0:
+            return False
+
+        if (
+            (inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0)
+            or (inputs.get("image_feature_urls") is not None and len(inputs["image_feature_urls"]) > 0)
+            or (inputs.get("audio_feature_urls") is not None and len(inputs["audio_feature_urls"]) > 0)
+        ):
+            return True
+        return False
 
     def _scheduler_task_to_worker_v1(self):
         """
@@ -563,7 +573,6 @@ class EngineSevice:
             for task in tasks:
                 self.resource_manager.add_request(task)
                 if self.cfg.parallel_config.enable_async_download_features:
-                    # 将带有features的请求插入worker异步下载features
                     if self._has_features_info(task):
                         self.engine_worker_queue.put_features_task([task])
             is_fetching = False

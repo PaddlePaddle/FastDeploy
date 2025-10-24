@@ -473,6 +473,7 @@ class LLMEngine:
             "use_internode_ll_two_stage": self.cfg.parallel_config.use_internode_ll_two_stage,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
+            "enable_async_download_features": self.cfg.parallel_config.enable_async_download_features,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:
