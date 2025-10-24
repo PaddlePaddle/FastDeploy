@@ -43,7 +43,7 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         # 模拟推理解析器
         self.mock_reasoning_parser = MagicMock()
         self.mock_reasoning_parser.__class__.__name__ = "ErnieX1ReasoningParser"
-        self.mock_reasoning_parser.extract_reasoning_content_streaming.return_value = ("reasoning", "text")
+        # self.mock_reasoning_parser.extract_reasoning_content_streaming.return_value = ("reasoning", "text")
         self.processor.reasoning_parser = self.mock_reasoning_parser
 
         # 模拟工具解析器
