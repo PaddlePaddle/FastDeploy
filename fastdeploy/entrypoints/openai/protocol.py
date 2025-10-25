@@ -60,6 +60,14 @@ class ErrorInfo(BaseModel):
     code: Optional[str] = None
 
 
+class CompletionTokenUsageInfo(BaseModel):
+    """
+    completion token usage info.
+    """
+
+    reasoning_tokens: Optional[int] = None
+
+
 class PromptTokenUsageInfo(BaseModel):
     """
     Prompt-related token usage info.
@@ -77,6 +85,7 @@ class UsageInfo(BaseModel):
     total_tokens: int = 0
     completion_tokens: Optional[int] = 0
     prompt_tokens_details: Optional[PromptTokenUsageInfo] = None
+    completion_tokens_details: Optional[CompletionTokenUsageInfo] = None
 
 
 class ModelPermission(BaseModel):
