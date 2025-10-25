@@ -45,6 +45,8 @@ from fastdeploy.model_executor.ops.xpu import (
     adjust_batch,
     get_infer_param,
     get_padding_offset,
+    limit_thinking_content_length_v1,
+    limit_thinking_content_length_v2,
     recover_decode_task,
     set_data_ipc,
     share_external_data,
@@ -185,6 +187,8 @@ def xpu_post_process(
     share_inputs: Dict[str, paddle.Tensor],
     block_size: int = 64,
     skip_save_output: bool = False,
+    think_end_id: int = None,
+    line_break_id: int = None,
 ) -> None:
     """ """
     from fastdeploy.model_executor.ops.xpu import (
@@ -192,6 +196,34 @@ def xpu_post_process(
         set_stop_value_multi_ends,
         update_inputs,
     )
+
+    if think_end_id > 0:
+        limit_strategy = envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR
+        max_think_lens = share_inputs["max_think_lens"]
+        step_idx = share_inputs["step_idx"]
+        limit_think_status = share_inputs["limit_think_status"]
+        if limit_strategy == "</think>":
+            # for ernie4_5_vl
+            limit_thinking_content_length_v1(
+                sampled_token_ids,
+                max_think_lens,
+                step_idx,
+                limit_think_status,
+                think_end_id,
+            )
+        elif limit_strategy == "\n</think>\n\n":
+            # for ernie_x1
+            assert line_break_id > 0
+            limit_thinking_content_length_v2(
+                sampled_token_ids,
+                max_think_lens,
+                step_idx,
+                limit_think_status,
+                think_end_id,
+                line_break_id,
+            )
+        else:
+            raise NotImplementedError(f"Not support {limit_strategy=} for limit thinking content length.")
 
     # 1. Set stop value
     paddle.assign(
@@ -388,6 +420,12 @@ class XPUModelRunner(ModelRunnerBase):
         req_len = len(req_dicts)
         has_prefill_task = False
         has_decode_task = False
+        rope_3d_position_ids = {
+            "position_ids_idx": [],
+            "position_ids_lst": [],
+            "position_ids_offset": [0],
+            "max_tokens_lst": [],
+        }
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
@@ -419,17 +457,22 @@ class XPUModelRunner(ModelRunnerBase):
                     else:
                         self.share_inputs["image_features"] = None
 
-                    if inputs["position_ids"] is not None:
-                        position_ids = paddle.to_tensor(
-                            request.multimodal_inputs["position_ids"],
-                            dtype="int64",
-                        ).unsqueeze([0])
-                    else:
-                        position_ids = None
-
-                    self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
-                        position_ids, request.get("max_tokens", 2048)
+                    position_ids = request.multimodal_inputs["position_ids"]
+                    rope_3d_position_ids["position_ids_idx"].append(idx)
+                    rope_3d_position_ids["position_ids_lst"].append(position_ids)
+                    rope_3d_position_ids["position_ids_offset"].append(
+                        position_ids.shape[0] + rope_3d_position_ids["position_ids_offset"][-1]
                     )
+                    rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
+
+                if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
+                    # Enable thinking
+                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
+                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                else:
+                    # Disable thinking
+                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
                 if len(request.output_token_ids) == 0:
                     input_ids = request.prompt_token_ids
@@ -447,8 +490,6 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
                     request.block_tables, dtype="int32"
                 )
-                if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
-                    has_decode_task = True
                 self.share_inputs["stop_flags"][idx : idx + 1] = False
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = prefill_start_index
                 self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length
@@ -469,6 +510,8 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
                     request.block_tables, dtype="int32"
                 )
+                if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
+                    has_decode_task = True
                 continue
             else:  # preempted task
                 logger.debug(f"Handle preempted request {request} at idx {idx}")
@@ -527,6 +570,18 @@ class XPUModelRunner(ModelRunnerBase):
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
+        if len(rope_3d_position_ids["position_ids_idx"]) > 0:
+            packed_position_ids = paddle.to_tensor(
+                np.concatenate(rope_3d_position_ids["position_ids_lst"]), dtype="int64"
+            )
+            rope_3d_lst = self.prepare_rope3d(
+                packed_position_ids,
+                rope_3d_position_ids["max_tokens_lst"],
+                rope_3d_position_ids["position_ids_offset"],
+            )
+            for i, idx in enumerate(rope_3d_position_ids["position_ids_idx"]):
+                self.share_inputs["rope_emb"][idx : idx + 1, :] = rope_3d_lst[i]
+
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
 
@@ -562,9 +617,18 @@ class XPUModelRunner(ModelRunnerBase):
 
             if self.enable_mm:
                 self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
-                    position_ids, request.get("max_tokens", 2048)
-                )
+                    position_ids, [request.get("max_tokens", 2048)], [0, position_ids.shape[0]]
+                )[0]
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
+
+            if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
+                # Enable thinking
+                self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
+                self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+            else:
+                # Disable thinking
+                self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
                 res = request.get(attr, default_value)
@@ -711,6 +775,10 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["ori_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["system_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["system_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int32")
+
+        # Initialize thinking related buffers
+        self.share_inputs["max_think_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
+        self.share_inputs["limit_think_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
@@ -1111,6 +1179,8 @@ class XPUModelRunner(ModelRunnerBase):
             share_inputs=self.share_inputs,
             block_size=self.cache_config.block_size,
             skip_save_output=is_dummy_run,
+            think_end_id=self.model_config.think_end_id,
+            line_break_id=self.model_config.line_break_id,
         )
 
         # 7. Updata 'infer_seed' and step_paddle()
@@ -1254,7 +1324,7 @@ class XPUModelRunner(ModelRunnerBase):
             grid_thw = None
 
         if one["position_ids"] is not None:
-            position_ids = paddle.to_tensor(one["position_ids"], dtype="int64").unsqueeze([0])
+            position_ids = paddle.to_tensor(one["position_ids"], dtype="int64")
         else:
             position_ids = None
 
@@ -1309,24 +1379,20 @@ class XPUModelRunner(ModelRunnerBase):
         return image_features
 
     @paddle.no_grad()
-    def prepare_rope3d(self, position_ids: paddle.Tensor, max_len: int) -> paddle.Tensor:
+    def prepare_rope3d(
+        self, position_ids: paddle.Tensor, max_len_lst: list[int], cumsum_seqlens: list[int]
+    ) -> list[paddle.Tensor]:
         """prepare_rope3d"""
 
-        prefix_max_position_ids = paddle.max(position_ids) + 1
-        dec_pos_ids = paddle.tile(
-            paddle.arange(max_len, dtype="int64").unsqueeze(0).unsqueeze(-1),
-            [1, 1, 3],
-        )
-        dec_pos_ids = dec_pos_ids + prefix_max_position_ids
-        position_ids_3d_real = paddle.concat([position_ids, dec_pos_ids], axis=1)
-
-        rope_emb = get_rope_3d(
-            position_ids=position_ids_3d_real,
+        rope_emb_lst = get_rope_3d(
+            position_ids=position_ids,
             rotary_dim=self.model_config.head_dim,
             partial_rotary_factor=1.0,
             base=self.model_config.rope_theta,
             max_position=self.model_config.max_model_len,
             freq_allocation=getattr(self.model_config, "freq_allocation", 20),
             model_type=self.model_config.model_type,
+            max_len_lst=max_len_lst,
+            cumsum_seqlens=cumsum_seqlens,
         )
-        return rope_emb
+        return rope_emb_lst

@@ -76,19 +76,20 @@ static int cpu_wrapper(
 }
 
 static int xpu3_wrapper(Context* ctx,
-                                const int64_t* base_model_draft_tokens,
-                                int* base_model_seq_lens_this_time,
-                                const int* base_model_seq_lens_encoder,
-                                const bool* base_model_stop_flags,
-                                int bsz,
-                                int base_model_draft_token_len) {
-  xpu3::plugin::draft_model_postprocess<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
-      reinterpret_cast<const xpu3::int64_t*>(base_model_draft_tokens),
-      base_model_seq_lens_this_time,
-      base_model_seq_lens_encoder,
-      base_model_stop_flags,
-      bsz,
-      base_model_draft_token_len);
+                        const int64_t* base_model_draft_tokens,
+                        int* base_model_seq_lens_this_time,
+                        const int* base_model_seq_lens_encoder,
+                        const bool* base_model_stop_flags,
+                        int bsz,
+                        int base_model_draft_token_len) {
+  xpu3::plugin::
+      draft_model_postprocess<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+          reinterpret_cast<const xpu3::int64_t*>(base_model_draft_tokens),
+          base_model_seq_lens_this_time,
+          base_model_seq_lens_encoder,
+          base_model_stop_flags,
+          bsz,
+          base_model_draft_token_len);
   return api::SUCCESS;
 }
 
@@ -124,12 +125,12 @@ int draft_model_postprocess(Context* ctx,
   }
   if (ctx->dev().type() == api::kXPU3) {
     return xpu3_wrapper(ctx,
-                                base_model_draft_tokens,
-                                base_model_seq_lens_this_time,
-                                base_model_seq_lens_encoder,
-                                base_model_stop_flags,
-                                bsz,
-                                base_model_draft_token_len);
+                        base_model_draft_tokens,
+                        base_model_seq_lens_this_time,
+                        base_model_seq_lens_encoder,
+                        base_model_stop_flags,
+                        bsz,
+                        base_model_draft_token_len);
   }
   WRAPPER_UNIMPLEMENTED(ctx);
 }

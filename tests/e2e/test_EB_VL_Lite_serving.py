@@ -35,6 +35,8 @@ FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 # List of ports to clean before and after tests
 PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT]
 
+os.environ["FD_USE_MACHETE"] = "0"
+
 
 def is_port_open(host: str, port: int, timeout=1.0):
     """
