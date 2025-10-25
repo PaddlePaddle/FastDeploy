@@ -215,6 +215,25 @@ DLL_EXPORT int text_image_gather_scatter(api::Context* ctx,
                                          int64_t hidden_size,
                                          bool is_scatter);
 
+DLL_EXPORT int limit_thinking_content_length_kernel_v1(
+    api::Context* ctx,
+    int64_t* next_tokens,
+    const int* max_think_lens,
+    const int64_t* step_idx,
+    int* limit_think_status,
+    const int64_t think_end_id,
+    const int bs);
+
+DLL_EXPORT int limit_thinking_content_length_kernel_v2(
+    api::Context* ctx,
+    int64_t* next_tokens,
+    const int* max_think_lens,
+    const int64_t* step_idx,
+    int* limit_think_status,
+    const int64_t think_end_id,
+    const int64_t line_break_id,
+    const int bs);
+
 /*--------------------------------------- MTP being
  * --------------------------------------------*/
 
