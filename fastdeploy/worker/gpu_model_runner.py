@@ -848,6 +848,8 @@ class GPUModelRunner(ModelRunnerBase):
             )
             self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
+        self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+
     def _prepare_inputs(self) -> None:
         """Prepare the model inputs"""
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -1591,6 +1593,7 @@ class GPUModelRunner(ModelRunnerBase):
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
             prompt_lens=self.share_inputs["prompt_lens"],
+            mask_rollback=self.share_inputs["mask_rollback"],
         )
 
         if self.speculative_config.method in ["mtp"] and self.parallel_config.splitwise_role == "prefill":
