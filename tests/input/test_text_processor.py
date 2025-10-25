@@ -20,6 +20,7 @@ class TestDataProcessorProcess(unittest.TestCase):
         self.processor.tool_parser_dict = {}
         self.processor.generation_config = MagicMock()
         self.processor.eos_token_ids = [1]
+        self.processor.reasoning_parser = MagicMock()
 
         def mock_messages2ids(request, **kwargs):
             if "chat_template" in kwargs:
@@ -57,6 +58,32 @@ class TestDataProcessorProcess(unittest.TestCase):
         }
         result = self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(result["prompt_token_ids"], [1])
+
+    def test_process_response_dict_normal(self):
+        self.processor.tokenizer.decode_token = MagicMock(return_value=("Mock decoded text", 0, 0))
+        self.processor.reasoning_parser.extract_reasoning_content = MagicMock(
+            return_value=("Mock reasoning content", "Mock final text")
+        )
+        mock_tokens = ["mock", "reasoning", "tokens"]
+        self.processor.tokenizer.tokenize = MagicMock(return_value=mock_tokens)
+        self.processor.tool_parser_obj = None
+        response_dict = {
+            "request_id": "request-id_0",
+            "outputs": {
+                "token_ids": [2, 3, 4, 5, 1],
+                "text": "Hello",
+                "top_logprobs": [{"a": 0.1}, {"b": 0.2}, {"c": 0.3}],
+            },
+            "finish_reason": "stop",
+            "finished": True,
+        }
+        kwargs = {"enable_thinking": True}
+        with patch("fastdeploy.input.text_processor.data_processor_logger"):
+            result = self.processor.process_response_dict_normal(response_dict, **kwargs)
+        self.assertEqual(result["outputs"]["reasoning_content"], "Mock reasoning content")
+        self.assertEqual(result["outputs"]["reasoning_token_num"], len(mock_tokens))
+        self.assertEqual(result["outputs"]["text"], "Mock final text")
+        self.assertIn("completion_tokens", result["outputs"])
 
 
 if __name__ == "__main__":

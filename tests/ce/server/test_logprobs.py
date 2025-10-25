@@ -37,6 +37,7 @@ def test_unstream_with_logprobs():
         "total_tokens": 25,
         "completion_tokens": 3,
         "prompt_tokens_details": {"cached_tokens": 0},
+        "completion_tokens_details": {"reasoning_tokens": 0},
     }
 
 
@@ -69,6 +70,7 @@ def test_unstream_without_logprobs():
         "total_tokens": 25,
         "completion_tokens": 3,
         "prompt_tokens_details": {"cached_tokens": 0},
+        "completion_tokens_details": {"reasoning_tokens": 0},
     }
 
 
