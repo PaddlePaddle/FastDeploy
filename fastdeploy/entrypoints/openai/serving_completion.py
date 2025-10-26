@@ -30,6 +30,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     CompletionResponseChoice,
     CompletionResponseStreamChoice,
     CompletionStreamResponse,
+    CompletionTokenUsageInfo,
     ErrorInfo,
     ErrorResponse,
     UsageInfo,
@@ -370,6 +371,7 @@ class OpenAIServingCompletion:
                 dealer.write([b"", req_id.encode("utf-8")])  # 发送多路请求
             output_tokens = [0] * num_choices
             inference_start_time = [0] * num_choices
+            reasoning_tokens = [0] * num_choices
             first_iteration = [True] * num_choices
             tool_called = [False] * num_choices
             max_streaming_response_tokens = (
@@ -458,6 +460,7 @@ class OpenAIServingCompletion:
                                 output_draft_top_logprobs, request.logprobs, 0
                             )
                     output_tokens[idx] += 1
+                    reasoning_tokens[idx] += output.get("reasoning_token_num", 0)
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
                         text=output["text"],
@@ -524,6 +527,9 @@ class OpenAIServingCompletion:
                                         prompt_batched_token_ids[idx // (1 if request.n is None else request.n)]
                                     )
                                     + output_tokens[idx],
+                                    completion_tokens_details=CompletionTokenUsageInfo(
+                                        reasoning_tokens=reasoning_tokens[idx]
+                                    ),
                                 ),
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
@@ -553,6 +559,7 @@ class OpenAIServingCompletion:
         choices: List[CompletionResponseChoice] = []
         num_prompt_tokens = 0
         num_generated_tokens = 0
+        num_reasoning_tokens = 0
 
         for idx in range(len(final_res_batch)):
             final_res = final_res_batch[idx]
@@ -608,11 +615,14 @@ class OpenAIServingCompletion:
 
             num_prompt_tokens += len(prompt_token_ids)
 
+            num_reasoning_tokens += output.get("reasoning_token_num", 0)
+
         num_prompt_tokens = num_prompt_tokens // (1 if request.n is None else request.n)
         usage = UsageInfo(
             prompt_tokens=num_prompt_tokens,
             completion_tokens=num_generated_tokens,
             total_tokens=num_prompt_tokens + num_generated_tokens,
+            completion_tokens_details=CompletionTokenUsageInfo(reasoning_tokens=num_reasoning_tokens),
         )
         del request
 
