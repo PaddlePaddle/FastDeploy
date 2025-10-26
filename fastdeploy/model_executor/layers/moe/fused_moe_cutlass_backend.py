@@ -1258,7 +1258,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
                 layer.down_proj_bias,
                 extra_weight_attrs,
             )
-            
+
     def process_weights_after_loading(self, layer):
         """ """
         if not self.quant_config.is_checkpoint_bf16:
