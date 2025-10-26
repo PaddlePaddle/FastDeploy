@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "append_attn/multi_head_latent_attention_kernel.h"
+#include "append_attn/decoder_mla_attention_kernel.h"
 #include "helper.h"
 #include "mla_attn/batch_mla_with_paged_kv_cache.h"
 

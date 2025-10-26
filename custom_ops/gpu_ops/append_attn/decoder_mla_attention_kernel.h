@@ -15,7 +15,7 @@
 
 #include "helper.h"
 #include "utils.cuh"
-#include "multiquery_decoder_attention_impl.cuh"
+#include "multiquery_decoder_attention_kernel.h"
 
 template <typename T>
 void DecodeMLAAttentionKernel(
