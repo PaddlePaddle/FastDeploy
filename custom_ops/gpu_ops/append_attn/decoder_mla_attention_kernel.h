@@ -14,30 +14,30 @@
 #pragma once
 
 #include "helper.h"
-#include "utils.cuh"
 #include "multiquery_decoder_attention_kernel.h"
+#include "utils.cuh"
 
 template <typename T>
 void DecodeMLAAttentionKernel(
-  const AppendAttnMetaData& meta_data,
-  const paddle::Tensor &q, // [token_num, num_heads, head_dim]
-  const paddle::Tensor &cache_k,
-  const paddle::Tensor &cache_v,
-  const paddle::optional<paddle::Tensor>& attn_mask,
-  const paddle::optional<paddle::Tensor>& shift_bias,
-  const paddle::optional<paddle::Tensor>& smooth_weight,
-  const paddle::Tensor &seq_lens_q, // q_seq_len is 1
-  const paddle::Tensor &seq_lens_kv,
-  const paddle::Tensor &batch_id_per_token,
-  const paddle::Tensor &cu_seqlens_q,
-  const paddle::Tensor &block_table,
-  int max_seq_len,
-  int max_dec_len,
-  float softmax_scale,
-  float in_scale,
-  bool causal,
-  cudaStream_t &stream,
-  paddle::Tensor *out) {
+    const AppendAttnMetaData &meta_data,
+    const paddle::Tensor &q,  // [token_num, num_heads, head_dim]
+    const paddle::Tensor &cache_k,
+    const paddle::Tensor &cache_v,
+    const paddle::optional<paddle::Tensor> &attn_mask,
+    const paddle::optional<paddle::Tensor> &shift_bias,
+    const paddle::optional<paddle::Tensor> &smooth_weight,
+    const paddle::Tensor &seq_lens_q,  // q_seq_len is 1
+    const paddle::Tensor &seq_lens_kv,
+    const paddle::Tensor &batch_id_per_token,
+    const paddle::Tensor &cu_seqlens_q,
+    const paddle::Tensor &block_table,
+    int max_seq_len,
+    int max_dec_len,
+    float softmax_scale,
+    float in_scale,
+    bool causal,
+    cudaStream_t &stream,
+    paddle::Tensor *out) {
   const auto token_num = meta_data.token_nums;
   const auto block_size = meta_data.block_size;
   const auto bsz = meta_data.batch_size;
@@ -51,55 +51,92 @@ void DecodeMLAAttentionKernel(
   const uint32_t num_stage = get_cascade_attention_num_stages();
   const uint32_t num_threads = get_cascade_attention_num_threads();
 
-  DISPATCH_CAUSAL(causal, CAUSAL,
-    {DISPATCH_MLA_GROUP_SIZE(group_size, GROUP_SIZE,
-      {DISPATCH_MLA_HEAD_DIM(head_dim_qk, HEAD_DIM_QK,
-        {DISPATCH_MLA_HEAD_DIM(head_dim_v, HEAD_DIM_V,
-          {DISPATCH_BLOCK_SIZE(block_size, BLOCK_SIZE,
-              {DISPATCH_DEAL_EACH_TIME(deal_each_time, DEAL_EACH_TIME,
-                  {MultiQueryDecoderAttention<T, GROUP_SIZE, HEAD_DIM_QK, HEAD_DIM_V, BLOCK_SIZE, CAUSAL, 2, 16, DEAL_EACH_TIME>(
-                  meta_data, stream, q, cache_k, cache_v, attn_mask, shift_bias, smooth_weight, seq_lens_q, seq_lens_kv, batch_id_per_token, cu_seqlens_q,
-                  block_table, max_seq_len, max_dec_len, rope_scale, rope_theta, softmax_scale, in_scale, out);})})})})})});
+  DISPATCH_CAUSAL(
+      causal,
+      CAUSAL,
+      {DISPATCH_MLA_GROUP_SIZE(
+          group_size,
+          GROUP_SIZE,
+          {DISPATCH_MLA_HEAD_DIM(
+              head_dim_qk,
+              HEAD_DIM_QK,
+              {DISPATCH_MLA_HEAD_DIM(
+                  head_dim_v,
+                  HEAD_DIM_V,
+                  {DISPATCH_BLOCK_SIZE(
+                      block_size,
+                      BLOCK_SIZE,
+                      {DISPATCH_DEAL_EACH_TIME(deal_each_time, DEAL_EACH_TIME, {
+                        MultiQueryDecoderAttention<T,
+                                                   GROUP_SIZE,
+                                                   HEAD_DIM_QK,
+                                                   HEAD_DIM_V,
+                                                   BLOCK_SIZE,
+                                                   CAUSAL,
+                                                   2,
+                                                   16,
+                                                   DEAL_EACH_TIME>(
+                            meta_data,
+                            stream,
+                            q,
+                            cache_k,
+                            cache_v,
+                            attn_mask,
+                            shift_bias,
+                            smooth_weight,
+                            seq_lens_q,
+                            seq_lens_kv,
+                            batch_id_per_token,
+                            cu_seqlens_q,
+                            block_table,
+                            max_seq_len,
+                            max_dec_len,
+                            rope_scale,
+                            rope_theta,
+                            softmax_scale,
+                            in_scale,
+                            out);
+                      })})})})})});
 }
 
 template void DecodeMLAAttentionKernel<paddle::bfloat16>(
-  const AppendAttnMetaData& meta_data,
-  const paddle::Tensor &q, // [token_num, num_heads, head_dim]
-  const paddle::Tensor &cache_k,
-  const paddle::Tensor &cache_v,
-  const paddle::optional<paddle::Tensor>& attn_mask,
-  const paddle::optional<paddle::Tensor>& shift_bias,
-  const paddle::optional<paddle::Tensor>& smooth_weight,
-  const paddle::Tensor &seq_lens_q, // q_seq_len is 1
-  const paddle::Tensor &seq_lens_kv,
-  const paddle::Tensor &batch_id_per_token,
-  const paddle::Tensor &cu_seqlens_q,
-  const paddle::Tensor &block_table,
-  int max_seq_len,
-  int max_dec_len,
-  float softmax_scale,
-  float in_scale,
-  bool causal,
-  cudaStream_t &stream,
-  paddle::Tensor *out);
+    const AppendAttnMetaData &meta_data,
+    const paddle::Tensor &q,  // [token_num, num_heads, head_dim]
+    const paddle::Tensor &cache_k,
+    const paddle::Tensor &cache_v,
+    const paddle::optional<paddle::Tensor> &attn_mask,
+    const paddle::optional<paddle::Tensor> &shift_bias,
+    const paddle::optional<paddle::Tensor> &smooth_weight,
+    const paddle::Tensor &seq_lens_q,  // q_seq_len is 1
+    const paddle::Tensor &seq_lens_kv,
+    const paddle::Tensor &batch_id_per_token,
+    const paddle::Tensor &cu_seqlens_q,
+    const paddle::Tensor &block_table,
+    int max_seq_len,
+    int max_dec_len,
+    float softmax_scale,
+    float in_scale,
+    bool causal,
+    cudaStream_t &stream,
+    paddle::Tensor *out);
 
 template void DecodeMLAAttentionKernel<paddle::float16>(
-  const AppendAttnMetaData& meta_data,
-  const paddle::Tensor &q, // [token_num, num_heads, head_dim]
-  const paddle::Tensor &cache_k,
-  const paddle::Tensor &cache_v,
-  const paddle::optional<paddle::Tensor>& attn_mask,
-  const paddle::optional<paddle::Tensor>& shift_bias,
-  const paddle::optional<paddle::Tensor>& smooth_weight,
-  const paddle::Tensor &seq_lens_q, // q_seq_len is 1
-  const paddle::Tensor &seq_lens_kv,
-  const paddle::Tensor &batch_id_per_token,
-  const paddle::Tensor &cu_seqlens_q,
-  const paddle::Tensor &block_table,
-  int max_seq_len,
-  int max_dec_len,
- float softmax_scale,
-  float in_scale,
-  bool causal,
-  cudaStream_t &stream,
-  paddle::Tensor *out);
+    const AppendAttnMetaData &meta_data,
+    const paddle::Tensor &q,  // [token_num, num_heads, head_dim]
+    const paddle::Tensor &cache_k,
+    const paddle::Tensor &cache_v,
+    const paddle::optional<paddle::Tensor> &attn_mask,
+    const paddle::optional<paddle::Tensor> &shift_bias,
+    const paddle::optional<paddle::Tensor> &smooth_weight,
+    const paddle::Tensor &seq_lens_q,  // q_seq_len is 1
+    const paddle::Tensor &seq_lens_kv,
+    const paddle::Tensor &batch_id_per_token,
+    const paddle::Tensor &cu_seqlens_q,
+    const paddle::Tensor &block_table,
+    int max_seq_len,
+    int max_dec_len,
+    float softmax_scale,
+    float in_scale,
+    bool causal,
+    cudaStream_t &stream,
+    paddle::Tensor *out);
