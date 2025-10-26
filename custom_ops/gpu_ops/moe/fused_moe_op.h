@@ -176,6 +176,7 @@ __global__ void masked_quantize_moe_input_kernel(const T* permuted_inputs,
         float abs_max = 0.0f;
         for(int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
             int64_t offset = token_idx * dim + idx * VecSize;
+            Load<T, VecSize>(&permuted_inputs[offset], &input_vec);
             #pragma unroll
             for (int i = 0; i < VecSize; i++) {
                 float res = static_cast<float>(input_vec[i]);
