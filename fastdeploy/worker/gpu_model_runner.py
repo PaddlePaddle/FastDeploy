@@ -1251,6 +1251,7 @@ class GPUModelRunner(ModelRunnerBase):
                 stop_token_ids=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
                 prompt_lens=self.share_inputs["prompt_lens"],
+                mask_rollback=self.share_inputs["mask_rollback"],
             )
 
             post_process(
