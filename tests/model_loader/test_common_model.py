@@ -32,24 +32,28 @@ from tests.model_loader.utils import (
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
 FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 
-prompts = ["解释下“温故而知新", "Hello, how are you?"]
+prompts = ["解释下”温故而知新”", "Hello, how are you?"]
 
 
 model_param_map = {
     "Qwen3-0.6B": {
+        "max_num_seqs": 1,
         "quantizations": ["None", "wint8", "wint4"],
     },
     "ernie-4_5-21b-a3b-bf16-paddle": {
+        "max_num_seqs": 1,
         "tensor_parallel_size": 2,
         "quantizations": [
             "wint8",
         ],
     },
     "Qwen2-7B-Instruct": {
+        "max_num_seqs": 1,
         "quantizations": ["wint4"],
     },
     "Qwen3-30B-A3B": {
         "tensor_parallel_size": 2,
+        "max_num_seqs": 1,
         "quantizations": [
             {
                 "quant_type": "block_wise_fp8",
@@ -91,6 +95,7 @@ for model, cfg in model_param_map.items():
             pytest.param(
                 model,
                 cfg.get("tensor_parallel_size", 1),
+                cfg.get("max_num_seqs", 1),
                 cfg.get("max_model_len", 1024),
                 quant,
                 cfg.get("max_tokens", 32),
@@ -102,13 +107,14 @@ for model, cfg in model_param_map.items():
 
 
 @pytest.mark.parametrize(
-    "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens,env",
+    "model_name_or_path,tensor_parallel_size,max_num_seqs,max_model_len,quantization,max_tokens,env",
     params,
 )
 def test_common_model(
     fd_runner,
     model_name_or_path: str,
     tensor_parallel_size: int,
+    max_num_seqs,
     max_model_len: int,
     max_tokens: int,
     quantization: str,
@@ -126,6 +132,7 @@ def test_common_model(
             fd_runner,
             model_path,
             tensor_parallel_size,
+            max_num_seqs,
             max_model_len,
             max_tokens,
             quantization,
@@ -141,6 +148,7 @@ def test_common_model(
             fd_runner,
             model_path,
             tensor_parallel_size,
+            max_num_seqs,
             max_model_len,
             max_tokens,
             quantization,

@@ -19,9 +19,11 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.tool_parser_dict = {}
         self.processor.generation_config = MagicMock()
         self.processor.eos_token_ids = [1]
+        self.processor.reasoning_parser = MagicMock()
 
         # 模拟 ids2tokens 方法
         def mock_ids2tokens(token_ids, task_id):
+            self.processor.decode_status[task_id] = "mock_decode_status"
             return "delta_text", [2, 3], "previous_texts"
 
         self.processor.ids2tokens = mock_ids2tokens
@@ -41,7 +43,7 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         # 模拟推理解析器
         self.mock_reasoning_parser = MagicMock()
         self.mock_reasoning_parser.__class__.__name__ = "ErnieX1ReasoningParser"
-        self.mock_reasoning_parser.extract_reasoning_content_streaming.return_value = ("reasoning", "text")
+        # self.mock_reasoning_parser.extract_reasoning_content_streaming.return_value = ("reasoning", "text")
         self.processor.reasoning_parser = self.mock_reasoning_parser
 
         # 模拟工具解析器
@@ -73,6 +75,32 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         }
         result = self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(result["prompt_token_ids"], [1])
+
+    def test_process_response_dict_normal(self):
+        mock_tokens = ["reasoning", "token", "list"]
+        self.processor.tokenizer.tokenize = MagicMock(return_value=mock_tokens)
+        self.processor.reasoning_parser.extract_reasoning_content = MagicMock(
+            return_value=("Mock reasoning content", "Mock final text")
+        )
+
+        self.processor.tool_parser_obj = None
+
+        response_dict = {
+            "request_id": "request-id_0",
+            "outputs": {"token_ids": [2, 3, 4, 5, 1], "text": "Initial text", "top_logprobs": []},
+            "finish_reason": "stop",
+            "finished": True,
+        }
+        kwargs = {"enable_thinking": True}
+
+        with patch("fastdeploy.input.ernie4_5_processor.data_processor_logger"):
+            result = self.processor.process_response_dict_normal(response_dict, **kwargs)
+
+        self.mock_reasoning_parser.extract_reasoning_content.assert_called_once()
+        self.assertEqual(result["outputs"]["reasoning_content"], "Mock reasoning content")
+        self.assertEqual(result["outputs"]["reasoning_token_num"], len(mock_tokens))
+        self.assertEqual(result["outputs"]["text"], "Mock final text")
+        self.assertIn("completion_tokens", result["outputs"])
 
 
 if __name__ == "__main__":

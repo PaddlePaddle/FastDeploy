@@ -20,21 +20,18 @@
 namespace xpu3 {
 namespace plugin {
 template <typename TX, typename TSCALE, typename TY>
-__attribute__((global)) void
-quant2d_per_channel_cluster(const TX *x, const TSCALE *scale, TY *y, int64_t m,
-                            int64_t n);
+__attribute__((global)) void quant2d_per_channel_cluster(
+    const TX *x, const TSCALE *scale, TY *y, int64_t m, int64_t n);
 
 template <typename TX, typename TSCALE, typename TY, int MAX_N>
-__attribute__((global)) void
-quant2d_per_channel_cached(const TX *input, TY *output, TSCALE *scale,
-                           int64_t m, int64_t n);
+__attribute__((global)) void quant2d_per_channel_cached(
+    const TX *input, TY *output, TSCALE *scale, int64_t m, int64_t n);
 
 template <typename TX, typename TSCALE, typename TY>
-__attribute__((global)) void quant2d_per_channel_bign(const TX *input,
-                                                      TY *output, TSCALE *scale,
-                                                      int64_t m, int64_t n);
-} // namespace plugin
-} // namespace xpu3
+__attribute__((global)) void quant2d_per_channel_bign(
+    const TX *input, TY *output, TSCALE *scale, int64_t m, int64_t n);
+}  // namespace plugin
+}  // namespace xpu3
 
 namespace api = baidu::xpu::api;
 
@@ -43,11 +40,17 @@ namespace xpu {
 namespace api {
 namespace plugin {
 
-template <typename TX, typename TSCALE, typename TY,
+template <typename TX,
+          typename TSCALE,
+          typename TY,
           typename std::enable_if<std::is_same<TY, int8_t>::value, TY>::type
               *ptr = nullptr>
-int cpu_wrapper_input_scale(api::Context *ctx, const TX *x, const TSCALE *scale,
-                            TY *y, int64_t m, int64_t n) {
+int cpu_wrapper_input_scale(api::Context *ctx,
+                            const TX *x,
+                            const TSCALE *scale,
+                            TY *y,
+                            int64_t m,
+                            int64_t n) {
   float absmax = 1e-30f;
   for (int i = 0; i < m; ++i) {
     for (int j = 0; j < n; ++j) {
@@ -78,11 +81,13 @@ static float16 quant_int4(float x, float scale) {
   return (float16)std::min(static_cast<float>(r), 7.f);
 }
 
-template <typename TX, typename TSCALE, typename TY,
+template <typename TX,
+          typename TSCALE,
+          typename TY,
           typename std::enable_if<std::is_same<TY, int4_t>::value, TY>::type
               *ptr = nullptr>
-int cpu_wrapper_input_scale(api::Context *ctx, const TX *x, const TSCALE *scale,
-                            TY *y, int m, int n) {
+int cpu_wrapper_input_scale(
+    api::Context *ctx, const TX *x, const TSCALE *scale, TY *y, int m, int n) {
   int8_t *y_ptr = reinterpret_cast<int8_t *>(y);
   float t1, t2;
   for (int i = 0; i < m; ++i) {
@@ -109,11 +114,17 @@ int cpu_wrapper_input_scale(api::Context *ctx, const TX *x, const TSCALE *scale,
   return api::SUCCESS;
 }
 
-template <typename TX, typename TSCALE, typename TY,
+template <typename TX,
+          typename TSCALE,
+          typename TY,
           typename std::enable_if<!std::is_same<TY, int4_t>::value, TY>::type
               *ptr = nullptr>
-int cpu_wrapper_output_scale(api::Context *ctx, const TX *x, TSCALE *scale,
-                             TY *y, int64_t m, int64_t n) {
+int cpu_wrapper_output_scale(api::Context *ctx,
+                             const TX *x,
+                             TSCALE *scale,
+                             TY *y,
+                             int64_t m,
+                             int64_t n) {
   int64_t i, j;
   for (j = 0; j < n; ++j) {
     float absmax = 1e-30f;
@@ -129,11 +140,13 @@ int cpu_wrapper_output_scale(api::Context *ctx, const TX *x, TSCALE *scale,
   return api::SUCCESS;
 }
 
-template <typename TX, typename TSCALE, typename TY,
+template <typename TX,
+          typename TSCALE,
+          typename TY,
           typename std::enable_if<std::is_same<TY, int4_t>::value, TY>::type
               *ptr = nullptr>
-int cpu_wrapper_output_scale(api::Context *ctx, const TX *x, TSCALE *scale,
-                             TY *y, int m, int n) {
+int cpu_wrapper_output_scale(
+    api::Context *ctx, const TX *x, TSCALE *scale, TY *y, int m, int n) {
   int8_t *y_ptr = reinterpret_cast<int8_t *>(y);
   float t1, t2, absmax_1, absmax_2, act_scale_1, act_scale_2;
   for (int j = 0; j < n; j += 2) {
@@ -173,18 +186,28 @@ int cpu_wrapper_output_scale(api::Context *ctx, const TX *x, TSCALE *scale,
 }
 
 template <typename TX, typename TSCALE, typename TY>
-int xpu3_wrapper_input_scale(api::Context *ctx, const TX *x,
-                             const TSCALE *scale, TY *y, int64_t m, int64_t n) {
+int xpu3_wrapper_input_scale(api::Context *ctx,
+                             const TX *x,
+                             const TSCALE *scale,
+                             TY *y,
+                             int64_t m,
+                             int64_t n) {
   auto func = xpu3::plugin::quant2d_per_channel_cluster<TX, TSCALE, TY>;
   func<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(x, scale, y, m, n);
   return api::SUCCESS;
 }
 
-template <typename TX, typename TSCALE, typename TY,
+template <typename TX,
+          typename TSCALE,
+          typename TY,
           typename std::enable_if<!std::is_same<TY, int4_t>::value, TY>::type
               * = nullptr>
-int xpu3_wrapper_output_scale(api::Context *ctx, const TX *x, TSCALE *scale,
-                              TY *y, int64_t m, int64_t n) {
+int xpu3_wrapper_output_scale(api::Context *ctx,
+                              const TX *x,
+                              TSCALE *scale,
+                              TY *y,
+                              int64_t m,
+                              int64_t n) {
   int64_t channel_size = m * sizeof(TX);
   int64_t cluster_n = (n + ctx->ncluster() - 1) / ctx->ncluster();
   auto func = xpu3::plugin::quant2d_per_channel_bign<TX, TSCALE, TY>;
@@ -210,19 +233,30 @@ int xpu3_wrapper_output_scale(api::Context *ctx, const TX *x, TSCALE *scale,
   func<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(x, y, scale, m, n);
   return api::SUCCESS;
 }
-template <typename TX, typename TSCALE, typename TY,
+template <typename TX,
+          typename TSCALE,
+          typename TY,
           typename std::enable_if<std::is_same<TY, int4_t>::value, TY>::type * =
               nullptr>
-int xpu3_wrapper_output_scale(api::Context *ctx, const TX *x, TSCALE *scale,
-                              TY *y, int64_t m, int64_t n) {
+int xpu3_wrapper_output_scale(api::Context *ctx,
+                              const TX *x,
+                              TSCALE *scale,
+                              TY *y,
+                              int64_t m,
+                              int64_t n) {
   auto func = xpu3::plugin::quant2d_per_channel_bign<TX, TSCALE, TY>;
   func<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(x, y, scale, m, n);
   return api::SUCCESS;
 }
 
 template <typename TX, typename TSCALE, typename TY>
-int quant2d_per_channel(api::Context *ctx, const TX *x, const TSCALE *scale_in,
-                        TY *y, TSCALE *scale_out, int64_t m, int64_t n) {
+int quant2d_per_channel(api::Context *ctx,
+                        const TX *x,
+                        const TSCALE *scale_in,
+                        TY *y,
+                        TSCALE *scale_out,
+                        int64_t m,
+                        int64_t n) {
   WRAPPER_CHECK_CTX(ctx);
   WRAPPER_DUMP_FUNCTION_T3(ctx, "quant2d_per_channel", TX, TSCALE, TY);
   WRAPPER_DUMP_PARAM4(ctx, x, scale_in, y, scale_out);
@@ -251,20 +285,24 @@ int quant2d_per_channel(api::Context *ctx, const TX *x, const TSCALE *scale_in,
   }
   if (ctx->dev().type() == api::kXPU3) {
     if (scale_in != nullptr) {
-      return xpu3_wrapper_input_scale<TX, TSCALE, TY>(ctx, x, scale_in, y, m,
-                                                      n);
+      return xpu3_wrapper_input_scale<TX, TSCALE, TY>(
+          ctx, x, scale_in, y, m, n);
     }
-    return xpu3_wrapper_output_scale<TX, TSCALE, TY>(ctx, x, scale_out, y, m,
-                                                     n);
+    return xpu3_wrapper_output_scale<TX, TSCALE, TY>(
+        ctx, x, scale_out, y, m, n);
   }
   WRAPPER_UNIMPLEMENTED(ctx);
   return 0;
 }
 
-#define INSTANTIATION_QUANT2D_PER_CHANNEL(TX, TSCALE, TY)                      \
-  template int quant2d_per_channel<TX, TSCALE, TY>(                            \
-      api::Context *, const TX *, const TSCALE *, TY *, TSCALE *, int64_t,     \
-      int64_t);
+#define INSTANTIATION_QUANT2D_PER_CHANNEL(TX, TSCALE, TY)          \
+  template int quant2d_per_channel<TX, TSCALE, TY>(api::Context *, \
+                                                   const TX *,     \
+                                                   const TSCALE *, \
+                                                   TY *,           \
+                                                   TSCALE *,       \
+                                                   int64_t,        \
+                                                   int64_t);
 
 INSTANTIATION_QUANT2D_PER_CHANNEL(float16, float, int8_t);
 INSTANTIATION_QUANT2D_PER_CHANNEL(bfloat16, float, int8_t);
@@ -274,7 +312,7 @@ INSTANTIATION_QUANT2D_PER_CHANNEL(float16, float16, int4_t);
 INSTANTIATION_QUANT2D_PER_CHANNEL(float16, float, int4_t);
 INSTANTIATION_QUANT2D_PER_CHANNEL(float, float, int4_t);
 INSTANTIATION_QUANT2D_PER_CHANNEL(bfloat16, float, int4_t);
-} // namespace plugin
-} // namespace api
-} // namespace xpu
-} // namespace baidu
+}  // namespace plugin
+}  // namespace api
+}  // namespace xpu
+}  // namespace baidu
