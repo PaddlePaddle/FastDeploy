@@ -367,6 +367,15 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
+    logprobs_mode: str = "raw_logprobs"
+    """
+    Indicates the content returned in the logprobs.
+    Supported mode:
+    1) raw_logprobs, 2) processed_logprobs, 3) raw_logits, 4) processed_logits.
+    Raw means the values before applying logit processors, like bad words.
+    Processed means the values after applying such processors.
+    """
+
     seed: int = 0
     """
     Random seed to use for initialization. If not set, defaults to 0.
@@ -412,6 +421,8 @@ class EngineArgs:
         if self.enable_logprob:
             if not current_platform.is_cuda():
                 raise NotImplementedError("Only CUDA platform supports logprob.")
+            if self.speculative_config is not None and self.logprobs_mode.startswith("processed"):
+                raise NotImplementedError("processed_logprobs not support in speculative.")
         if self.speculative_config is not None:
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if self.splitwise_role != "mixed" and self.cache_transfer_protocol != "rdma":
@@ -609,6 +620,13 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_logprob,
             help="Enable output of token-level log probabilities.",
+        )
+        model_group.add_argument(
+            "--logprobs-mode",
+            type=str,
+            choices=["raw_logprobs", "processed_logprobs", "processed_logits"],
+            default=EngineArgs.logprobs_mode,
+            help="Indicates the content returned in the logprobs.",
         )
         model_group.add_argument(
             "--seed",
