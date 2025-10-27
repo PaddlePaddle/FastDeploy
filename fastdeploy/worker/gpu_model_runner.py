@@ -83,7 +83,7 @@ import zmq
 from fastdeploy import envs
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.tasks import PoolingTask
-from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
+# from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.pool.metadata import PoolingMetadata
@@ -117,8 +117,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         # VL model config:
         if self.enable_mm:
-            if "ernie" in self.fd_config.model_config.model_type:
-                self._init_image_preprocess()
+            # if "ernie" in self.fd_config.model_config.model_type:
+            #     self._init_image_preprocess()
 
             self.amp_black = [
                 "reduce_sum",
@@ -166,6 +166,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Initialize share inputs
         self._init_share_inputs(self.scheduler_config.max_num_seqs)
+        self._initialize_linear_attn_cache() 
         self.infer_seed_increment = paddle.full(
             shape=[self.scheduler_config.max_num_seqs, 1],
             fill_value=4,
@@ -202,6 +203,70 @@ class GPUModelRunner(ModelRunnerBase):
                 name="WorkerAsyncOutputCopy",
             )
             self.async_output_copy_thread.start()
+    
+    def _initialize_linear_attn_cache(self):
+        """
+        Initializes the state cache for Linear Attention layers.
+        """
+        config = self.model_config
+
+        # ... (前面的检查逻辑不变) ...
+        
+        # 缓存的形状: [max_batch_size, num_active_linear_layers, num_heads_tp, head_dim, head_dim]
+        # 为了方便索引，我们将 batch_size 放在最外面
+        shape = (
+            # --- [核心修复] ---
+            # 从 self.scheduler_config 获取 max_num_seqs，而不是 self.parallel_config
+            self.scheduler_config.max_num_seqs, 
+            # --- [结束修复] ---
+            config.num_hidden_layers, # 我们为所有层都预留空间，但只使用需要的
+            config.num_attention_heads // self.parallel_config.tensor_parallel_size,
+            config.head_dim,
+            config.head_dim
+        )
+
+        self.share_inputs["linear_attn_caches"] = paddle.zeros(shape, dtype="float32")
+        logger.info(f"Initialized linear attention cache with shape: {shape}")
+            
+    # def _initialize_linear_attn_cache(self):
+    #     """
+    #     Initializes the state cache for Linear Attention layers.
+    #     """
+    #     config = self.model_config
+
+    #     # 检查模型是否真的需要线性注意力缓存
+    #     if not hasattr(config, "attn_type_list") or 0 not in config.attn_type_list:
+    #         self.share_inputs["linear_attn_caches"] = None
+    #         logger.info("No Linear Attention layers found. Skipping linear_attn_cache initialization.")
+    #         return
+
+    #     # 计算需要缓存的线性注意力层数
+    #     # 注意：这里我们只计算在 layer_mapping 中实际使用的线性注意力层
+    #     active_linear_layers_indices = []
+    #     layer_mapping = getattr(config, "layer_mapping", list(range(config.num_hidden_layers)))
+    #     for i in range(config.num_hidden_layers):
+    #         original_layer_id = layer_mapping[i]
+    #         if config.attn_type_list[original_layer_id] == 0:
+    #             active_linear_layers_indices.append(i) # 使用模型内部的索引 i
+
+    #     if not active_linear_layers_indices:
+    #         self.share_inputs["linear_attn_caches"] = None
+    #         logger.info("No active Linear Attention layers in layer_mapping. Skipping linear_attn_cache initialization.")
+    #         return
+
+    #     # 缓存的形状: [max_batch_size, num_active_linear_layers, num_heads_tp, head_dim, head_dim]
+    #     # 为了方便索引，我们将 batch_size 放在最外面
+    #     shape = (
+    #         self.parallel_config.max_num_seqs,
+    #         config.num_hidden_layers, # 我们为所有层都预留空间，但只使用需要的
+    #         config.num_attention_heads // self.parallel_config.tensor_parallel_size,
+    #         config.head_dim,
+    #         config.head_dim
+    #     )
+
+    #     self.share_inputs["linear_attn_caches"] = paddle.zeros(shape, dtype="float32")
+    #     logger.info(f"Initialized linear attention cache with shape: {shape}")
+        
 
     def _async_output_busy_loop(self):
         """Entrypoint for the thread which handles outputs asynchronously."""
@@ -1082,6 +1147,19 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Initialize rotary position embedding
         if not self.enable_mm:
+            # rotary_dimension = getattr(self.model_config, "rotary_dim", self.model_config.head_dim)
+            # head_dimension = self.model_config.head_dim
+            
+            # # 计算正确的 partial_rotary_factor
+            # p_rotary_factor = rotary_dimension / head_dimension
+            
+            # self.share_inputs["rope_emb"] = get_rope(
+            #     rotary_dim=head_dimension, # 保持传入 true rotary_dim
+            #     position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
+            #     base=self.model_config.rope_theta,
+            #     model_config=self.model_config,
+            #     partial_rotary_factor=p_rotary_factor, # <--- 传入计算出的 factor
+            # )
             self.share_inputs["rope_emb"] = get_rope(
                 rotary_dim=self.model_config.head_dim,
                 position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
@@ -1089,6 +1167,8 @@ class GPUModelRunner(ModelRunnerBase):
                 model_config=self.model_config,
                 partial_rotary_factor=self.model_config.partial_rotary_factor,
             )
+
+
 
         # Set block tables
         pre_max_block_num = (
@@ -1244,6 +1324,11 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Update bad tokens len
         max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
+        
+        # 【新增】为线性注意力创建 slot_mapping
+        # batch_id_per_token 就是我们需要的 slot_mapping
+        self.share_inputs["slot_mapping"] = batch_id_per_token
+
 
         # Initialize forward meta data
         self.initialize_forward_meta()
@@ -1327,6 +1412,8 @@ class GPUModelRunner(ModelRunnerBase):
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
             block_tables=self.share_inputs["block_tables"],
             caches=self.share_inputs["caches"],
+            linear_attn_caches=self.share_inputs.get("linear_attn_caches"),
+            slot_mapping=self.share_inputs.get("slot_mapping"),
             encoder_batch_ids=self.share_inputs["encoder_batch_ids"],
             encoder_tile_ids_per_batch=self.share_inputs["encoder_tile_ids_per_batch"],
             encoder_num_blocks_x_cpu=self.share_inputs["encoder_num_blocks_x_cpu"],
@@ -1507,6 +1594,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Get the attention backend
         attn_cls = get_attention_backend()
+        logger.info(f"========== ATTENTION BACKEND SELECTED: {attn_cls.__name__} ==========")
         attn_backend = attn_cls(
             self.fd_config,
             kv_num_heads=self.model_config.kv_num_heads,
@@ -2378,27 +2466,27 @@ class GPUModelRunner(ModelRunnerBase):
             self.real_token_num = self.forward_meta.ids_remove_padding.shape[0]
         return
 
-    def _init_image_preprocess(self) -> None:
-        processor = DataProcessor(
-            tokenizer_name=self.model_config.model,
-            image_preprocessor_name=str(self.model_config.model),
-        )
-        processor.eval()
-        image_preprocess = processor.image_preprocessor
-        image_preprocess.image_mean_tensor = paddle.to_tensor(image_preprocess.image_mean, dtype="float32").reshape(
-            [1, 3, 1, 1]
-        )
-        image_preprocess.image_std_tensor = paddle.to_tensor(image_preprocess.image_std, dtype="float32").reshape(
-            [1, 3, 1, 1]
-        )
-        image_preprocess.rescale_factor = paddle.to_tensor(image_preprocess.rescale_factor, dtype="float32")
-        image_preprocess.image_mean_tensor = image_preprocess.image_mean_tensor.squeeze([-2, -1]).repeat_interleave(
-            self.model_config.vision_config.patch_size**2 * 1, -1
-        )
-        image_preprocess.image_std_tensor = image_preprocess.image_std_tensor.squeeze([-2, -1]).repeat_interleave(
-            self.model_config.vision_config.patch_size**2 * 1, -1
-        )
-        self.image_preprocess = image_preprocess
+    # def _init_image_preprocess(self) -> None:
+    #     processor = DataProcessor(
+    #         tokenizer_name=self.model_config.model,
+    #         image_preprocessor_name=str(self.model_config.model),
+    #     )
+    #     processor.eval()
+    #     image_preprocess = processor.image_preprocessor
+    #     image_preprocess.image_mean_tensor = paddle.to_tensor(image_preprocess.image_mean, dtype="float32").reshape(
+    #         [1, 3, 1, 1]
+    #     )
+    #     image_preprocess.image_std_tensor = paddle.to_tensor(image_preprocess.image_std, dtype="float32").reshape(
+    #         [1, 3, 1, 1]
+    #     )
+    #     image_preprocess.rescale_factor = paddle.to_tensor(image_preprocess.rescale_factor, dtype="float32")
+    #     image_preprocess.image_mean_tensor = image_preprocess.image_mean_tensor.squeeze([-2, -1]).repeat_interleave(
+    #         self.model_config.vision_config.patch_size**2 * 1, -1
+    #     )
+    #     image_preprocess.image_std_tensor = image_preprocess.image_std_tensor.squeeze([-2, -1]).repeat_interleave(
+    #         self.model_config.vision_config.patch_size**2 * 1, -1
+    #     )
+    #     self.image_preprocess = image_preprocess
 
     def _preprocess_mm_task(self, one: dict) -> None:
         """process batch"""

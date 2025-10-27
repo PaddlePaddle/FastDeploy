@@ -130,19 +130,95 @@ class CustomAllreduce:
             rank = dist.get_rank(group=group)
         lib = cuda_wrapper.CudaRTLibrary()
         lib.cudaFree(ctypes.c_void_p(pointers[rank]))
+        
+    # def should_custom_ar(self, inp: paddle.Tensor):
+    #     if self.capturing:
+    #         return True
+    #     inp_size = inp.shape[0] * inp.shape[1] * inp.element_size()
+    #     # custom allreduce requires input byte size to be multiples of 16
+    #     if inp_size % 16 != 0:
+    #         return False
+    #     # for 4 or more non NVLink-capable GPUs, custom allreduce provides
+    #     # little performance improvement over NCCL.
+    #     if self.world_size == 2 or self.full_nvlink:
+    #         return inp_size < self.max_size
+    #     return False
 
+    # def should_custom_ar(self, inp: paddle.Tensor):
+    #     if self.capturing:
+    #         return True
+    #     # inp_size = inp.shape[0] * inp.shape[1] * inp.element_size()
+    #     # --- [修复] ---
+    #     # 1. 使用 paddle.numel() 计算总元素数，保证对任意维度张量都正确
+    #     num_elements = paddle.numel(inp)
+    #     inp_size = num_elements * inp.element_size()
+
+    #     # 2. 增加一个最小尺寸阈值。对于非常小的张量，直接使用原生all_reduce更稳定且性能差异不大。
+    #     #    这里的 256 字节是一个经验值，可以调整。
+    #     #    我们的 variance (16字节) 会在这里返回 False。
+    #     MIN_SIZE_THRESHOLD = 256 
+    #     if inp_size < MIN_SIZE_THRESHOLD:
+    #         return False
+    #     # --- [结束修复] ---
+    #     # custom allreduce requires input byte size to be multiples of 16
+    #     if inp_size % 16 != 0:
+    #         return False
+    #     # for 4 or more non NVLink-capable GPUs, custom allreduce provides
+    #     # little performance improvement over NCCL.
+    #     if self.world_size == 2 or self.full_nvlink:
+    #         return inp_size < self.max_size
+    #     return 
+    
     def should_custom_ar(self, inp: paddle.Tensor):
-        if self.capturing:
-            return True
-        inp_size = inp.shape[0] * inp.shape[1] * inp.element_size()
-        # custom allreduce requires input byte size to be multiples of 16
+        # --- [PR 建议修改] ---
+        
+        # 1. 直接获取 numel() 的 Python int 值，避免在 if 判断中隐式同步
+        #    .shape 是一个 CPU 属性，访问它是图安全的
+        #    .numel() 方法可能返回 tensor，而 .shape.numel() 总是返回 int
+        if not isinstance(inp.shape, list):
+            # In dygraph mode, shape is a list, in static mode, it might be something else
+            # To be safe, we check.
+            # In the context of FD, it should always be dygraph.
+            # A more robust way might be needed if static graph is considered.
+             try:
+                num_elements = inp.shape.numel()
+             except:
+                # Fallback for static graph or other cases, might be unsafe in graph capture
+                num_elements = paddle.numel(inp).item()
+        else:
+            # For list shape
+            import math
+            num_elements = math.prod(inp.shape)
+        
+        inp_size = num_elements * inp.element_size()
+
+        # 2. 约束 a: 字节数必须是 16 的倍数
         if inp_size % 16 != 0:
             return False
-        # for 4 or more non NVLink-capable GPUs, custom allreduce provides
-        # little performance improvement over NCCL.
-        if self.world_size == 2 or self.full_nvlink:
-            return inp_size < self.max_size
-        return False
+            
+        # 3. 约束 b: "input length to be multiple of 4" (假设指元素数量)
+        #    这是为了修复 "multiple of 4" 的 RuntimeError
+        if num_elements % 4 != 0:
+            return False
+
+        # 4. 约束 c: 增加一个最小尺寸阈值，过滤掉小张量
+        #    这可以同时解决 variance 的数值问题和形状限制问题
+        MIN_SIZE_THRESHOLD = 256 
+        if inp_size < MIN_SIZE_THRESHOLD:
+            return False
+            
+        # 5. 约束 d: 不能超过最大尺寸限制
+        if inp_size >= self.max_size:
+            return False
+
+        # 6. 硬件和 world_size 的约束
+        if self.world_size > 2 and not self.full_nvlink:
+            return False
+
+        # 7. 如果所有检查都通过了，才返回 True。
+        #    这个修改移除了 `if self.capturing: return True` 的逻辑漏洞。
+        return True
+        # --- [结束修改] ---
 
     def all_reduce(
         self,

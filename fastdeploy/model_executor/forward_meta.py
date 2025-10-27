@@ -142,6 +142,11 @@ class ForwardMeta:
     block_tables: Optional[paddle.Tensor] = None
     # KV caches
     caches: Optional[list[paddle.Tensor]] = None
+    
+    # 线性注意力专用的状态缓存
+    linear_attn_caches: Optional[paddle.Tensor] = None
+    # 用于线性注意力 decode 阶段，指示每个 token 属于哪个 slot
+    slot_mapping: Optional[paddle.Tensor] = None
 
     def clear_caches(self):
         """Safely clean up the caches"""

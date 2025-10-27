@@ -133,6 +133,89 @@ class LLMEngine:
         self.engine.start()
         self.engine.create_data_processor()
         self.data_processor = self.engine.data_processor
+        # --- [最终的、通用的、正确的修复方案] ---
+        # 目标：确保 tokenizer.pad_token_id 和 tokenizer.eos_token_id 被正确设置。
+        
+        tokenizer = self.data_processor.tokenizer
+        
+        # 1. 设置/确认 EOS Token ID
+        if tokenizer.eos_token_id is None:
+            # 尝试从词汇表中智能查找
+            vocab = tokenizer.get_vocab()
+            potential_eos_tokens = ["<end_of_sentence>", "<eos>", "</s>"]
+            found_eos_id = None
+            for token_str in potential_eos_tokens:
+                if token_str in vocab:
+                    found_eos_id = vocab[token_str]
+                    console_logger.info(f"Auto-detected EOS token '{token_str}' with ID: {found_eos_id}.")
+                    break
+            
+            if found_eos_id is not None:
+                tokenizer.eos_token_id = found_eos_id
+            else:
+                # 如果找不到，这可能是一个问题，但我们先不报错，因为有些操作不需要eos
+                console_logger.warning("Could not automatically determine eos_token_id from tokenizer vocab.")
+
+        # 2. 设置/确认 PAD Token ID
+        if tokenizer.pad_token_id is None:
+            console_logger.warning("Tokenizer's pad_token_id is None. Attempting to set it.")
+            
+            pad_token_id_to_set = None
+            vocab = tokenizer.get_vocab()
+
+            # 优先策略：从词汇表中查找 '<pad>'
+            if "<pad>" in vocab:
+                pad_token_id_to_set = vocab["<pad>"]
+                console_logger.info(f"Auto-detected PAD token '<pad>' with ID: {pad_token_id_to_set}.")
+            
+            # 降级策略：如果找不到 '<pad>'，使用 eos_token_id
+            if pad_token_id_to_set is None and tokenizer.eos_token_id is not None:
+                pad_token_id_to_set = tokenizer.eos_token_id
+                console_logger.warning(
+                    f"Could not find '<pad>' token. Falling back to using eos_token_id ({tokenizer.eos_token_id}) as pad_token_id."
+                )
+            
+            if pad_token_id_to_set is not None:
+                tokenizer.pad_token_id = pad_token_id_to_set
+            else:
+                raise ValueError(
+                    "Tokenizer has neither a pad_token_id nor an eos_token_id, and '<pad>' token was not found in vocab. "
+                    "Cannot proceed without a token for padding."
+                )
+        
+        # 3. 将修复后的值同步到所有相关配置中，确保一致性
+        self.data_processor.pad_token_id = tokenizer.pad_token_id
+        self.data_processor.eos_token_id = tokenizer.eos_token_id
+        
+        if self.cfg.model_config.pad_token_id is None:
+            self.cfg.model_config.pad_token_id = tokenizer.pad_token_id
+        if self.cfg.model_config.eos_token_id is None:
+            self.cfg.model_config.eos_token_id = tokenizer.eos_token_id
+            
+        # 打印最终结果以确认
+        console_logger.info(f"Final tokenizer config: pad_token_id={tokenizer.pad_token_id}, eos_token_id={tokenizer.eos_token_id}")
+        # --- [结束修复] ---
+        
+        # if self.data_processor.pad_token_id is None:
+        #     eos_token_id = 200000
+        #     if eos_token_id is not None:
+        #         console_logger.warning(
+        #             f"Tokenizer's pad_token_id is None. Setting it to the eos_token_id ({eos_token_id}) for padding."
+        #         )
+        #         # 1. Update the tokenizer instance directly. This is crucial for padding operations.
+        #         self.data_processor.tokenizer.pad_token_id = eos_token_id
+        #         # 2. Update the data_processor's attribute to ensure workers are initialized with the correct value.
+        #         self.data_processor.pad_token_id = eos_token_id
+
+        #         # 3. Update the main model configuration to maintain a single source of truth.
+        #         if self.cfg.model_config.pad_token_id is None:
+        #             self.cfg.model_config.pad_token_id = eos_token_id
+        #     else:
+        #         # This is a critical failure case. A model must have a token for padding.
+        #         raise ValueError(
+        #             "Tokenizer has neither a pad_token_id nor an eos_token_id. "
+        #             "Cannot proceed without a token for padding."
+        #         )
 
         # If block numer is specified and model is deployed in mixed mode, start cache manager first
         if not self.do_profile and self.cfg.scheduler_config.splitwise_role != "mixed":

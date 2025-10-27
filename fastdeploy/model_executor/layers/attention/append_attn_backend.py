@@ -42,6 +42,58 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
 
+# ============================================================================
+# 这一部分是新的调试代码
+# ============================================================================
+import pprint
+import numpy as np
+from paddleformers.utils.log import logger
+
+def print_tensor_stats(tensor, name,  is_capturing=False):
+    """打印Paddle张量的统计信息 (增加了CUDAGraph安全保护)"""
+    if tensor is None:
+        logger.info(f"--- [FD OP DEBUG] Param '{name}' is None ---")
+        return
+    
+    # 在 CUDAGraph 捕获期间，我们只打印 shape 和 dtype，不访问数据
+    if is_capturing:
+        stats = {
+            "CAPTURE_MODE": True,
+            "shape": list(tensor.shape),
+            "dtype": str(tensor.dtype)
+        }
+        logger.info(f"\n--- [FD OP DEBUG] Param: {name} ---\n{pprint.pformat(stats, indent=2)}\n--------------------------\n")
+        return
+
+    # 正常推理期间，打印完整信息
+    with paddle.no_grad():
+        stats = {
+            "CAPTURE_MODE": False,
+            "shape": list(tensor.shape),
+            "dtype": str(tensor.dtype)
+        }
+        num_elements = tensor.numel()
+        if num_elements > 0:
+            tensor_float = tensor.astype('float32')
+            tensor_cpu = tensor_float.cpu()
+            stats["max"] = f"{tensor_cpu.max().item():.6f}"
+            stats["min"] = f"{tensor_cpu.min().item():.6f}"
+            stats["mean"] = f"{tensor_cpu.mean().item():.6f}"
+            
+            if num_elements > 1:
+                stats["std"] = f"{tensor_cpu.std().item():.6f}"
+            else:
+                stats["std"] = "0.000000"
+            
+            flat_data = tensor_cpu.flatten().numpy()[:5]
+            stats["first_5_values"] = [f"{v:.6f}" for v in flat_data]
+        
+        logger.info(f"\n--- [FD OP DEBUG] Param: {name} ---\n{pprint.pformat(stats, indent=2)}\n--------------------------\n")
+
+# ============================================================================
+# 结束新的调试代码
+# ============================================================================
+
 
 @dataclass
 class AppendAttentionMetadata(AttentionMetadata):
@@ -197,6 +249,55 @@ class AppendAttentionBackend(AttentionBackend):
         """
         forward_mixed
         """
+        # if layer.layer_id == 7 and not forward_meta.step_use_cudagraph:
+        #     logger.info("--- [FD DEBUG] Manually applying RoPE for L7 ---")
+            
+        #     # 1. 从 qkv 中拆分出 Q 和 K
+        #     # 注意！这里的维度需要根据你的 QKVParallelLinear 输出布局来确定
+        #     # 假设 TP=1, num_heads=32, num_kv_heads=4, head_dim=64
+        #     # q_size_tp = 32 * 64 = 2048
+        #     # k_size_tp = 4 * 64 = 256
+        #     # v_size_tp = 4 * 64 = 256
+            
+        #     # 请根据您的 QKVParallelLinear 的实际拼接顺序和 TP size 调整这里的维度
+        #     # 这是一个基于 vLLM 常见布局的猜测
+        #     q_size_tp = layer.num_heads * layer.head_dim
+        #     k_size_tp = layer.num_kv_heads * layer.head_dim
+            
+        #     q_before_rope, k_before_rope, _ = qkv.split([q_size_tp, k_size_tp, k_size_tp], axis=-1)
+
+        #     print_tensor_stats(q_before_rope, "FD_L7_Q_BeforeRoPE_ManualSplit")
+        #     print_tensor_stats(k_before_rope, "FD_L7_K_BeforeRoPE_ManualSplit")
+
+        #     # 2. 从 rotary_embs 中获取 cos 和 sin
+        #     rotary_embs = metadata.rotary_embs # shape: [2, bsz, seq_len, 1, head_dim/2]
+        #     cos_cache = rotary_embs[0].squeeze([1, 3]) # -> [bsz, seq_len, head_dim/2]
+        #     sin_cache = rotary_embs[1].squeeze([1, 3]) # -> [bsz, seq_len, head_dim/2]
+            
+        #     # 假设是 prefill, batch_size=1, seq_len=4
+        #     # cu_seqlens_q: [0, 4] -> total_tokens = 4
+        #     total_tokens = q_before_rope.shape[0]
+        #     cos = cos_cache[0, :total_tokens, :] # -> [total_tokens, head_dim/2]
+        #     sin = sin_cache[0, :total_tokens, :] # -> [total_tokens, head_dim/2]
+
+        #     # 3. 手动应用 RoPE (NEOX style)
+        #     from paddle.nn.functional import gpt_rotary_position_embedding
+            
+        #     # gpt_rotary_position_embedding 需要的 shape: [batch_size, seq_len, num_heads, head_dim]
+        #     # 我们需要 reshape 一下
+        #     q_reshaped = q_before_rope.reshape([total_tokens, layer.num_heads, layer.head_dim])
+        #     k_reshaped = k_before_rope.reshape([total_tokens, layer.num_kv_heads, layer.head_dim])
+
+        #     # 展开 cos/sin 以匹配 head_dim
+        #     cos_expanded = cos.unsqueeze(1).expand([-1, -1, 2]).reshape([total_tokens, 1, -1])
+        #     sin_expanded = sin.unsqueeze(1).expand([-1, -1, 2]).reshape([total_tokens, 1, -1])
+
+        #     q_after_rope, _ = gpt_rotary_position_embedding(q_reshaped, None, sin_expanded, cos_expanded, position_ids=None)
+        #     k_after_rope, _ = gpt_rotary_position_embedding(k_reshaped, None, sin_expanded, cos_expanded, position_ids=None)
+            
+        #     print_tensor_stats(q_after_rope, "FD_L7_Q_AfterRoPE_ManualApply")
+        #     print_tensor_stats(k_after_rope, "FD_L7_K_AfterRoPE_ManualApply")
+
         metadata = self.attention_metadata
 
         sliding_window = layer.sliding_window

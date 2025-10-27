@@ -78,7 +78,7 @@ class ErnieRotaryEmbedding:
         else:
             return rot_emb
 
-
+# 官方原始GlmRotaryEmbedding代码
 class GlmRotaryEmbedding:
     def __init__(self, rotary_dim, base, partial_rotary_factor):
         """
@@ -101,6 +101,43 @@ class GlmRotaryEmbedding:
         rot_emb[0] = paddle.cos(emb)
         rot_emb[1] = paddle.sin(emb)
         return rot_emb
+
+# 修改后的GlmRotaryEmbedding代码
+# class GlmRotaryEmbedding:
+#     def __init__(self, rotary_dim, base, partial_rotary_factor):
+#         """
+#         Pre-calculate rotary position embedding for position_ids.
+#         """
+#         # 注意：这里的 rotary_dim 将是传入的 head_dim (e.g., 128)
+#         self.head_dim = rotary_dim
+#         self.base = base
+#         # 实际需要旋转的维度
+#         self.true_rotary_dim = int(self.head_dim * partial_rotary_factor)
+
+
+#     def __call__(self, position_ids):
+#         bsz, max_seq_len = position_ids.shape[:2]
+        
+#         # 1. 只为 true_rotary_dim 计算旋转频率
+#         inv_freq = self.base ** (-paddle.arange(0, self.true_rotary_dim, 2, dtype="float32") / self.true_rotary_dim)
+#         freqs = paddle.einsum("ij,k->ijk", position_ids.cast("float32"), inv_freq)
+        
+#         # 2. 创建一个完整的、适配 head_dim/2 的频率张量，后面补 0
+#         freqs_full = paddle.zeros((bsz, max_seq_len, self.head_dim // 2), dtype="float32")
+#         freqs_full[:, :, :self.true_rotary_dim // 2] = freqs
+
+#         # 3. 创建最终的 rot_emb cache
+#         # shape: [2, bsz, max_seq_len, 1, head_dim/2]
+#         rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.head_dim // 2), dtype="float32")
+#         emb = freqs_full.unsqueeze(2)
+        
+#         # 4. 计算 cos 和 sin
+#         # 对于 freqs_full 中补 0 的部分, cos(0) = 1, sin(0) = 0
+#         # 这天然地实现了单位旋转！
+#         rot_emb[0] = paddle.cos(emb)
+#         rot_emb[1] = paddle.sin(emb)
+        
+#         return rot_emb
 
 
 class QwenRotaryEmbedding:
@@ -334,26 +371,35 @@ def get_rope_impl(
     """
 
     architecture = model_config.architectures[0]
-    if architecture.startswith("Qwen"):
-        rotary_emb_layer = QwenRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
-        rotary_emb = rotary_emb_layer(position_ids)
-    elif architecture.startswith("Glm"):
-        rotary_emb_layer = GlmRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
-        rotary_emb = rotary_emb_layer(position_ids)
-    elif architecture.startswith("GptOss"):
-        rotary_emb_layer = GptOssScalingRotaryEmbedding(
-            rotary_dim=model_config.head_dim,
-            base=model_config.rope_theta,
-            original_max_position_embeddings=model_config.rope_scaling["original_max_position_embeddings"],
-            scale=model_config.rope_scaling["factor"],
-            beta_fast=model_config.rope_scaling["beta_fast"],
-            beta_slow=model_config.rope_scaling["beta_slow"],
-            use_neox_rotary_style=True,
-        )
-        rotary_emb = rotary_emb_layer(position_ids)
-    else:
-        rotary_emb_layer = ErnieRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
-        rotary_emb = rotary_emb_layer(position_ids)
+    print(f"INFO: Using GlmRotaryEmbedding for {architecture}")
+    rotary_emb_layer = GlmRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
+    rotary_emb = rotary_emb_layer(position_ids)
+    # if architecture.startswith("Qwen"):
+    #     rotary_emb_layer = QwenRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
+    #     rotary_emb = rotary_emb_layer(position_ids)
+    # elif architecture.startswith("Glm") or ("MiniMaxM1" in architecture and partial_rotary_factor < 1.0):
+    #     print(f"INFO: Using GlmRotaryEmbedding for {architecture}")
+    #     # rotary_emb_layer = GlmRotaryEmbedding(model_config.head_dim, base, partial_rotary_factor)
+    #     rotary_emb_layer = GlmRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
+    #     rotary_emb = rotary_emb_layer(position_ids)
+    # # elif architecture.startswith("Glm"):
+    # #     rotary_emb_layer = GlmRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
+    # #     rotary_emb = rotary_emb_layer(position_ids)
+    # elif architecture.startswith("GptOss"):
+    #     rotary_emb_layer = GptOssScalingRotaryEmbedding(
+    #         rotary_dim=model_config.head_dim,
+    #         base=model_config.rope_theta,
+    #         original_max_position_embeddings=model_config.rope_scaling["original_max_position_embeddings"],
+    #         scale=model_config.rope_scaling["factor"],
+    #         beta_fast=model_config.rope_scaling["beta_fast"],
+    #         beta_slow=model_config.rope_scaling["beta_slow"],
+    #         use_neox_rotary_style=True,
+    #     )
+    #     rotary_emb = rotary_emb_layer(position_ids)
+    # else:
+    #     print("进入到ErnieRotaryEmbedding啦~")
+    #     rotary_emb_layer = ErnieRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
+    #     rotary_emb = rotary_emb_layer(position_ids)
     return rotary_emb
 
 
