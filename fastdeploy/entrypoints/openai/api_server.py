@@ -17,6 +17,7 @@
 import asyncio
 import json
 import os
+import signal
 import threading
 import time
 import traceback
@@ -649,6 +650,27 @@ def launch_controller_server():
     time.sleep(1)
 
 
+def launch_worker_monitor():
+    """
+    Detect whether worker process is alive. If not, stop the API serverby triggering llm_engine.
+    """
+
+    def _monitor():
+        global llm_engine
+        while True:
+            if hasattr(llm_engine, "worker_proc") and llm_engine.worker_proc.poll() is not None:
+                console_logger.error(
+                    f"Worker process has died in the background (code={llm_engine.worker_proc.returncode}). API server is forced to stop."
+                )
+                os.kill(os.getpid(), signal.SIGINT)
+                break
+            time.sleep(5)
+
+    worker_monitor_thread = threading.Thread(target=_monitor, daemon=True)
+    worker_monitor_thread.start()
+    time.sleep(1)
+
+
 def main():
     """main函数"""
     if args.local_data_parallel_id == 0:
@@ -662,6 +684,7 @@ def main():
     console_logger.info(f"Launching chat completion service at http://{args.host}:{args.port}/v1/chat/completions")
     console_logger.info(f"Launching completion service at http://{args.host}:{args.port}/v1/completions")
 
+    launch_worker_monitor()
     launch_controller_server()
     launch_metrics_server()
     launch_api_server()
