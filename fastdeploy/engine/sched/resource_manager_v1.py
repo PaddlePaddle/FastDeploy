@@ -27,6 +27,7 @@ from typing import Union
 import numpy as np
 import paddle
 
+from fastdeploy import envs
 from fastdeploy.cache_manager.multimodal_cache_manager import (
     EncoderCacheManager,
     ProcessorCacheManager,
@@ -38,7 +39,6 @@ from fastdeploy.engine.request import (
     RequestStatus,
     RequestType,
 )
-from fastdeploy import envs
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics

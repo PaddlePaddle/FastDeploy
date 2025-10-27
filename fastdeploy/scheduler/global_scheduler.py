@@ -24,7 +24,6 @@ from typing import Dict, List, Optional, Tuple
 import crcmod
 from redis import ConnectionPool
 
-from fastdeploy import envs
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.scheduler import utils
 from fastdeploy.scheduler.data import ScheduledRequest, ScheduledResponse
