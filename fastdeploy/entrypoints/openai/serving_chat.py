@@ -323,7 +323,9 @@ class OpenAIServingChat:
                     output_top_logprobs = output["top_logprobs"]
                     output_draft_top_logprobs = output["draft_top_logprobs"]
                     previous_num_tokens[idx] += len(output["token_ids"])
-                    num_image_tokens[idx] += output.get("num_image_tokens") or 0
+                    if output.get("num_image_tokens"):
+                        previous_num_tokens[idx] += output.get("num_image_tokens")
+                        num_image_tokens[idx] += output.get("num_image_tokens")
                     reasoning_num_tokens[idx] += output.get("reasoning_token_num", 0)
                     logprobs_res: Optional[LogProbs] = None
                     draft_logprobs_res: Optional[LogProbs] = None
@@ -540,6 +542,9 @@ class OpenAIServingChat:
                     if data["finished"]:
                         num_choices -= 1
                         reasoning_num_tokens[idx] = data["outputs"].get("reasoning_token_num", 0)
+                        if data["outputs"].get("image_token_num"):
+                            previous_num_tokens[idx] += data["outputs"].get("image_token_num")
+                            num_image_tokens[idx] = data["outputs"].get("image_token_num")
                         choice = await self._create_chat_completion_choice(
                             output=output,
                             index=idx,

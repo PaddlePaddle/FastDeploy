@@ -464,7 +464,9 @@ class OpenAIServingCompletion:
                             )
                     output_tokens[idx] += len(output.get("token_ids", [])) or 0
                     num_cache_tokens[idx] += output.get("num_cache_tokens") or 0
-                    num_image_tokens[idx] += output.get("num_image_tokens") or 0
+                    if output.get("num_image_tokens"):
+                        output_tokens[idx] += output.get("num_image_tokens")
+                        num_image_tokens[idx] += output.get("num_image_tokens")
                     reasoning_tokens[idx] += output.get("reasoning_token_num", 0)
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
@@ -623,7 +625,9 @@ class OpenAIServingCompletion:
 
             num_prompt_tokens += len(prompt_token_ids)
             num_cache_tokens += output.get("num_cache_tokens") or 0
-            num_image_tokens += output.get("num_image_tokens") or 0
+            if output.get("num_image_tokens"):
+                num_generated_tokens += output.get("num_image_tokens")
+                num_image_tokens += output.get("num_image_tokens")
 
             num_reasoning_tokens += output.get("reasoning_token_num", 0)
 
