@@ -15,19 +15,19 @@
 #include "helper.h"
 
 template <int THREADBLOCK_SIZE>
-__global__ void update_inputs_kernel_v1(bool *not_need_stop,
-                                        int *seq_lens_this_time,
-                                        int *seq_lens_encoder,
-                                        int *seq_lens_decoder,
-                                        int *step_seq_lens_decoder,
-                                        int64_t *prompt_lens,
-                                        int64_t *topk_ids,
-                                        int64_t *input_ids,
-                                        int *block_tables,
-                                        const int64_t *stop_nums,
-                                        bool *stop_flags,
-                                        bool *is_block_step,
-                                        const int64_t *next_tokens,
+__global__ void update_inputs_kernel_v1(bool* not_need_stop,
+                                        int* seq_lens_this_time,
+                                        int* seq_lens_encoder,
+                                        int* seq_lens_decoder,
+                                        int* step_seq_lens_decoder,
+                                        int64_t* prompt_lens,
+                                        int64_t* topk_ids,
+                                        int64_t* input_ids,
+                                        int* block_tables,
+                                        const int64_t* stop_nums,
+                                        bool* stop_flags,
+                                        bool* is_block_step,
+                                        const int64_t* next_tokens,
                                         const int bsz,
                                         const int max_bsz,
                                         const int input_ids_stride,
@@ -41,7 +41,6 @@ __global__ void update_inputs_kernel_v1(bool *not_need_stop,
 
   bool stop_flag_now = false;
   int64_t stop_flag_now_int = 0;
-
   if (thread_idx < max_bsz) {
     if (thread_idx < bsz) {
       stop_flag_now = stop_flags[thread_idx];
@@ -53,10 +52,9 @@ __global__ void update_inputs_kernel_v1(bool *not_need_stop,
 
   if (thread_idx < bsz) {
     if (stop_flag_now) {
-      seq_lens_this_time[thread_idx] = 0;
+      seq_lens_this_time[thread_idx] = 0;  // stop at next step
       seq_lens_decoder[thread_idx] = 0;
       seq_lens_encoder[thread_idx] = 0;
-
     } else {
       if (is_pooling_task) {
         if (seq_lens_this_time[thread_idx] > 0) {
@@ -72,11 +70,14 @@ __global__ void update_inputs_kernel_v1(bool *not_need_stop,
           }
         } else {
           seq_lens_encoder[thread_idx] = 0;
+          stop_flag_now_int = 1;
         }
       } else {
+        // Normal generation task logic
         if (seq_lens_this_time[thread_idx] + seq_lens_decoder[thread_idx] >=
             prompt_lens[thread_idx]) {
           if (prefill_one_step_stop) {
+            // prefill done, stop
             stop_flags[thread_idx] = true;
             seq_lens_this_time[thread_idx] = 0;
             seq_lens_decoder[thread_idx] = 0;
@@ -87,14 +88,16 @@ __global__ void update_inputs_kernel_v1(bool *not_need_stop,
             seq_lens_decoder[thread_idx] += seq_lens_this_time[thread_idx];
             seq_lens_this_time[thread_idx] = 1;
             seq_lens_encoder[thread_idx] = 0;
-            int64_t *input_ids_now = input_ids + thread_idx * input_ids_stride;
+            int64_t* input_ids_now = input_ids + thread_idx * input_ids_stride;
             input_ids_now[0] = next_tokens[thread_idx];
 
-            int *block_table_now =
+            // to judge whether block is not enough
+            int* block_table_now =
                 block_tables + thread_idx * block_num_per_seq;
             if (seq_lens_this_time[thread_idx] != 0 &&
                 block_table_now[seq_lens_decoder[thread_idx] / block_size] ==
                     -1) {
+              // should be scheduled by server
               is_block_step[thread_idx] = true;
               seq_lens_this_time[thread_idx] = 0;
               stop_flags[thread_idx] = true;
@@ -122,23 +125,23 @@ __global__ void update_inputs_kernel_v1(bool *not_need_stop,
   }
 }
 
-void UpdateInputesV1(const paddle::Tensor &stop_flags,
-                     const paddle::Tensor &not_need_stop,  // only on cpu
-                     const paddle::Tensor &seq_lens_this_time,
-                     const paddle::Tensor &seq_lens_encoder,
-                     const paddle::Tensor &seq_lens_decoder,
-                     const paddle::Tensor &step_seq_lens_decoder,
-                     const paddle::Tensor &prompt_lens,
-                     const paddle::Tensor &topk_ids,
-                     const paddle::Tensor &input_ids,
-                     const paddle::Tensor &block_tables,
-                     const paddle::Tensor &stop_nums,
-                     const paddle::Tensor &next_tokens,
-                     const paddle::Tensor &is_block_step,
-                     const int block_size,
-                     const bool is_pooling_task) {
+void UpdateInputsV1(const paddle::Tensor& stop_flags,
+                    const paddle::Tensor& not_need_stop,  // only on cpu
+                    const paddle::Tensor& seq_lens_this_time,
+                    const paddle::Tensor& seq_lens_encoder,
+                    const paddle::Tensor& seq_lens_decoder,
+                    const paddle::Tensor& step_seq_lens_decoder,
+                    const paddle::Tensor& prompt_lens,
+                    const paddle::Tensor& topk_ids,
+                    const paddle::Tensor& input_ids,
+                    const paddle::Tensor& block_tables,
+                    const paddle::Tensor& stop_nums,
+                    const paddle::Tensor& next_tokens,
+                    const paddle::Tensor& is_block_step,
+                    const int block_size,
+                    const bool is_pooling_task) {
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
-  auto dev_ctx = static_cast<const phi::CustomContext *>(
+  auto dev_ctx = static_cast<const phi::CustomContext*>(
       paddle::experimental::DeviceContextPool::Instance().Get(
           input_ids.place()));
   auto cu_stream = dev_ctx->stream();
@@ -146,32 +149,30 @@ void UpdateInputesV1(const paddle::Tensor &stop_flags,
   auto cu_stream = input_ids.stream();
 #endif
   bool prefill_one_step_stop = false;
-  if (const char *env_p = std::getenv("PREFILL_NODE_ONE_STEP_STOP_V1")) {
+  if (const char* env_p = std::getenv("PREFILL_NODE_ONE_STEP_STOP_V1")) {
     if (env_p[0] == '1') {
       prefill_one_step_stop = true;
     }
   }
   const int max_bsz = stop_flags.shape()[0];
   const int now_bsz = seq_lens_this_time.shape()[0];
-
   const int bsz_to_process = is_pooling_task ? max_bsz : now_bsz;
-
   const int input_ids_stride = input_ids.shape()[1];
   const int block_num_per_seq = block_tables.shape()[1];
   auto not_need_stop_gpu = not_need_stop.copy_to(stop_flags.place(), false);
   update_inputs_kernel_v1<1024><<<1, 1024, 0, cu_stream>>>(
-      const_cast<bool *>(not_need_stop_gpu.data<bool>()),
-      const_cast<int *>(seq_lens_this_time.data<int>()),
-      const_cast<int *>(seq_lens_encoder.data<int>()),
-      const_cast<int *>(seq_lens_decoder.data<int>()),
-      const_cast<int *>(step_seq_lens_decoder.data<int>()),
-      const_cast<int64_t *>(prompt_lens.data<int64_t>()),
-      const_cast<int64_t *>(topk_ids.data<int64_t>()),
-      const_cast<int64_t *>(input_ids.data<int64_t>()),
-      const_cast<int *>(block_tables.data<int>()),
+      const_cast<bool*>(not_need_stop_gpu.data<bool>()),
+      const_cast<int*>(seq_lens_this_time.data<int>()),
+      const_cast<int*>(seq_lens_encoder.data<int>()),
+      const_cast<int*>(seq_lens_decoder.data<int>()),
+      const_cast<int*>(step_seq_lens_decoder.data<int>()),
+      const_cast<int64_t*>(prompt_lens.data<int64_t>()),
+      const_cast<int64_t*>(topk_ids.data<int64_t>()),
+      const_cast<int64_t*>(input_ids.data<int64_t>()),
+      const_cast<int*>(block_tables.data<int>()),
       stop_nums.data<int64_t>(),
-      const_cast<bool *>(stop_flags.data<bool>()),
-      const_cast<bool *>(is_block_step.data<bool>()),
+      const_cast<bool*>(stop_flags.data<bool>()),
+      const_cast<bool*>(is_block_step.data<bool>()),
       next_tokens.data<int64_t>(),
       bsz_to_process,
       max_bsz,
@@ -182,7 +183,7 @@ void UpdateInputesV1(const paddle::Tensor &stop_flags,
       is_pooling_task);
   auto not_need_stop_cpu =
       not_need_stop_gpu.copy_to(not_need_stop.place(), false);
-  bool *not_need_stop_data = const_cast<bool *>(not_need_stop.data<bool>());
+  bool* not_need_stop_data = const_cast<bool*>(not_need_stop.data<bool>());
   not_need_stop_data[0] = not_need_stop_cpu.data<bool>()[0];
 }
 
@@ -200,7 +201,7 @@ PD_BUILD_STATIC_OP(update_inputs_v1)
              "stop_nums",
              "next_tokens",
              "is_block_step"})
-    .Attrs({"block_size: int", "is_pooling_task:bool"})
+    .Attrs({"block_size: int", "is_pooling_task: bool"})
     .Outputs({"not_need_stop_out",
               "seq_lens_this_time_out",
               "seq_lens_encoder_out",
@@ -219,4 +220,4 @@ PD_BUILD_STATIC_OP(update_inputs_v1)
                     {"stop_flags", "stop_flags_out"},
                     {"step_seq_lens_decoder", "step_seq_lens_decoder_out"},
                     {"is_block_step", "is_block_step_out"}})
-    .SetKernelFn(PD_KERNEL(UpdateInputesV1));
+    .SetKernelFn(PD_KERNEL(UpdateInputsV1));

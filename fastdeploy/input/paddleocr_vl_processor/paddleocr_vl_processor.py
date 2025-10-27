@@ -23,12 +23,12 @@ from fastdeploy.utils import data_processor_logger
 from .process import DataProcessor
 
 
-class QwenVLProcessor(TextProcessor):
+class PaddleOCRVLProcessor(TextProcessor):
     """
-    Qwen Vision-Language processor for handling multimodal inputs.
+    PaddleOCR Vision-Language processor for handling multimodal inputs.
 
     This processor extends TextProcessor to support:
-    - Image and video processing
+    - Image processing
     - Multimodal feature extraction
     - Tokenization and position encoding
     - Request processing and model input generation
@@ -49,7 +49,7 @@ class QwenVLProcessor(TextProcessor):
         tool_parser_obj=None,
     ):
         """
-        Initialize QwenVLProcessor instance.
+        Initialize PaddleOCRVLProcessor instance.
 
         Args:
             config: Model configuration object
@@ -69,7 +69,7 @@ class QwenVLProcessor(TextProcessor):
             tokenizer=self.tokenizer,
             **processor_kwargs,
         )
-        self.image_patch_id = self.processor.image_token_id
+        self.image_patch_id = self.processor.image_patch_id
         self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
 
     def process_request(self, request, max_model_len=None, **kwargs):
@@ -213,12 +213,6 @@ class QwenVLProcessor(TextProcessor):
             request["stop_token_ids"] = stop_seqs
             request["stop_seqs_len"] = stop_seqs_len
 
-        bad_words = request.get("bad_words")
-        bad_words_token_ids = request.get("bad_words_token_ids")
-        if bad_words:
-            bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
-            request["bad_words_token_ids"] = bad_words_token_ids
-
         if request.get("prompt"):
             multimodal_data = request.get("multimodal_data")
             if multimodal_data is None:
@@ -231,27 +225,15 @@ class QwenVLProcessor(TextProcessor):
         elif request.get("messages"):
             messages = request["messages"]
             self._check_mm_limits(messages)
-            chat_template_kwargs = request.get("chat_template_kwargs")
-            if chat_template_kwargs:
-                if isinstance(chat_template_kwargs, dict):
-                    for k, v in chat_template_kwargs.items():
-                        if k not in request:
-                            request[k] = v
-                else:
-                    raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-            request.setdefault("enable_thinking", False)
             outputs = self.processor.request2ids(request)
 
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 
+        metadata = request.get("metadata")
         # Handle continuation of previous generation by appending existing tokens
-        if request.get("completion_token_ids"):
-            self.append_completion_tokens(outputs, request["completion_token_ids"])
-
-        # qwen25_vl not support thinking
-        request["enable_thinking"] = False
-
+        if metadata and metadata.get("generated_token_ids"):
+            self.append_generated_tokens(outputs, metadata["generated_token_ids"])
         outputs = self.pack_outputs(outputs)
 
         request["prompt_token_ids"] = outputs["input_ids"].tolist()
@@ -267,20 +249,19 @@ class QwenVLProcessor(TextProcessor):
         # Set default max_tokens if not specified
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))  # Ensure at least 1 token
-        data_processor_logger.info(f"Processed request {request}")
 
         return request
 
-    def append_completion_tokens(self, outputs, completion_token_ids):
+    def append_generated_tokens(self, outputs, generated_token_ids):
         """
-        Append completion tokens to existing outputs.
+        Append generated tokens to existing outputs.
 
         Args:
             outputs: Current model outputs
-            completion_token_ids: completion tokens to append
+            generated_token_ids: Generated tokens to append
         """
         out = {"input_ids": [], "token_type_ids": [], "position_ids": [], "cur_position": outputs["cur_position"]}
-        self.processor._add_text(completion_token_ids, out)
+        self.processor._add_text(generated_token_ids, out)
 
         outputs["input_ids"] = np.concatenate(
             [outputs["input_ids"], np.array(out["input_ids"], dtype=np.int64)], axis=0
