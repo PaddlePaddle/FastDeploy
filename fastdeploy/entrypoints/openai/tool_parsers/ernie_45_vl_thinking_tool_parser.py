@@ -93,13 +93,12 @@ class Ernie45VLThinkingToolParser(ToolParser):
             remaining_text = model_output
 
             think_end = remaining_text.find("</think>")
-            if think_end != -1:
-                think_end = think_end + len("</think>")
-                tool_begin = remaining_text.find("<tool_call>")
-                if tool_begin != -1:
-                    middle_str = remaining_text[think_end:tool_begin]
-                    if len(middle_str.strip("\n")) > 0:
-                        return ExtractedToolCallInformation(tools_called=False)
+            think_end = think_end + len("</think>") if think_end != -1 else 0
+            tool_begin = remaining_text.find("<tool_call>")
+            if tool_begin != -1:
+                middle_str = remaining_text[think_end:tool_begin]
+                if len(middle_str.strip("\n")) > 0:
+                    return ExtractedToolCallInformation(tools_called=False)
 
             while True:
                 # Find the next <tool_call>

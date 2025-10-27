@@ -81,6 +81,14 @@ class TestErnie45VLThinkingToolParser(unittest.TestCase):
             result = self.parser.extract_tool_calls(output, self.dummy_request)
             self.assertFalse(result.tools_called)
 
+    def test_extract_tool_calls_illegal(self):
+        output = '</think>abc<tool_call>{"name": "get_weather", "arguments": {"location": "北京"}}</tool_call>'
+        result = self.parser.extract_tool_calls(output, self.dummy_request)
+        self.assertFalse(result.tools_called)
+        output = 'abc<tool_call>{"name": "get_weather", "arguments": {"location": "北京"}}</tool_call>'
+        result = self.parser.extract_tool_calls(output, self.dummy_request)
+        self.assertFalse(result.tools_called)
+
     # ---------------- Streaming extraction tests ----------------
 
     def test_streaming_no_toolcall(self):
@@ -88,8 +96,7 @@ class TestErnie45VLThinkingToolParser(unittest.TestCase):
         result = self.parser.extract_tool_calls_streaming(
             "", "abc", "abc", [], [], [], self.dummy_request.model_dump()
         )
-        self.assertIsInstance(result, DeltaMessage)
-        self.assertEqual(result.content, "abc")
+        self.assertIsNone(result)
 
     def test_streaming_skip_empty_chunk(self):
         """Streaming extraction skips empty chunks"""
@@ -119,15 +126,43 @@ class TestErnie45VLThinkingToolParser(unittest.TestCase):
         """Streaming extraction completes arguments with brackets matched and closes tool_call"""
         text = '"arguments": {"location": "北京"}}'
         delta = self.parser.extract_tool_calls_streaming(
-            "", "<tool_call>" + text, text, [], [1], [1], self.dummy_request.model_dump()
+            "", "<tool_call>" + text, "<tool_call>" + text, [], [1], [1], self.dummy_request.model_dump()
         )
         self.assertIsInstance(delta, DeltaMessage)
         # Also simulate closing tag
         end_delta = self.parser.extract_tool_calls_streaming(
-            "", "</tool_call>", "</tool_call>", [], [2], [2], self.dummy_request.model_dump()
+            "<tool_call>" + text,
+            "<tool_call>" + text + "</tool_call>",
+            "</tool_call>",
+            [1],
+            [1, 2],
+            [2],
+            self.dummy_request.model_dump(),
         )
-        self.assertIsNotNone(end_delta)
-        self.assertEqual(end_delta.content, "</tool_call>")
+        self.assertIsNone(end_delta)
+
+    def test_streaming_no_tool_illegal(self):
+        result = self.parser.extract_tool_calls_streaming(
+            "", "abc<tool_call>", "abc<tool_call>", [], [], [], self.dummy_request.model_dump()
+        )
+        self.assertIsNone(result)
+        result = self.parser.extract_tool_calls_streaming(
+            "", "</think>abc<tool_call>", "</think>abc<tool_call>", [], [], [], self.dummy_request.model_dump()
+        )
+        self.assertIsNone(result)
+
+    def test_streaming_tool_with_reasoning(self):
+        delta = self.parser.extract_tool_calls_streaming(
+            "",
+            '</think><tool_call>{"name": "get_weather"',
+            '</think><tool_call>{"name": "get_weather"',
+            [],
+            [1],
+            [1],
+            self.dummy_request.model_dump(),
+        )
+        self.assertIsNotNone(delta)
+        self.assertEqual(delta.tool_calls[0].function.name, "get_weather")
 
 
 if __name__ == "__main__":

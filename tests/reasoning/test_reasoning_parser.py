@@ -366,7 +366,8 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
             current_token_ids=[101, 110],
             delta_token_ids=[110],
         )
-        self.assertIsNone(result)
+        self.assertIsInstance(result, DeltaMessage)
+        self.assertEqual(result.reasoning_content, "hello")
 
     def test_batch_no_think_end(self):
         reasoning, content = self.parser.extract_reasoning_content(
@@ -380,7 +381,7 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
             model_output="direct response<tool_call>abc", request=self.test_request
         )
         self.assertEqual(reasoning, "")
-        self.assertEqual(content, "direct response")
+        self.assertEqual(content, "direct response<tool_call>abc")
 
     def test_batch_think_end_normal_content(self):
         reasoning, content = self.parser.extract_reasoning_content(
