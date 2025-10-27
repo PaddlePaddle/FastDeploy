@@ -169,6 +169,7 @@ echo kv_block_test_exit_code is ${kv_block_test_exit_code}
 unset ENABLE_V1_KVCACHE_SCHEDULER
 ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 lsof -t -i :8188 | xargs kill -9 || true
 
 if [ ${kv_block_test_exit_code} -ne 0 ]; then
