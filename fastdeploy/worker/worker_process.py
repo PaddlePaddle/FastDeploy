@@ -615,6 +615,12 @@ def parse_args():
         help="Enable output of token-level log probabilities.",
     )
     parser.add_argument(
+        "--logprobs_mode",
+        type=str,
+        default="raw_logprobs",
+        help="Indicates the content returned in the logprobs.",
+    )
+    parser.add_argument(
         "--reasoning_parser",
         type=str,
         default=None,

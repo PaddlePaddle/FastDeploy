@@ -27,6 +27,7 @@ from fastdeploy.model_executor.ops.xpu import (
     moe_expert_ffn,
     moe_topk_select,
     weight_quantize_xpu,
+    xpu_moe_layer,
 )
 
 
@@ -153,8 +154,6 @@ class XPUMoEMethod(MoEMethodBase):
         """
         Apply TP Fused Op.
         """
-        from fastdeploy.model_executor.ops.xpu import xpu_moe_layer
-
         fused_moe_out = xpu_moe_layer(
             x,
             gate.weight.transpose([1, 0]),
