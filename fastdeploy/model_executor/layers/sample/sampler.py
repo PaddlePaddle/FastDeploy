@@ -567,6 +567,7 @@ class SpeculativeSampler(nn.Layer):
         max_model_len: int,
         share_inputs: List[paddle.Tensor],
         accept_all_drafts: bool = False,
+        reject_all_drafts: bool = False,
     ) -> paddle.Tensor:
         """ """
 
@@ -622,7 +623,7 @@ class SpeculativeSampler(nn.Layer):
             max_model_len,
             self.speculative_verify_window,
             True,  # enable_topp
-            self.speculative_benchmark_mode,
+            (self.speculative_benchmark_mode or reject_all_drafts),
             accept_all_drafts,
         )
 
