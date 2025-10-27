@@ -48,6 +48,7 @@ class ModelRunnerBase(ABC):
         # ... config
 
         self.device = device
+        self.download_features = {}
 
     @abstractmethod
     def load_model(self) -> None:
@@ -78,3 +79,9 @@ class ModelRunnerBase(ABC):
         Execute a forward pass with dummy inputs to profile the memory usage of the model."
         """
         raise NotImplementedError
+
+    def async_download_features(self, feature_urls: list) -> None:
+        """
+        Download features from remote urls
+        """
+        pass

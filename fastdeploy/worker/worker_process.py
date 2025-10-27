@@ -18,6 +18,7 @@ import argparse
 import json
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Tuple
 
 import numpy as np
@@ -261,19 +262,47 @@ class PaddleDisWorkerProc:
         if not self.parallel_config.enable_async_download_features:
             return None
 
+        self.download_features = {}
         self.start_async_download_thread = threading.Thread(target=self._async_download_loop, daemon=True)
         self.start_async_download_thread.daemon = True
         self.start_async_download_thread.start()
 
     def _async_download_loop(self) -> None:
         """ """
-        # local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+        features_download_pool = ThreadPoolExecutor(max_workers=10)
         while True:
             if self.task_queue.num_features_task() > 0:
-                pass
+                tasks, read_finish = self.task_queue.get_features_task()
+
+                req_dicts = []
+                for req_dict, bsz in tasks:
+                    req_dicts.extend(req_dict)
+
+                req_ids = [req.request_id for req in req_dicts]
+                logger.info(f"Rank: {self.local_rank}, async download features, req_ids: {req_ids}")
+
+                feature_urls = []
+                for req_dict in req_dicts:
+                    inputs = req_dict.multimodal_inputs
+                    if inputs is None or len(inputs) == 0:
+                        logger.warning(f"skip download features for request: {req_dict.request_id}")
+                        continue
+
+                    if inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0:
+                        feature_urls.extend(inputs["video_feature_urls"])
+
+                    if inputs.get("image_feature_urls") is not None and len(inputs["image_feature_urls"]) > 0:
+                        feature_urls.extend(inputs["image_feature_urls"])
+
+                    if inputs.get("audio_feature_urls") is not None and len(inputs["audio_feature_urls"]) > 0:
+                        feature_urls.extend(inputs["audio_feature_urls"])
+
+                for url in feature_urls:
+                    logger.info(f"Rank: {self.local_rank}, async download features, url: {url}")
+                    future = features_download_pool.submit(self.worker.model_runner.async_download_features, [url])
+                    self.worker.model_runner.download_features[url] = future
             else:
-                pass
-            time.sleep(0.001)
+                time.sleep(0.01)
 
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distrubuted Workers.
