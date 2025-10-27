@@ -503,8 +503,6 @@ class ResourceManagerV1(ResourceManager):
         with self.lock:
             self.waiting.append(request)
             self.requests[request.request_id] = request
-            # 插入worker异步下载features
-            pass
 
     def _free_blocks(self, request: Request):
         if self.config.cache_config.enable_prefix_caching:
