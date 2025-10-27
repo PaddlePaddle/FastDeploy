@@ -171,6 +171,7 @@ class XPUAttentionBackend(AttentionBackend):
 
         from fastdeploy.model_executor.ops.xpu import block_attn
 
+        rope_3d = True if len(metadata.rotary_embs.shape) == 6 else False
         res = block_attn(
             qkv,
             forward_meta.caches[2 * layer.layer_id],
@@ -199,6 +200,6 @@ class XPUAttentionBackend(AttentionBackend):
             None,  # kv_signal_data
             None,  # kv_signal_sender
             forward_meta.pos_emb_type,
-            self.rope_3d,
+            rope_3d,
         )
         return res
