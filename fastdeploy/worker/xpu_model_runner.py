@@ -850,6 +850,11 @@ class XPUModelRunner(ModelRunnerBase):
             else:  # neox style = False
                 rope_head_dim = head_dim // 2
 
+            if head_dim == self.model_config.head_dim:
+                self.share_inputs["pos_emb_type"] = "NORMAL"
+            else:
+                self.share_inputs["pos_emb_type"] = "HALF_HEAD_DIM"
+
             self.share_inputs["rope_emb"] = paddle.full(
                 shape=[
                     max_num_seqs,
@@ -890,8 +895,8 @@ class XPUModelRunner(ModelRunnerBase):
         # Update bad tokens len
         max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
 
-        if self.enable_mm:  # pos_emb_type is different in EB and VL
-            self.forward_meta.pos_emb_type = "HALF_HEAD_DIM"
+        if self.enable_mm:
+            self.forward_meta.pos_emb_type = self.share_inputs["pos_emb_type"]
         self.forward_meta.attn_backend = self.attn_backends[0]
         self.initialize_attention_backend()
 

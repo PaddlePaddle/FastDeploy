@@ -26,7 +26,6 @@ from paddleformers.transformers.model_utils import PretrainedModel
 
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import slice_fn
-from fastdeploy.platforms import current_platform
 
 from .config import PaddleOCRVisionConfig
 

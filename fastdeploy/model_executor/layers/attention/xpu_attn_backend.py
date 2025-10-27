@@ -83,7 +83,9 @@ class XPUAttentionBackend(AttentionBackend):
         self.rope_theta: float = (
             10000.0 if fd_config.model_config.rope_theta is None else fd_config.model_config.rope_theta
         )
-        self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False)
+        self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False) or getattr(
+            fd_config.model_config, "use_3d_rope", False
+        )
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
         self.rank: int = fd_config.parallel_config.tensor_parallel_rank
@@ -171,7 +173,6 @@ class XPUAttentionBackend(AttentionBackend):
 
         from fastdeploy.model_executor.ops.xpu import block_attn
 
-        rope_3d = True if len(metadata.rotary_embs.shape) == 6 else False
         res = block_attn(
             qkv,
             forward_meta.caches[2 * layer.layer_id],
@@ -200,6 +201,6 @@ class XPUAttentionBackend(AttentionBackend):
             None,  # kv_signal_data
             None,  # kv_signal_sender
             forward_meta.pos_emb_type,
-            rope_3d,
+            self.rope_3d,
         )
         return res
