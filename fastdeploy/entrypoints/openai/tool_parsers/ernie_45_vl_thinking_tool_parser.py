@@ -62,6 +62,7 @@ class Ernie45VLThinkingToolParser(ToolParser):
         self.bracket_counts: dict = {"total_l": 0, "total_r": 0}  # track bracket counts in streamed deltas
         self.tool_call_start_token: str = "<tool_call>"
         self.tool_call_end_token: str = "</tool_call>"
+        self.valid = None
 
         self.tool_call_start_token_id = self.vocab.get(self.tool_call_start_token)
         self.tool_call_end_token_id = self.vocab.get(self.tool_call_end_token)
@@ -90,6 +91,15 @@ class Ernie45VLThinkingToolParser(ToolParser):
 
             function_call_arr = []
             remaining_text = model_output
+
+            think_end = remaining_text.find("</think>")
+            if think_end != -1:
+                think_end = think_end + len("</think>")
+                tool_begin = remaining_text.find("<tool_call>")
+                if tool_begin != -1:
+                    middle_str = remaining_text[think_end:tool_begin]
+                    if len(middle_str.strip("\n")) > 0:
+                        return ExtractedToolCallInformation(tools_called=False)
 
             while True:
                 # Find the next <tool_call>
@@ -231,9 +241,12 @@ class Ernie45VLThinkingToolParser(ToolParser):
     ) -> Union[DeltaMessage, None]:
 
         if self.tool_call_start_token_id not in current_token_ids:
-            return DeltaMessage(content=delta_text)
+            return None
         # Skip empty chunks
         if len(delta_text.strip()) == 0:
+            return None
+
+        if self.valid is not None and not self.valid:
             return None
 
         try:
@@ -243,6 +256,14 @@ class Ernie45VLThinkingToolParser(ToolParser):
 
             # Process the buffer content
             if "<tool_call>" in delta_text:
+                if self.valid is None:
+                    tool_call_begin = self.buffer.find(self.tool_call_start_token)
+                    prefix = self.buffer[:tool_call_begin]
+                    prefix = prefix.strip("\n")
+                    if len(prefix) > 0 and not prefix.endswith("</think>"):
+                        self.valid = False
+                        return None
+                    self.valid = True
                 self.current_tool_id = (
                     max(self.current_tool_id, 0) if self.current_tool_id == -1 else self.current_tool_id + 1
                 )

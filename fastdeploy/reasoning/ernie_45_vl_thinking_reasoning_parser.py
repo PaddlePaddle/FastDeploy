@@ -45,6 +45,7 @@ class Ernie45VLThinkingReasoningParser(ReasoningParser):
 
         self.think_end_token_id = self.vocab.get(self.think_end_token)
         self.tool_begin_token_id = self.vocab.get(self.tool_begin_token)
+        self.with_tool = None
         if self.tool_begin_token_id is None:
             self.tool_begin_token_id = -1
 
@@ -74,28 +75,42 @@ class Ernie45VLThinkingReasoningParser(ReasoningParser):
         # Skip single special tokens
         if len(delta_token_ids) == 1 and delta_token_ids[0] == self.think_end_token_id:
             return None
-        if self.tool_begin_token_id in previous_token_ids:
+        if self.with_tool is not None:
+            if not self.with_tool:
+                return DeltaMessage(content=delta_text)
             return None
         if self.think_end_token_id in delta_token_ids:
             end_index = delta_text.find(self.think_end_token)
             reasoning_content = delta_text[:end_index]
             index = end_index + len(self.think_end_token)
-            content = delta_text[index:].lstrip("\n")
-            if self.tool_begin_token_id in delta_token_ids:
-                if len(reasoning_content) > 0:
-                    return DeltaMessage(reasoning_content=reasoning_content)
-                return None
-            if len(content) > 0:
-                return DeltaMessage(reasoning_content=reasoning_content, content=delta_text[index:])
-            elif len(reasoning_content) > 0:
-                return DeltaMessage(reasoning_content=reasoning_content)
-            return None
+            content = delta_text[index:]
+            if self.tool_begin_token_id in delta_token_ids or self.tool_begin_token in content:
+                prefix_content, _, _ = content.partition(self.tool_begin_token)
+                prefix = prefix_content.lstrip("\n")
+                if len(prefix) > 0:
+                    self.with_tool = False
+                    return DeltaMessage(reasoning_content=reasoning_content, content=content)
+                self.with_tool = True
+                return DeltaMessage(reasoning_content=reasoning_content) if reasoning_content else None
+            strip_content = content.lstrip("\n")
+            if len(strip_content) > 0:
+                self.with_tool = False
+                return DeltaMessage(reasoning_content=reasoning_content, content=content)
+            # no assigning to with_tool for <tool_call> may come in next package
+            return DeltaMessage(reasoning_content=reasoning_content) if reasoning_content else None
         elif self.think_end_token_id in previous_token_ids:
-            if self.tool_begin_token_id in delta_token_ids:
+            if self.tool_begin_token_id in delta_token_ids or self.tool_begin_token in delta_text:
+                content, _, _ = delta_text.partition(self.tool_begin_token)
+                if len(content.lstrip("\n")) > 0:
+                    self.with_tool = False
+                    return DeltaMessage(content=delta_text)
+                self.with_tool = True
                 return None
             content = delta_text.lstrip("\n")
             if len(content) > 0:
+                self.with_tool = False
                 return DeltaMessage(content=delta_text)
+            # no assigning to with_tool for <tool_call> may come in next package
             return None
         return DeltaMessage(reasoning_content=delta_text)
 
@@ -115,14 +130,20 @@ class Ernie45VLThinkingReasoningParser(ReasoningParser):
 
         # Check if the model output contains the </think> tokens.
         if self.think_end_token not in model_output:
-            if self.tool_begin_token not in model_output:
-                return "", model_output
-            else:
+            # disable thinking
+            if self.tool_begin_token in model_output:
                 content, _, _ = model_output.partition(self.tool_begin_token)
-                return "", content
-        reasoning_content, _, content = model_output.partition(self.think_end_token)
-        if self.tool_begin_token not in content:
-            final_content = content or ""
-            return reasoning_content, final_content
+                content_prefix = content.lstrip("\n")
+                if len(content_prefix) > 0:
+                    return "", model_output
+                return "", ""
+            return "", model_output
         else:
-            return reasoning_content, ""
+            reasoning_content, _, content = model_output.partition(self.think_end_token)
+            if self.tool_begin_token in content:
+                prefix, _, _ = content.partition(self.tool_begin_token)
+                prefix_strip = prefix.lstrip("\n")
+                if len(prefix_strip) > 0:
+                    return reasoning_content, content
+                return reasoning_content, ""
+            return reasoning_content, content
