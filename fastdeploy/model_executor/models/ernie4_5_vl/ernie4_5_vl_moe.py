@@ -277,25 +277,29 @@ class Ernie4_5_VLMoE(nn.Layer):
     def forward(self, hidden_states: paddle.Tensor, vl_moe_meta: VLMoEMeta):
         if self.num_shared_experts > 0:
             shared_experts_out = self.shared_experts(hidden_states)
-        text_image_gather_scatter(
-            hidden_states,
-            vl_moe_meta.text_input,
-            vl_moe_meta.image_input,
-            vl_moe_meta.token_type_ids,
-            vl_moe_meta.text_index,
-            vl_moe_meta.image_index,
-            True,
+        hidden_states, vl_moe_meta.text_input, vl_moe_meta.image_input = (
+            text_image_gather_scatter(
+                hidden_states,
+                vl_moe_meta.text_input,
+                vl_moe_meta.image_input,
+                vl_moe_meta.token_type_ids,
+                vl_moe_meta.text_index,
+                vl_moe_meta.image_index,
+                True,
+            )
         )
         text_out = self.text_fused_moe(vl_moe_meta.text_input)
         image_out = self.image_fused_moe(vl_moe_meta.image_input)
-        text_image_gather_scatter(
-            hidden_states,
-            text_out,
-            image_out,
-            vl_moe_meta.token_type_ids,
-            vl_moe_meta.text_index,
-            vl_moe_meta.image_index,
-            False,
+        hidden_states, _, _ = (
+            text_image_gather_scatter(
+                hidden_states,
+                text_out,
+                image_out,
+                vl_moe_meta.token_type_ids,
+                vl_moe_meta.text_index,
+                vl_moe_meta.image_index,
+                False,
+            )
         )
         if self.num_shared_experts > 0:
             hidden_states += shared_experts_out

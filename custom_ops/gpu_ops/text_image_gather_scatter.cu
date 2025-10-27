@@ -198,7 +198,7 @@ void LaunchTextImageGatherScatter(
     }
 }
 
-void TextImageGatherScatter(
+std::vector<paddle::Tensor> TextImageGatherScatter(
             paddle::Tensor& input,
             paddle::Tensor& text_input,
             paddle::Tensor& image_input,
@@ -207,16 +207,17 @@ void TextImageGatherScatter(
             paddle::Tensor& image_index,
             const bool is_scatter) {
 
-    switch (input.type()) {
+    switch (input.dtype()) {
         case paddle::DataType::BFLOAT16: {
-            return LaunchTextImageGatherScatter<paddle::DataType::BFLOAT16>(input, text_input, image_input, token_type_ids, text_index, image_index, is_scatter);
+            LaunchTextImageGatherScatter<paddle::DataType::BFLOAT16>(input, text_input, image_input, token_type_ids, text_index, image_index, is_scatter);
+            break;
         }
         default: {
             PD_THROW(
-                "NOT supported data type. Only support BFLOAT16. ");
-            break;
+                "NOT supported data type. Only support BFLOAT16, but got", input.dtype());
         }
     }
+    return {input, text_input, image_input};
 }
 
 
@@ -227,13 +228,11 @@ PD_BUILD_STATIC_OP(text_image_gather_scatter)
              "token_type_ids",
              "text_index",
              "image_index"})
-    .Outputs({"text_input_out",
-              "image_input_out",
-              "text_index_out",
-              "image_index_out"})
+    .Outputs({"output",
+              "text_input_out",
+              "image_input_out"})
     .Attrs({"is_scatter:bool"})
-    .SetInplaceMap({{"text_input", "text_input_out"},
-                    {"image_input", "image_input_out"},
-                    {"text_index", "text_index_out"},
-                    {"image_index", "image_index_out"}})
+    .SetInplaceMap({{"input", "output"},
+                    {"text_input", "text_input_out"},
+                    {"image_input", "image_input_out"}})
     .SetKernelFn(PD_KERNEL(TextImageGatherScatter));
