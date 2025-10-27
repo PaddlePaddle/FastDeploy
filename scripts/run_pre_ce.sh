@@ -45,6 +45,7 @@ for subdir in "$run_path"*/; do
                     fi
 
                     if [ "$exit_code" -eq 1 ] || [ "$exit_code" -eq 124 ]; then
+                        grep -r "ERROR" ./log
                         echo "[ERROR] $file 起服务或执行异常，exit_code=$exit_code"
                         if [ "$exit_code" -eq 124 ]; then
                             echo "[TIMEOUT] $file 脚本执行超过 6 分钟, 任务超时退出！"
