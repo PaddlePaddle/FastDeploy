@@ -230,7 +230,6 @@ def test_non_streaming_chat(openai_client):
         stream=False,
     )
 
-    print("tmp")
     assert hasattr(response, "choices")
     assert len(response.choices) > 0
     assert hasattr(response.choices[0], "message")
