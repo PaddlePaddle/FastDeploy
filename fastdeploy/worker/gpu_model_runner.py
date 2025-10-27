@@ -1196,6 +1196,8 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["logits_processors"] = build_logits_processors(self.fd_config)
         self.share_inputs["logits_processors_args"] = [{} for _ in range(max_num_seqs)]
         logger.info(f"Enabled logits processors: {self.share_inputs['logits_processors']}")
+        
+        self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
     def _prepare_inputs(self) -> None:
         """Prepare the model inputs"""
@@ -1664,6 +1666,8 @@ class GPUModelRunner(ModelRunnerBase):
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
+            prompt_lens=self.share_inputs["prompt_lens"],
+            mask_rollback=self.share_inputs["mask_rollback"],
         )
 
         post_process(
@@ -2127,6 +2131,7 @@ class GPUModelRunner(ModelRunnerBase):
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
             prompt_lens=self.share_inputs["prompt_lens"],
+            mask_rollback=self.share_inputs["mask_rollback"],
         )
 
         if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
