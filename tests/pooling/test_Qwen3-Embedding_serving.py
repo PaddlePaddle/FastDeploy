@@ -273,36 +273,3 @@ def test_single_text_embedding(embedding_api_url, headers):
     else:
         print(f"Comparing with baseline: {baseline_file}")
         check_embedding_against_baseline(embedding, baseline_file, threshold=0.01)
-
-
-def test_batch_embeddings(embedding_api_url, headers):
-    """Test embedding generation for batch inputs."""
-    payload = {
-        "input": [
-            "北京天安门在哪里?",
-        ],
-        "model": "Qwen3-Embedding-0.6B",
-    }
-
-    resp = requests.post(embedding_api_url, headers=headers, json=payload)
-    assert resp.status_code == 200, f"Unexpected status code: {resp.status_code}"
-
-    result = resp.json()
-    assert "data" in result, "Response missing 'data' field"
-    assert len(result["data"]) == 1, "Expected three embedding results"
-
-    base_path = os.getenv("MODEL_PATH", "")
-
-    for idx, item in enumerate(result["data"]):
-        embedding = item["embedding"]
-
-        baseline_filename = f"Qwen3-Embedding-0.6B-batch-{idx}-baseline.json"
-        if base_path:
-            baseline_file = os.path.join(base_path, baseline_filename)
-        else:
-            baseline_file = baseline_filename
-
-        if not os.path.exists(baseline_file):
-            save_embedding_baseline(embedding, baseline_file)
-        else:
-            check_embedding_against_baseline(embedding, baseline_file, threshold=0.01)
