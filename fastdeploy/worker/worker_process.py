@@ -480,7 +480,7 @@ def parse_args():
         help="model dir",
     )
     parser.add_argument("-mbs", "--max_num_seqs", type=int, default=34, help="max batch size")
-    parser.add_argument("--num_gpu_blocks_override", type=int, default=1024)
+    parser.add_argument("--num_gpu_blocks_override", type=int, default=None)
     parser.add_argument("--block_size", type=int, default=64)
     parser.add_argument("--pod_ip", type=str, default="127.0.0.1")
     parser.add_argument("--engine_worker_queue_port", type=str, default="9923")
