@@ -335,7 +335,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             recv_num_tokens_per_expert_list,
             handle,
             _,
-        ) = self.ep_prefill_runner.dispatch(x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor)
+        ) = self.ep_prefill_runner.dispatch(
+            x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128
+        )
 
         token_all_num = sum(recv_num_tokens_per_expert_list)
 
