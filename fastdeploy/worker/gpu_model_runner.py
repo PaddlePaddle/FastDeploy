@@ -1334,6 +1334,8 @@ class GPUModelRunner(ModelRunnerBase):
         # TODO(wanglongzhi):Modifying the config at runtime is not appropriate; it needs to be moved to forward_meta. It will be used in MoEMethodBase.apply()
         if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
             self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
+            if self.speculative_decoding:
+                self.proposer.fd_config.parallel_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
         # Update Batch type for cuda graph for only_prefill_batch
         only_prefill_use_cudagraph = self.use_cudagraph and self.cudagraph_only_prefill and self.only_prefill()
@@ -1572,6 +1574,8 @@ class GPUModelRunner(ModelRunnerBase):
         self,
         hidden_states: paddle.Tensor,
         model_output: paddle.Tensor,
+        accept_all_drafts=False,
+        reject_all_drafts=False,
     ) -> paddle.Tensor:
         logits = self.model.compute_logits(hidden_states)
 
@@ -1598,6 +1602,8 @@ class GPUModelRunner(ModelRunnerBase):
                 self.sampling_metadata,
                 self.model_config.max_model_len,
                 self.share_inputs,
+                accept_all_drafts,
+                reject_all_drafts,
             )
             sampler_output = None
             if self.parallel_config.tensor_parallel_size > 1:
@@ -1679,6 +1685,7 @@ class GPUModelRunner(ModelRunnerBase):
         in_capturing: bool = False,
         capture_prefill: bool = False,
         accept_all_drafts: bool = False,
+        reject_all_drafts: bool = False,
     ) -> paddle.Tensor:
         """
         Use dummy inputs to run before formal execution.
@@ -1688,6 +1695,7 @@ class GPUModelRunner(ModelRunnerBase):
             in_capturing: Is cuda graph in capturing state
             capture_prefill: Capture pure prefill for cuda graph
             accept_all_drafts: Target model will accept all draft tokens
+            reject_all_drafts: Target model will reject all draft tokens
         """
 
         input_length_list, max_dec_len_list, block_num = self.get_input_length_list(
@@ -1747,7 +1755,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self._dummy_pooler_run(hidden_states)
                 break
             else:
-                self._dummy_sampler_run(hidden_states, model_output)
+                self._dummy_sampler_run(hidden_states, model_output, accept_all_drafts, reject_all_drafts)
 
             # 7. Updata 'infer_seed' and step_cuda()
             self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
@@ -1891,6 +1899,7 @@ class GPUModelRunner(ModelRunnerBase):
                         in_capturing=True,
                         expected_decode_len=3,
                         accept_all_drafts=False,
+                        reject_all_drafts=True,
                     )
                     logger.info(f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}")
 
