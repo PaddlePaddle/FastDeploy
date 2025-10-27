@@ -376,6 +376,7 @@ class LLMEngine:
         exit sub services
         """
         self.running = False
+        llm_logger.info("Engine shut down, exiting sub services...")
 
         if hasattr(self, "cache_manager_processes"):
             self.engine.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
@@ -394,6 +395,7 @@ class LLMEngine:
 
         if hasattr(self, "get_profile_block_num_signal"):
             self.get_profile_block_num_signal.clear()
+
         if hasattr(self, "worker_proc") and self.worker_proc is not None:
             try:
                 pgid = os.getpgid(self.worker_proc.pid)
@@ -403,6 +405,7 @@ class LLMEngine:
 
         if hasattr(self, "zmq_server") and self.zmq_server is not None:
             self.zmq_server.close()
+
         if hasattr(self, "dp_processed"):
             for p in self.dp_processed:
                 console_logger.info(f"Waiting for worker {p.pid} to exit")
