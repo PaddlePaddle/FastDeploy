@@ -25,7 +25,9 @@ if project_root not in sys.path:
 from tests.model_loader.utils import (
     check_tokens_id_and_text_close,
     form_model_get_output_topp0,
+    form_model_get_output_topp1,
     get_paddle_model_path,
+    get_torch_model_path,
     run_with_timeout,
 )
 
@@ -50,6 +52,12 @@ model_param_map = {
     "Qwen2-7B-Instruct": {
         "max_num_seqs": 1,
         "quantizations": ["wint4"],
+    },
+    "Qwen2.5-VL-7B-Instruct": {
+        "max_num_seqs": 1,
+        "quantizations": ["wint4"],
+        "is_mm": True,
+        "torch_model_name_or_path": "Qwen2.5-VL-7B-Instruct-PT",
     },
     "Qwen3-30B-A3B": {
         "tensor_parallel_size": 2,
@@ -94,12 +102,14 @@ for model, cfg in model_param_map.items():
         params.append(
             pytest.param(
                 model,
+                cfg.get("torch_model_name_or_path", ""),
                 cfg.get("tensor_parallel_size", 1),
                 cfg.get("max_num_seqs", 1),
                 cfg.get("max_model_len", 1024),
                 quant,
                 cfg.get("max_tokens", 32),
                 env,
+                cfg.get("is_mm", False),
                 marks=[pytest.mark.core_model],
                 id=f"{model}.{quant}.{backend}",
             )
@@ -107,18 +117,20 @@ for model, cfg in model_param_map.items():
 
 
 @pytest.mark.parametrize(
-    "model_name_or_path,tensor_parallel_size,max_num_seqs,max_model_len,quantization,max_tokens,env",
+    "model_name_or_path,torch_model_name_or_path,tensor_parallel_size,max_num_seqs,max_model_len,quantization,max_tokens,env,is_mm",
     params,
 )
 def test_common_model(
     fd_runner,
     model_name_or_path: str,
+    torch_model_name_or_path: str,
     tensor_parallel_size: int,
     max_num_seqs,
     max_model_len: int,
     max_tokens: int,
     quantization: str,
     env,
+    is_mm: bool,
     monkeypatch,
 ) -> None:
     model_path = get_paddle_model_path(model_name_or_path)
@@ -126,8 +138,9 @@ def test_common_model(
         for k, v in env.items():
             monkeypatch.setenv(k, v)
 
+    form_model_get_output = form_model_get_output_topp0 if not is_mm else form_model_get_output_topp1
     fd_outputs_v0 = run_with_timeout(
-        target=form_model_get_output_topp0,
+        target=form_model_get_output,
         args=(
             fd_runner,
             model_path,
@@ -143,7 +156,7 @@ def test_common_model(
         ),
     )
     fd_outputs_v1 = run_with_timeout(
-        target=form_model_get_output_topp0,
+        target=form_model_get_output,
         args=(
             fd_runner,
             model_path,
@@ -158,9 +171,35 @@ def test_common_model(
             FD_CACHE_QUEUE_PORT,
         ),
     )
+
     check_tokens_id_and_text_close(
         outputs_0_lst=fd_outputs_v0,
         outputs_1_lst=fd_outputs_v1,
         name_0="default loader",
         name_1="default_v1 loader",
     )
+
+    if torch_model_name_or_path != "":
+        torch_model_path = get_torch_model_path(torch_model_name_or_path)
+        fd_outputs_v1_torch = run_with_timeout(
+            target=form_model_get_output,
+            args=(
+                fd_runner,
+                torch_model_path,
+                tensor_parallel_size,
+                max_num_seqs,
+                max_model_len,
+                max_tokens,
+                quantization,
+                "default_v1",
+                FD_ENGINE_QUEUE_PORT,
+                prompts,
+                FD_CACHE_QUEUE_PORT,
+            ),
+        )
+        check_tokens_id_and_text_close(
+            outputs_0_lst=fd_outputs_v1,
+            outputs_1_lst=fd_outputs_v1_torch,
+            name_0="default loader",
+            name_1="default_v1 loader",
+        )

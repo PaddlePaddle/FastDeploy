@@ -256,7 +256,6 @@ def is_paddle_support_v1_loader():
 def v1_loader_support(fd_config):
     _v1_no_support_archs = [
         "Qwen2VLForConditionalGeneration",
-        "Qwen2_5_VLForConditionalGeneration",
     ]
 
     def _err_msg(msg: str) -> str:
