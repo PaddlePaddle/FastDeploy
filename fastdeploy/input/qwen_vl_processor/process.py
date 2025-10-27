@@ -355,7 +355,7 @@ class DataProcessor:
 
         outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
-        outputs["num_image_tokens"] += num_tokens
+        outputs["num_image_tokens"] += int(num_tokens)
 
         outputs["images"].append(ret["pixel_values"])
         outputs["grid_thw"].append(grid_thw)
@@ -387,7 +387,7 @@ class DataProcessor:
 
         outputs["input_ids"].extend([self.video_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
-        outputs["num_video_tokens"] += num_tokens
+        outputs["num_video_tokens"] += int(num_tokens)
 
         outputs["images"].append(ret["pixel_values"])
         outputs["grid_thw"].append(grid_thw)
