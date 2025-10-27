@@ -98,7 +98,7 @@ class Ernie45VLThinkingToolParser(ToolParser):
             if tool_begin != -1:
                 middle_str = remaining_text[think_end:tool_begin]
                 if len(middle_str.strip("\n")) > 0:
-                    return ExtractedToolCallInformation(tools_called=False)
+                    return ExtractedToolCallInformation(tools_called=False, content=model_output)
 
             while True:
                 # Find the next <tool_call>
