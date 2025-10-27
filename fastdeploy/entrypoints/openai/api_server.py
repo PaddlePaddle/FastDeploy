@@ -193,6 +193,7 @@ async def lifespan(app: FastAPI):
         tool_parser=args.tool_call_parser,
         enable_prefix_caching=args.enable_prefix_caching,
         splitwise_role=args.splitwise_role,
+        max_processor_cache=args.max_processor_cache,
     )
     await engine_client.connection_manager.initialize()
     app.state.dynamic_load_weight = args.dynamic_load_weight
