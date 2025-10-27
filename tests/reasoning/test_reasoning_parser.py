@@ -296,16 +296,18 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
         )
         self.assertIsNone(result)
 
-    def test_streaming_with_no_reasoning_but_tool(self):
+    def test_streaming_with_reasoning_and_content(self):
         result = self.parser.extract_reasoning_content_streaming(
-            previous_text="",
-            current_text="<tool_call>",
-            delta_text="<tool_call>",
-            previous_token_ids=[],
-            current_token_ids=[101],
-            delta_token_ids=[101],
+            previous_text="ab",
+            current_text="ab</think>\n\ncd",
+            delta_text="</think>\n\ncd",
+            previous_token_ids=[200, 201],
+            current_token_ids=[200, 201, 100, 300, 400],
+            delta_token_ids=[100, 300, 400],
         )
-        self.assertIsNone(result)
+        self.assertIsInstance(result, DeltaMessage)
+        self.assertEqual(result.reasoning_content, "")
+        self.assertEqual(result.content, "\n\ncd")
 
     def test_streaming_with_reasoning_new_line(self):
         result = self.parser.extract_reasoning_content_streaming(
@@ -328,19 +330,6 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
             delta_token_ids=[100, 200, 101],
         )
         self.assertIsNone(result)
-
-    def test_streaming_with_reasoning_and_tool_not_complete(self):
-        result = self.parser.extract_reasoning_content_streaming(
-            previous_text="abc",
-            current_text="abc</think>\n\n<tool",
-            delta_text="</think>\n\n<tool",
-            previous_token_ids=[200, 201, 202],
-            current_token_ids=[200, 201, 202, 100, 200, 101],
-            delta_token_ids=[100, 200, 101],
-        )
-        self.assertIsInstance(result, DeltaMessage)
-        self.assertEqual(result.reasoning_content, "")
-        self.assertEqual(result.content, "\n\n<tool")
 
     def test_streaming_with_reasoning_no_tool(self):
         result = self.parser.extract_reasoning_content_streaming(
@@ -367,6 +356,17 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
         self.assertIsInstance(result, DeltaMessage)
         self.assertIsNone(result.reasoning_content)
         self.assertEqual(result.content, "\nhello")
+
+    def test_streaming_no_reasoning_previous_tool(self):
+        result = self.parser.extract_reasoning_content_streaming(
+            previous_text="<tool_call>",
+            current_text="<tool_call>hello",
+            delta_text="hello",
+            previous_token_ids=[101],
+            current_token_ids=[101, 110],
+            delta_token_ids=[110],
+        )
+        self.assertIsNone(result)
 
     def test_batch_no_think_end(self):
         reasoning, content = self.parser.extract_reasoning_content(
