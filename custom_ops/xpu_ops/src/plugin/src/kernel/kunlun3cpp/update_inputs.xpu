@@ -46,7 +46,8 @@ __global__ void update_inputs(bool *not_need_stop,
     int seq_len_decoder_update =
         stop_flag_now
             ? 0
-            : (seq_len_encoder > 0 ? (seq_len_encoder + seq_len_decoder) : seq_len_decoder + 1);
+            : (seq_len_encoder > 0 ? (seq_len_encoder + seq_len_decoder)
+                                   : seq_len_decoder + 1);
     int seq_len_this_time_update = !stop_flag_now;
     int seq_len_encoder_update = 0;
     mfence_lm();

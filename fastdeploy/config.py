@@ -1144,7 +1144,7 @@ class CacheConfig:
             self.kv_cache_ratio = 1.0
         else:
             self.kv_cache_ratio = 0.75
-        self.enc_dec_block_num = 0 if current_platform.is_maca() else envs.FD_ENC_DEC_BLOCK_NUM
+        self.enc_dec_block_num = envs.FD_ENC_DEC_BLOCK_NUM
         self.prealloc_dec_block_slot_num_threshold = 12
         self.cache_dtype = "bfloat16"
         self.model_cfg = None
@@ -1435,11 +1435,14 @@ class FDConfig:
             self.model_config.model_format = "torch"
 
         # TODO
-        self.max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "3"))
-        if current_platform.is_xpu():
-            self.max_prefill_batch = 1
-        if self.model_config is not None and self.model_config.enable_mm:
-            self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
+        if not envs.FD_ENABLE_MAX_PREFILL:
+            self.max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "3"))
+            if current_platform.is_xpu():
+                self.max_prefill_batch = 1
+            if self.model_config is not None and self.model_config.enable_mm:
+                self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
+        else:
+            self.max_prefill_batch = self.scheduler_config.max_num_seqs
 
         num_ranks = self.parallel_config.tensor_parallel_size * self.parallel_config.data_parallel_size
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
@@ -1510,13 +1513,6 @@ class FDConfig:
                 self.structured_outputs_config.guided_decoding_backend = "xgrammar"
 
         # Adjustment GraphOptConfig
-        if (self.scheduler_config.splitwise_role != "mixed") or (
-            self.load_config is not None and self.load_config.dynamic_load_weight is True
-        ):
-            self.graph_opt_config.use_cudagraph = False
-            logger.info(
-                "CUDAGraph does not support to be started together with PD Disaggregation temporarily, but has been automatically closed!"
-            )
         if self.load_config is not None and self.load_config.dynamic_load_weight is True:
             self.graph_opt_config.graph_opt_level = 0
             logger.info(
@@ -1630,11 +1626,12 @@ class FDConfig:
             self.scheduler_config.check()
 
         # Check graph optimization config
-        if self.graph_opt_config.graph_opt_level > 0 or self.graph_opt_config.use_cudagraph:
+        if self.graph_opt_config.graph_opt_level > 0:
             if self.load_config is not None:
                 assert (
                     self.load_config.dynamic_load_weight is False
                 ), "Static graph cannot be used in RL scene temporarily"
+
         if int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 1:
             assert (
                 int(envs.FD_DISABLED_RECOVER) == 0

@@ -32,6 +32,7 @@ python -m pip install openai -U
 python -m pip uninstall -y triton
 python -m pip install triton==3.3.0
 python -m pip install pytest
+python -m pip install pytest-timeout
 unset http_proxy
 unset https_proxy
 unset no_proxy
@@ -197,7 +198,7 @@ cd xDeepEP
 bash build.sh
 cd -
 
-python tests/ci_use/XPU_45T/run_ep.py
+python -m pytest -s --timeout=300 tests/ci_use/XPU_45T/run_ep.py
 ep_exit_code=$?
 
 if [ ${ep_exit_code} -ne 0 ]; then

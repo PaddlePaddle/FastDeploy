@@ -60,6 +60,15 @@ class ErrorInfo(BaseModel):
     code: Optional[str] = None
 
 
+class CompletionTokenUsageInfo(BaseModel):
+    """
+    completion token usage info.
+    """
+
+    reasoning_tokens: Optional[int] = None
+    image_tokens: Optional[int] = None
+
+
 class PromptTokenUsageInfo(BaseModel):
     """
     Prompt-related token usage info.
@@ -68,14 +77,6 @@ class PromptTokenUsageInfo(BaseModel):
     cached_tokens: Optional[int] = None
     image_tokens: Optional[int] = None
     video_tokens: Optional[int] = None
-
-
-class CompletionTokenUsageInfo(BaseModel):
-    """
-    Completion-related token usage info.
-    """
-
-    image_tokens: Optional[int] = None
 
 
 class UsageInfo(BaseModel):

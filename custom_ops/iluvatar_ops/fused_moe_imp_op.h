@@ -16,8 +16,8 @@
  */
 
 #pragma once
-#include <string>
 #include <sstream>
+#include <string>
 #include "cub/cub.cuh"
 
 namespace phi {

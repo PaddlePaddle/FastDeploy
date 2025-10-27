@@ -374,6 +374,7 @@ class OpenAIServingCompletion:
             num_cache_tokens = [0] * num_choices
             num_image_tokens = [0] * num_choices
             inference_start_time = [0] * num_choices
+            reasoning_tokens = [0] * num_choices
             first_iteration = [True] * num_choices
             tool_called = [False] * num_choices
             max_streaming_response_tokens = (
@@ -464,6 +465,7 @@ class OpenAIServingCompletion:
                     output_tokens[idx] += len(output.get("token_ids", [])) or 0
                     num_cache_tokens[idx] += output.get("num_cache_tokens") or 0
                     num_image_tokens[idx] += output.get("num_image_tokens") or 0
+                    reasoning_tokens[idx] += output.get("reasoning_token_num", 0)
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
                         text=output["text"],
@@ -532,7 +534,7 @@ class OpenAIServingCompletion:
                                     + output_tokens[idx],
                                     prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cache_tokens[idx]),
                                     completion_tokens_details=CompletionTokenUsageInfo(
-                                        image_tokens=num_image_tokens[idx]
+                                        image_tokens=num_image_tokens[idx], reasoning_tokens=reasoning_tokens[idx]
                                     ),
                                 ),
                             )
@@ -565,6 +567,7 @@ class OpenAIServingCompletion:
         num_generated_tokens = 0
         num_cache_tokens = 0
         num_image_tokens = 0
+        num_reasoning_tokens = 0
 
         for idx in range(len(final_res_batch)):
             final_res = final_res_batch[idx]
@@ -622,13 +625,17 @@ class OpenAIServingCompletion:
             num_cache_tokens += output.get("num_cache_tokens") or 0
             num_image_tokens += output.get("num_image_tokens") or 0
 
+            num_reasoning_tokens += output.get("reasoning_token_num", 0)
+
         num_prompt_tokens = num_prompt_tokens // (1 if request.n is None else request.n)
         usage = UsageInfo(
             prompt_tokens=num_prompt_tokens,
             completion_tokens=num_generated_tokens,
             total_tokens=num_prompt_tokens + num_generated_tokens,
             prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cache_tokens),
-            completion_tokens_details=CompletionTokenUsageInfo(image_tokens=num_image_tokens),
+            completion_tokens_details=CompletionTokenUsageInfo(
+                reasoning_tokens=num_reasoning_tokens, image_tokens=num_image_tokens
+            ),
         )
         del request
 

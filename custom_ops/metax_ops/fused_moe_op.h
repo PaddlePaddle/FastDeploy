@@ -19,9 +19,9 @@
 
 #include <cuda.h>
 #include <cuda_fp16.h>
-#include "fused_moe_imp_op.h"
 #include "fused_moe_helper.h"
-#include "mctlass/numeric_conversion.h" // BUILD_MARK
+#include "fused_moe_imp_op.h"
+#include "mctlass/numeric_conversion.h"  // BUILD_MARK
 // Ignore mctlass warnings about type punning
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstrict-aliasing"
@@ -35,8 +35,8 @@
 #define WARP_SIZE 32
 
 struct GpuLaunchConfig {
-    dim3 block_per_grid;
-    dim3 thread_per_block;
+  dim3 block_per_grid;
+  dim3 thread_per_block;
 };
 
 inline GpuLaunchConfig Get1DBlocksAnd2DGridsMoe(const int64_t cols) {
@@ -81,7 +81,6 @@ __launch_bounds__(TPB) __global__
 
   cub::Sum sum;
   float threadData(-FLT_MAX);
-
 
   for (int ii = threadIdx.x; ii < num_cols; ii += TPB) {
     const int idx = thread_row_offset + ii;
@@ -603,7 +602,7 @@ void topk_gating_softmax_kernelLauncher(const T* input,
   }
   static constexpr int WARPS_PER_TB = 4;
 
-  #define LAUNCH_TOPK_GATING_SOFTMAX_HELPER(N)                                   \
+#define LAUNCH_TOPK_GATING_SOFTMAX_HELPER(N)                                   \
   case N: {                                                                    \
     topk_gating_softmax_launcher_helper<T, N, WARPS_PER_TB>(                   \
         input, output, indices, source_row, num_rows, num_experts, k, stream); \
@@ -646,14 +645,8 @@ void topk_gating_softmax_kernelLauncher(const T* input,
         const auto config_topk = Get1DBlocksAnd2DGridsMoe(num_rows);
         moe_softmax<T, TPB><<<config_topk.block_per_grid, TPB, 0, stream>>>(
             input, softmax, num_experts, num_rows);
-        moe_top_k<T, TPB>
-            <<<config_topk.block_per_grid, TPB, 0, stream>>>(softmax,
-                                                             output,
-                                                             indices,
-                                                             source_row,
-                                                             num_experts,
-                                                             k,
-                                                             num_rows);
+        moe_top_k<T, TPB><<<config_topk.block_per_grid, TPB, 0, stream>>>(
+            softmax, output, indices, source_row, num_experts, k, num_rows);
       }
     }
   }
