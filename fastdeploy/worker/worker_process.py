@@ -615,6 +615,12 @@ def parse_args():
         help="Enable output of token-level log probabilities.",
     )
     parser.add_argument(
+        "--logprobs_mode",
+        type=str,
+        default="raw_logprobs",
+        help="Indicates the content returned in the logprobs.",
+    )
+    parser.add_argument(
         "--reasoning_parser",
         type=str,
         default=None,
@@ -645,6 +651,12 @@ def parse_args():
         "--lm_head_fp32",
         action="store_true",
         help="Flag to specify dtype of lm_head as FP32",
+    )
+
+    parser.add_argument(
+        "--max_encoder_cache",
+        type=int,
+        help="Maximum encoder cache tokens(use 0 to disable).",
     )
 
     parser.add_argument(
