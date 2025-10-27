@@ -539,7 +539,7 @@ class LLMEngine:
             f" --override-pooler-config {self.cfg.model_config.override_pooler_config}"
         )
 
-        worker_append_flag = {
+        worker_store_true_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,
             "enable_prefix_caching": self.cfg.cache_config.enable_prefix_caching,
             "enable_chunked_prefill": self.cfg.cache_config.enable_chunked_prefill,
@@ -549,11 +549,18 @@ class LLMEngine:
             "disable_custom_all_reduce": self.cfg.parallel_config.disable_custom_all_reduce,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
-            "num_gpu_blocks_override": self.cfg.cache_config.num_gpu_blocks_override,
         }
-        for worker_flag, value in worker_append_flag.items():
+        for worker_flag, value in worker_store_true_flag.items():
             if value:
                 arguments = arguments + f" --{worker_flag}"
+
+        worker_default_none_flag = {
+            "num_gpu_blocks_override": self.cfg.cache_config.num_gpu_blocks_override,
+        }
+        for worker_flag, value in worker_default_none_flag.items():
+            if value:
+                arguments = arguments + f" --{worker_flag} {value}"
+
         if self.cfg.nnode > 1:
             pd_cmd = pd_cmd + f" --ips {ips} --nnodes {len(self.cfg.ips)}"
         pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
