@@ -28,10 +28,21 @@ import numpy as np
 import paddle
 
 from fastdeploy import envs
-from fastdeploy.engine.request import Request, RequestOutput, RequestStatus, RequestType
+from fastdeploy.cache_manager.multimodal_cache_manager import (
+    EncoderCacheManager,
+    ProcessorCacheManager,
+)
+from fastdeploy.engine.request import (
+    ImagePosition,
+    Request,
+    RequestOutput,
+    RequestStatus,
+    RequestType,
+)
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import llm_logger
 
@@ -175,6 +186,15 @@ class ResourceManagerV1(ResourceManager):
 
         self.need_block_num_map = dict()
 
+        self.encoder_cache = None
+        if config.model_config.enable_mm and config.cache_config.max_encoder_cache > 0:
+            self.encoder_cache = EncoderCacheManager(config.cache_config.max_encoder_cache)
+
+        self.processor_cache = None
+        if config.model_config.enable_mm and config.cache_config.max_processor_cache > 0:
+            max_processor_cache_in_bytes = int(config.cache_config.max_processor_cache * 1024 * 1024 * 1024)
+            self.processor_cache = ProcessorCacheManager(max_processor_cache_in_bytes)
+
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
 
@@ -273,6 +293,44 @@ class ResourceManagerV1(ResourceManager):
                 break
         return can_schedule
 
+    def _update_mm_hashes(self, request):
+        if request.multimodal_inputs is None:
+            return
+
+        inputs = request.multimodal_inputs
+        if (
+            inputs.get("images", None) is not None
+            and inputs.get("image_patch_id", None) is not None
+            and inputs.get("grid_thw", None) is not None
+            and len(inputs["grid_thw"]) != 0
+        ):
+            grid_thw = []
+            new_mm_positions, new_mm_hashes = [], []
+            image_st = 0
+            for idx, one in enumerate(inputs["grid_thw"]):
+                t, h, w = one[0], one[1], one[2]
+                if t == 1:
+                    grid_thw.append(one)
+                    new_mm_positions.append(inputs["mm_positions"][idx])
+                    new_mm_hashes.append(inputs["mm_hashes"][idx])
+                    image_st += h * w
+                else:
+                    grid_thw.extend([[2, h, w]] * (t // 2))
+                    token_st = inputs["mm_positions"][idx].offset
+                    for _ in range(t // 2):
+                        new_mm_positions.append(ImagePosition(token_st, h * w // 4))
+                        # videos are split into patches every 2 frames, need to rehash
+                        new_mm_hashes.append(
+                            MultimodalHasher.hash_features(inputs["images"][image_st : image_st + 2 * h * w])
+                        )
+                        image_st += 2 * h * w
+                        token_st += h * w // 4
+            inputs["mm_positions"] = new_mm_positions
+            inputs["mm_hashes"] = new_mm_hashes
+        else:
+            inputs["mm_positions"] = []
+            inputs["mm_hashes"] = []
+
     def _get_num_new_tokens(self, request, token_budget):
         # TODO: set condition to new _get_num_new_tokens
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
@@ -333,11 +391,12 @@ class ResourceManagerV1(ResourceManager):
 
             if request.multimodal_img_boundaries is None:
                 grid_thw = []
-                for one in inputs["grid_thw"]:
-                    if one[0] == 1:
+                for idx, one in enumerate(inputs["grid_thw"]):
+                    t, h, w = one[0], one[1], one[2]
+                    if t == 1:
                         grid_thw.append(one)
                     else:
-                        grid_thw.extend([[2, one[1], one[2]]] * (one[0] // 2))
+                        grid_thw.extend([[2, h, w]] * (t // 2))
 
                 grid_thw = paddle.to_tensor(grid_thw, dtype="int64")
                 if current_platform.is_xpu():
@@ -397,6 +456,11 @@ class ResourceManagerV1(ResourceManager):
                 request.image_type_ids_end = np.sum(grid_thw[: request.num_image_end, 0])
                 request.image_start = np.sum(np.prod(grid_thw[: request.num_image_start], axis=1))
                 request.image_end = np.sum(np.prod(grid_thw[: request.num_image_end], axis=1))
+
+                cur_mm_hashes = inputs["mm_hashes"][request.num_image_start : request.num_image_end]
+                cur_mm_positions = inputs["mm_positions"][request.num_image_start : request.num_image_end]
+                if self.encoder_cache:
+                    request.evict_mm_hashes = self.encoder_cache.apply_cache(cur_mm_hashes, cur_mm_positions)
 
         # Compatible with scenarios without images and videos.
         return num_new_tokens
@@ -553,6 +617,7 @@ class ResourceManagerV1(ResourceManager):
                         break
                     request = self.waiting[0]
                     if request.status == RequestStatus.WAITING:
+                        self._update_mm_hashes(request)
                         # Enable prefix caching
                         if self.config.cache_config.enable_prefix_caching:
                             if (
