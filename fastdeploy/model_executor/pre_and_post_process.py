@@ -318,7 +318,6 @@ def post_process_normal(
             model_output.stop_token_ids,
             model_output.stop_seqs_len,
             False,
-            is_pooling=False,
         )  # multi ends
     elif current_platform.is_maca():
         set_stop_value_multi_ends(
@@ -332,7 +331,6 @@ def post_process_normal(
             model_output.stop_token_ids,
             model_output.stop_seqs_len,
             False,
-            is_pooling=False,
         )  # multi ends
     else:
         set_stop_value_multi_ends(
@@ -362,7 +360,7 @@ def post_process_normal(
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,
-                False,  # ✅ 改为位置参数，表示 is_pooling_task=False
+                False,
             )
         else:
             update_inputs(
