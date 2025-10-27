@@ -461,6 +461,7 @@ class EPPrefillRunner(EPRunner):
             "async_finish": self.ep_engine.async_finish,
             "topk_idx": topk_idx,
             "topk_weights": topk_weights,
+            "expert_alignment": 128,
         }
         return buffer.dispatch(**dispatch_args)
 

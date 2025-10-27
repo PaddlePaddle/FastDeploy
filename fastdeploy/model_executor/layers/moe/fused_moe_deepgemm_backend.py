@@ -345,7 +345,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             (recv_x, recv_x_scale) = recv_x
 
             token_nums_this_rank = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)
-            token_nums_this_rank_padded = sum(token_nums_this_rank[1].numpy().tolist())
 
             (
                 permute_input,
@@ -365,7 +364,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 token_nums_this_rank[0],
                 token_nums_this_rank[1],
                 True,  # use_in_ep
-                token_nums_this_rank_padded,
+                token_all_num,
             )
 
             permute_scale = permute_scale.transpose([1, 0]).contiguous()
