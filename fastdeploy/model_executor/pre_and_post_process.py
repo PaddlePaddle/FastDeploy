@@ -501,7 +501,15 @@ def post_process(
         )
     else:
         if speculative_decoding:
-            post_process_specualate(sampler_or_pooler_output, model_output, save_each_rank, skip_save_output)
+            post_process_specualate(
+                sampler_or_pooler_output,
+                model_output,
+                share_inputs,
+                save_each_rank,
+                skip_save_output,
+                think_end_id,
+                line_break_id,
+            )
         else:
             post_process_normal(
                 sampler_or_pooler_output,
@@ -511,6 +519,8 @@ def post_process(
                 save_each_rank,
                 skip_save_output,
                 async_output_queue,
+                think_end_id,
+                line_break_id,
             )
 
 
