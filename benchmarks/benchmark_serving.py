@@ -635,7 +635,7 @@ def benchmark_metrics(
     goodput_config_dict = check_goodput_args(args)
 
     metrics, actual_output_lens = calculate_metrics(
-        input_requests=input_requests,
+        # input_requests=input_requests,
         outputs=outputs,
         dur_s=benchmark_duration,
         selected_percentiles=selected_percentiles,
