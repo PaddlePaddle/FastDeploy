@@ -27,7 +27,9 @@ from queue import Queue
 from typing import Any, List, Tuple
 
 import numpy as np
+import paddle
 
+from fastdeploy import envs
 from fastdeploy.utils import llm_logger
 
 
@@ -294,6 +296,49 @@ class EngineWorkerQueue:
                 time.sleep(interval)
         raise ConnectionError(f"TaskQueue cannot connect {self.address}")
 
+    @staticmethod
+    def to_tensor(tasks):
+        """
+        Convert NumPy arrays in multimodal inputs to PaddlePaddle tensors.
+
+        Args:
+            tasks: List of tasks containing multimodal inputs.
+        """
+        try:
+            if envs.FD_ENABLE_MAX_PREFILL:
+                llm_logger.debug(f"Convert image to tensor, type: {type(tasks)}")
+                batch_tasks, _ = tasks
+                for task in batch_tasks:
+                    if not hasattr(task, "multimodal_inputs"):
+                        continue
+                    images = task.multimodal_inputs["images"]
+                    if isinstance(images, np.ndarray):
+                        llm_logger.debug(f"Convert image to tensor, shape: {images.shape}")
+                        task.multimodal_inputs["images"] = paddle.to_tensor(images)
+        except Exception as e:
+            llm_logger.warning(f"Failed to convert to tensor: {e}")
+
+    @staticmethod
+    def to_numpy(tasks):
+        """
+        Convert PaddlePaddle tensors in multimodal inputs to NumPy arrays.
+
+        Args:
+            tasks: List of tasks containing multimodal inputs.
+        """
+        try:
+            if envs.FD_ENABLE_MAX_PREFILL:
+                for batch_tasks, _ in tasks:
+                    for task in batch_tasks:
+                        if not hasattr(task, "multimodal_inputs"):
+                            continue
+                        images = task.multimodal_inputs.get("images", None)
+                        if isinstance(images, paddle.Tensor):
+                            llm_logger.debug(f"Convert image to numpy, shape: {images.shape}")
+                            task.multimodal_inputs["images"] = images.numpy()
+        except Exception as e:
+            llm_logger.warning(f"Failed to convert to numpy: {e}")
+
     def put_tasks(self, tasks: List[Any]) -> None:
         """
         Add tasks to the shared queue in a thread-safe manner.
@@ -307,6 +352,9 @@ class EngineWorkerQueue:
             self.lock.release()
             time.sleep(0.001)
             self.lock.acquire()
+
+        # 多模态输入转换为张量
+        EngineWorkerQueue.to_tensor(tasks)
 
         self.tasks[:] = list()
         self.client_read_flag[:] = [0] * self.num_client
@@ -322,7 +370,11 @@ class EngineWorkerQueue:
         """
         tasks: List[Any] = list()
         self.lock.acquire()
+
         tasks.extend(self.tasks)
+        # 多模态输入转换为numpy
+        # EngineWorkerQueue.to_numpy(tasks)
+
         self.client_read_flag[self.client_id] = 1
         all_client_read: bool = np.sum(self.client_read_flag) == self.num_client
         if all_client_read:

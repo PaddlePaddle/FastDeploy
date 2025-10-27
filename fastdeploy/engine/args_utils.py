@@ -20,8 +20,6 @@ from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional, Union
 
-import paddle
-
 from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
@@ -124,6 +122,14 @@ class EngineArgs:
     limit_mm_per_prompt: Optional[Dict[str, Any]] = None
     """
     Limitation of numbers of multi-modal data.
+    """
+    max_encoder_cache: int = -1
+    """
+    Maximum number of tokens in the encoder cache.
+    """
+    max_processor_cache: float = -1
+    """
+    Maximum number of bytes(in GiB) in the processor cache.
     """
     reasoning_parser: str = None
     """
@@ -369,6 +375,15 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
+    logprobs_mode: str = "raw_logprobs"
+    """
+    Indicates the content returned in the logprobs.
+    Supported mode:
+    1) raw_logprobs, 2) processed_logprobs, 3) raw_logits, 4) processed_logits.
+    Raw means the values before applying logit processors, like bad words.
+    Processed means the values after applying such processors.
+    """
+
     seed: int = 0
     """
     Random seed to use for initialization. If not set, defaults to 0.
@@ -414,6 +429,8 @@ class EngineArgs:
         if self.enable_logprob:
             if not current_platform.is_cuda():
                 raise NotImplementedError("Only CUDA platform supports logprob.")
+            if self.speculative_config is not None and self.logprobs_mode.startswith("processed"):
+                raise NotImplementedError("processed_logprobs not support in speculative.")
         if self.speculative_config is not None:
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if self.splitwise_role != "mixed" and self.cache_transfer_protocol != "rdma":
@@ -518,6 +535,18 @@ class EngineArgs:
             help="Additional keyword arguments for the multi-modal processor.",
         )
         model_group.add_argument(
+            "--max-encoder-cache",
+            default=EngineArgs.max_encoder_cache,
+            type=int,
+            help="Maximum encoder cache tokens(use 0 to disable).",
+        )
+        model_group.add_argument(
+            "--max-processor-cache",
+            default=EngineArgs.max_processor_cache,
+            type=float,
+            help="Maximum processor cache bytes(use 0 to disable).",
+        )
+        model_group.add_argument(
             "--enable-mm",
             action=DeprecatedOptionWarning,
             default=EngineArgs.enable_mm,
@@ -611,6 +640,13 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_logprob,
             help="Enable output of token-level log probabilities.",
+        )
+        model_group.add_argument(
+            "--logprobs-mode",
+            type=str,
+            choices=["raw_logprobs", "processed_logprobs", "processed_logits"],
+            default=EngineArgs.logprobs_mode,
+            help="Indicates the content returned in the logprobs.",
         )
         model_group.add_argument(
             "--seed",
@@ -1025,10 +1061,7 @@ class EngineArgs:
 
         if self.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                if paddle.is_compiled_with_xpu():
-                    self.max_num_batched_tokens = self.max_model_len
-                else:
-                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.enable_chunked_prefill:
                     self.max_num_batched_tokens = 2048

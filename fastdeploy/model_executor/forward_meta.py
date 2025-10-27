@@ -259,7 +259,7 @@ class DCUForwardMeta(ForwardMeta):
 
 
 @dataclass
-class HPUForwardMeta:
+class HPUForwardMeta(ForwardMeta):
     """
     HPUForwardMeta is used to store the global meta information of the forward on intel HPU.
     """

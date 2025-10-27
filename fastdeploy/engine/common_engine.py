@@ -538,6 +538,7 @@ class EngineService:
                 chunk_grid_thw = grid_thw[grid_thw_st : grid_thw_st + chunk_image_num[idx]]
                 chunk_patch_num = np.sum(np.prod(chunk_grid_thw, axis=1))
                 chunk_images = inputs["images"][patch_st : patch_st + chunk_patch_num]
+                chunk_position_ids = inputs["position_ids"][input_ids_st : input_ids_st + chunk_seq_len[idx]]
 
                 chunks_info.append(
                     {
@@ -546,7 +547,7 @@ class EngineService:
                         "image_type_ids": (chunk_image_type_ids if chunk_image_type_ids.shape[0] else None),
                         "grid_thw": (chunk_grid_thw if chunk_grid_thw.shape[0] else None),
                         "images": (chunk_images if chunk_images.shape[0] else None),
-                        "position_ids": None,
+                        "position_ids": chunk_position_ids,
                     }
                 )
 
@@ -633,13 +634,9 @@ class EngineService:
                     int(self.resource_manager.available_batch()),
                     self.cfg.max_prefill_batch,
                 )
-                if self.cfg.model_config.enable_mm:
-                    available_blocks = self.resource_manager.available_block_num()
-                else:
-                    available_blocks = self.cfg.cache_config.max_block_num_per_seq
 
                 tasks = self.scheduler.get_requests(
-                    available_blocks=available_blocks,
+                    available_blocks=self.cfg.cache_config.max_block_num_per_seq,
                     block_size=self.cfg.cache_config.block_size,
                     reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
                     max_num_batched_tokens=self.cfg.model_config.max_model_len,
@@ -762,7 +759,7 @@ class EngineService:
             self.recv_request_server = ZmqTcpServer(port=envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT, mode=zmq.PULL)
             self.send_response_server = ZmqTcpServer(port=envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT, mode=zmq.ROUTER)
             self.internal_adapter = InternalAdapter(
-                cfg=self.cfg, engine=self, dp_rank=self.cfg.node_rank * self.cfg.worker_num_per_node
+                cfg=self.cfg, engine=self, dp_rank=self.cfg.parallel_config.local_data_parallel_id
             )
         else:
             self.recv_request_server = ZmqIpcServer(name=api_server_pid, mode=zmq.PULL)
@@ -1060,7 +1057,8 @@ class EngineService:
         exit sub services
         """
         self.running = False
-        self.engine_worker_queue_server.cleanup()
+        if hasattr(self, "engine_worker_queue_server") and self.engine_worker_queue_server is not None:
+            self.engine_worker_queue_server.cleanup()
         self.exist_task_signal.clear()
         self.exist_swapped_task_signal.clear()
         self.worker_healthy_live_signal.clear()

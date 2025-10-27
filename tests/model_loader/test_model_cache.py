@@ -22,6 +22,8 @@ project_root = os.path.abspath(os.path.join(current_dir, ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+os.environ["FD_USE_MACHETE"] = "0"
+
 from tests.model_loader.utils import (
     check_tokens_id_and_text_close,
     form_model_get_output_topp0,
