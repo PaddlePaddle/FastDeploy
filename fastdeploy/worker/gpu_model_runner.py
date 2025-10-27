@@ -1416,6 +1416,19 @@ class GPUModelRunner(ModelRunnerBase):
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
+        if self.fd_config.parallel_config.enable_chunked_moe:
+            chunk_size = self.fd_config.parallel_config.moe_chunk_size
+            token_num = ids_remove_padding.shape[0]
+
+            if token_num > chunk_size:
+                self.fd_config.parallel_config.moe_num_chunk = (token_num + chunk_size - 1) // chunk_size
+            else:
+                self.fd_config.parallel_config.moe_num_chunk = 1
+
+            moe_num_chunk_list = []
+            paddle.distributed.all_gather_object(moe_num_chunk_list, self.fd_config.parallel_config.moe_num_chunk)
+            self.fd_config.parallel_config.max_moe_num_chunk = max(moe_num_chunk_list)
+            
     def initialize_kv_cache(self, profile: bool = False) -> None:
         """
         Initialize kv cache
