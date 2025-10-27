@@ -15,13 +15,14 @@
 """
 
 import paddle
+import paddle.nn.functional as F
 
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler
 
 
 def _create_fake_logits(batch_size: int, vocab_size: int) -> paddle.Tensor:
-    fake_logits = paddle.full(shape=[batch_size, vocab_size], fill_value=1e-2, dtype="float32")
+    fake_logits = paddle.rand(shape=[batch_size, vocab_size], dtype="float32")
     return fake_logits
 
 
@@ -41,6 +42,7 @@ def _create_default_sampling_metadata(
     batch_size: int,
     min_seq_len: int,
     max_seq_len: int,
+    max_num_logprobs: int = None,
 ) -> SamplingMetadata:
 
     fake_sampling_metadata = SamplingMetadata(
@@ -59,6 +61,8 @@ def _create_default_sampling_metadata(
         min_p=paddle.randn([batch_size]),
         seed=paddle.to_tensor([[2025]]),
     )
+    if max_num_logprobs is not None:
+        fake_sampling_metadata.max_num_logprobs = max_num_logprobs
     return fake_sampling_metadata
 
 
@@ -75,5 +79,77 @@ def test_sampler():
     print(next_tokens)
 
 
+def get_baseline_logprobs(logits, sampling_metadata, logprobs_mode, token_ids):
+    if logprobs_mode == "raw_logprobs":
+        logprobs = F.log_softmax(logits, axis=-1)
+    elif logprobs_mode == "raw_logits":
+        logprobs = logits.clone()
+    elif logprobs_mode == "processed_logprobs":
+        from fastdeploy.model_executor.layers.sample.ops import (
+            apply_penalty_multi_scores,
+        )
+
+        logits = apply_penalty_multi_scores(
+            sampling_metadata.pre_token_ids,
+            sampling_metadata.prompt_ids,
+            sampling_metadata.prompt_lens,
+            logits,
+            sampling_metadata.repetition_penalties,
+            sampling_metadata.frequency_penalties,
+            sampling_metadata.presence_penalties,
+            sampling_metadata.temperature,
+            sampling_metadata.bad_words_token_ids,
+            sampling_metadata.step_idx,
+            sampling_metadata.min_dec_lens,
+            sampling_metadata.eos_token_ids,
+        )
+        logprobs = F.log_softmax(logits, axis=-1)
+    else:
+        from fastdeploy.model_executor.layers.sample.ops import (
+            apply_penalty_multi_scores,
+        )
+
+        logits = apply_penalty_multi_scores(
+            sampling_metadata.pre_token_ids,
+            sampling_metadata.prompt_ids,
+            sampling_metadata.prompt_lens,
+            logits,
+            sampling_metadata.repetition_penalties,
+            sampling_metadata.frequency_penalties,
+            sampling_metadata.presence_penalties,
+            sampling_metadata.temperature,
+            sampling_metadata.bad_words_token_ids,
+            sampling_metadata.step_idx,
+            sampling_metadata.min_dec_lens,
+            sampling_metadata.eos_token_ids,
+        )
+        logprobs = logits
+    token_logprobs = paddle.take_along_axis(logprobs, token_ids, axis=-1)
+    return token_logprobs
+
+
+def test_sampler_logprobs():
+    batch_size = 32
+    vocab_size = 1024
+    min_seq_len = 1
+    max_seq_len = 1024
+    logprobs_mode_list = ["raw_logprobs", "raw_logits", "processed_logprobs", "processed_logits"]
+    logits = _create_fake_logits(batch_size, vocab_size)
+    sampling_metadata = _create_default_sampling_metadata(batch_size, min_seq_len, max_seq_len, max_num_logprobs=0)
+    for logprobs_mode in logprobs_mode_list:
+        sampler = Sampler(logprobs_mode=logprobs_mode)
+        sampler_output = sampler(logits.clone(), sampling_metadata)
+        baseline_logprobs = get_baseline_logprobs(
+            logits.clone(), sampling_metadata, logprobs_mode=logprobs_mode, token_ids=sampler_output.sampled_token_ids
+        )
+        logprobs = sampler_output.logprobs_tensors.logprobs
+        print(f"baseline_logprobs = {baseline_logprobs}")
+        print(f"logprobs = {logprobs}")
+        equal = paddle.allclose(baseline_logprobs, logprobs, atol=1e-03, rtol=1e-03).item()
+        print(f"logprobs_mode: {logprobs_mode} equal={equal}")
+        assert equal
+
+
 if __name__ == "__main__":
     test_sampler()
+    test_sampler_logprobs()
