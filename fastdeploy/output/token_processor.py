@@ -289,7 +289,7 @@ class TokenProcessor:
                     if task.messages is not None:
                         result.prompt = task.messages
                     result.num_cached_tokens = task.num_cached_tokens
-                    if task.multimodal_inputs:
+                    if task.get("multimodal_inputs", None):
                         result.num_image_tokens = task.multimodal_inputs.get("num_image_tokens", 0)
                         result.num_video_tokens = task.multimodal_inputs.get("num_video_tokens", 0)
 
@@ -655,7 +655,7 @@ class TokenProcessor:
                 if task.messages is not None:
                     result.prompt = task.messages
             result.num_cached_tokens = task.num_cached_tokens
-            if task.multimodal_inputs:
+            if task.get("multimodal_inputs", None):
                 result.num_image_tokens = task.multimodal_inputs.get("num_image_tokens", 0)
                 result.num_video_tokens = task.multimodal_inputs.get("num_video_tokens", 0)
 
