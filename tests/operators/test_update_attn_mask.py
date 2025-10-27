@@ -1,7 +1,8 @@
 import numpy as np
 import paddle
 import pytest
-from mm_custom_ops import update_attn_mask_offsets
+
+from fastdeploy.model_executor.ops.gpu import update_attn_mask_offsets
 
 
 def run_update_attn_mask_offsets_case(
