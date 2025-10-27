@@ -377,7 +377,7 @@ class CacheMessager:
                     continue
                 logger.info(f"_handle_connect_task recv task: {task}")
                 task_id = task["task_id"]
-                ip, rdma_port = task["ip"], task["rdma_port"]
+                ip, rdma_port = task["ip"], task["rdma_ports"][self.rank]
                 status = self.messager["rdma"].connect(ip, rdma_port)
                 if not status:
                     response = {"task_id": task_id, "success": False}
@@ -735,7 +735,7 @@ class CacheMessagerV1:
                     continue
                 logger.info(f"_handle_connect_task recv task: {task}")
                 task_id = task["task_id"]
-                ip, rdma_port = task["ip"], task["rdma_port"]
+                ip, rdma_port = task["ip"], task["rdma_ports"][self.rank]
                 status = self.messager["rdma"].connect(ip, rdma_port)
                 if not status:
                     response = {"task_id": task_id, "success": False}

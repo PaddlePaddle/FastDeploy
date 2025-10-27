@@ -509,12 +509,14 @@ class EngineWorkerQueue:
         return all_client_put
 
     def get_connect_rdma_task_response(self):
+        task_response = None
         self.connect_task_response_lock.acquire()
         while sum(self.client_get_connect_task_response_flag) < self.num_client:
             self.connect_task_response_lock.release()
             time.sleep(0.001)
             self.connect_task_response_lock.acquire()
-        task_response = self.connect_rdma_task_responses[0]
+        if len(self.connect_rdma_task_responses) > 0:
+            task_response = self.connect_rdma_task_responses[0]
         for tmp_task_response in self.connect_rdma_task_responses:
             task_response["success"] = task_response["success"] and tmp_task_response["success"]
         self.connect_rdma_task_responses[:] = list()
