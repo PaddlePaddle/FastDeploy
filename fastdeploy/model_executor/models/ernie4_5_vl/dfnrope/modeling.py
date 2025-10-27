@@ -204,7 +204,7 @@ class VisionFlashAttention2(nn.Layer):
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
         if weight_need_transpose:
-            loaded_weight = loaded_weight.transpose([1, 0])
+            loaded_weight = get_tensor(loaded_weight).transpose([1, 0])
         load_bias = getattr(param, "load_bias", None)
         if load_bias:
             head_dim = self.hidden_size // self.num_heads
