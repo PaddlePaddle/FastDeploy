@@ -371,7 +371,7 @@ class CacheMessager:
         while True:
             try:
                 task = self.engine_worker_queue.get_connect_rdma_task()
-                self.engine_worker_queue.connect_task_lock.connect_task_barrier.wait()
+                self.engine_worker_queue.connect_task_barrier.wait()
                 if task is None:
                     time.sleep(0.001)
                     continue
@@ -729,7 +729,7 @@ class CacheMessagerV1:
         while True:
             try:
                 task, _ = self.engine_worker_queue.get_connect_rdma_task()
-                self.engine_worker_queue.connect_task_lock.connect_task_barrier.wait()
+                self.engine_worker_queue.connect_task_barrier.wait()
                 if task is None:
                     time.sleep(0.001)
                     continue
