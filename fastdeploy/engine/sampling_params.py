@@ -103,6 +103,8 @@ class SamplingParams:
     bad_words: Optional[List[str]] = None
     guided_decoding: Optional[GuidedDecodingParams] = None
     bad_words_token_ids: Optional[List[int]] = None
+    height: Optional[int] = None
+    width: Optional[int] = None
 
     @classmethod
     def from_dict(cls, req_dict: dict[str, Any]) -> SamplingParams:
@@ -136,6 +138,8 @@ class SamplingParams:
         bad_words=None,
         guided_decoding=None,
         bad_words_token_ids=None,
+        height=None,
+        width=None,
     ) -> SamplingParams:
         """Create instance from command line arguments"""
         return cls(
@@ -158,6 +162,8 @@ class SamplingParams:
             bad_words=bad_words,
             guided_decoding=guided_decoding,
             bad_words_token_ids=bad_words_token_ids,
+            height=height,
+            width=width,
         )
 
     def __post_init__(self):
