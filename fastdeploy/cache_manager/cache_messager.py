@@ -246,9 +246,7 @@ class CacheMessager:
             engine_recycled_count = 0
 
             while True:
-
                 cache_info = self.engine_worker_queue.get_cache_info()
-
                 if cache_info:
                     logger.debug(f"cache info {cache_info}")
                     for info in cache_info:
@@ -373,6 +371,7 @@ class CacheMessager:
         while True:
             try:
                 task = self.engine_worker_queue.get_connect_rdma_task()
+                self.engine_worker_queue.connect_task_lock.connect_task_barrier.wait()
                 if task is None:
                     time.sleep(0.001)
                     continue
@@ -384,6 +383,7 @@ class CacheMessager:
                     response = {"task_id": task_id, "success": False}
                 else:
                     response = {"task_id": task_id, "success": True}
+                self.engine_worker_queue.connect_task_response_barrier.wait()
                 self.engine_worker_queue.put_connect_rdma_task_response(response)
             except Exception as e:
                 logger.error(f"handle_connect_task has exception: {e}")
@@ -524,7 +524,7 @@ class CacheMessagerV1:
         while True:
             try:
                 cache_info = self.engine_worker_queue.get_cache_info()
-                self.engine_worker_queue.finish_add_cache_task_barrier.wait()
+                self.engine_worker_queue.cache_info_barrier.wait()
                 finished_add_cache_task_req_ids = []
                 if cache_info:
                     for info in cache_info:
@@ -549,8 +549,10 @@ class CacheMessagerV1:
                             self.idx_cache_task_dict[current_info["current_id"]] = current_info
                         else:
                             self.cache_info[info["request_id"]] = info
-                    if self.rank == 0 and finished_add_cache_task_req_ids:
+
+                    if finished_add_cache_task_req_ids:
                         self.engine_worker_queue.put_finished_add_cache_task_req(finished_add_cache_task_req_ids)
+                    self.engine_worker_queue.finish_add_cache_task_barrier.wait()
                 else:
                     time.sleep(0.001)
             except Exception as e:
@@ -564,7 +566,7 @@ class CacheMessagerV1:
         while True:
             try:
                 engine_indexes = self.cache_prefilled_engine_ids_queue.get()
-                self.engine_worker_queue.finish_request_barrier.wait()
+                self.engine_worker_queue.begin_send_cache_barrier.wait()
                 block_start_end_list = []
                 current_prefilled_token_num_list = []
                 for engine_index in engine_indexes:
@@ -615,7 +617,7 @@ class CacheMessagerV1:
                                 if task["transfer_protocol"] == "rdma":
                                     target_ip = task["ip"]
                                     target_id = int(task["rdma_ports"][self.rank])
-                                    if task["status"] == "error":
+                                    if "error" in task["status"]:
                                         continue
                                     status = self.messager[current_transfer_protocol].connect(target_ip, target_id)
                                     if not status:
@@ -665,7 +667,7 @@ class CacheMessagerV1:
                                         block_id_end - block_id_start
                                     )
                                     if current_prefilled_token_num_list[i] == task["need_prefill_tokens"]:
-                                        if task["status"] != "error":
+                                        if "error" not in task["status"]:
                                             task["status"] = "finished"
                                             logger.info(
                                                 f"finish write cache for all layers, req_id: {req_id}, block_id_end {block_id_end} need_prefill_tokens {task['need_prefill_tokens']}"
@@ -680,12 +682,9 @@ class CacheMessagerV1:
                                     target_id = int(task["rdma_ports"][self.rank])
                                     if task["transfer_protocol"] == "ipc":
                                         self.messager["ipc"].write_block_by_sync(target_id)
-                                    if self.rank == 0:
-                                        # to do: robust in TP, here we assume all status in tp are the same. If wrong, all wrong. If ok, all ok.
-                                        self.engine_worker_queue.put_finished_req(
-                                            [(task["request_id"], task["status"])]
-                                        )
-                                        logger.info(f"put write cache {task['request_id']}, status {task['status']}")
+                                    self.engine_worker_queue.finish_send_cache_barrier.wait()
+                                    self.engine_worker_queue.put_finished_req([[task["request_id"], task["status"]]])
+                                    logger.info(f"put write cache {task['request_id']}, status {task['status']}")
                                     self.engine_cache_tasks[task["current_id"]] = dict()
                                     del self.cache_info[task["request_id"]]
                                     del self.idx_cache_task_dict[task["current_id"]]
@@ -729,7 +728,8 @@ class CacheMessagerV1:
     def _handle_connect_task(self):
         while True:
             try:
-                task = self.engine_worker_queue.get_connect_rdma_task()
+                task, _ = self.engine_worker_queue.get_connect_rdma_task()
+                self.engine_worker_queue.connect_task_lock.connect_task_barrier.wait()
                 if task is None:
                     time.sleep(0.001)
                     continue
@@ -741,6 +741,7 @@ class CacheMessagerV1:
                     response = {"task_id": task_id, "success": False}
                 else:
                     response = {"task_id": task_id, "success": True}
+                self.engine_worker_queue.connect_task_response_barrier.wait()
                 self.engine_worker_queue.put_connect_rdma_task_response(response)
             except Exception as e:
                 logger.error(f"handle_connect_task has exception: {e}")
