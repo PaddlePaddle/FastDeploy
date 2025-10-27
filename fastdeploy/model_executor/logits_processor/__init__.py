@@ -59,7 +59,7 @@ def load_class(spec: str):
 def build_logits_processors(fd_config):
     logit_procs = []
     for fqcn in fd_config.structured_outputs_config.logits_processors or []:
-        logit_procs.append(load_class(fqcn)())
+        logit_procs.append(load_class(fqcn)(fd_config))
     return logit_procs
 
 

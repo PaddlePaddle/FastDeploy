@@ -1821,10 +1821,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 1.1 Update state of logits processor
         for proc in self.sampling_metadata.logits_processors:
-            proc.update_state(
-                self.share_inputs["stop_flags"].clone(),
-                self.share_inputs["logits_processors_args"].copy(),
-            )
+            proc.update_state(self.share_inputs)
 
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,

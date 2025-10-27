@@ -18,10 +18,19 @@ from abc import ABC, abstractmethod
 
 from paddle import Tensor
 
+from fastdeploy.config import FDConfig
+
 
 class LogitsProcessor(ABC):
     @abstractmethod
-    def __init__(self) -> None:
+    def __init__(self, fd_config: FDConfig) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def update_state(self, share_inputs: dict) -> None:
+        """Called when there are new output tokens, prior
+        to each forward pass.
+        """
         raise NotImplementedError
 
     @abstractmethod
@@ -30,22 +39,5 @@ class LogitsProcessor(ABC):
 
         The updated tensor must be returned but may be
         modified in-place.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def is_argmax_invariant(self) -> bool:
-        """True if logits processor has no impact on the
-        argmax computation in greedy sampling.
-        NOTE: may or may not have the same value for all
-        instances of a given LogitsProcessor subclass,
-        depending on subclass implementation.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def update_state(self, stop_flags, logits_processors_args) -> None:
-        """Called when there are new output tokens, prior
-        to each forward pass.
         """
         raise NotImplementedError

@@ -16,6 +16,7 @@
 
 import paddle
 
+from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.logits_processor.base import LogitsProcessor
 
 
@@ -24,40 +25,28 @@ class LogitBiasLogitsProcessor(LogitsProcessor):
     Maintains per-request logit biases and applies them to logits.
     """
 
-    def __init__(self):
+    def __init__(self, fd_config: FDConfig):
         self.biases: dict[str, dict[int, float]] = {}  # req_id -> {tok_id -> bias}
         self.device = paddle.device.get_device()
+        self.dtype = fd_config.model_config.dtype
         self.bias_indices = (
             paddle.zeros([], dtype="int32").to(self.device),
             paddle.zeros([], dtype="int32").to(self.device),
         )
-        self.bias_tensor: paddle.Tensor = paddle.zeros([]).to(self.device)
+        self.bias_tensor: paddle.Tensor = paddle.zeros([]).to(self.device, self.dtype)
         self.skipped = False
 
-    def is_argmax_invariant(self) -> bool:
-        """Logit bias can rebalance token probabilities and change the
-        outcome of argmax in greedy sampling."""
-        return False
+    def update_state(self, share_inputs: dict):
+        """Build per-step logit-bias state from request slots and move it to device."""
 
-    def update_state(self, stop_flags: list[bool], logits_processors_args: list[dict]):
-        """
-        Build per-step logit-bias state from request slots and move it to device.
+        # Retrive inference states from share_inputs
+        stop_flags = share_inputs["stop_flags"]
+        logits_processors_args = share_inputs["logits_processors_args"]
 
-        Args:
-        stop_flags (list[bool] | None): Per-slot stop indicators for the current
-            micro-batch. `False` means the slot is active; `True` means the slot
-            is finished and should be ignored. If `None`, the method assumes all
-            slots are active.
-        logits_processors_args (list[dict]): Per-slot runtime arguments. Each
-            item may contain `"logit_bias": dict[int, float]` specifying token
-            biases for that slot. Missing or empty maps are treated as no-op.
-        """
-
+        # Get bias states for each request
         batch_ids: list[int] = []
         token_ids: list[int] = []
         biases: list[float] = []
-
-        # Get bias states for each request
         batch_id = 0
         for slot_id, flag in enumerate(stop_flags):
             if not flag:
@@ -72,11 +61,9 @@ class LogitBiasLogitsProcessor(LogitsProcessor):
             paddle.tensor(batch_ids, dtype="int32").to(self.device),
             paddle.tensor(token_ids, dtype="int32").to(self.device),
         )
-        self.bias_tensor = paddle.tensor(biases, dtype="float32").to(self.device)
+        self.bias_tensor = paddle.tensor(biases).to(self.device, self.dtype)
 
     def apply(self, logits: paddle.Tensor) -> paddle.Tensor:
         """Apply logit bias to logits: [batch_size, vocab_size]"""
-        logits = logits.clone()
-        # NOTE: logits must be cloned before modifying them, otherwise will affect accuracy
         logits[self.bias_indices] += self.bias_tensor
         return logits
