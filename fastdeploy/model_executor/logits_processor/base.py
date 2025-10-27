@@ -28,8 +28,12 @@ class LogitsProcessor(ABC):
 
     @abstractmethod
     def update_state(self, share_inputs: dict) -> None:
-        """Called when there are new output tokens, prior
-        to each forward pass.
+        """Called when there are new output tokens, prior to each forward pass.
+
+        Each field in the `share_inputs` dict typically stores information for all request
+        slots. It has a `stop_flags` array that indicates whether a slot currently has a
+        running request (`False` means the slot is active). Therefore, it is recommended to
+        filter entries by `stop_flags` to keep only data for the current batch.
         """
         raise NotImplementedError
 
@@ -37,7 +41,6 @@ class LogitsProcessor(ABC):
     def apply(self, logits: Tensor) -> Tensor:
         """Apply LogitsProcessor to batch logits tensor.
 
-        The updated tensor must be returned but may be
-        modified in-place.
+        The updated tensor must be returned but may be modified in-place.
         """
         raise NotImplementedError
