@@ -55,6 +55,8 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```tool_call_parser``` | `str` | Specify the function call parser to be used for extracting function call content from the model's output. |
 | ```tool_parser_plugin``` | `str` | Specify the file path of the tool parser to be registered, so as to register parsers that are not in the code repository. The code format within these parsers must adhere to the format used in the code repository. |
 | ```load_choices```       | `str`      | By default, the "default" loader is used for weight loading. To load Torch weights or enable weight acceleration, "default_v1" must be used.|
+| ```max_encoder_cache```   | `int` | Maximum number of tokens in the encoder cache (use 0 to disable). |
+| ```max_processor_cache```  | `int` | Maximum number of bytes(in GiB) in the processor cache (use 0 to disable). |
 
 ## 1. Relationship between KVCache allocation, ```num_gpu_blocks_override``` and ```block_size```?
 

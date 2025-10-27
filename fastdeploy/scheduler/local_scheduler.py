@@ -18,10 +18,9 @@ import threading
 import time
 from typing import Dict, List, Optional, Tuple
 
-from fastdeploy import envs
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.scheduler.data import ScheduledRequest, ScheduledResponse
-from fastdeploy.utils import scheduler_logger
+from fastdeploy.utils import envs, scheduler_logger
 
 
 class LocalScheduler:
@@ -247,35 +246,40 @@ class LocalScheduler:
                 self.wait_request_timeout,
             )
 
-            required_total_blocks = 0
-            current_prefill_tokens = 0
             requests: List[Request] = []
-            long_partial_requests, short_partial_requests = 0, 0
-            for request_id in batch_ids:
-                request = self.requests[request_id]
-                required_input_blocks = self.calc_required_blocks(request.prompt_tokens_ids_len, block_size)
-                current_prefill_tokens += request.prompt_tokens_ids_len
-                required_total_blocks += required_input_blocks + reserved_output_blocks
-                if required_total_blocks > available_blocks:
-                    break
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                required_total_blocks = 0
+                current_prefill_tokens = 0
+                long_partial_requests, short_partial_requests = 0, 0
+                for request_id in batch_ids:
+                    request = self.requests[request_id]
+                    required_input_blocks = self.calc_required_blocks(request.prompt_tokens_ids_len, block_size)
+                    current_prefill_tokens += request.prompt_tokens_ids_len
+                    required_total_blocks += required_input_blocks + reserved_output_blocks
+                    if required_total_blocks > available_blocks:
+                        break
 
-                if not envs.FD_ENABLE_MAX_PREFILL:
-                    if self.enable_chunked_prefill:
-                        if request.prompt_tokens_ids_len > self.long_prefill_token_threshold:
-                            # 长请求
-                            long_partial_requests += 1
-                            if long_partial_requests > self.max_long_partial_prefills:
+                    if not envs.FD_ENABLE_MAX_PREFILL:
+                        if self.enable_chunked_prefill:
+                            if request.prompt_tokens_ids_len > self.long_prefill_token_threshold:
+                                # 长请求
+                                long_partial_requests += 1
+                                if long_partial_requests > self.max_long_partial_prefills:
+                                    break
+                            else:
+                                short_partial_requests += 1
+
+                            if short_partial_requests + long_partial_requests > self.max_num_partial_prefills:
                                 break
                         else:
-                            short_partial_requests += 1
+                            if current_prefill_tokens > max_num_batched_tokens:
+                                break
+                    requests.append(request.raw)
+            else:
+                for request_id in batch_ids:
+                    request = self.requests[request_id]
+                    requests.append(request.raw)
 
-                        if short_partial_requests + long_partial_requests > self.max_num_partial_prefills:
-                            break
-                    else:
-                        if current_prefill_tokens > max_num_batched_tokens:
-                            break
-
-                requests.append(request.raw)
             self.ids_read_cursor += len(requests)
 
         if len(batch_ids) > 0 and len(requests) == 0:

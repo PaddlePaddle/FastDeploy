@@ -13,7 +13,7 @@ By default, logs are stored in the `log` directory under the execution path. To 
 * `fastdeploy.log` : Records configuration information during instance startup, as well as request and response details during runtime.
 * `workerlog.*` : Tracks model loading progress and inference operator errors. Each GPU card has a corresponding file.
 * `worker_process.log` : Logs engine inference data for each iteration.
-* `prefix_cache_manager.log` : Records KV Cache logical index allocation for each request and cache hit status.
+* `cache_manager.log` : Records KV Cache logical index allocation for each request and cache hit status.
 * `launch_worker.log` : Logs model startup information and error messages.
 * `gpu_worker.log` : Records KV Cache block count information during profiling.
 * `gpu_model_runner.log` : Contains model details and loading time.

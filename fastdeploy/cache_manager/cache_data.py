@@ -18,7 +18,7 @@ from enum import Enum
 
 from fastdeploy.utils import get_logger
 
-logger = get_logger("prefix_cache_manager", "prefix_cache_manager.log")
+logger = get_logger("prefix_cache_manager", "cache_manager.log")
 
 
 DISABLE_PREFIX_CACHE_MM_MODEL: set[str] = {

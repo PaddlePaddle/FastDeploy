@@ -123,6 +123,14 @@ class EngineArgs:
     """
     Limitation of numbers of multi-modal data.
     """
+    max_encoder_cache: int = -1
+    """
+    Maximum number of tokens in the encoder cache.
+    """
+    max_processor_cache: float = -1
+    """
+    Maximum number of bytes(in GiB) in the processor cache.
+    """
     reasoning_parser: str = None
     """
     specifies the reasoning parser to use for extracting reasoning content from the model output
@@ -525,6 +533,18 @@ class EngineArgs:
             default=EngineArgs.mm_processor_kwargs,
             type=json.loads,
             help="Additional keyword arguments for the multi-modal processor.",
+        )
+        model_group.add_argument(
+            "--max-encoder-cache",
+            default=EngineArgs.max_encoder_cache,
+            type=int,
+            help="Maximum encoder cache tokens(use 0 to disable).",
+        )
+        model_group.add_argument(
+            "--max-processor-cache",
+            default=EngineArgs.max_processor_cache,
+            type=float,
+            help="Maximum processor cache bytes(use 0 to disable).",
         )
         model_group.add_argument(
             "--enable-mm",

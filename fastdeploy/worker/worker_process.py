@@ -654,6 +654,12 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--max_encoder_cache",
+        type=int,
+        help="Maximum encoder cache tokens(use 0 to disable).",
+    )
+
+    parser.add_argument(
         "--cache-transfer-protocol",
         type=str,
         default="ipc",

@@ -37,6 +37,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         mm_processor_kwargs=None,
         reasoning_parser_obj=None,
         tool_parser_obj=None,
+        enable_processor_cache=False,
     ):
         data_processor_logger.info(f"model_name_or_path: {model_name_or_path}")
         tokenizer_path = model_name_or_path
@@ -46,6 +47,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         self.ernie4_5_processor = DataProcessor(
             tokenizer_name=tokenizer_path,
             image_preprocessor_name=preprocessor_path,
+            enable_processor_cache=enable_processor_cache,
             **processor_kwargs,
         )
         self.ernie4_5_processor.eval()

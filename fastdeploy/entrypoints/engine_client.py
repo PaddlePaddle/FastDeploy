@@ -68,16 +68,19 @@ class EngineClient:
         tool_parser=None,
         enable_prefix_caching=None,
         splitwise_role=None,
+        max_processor_cache=0,
     ):
         model_config = ModelConfig({"model": model_name_or_path})
+        self.enable_mm = model_config.enable_mm
+        enable_processor_cache = self.enable_mm and max_processor_cache > 0
         input_processor = InputPreprocessor(
             model_config,
             reasoning_parser,
             limit_mm_per_prompt,
             mm_processor_kwargs,
             tool_parser,
+            enable_processor_cache,
         )
-        self.enable_mm = model_config.enable_mm
         self.enable_logprob = enable_logprob
         self.reasoning_parser = reasoning_parser
         self.data_processor = input_processor.create_processor()
