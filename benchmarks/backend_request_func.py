@@ -134,8 +134,8 @@ async def async_request_eb_openai_chat_completions(
 
                             if request_id == "None" and "id" in data:
                                 request_id = data["id"]
-
-                            if (choices := data.get("choices")) and choices[0]["delta"].get("content"):
+                            
+                            if choices := data.get("choices"):
                                 content = choices[0]["delta"].get("content")
                                 reason_content = choices[0]["delta"].get("reasoning_content")
                                 # First token
