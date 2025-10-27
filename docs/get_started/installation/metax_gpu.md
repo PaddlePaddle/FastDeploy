@@ -1,3 +1,5 @@
+[简体中文](../../zh/get_started/installation/metax_gpu.md)
+
 # Metax GPU Installation for running ERNIE 4.5 Series Models
 
 The following installation methods are available when your environment meets these requirements:

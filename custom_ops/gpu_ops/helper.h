@@ -27,6 +27,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <nvml.h>
+#include <cassert>
+#include <cstdlib>
 #include <cstdlib>
 #include <cstring>
 
@@ -592,10 +595,13 @@ inline int get_cuda_max_shared_memory_per_block_opt_in(int const device) {
 #endif
 
 inline int GetSMVersion() {
+#ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
+  return 80;
+#else
   static int sm_version = phi::backends::gpu::GetGPUComputeCapability(
       phi::backends::gpu::GetCurrentDeviceId());
   return sm_version;
-
+#endif
 }
 
 inline bool GetMlaUseTensorcore() {
@@ -618,6 +624,32 @@ inline bool checkAttentionBackend() {
   return false;
 }
 
+#ifndef GPU_MEMORY_CHECKER_H
+#define GPU_MEMORY_CHECKER_H
+class GPUMemoryChecker {
+public:
+    static GPUMemoryChecker* getInstance() {
+        static GPUMemoryChecker instance;
+        return &instance;
+    }
+
+    void addCheckPoint(const char* call_file, int call_line);
+    unsigned int getGPUCount() const { return deviceCount_; }
+    void getCUDAVisibleDevice();
+
+    GPUMemoryChecker(const GPUMemoryChecker&) = delete;
+    void operator=(const GPUMemoryChecker&) = delete;
+
+private:
+    GPUMemoryChecker();
+    ~GPUMemoryChecker();
+
+    unsigned int deviceCount_;
+    std::vector<unsigned int> visible_device_;
+    std::vector<unsigned int> visible_device_mem_usage_;
+};
+
+#endif // GPU_MEMORY_CHECKER_H
 __device__ __forceinline__ float warpReduceMax(float value) {
   value = fmaxf(value, __shfl_xor_sync(0xffffffff, value, 16));
   value = fmaxf(value, __shfl_xor_sync(0xffffffff, value, 8));

@@ -123,6 +123,7 @@ class TestOpenAIServingCompletion(unittest.TestCase):
                         "a": 0.1,
                         "b": 0.2,
                     },
+                    "reasoning_token_num": 10,
                 },
                 "output_token_ids": 3,
             },
@@ -134,6 +135,7 @@ class TestOpenAIServingCompletion(unittest.TestCase):
                         "a": 0.3,
                         "b": 0.4,
                     },
+                    "reasoning_token_num": 20,
                 },
                 "output_token_ids": 3,
             },
@@ -142,6 +144,7 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         request: CompletionRequest = Mock()
         request.prompt = "Hello, world!"
         request.echo = True
+        request.n = 2
         request_id = "test_request_id"
         created_time = 1655136000
         model_name = "test_model"
@@ -155,7 +158,7 @@ class TestOpenAIServingCompletion(unittest.TestCase):
             model_name=model_name,
             prompt_batched_token_ids=prompt_batched_token_ids,
             completion_batched_token_ids=completion_batched_token_ids,
-            text_after_process_list=["1", "1"],
+            prompt_tokens_list=["1", "1"],
         )
 
         assert completion_response.id == request_id
@@ -166,6 +169,8 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         # 验证 choices 的 text 属性
         assert completion_response.choices[0].text == "Hello, world! world!"
         assert completion_response.choices[1].text == "Hello, world! world!"
+
+        assert completion_response.usage.completion_tokens_details.reasoning_tokens == 30
 
 
 if __name__ == "__main__":

@@ -167,7 +167,7 @@ def machete_quantize_and_pack(
         atype,
         quant_type,
         scale_type,
-    )[0]
+    )
     return w_q_prepack, w_s
 
 
@@ -194,5 +194,5 @@ def machete_wint_mm(
         out_dtype,  # out_dtype
         group_size,  # group_size
         scheduler,  # scheduler
-    )[0]
+    )
     return out
