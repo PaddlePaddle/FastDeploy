@@ -824,7 +824,7 @@ class GraphOptimizationConfig:
         """ Whether to use shared memory pool for multi capture_size """
         self.use_unique_memory_pool: bool = True
         """ Whether to use cudagraph for draft model."""
-        self.draft_model_use_cudagraph: bool = True
+        self.draft_model_use_cudagraph: bool = False
 
         # CINN Config ...
         if args is not None:
