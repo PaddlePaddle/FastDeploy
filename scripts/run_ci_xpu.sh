@@ -46,7 +46,6 @@ rm -f core*
 #清空消息队列
 ipcrm --all=msg
 echo "============================开始V1模式测试!============================"
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${model_path} \
@@ -94,7 +93,6 @@ python -m pytest tests/ci_use/XPU_45T/run_45T.py
 kv_block_test_exit_code=$?
 echo kv_block_test_exit_code is ${kv_block_test_exit_code}
 
-unset ENABLE_V1_KVCACHE_SCHEDULER
 ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
@@ -115,7 +113,6 @@ rm -f core*
 #清空消息队列
 ipcrm --all=msg
 echo "============================开始W4A8测试!============================"
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 export XPU_VISIBLE_DEVICES="0,1,2,3"
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle \
@@ -163,7 +160,6 @@ python -m pytest tests/ci_use/XPU_45T/run_w4a8.py
 w4a8_test_exit_code=$?
 echo w4a8_test_exit_code is ${w4a8_test_exit_code}
 
-unset ENABLE_V1_KVCACHE_SCHEDULER
 ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
