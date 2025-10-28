@@ -117,8 +117,8 @@ def setup_and_run_server():
         "32768",
         "--max-num-seqs",
         "128",
-        "--quantization",
-        "wint4",
+        # "--quantization",
+        # "wint4",
         "--graph-optimization-config",
         '{"cudagraph_capture_sizes": [1], "use_cudagraph":true}',
     ]

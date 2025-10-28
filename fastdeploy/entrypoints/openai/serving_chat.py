@@ -545,6 +545,7 @@ class OpenAIServingChat:
                             prompt_token_ids=prompt_token_ids,
                             prompt_tokens=prompt_tokens,
                             completion_token_ids=completion_token_ids[idx],
+                            previous_num_tokens=previous_num_tokens[idx],
                             num_cached_tokens=num_cached_tokens,
                             num_image_tokens=num_image_tokens,
                             num_video_tokens=num_video_tokens,
@@ -590,6 +591,7 @@ class OpenAIServingChat:
         prompt_token_ids: list,
         prompt_tokens: str,
         completion_token_ids: list,
+        previous_num_tokens: int,
         num_cached_tokens: list,
         num_image_tokens: list,
         num_video_tokens: list,
@@ -598,7 +600,6 @@ class OpenAIServingChat:
     ) -> ChatCompletionResponseChoice:
         idx = int(data["request_id"].split("_")[-1])
         output = data["outputs"]
-        previous_num_tokens = len(data["outputs"]["token_ids"])
 
         if output is not None and output.get("metrics") and output["metrics"].get("request_start_time"):
             work_process_metrics.e2e_request_latency.observe(
