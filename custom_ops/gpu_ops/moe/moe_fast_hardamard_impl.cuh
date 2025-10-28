@@ -17,7 +17,7 @@
 #include <string>
 #include <vector>
 #include "helper.h"
-#include "moe_fast_hardamard_impl_kernel.h"
+#include "moe_fast_hardamard_impl_common.h"
 
 template <typename T, int VecSize>
 __device__ __forceinline__ void hadamard_mult_thread_28_transpose(
