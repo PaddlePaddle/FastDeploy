@@ -1391,19 +1391,20 @@ class FDConfig:
         self.cache_config: CacheConfig = cache_config  # type: ignore
         self.plas_attention_config: Optional[PlasAttentionConfig] = plas_attention_config
         self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
-        # Initialize cuda graph capture list
-        if self.graph_opt_config.cudagraph_capture_sizes is None:
-            self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.scheduler_config.max_num_seqs)
 
-        if self.graph_opt_config.cudagraph_only_prefill:
-            self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=512)
-        elif self.speculative_config is not None and self.speculative_config.method == "mtp":
+        # Initialize cuda graph capture list
+        max_shape = self.scheduler_config.max_num_seqs
+        if self.speculative_config is not None and self.speculative_config.method == "mtp":
             max_shape = self.scheduler_config.max_num_seqs * (self.speculative_config.num_speculative_tokens + 1)
-            if max_shape % 2 == 1:
-                max_shape = max_shape + 1
-            self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=min(512, max_shape))
+            assert max_shape % 2 == 0, "CUDAGraph only supports capturing even token nums in MTP scenarios."
+        if self.graph_opt_config.cudagraph_only_prefill:
+            max_shape = 512
         else:
-            self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=self.scheduler_config.max_num_seqs)
+            max_shape = min(512, max_shape)
+
+        if self.graph_opt_config.cudagraph_capture_sizes is None:
+            self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=max_shape)
+        self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=max_shape)
 
         self.tokenizer = tokenizer
         self.ips = ips
