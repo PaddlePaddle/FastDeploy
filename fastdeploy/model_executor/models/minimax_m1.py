@@ -1,3 +1,4 @@
+"""
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
 
 from __future__ import annotations
 
@@ -58,12 +60,11 @@ from fastdeploy.model_executor.models.model_base import (
     ModelRegistry,
 )
 
-
 import pprint
-import numpy as np
+
 
 def print_tensor_stats(tensor, name):
-    """打印Paddle张量的统计信息 (强制 float32)"""
+    """Print statistics of Paddle tensors"""
 
     if tensor is None:
         logger.info(f"DEBUG_FD: {name} is None")
@@ -567,14 +568,6 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
         
         if hasattr(self.config, "num_local_experts") and not hasattr(self.config, "moe_num_experts"):
             self.config.moe_num_experts = self.config.num_local_experts
-        if (
-            hasattr(self.config, "rotary_dim")
-            and hasattr(self.config, "head_dim")
-            and self.config.rotary_dim < self.config.head_dim
-        ):
-            
-            self.config.partial_rotary_factor = self.config.rotary_dim / self.config.head_dim
-            print(f"self.config.partial_rotary_factor {self.config.partial_rotary_factor}")
         if not hasattr(self.config, "first_k_dense_replace"):
             self.config.first_k_dense_replace = 0
 
