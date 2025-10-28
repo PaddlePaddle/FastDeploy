@@ -45,7 +45,6 @@ class Ernie45VLThinkingReasoningParser(ReasoningParser):
 
         self.think_end_token_id = self.vocab.get(self.think_end_token)
         self.tool_begin_token_id = self.vocab.get(self.tool_begin_token)
-        self.with_tool = None
         if self.tool_begin_token_id is None:
             self.tool_begin_token_id = -1
 
@@ -75,42 +74,24 @@ class Ernie45VLThinkingReasoningParser(ReasoningParser):
         # Skip single special tokens
         if len(delta_token_ids) == 1 and delta_token_ids[0] == self.think_end_token_id:
             return None
-        if self.with_tool is not None:
-            if not self.with_tool:
-                return DeltaMessage(content=delta_text)
-            return None
+        if not self._is_with_tool(current_text=current_text, current_token_ids=current_token_ids):
+            return DeltaMessage(content=delta_text)
         if self.think_end_token_id in delta_token_ids:
             end_index = delta_text.find(self.think_end_token)
             reasoning_content = delta_text[:end_index]
             index = end_index + len(self.think_end_token)
             content = delta_text[index:]
-            if self.tool_begin_token_id in delta_token_ids or self.tool_begin_token in content:
+            if self.tool_begin_token_id in delta_token_ids:
                 prefix_content, _, _ = content.partition(self.tool_begin_token)
                 prefix = prefix_content.lstrip("\n")
                 if len(prefix) > 0:
-                    self.with_tool = False
                     return DeltaMessage(reasoning_content=reasoning_content, content=content)
-                self.with_tool = True
                 return DeltaMessage(reasoning_content=reasoning_content) if reasoning_content else None
             strip_content = content.lstrip("\n")
             if len(strip_content) > 0:
-                self.with_tool = False
                 return DeltaMessage(reasoning_content=reasoning_content, content=content)
-            # no assigning to with_tool for <tool_call> may come in next package
             return DeltaMessage(reasoning_content=reasoning_content) if reasoning_content else None
         elif self.think_end_token_id in previous_token_ids:
-            if self.tool_begin_token_id in delta_token_ids or self.tool_begin_token in delta_text:
-                content, _, _ = delta_text.partition(self.tool_begin_token)
-                if len(content.lstrip("\n")) > 0:
-                    self.with_tool = False
-                    return DeltaMessage(content=delta_text)
-                self.with_tool = True
-                return None
-            content = delta_text.lstrip("\n")
-            if len(content) > 0:
-                self.with_tool = False
-                return DeltaMessage(content=delta_text)
-            # no assigning to with_tool for <tool_call> may come in next package
             return None
         return DeltaMessage(reasoning_content=delta_text)
 
@@ -130,14 +111,7 @@ class Ernie45VLThinkingReasoningParser(ReasoningParser):
 
         # Check if the model output contains the </think> tokens.
         if self.think_end_token not in model_output:
-            # disable thinking
-            if self.tool_begin_token in model_output:
-                content, _, _ = model_output.partition(self.tool_begin_token)
-                content_prefix = content.lstrip("\n")
-                if len(content_prefix) > 0:
-                    return "", model_output
-                return "", ""
-            return "", model_output
+            return model_output, ""
         else:
             reasoning_content, _, content = model_output.partition(self.think_end_token)
             if self.tool_begin_token in content:
@@ -147,3 +121,20 @@ class Ernie45VLThinkingReasoningParser(ReasoningParser):
                     return reasoning_content, content
                 return reasoning_content, ""
             return reasoning_content, content
+
+    def _is_with_tool(self, current_text: str, current_token_ids: Sequence[int]) -> bool:
+        think_end_index = current_text.find(self.think_end_token)
+        if think_end_index == -1:
+            return True
+        think_end = think_end_index + len(self.think_end_token)
+        middle_str = current_text[think_end:]
+        if self.tool_begin_token_id in current_token_ids:
+            prefix, _, _ = middle_str.partition(self.tool_begin_token)
+            striped_prefix = prefix.strip("\n")
+            if len(striped_prefix) > 0:
+                return False
+            return True
+        striped_str = middle_str.strip("\n")
+        if len(striped_str) > 0:
+            return False
+        return True

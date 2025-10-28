@@ -240,13 +240,13 @@ class Ernie45VLThinkingToolParser(ToolParser):
     ) -> Union[DeltaMessage, None]:
 
         if self.tool_call_start_token_id not in current_token_ids:
-            return None
+            return DeltaMessage(content=delta_text)
         # Skip empty chunks
         if len(delta_text.strip()) == 0:
             return None
 
         if self.valid is not None and not self.valid:
-            return None
+            return DeltaMessage(content=delta_text)
 
         try:
             delta = None
@@ -261,7 +261,7 @@ class Ernie45VLThinkingToolParser(ToolParser):
                     prefix = prefix.strip("\n")
                     if len(prefix) > 0 and not prefix.endswith("</think>"):
                         self.valid = False
-                        return None
+                        return DeltaMessage(content=delta_text)
                     self.valid = True
                 self.current_tool_id = (
                     max(self.current_tool_id, 0) if self.current_tool_id == -1 else self.current_tool_id + 1
