@@ -17,22 +17,22 @@
 |ERNIE-4.5-0.3B|32K|WINT8|1|export XPU_VISIBLE_DEVICES="x" # 指定任意一张卡<br>export ENABLE_V1_KVCACHE_SCHEDULER=0 # V1不支持<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 1 \ <br>    --max-model-len 32768 \ <br>    --max-num-seqs 128 \ <br>    --quantization "wint8" \ <br>    --gpu-memory-utilization 0.9 \ <br>    --load-choices "default"|>=2.0.3|
 |ERNIE-4.5-0.3B|128K|BF16|1|export XPU_VISIBLE_DEVICES="0" # 指定任意一张卡<br>export ENABLE_V1_KVCACHE_SCHEDULER=0 # V1不支持<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 1 \ <br>    --max-model-len 131072 \ <br>    --max-num-seqs 128 \ <br>    --gpu-memory-utilization 0.9 \ <br>    --load-choices "default"|>=2.0.3|
 |ERNIE-4.5-0.3B|128K|WINT8|1|export XPU_VISIBLE_DEVICES="0" # 指定任意一张卡<br>export ENABLE_V1_KVCACHE_SCHEDULER=0 # V1不支持<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 1 \ <br>    --max-model-len 131072 \ <br>    --max-num-seqs 128 \ <br>    --quantization "wint8" \ <br>    --gpu-memory-utilization 0.9 \ <br>    --load-choices "default"|>=2.0.3|
+|ERNIE-4.5-VL-28B-A3B|32K|WINT8|1|export XPU_VISIBLE_DEVICES="0"# 指定任意一张卡<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Paddle \ <br>    --port 8188  \ <br> --tensor-parallel-size 1 \ <br> --quantization "wint8" \ <br>  --max-model-len 32768 \ <br> --max-num-seqs 10 \ <br>     --enable-mm \ <br>   --mm-processor-kwargs '{"video_max_frames": 30}' \ <br>     --limit-mm-per-prompt '{"image": 10, "video": 3}' \ <br>     --reasoning-parser ernie-45-vl |>=2.3.0|
+|ERNIE-4.5-VL-424B-A47B|32K|WINT8|8|export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" <br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-VL-424B-A47B-Paddle \ <br>    --port 8188 \ <br> --tensor-parallel-size 8 \ <br> --quantization "wint8" \ <br>  --max-model-len 32768 \ <br> --max-num-seqs 10 \ <br>     --enable-mm \ <br>   --mm-processor-kwargs '{"video_max_frames": 30}' \ <br>     --limit-mm-per-prompt '{"image": 10, "video": 3}' \ <br>     --reasoning-parser ernie-45-vl |>=2.3.0|
 
 ## 快速开始
 
-### OpenAI 兼容服务器
-
-您还可以通过如下命令，基于 FastDeploy 实现 OpenAI API 协议兼容的服务器部署。
+### 基于ERNIE-4.5-300B-A47B-Paddle模型部署在线服务
 
 #### 启动服务
 
-**基于 WINT4 精度和 32K 上下文部署 ERNIE-4.5-300B-A47B-Paddle 模型到 4 卡 P800 服务器**
+基于 WINT4 精度和 32K 上下文部署 ERNIE-4.5-300B-A47B-Paddle 模型到 4 卡 P800 服务器
 
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3" # 设置使用的 XPU 卡
 export ENABLE_V1_KVCACHE_SCHEDULER=0 # V1不支持
 python -m fastdeploy.entrypoints.openai.api_server \
-    --model baidu/ERNIE-4.5-300B-A47B-Paddle \
+    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \
     --port 8188 \
     --tensor-parallel-size 4 \
     --max-model-len 32768 \
@@ -94,3 +94,77 @@ print('\n')
 ```
 
 OpenAI 协议的更多说明可参考文档 [OpenAI Chat Completion API](https://platform.openai.com/docs/api-reference/chat/create)，以及与 OpenAI 协议的区别可以参考 [兼容 OpenAI 协议的服务化部署](../online_serving/README.md)。
+
+### 基于ERNIE-4.5-VL-28B-A3B-Paddle模型部署在线服务
+
+#### 启动服务
+
+基于 WINT8 精度和 32K 上下文部署 ERNIE-4.5-VL-28B-A3B-Paddle 模型到 单卡 P800 服务器
+
+```bash
+export XPU_VISIBLE_DEVICES="0" # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+--model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Paddle \
+--port 8188 \
+--tensor-parallel-size 1 \
+--quantization "wint8" \
+--max-model-len 32768 \
+--max-num-seqs 10 \
+--enable-mm \
+--mm-processor-kwargs '{"video_max_frames": 30}' \
+--limit-mm-per-prompt '{"image": 10, "video": 3}' \
+--reasoning-parser ernie-45-vl
+```
+
+#### Send requests
+
+```bash
+curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": [
+              {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg", "detail": "high"}},
+              {"type": "text", "text": "请描述图片内容"}
+            ]}
+    ],
+    "metadata": {"enable_thinking": false}
+}'
+```
+
+```python
+import openai
+
+ip = "0.0.0.0"
+service_http_port = "8188"
+client = openai.Client(base_url=f"http://{ip}:{service_http_port}/v1", api_key="EMPTY_API_KEY")
+
+response = client.chat.completions.create(
+    model="default",
+    messages=[
+        {"role": "user", "content": [
+              {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg", "detail": "high"}},
+              {"type": "text", "text": "请描述图片内容"}
+            ]
+        },
+    ],
+    temperature=0.0001,
+    max_tokens=10000,
+    stream=True,
+    top_p=0,
+    metadata={"enable_thinking": False},
+)
+
+def get_str(content_raw):
+    content_str = str(content_raw) if content_raw is not None else ''
+    return content_str
+
+for chunk in response:
+    if chunk.choices[0].delta is not None and chunk.choices[0].delta.role != 'assistant':
+        reasoning_content = get_str(chunk.choices[0].delta.reasoning_content)
+        content = get_str(chunk.choices[0].delta.content)
+        is_reason = "[answer]" if reasoning_content == '' else "[think]"
+        is_reason = ""
+        print(reasoning_content+content+is_reason, end='', flush=True)
+print('\n')
+```

@@ -21,7 +21,7 @@ class CudaError : public std::exception {
  public:
   explicit CudaError(cudaError_t error) : error_(error) {}
 
-  const char *what() const noexcept override {
+  const char* what() const noexcept override {
     return cudaGetErrorString(error_);
   }
 
@@ -39,56 +39,56 @@ void check_cuda_error(cudaError_t error) {
 // 封装cudaHostAlloc的Python函数
 uintptr_t cuda_host_alloc(size_t size,
                           unsigned int flags = cudaHostAllocDefault) {
-  void *ptr = nullptr;
+  void* ptr = nullptr;
   check_cuda_error(cudaHostAlloc(&ptr, size, flags));
   return reinterpret_cast<uintptr_t>(ptr);
 }
 
 // 封装cudaFreeHost的Python函数
 void cuda_host_free(uintptr_t ptr) {
-  check_cuda_error(cudaFreeHost(reinterpret_cast<void *>(ptr)));
+  check_cuda_error(cudaFreeHost(reinterpret_cast<void*>(ptr)));
 }
 
 std::vector<paddle::Tensor> AppendAttention(
-    const paddle::Tensor &qkv,
-    const paddle::Tensor &key_cache,
-    const paddle::Tensor &value_cache,
-    const paddle::Tensor &seq_lens_encoder,
-    const paddle::Tensor &seq_lens_decoder,
-    const paddle::Tensor &seq_lens_this_time,
-    const paddle::Tensor &batch_id_per_token,
-    const paddle::Tensor &cu_seqlens_q,
-    const paddle::Tensor &block_tables,
-    const paddle::Tensor &encoder_batch_ids,
-    const paddle::Tensor &encoder_tile_ids_per_batch,
-    const paddle::Tensor &encoder_num_blocks,
-    const paddle::Tensor &kv_batch_ids,
-    const paddle::Tensor &kv_tile_ids_per_batch,
-    const paddle::Tensor &kv_num_blocks,
-    const paddle::Tensor &decoder_batch_ids,
-    const paddle::Tensor &decoder_tile_ids_per_batch,
-    const paddle::Tensor &decoder_num_blocks_cpu,
-    const paddle::Tensor &set_max_lengths,
-    const paddle::optional<paddle::Tensor> &rotary_embs,
-    const paddle::optional<paddle::Tensor> &attn_mask,
-    const paddle::optional<paddle::Tensor> &qkv_bias,
-    const paddle::optional<paddle::Tensor> &qkv_out_scales,
-    const paddle::optional<paddle::Tensor> &cache_k_quant_scales,
-    const paddle::optional<paddle::Tensor> &cache_v_quant_scales,
-    const paddle::optional<paddle::Tensor> &cache_k_dequant_scales,
-    const paddle::optional<paddle::Tensor> &cache_v_dequant_scales,
-    const paddle::optional<paddle::Tensor> &cache_k_zp,
-    const paddle::optional<paddle::Tensor> &cache_v_zp,
-    const paddle::optional<paddle::Tensor> &out_linear_shifts,
-    const paddle::optional<paddle::Tensor> &out_linear_smooths,
-    const paddle::optional<paddle::Tensor> &mask_offset,
-    const paddle::optional<paddle::Tensor> &kv_signal_data,
-    const paddle::optional<paddle::Tensor> &q_norm_weight,
-    const paddle::optional<paddle::Tensor> &k_norm_weight,
-    const paddle::optional<paddle::Tensor> &sinks,
+    const paddle::Tensor& qkv,
+    const paddle::Tensor& key_cache,
+    const paddle::Tensor& value_cache,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& block_tables,
+    const paddle::Tensor& encoder_batch_ids,
+    const paddle::Tensor& encoder_tile_ids_per_batch,
+    const paddle::Tensor& encoder_num_blocks,
+    const paddle::Tensor& kv_batch_ids,
+    const paddle::Tensor& kv_tile_ids_per_batch,
+    const paddle::Tensor& kv_num_blocks,
+    const paddle::Tensor& decoder_batch_ids,
+    const paddle::Tensor& decoder_tile_ids_per_batch,
+    const paddle::Tensor& decoder_num_blocks_cpu,
+    const paddle::Tensor& set_max_lengths,
+    const paddle::optional<paddle::Tensor>& rotary_embs,
+    const paddle::optional<paddle::Tensor>& attn_mask,
+    const paddle::optional<paddle::Tensor>& qkv_bias,
+    const paddle::optional<paddle::Tensor>& qkv_out_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_quant_scales,
+    const paddle::optional<paddle::Tensor>& cache_v_quant_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_dequant_scales,
+    const paddle::optional<paddle::Tensor>& cache_v_dequant_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_zp,
+    const paddle::optional<paddle::Tensor>& cache_v_zp,
+    const paddle::optional<paddle::Tensor>& out_linear_shifts,
+    const paddle::optional<paddle::Tensor>& out_linear_smooths,
+    const paddle::optional<paddle::Tensor>& mask_offset,
+    const paddle::optional<paddle::Tensor>& kv_signal_data,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const paddle::optional<paddle::Tensor>& sinks,
     const float rms_norm_eps,
-    const std::string &compute_dtype,
-    const std::string &cache_quant_type_str,
+    const std::string& compute_dtype,
+    const std::string& cache_quant_type_str,
     const bool use_neox_rotary_style,
     const bool rope_3d,
     const int max_input_length,
@@ -105,46 +105,46 @@ std::vector<paddle::Tensor> AppendAttention(
     const int sliding_window);
 
 std::vector<paddle::Tensor> AppendAttentionWithOutput(
-    const paddle::Tensor &qkv,
-    const paddle::Tensor &key_cache,
-    const paddle::Tensor &value_cache,
-    const paddle::Tensor &seq_lens_encoder,
-    const paddle::Tensor &seq_lens_decoder,
-    const paddle::Tensor &seq_lens_this_time,
-    const paddle::Tensor &batch_id_per_token,
-    const paddle::Tensor &cu_seqlens_q,
-    const paddle::Tensor &block_tables,
-    const paddle::Tensor &encoder_batch_ids,
-    const paddle::Tensor &encoder_tile_ids_per_batch,
-    const paddle::Tensor &encoder_num_blocks,
-    const paddle::Tensor &kv_batch_ids,
-    const paddle::Tensor &kv_tile_ids_per_batch,
-    const paddle::Tensor &kv_num_blocks,
-    const paddle::Tensor &decoder_batch_ids,
-    const paddle::Tensor &decoder_tile_ids_per_batch,
-    const paddle::Tensor &decoder_num_blocks_cpu,
-    const paddle::Tensor &set_max_lengths,
-    paddle::Tensor &fmha_out,
-    const paddle::optional<paddle::Tensor> &rotary_embs,
-    const paddle::optional<paddle::Tensor> &attn_mask,
-    const paddle::optional<paddle::Tensor> &qkv_bias,
-    const paddle::optional<paddle::Tensor> &qkv_out_scales,
-    const paddle::optional<paddle::Tensor> &cache_k_quant_scales,
-    const paddle::optional<paddle::Tensor> &cache_v_quant_scales,
-    const paddle::optional<paddle::Tensor> &cache_k_dequant_scales,
-    const paddle::optional<paddle::Tensor> &cache_v_dequant_scales,
-    const paddle::optional<paddle::Tensor> &cache_k_zp,
-    const paddle::optional<paddle::Tensor> &cache_v_zp,
-    const paddle::optional<paddle::Tensor> &out_linear_shifts,
-    const paddle::optional<paddle::Tensor> &out_linear_smooths,
-    const paddle::optional<paddle::Tensor> &mask_offset,
-    const paddle::optional<paddle::Tensor> &kv_signal_data,
-    const paddle::optional<paddle::Tensor> &q_norm_weight,
-    const paddle::optional<paddle::Tensor> &k_norm_weight,
-    const paddle::optional<paddle::Tensor> &sinks,
+    const paddle::Tensor& qkv,
+    const paddle::Tensor& key_cache,
+    const paddle::Tensor& value_cache,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& block_tables,
+    const paddle::Tensor& encoder_batch_ids,
+    const paddle::Tensor& encoder_tile_ids_per_batch,
+    const paddle::Tensor& encoder_num_blocks,
+    const paddle::Tensor& kv_batch_ids,
+    const paddle::Tensor& kv_tile_ids_per_batch,
+    const paddle::Tensor& kv_num_blocks,
+    const paddle::Tensor& decoder_batch_ids,
+    const paddle::Tensor& decoder_tile_ids_per_batch,
+    const paddle::Tensor& decoder_num_blocks_cpu,
+    const paddle::Tensor& set_max_lengths,
+    paddle::Tensor& fmha_out,
+    const paddle::optional<paddle::Tensor>& rotary_embs,
+    const paddle::optional<paddle::Tensor>& attn_mask,
+    const paddle::optional<paddle::Tensor>& qkv_bias,
+    const paddle::optional<paddle::Tensor>& qkv_out_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_quant_scales,
+    const paddle::optional<paddle::Tensor>& cache_v_quant_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_dequant_scales,
+    const paddle::optional<paddle::Tensor>& cache_v_dequant_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_zp,
+    const paddle::optional<paddle::Tensor>& cache_v_zp,
+    const paddle::optional<paddle::Tensor>& out_linear_shifts,
+    const paddle::optional<paddle::Tensor>& out_linear_smooths,
+    const paddle::optional<paddle::Tensor>& mask_offset,
+    const paddle::optional<paddle::Tensor>& kv_signal_data,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const paddle::optional<paddle::Tensor>& sinks,
     const float rms_norm_eps,
-    const std::string &compute_dtype,
-    const std::string &cache_quant_type_str,
+    const std::string& compute_dtype,
+    const std::string& cache_quant_type_str,
     const bool use_neox_rotary_style,
     const bool rope_3d,
     const int max_input_length,
@@ -161,142 +161,142 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const int sliding_window);
 
 std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
-    const paddle::Tensor &qkv,
-    const paddle::Tensor &key_cache,
-    const paddle::Tensor &value_cache,
-    const paddle::Tensor &cu_seqlens_q,
-    const paddle::Tensor &cu_seqlens_k,
-    const paddle::Tensor &rotary_embs,
-    const paddle::Tensor &seq_lens_this_time,
-    const paddle::Tensor &seq_lens_encoder,
-    const paddle::Tensor &seq_lens_decoder,
-    const paddle::Tensor &batch_id_per_token,
-    const paddle::Tensor &block_tables,
-    const paddle::Tensor &kv_batch_ids,
-    const paddle::Tensor &kv_tile_ids,
-    const paddle::Tensor &kv_num_blocks,
-    const paddle::Tensor &cache_batch_ids,
-    const paddle::Tensor &cache_tile_ids,
-    const paddle::Tensor &cache_num_blocks,
-    const paddle::optional<paddle::Tensor> &cache_k_quant_scales,
-    const paddle::optional<paddle::Tensor> &cache_v_quant_scales,
-    const paddle::optional<paddle::Tensor> &cache_k_dequant_scales,
-    const paddle::optional<paddle::Tensor> &cache_v_dequant_scales,
-    const paddle::optional<paddle::Tensor> &cache_k_zp,
-    const paddle::optional<paddle::Tensor> &cache_v_zp,
-    const paddle::optional<paddle::Tensor> &kv_signal_data,
+    const paddle::Tensor& qkv,
+    const paddle::Tensor& key_cache,
+    const paddle::Tensor& value_cache,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& cu_seqlens_k,
+    const paddle::Tensor& rotary_embs,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& block_tables,
+    const paddle::Tensor& kv_batch_ids,
+    const paddle::Tensor& kv_tile_ids,
+    const paddle::Tensor& kv_num_blocks,
+    const paddle::Tensor& cache_batch_ids,
+    const paddle::Tensor& cache_tile_ids,
+    const paddle::Tensor& cache_num_blocks,
+    const paddle::optional<paddle::Tensor>& cache_k_quant_scales,
+    const paddle::optional<paddle::Tensor>& cache_v_quant_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_dequant_scales,
+    const paddle::optional<paddle::Tensor>& cache_v_dequant_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_zp,
+    const paddle::optional<paddle::Tensor>& cache_v_zp,
+    const paddle::optional<paddle::Tensor>& kv_signal_data,
     const int kv_token_num,
     const int max_seq_len,
-    const std::string &cache_quant_type,
+    const std::string& cache_quant_type,
     const bool rope_3d);
 
 std::vector<paddle::Tensor> PreCacheLenConcat(
-    const paddle::Tensor &seq_lens_decoder,
-    const paddle::Tensor &seq_lens_this_time,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& seq_lens_this_time,
     const int max_dec_len,
     const int block_size);
 
 paddle::Tensor FusedExpertMoeFunc(
-    const paddle::Tensor &input,
-    const paddle::Tensor &gate_weight,
-    const paddle::Tensor &up_gate_proj_weight,
-    const paddle::Tensor &down_proj_weight,
-    const paddle::optional<paddle::Tensor> &up_gate_proj_bias,
-    const paddle::optional<paddle::Tensor> &up_gate_proj_scale,
-    const paddle::optional<paddle::Tensor> &down_proj_bias,
-    const paddle::optional<paddle::Tensor> &down_proj_scale,
-    const std::string &quant_method,
+    const paddle::Tensor& input,
+    const paddle::Tensor& gate_weight,
+    const paddle::Tensor& up_gate_proj_weight,
+    const paddle::Tensor& down_proj_weight,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
+    const paddle::optional<paddle::Tensor>& down_proj_bias,
+    const paddle::optional<paddle::Tensor>& down_proj_scale,
+    const std::string& quant_method,
     const int moe_topk,
     const bool norm_topk_prob,
     const bool group_moe);
 
 std::vector<paddle::Tensor> MacheteMMKernel(
-    paddle::Tensor const &A,
-    paddle::Tensor const &B,
-    paddle::optional<paddle::Tensor> const &maybe_group_scales,
-    paddle::optional<paddle::Tensor> const &maybe_group_zeros,
-    paddle::optional<paddle::Tensor> const &maybe_channel_scales,
-    paddle::optional<paddle::Tensor> const &maybe_token_scales,
-    std::string const &b_type_str,
-    std::string const &maybe_out_type_str,
-    int64_t const &maybe_group_size,
-    std::string const &maybe_schedule);
+    paddle::Tensor const& A,
+    paddle::Tensor const& B,
+    paddle::optional<paddle::Tensor> const& maybe_group_scales,
+    paddle::optional<paddle::Tensor> const& maybe_group_zeros,
+    paddle::optional<paddle::Tensor> const& maybe_channel_scales,
+    paddle::optional<paddle::Tensor> const& maybe_token_scales,
+    std::string const& b_type_str,
+    std::string const& maybe_out_type_str,
+    int64_t const& maybe_group_size,
+    std::string const& maybe_schedule);
 
 std::vector<paddle::Tensor> MachetePrepackBKernel(
-    paddle::Tensor const &B,
-    std::string const &a_type_str,
-    std::string const &b_type_str,
-    std::string const &maybe_group_scales_type_str);
+    paddle::Tensor const& B,
+    std::string const& a_type_str,
+    std::string const& b_type_str,
+    std::string const& maybe_group_scales_type_str);
 
 std::vector<std::string> MacheteSupportedSchedules(
     std::string const &a_type_str, std::string const &b_type_str);
 
 std::vector<paddle::Tensor> MoeExpertDispatch(
-    const paddle::Tensor &input,
-    const paddle::Tensor &gating_output,
-    const paddle::optional<paddle::Tensor> &gating_correction_bias,
-    const paddle::optional<paddle::Tensor> &w4a8_in_scale,
+    const paddle::Tensor& input,
+    const paddle::Tensor& gating_output,
+    const paddle::optional<paddle::Tensor>& gating_correction_bias,
+    const paddle::optional<paddle::Tensor>& w4a8_in_scale,
     const int moe_topk,
     const bool group_moe,
-    const std::string &moe_quant_type,
+    const std::string& moe_quant_type,
     const bool topk_only_mode);
 
 std::vector<paddle::Tensor> MoETopKSelectKernel(
-    const paddle::Tensor &gating_logits,
-    const paddle::optional<paddle::Tensor> &bias,
+    const paddle::Tensor& gating_logits,
+    const paddle::optional<paddle::Tensor>& bias,
     const int moe_topk,
     const bool apply_norm_weight,
     const bool enable_softmax_top_k_fused);
 
 std::vector<paddle::Tensor> MoERedundantTopKSelectKernel(
-    const paddle::Tensor &gating_logits,
-    const paddle::Tensor &expert_id_to_ep_rank_array,
-    const paddle::Tensor &expert_in_rank_num_list,
-    paddle::Tensor &tokens_per_expert_stats_list,
-    const paddle::optional<paddle::Tensor> &bias,
+    const paddle::Tensor& gating_logits,
+    const paddle::Tensor& expert_id_to_ep_rank_array,
+    const paddle::Tensor& expert_in_rank_num_list,
+    paddle::Tensor& tokens_per_expert_stats_list,
+    const paddle::optional<paddle::Tensor>& bias,
     const int moe_topk,
     const bool apply_norm_weight,
     const bool enable_softmax_top_k_fused,
     const int redundant_ep_rank_num_plus_one);
 
 std::vector<paddle::Tensor> EPMoeExpertDispatch(
-    const paddle::Tensor &input,
-    const paddle::Tensor &topk_ids,
-    const paddle::Tensor &topk_weights,
-    const paddle::optional<paddle::Tensor> &up_gate_proj_in_scale,
-    const std::vector<int> &token_nums_per_expert,
+    const paddle::Tensor& input,
+    const paddle::Tensor& topk_ids,
+    const paddle::Tensor& topk_weights,
+    const paddle::optional<paddle::Tensor>& up_gate_proj_in_scale,
+    const std::vector<int>& token_nums_per_expert,
     const int token_nums_this_rank,
-    const std::string &moe_quant_type);
+    const std::string& moe_quant_type);
 
 std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
-    const paddle::Tensor &input,
-    const paddle::Tensor &scale,
-    const paddle::Tensor &topk_ids,
-    const paddle::Tensor &topk_weights,
-    const paddle::Tensor &token_nums_per_expert,
-    const paddle::Tensor &token_nums_per_expert_padded,
+    const paddle::Tensor& input,
+    const paddle::Tensor& scale,
+    const paddle::Tensor& topk_ids,
+    const paddle::Tensor& topk_weights,
+    const paddle::Tensor& token_nums_per_expert,
+    const paddle::Tensor& token_nums_per_expert_padded,
     const bool use_in_ep,
     const int token_nums_this_rank_padded);
 
-std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor &input,
+std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor& input,
                                           const int block_size);
-std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor &input,
+std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor& input,
                                                  const int block_size);
 std::vector<paddle::Tensor> MaskedPerTokenQuant(
-    paddle::Tensor &input,
-    paddle::Tensor &recv_expert_count,
+    paddle::Tensor& input,
+    paddle::Tensor& recv_expert_count,
     const int block_size);
 
 std::vector<paddle::Tensor> EPMoeExpertCombine(
-    const paddle::Tensor &ffn_out,
-    const paddle::Tensor &expert_scales_float,
-    const paddle::Tensor &permute_indices_per_token,
-    const paddle::Tensor &top_k_indices,
-    const paddle::optional<paddle::Tensor> &down_proj_bias,
+    const paddle::Tensor& ffn_out,
+    const paddle::Tensor& expert_scales_float,
+    const paddle::Tensor& permute_indices_per_token,
+    const paddle::Tensor& top_k_indices,
+    const paddle::optional<paddle::Tensor>& down_proj_bias,
     const bool norm_topk_prob,
     const float routed_scaling_factor);
 
-std::vector<std::vector<int>> GetExpertTokenNum(const paddle::Tensor &topk_ids,
+std::vector<std::vector<int>> GetExpertTokenNum(const paddle::Tensor& topk_ids,
                                                 const int num_experts);
 
 paddle::Tensor MoeExpertFFNFunc(
@@ -333,168 +333,168 @@ paddle::Tensor MoeExpertFFNWint2Func(
     const bool used_in_ep_low_latency);
 
 paddle::Tensor MoeExpertReduceFunc(
-    const paddle::Tensor &ffn_out,
-    const paddle::Tensor &top_k_weight,
-    const paddle::Tensor &permute_indices_per_token,
-    const paddle::Tensor &top_k_indices,
-    const paddle::optional<paddle::Tensor> &down_proj_bias,
+    const paddle::Tensor& ffn_out,
+    const paddle::Tensor& top_k_weight,
+    const paddle::Tensor& permute_indices_per_token,
+    const paddle::Tensor& top_k_indices,
+    const paddle::optional<paddle::Tensor>& down_proj_bias,
     const bool norm_topk_prob,
     const float routed_scaling_factor);
 
-void InitKVSignalPerQuery(const paddle::Tensor &seq_lens_encoder_tensor,
-                          const paddle::Tensor &seq_lens_this_time_tensor,
-                          const paddle::Tensor &seq_lens_decoder_tensor,
+void InitKVSignalPerQuery(const paddle::Tensor& seq_lens_encoder_tensor,
+                          const paddle::Tensor& seq_lens_this_time_tensor,
+                          const paddle::Tensor& seq_lens_decoder_tensor,
                           const int rank,
                           const int num_layers);
 
-void GetOutputKVSignal(const paddle::Tensor &x,
+void GetOutputKVSignal(const paddle::Tensor& x,
                        int64_t rank_id,
                        bool wait_flag);
 
-paddle::Tensor DequantInt8Func(const paddle::Tensor &input,
-                               const paddle::Tensor &out_scale,
+paddle::Tensor DequantInt8Func(const paddle::Tensor& input,
+                               const paddle::Tensor& out_scale,
                                std::string dtype);
 
 paddle::Tensor OpenShmAndGetMetaSignalFunc(const int rank,
                                            const int device_id,
                                            const bool keep_pd_step_flag);
 
-paddle::Tensor InitSignalLayerwiseFunc(const paddle::Tensor &kv_signal_metadata,
+paddle::Tensor InitSignalLayerwiseFunc(const paddle::Tensor& kv_signal_metadata,
                                        const int layer_id);
 
 void GetBlockShapeAndSplitKVBlock(
-    const paddle::Tensor &seq_lens_encoder,
-    const paddle::Tensor &seq_lens_decoder,
-    const paddle::Tensor &seq_lens_this_time,
-    paddle::Tensor &decoder_batch_ids,           // Inplace
-    paddle::Tensor &decoder_tile_ids_per_batch,  // Inplace
-    paddle::Tensor &decoder_num_blocks_cpu,      // Inplace, Pinned Memory
-    paddle::Tensor &decoder_num_blocks_device,   // Inplace
-    paddle::Tensor &decoder_chunk_size_device,   // Inplace
-    paddle::Tensor &max_len_tensor_cpu,          // Inplace, Pinned Memory
-    paddle::Tensor &encoder_batch_ids,           // Inplace
-    paddle::Tensor &encoder_tile_ids_per_batch,  // Inplace
-    paddle::Tensor &encoder_num_blocks_x_cpu,    // Inplace, Pinned Memory
-    paddle::Tensor &kv_batch_ids,                // Inplace
-    paddle::Tensor &kv_tile_ids_per_batch,       // Inplace
-    paddle::Tensor &kv_num_blocks_x_cpu,         // Inplace, Pinned Memory
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& seq_lens_this_time,
+    paddle::Tensor& decoder_batch_ids,           // Inplace
+    paddle::Tensor& decoder_tile_ids_per_batch,  // Inplace
+    paddle::Tensor& decoder_num_blocks_cpu,      // Inplace, Pinned Memory
+    paddle::Tensor& decoder_num_blocks_device,   // Inplace
+    paddle::Tensor& decoder_chunk_size_device,   // Inplace
+    paddle::Tensor& max_len_tensor_cpu,          // Inplace, Pinned Memory
+    paddle::Tensor& encoder_batch_ids,           // Inplace
+    paddle::Tensor& encoder_tile_ids_per_batch,  // Inplace
+    paddle::Tensor& encoder_num_blocks_x_cpu,    // Inplace, Pinned Memory
+    paddle::Tensor& kv_batch_ids,                // Inplace
+    paddle::Tensor& kv_tile_ids_per_batch,       // Inplace
+    paddle::Tensor& kv_num_blocks_x_cpu,         // Inplace, Pinned Memory
     const int encoder_block_shape_q,
     const int decoder_block_shape_q,
     const int group_size,
     const int block_size,
     const int decoder_step_token_num);
 
-std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
-                                             const paddle::Tensor &cum_offsets,
-                                             const paddle::Tensor &token_num,
-                                             const paddle::Tensor &seq_len);
+std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor& input_ids,
+                                             const paddle::Tensor& cum_offsets,
+                                             const paddle::Tensor& token_num,
+                                             const paddle::Tensor& seq_len);
 
-void SetValueByFlagsAndIdx(const paddle::Tensor &pre_ids_all,
-                           const paddle::Tensor &input_ids,
-                           const paddle::Tensor &seq_lens_this_time,
-                           const paddle::Tensor &seq_lens_encoder,
-                           const paddle::Tensor &seq_lens_decoder,
-                           const paddle::Tensor &step_idx,
-                           const paddle::Tensor &stop_flags);
+void SetValueByFlagsAndIdx(const paddle::Tensor& pre_ids_all,
+                           const paddle::Tensor& input_ids,
+                           const paddle::Tensor& seq_lens_this_time,
+                           const paddle::Tensor& seq_lens_encoder,
+                           const paddle::Tensor& seq_lens_decoder,
+                           const paddle::Tensor& step_idx,
+                           const paddle::Tensor& stop_flags);
 
 paddle::Tensor RebuildPaddingFunc(
-    const paddle::Tensor &tmp_out,      // [token_num, dim_embed]
-    const paddle::Tensor &cum_offsets,  // [bsz, 1]
-    const paddle::Tensor &seq_len_this_time,
-    const paddle::Tensor &seq_lens_decoder,
-    const paddle::Tensor &seq_lens_encoder,
-    const paddle::optional<paddle::Tensor> &output_padding_offset,
-    const paddle::optional<paddle::Tensor> &first_token_out,
+    const paddle::Tensor& tmp_out,      // [token_num, dim_embed]
+    const paddle::Tensor& cum_offsets,  // [bsz, 1]
+    const paddle::Tensor& seq_len_this_time,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::optional<paddle::Tensor>& output_padding_offset,
+    const paddle::optional<paddle::Tensor>& first_token_out,
     int max_input_length,
     bool enable_logprob);
 
-void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
-                       const paddle::Tensor &stop_flags,
-                       const paddle::Tensor &seq_lens,
-                       const paddle::Tensor &end_ids,
-                       const paddle::Tensor &next_tokens,
-                       const paddle::Tensor &pre_ids,
-                       const paddle::Tensor &step_idx,
-                       const paddle::Tensor &stop_seqs,
-                       const paddle::Tensor &stop_seqs_len,
+void GetStopFlagsMulti(const paddle::Tensor& topk_ids,
+                       const paddle::Tensor& stop_flags,
+                       const paddle::Tensor& seq_lens,
+                       const paddle::Tensor& end_ids,
+                       const paddle::Tensor& next_tokens,
+                       const paddle::Tensor& pre_ids,
+                       const paddle::Tensor& step_idx,
+                       const paddle::Tensor& stop_seqs,
+                       const paddle::Tensor& stop_seqs_len,
                        const bool beam_search);
 
-void UpdateInputes(const paddle::Tensor &stop_flags,
-                   const paddle::Tensor &not_need_stop,  // only on cpu
-                   const paddle::Tensor &seq_lens_this_time,
-                   const paddle::Tensor &seq_lens_encoder,
-                   const paddle::Tensor &seq_lens_decoder,
-                   const paddle::Tensor &input_ids,
-                   const paddle::Tensor &stop_nums,
-                   const paddle::Tensor &next_tokens,
-                   const paddle::Tensor &is_block_step);
+void UpdateInputs(const paddle::Tensor& stop_flags,
+                  const paddle::Tensor& not_need_stop,  // only on cpu
+                  const paddle::Tensor& seq_lens_this_time,
+                  const paddle::Tensor& seq_lens_encoder,
+                  const paddle::Tensor& seq_lens_decoder,
+                  const paddle::Tensor& input_ids,
+                  const paddle::Tensor& stop_nums,
+                  const paddle::Tensor& next_tokens,
+                  const paddle::Tensor& is_block_step);
 
-void UpdateInputesV1(const paddle::Tensor &stop_flags,
-                     const paddle::Tensor &not_need_stop,  // only on cpu
-                     const paddle::Tensor &seq_lens_this_time,
-                     const paddle::Tensor &seq_lens_encoder,
-                     const paddle::Tensor &seq_lens_decoder,
-                     const paddle::Tensor &step_seq_lens_decoder,
-                     const paddle::Tensor &prompt_lens,
-                     const paddle::Tensor &topk_ids,
-                     const paddle::Tensor &input_ids,
-                     const paddle::Tensor &block_tables,
-                     const paddle::Tensor &stop_nums,
-                     const paddle::Tensor &next_tokens,
-                     const paddle::Tensor &is_block_step,
-                     const int block_size);
+void UpdateInputsV1(const paddle::Tensor& stop_flags,
+                    const paddle::Tensor& not_need_stop,  // only on cpu
+                    const paddle::Tensor& seq_lens_this_time,
+                    const paddle::Tensor& seq_lens_encoder,
+                    const paddle::Tensor& seq_lens_decoder,
+                    const paddle::Tensor& step_seq_lens_decoder,
+                    const paddle::Tensor& prompt_lens,
+                    const paddle::Tensor& topk_ids,
+                    const paddle::Tensor& input_ids,
+                    const paddle::Tensor& block_tables,
+                    const paddle::Tensor& stop_nums,
+                    const paddle::Tensor& next_tokens,
+                    const paddle::Tensor& is_block_step,
+                    const int block_size);
 
 void RecoverDecodeTask(
-    const paddle::Tensor &stop_flags,
-    const paddle::Tensor &seq_lens_this_time,
-    const paddle::Tensor &seq_lens_encoder,
-    const paddle::Tensor &seq_lens_decoder,
-    const paddle::Tensor &step_seq_lens_decoder,
-    const paddle::Tensor &block_tables,
-    const paddle::Tensor &is_block_step,
-    const paddle::optional<paddle::Tensor> &draft_tokens,
-    const paddle::optional<paddle::Tensor> &step_draft_tokens,
-    const paddle::optional<paddle::Tensor> &step_seq_lens_this_time,
+    const paddle::Tensor& stop_flags,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& step_seq_lens_decoder,
+    const paddle::Tensor& block_tables,
+    const paddle::Tensor& is_block_step,
+    const paddle::optional<paddle::Tensor>& draft_tokens,
+    const paddle::optional<paddle::Tensor>& step_draft_tokens,
+    const paddle::optional<paddle::Tensor>& step_seq_lens_this_time,
     const int block_size,
     const int max_draft_tokens);
 
 paddle::Tensor GroupSwigluWithMasked(
-    const paddle::Tensor &fc1_out_tensor,
-    const paddle::Tensor &token_nums_per_expert);
+    const paddle::Tensor& fc1_out_tensor,
+    const paddle::Tensor& token_nums_per_expert);
 
 std::vector<paddle::Tensor> ExtractTextTokenOutput(
-    const paddle::Tensor &max_seq_len,
-    const paddle::Tensor &max_seq_len_index,
-    const paddle::Tensor &mm_token_num_len,
-    const paddle::Tensor &seq_lens_this_time,
-    const paddle::Tensor &cu_seqlens_q,
-    const paddle::Tensor &hidden_states);
+    const paddle::Tensor& max_seq_len,
+    const paddle::Tensor& max_seq_len_index,
+    const paddle::Tensor& mm_token_num_len,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& hidden_states);
 
-std::vector<paddle::Tensor> MoEDeepGEMMPermute(const paddle::Tensor &x,
-                                               const paddle::Tensor &topk_idx,
+std::vector<paddle::Tensor> MoEDeepGEMMPermute(const paddle::Tensor& x,
+                                               const paddle::Tensor& topk_idx,
                                                const int num_experts,
                                                const int max_tokens_per_expert);
 
 std::vector<paddle::Tensor> MoEDeepGEMMDePermute(
-    const paddle::Tensor
-        &ffn_out,  // [num_experts, max_tokens_per_expert, hidden]
-    const paddle::Tensor &permute_indices_per_token,  // [token_num, topk}]
-    const paddle::Tensor &topk_idx,
-    const paddle::Tensor &topk_weights);
+    const paddle::Tensor&
+        ffn_out,  // [num_experts, max_tokens_per_expert, hidden]
+    const paddle::Tensor& permute_indices_per_token,  // [token_num, topk}]
+    const paddle::Tensor& topk_idx,
+    const paddle::Tensor& topk_weights);
 
-void TextImageIndexOut(const paddle::Tensor &token_type_ids,
-                       paddle::Tensor &text_input,
-                       paddle::Tensor &image_input);
+void TextImageIndexOut(const paddle::Tensor& token_type_ids,
+                       paddle::Tensor& text_input,
+                       paddle::Tensor& image_input);
 
-void TextImageGatherScatter(paddle::Tensor &input,
-                            paddle::Tensor &text_input,
-                            paddle::Tensor &image_input,
-                            paddle::Tensor &token_type_ids,
-                            paddle::Tensor &text_index,
-                            paddle::Tensor &image_index,
+void TextImageGatherScatter(paddle::Tensor& input,
+                            paddle::Tensor& text_input,
+                            paddle::Tensor& image_input,
+                            paddle::Tensor& token_type_ids,
+                            paddle::Tensor& text_index,
+                            paddle::Tensor& image_index,
                             const bool is_scatter);
 
-paddle::Tensor count_tokens_per_expert_func(const paddle::Tensor &topk_ids,
+paddle::Tensor count_tokens_per_expert_func(const paddle::Tensor& topk_ids,
                                             int64_t num_experts);
 void GetPositionIdsAndMaskEncoderBatch(
     const paddle::Tensor &seq_lens_encoder,
@@ -517,15 +517,15 @@ std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
     const bool speculate_decoder);
 
 std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
-    const paddle::Tensor &kv_nope,
-    const paddle::Tensor &kv_pe,
-    const paddle::Tensor &kv_cache,
-    const paddle::Tensor &seq_lens,
-    const paddle::Tensor &seq_lens_decoder,
-    const paddle::Tensor &batch_id_per_token,
-    const paddle::Tensor &cu_seqlens_q,
-    const paddle::Tensor &block_tables,
-    const std::string &cache_quant_type_str,
+    const paddle::Tensor& kv_nope,
+    const paddle::Tensor& kv_pe,
+    const paddle::Tensor& kv_cache,
+    const paddle::Tensor& seq_lens,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& block_tables,
+    const std::string& cache_quant_type_str,
     const int max_seq_len);
 
 void FusedRotaryPositionEncoding(
@@ -581,7 +581,7 @@ std::vector<paddle::Tensor> MultiHeadLatentAttention(
     const bool speculate_decoder);
 
 std::vector<paddle::Tensor> tritonmoe_preprocess_kernel(
-    const paddle::Tensor &topk_ids,
+    const paddle::Tensor& topk_ids,
     int64_t num_experts,
     int64_t GEMM_BLOCK_SIZE_M);
 
@@ -611,37 +611,37 @@ std::vector<paddle::Tensor> MoeWna16MarlinGemmApi(
     bool use_atomic_add,
     bool use_fp32_reduce,
     bool is_zp_float);
-void CutlassScaledMm(paddle::Tensor &c,
-                     paddle::Tensor const &a,
-                     paddle::Tensor const &b,
-                     paddle::Tensor const &a_scales,
-                     paddle::Tensor const &b_scales,
-                     paddle::optional<paddle::Tensor> const &bias);
+void CutlassScaledMm(paddle::Tensor& c,
+                     paddle::Tensor const& a,
+                     paddle::Tensor const& b,
+                     paddle::Tensor const& a_scales,
+                     paddle::Tensor const& b_scales,
+                     paddle::optional<paddle::Tensor> const& bias);
 
-void CutlassScaledMmAzp(paddle::Tensor &c,
-                        paddle::Tensor const &a,
-                        paddle::Tensor const &b,
-                        paddle::Tensor const &a_scales,
-                        paddle::Tensor const &b_scales,
-                        paddle::Tensor const &azp_adj,
-                        paddle::optional<paddle::Tensor> const &azp,
-                        paddle::optional<paddle::Tensor> const &bias);
+void CutlassScaledMmAzp(paddle::Tensor& c,
+                        paddle::Tensor const& a,
+                        paddle::Tensor const& b,
+                        paddle::Tensor const& a_scales,
+                        paddle::Tensor const& b_scales,
+                        paddle::Tensor const& azp_adj,
+                        paddle::optional<paddle::Tensor> const& azp,
+                        paddle::optional<paddle::Tensor> const& bias);
 
-void StaticScaledFp8Quant(paddle::Tensor &out,
-                          paddle::Tensor const &input,
-                          paddle::Tensor const &scale);
+void StaticScaledFp8Quant(paddle::Tensor& out,
+                          paddle::Tensor const& input,
+                          paddle::Tensor const& scale);
 
-void DynamicScaledFp8Quant(paddle::Tensor &out,
-                           paddle::Tensor const &input,
-                           paddle::Tensor &scale);
+void DynamicScaledFp8Quant(paddle::Tensor& out,
+                           paddle::Tensor const& input,
+                           paddle::Tensor& scale);
 
-void DynamicPerTokenScaledFp8Quant(paddle::Tensor &out,
-                                   paddle::Tensor const &input,
-                                   paddle::Tensor &scales,
+void DynamicPerTokenScaledFp8Quant(paddle::Tensor& out,
+                                   paddle::Tensor const& input,
+                                   paddle::Tensor& scales,
                                    float scale_ub);
 
-std::vector<paddle::Tensor> NoauxTc(paddle::Tensor &scores,
-                                    paddle::Tensor &scores_with_bias,
+std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& scores,
+                                    paddle::Tensor& scores_with_bias,
                                     int n_group,
                                     int topk_group,
                                     int topk,
@@ -659,24 +659,24 @@ paddle::Tensor cutlass_fp8_fp8_half_gemm_func(
     std::string output_dtype,
     std::string activation_type);
 
-paddle::Tensor MoeFusedHadamardQuantFp8Func(const paddle::Tensor &input,
-                                            const paddle::Tensor &scale,
-                                            const paddle::Tensor &topk_ids,
+paddle::Tensor MoeFusedHadamardQuantFp8Func(const paddle::Tensor& input,
+                                            const paddle::Tensor& scale,
+                                            const paddle::Tensor& topk_ids,
                                             const int top_k,
                                             const int intermediate_size,
                                             const bool tiled);
 
-paddle::Tensor FusedHadamardQuantFp8Func(const paddle::Tensor &input,
+paddle::Tensor FusedHadamardQuantFp8Func(const paddle::Tensor& input,
                                          const float scale);
 #endif
 
-int64_t init_custom_all_reduce(const std::vector<int64_t> &fake_ipc_ptrs,
-                               paddle::Tensor &rank_data,
+int64_t init_custom_all_reduce(const std::vector<int64_t>& fake_ipc_ptrs,
+                               paddle::Tensor& rank_data,
                                int64_t rank,
                                bool full_nvlink);
 
-void all_reduce(paddle::Tensor &inp,
-                paddle::Tensor &out,
+void all_reduce(paddle::Tensor& inp,
+                paddle::Tensor& out,
                 int64_t _fa,
                 int64_t reg_buffer,
                 int64_t reg_buffer_sz_bytes);
@@ -723,74 +723,74 @@ std::vector<paddle::Tensor> SpeculateGetOutputPaddingOffset(
     const paddle::Tensor &seq_lens_output,
     const int max_seq_len);
 
-void SpecTokenPenaltyMultiScores(const paddle::Tensor &pre_ids,
-                                 const paddle::Tensor &logits,
-                                 const paddle::Tensor &penalty_scores,
-                                 const paddle::Tensor &frequency_scores,
-                                 const paddle::Tensor &presence_scores,
-                                 const paddle::Tensor &temperatures,
-                                 const paddle::Tensor &bad_tokens,
-                                 const paddle::Tensor &cur_len,
-                                 const paddle::Tensor &min_len,
-                                 const paddle::Tensor &eos_token_id,
-                                 const paddle::Tensor &seq_lens_this_time,
-                                 const paddle::Tensor &output_padding_offset,
-                                 const paddle::Tensor &output_cum_offsets,
+void SpecTokenPenaltyMultiScores(const paddle::Tensor& pre_ids,
+                                 const paddle::Tensor& logits,
+                                 const paddle::Tensor& penalty_scores,
+                                 const paddle::Tensor& frequency_scores,
+                                 const paddle::Tensor& presence_scores,
+                                 const paddle::Tensor& temperatures,
+                                 const paddle::Tensor& bad_tokens,
+                                 const paddle::Tensor& cur_len,
+                                 const paddle::Tensor& min_len,
+                                 const paddle::Tensor& eos_token_id,
+                                 const paddle::Tensor& seq_lens_this_time,
+                                 const paddle::Tensor& output_padding_offset,
+                                 const paddle::Tensor& output_cum_offsets,
                                  const int max_seq_len);
 
-void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
-                               const paddle::Tensor &accept_num,
-                               const paddle::Tensor &pre_ids,
-                               const paddle::Tensor &step_idx,
-                               const paddle::Tensor &stop_flags,
-                               const paddle::Tensor &seq_lens,
-                               const paddle::Tensor &stop_seqs,
-                               const paddle::Tensor &stop_seqs_len,
-                               const paddle::Tensor &end_ids);
+void SpecGetStopFlagsMultiSeqs(const paddle::Tensor& accept_tokens,
+                               const paddle::Tensor& accept_num,
+                               const paddle::Tensor& pre_ids,
+                               const paddle::Tensor& step_idx,
+                               const paddle::Tensor& stop_flags,
+                               const paddle::Tensor& seq_lens,
+                               const paddle::Tensor& stop_seqs,
+                               const paddle::Tensor& stop_seqs_len,
+                               const paddle::Tensor& end_ids);
 
-void SpeculateVerify(const paddle::Tensor &accept_tokens,
-                     const paddle::Tensor &accept_num,
-                     const paddle::Tensor &step_idx,
-                     const paddle::Tensor &stop_flags,
-                     const paddle::Tensor &seq_lens_encoder,
-                     const paddle::Tensor &seq_lens_decoder,
-                     const paddle::Tensor &draft_tokens,
-                     const paddle::Tensor &seq_lens_this_time,
-                     const paddle::Tensor &verify_tokens,
-                     const paddle::Tensor &verify_scores,
-                     const paddle::Tensor &max_dec_len,
-                     const paddle::Tensor &end_tokens,
-                     const paddle::Tensor &is_block_step,
-                     const paddle::Tensor &output_cum_offsets,
-                     const paddle::Tensor &actual_candidate_len,
-                     const paddle::Tensor &actual_draft_token_nums,
-                     const paddle::Tensor &topp,
+void SpeculateVerify(const paddle::Tensor& accept_tokens,
+                     const paddle::Tensor& accept_num,
+                     const paddle::Tensor& step_idx,
+                     const paddle::Tensor& stop_flags,
+                     const paddle::Tensor& seq_lens_encoder,
+                     const paddle::Tensor& seq_lens_decoder,
+                     const paddle::Tensor& draft_tokens,
+                     const paddle::Tensor& seq_lens_this_time,
+                     const paddle::Tensor& verify_tokens,
+                     const paddle::Tensor& verify_scores,
+                     const paddle::Tensor& max_dec_len,
+                     const paddle::Tensor& end_tokens,
+                     const paddle::Tensor& is_block_step,
+                     const paddle::Tensor& output_cum_offsets,
+                     const paddle::Tensor& actual_candidate_len,
+                     const paddle::Tensor& actual_draft_token_nums,
+                     const paddle::Tensor& topp,
                      int max_seq_len,
                      int verify_window,
                      bool enable_topp,
                      bool benchmark_mode,
                      bool accept_all_drafts);
 
-void SpeculateUpdate(const paddle::Tensor &seq_lens_encoder,
-                     const paddle::Tensor &seq_lens_decoder,
-                     const paddle::Tensor &not_need_stop,
-                     const paddle::Tensor &draft_tokens,
-                     const paddle::Tensor &actual_draft_token_nums,
-                     const paddle::Tensor &accept_tokens,
-                     const paddle::Tensor &accept_num,
-                     const paddle::Tensor &stop_flags,
-                     const paddle::Tensor &seq_lens_this_time,
-                     const paddle::Tensor &is_block_step,
-                     const paddle::Tensor &stop_nums);
+void SpeculateUpdate(const paddle::Tensor& seq_lens_encoder,
+                     const paddle::Tensor& seq_lens_decoder,
+                     const paddle::Tensor& not_need_stop,
+                     const paddle::Tensor& draft_tokens,
+                     const paddle::Tensor& actual_draft_token_nums,
+                     const paddle::Tensor& accept_tokens,
+                     const paddle::Tensor& accept_num,
+                     const paddle::Tensor& stop_flags,
+                     const paddle::Tensor& seq_lens_this_time,
+                     const paddle::Tensor& is_block_step,
+                     const paddle::Tensor& stop_nums);
 
-void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor &pre_ids_all,
-                                    const paddle::Tensor &accept_tokens,
-                                    const paddle::Tensor &accept_num,
-                                    const paddle::Tensor &stop_flags,
-                                    const paddle::Tensor &seq_lens_this_time,
-                                    const paddle::Tensor &seq_lens_encoder,
-                                    const paddle::Tensor &seq_lens_decoder,
-                                    const paddle::Tensor &step_idx);
+void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor& pre_ids_all,
+                                    const paddle::Tensor& accept_tokens,
+                                    const paddle::Tensor& accept_num,
+                                    const paddle::Tensor& stop_flags,
+                                    const paddle::Tensor& seq_lens_this_time,
+                                    const paddle::Tensor& seq_lens_encoder,
+                                    const paddle::Tensor& seq_lens_decoder,
+                                    const paddle::Tensor& step_idx);
 
 void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor &accept_tokens,
                                       const paddle::Tensor &accept_num,
@@ -801,197 +801,197 @@ void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor &accept_tokens,
                                       bool save_each_rank,
                                       bool skip_prefill);
 
-void SpeculateClearAcceptNums(const paddle::Tensor &accept_num,
-                              const paddle::Tensor &seq_lens_decoder);
+void SpeculateClearAcceptNums(const paddle::Tensor& accept_num,
+                              const paddle::Tensor& seq_lens_decoder);
 
-void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
-                            const paddle::Tensor &block_tables,
-                            const paddle::Tensor &stop_flags,
-                            const paddle::Tensor &prompt_lens,
-                            const paddle::Tensor &seq_lens_this_time,
-                            const paddle::Tensor &seq_lens_encoder,
-                            const paddle::Tensor &seq_lens_decoder,
-                            const paddle::Tensor &step_seq_lens_decoder,
-                            const paddle::Tensor &step_draft_tokens,
-                            const paddle::Tensor &step_seq_lens_this_time,
-                            const paddle::Tensor &accept_num,
-                            const paddle::Tensor &accept_tokens,
-                            const paddle::Tensor &is_block_step,
-                            const paddle::Tensor &not_need_stop,
-                            const paddle::Tensor &stop_nums,
+void SpeculateScheduleCache(const paddle::Tensor& draft_tokens,
+                            const paddle::Tensor& block_tables,
+                            const paddle::Tensor& stop_flags,
+                            const paddle::Tensor& prompt_lens,
+                            const paddle::Tensor& seq_lens_this_time,
+                            const paddle::Tensor& seq_lens_encoder,
+                            const paddle::Tensor& seq_lens_decoder,
+                            const paddle::Tensor& step_seq_lens_decoder,
+                            const paddle::Tensor& step_draft_tokens,
+                            const paddle::Tensor& step_seq_lens_this_time,
+                            const paddle::Tensor& accept_num,
+                            const paddle::Tensor& accept_tokens,
+                            const paddle::Tensor& is_block_step,
+                            const paddle::Tensor& not_need_stop,
+                            const paddle::Tensor& stop_nums,
                             const int block_size,
                             const int max_draft_tokens);
 
-void NgramMatch(const paddle::Tensor &input_ids,
-                const paddle::Tensor &input_ids_len,
-                const paddle::Tensor &pre_ids,
-                const paddle::Tensor &step_idx,
-                const paddle::Tensor &draft_token_num,
-                const paddle::Tensor &draft_tokens,
-                const paddle::Tensor &seq_lens_this_time,
-                const paddle::Tensor &seq_lens_encoder,
-                const paddle::Tensor &seq_lens_decoder,
-                const paddle::Tensor &max_dec_len,
+void NgramMatch(const paddle::Tensor& input_ids,
+                const paddle::Tensor& input_ids_len,
+                const paddle::Tensor& pre_ids,
+                const paddle::Tensor& step_idx,
+                const paddle::Tensor& draft_token_num,
+                const paddle::Tensor& draft_tokens,
+                const paddle::Tensor& seq_lens_this_time,
+                const paddle::Tensor& seq_lens_encoder,
+                const paddle::Tensor& seq_lens_decoder,
+                const paddle::Tensor& max_dec_len,
                 const int max_ngram_size,
                 const int max_draft_tokens);
 
-void HybridMtpNgram(const paddle::Tensor &input_ids,
-                    const paddle::Tensor &input_ids_len,
-                    const paddle::Tensor &pre_ids,
-                    const paddle::Tensor &step_idx,
-                    const paddle::Tensor &draft_token_num,
-                    const paddle::Tensor &draft_tokens,
-                    const paddle::Tensor &seq_lens_this_time,
-                    const paddle::Tensor &seq_lens_decoder,
-                    const paddle::Tensor &max_dec_len,
+void HybridMtpNgram(const paddle::Tensor& input_ids,
+                    const paddle::Tensor& input_ids_len,
+                    const paddle::Tensor& pre_ids,
+                    const paddle::Tensor& step_idx,
+                    const paddle::Tensor& draft_token_num,
+                    const paddle::Tensor& draft_tokens,
+                    const paddle::Tensor& seq_lens_this_time,
+                    const paddle::Tensor& seq_lens_decoder,
+                    const paddle::Tensor& max_dec_len,
                     const int max_ngram_size,
                     const int min_ngram_size,
                     const int max_draft_tokens);
 
 // MTP
-void DraftModelPostprocess(const paddle::Tensor &base_model_draft_tokens,
-                           const paddle::Tensor &base_model_seq_lens_this_time,
-                           const paddle::Tensor &base_model_seq_lens_encoder,
-                           const paddle::Tensor &base_model_stop_flags);
+void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
+                           const paddle::Tensor& base_model_seq_lens_this_time,
+                           const paddle::Tensor& base_model_seq_lens_encoder,
+                           const paddle::Tensor& base_model_stop_flags);
 
-void DraftModelPreprocess(const paddle::Tensor &draft_tokens,
-                          const paddle::Tensor &input_ids,
-                          const paddle::Tensor &stop_flags,
-                          const paddle::Tensor &seq_lens_this_time,
-                          const paddle::Tensor &seq_lens_encoder,
-                          const paddle::Tensor &seq_lens_decoder,
-                          const paddle::Tensor &step_idx,
-                          const paddle::Tensor &not_need_stop,
-                          const paddle::Tensor &is_block_step,
-                          const paddle::Tensor &batch_drop,
-                          const paddle::Tensor &pre_ids,
-                          const paddle::Tensor &accept_tokens,
-                          const paddle::Tensor &accept_num,
-                          const paddle::Tensor &base_model_seq_lens_this_time,
-                          const paddle::Tensor &base_model_seq_lens_encoder,
-                          const paddle::Tensor &base_model_seq_lens_decoder,
-                          const paddle::Tensor &base_model_step_idx,
-                          const paddle::Tensor &base_model_stop_flags,
-                          const paddle::Tensor &base_model_is_block_step,
-                          const paddle::Tensor &base_model_draft_tokens,
+void DraftModelPreprocess(const paddle::Tensor& draft_tokens,
+                          const paddle::Tensor& input_ids,
+                          const paddle::Tensor& stop_flags,
+                          const paddle::Tensor& seq_lens_this_time,
+                          const paddle::Tensor& seq_lens_encoder,
+                          const paddle::Tensor& seq_lens_decoder,
+                          const paddle::Tensor& step_idx,
+                          const paddle::Tensor& not_need_stop,
+                          const paddle::Tensor& is_block_step,
+                          const paddle::Tensor& batch_drop,
+                          const paddle::Tensor& pre_ids,
+                          const paddle::Tensor& accept_tokens,
+                          const paddle::Tensor& accept_num,
+                          const paddle::Tensor& base_model_seq_lens_this_time,
+                          const paddle::Tensor& base_model_seq_lens_encoder,
+                          const paddle::Tensor& base_model_seq_lens_decoder,
+                          const paddle::Tensor& base_model_step_idx,
+                          const paddle::Tensor& base_model_stop_flags,
+                          const paddle::Tensor& base_model_is_block_step,
+                          const paddle::Tensor& base_model_draft_tokens,
                           const int max_draft_token,
                           const bool truncate_first_token,
                           const bool splitwise_prefill,
                           const bool kvcache_scheduler_v1);
 
-void DraftModelUpdate(const paddle::Tensor &inter_next_tokens,
-                      const paddle::Tensor &draft_tokens,
-                      const paddle::Tensor &pre_ids,
-                      const paddle::Tensor &seq_lens_this_time,
-                      const paddle::Tensor &seq_lens_encoder,
-                      const paddle::Tensor &seq_lens_decoder,
-                      const paddle::Tensor &step_idx,
-                      const paddle::Tensor &output_cum_offsets,
-                      const paddle::Tensor &stop_flags,
-                      const paddle::Tensor &not_need_stop,
-                      const paddle::Tensor &max_dec_len,
-                      const paddle::Tensor &end_ids,
-                      const paddle::Tensor &base_model_draft_tokens,
+void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
+                      const paddle::Tensor& draft_tokens,
+                      const paddle::Tensor& pre_ids,
+                      const paddle::Tensor& seq_lens_this_time,
+                      const paddle::Tensor& seq_lens_encoder,
+                      const paddle::Tensor& seq_lens_decoder,
+                      const paddle::Tensor& step_idx,
+                      const paddle::Tensor& output_cum_offsets,
+                      const paddle::Tensor& stop_flags,
+                      const paddle::Tensor& not_need_stop,
+                      const paddle::Tensor& max_dec_len,
+                      const paddle::Tensor& end_ids,
+                      const paddle::Tensor& base_model_draft_tokens,
                       const int max_seq_len,
                       const int substep);
 
 std::vector<paddle::Tensor> EagleGetHiddenStates(
-    const paddle::Tensor &input,
-    const paddle::Tensor &seq_lens_this_time,
-    const paddle::Tensor &seq_lens_encoder,
-    const paddle::Tensor &seq_lens_decoder,
-    const paddle::Tensor &stop_flags,
-    const paddle::Tensor &accept_nums,
-    const paddle::Tensor &base_model_seq_lens_this_time,
-    const paddle::Tensor &base_model_seq_lens_encoder,
+    const paddle::Tensor& input,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& stop_flags,
+    const paddle::Tensor& accept_nums,
+    const paddle::Tensor& base_model_seq_lens_this_time,
+    const paddle::Tensor& base_model_seq_lens_encoder,
     const int actual_draft_token_num);
 
 std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
-    const paddle::Tensor &input,
-    const paddle::Tensor &last_seq_lens_this_time,
-    const paddle::Tensor &seq_lens_this_time,
-    const paddle::Tensor &step_idx);
+    const paddle::Tensor& input,
+    const paddle::Tensor& last_seq_lens_this_time,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& step_idx);
 
 void MTPStepPaddle(
-    const paddle::Tensor &base_model_stop_flags,
-    const paddle::Tensor &stop_flags,
-    const paddle::Tensor &batch_drop,
-    const paddle::Tensor &seq_lens_this_time,
-    const paddle::Tensor &seq_lens_encoder,
-    const paddle::Tensor &seq_lens_decoder,
-    const paddle::Tensor &block_tables,  // [bsz, block_num_per_seq]
-    const paddle::Tensor &encoder_block_lens,
-    const paddle::Tensor &used_list_len,
-    const paddle::Tensor &free_list,
-    const paddle::Tensor &free_list_len,
+    const paddle::Tensor& base_model_stop_flags,
+    const paddle::Tensor& stop_flags,
+    const paddle::Tensor& batch_drop,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& block_tables,  // [bsz, block_num_per_seq]
+    const paddle::Tensor& encoder_block_lens,
+    const paddle::Tensor& used_list_len,
+    const paddle::Tensor& free_list,
+    const paddle::Tensor& free_list_len,
     const int block_size,
     const int max_draft_tokens);
 
 void SpeculateStepPaddle(
-    const paddle::Tensor &stop_flags,
-    const paddle::Tensor &seq_lens_this_time,
-    const paddle::Tensor &ori_seq_lens_encoder,
-    const paddle::Tensor &seq_lens_encoder,
-    const paddle::Tensor &seq_lens_decoder,
-    const paddle::Tensor &block_tables,  // [bsz, block_num_per_seq]
-    const paddle::Tensor &encoder_block_lens,
-    const paddle::Tensor &is_block_step,
-    const paddle::Tensor &step_block_list,
-    const paddle::Tensor &step_lens,
-    const paddle::Tensor &recover_block_list,
-    const paddle::Tensor &recover_lens,
-    const paddle::Tensor &need_block_list,
-    const paddle::Tensor &need_block_len,
-    const paddle::Tensor &used_list_len,
-    const paddle::Tensor &free_list,
-    const paddle::Tensor &free_list_len,
-    const paddle::Tensor &input_ids,
-    const paddle::Tensor &pre_ids,
-    const paddle::Tensor &step_idx,
-    const paddle::Tensor &next_tokens,
-    const paddle::Tensor &first_token_ids,
-    const paddle::Tensor &accept_num,
+    const paddle::Tensor& stop_flags,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& ori_seq_lens_encoder,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& block_tables,  // [bsz, block_num_per_seq]
+    const paddle::Tensor& encoder_block_lens,
+    const paddle::Tensor& is_block_step,
+    const paddle::Tensor& step_block_list,
+    const paddle::Tensor& step_lens,
+    const paddle::Tensor& recover_block_list,
+    const paddle::Tensor& recover_lens,
+    const paddle::Tensor& need_block_list,
+    const paddle::Tensor& need_block_len,
+    const paddle::Tensor& used_list_len,
+    const paddle::Tensor& free_list,
+    const paddle::Tensor& free_list_len,
+    const paddle::Tensor& input_ids,
+    const paddle::Tensor& pre_ids,
+    const paddle::Tensor& step_idx,
+    const paddle::Tensor& next_tokens,
+    const paddle::Tensor& first_token_ids,
+    const paddle::Tensor& accept_num,
     const int block_size,
     const int encoder_decoder_block_num,
     const int max_draft_tokens);
 
-void MergePrefillDecodeOutput(const paddle::Tensor &encoder_res,
-                              const paddle::Tensor &decoder_res,
-                              const paddle::Tensor &seq_lens_encoder,
-                              const paddle::Tensor &seq_lens_decoder,
-                              const paddle::Tensor &seq_lens_this_time,
-                              const paddle::Tensor &cu_seq_q,
+void MergePrefillDecodeOutput(const paddle::Tensor& encoder_res,
+                              const paddle::Tensor& decoder_res,
+                              const paddle::Tensor& seq_lens_encoder,
+                              const paddle::Tensor& seq_lens_decoder,
+                              const paddle::Tensor& seq_lens_this_time,
+                              const paddle::Tensor& cu_seq_q,
                               const int head_num,
                               const int head_dim,
                               const int max_token);
 
 std::vector<paddle::Tensor> TopPSamplingReject(
-    const paddle::Tensor &probs,
-    const paddle::Tensor &top_p,
-    const paddle::optional<paddle::Tensor> &top_k,
+    const paddle::Tensor& probs,
+    const paddle::Tensor& top_p,
+    const paddle::optional<paddle::Tensor>& top_k,
     int64_t seed);
 
-std::vector<paddle::Tensor> TopKRenorm(const paddle::Tensor &probs,
-                                       const paddle::Tensor &top_k);
+std::vector<paddle::Tensor> TopKRenorm(const paddle::Tensor& probs,
+                                       const paddle::Tensor& top_k);
 
-std::vector<paddle::Tensor> MinPSamplingFromProbs(const paddle::Tensor &probs,
-                                                  const paddle::Tensor &min_p);
+std::vector<paddle::Tensor> MinPSamplingFromProbs(const paddle::Tensor& probs,
+                                                  const paddle::Tensor& min_p);
 
 void SaveOutMmsgStatic(const paddle::Tensor &x,
                        const paddle::Tensor &not_need_stop,
                        int64_t rank_id,
                        bool save_each_rank);
 
-void LimitThinkingContentLengthV1(const paddle::Tensor &next_tokens,
-                                  const paddle::Tensor &max_think_lens,
-                                  const paddle::Tensor &step_idx,
-                                  const paddle::Tensor &limit_think_status,
+void LimitThinkingContentLengthV1(const paddle::Tensor& next_tokens,
+                                  const paddle::Tensor& max_think_lens,
+                                  const paddle::Tensor& step_idx,
+                                  const paddle::Tensor& limit_think_status,
                                   const int64_t think_end_id);
 
-void LimitThinkingContentLengthV2(const paddle::Tensor &next_tokens,
-                                  const paddle::Tensor &max_think_lens,
-                                  const paddle::Tensor &step_idx,
-                                  const paddle::Tensor &limit_think_status,
+void LimitThinkingContentLengthV2(const paddle::Tensor& next_tokens,
+                                  const paddle::Tensor& max_think_lens,
+                                  const paddle::Tensor& step_idx,
+                                  const paddle::Tensor& limit_think_status,
                                   const int64_t think_end_id,
                                   const int64_t line_break_id);
 
@@ -1014,31 +1014,31 @@ void SpeculateLimitThinkingContentLengthV2(
     const int64_t think_end_id,
     const int64_t line_break_id);
 
-void SpeculateGetLogits(const paddle::Tensor &draft_logits,
-                        const paddle::Tensor &next_token_num,
-                        const paddle::Tensor &batch_token_num,
-                        const paddle::Tensor &cu_next_token_offset,
-                        const paddle::Tensor &cu_batch_token_offset,
-                        const paddle::Tensor &logits,
-                        const paddle::Tensor &first_token_logits,
-                        const paddle::Tensor &seq_lens_this_time,
-                        const paddle::Tensor &seq_lens_encoder);
+void SpeculateGetLogits(const paddle::Tensor& draft_logits,
+                        const paddle::Tensor& next_token_num,
+                        const paddle::Tensor& batch_token_num,
+                        const paddle::Tensor& cu_next_token_offset,
+                        const paddle::Tensor& cu_batch_token_offset,
+                        const paddle::Tensor& logits,
+                        const paddle::Tensor& first_token_logits,
+                        const paddle::Tensor& seq_lens_this_time,
+                        const paddle::Tensor& seq_lens_encoder);
 
-void SpeculateInsertFirstToken(const paddle::Tensor &token_ids,
-                               const paddle::Tensor &accept_tokens,
-                               const paddle::Tensor &next_tokens,
-                               const paddle::Tensor &cu_next_token_offset,
-                               const paddle::Tensor &cu_batch_token_offset,
-                               const paddle::Tensor &seq_lens_this_time,
-                               const paddle::Tensor &seq_lens_encoder);
+void SpeculateInsertFirstToken(const paddle::Tensor& token_ids,
+                               const paddle::Tensor& accept_tokens,
+                               const paddle::Tensor& next_tokens,
+                               const paddle::Tensor& cu_next_token_offset,
+                               const paddle::Tensor& cu_batch_token_offset,
+                               const paddle::Tensor& seq_lens_this_time,
+                               const paddle::Tensor& seq_lens_encoder);
 
-void SpeculateGetTargetLogits(const paddle::Tensor &target_logits,
-                              const paddle::Tensor &logits,
-                              const paddle::Tensor &cu_batch_token_offset,
-                              const paddle::Tensor &ori_cu_batch_token_offset,
-                              const paddle::Tensor &seq_lens_this_time,
-                              const paddle::Tensor &seq_lens_encoder,
-                              const paddle::Tensor &accept_num);
+void SpeculateGetTargetLogits(const paddle::Tensor& target_logits,
+                              const paddle::Tensor& logits,
+                              const paddle::Tensor& cu_batch_token_offset,
+                              const paddle::Tensor& ori_cu_batch_token_offset,
+                              const paddle::Tensor& seq_lens_this_time,
+                              const paddle::Tensor& seq_lens_encoder,
+                              const paddle::Tensor& accept_num);
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_expert_token_num",
@@ -1337,14 +1337,14 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
    * update_inputs.cu
    * update_inputs
    */
-  m.def("update_inputs", &UpdateInputes, "update_inputs function");
+  m.def("update_inputs", &UpdateInputs, "update_inputs function");
 
   /**
    * update_inputs_v1.cu
    * update_inputs_v1
    */
   m.def("update_inputs_v1",
-        &UpdateInputesV1,
+        &UpdateInputsV1,
         "update inputs for scheduler v1 function");
 
   /**
