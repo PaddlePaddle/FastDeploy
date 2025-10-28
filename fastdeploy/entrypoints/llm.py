@@ -267,7 +267,13 @@ class LLM:
 
         # get output
         if stream:
-            return self._run_engine_stream(req_ids, messages, use_tqdm=use_tqdm, topk_logprobs=topk_logprobs)
+            return self._run_engine_stream(
+                req_ids,
+                messages,
+                use_tqdm=use_tqdm,
+                topk_logprobs=topk_logprobs,
+                chat_template_kwargs=chat_template_kwargs,
+            )
         else:
             outputs = self._run_engine(req_ids, use_tqdm=use_tqdm, topk_logprobs=topk_logprobs)
             return outputs
@@ -438,7 +444,14 @@ class LLM:
             pbar.close()
         return output
 
-    def _run_engine_stream(self, req_ids: list[str], prompts, use_tqdm: bool, topk_logprobs: Optional[int] = None):
+    def _run_engine_stream(
+        self,
+        req_ids: list[str],
+        prompts,
+        use_tqdm: bool,
+        topk_logprobs: Optional[int] = None,
+        chat_template_kwargs: Optional[dict[str, Any]] = None,
+    ):
         """
         运行引擎并返回流式响应的迭代器。
 
@@ -489,7 +502,7 @@ class LLM:
                         has_new_tokens = True
                         # Create incremental output with only new tokens
                         incremental_result = self._create_incremental_result(
-                            current_result, previous_count, pos, prompts
+                            current_result, previous_count, pos, prompts, chat_template_kwargs
                         )
 
                         # Apply logprobs filtering to the incremental result if needed
@@ -536,7 +549,9 @@ class LLM:
         if use_tqdm:
             pbar.close()
 
-    def _create_incremental_result(self, current_result, previous_count, pos, prompts):
+    def _create_incremental_result(
+        self, current_result, previous_count, pos, prompts, chat_template_kwargs: Optional[dict[str, Any]] = None
+    ):
         """
         创建包含增量token的结果对象
 
@@ -545,6 +560,7 @@ class LLM:
             previous_count: 之前已处理的token数量
             pos: 在prompts列表中的位置
             prompts: 原始提示词列表
+            chat_template_kwargs: 聊天模板参数，包含enable_thinking等配置
 
         Returns:
             RequestOutput: 包含增量更新的结果对象
@@ -559,8 +575,26 @@ class LLM:
             new_token_ids = current_result.outputs.token_ids[previous_count:]
             incremental_result.outputs.token_ids = new_token_ids
 
-            # Process new tokens to get text
-            incremental_result = self.llm_engine.data_processor.process_response(incremental_result)
+            # Get enable_thinking from chat_template_kwargs, default to False
+            enable_thinking = False
+            if chat_template_kwargs:
+                enable_thinking = chat_template_kwargs.get("enable_thinking", False)
+
+            # Construct response_dict format and call process_response_dict_streaming
+            response_dict = {
+                "request_id": current_result.request_id,
+                "finished": current_result.finished,
+                "outputs": {
+                    "token_ids": new_token_ids,
+                },
+            }
+
+            processed_response = self.llm_engine.data_processor.process_response_dict_streaming(
+                response_dict, stream=True, enable_thinking=enable_thinking, include_stop_str_in_output=False
+            )
+
+            # Extract incremental text
+            incremental_result.outputs.text = processed_response["outputs"]["text"]
 
         # Set the prompt
         if isinstance(prompts, list):

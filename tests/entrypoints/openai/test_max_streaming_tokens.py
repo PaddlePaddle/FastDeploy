@@ -165,7 +165,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         generator = self.chat_serving.chat_completion_stream_generator(
             request=request,
-            request_id="test-request-id",
+            request_id="test_request_id",
             model_name="test-model",
             prompt_token_ids=[1, 2, 3],
             prompt_tokens="Hello",
@@ -470,6 +470,237 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             self.assertEqual(num_cached_tokens[expected["index"]], expected["num_cached_tokens"])
             self.assertEqual(actual_choice.finish_reason, expected["finish_reason"])
             assert actual_choice.logprobs is not None
+
+    @patch("fastdeploy.entrypoints.openai.serving_chat.api_server_logger")
+    @patch("fastdeploy.entrypoints.openai.serving_chat.ChatResponseProcessor")
+    async def test_chat_stream_usage_fields(self, mock_response_processor, api_server_logger):
+        response_data = [
+            {
+                "request_id": "test-request-id_0",
+                "outputs": {"token_ids": [1], "text": "a", "top_logprobs": None, "draft_top_logprobs": None},
+                "metrics": {"first_token_time": 0.1, "inference_start_time": 0.1, "request_start_time": 0.0},
+                "finished": False,
+            },
+            {
+                "request_id": "test-request-id_0",
+                "outputs": {"token_ids": [2, 3], "text": "bc", "top_logprobs": None, "draft_top_logprobs": None},
+                "metrics": {"arrival_time": 0.3, "first_token_time": None, "request_start_time": 0.0},
+                "finished": True,
+            },
+        ]
+
+        mock_response_queue = AsyncMock()
+        mock_response_queue.get.side_effect = response_data
+
+        mock_dealer = Mock()
+        mock_dealer.write = Mock()
+        self.engine_client.connection_manager.get_connection = AsyncMock(
+            return_value=(mock_dealer, mock_response_queue)
+        )
+
+        mock_processor_instance = Mock()
+
+        async def mock_process_response_chat(response, stream, enable_thinking, include_stop_str_in_output):
+            delta_msg_mock = Mock()
+            delta_msg_mock.content = response["outputs"]["text"]
+            if response["outputs"]["text"] == "a":
+                delta_msg_mock.reasoning_content = "Thinking for a"
+            elif response["outputs"]["text"] == "bc":
+                delta_msg_mock.reasoning_content = "Thinking for bc"
+            delta_msg_mock.tool_calls = None
+            response["outputs"]["delta_message"] = delta_msg_mock
+
+            reasoning_content = (
+                delta_msg_mock.reasoning_content if (delta_msg_mock and delta_msg_mock.reasoning_content) else None
+            )
+            reasoning_tokens = reasoning_content.split() if reasoning_content else []
+            response["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
+
+            response["outputs"]["num_cached_tokens"] = response.get("num_cached_tokens", 0)
+
+            yield response
+
+        mock_processor_instance.process_response_chat = mock_process_response_chat
+        mock_processor_instance.enable_multimodal_content = Mock(return_value=False)
+        mock_processor_instance.reasoning_parser = Mock(__class__.__name__ == "ErineTestReasoningParser")
+        mock_processor_instance.data_processor = Mock(
+            process_response_dict=lambda resp, stream, enable_thinking, include_stop_str_in_output: resp
+        )
+        mock_response_processor.return_value = mock_processor_instance
+
+        request = ChatCompletionRequest(
+            model="test-model",
+            messages=[{"role": "user", "content": "Hello"}],
+            stream=True,
+            max_streaming_response_tokens=3,
+            return_token_ids=True,
+            stream_options={"include_usage": True, "continuous_usage_stats": True},
+            chat_template_kwargs={"enable_thinking": True},
+        )
+
+        generator = self.chat_serving.chat_completion_stream_generator(
+            request=request,
+            request_id="test-request-id",
+            model_name="test-model",
+            prompt_token_ids=[10, 20, 30],
+            prompt_tokens="Hello",
+        )
+
+        chunks = []
+        async for chunk in generator:
+            chunks.append(chunk)
+            if "[DONE]" in chunk:
+                break
+
+        parsed_chunks = []
+        for chunk_str in chunks:
+            if chunk_str.startswith("data: ") and chunk_str.endswith("\n\n"):
+                json_part = chunk_str[6:-2]
+                if json_part == "[DONE]":
+                    break
+                try:
+                    chunk_dict = json.loads(json_part)
+                    parsed_chunks.append(chunk_dict)
+                except json.JSONDecodeError:
+                    self.fail(f"Invalid JSON in chunk: {chunk_str}")
+
+        first_chunk = parsed_chunks[0]
+        self.assertIn("usage", first_chunk, "First chunk should contain usage")
+        self.assertEqual(first_chunk["usage"]["prompt_tokens"], 3, "First chunk prompt_tokens mismatch")
+        self.assertIn("prompt_tokens_details", first_chunk["usage"])
+
+        middle_chunk = next(c for c in parsed_chunks if "choices" in c and len(c["choices"]) > 0)
+        self.assertIn("usage", middle_chunk, "Middle chunk should contain usage")
+        self.assertIn(
+            "completion_tokens_details", middle_chunk["usage"], "Middle chunk missing completion_tokens_details"
+        )
+        self.assertIn(
+            "reasoning_tokens",
+            middle_chunk["usage"]["completion_tokens_details"],
+            "completion_tokens_details should contain reasoning_tokens",
+        )
+        self.assertGreaterEqual(
+            middle_chunk["usage"]["completion_tokens_details"]["reasoning_tokens"],
+            0,
+            "reasoning_tokens should be greater than 0",
+        )
+
+        final_usage_chunk = parsed_chunks[-1]
+
+        self.assertIn("usage", final_usage_chunk, "Final chunk missing 'usage'")
+        self.assertEqual(final_usage_chunk["usage"]["completion_tokens"], 3, "Final completion_tokens mismatch")
+        self.assertEqual(final_usage_chunk["usage"]["total_tokens"], 3 + 3, "Final total_tokens mismatch")
+
+    @patch("fastdeploy.entrypoints.openai.serving_completion.api_server_logger")
+    async def test_completion_stream_usage_fields(self, mock_logger):
+        """测试completion流式响应中当include_usage为True时，usage字段的正确性"""
+        response_data = [
+            [
+                {
+                    "request_id": "test-request-id_0",
+                    "outputs": {"token_ids": [10], "text": "a", "top_logprobs": None, "draft_top_logprobs": None},
+                    "metrics": {
+                        "arrival_time": 0.3,
+                        "first_token_time": 0.1,
+                        "inference_start_time": 0.1,
+                        "request_start_time": 0.0,
+                    },
+                    "finished": False,
+                }
+            ],
+            [
+                {
+                    "request_id": "test-request-id_0",
+                    "outputs": {"token_ids": [2], "text": "bc", "top_logprobs": None, "draft_top_logprobs": None},
+                    "metrics": {
+                        "arrival_time": 0.3,
+                        "first_token_time": 0.1,
+                        "inference_start_time": 0.1,
+                        "request_start_time": 0.0,
+                    },
+                    "finished": True,
+                }
+            ],
+        ]
+
+        mock_response_queue = AsyncMock()
+        mock_response_queue.get.side_effect = response_data
+
+        mock_dealer = Mock()
+        mock_dealer.write = Mock()
+        self.engine_client.connection_manager.get_connection = AsyncMock(
+            return_value=(mock_dealer, mock_response_queue)
+        )
+
+        from fastdeploy.entrypoints.openai.protocol import StreamOptions
+
+        request = CompletionRequest(
+            model="test-model",
+            prompt="Hello",
+            stream=True,
+            max_streaming_response_tokens=3,
+            return_token_ids=True,
+            stream_options=StreamOptions(include_usage=True),
+        )
+
+        generator = self.completion_serving.completion_stream_generator(
+            request=request,
+            num_choices=1,
+            request_id="test-request-id",
+            created_time=1620000000,
+            model_name="test-model",
+            prompt_batched_token_ids=[[10, 20, 30]],
+            prompt_tokens_list=["Hello"],
+        )
+
+        chunks = []
+        async for chunk in generator:
+            chunks.append(chunk)
+            if "[DONE]" in chunk:
+                break
+
+        parsed_chunks = []
+        for chunk_str in chunks:
+            if chunk_str.startswith("data: ") and chunk_str.endswith("\n\n"):
+                json_part = chunk_str[6:-2]
+                if json_part == "[DONE]":
+                    break
+                try:
+                    chunk_dict = json.loads(json_part)
+                    parsed_chunks.append(chunk_dict)
+                except json.JSONDecodeError:
+                    self.fail(f"Invalid JSON in chunk: {chunk_str}")
+
+        middle_chunks = [c for c in parsed_chunks if "choices" in c and len(c["choices"]) > 0]
+        for chunk in middle_chunks:
+            self.assertNotIn("usage", chunk, "Middle chunks should not contain 'usage'")
+
+        self.assertGreater(len(parsed_chunks), 0, "No parsed chunks found")
+        final_usage_chunk = None
+        for chunk in reversed(parsed_chunks):
+            if "usage" in chunk:
+                final_usage_chunk = chunk
+                break
+
+        self.assertIsNotNone(final_usage_chunk, "Final usage chunk not found")
+
+        self.assertEqual(final_usage_chunk["usage"]["prompt_tokens"], 3, "Final prompt_tokens mismatch")
+        self.assertEqual(final_usage_chunk["usage"]["completion_tokens"], 2, "Final completion_tokens mismatch")
+        self.assertEqual(final_usage_chunk["usage"]["total_tokens"], 5, "Final total_tokens mismatch")
+
+        self.assertIn(
+            "completion_tokens_details", final_usage_chunk["usage"], "Final chunk missing completion_tokens_details"
+        )
+        self.assertIn(
+            "reasoning_tokens",
+            final_usage_chunk["usage"]["completion_tokens_details"],
+            "completion_tokens_details should contain reasoning_tokens",
+        )
+        self.assertGreaterEqual(
+            final_usage_chunk["usage"]["completion_tokens_details"]["reasoning_tokens"],
+            0,
+            "reasoning_tokens count mismatch",
+        )
 
 
 if __name__ == "__main__":

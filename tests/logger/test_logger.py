@@ -29,7 +29,7 @@ class LoggerTests(unittest.TestCase):
         self.tmp_dir = tempfile.mkdtemp(prefix="fd_unittest_")
         self.env_patchers = [
             patch("fastdeploy.envs.FD_LOG_DIR", self.tmp_dir),
-            patch("fastdeploy.envs.FD_DEBUG", "0"),
+            patch("fastdeploy.envs.FD_DEBUG", 0),
             patch("fastdeploy.envs.FD_LOG_BACKUP_COUNT", "1"),
         ]
         for p in self.env_patchers:

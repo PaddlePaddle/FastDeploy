@@ -316,6 +316,9 @@ def test_non_streaming_chat(openai_client):
     assert len(response.choices) > 0
     assert hasattr(response.choices[0], "message")
     assert hasattr(response.choices[0].message, "content")
+    assert hasattr(response, "usage")
+    assert hasattr(response.usage, "completion_tokens_details")
+    assert hasattr(response.usage.completion_tokens_details, "reasoning_tokens")
 
 
 # Streaming test
@@ -350,13 +353,64 @@ def test_streaming_chat(openai_client, capsys):
         temperature=1,
         max_tokens=512,
         stream=True,
+        stream_options={"include_usage": True, "continuous_usage_stats": True},
     )
 
     output = []
     for chunk in response:
+        assert hasattr(chunk, "usage")
+        assert hasattr(chunk.usage, "completion_tokens_details")
+        assert hasattr(chunk.usage.completion_tokens_details, "reasoning_tokens")
+        if hasattr(chunk, "choices") and len(chunk.choices) == 0:
+            continue
         if hasattr(chunk.choices[0], "delta") and hasattr(chunk.choices[0].delta, "content"):
             output.append(chunk.choices[0].delta.content)
     assert len(output) > 2
+
+
+def test_non_streaming_completion(openai_client):
+    """Test non-streaming completion functionality with the local service"""
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello world",
+        temperature=1,
+        max_tokens=53,
+        stream=False,
+    )
+
+    assert hasattr(response, "choices")
+    assert len(response.choices) > 0
+    assert hasattr(response.choices[0], "text")
+    assert hasattr(response, "usage")
+    assert hasattr(response.usage, "completion_tokens_details")
+    assert hasattr(response.usage.completion_tokens_details, "reasoning_tokens")
+    assert hasattr(response.usage, "completion_tokens")
+    assert response.usage.completion_tokens >= response.usage.completion_tokens_details.reasoning_tokens
+
+
+def test_streaming_completion(openai_client):
+    """Test streaming completion functionality with the local service"""
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello world",
+        temperature=1,
+        max_tokens=512,
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+
+    output = []
+    for chunk in response:
+        if hasattr(chunk, "choices") and len(chunk.choices) == 0:
+            assert hasattr(chunk, "usage")
+            assert hasattr(chunk.usage, "completion_tokens_details")
+            assert hasattr(chunk.usage.completion_tokens_details, "reasoning_tokens")
+            assert hasattr(chunk.usage, "completion_tokens")
+            assert chunk.usage.completion_tokens >= chunk.usage.completion_tokens_details.reasoning_tokens
+            continue
+        if hasattr(chunk.choices[0], "text"):
+            output.append(chunk.choices[0].text)
+    assert len(output) > 0
 
 
 # ==========================
