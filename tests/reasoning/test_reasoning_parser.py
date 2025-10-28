@@ -306,7 +306,7 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
             delta_token_ids=[100, 300, 400],
         )
         self.assertIsInstance(result, DeltaMessage)
-        self.assertEqual(result.reasoning_content, "")
+        self.assertIsNone(result.reasoning_content)
         self.assertEqual(result.content, "\n\ncd")
 
     def test_streaming_with_reasoning_new_line(self):
@@ -330,6 +330,18 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
             delta_token_ids=[100, 200, 101],
         )
         self.assertIsNone(result)
+
+    def test_streaming_with_reasoning_and_illegal_tool(self):
+        result = self.parser.extract_reasoning_content_streaming(
+            previous_text="abc</think>",
+            current_text="abc</think>\n\nhello<tool_call>",
+            delta_text="\n\nhello<tool_call>",
+            previous_token_ids=[200, 201, 202],
+            current_token_ids=[200, 201, 202, 100, 200, 101],
+            delta_token_ids=[109, 200, 101],
+        )
+        self.assertIsInstance(result, DeltaMessage)
+        self.assertEqual(result.content, "\n\nhello<tool_call>")
 
     def test_streaming_with_reasoning_no_tool(self):
         result = self.parser.extract_reasoning_content_streaming(
@@ -373,15 +385,15 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
         reasoning, content = self.parser.extract_reasoning_content(
             model_output="direct response", request=self.test_request
         )
-        self.assertEqual(reasoning, "")
-        self.assertEqual(content, "direct response")
+        self.assertEqual(reasoning, "direct response")
+        self.assertEqual(content, "")
 
     def test_batch_no_think_end_with_tool(self):
         reasoning, content = self.parser.extract_reasoning_content(
             model_output="direct response<tool_call>abc", request=self.test_request
         )
-        self.assertEqual(reasoning, "")
-        self.assertEqual(content, "direct response<tool_call>abc")
+        self.assertEqual(reasoning, "direct response<tool_call>abc")
+        self.assertEqual(content, "")
 
     def test_batch_think_end_normal_content(self):
         reasoning, content = self.parser.extract_reasoning_content(
@@ -396,6 +408,13 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
         )
         self.assertEqual(reasoning, "reasoning")
         self.assertEqual(content, "")
+
+    def test_batch_think_end_with_illegal_tool(self):
+        reasoning, content = self.parser.extract_reasoning_content(
+            model_output="reasoning</think>\nABC\n<tool_call>tool params</tool_call>", request=self.test_request
+        )
+        self.assertEqual(reasoning, "reasoning")
+        self.assertEqual(content, "\nABC\n<tool_call>tool params</tool_call>")
 
     def test_batch_think_end_content_with_newline(self):
         reasoning, content = self.parser.extract_reasoning_content(

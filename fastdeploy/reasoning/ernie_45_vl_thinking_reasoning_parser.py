@@ -75,6 +75,13 @@ class Ernie45VLThinkingReasoningParser(ReasoningParser):
         if len(delta_token_ids) == 1 and delta_token_ids[0] == self.think_end_token_id:
             return None
         if not self._is_with_tool(current_text=current_text, current_token_ids=current_token_ids):
+            if self.think_end_token in delta_text:
+                reasoning_content, _, content = delta_text.partition(self.think_end_token)
+                return (
+                    DeltaMessage(reasoning_content=reasoning_content, content=content)
+                    if reasoning_content
+                    else DeltaMessage(content=content)
+                )
             return DeltaMessage(content=delta_text)
         if self.think_end_token_id in delta_token_ids:
             end_index = delta_text.find(self.think_end_token)
