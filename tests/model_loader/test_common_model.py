@@ -89,6 +89,12 @@ model_param_map = {
             },
         ],
     },
+    "ERNIE-4.5-VL-28B-A3B": {
+        "max_num_seqs": 1,
+        "quantizations": ["wint4"],
+        "is_mm": True,
+        "torch_model_name_or_path": "ERNIE-4.5-VL-28B-A3B-PT",
+    },
 }
 
 
