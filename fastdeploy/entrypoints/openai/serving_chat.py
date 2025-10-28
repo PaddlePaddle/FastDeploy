@@ -274,8 +274,8 @@ class OpenAIServingChat:
                     if first_iteration:
                         num_prompt_tokens = len(prompt_token_ids)
                         num_cached_tokens = res.get("num_cached_tokens", 0)
-                        num_image_tokens = res.get("num_image_tokens", 0)
-                        num_video_tokens = res.get("num_video_tokens", 0)
+                        num_input_image_tokens = res.get("num_input_image_tokens", 0)
+                        num_input_video_tokens = res.get("num_input_video_tokens", 0)
                         for i in range(num_choices):
                             choice = ChatCompletionResponseStreamChoice(
                                 index=i,
@@ -314,8 +314,8 @@ class OpenAIServingChat:
                                     total_tokens=num_prompt_tokens,
                                     prompt_tokens_details=PromptTokenUsageInfo(
                                         cached_tokens=num_cached_tokens,
-                                        image_tokens=num_image_tokens,
-                                        video_tokens=num_video_tokens,
+                                        image_tokens=num_input_image_tokens,
+                                        video_tokens=num_input_video_tokens,
                                     ),
                                     completion_tokens_details=CompletionTokenUsageInfo(reasoning_tokens=0),
                                 )
@@ -472,8 +472,8 @@ class OpenAIServingChat:
             draft_logprob_contents = [[] for _ in range(num_choices)]
             completion_token_ids = [[] for _ in range(num_choices)]
             num_cached_tokens = [0] * num_choices
-            num_image_tokens = [0] * num_choices
-            num_video_tokens = [0] * num_choices
+            num_input_image_tokens = [0] * num_choices
+            num_input_video_tokens = [0] * num_choices
             response_processor = ChatResponseProcessor(
                 data_processor=self.engine_client.data_processor,
                 enable_mm_output=self.enable_mm_output,
@@ -547,8 +547,8 @@ class OpenAIServingChat:
                             completion_token_ids=completion_token_ids[idx],
                             previous_num_tokens=previous_num_tokens[idx],
                             num_cached_tokens=num_cached_tokens,
-                            num_image_tokens=num_image_tokens,
-                            num_video_tokens=num_video_tokens,
+                            num_input_image_tokens=num_input_image_tokens,
+                            num_input_video_tokens=num_input_video_tokens,
                             logprob_contents=logprob_contents,
                             response_processor=response_processor,
                         )
@@ -567,8 +567,8 @@ class OpenAIServingChat:
             total_tokens=num_prompt_tokens + num_generated_tokens,
             prompt_tokens_details=PromptTokenUsageInfo(
                 cached_tokens=sum(num_cached_tokens),
-                image_tokens=sum(num_image_tokens),
-                video_tokens=sum(num_video_tokens),
+                image_tokens=sum(num_input_image_tokens),
+                video_tokens=sum(num_input_video_tokens),
             ),
             completion_tokens_details=CompletionTokenUsageInfo(reasoning_tokens=num_reasoning_tokens),
         )
@@ -593,8 +593,8 @@ class OpenAIServingChat:
         completion_token_ids: list,
         previous_num_tokens: int,
         num_cached_tokens: list,
-        num_image_tokens: list,
-        num_video_tokens: list,
+        num_input_image_tokens: list,
+        num_input_video_tokens: list,
         logprob_contents: list,
         response_processor: ChatResponseProcessor,
     ) -> ChatCompletionResponseChoice:
@@ -626,8 +626,8 @@ class OpenAIServingChat:
         has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
         max_tokens = request.max_completion_tokens or request.max_tokens
         num_cached_tokens[idx] = data.get("num_cached_tokens", 0)
-        num_image_tokens[idx] = data.get("num_image_tokens", 0)
-        num_video_tokens[idx] = data.get("num_video_tokens", 0)
+        num_input_image_tokens[idx] = data.get("num_input_image_tokens", 0)
+        num_input_video_tokens[idx] = data.get("num_input_video_tokens", 0)
 
         finish_reason = "stop"
         if has_no_token_limit or previous_num_tokens != max_tokens:

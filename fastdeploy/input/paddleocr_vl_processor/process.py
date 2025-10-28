@@ -164,8 +164,8 @@ class DataProcessor:
             "cur_position": 0,
             "pic_cnt": 0,
             "video_cnt": 0,
-            "num_image_tokens": 0,
-            "num_video_tokens": 0,
+            "num_input_image_tokens": 0,
+            "num_input_video_tokens": 0,
             "vit_seqlen": [],
             "vit_position_ids": [],
         }
@@ -235,8 +235,8 @@ class DataProcessor:
             "cur_position": 0,
             "pic_cnt": 0,
             "video_cnt": 0,
-            "num_image_tokens": 0,
-            "num_video_tokens": 0,
+            "num_input_image_tokens": 0,
+            "num_input_video_tokens": 0,
             "vit_seqlen": [],
             "vit_position_ids": [],
         }
@@ -359,7 +359,7 @@ class DataProcessor:
 
         outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
-        outputs["num_image_tokens"] += int(num_tokens)
+        outputs["num_input_image_tokens"] += int(num_tokens)
 
         outputs["images"].append(ret["pixel_values"])
         outputs["grid_thw"].append(grid_thw)
@@ -394,7 +394,7 @@ class DataProcessor:
 
         outputs["input_ids"].extend([self.video_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
-        outputs["num_video_tokens"] += int(num_tokens)
+        outputs["num_input_video_tokens"] += int(num_tokens)
 
         outputs["images"].append(ret["pixel_values"])
         outputs["grid_thw"].append(grid_thw)

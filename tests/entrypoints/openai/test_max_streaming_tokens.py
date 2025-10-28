@@ -442,8 +442,8 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         mock_response_processor.enable_multimodal_content.return_value = False
         completion_token_ids = [[], []]
         num_cached_tokens = [0, 0]
-        num_image_tokens = [0, 0]
-        num_video_tokens = [0, 0]
+        num_input_image_tokens = [0, 0]
+        num_input_video_tokens = [0, 0]
 
         for idx, case in enumerate(test_cases):
             actual_choice = await self.chat_serving._create_chat_completion_choice(
@@ -453,8 +453,8 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 prompt_tokens=prompt_tokens,
                 completion_token_ids=completion_token_ids[idx],
                 num_cached_tokens=num_cached_tokens,
-                num_image_tokens=num_image_tokens,
-                num_video_tokens=num_video_tokens,
+                num_input_image_tokens=num_input_image_tokens,
+                num_input_video_tokens=num_input_video_tokens,
                 logprob_contents=logprob_contents,
                 response_processor=mock_response_processor,
             )
