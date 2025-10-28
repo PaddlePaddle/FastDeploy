@@ -509,8 +509,8 @@ class TestAsyncLLMEngine(unittest.TestCase):
                     model=MODEL_NAME,
                     max_model_len=512,
                     tensor_parallel_size=1,
-                    engine_worker_queue_port=6730,
-                    cache_queue_port=6731,
+                    engine_worker_queue_port=int(os.getenv("FD_ENGINE_QUEUE_PORT", "6778")) + 2,
+                    cache_queue_port=int(os.getenv("FD_CACHE_QUEUE_PORT", "6779")) + 2,
                     max_num_seqs=4,  # Reduce to avoid batch token error
                     max_num_batched_tokens=2048,  # Set appropriately
                 )
@@ -630,61 +630,6 @@ class TestAsyncLLMEngine(unittest.TestCase):
         result = self.run_async_test(_test())
         self.assertTrue(result)
 
-    def test_engine_config_branches(self):
-        """Test engine initialization config branches"""
-
-        async def _test():
-            from unittest.mock import Mock, patch
-
-            from fastdeploy.engine.args_utils import EngineArgs
-            from fastdeploy.engine.async_llm import AsyncLLMEngine
-
-            # Test case 1: num_gpu_blocks_override is not None (covers line 226: do_profile = 0)
-            engine_args = EngineArgs(
-                model=MODEL_NAME,
-                max_model_len=512,
-                tensor_parallel_size=1,
-                engine_worker_queue_port=6710,
-                cache_queue_port=6711,
-                max_num_seqs=4,  # Reduce to avoid batch token error
-                max_num_batched_tokens=2048,  # Set appropriately
-                num_gpu_blocks_override=100,  # Set this to trigger do_profile = 0
-            )
-
-            test_engine = AsyncLLMEngine.from_engine_args(engine_args)
-            self.assertEqual(test_engine.do_profile, 0)
-
-            # Mock all signals to prevent cleanup errors
-
-            test_engine.worker_ready_signal = Mock()
-            test_engine.worker_ready_signal.clear = Mock()
-            test_engine.loaded_model_signal = Mock()
-            test_engine.loaded_model_signal.clear = Mock()
-            test_engine.get_profile_block_num_signal = Mock()
-            test_engine.get_profile_block_num_signal.clear = Mock()
-
-            # Test case 2: Test tokenizer branch logic (lines 231, 233)
-            # This tests the tokenizer acquisition from input_processor and data_processor
-            mock_tokenizer = Mock()
-
-            # Test input_processor tokenizer branch (line 231)
-            with patch.object(test_engine, "input_processor") as mock_input:
-                mock_input.tokenizer = mock_tokenizer
-
-                # Simulate the tokenizer assignment logic
-                tokenizer = None
-                if hasattr(mock_input, "tokenizer"):
-                    tokenizer = mock_input.tokenizer
-                self.assertEqual(tokenizer, mock_tokenizer)
-
-            # Clean up
-            del test_engine
-
-            return True
-
-        result = self.run_async_test(_test())
-        self.assertTrue(result)
-
     def test_shutdown_exception_handling(self):
         """Test shutdown method exception handling"""
 
@@ -700,8 +645,8 @@ class TestAsyncLLMEngine(unittest.TestCase):
                 model=MODEL_NAME,
                 max_model_len=512,
                 tensor_parallel_size=1,
-                engine_worker_queue_port=6712,
-                cache_queue_port=6713,
+                engine_worker_queue_port=int(os.getenv("FD_ENGINE_QUEUE_PORT", "6778")) + 4,
+                cache_queue_port=int(os.getenv("FD_CACHE_QUEUE_PORT", "6779")) + 4,
                 max_num_seqs=4,  # Reduce to avoid batch token error
                 max_num_batched_tokens=2048,  # Set appropriately
             )
@@ -876,7 +821,7 @@ class TestAsyncLLMEngine(unittest.TestCase):
         """Test various config conditions"""
 
         async def _test():
-            from unittest.mock import Mock
+            from unittest.mock import Mock, patch
 
             from fastdeploy.engine.args_utils import EngineArgs
             from fastdeploy.engine.async_llm import AsyncLLMEngine
@@ -888,8 +833,8 @@ class TestAsyncLLMEngine(unittest.TestCase):
                     model=MODEL_NAME,
                     max_model_len=512,
                     tensor_parallel_size=1,
-                    engine_worker_queue_port=6720,
-                    cache_queue_port=6721,
+                    engine_worker_queue_port=int(os.getenv("FD_ENGINE_QUEUE_PORT", "6778")) + 6,
+                    cache_queue_port=int(os.getenv("FD_CACHE_QUEUE_PORT", "6779")) + 6,
                     num_gpu_blocks_override=50,  # Set to avoid profiling
                 )
 
@@ -911,6 +856,19 @@ class TestAsyncLLMEngine(unittest.TestCase):
                 test_engine.engine_service.start_cache_service = Mock(return_value=[])
                 test_engine.launched_cache_manager_signal = Mock()
                 test_engine.launched_cache_manager_signal.value = [0]
+
+                # This tests the tokenizer acquisition from input_processor and data_processor
+                mock_tokenizer = Mock()
+
+                # Test input_processor tokenizer branch (line 231)
+                with patch.object(test_engine, "input_processor") as mock_input:
+                    mock_input.tokenizer = mock_tokenizer
+
+                    # Simulate the tokenizer assignment logic
+                    tokenizer = None
+                    if hasattr(mock_input, "tokenizer"):
+                        tokenizer = mock_input.tokenizer
+                    self.assertEqual(tokenizer, mock_tokenizer)
 
                 # This should trigger cache manager start (lines 267-268)
                 # Simulate the condition in start() method
@@ -934,6 +892,7 @@ class TestAsyncLLMEngine(unittest.TestCase):
                 if test_engine.cfg.scheduler_config.splitwise_role != "mixed":
                     test_engine.launched_cache_manager_signal.value[0] = 1
 
+                await test_engine.shutdown()
                 del test_engine
 
             except Exception as e:
