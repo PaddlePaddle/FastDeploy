@@ -19,17 +19,24 @@ import os
 import time
 import traceback
 import uuid
+from copy import copy
 
 import numpy as np
+from filelock import FileLock
 
 from fastdeploy import envs
 from fastdeploy.config import ModelConfig
 from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
 from fastdeploy.input.preprocess import InputPreprocessor
-from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
+from fastdeploy.inter_communicator import (
+    IPCSignal,
+    KVCacheStatus,
+    ModelWeightsStatus,
+    PrefixTreeStatus,
+    ZmqIpcClient,
+)
 from fastdeploy.metrics.work_metrics import work_process_metrics
-from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import (
     EngineError,
@@ -54,32 +61,40 @@ class EngineClient:
         port,
         limit_mm_per_prompt,
         mm_processor_kwargs,
-        # enable_mm=False,
         reasoning_parser=None,
         data_parallel_size=1,
         enable_logprob=False,
         workers=1,
         tool_parser=None,
+        enable_prefix_caching=None,
+        splitwise_role=None,
+        max_processor_cache=0,
     ):
-        architectures = ModelConfig({"model": model_name_or_path}).architectures[0]
-        if MultimodalRegistry.contains_model(architectures):
-            self.enable_mm = True
-        else:
-            self.enable_mm = False
-
+        model_config = ModelConfig({"model": model_name_or_path})
+        self.enable_mm = model_config.enable_mm
+        enable_processor_cache = self.enable_mm and max_processor_cache > 0
         input_processor = InputPreprocessor(
-            tokenizer,
+            model_config,
             reasoning_parser,
             limit_mm_per_prompt,
             mm_processor_kwargs,
-            self.enable_mm,
             tool_parser,
+            enable_processor_cache,
         )
         self.enable_logprob = enable_logprob
         self.reasoning_parser = reasoning_parser
         self.data_processor = input_processor.create_processor()
         self.max_model_len = max_model_len
+        self.enable_prefix_caching = enable_prefix_caching
+        self.enable_splitwise = splitwise_role != "mixed"
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+
+        if self.enable_mm and self.enable_prefix_caching:
+            from fastdeploy.cache_manager.cache_data import (
+                is_mm_model_disable_prefix_cache,
+            )
+
+            self.disable_prefix_mm = is_mm_model_disable_prefix_cache(model_config)
 
         if tensor_parallel_size <= max_chips_per_node:
             self.is_master = True
@@ -104,10 +119,27 @@ class EngineClient:
             suffix=port,
             create=False,
         )
+        prefix_tree_status = np.zeros([1], dtype=np.int32)
+        self.prefix_tree_status_signal = IPCSignal(
+            name="prefix_tree_status",
+            array=prefix_tree_status,
+            dtype=np.int32,
+            suffix=port,
+            create=False,
+        )
+        kv_cache_status = np.zeros([1], dtype=np.int32)
+        self.kv_cache_status_signal = IPCSignal(
+            name="kv_cache_status",
+            array=kv_cache_status,
+            dtype=np.int32,
+            suffix=port,
+            create=False,
+        )
         self.connection_manager = DealerConnectionManager(
             pid, max_connections=int(os.getenv("FD_DEALER_CONNECTIONS", 50))
         )
         self.connection_initialized = False
+        self.clear_update_lock = FileLock(f"/tmp/fd_weight_clear_update_lock__pid{pid}_port{port}.lock")
 
     def create_zmq_client(self, model, mode):
         """
@@ -130,6 +162,16 @@ class EngineClient:
         await self.add_requests(prompts)
         return prompts["prompt_token_ids"]
 
+    def _check_mm_disable_prefix_cache(self, task):
+        is_multimodal_data = False
+        if self.disable_prefix_mm:
+            multimodal_inputs = task.get("multimodal_inputs", [])
+            if multimodal_inputs:
+                token_type_ids = multimodal_inputs.get("token_type_ids", [])
+                if token_type_ids:
+                    is_multimodal_data = np.sum(token_type_ids) > 0
+        return is_multimodal_data
+
     async def add_requests(self, task):
         """
         Add a new request to the queue.
@@ -144,19 +186,27 @@ class EngineClient:
 
         task["preprocess_start_time"] = time.time()
         try:
-            chat_template_kwargs = task.get("chat_template_kwargs", {})
-            chat_template_kwargs.update({"chat_template": task.get("chat_template"), "tools": task.get("tools")})
+            chat_template_kwargs = task.get("chat_template_kwargs") or {}
+            chat_template_kwargs.update({"chat_template": task.get("chat_template")})
             task["chat_template_kwargs"] = chat_template_kwargs
             if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
                 await self.data_processor.process_request_dict(task, self.max_model_len)
             else:
                 self.data_processor.process_request_dict(task, self.max_model_len)
 
+            if self.enable_mm and self.enable_prefix_caching:
+                if self._check_mm_disable_prefix_cache(task):
+                    api_server_logger.error(
+                        "The current service does not support processing requests containing multimodal data when prefix cache is enabled. Please send only text-based requests or disable prefix cache"
+                    )
+                    raise EngineError(
+                        "The current service does not support processing requests containing multimodal data when prefix cache is enabled. Please send only text-based requests or disable prefix cache",
+                        error_code=400,
+                    )
+
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]
             task["max_tokens"] = min(self.max_model_len - input_ids_len, task.get("max_tokens"))
-            if task.get("reasoning_max_tokens", None) is None:
-                task["reasoning_max_tokens"] = max(int(task["max_tokens"] * 0.8), 1)
             min_tokens = task.get("min_tokens", 1)
             if "messages" in task:
                 del task["messages"]
@@ -212,14 +262,28 @@ class EngineClient:
 
         self.valid_parameters(task)
         api_server_logger.debug(f"Receive task: {task}")
+        n = task.get("n", 1)
         try:
-            if not self.enable_mm:
-                self.zmq_client.send_json(task)
+            request_id_idx = task.get("request_id")
+            parts = request_id_idx.rsplit("_", 1)
+            if len(parts) == 1:
+                self._send_task(task)
             else:
-                self.zmq_client.send_pyobj(task)
+                request_id = parts[0]
+                index = int(parts[1])
+                for i in range(index * n, (index + 1) * n):
+                    child_task = copy(task)
+                    child_task["request_id"] = f"{request_id}_{i}"
+                    self._send_task(child_task)
         except Exception as e:
             api_server_logger.error(f"zmq_client send task error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
+
+    def _send_task(self, task):
+        if not self.enable_mm:
+            self.zmq_client.send_json(task)
+        else:
+            self.zmq_client.send_pyobj(task)
 
     def valid_parameters(self, data):
         """
@@ -227,10 +291,6 @@ class EngineClient:
         超参数（top_p、seed、frequency_penalty、temperature、presence_penalty）的校验逻辑
         前置到了ChatCompletionRequest/CompletionRequest中
         """
-
-        if data.get("n") is not None:
-            if data["n"] != 1:
-                raise ParameterError("n", "n only support 1.")
 
         if data.get("max_tokens") is not None:
             if data["max_tokens"] < 1 or data["max_tokens"] >= self.max_model_len:
@@ -300,7 +360,7 @@ class EngineClient:
         Check the health of the model server by checking whether all workers are alive.
 
         """
-        if self.model_weights_status_signal.value[0] == 0:
+        if self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL:
             return True, ""
         else:
             return False, "No model weight enabled"
@@ -311,21 +371,44 @@ class EngineClient:
         1 : worker receive the signal and start to update model weight
         2 : worker update finish and notify client
         """
-        if self.model_weights_status_signal.value[0] == 0:
-            return True, ""
-        if self.model_weights_status_signal.value[0] == 1:
-            return False, "updating model weight already"
+        with self.clear_update_lock:
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL:
+                return True, ""
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.UPDATING:
+                return False, "worker is updating model weight already"
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARING:
+                return False, "worker is clearing model weight, cannot update now"
 
-        self.model_weights_status_signal.value[0] = 1
-        api_server_logger.info(f"start update model weight {self.model_weights_status_signal.value}")
-        while self.model_weights_status_signal.value[0] != 0 and timeout != 0:
+            self.model_weights_status_signal.value[0] = ModelWeightsStatus.UPDATING
+            if self.enable_prefix_caching or self.enable_splitwise:
+                self.kv_cache_status_signal.value[0] = KVCacheStatus.UPDATING
+            if self.enable_prefix_caching:
+                self.prefix_tree_status_signal.value[0] = PrefixTreeStatus.UPDATING
+            api_server_logger.info(f"start update model weight {self.model_weights_status_signal.value}")
+            all_updated = False
+            while timeout >= 0 and not all_updated:
+                api_server_logger.info(
+                    f"Updating model weights.. "
+                    f"model_weights_status: {self.model_weights_status_signal.value[0]}, "
+                    f"prefix_tree_status: {self.prefix_tree_status_signal.value[0]}, "
+                    f"kv_cache_status: {self.kv_cache_status_signal.value[0]} "
+                )
+                weight_updated = self.model_weights_status_signal.value[0] == ModelWeightsStatus.NORMAL
+                cache_updated = self.kv_cache_status_signal.value[0] == KVCacheStatus.NORMAL
+                prefix_updated = self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.NORMAL
+                if self.enable_prefix_caching or self.enable_splitwise:
+                    if self.enable_prefix_caching:
+                        all_updated = weight_updated and cache_updated and prefix_updated
+                    else:
+                        all_updated = weight_updated and cache_updated
+                else:
+                    all_updated = weight_updated
+                time.sleep(1)
+                timeout -= 1
+            if timeout < 0:
+                return False, "Update model weight timeout"
             time.sleep(1)
-            timeout -= 1
-            continue
-        if self.model_weights_status_signal.value[0] != 0:
-            return False, "Update model weight timeout"
-        time.sleep(1)
-        return True, ""
+            return True, ""
 
     def clear_load_weight(self, timeout=300):
         """
@@ -333,22 +416,47 @@ class EngineClient:
         -1 : worker receive the signal and start to clear model weight
         -2 : worker clear finish and notify client
         """
-        if self.model_weights_status_signal.value[0] == -2:
-            return True, ""
-        if self.model_weights_status_signal.value[0] == -1:
-            return False, "clearing model weight already"
 
-        self.model_weights_status_signal.value[0] = -1
+        with self.clear_update_lock:
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED:
+                return True, ""
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARING:
+                return False, "worker is clearing model weight already"
+            if self.model_weights_status_signal.value[0] == ModelWeightsStatus.UPDATING:
+                return False, "worker is updating model weight, cannot clear now"
 
-        api_server_logger.info(f"start clear model weight {self.model_weights_status_signal.value}")
-        while self.model_weights_status_signal.value[0] != -2 and timeout != 0:
+            self.model_weights_status_signal.value[0] = ModelWeightsStatus.CLEARING
+            if self.enable_prefix_caching or self.enable_splitwise:
+                self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARING
+            if self.enable_prefix_caching:
+                self.prefix_tree_status_signal.value[0] = PrefixTreeStatus.CLEARING
+
+            api_server_logger.info(f"start clear model weight {self.model_weights_status_signal.value}")
+            all_cleared = False
+            while timeout >= 0 and not all_cleared:
+                api_server_logger.info(
+                    f"Clearing model weights.. "
+                    f"model_weights_status: {self.model_weights_status_signal.value[0]}, "
+                    f"prefix_tree_status: {self.prefix_tree_status_signal.value[0]}, "
+                    f"kv_cache_status: {self.kv_cache_status_signal.value[0]} "
+                )
+                weight_cleared = self.model_weights_status_signal.value[0] == ModelWeightsStatus.CLEARED
+                cache_cleared = self.kv_cache_status_signal.value[0] == KVCacheStatus.CLEARED
+                prefix_cleared = self.prefix_tree_status_signal.value[0] == PrefixTreeStatus.CLEARED
+                if self.enable_prefix_caching or self.enable_splitwise:
+                    if self.enable_prefix_caching:
+                        all_cleared = weight_cleared and cache_cleared and prefix_cleared
+                    else:
+                        all_cleared = weight_cleared and cache_cleared
+                else:
+                    all_cleared = weight_cleared
+                time.sleep(1)
+                timeout -= 1
+
+            if timeout < 0:
+                return False, "Clear model weight timeout"
             time.sleep(1)
-            timeout -= 1
-            continue
-        if self.model_weights_status_signal.value[0] != -2:
-            return False, "clear model weight timeout"
-        time.sleep(1)
-        return True, ""
+            return True, ""
 
     def check_model_weight_status(self):
         return self.model_weights_status_signal.value[0] < 0

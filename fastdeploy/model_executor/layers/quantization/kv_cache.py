@@ -22,6 +22,7 @@ from paddle import nn
 
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import set_weight_attrs
+from fastdeploy.platforms import current_platform
 
 from .quant_base import QuantConfigBase, QuantMethodBase
 
@@ -37,6 +38,7 @@ class KvCacheQuantzationTypes(str, Enum):
     INT8_ZP = "int8_zp"
     INT4_ZP = "int4_zp"
     FP8_ZP = "float8_e4m3fn_zp"
+    DYNAMIC_INT2_ZP = "dynamic_int2_zp"
 
 
 class KvCacheQuantConfig(QuantConfigBase):
@@ -72,6 +74,8 @@ class KvCacheQuantConfig(QuantConfigBase):
             self.max_bound = 448.0
         elif self.quant_type == KvCacheQuantzationTypes.INT4_ZP:
             self.max_bound = 7.0
+        elif self.quant_type == KvCacheQuantzationTypes.DYNAMIC_INT2_ZP:
+            self.max_bound = 3.0
         else:
             raise ValueError(f"Invalid Kvcache type: {kv_cache_quant_type}")
 
@@ -94,7 +98,14 @@ class KvCacheQuantConfig(QuantConfigBase):
         """
         get_quant_method
         """
-        return KVCacheMethodBase(self)
+        if current_platform.is_xpu():
+            from fastdeploy.model_executor.layers.backends.xpu.quantization.kv_cache import (
+                XPUKVCacheMethodBase,
+            )
+
+            return XPUKVCacheMethodBase(self)
+        else:
+            return KVCacheMethodBase(self)
 
 
 class KVCacheMethodBase(QuantMethodBase):
@@ -118,6 +129,7 @@ class KVCacheMethodBase(QuantMethodBase):
         """
         cache_k_zeropoint = get_tensor(state_dict.pop(self.cache_k_zp_name)).cast(paddle.get_default_dtype())
         cache_v_zeropoint = get_tensor(state_dict.pop(self.cache_v_zp_name)).cast(paddle.get_default_dtype())
+
         layer.cache_k_zp.set_value(cache_k_zeropoint)
         layer.cache_v_zp.set_value(cache_v_zeropoint)
 
@@ -125,7 +137,6 @@ class KVCacheMethodBase(QuantMethodBase):
         """
         load_scale
         """
-
         cache_k_scale_tensor = (
             get_tensor(state_dict.pop(self.cache_k_scale_name)).cast(paddle.get_default_dtype()).reshape_([-1])
         )
@@ -165,6 +176,10 @@ class KVCacheMethodBase(QuantMethodBase):
             layer.cache_quant_type_str = "cache_int4_zp"
             layer.quant_max_bound = 7.0
             layer.quant_min_bound = -7.0
+        elif self.cache_quant_config.quant_type == KvCacheQuantzationTypes.DYNAMIC_INT2_ZP:
+            layer.cache_quant_type_str = "dynamic_int2_zp"
+            layer.quant_max_bound = 3.0
+            layer.quant_min_bound = 0.0
         elif self.cache_quant_config.quant_type == KvCacheQuantzationTypes.BLOCK_WISE_FP8:
             layer.cache_quant_type_str = "block_wise_fp8"
             layer.quant_max_bound = 448.0
@@ -186,6 +201,7 @@ class KVCacheMethodBase(QuantMethodBase):
             dtype=paddle.get_default_dtype(),
             default_initializer=paddle.nn.initializer.Constant(0),
         )
+
         set_weight_attrs(
             layer.cache_k_scale,
             {
@@ -198,6 +214,7 @@ class KVCacheMethodBase(QuantMethodBase):
                 **extra_weight_attrs,
             },
         )
+
         layer.cache_k_out_scale = layer.create_parameter(
             shape=scale_shape,
             dtype=paddle.get_default_dtype(),
@@ -243,7 +260,7 @@ class KVCacheMethodBase(QuantMethodBase):
         self.cache_k_zp_name = layer.prefix + ".cachek_matmul.activation_zero_point"
         self.cache_v_zp_name = layer.prefix + ".cachev_matmul.activation_zero_point"
 
-        if "block_wise" not in layer.cache_quant_type_str:
+        if "block_wise" not in layer.cache_quant_type_str and "dynamic" not in layer.cache_quant_type_str:
             self.load_scale(layer, state_dict)
             if self.cache_quant_config.has_zero_point:
                 self.load_zp(layer, state_dict)

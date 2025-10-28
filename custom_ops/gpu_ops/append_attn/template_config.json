@@ -1,0 +1,144 @@
+{
+  "multiquery_attention_c8": {
+    "name": "multiquery_attention_c8",
+    "function_name": "MultiQueryAppendC8Attention",
+    "impl_file": "multiquery_attention_c8_impl.cuh",
+    "template_params": [
+      "T",
+      "GROUP_SIZE",
+      "HEAD_DIM",
+      "BLOCK_SIZE",
+      "CAUSAL",
+      "BLOCK_SHAPE_Q",
+      "NUM_WARP_Q",
+      "OutT",
+      "ENABLE_PREFILL",
+      "IsFP8",
+      "IsDynamicC8"
+    ],
+    "dispatch_params": {
+      "GROUP_SIZE": [1, 2, 4, 5, 6, 7, 8, 12, 14, 16],
+      "HEAD_DIM": [128],
+      "BLOCK_SIZE": [64],
+      "CAUSAL": [0, 1],
+      "BLOCK_SHAPE_Q": [16, 32, 64, 128],
+      "ENABLE_PREFILL": [0, 1],
+      "IsFP8": [0, 1],
+      "IsDynamicC8": [0, 1]
+    },
+    "data_types": [
+      ["paddle::float16", "paddle::float16", "float16_float16"],
+      ["paddle::float16", "paddle::float8_e4m3fn", "float16_fp8"],
+      ["paddle::float16", "int8_t", "float16_int8"],
+      ["paddle::bfloat16", "paddle::bfloat16", "bfloat16_bfloat16"],
+      ["paddle::bfloat16", "paddle::float8_e4m3fn", "bfloat16_fp8"],
+      ["paddle::bfloat16", "int8_t", "bfloat16_int8"]
+    ],
+    "max_instances_per_file": 80,
+    "file_prefix": "multiquery_attention_c8_",
+    "function_signature": "template void {function_name}{template_args}(\n    const AppendAttnMetaData &meta_data,\n    const paddle::Tensor &qkv,\n    const paddle::Tensor &cache_k,\n    const paddle::Tensor &cache_v,\n    const paddle::optional<paddle::Tensor> &attn_mask,\n    const paddle::Tensor &cache_k_scale,\n    const paddle::Tensor &cache_v_scale,\n    const paddle::optional<paddle::Tensor> &shift_bias,\n    const paddle::optional<paddle::Tensor> &smooth_weight,\n    const paddle::optional<paddle::Tensor> &sinks,\n    const paddle::Tensor &seq_lens_q,\n    const paddle::Tensor &seq_lens_kv,\n    const paddle::Tensor &seq_lens_encoder,\n    const paddle::Tensor &batch_id_per_token,\n    const paddle::Tensor &cu_seqlens_q,\n    const paddle::Tensor &block_table,\n    const paddle::Tensor &batch_ids,\n    const paddle::Tensor &tile_ids_per_batch,\n    const int num_blocks_x_cpu,\n    const int max_seq_len,\n    const int max_dec_len,\n    const float quant_max_bound,\n    const float quant_min_bound,\n    const float in_scale,\n    const int max_partition_size,\n    const int encoder_max_partition_size,\n    const int speculate_max_draft_token_num,\n    const bool is_decoder,\n    cudaStream_t &stream,\n    paddle::Tensor *out,\n    const int sliding_window);\n\n"
+  },
+  "multiquery_attention_c4": {
+    "name": "multiquery_attention_c4",
+    "function_name": "MultiQueryAppendC4Attention",
+    "impl_file": "multiquery_attention_c4_impl.cuh",
+    "template_params": [
+      "T",
+      "GROUP_SIZE",
+      "HEAD_DIM",
+      "BLOCK_SIZE",
+      "CAUSAL",
+      "BLOCK_SHAPE_Q",
+      "NUM_WARP_Q",
+      "OutT",
+      "ENABLE_PREFILL"
+    ],
+    "dispatch_params": {
+      "GROUP_SIZE": [1, 2, 4, 5, 6, 7, 8, 12, 14, 16],
+      "HEAD_DIM": [128],
+      "BLOCK_SIZE": [64],
+      "CAUSAL": [0, 1],
+      "BLOCK_SHAPE_Q": [16, 32, 64, 128],
+      "ENABLE_PREFILL": [0, 1]
+    },
+    "data_types": [
+      ["paddle::float16", "paddle::float16", "float16_float16"],
+      ["paddle::float16", "paddle::float8_e4m3fn", "float16_fp8"],
+      ["paddle::float16", "int8_t", "float16_int8"],
+      ["paddle::bfloat16", "paddle::bfloat16", "bfloat16_bfloat16"],
+      ["paddle::bfloat16", "paddle::float8_e4m3fn", "bfloat16_fp8"],
+      ["paddle::bfloat16", "int8_t", "bfloat16_int8"]
+    ],
+    "max_instances_per_file": 160,
+    "file_prefix": "multiquery_attention_c4_",
+    "function_signature": "template void {function_name}{template_args}(\n    const AppendAttnMetaData &meta_data,\n    const paddle::Tensor &qkv,\n    const paddle::Tensor &cache_k,\n    const paddle::Tensor &cache_v,\n    const paddle::optional<paddle::Tensor> &attn_mask,\n    const paddle::Tensor &cache_k_scale,\n    const paddle::Tensor &cache_v_scale,\n    const paddle::optional<paddle::Tensor> &cache_k_zp,\n    const paddle::optional<paddle::Tensor> &cache_v_zp,\n    const paddle::optional<paddle::Tensor> &shift_bias,\n    const paddle::optional<paddle::Tensor> &smooth_weight,\n    const paddle::optional<paddle::Tensor> &sinks,\n    const paddle::Tensor &seq_lens_q,\n    const paddle::Tensor &seq_lens_kv,\n    const paddle::Tensor &seq_lens_encoder,\n    const paddle::Tensor &batch_id_per_token,\n    const paddle::Tensor &cu_seqlens_q,\n    const paddle::Tensor &block_table,\n    const paddle::Tensor &batch_ids,\n    const paddle::Tensor &tile_ids_per_batch,\n    const int num_blocks_x_cpu,\n    const int max_seq_len,\n    const int max_dec_len,\n    const float quant_max_bound,\n    const float quant_min_bound,\n    const float in_scale,\n    const int max_partition_size,\n    const int encoder_max_partition_size,\n    const int speculate_max_draft_token_num,\n    const bool is_decoder,\n    cudaStream_t &stream,\n    paddle::Tensor *out,\n    const int sliding_window);\n\n"
+  },
+  "multiquery_attention_c16": {
+    "name": "multiquery_attention_c16",
+    "function_name": "MultiQueryAppendAttention",
+    "impl_file": "multiquery_attention_c16_impl.cuh",
+    "template_params": [
+      "T",
+      "GROUP_SIZE",
+      "HEAD_DIM",
+      "BLOCK_SIZE",
+      "CAUSAL",
+      "BLOCK_SHAPE_Q",
+      "NUM_WARP_Q",
+      "OutT",
+      "ENABLE_PREFILL"
+    ],
+    "dispatch_params": {
+      "GROUP_SIZE": [1, 2, 4, 5, 6, 7, 8, 12, 14, 16],
+      "HEAD_DIM": [64,128],
+      "BLOCK_SIZE": [64],
+      "CAUSAL": [0, 1],
+      "BLOCK_SHAPE_Q": [16, 32, 64, 128],
+      "ENABLE_PREFILL": [0, 1]
+    },
+    "data_types": [
+      ["paddle::float16", "paddle::float16", "float16_float16"],
+      ["paddle::float16", "paddle::float8_e4m3fn", "float16_fp8"],
+      ["paddle::float16", "int8_t", "float16_int8"],
+      ["paddle::bfloat16", "paddle::bfloat16", "bfloat16_bfloat16"],
+      ["paddle::bfloat16", "paddle::float8_e4m3fn", "bfloat16_fp8"],
+      ["paddle::bfloat16", "int8_t", "bfloat16_int8"]
+    ],
+    "max_instances_per_file": 160,
+    "file_prefix": "multiquery_attention_c16_",
+    "function_signature": "template void {function_name}{template_args}(\n    const AppendAttnMetaData &meta_data,\n    const paddle::Tensor &qkv,\n    const paddle::Tensor &cache_k,\n    const paddle::Tensor &cache_v,\n    const paddle::optional<paddle::Tensor> &attn_mask,\n    const paddle::optional<paddle::Tensor> &shift_bias,\n    const paddle::optional<paddle::Tensor> &smooth_weight,\n    const paddle::optional<paddle::Tensor> &sinks,\n    const paddle::Tensor &seq_lens_q,\n    const paddle::Tensor &seq_lens_kv,\n    const paddle::Tensor &seq_lens_encoder,\n    const paddle::Tensor &batch_id_per_token,\n    const paddle::Tensor &cu_seqlens_q,\n    const paddle::Tensor &block_table,\n    const paddle::Tensor &batch_ids,\n    const paddle::Tensor &tile_ids_per_batch,\n    const int num_blocks_x_cpu,\n    const int max_seq_len,\n    const int max_dec_len,\n    const float quant_max_bound,\n    const float quant_min_bound,\n    const float in_scale,\n    const int max_partition_size,\n    const int encoder_max_partition_size,\n    const int speculate_max_draft_token_num,\n    const bool is_decoder,\n    cudaStream_t &stream,\n    paddle::Tensor *out,\n    const int sliding_window);\n\n"
+  },
+  "multiquery_decoder_attention": {
+    "name": "multiquery_decoder_attention",
+    "function_name": "MultiQueryDecoderAttention",
+    "impl_file": "multiquery_decoder_attention_impl.cuh",
+    "template_params": [
+      "T",
+      "GROUP_SIZE",
+      "HEAD_DIM_QK",
+      "HEAD_DIM_V",
+      "BLOCK_SIZE",
+      "CAUSAL",
+      "NUM_STAGE",
+      "cache_bytes",
+      "DEAL_EACH_TIME"
+    ],
+    "dispatch_params": {
+      "GROUP_SIZE": [8, 16, 128],
+      "HEAD_DIM_QK": [128, 192, 512, 576],
+      "HEAD_DIM_V": [128, 192, 512, 576],
+      "BLOCK_SIZE": [64],
+      "CAUSAL": [0, 1],
+      "NUM_STAGE": [2],
+      "cache_bytes": [16],
+      "DEAL_EACH_TIME": [32, 64]
+    },
+    "data_types": [
+      ["paddle::float16", "", "float16"],
+      ["paddle::bfloat16", "", "bfloat16"]
+    ],
+    "max_instances_per_file": 60,
+    "file_prefix": "multiquery_decoder_attention_",
+    "function_signature": "template void {function_name}{template_args}(\n    const AppendAttnMetaData& meta_data,\n    cudaStream_t &stream,\n    const paddle::Tensor &q,\n    const paddle::Tensor &cache_k,\n    const paddle::Tensor &cache_v,\n    const paddle::optional<paddle::Tensor>& attn_mask,\n    const paddle::optional<paddle::Tensor>& shift_bias,\n    const paddle::optional<paddle::Tensor>& smooth_weight,\n    const paddle::Tensor &seq_lens_q,\n    const paddle::Tensor &seq_lens_kv,\n    const paddle::Tensor &batch_id_per_token,\n    const paddle::Tensor &cu_seqlens_q,\n    const paddle::Tensor &block_table,\n    const int max_seq_len,\n    const int max_dec_len,\n    const float rope_scale,\n    const float rope_theta,\n    const float softmax_scale,\n    const float in_scale,\n    paddle::Tensor *out);\n\n"
+  }
+}

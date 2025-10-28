@@ -75,8 +75,8 @@ class PlasAttentionBackend(AttentionBackend):
         super().__init__()
         self.attention_metadata: PlasAttentionMetadata = None
         assert fd_config.plas_attention_config is not None, "plas_attention_config is None"
-        self.block_size = fd_config.parallel_config.block_size
-        self.max_seq_len = fd_config.parallel_config.max_model_len
+        self.block_size = fd_config.cache_config.block_size
+        self.max_seq_len = fd_config.model_config.max_model_len
         self.max_num_seqs = fd_config.scheduler_config.max_num_seqs
         self.kv_num_heads = kv_num_heads
         self.num_heads = num_heads

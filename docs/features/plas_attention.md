@@ -1,3 +1,5 @@
+[简体中文](../zh/features/plas_attention.md)
+
 # PLAS
 
 ## Introduction

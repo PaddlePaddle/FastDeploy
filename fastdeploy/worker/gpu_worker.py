@@ -64,7 +64,7 @@ class GpuWorker(WorkerBase):
             self.device_ids = self.parallel_config.device_ids.split(",")
             self.device = f"gpu:{self.local_rank % self.max_chips_per_node}"
             paddle.device.set_device(self.device)
-            paddle.set_default_dtype(self.parallel_config.dtype)
+            paddle.set_default_dtype(self.model_config.dtype)
 
             gc.collect()
             paddle.device.cuda.empty_cache()
@@ -141,7 +141,7 @@ class GpuWorker(WorkerBase):
         paddle_allocated_mem_after_run = paddle.device.cuda.max_memory_allocated(local_rank)
 
         model_block_memory_used = self.cal_theortical_kvcache()
-        paddle_peak_increase = paddle_reserved_mem_after_run - paddle_allocated_mem_before_run
+        paddle_peak_increase = paddle_allocated_mem_after_run - paddle_allocated_mem_before_run
 
         paddle.device.cuda.empty_cache()
 
@@ -153,7 +153,7 @@ class GpuWorker(WorkerBase):
             - after_run_meminfo.used
             - paddle_peak_increase
         )
-        available_kv_cache_memory += model_block_memory_used * self.parallel_config.total_block_num
+        available_kv_cache_memory += model_block_memory_used * self.cache_config.total_block_num
 
         end_time = time.perf_counter()
         logger.info(
@@ -207,7 +207,7 @@ class GpuWorker(WorkerBase):
         """
         Perform the warm-up and the graph optimization
         """
-        if self.model_runner.graph_opt_level >= 1:
+        if self.fd_config.graph_opt_config.graph_opt_level >= 1 and not self.model_runner.use_cudagraph:
             self.model_runner.sot_warmup()
         # Trigger cuda graph capture
         self.model_runner.capture_model()

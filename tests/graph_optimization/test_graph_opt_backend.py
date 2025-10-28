@@ -32,6 +32,7 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
 )
+from fastdeploy.model_executor.graph_optimization.utils import sot_warmup_guard
 
 
 @support_graph_optimization
@@ -46,7 +47,7 @@ class Attention(nn.Layer):
 
     def forward(
         self,
-        ids_remove_padding,
+        ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
         hidden_states = self.embed_tokens(forward_meta.ids_remove_padding)
@@ -58,7 +59,7 @@ class Attention(nn.Layer):
 
     def forward_dynamic(
         self,
-        ids_remove_padding,
+        ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
         hidden_states = self.embed_tokens(forward_meta.ids_remove_padding)
@@ -75,12 +76,14 @@ class TestGraphOptBackend(unittest.TestCase):
     """
 
     def setUp(self):
+        paddle.seed(2025)
+
         """Set up test fixtures, compute baseline once for all tests"""
         # Setup common test data that will be reused across all tests
         self.input_shape = (4, 8)
         self.dtype = "int32"
         self.model_config = {}
-        self.max_num_seqs = 1
+        self.max_num_seqs = 4
 
         # Create baseline configuration (dynamic graph, no cudagraph)
         baseline_graph_opt_config = GraphOptimizationConfig(args={})
@@ -93,6 +96,7 @@ class TestGraphOptBackend(unittest.TestCase):
         baseline_cache_config = CacheConfig({})
         baseline_parallel_config = ParallelConfig(args={})
         model_config = Mock()
+        model_config.max_model_len = 512
         self.baseline_fd_config = FDConfig(
             graph_opt_config=baseline_graph_opt_config,
             scheduler_config=baseline_scheduler_config,
@@ -141,6 +145,7 @@ class TestGraphOptBackend(unittest.TestCase):
         cache_config = CacheConfig({})
         parallel_config = ParallelConfig(args={})
         model_config = Mock()
+        model_config.max_model_len = 512
 
         # Create FD config
         return FDConfig(
@@ -162,14 +167,24 @@ class TestGraphOptBackend(unittest.TestCase):
         """
         test_model = Attention(fd_config=fd_config, **self.model_config)
 
+        with sot_warmup_guard(True):
+            _ = test_model(ids_remove_padding=self.input_tensor, forward_meta=self.forward_meta)
+
         # Run model test
         output = test_model(ids_remove_padding=self.input_tensor, forward_meta=self.forward_meta)
 
         # Validate results if comparison is requested
         if compare_with_baseline:
             np.testing.assert_allclose(
-                self.baseline_result, output.numpy(), err_msg=f"Test {test_name} failed: output mismatch"
+                self.baseline_result,
+                output.numpy(),
+                err_msg=f"Test {test_name} failed: output mismatch",
+                atol=1e-4,  # for CINN
+                rtol=1e-2,
             )
+
+    def tearDown(self):
+        paddle.jit.sot.opcode_translator.executor.executor_cache.OpcodeExecutorCache().clear()
 
     def test_dynamic_graph(self):
         """Test dynamic graph mode"""

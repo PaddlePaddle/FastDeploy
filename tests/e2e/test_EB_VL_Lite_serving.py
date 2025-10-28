@@ -35,6 +35,8 @@ FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 # List of ports to clean before and after tests
 PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT]
 
+os.environ["FD_USE_MACHETE"] = "0"
+
 
 def is_port_open(host: str, port: int, timeout=1.0):
     """
@@ -245,9 +247,9 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     # base result
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2")
+        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2-fp32")
     else:
-        base_file = "ernie-4_5-vl-base-tp2"
+        base_file = "ernie-4_5-vl-base-tp2-fp32"
     with open(base_file, "r") as f:
         content2 = f.read()
 
@@ -314,6 +316,9 @@ def test_non_streaming_chat(openai_client):
     assert len(response.choices) > 0
     assert hasattr(response.choices[0], "message")
     assert hasattr(response.choices[0].message, "content")
+    assert hasattr(response, "usage")
+    assert hasattr(response.usage, "completion_tokens_details")
+    assert hasattr(response.usage.completion_tokens_details, "reasoning_tokens")
 
 
 # Streaming test
@@ -348,13 +353,64 @@ def test_streaming_chat(openai_client, capsys):
         temperature=1,
         max_tokens=512,
         stream=True,
+        stream_options={"include_usage": True, "continuous_usage_stats": True},
     )
 
     output = []
     for chunk in response:
+        assert hasattr(chunk, "usage")
+        assert hasattr(chunk.usage, "completion_tokens_details")
+        assert hasattr(chunk.usage.completion_tokens_details, "reasoning_tokens")
+        if hasattr(chunk, "choices") and len(chunk.choices) == 0:
+            continue
         if hasattr(chunk.choices[0], "delta") and hasattr(chunk.choices[0].delta, "content"):
             output.append(chunk.choices[0].delta.content)
     assert len(output) > 2
+
+
+def test_non_streaming_completion(openai_client):
+    """Test non-streaming completion functionality with the local service"""
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello world",
+        temperature=1,
+        max_tokens=53,
+        stream=False,
+    )
+
+    assert hasattr(response, "choices")
+    assert len(response.choices) > 0
+    assert hasattr(response.choices[0], "text")
+    assert hasattr(response, "usage")
+    assert hasattr(response.usage, "completion_tokens_details")
+    assert hasattr(response.usage.completion_tokens_details, "reasoning_tokens")
+    assert hasattr(response.usage, "completion_tokens")
+    assert response.usage.completion_tokens >= response.usage.completion_tokens_details.reasoning_tokens
+
+
+def test_streaming_completion(openai_client):
+    """Test streaming completion functionality with the local service"""
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello world",
+        temperature=1,
+        max_tokens=512,
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+
+    output = []
+    for chunk in response:
+        if hasattr(chunk, "choices") and len(chunk.choices) == 0:
+            assert hasattr(chunk, "usage")
+            assert hasattr(chunk.usage, "completion_tokens_details")
+            assert hasattr(chunk.usage.completion_tokens_details, "reasoning_tokens")
+            assert hasattr(chunk.usage, "completion_tokens")
+            assert chunk.usage.completion_tokens >= chunk.usage.completion_tokens_details.reasoning_tokens
+            continue
+        if hasattr(chunk.choices[0], "text"):
+            output.append(chunk.choices[0].text)
+    assert len(output) > 0
 
 
 # ==========================
@@ -535,6 +591,21 @@ def test_chat_with_thinking(openai_client, capsys):
     assert response.choices[0].message.reasoning_content is None
     assert "</think>" not in response.choices[0].message.content
 
+    # test logic
+    reasoning_max_tokens = None
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        stream=False,
+        max_tokens=20,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+            "reasoning_max_tokens": reasoning_max_tokens,
+        },
+    )
+    assert response.choices[0].message.reasoning_content is not None
+
     # enable thinking, streaming
     reasoning_max_tokens = 3
     response = openai_client.chat.completions.create(
@@ -642,3 +713,50 @@ def test_profile_reset_block_num():
         f"Reset total_block_num {actual_value} 与 baseline {baseline} diff需要在5%以内"
         f"Allowed range: [{lower_bound:.1f}, {upper_bound:.1f}]"
     )
+
+
+def test_thinking_logic_flag(openai_client, capsys):
+    """
+    Test the interaction between token calculation logic and conditional thinking.
+    This test covers:
+    1. Default max_tokens calculation when not provided.
+    2. Capping of max_tokens when it exceeds model limits.
+    3. Default reasoning_max_tokens calculation when not provided.
+    4. Activation of thinking based on the final state of reasoning_max_tokens.
+    """
+
+    response_case_1 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity briefly."}],
+        temperature=1,
+        stream=False,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+        },
+    )
+    assert response_case_1.choices[0].message.reasoning_content is not None
+
+    response_case_2 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        stream=False,
+        max_tokens=20,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+            "reasoning_max_tokens": 5,
+        },
+    )
+    assert response_case_2.choices[0].message.reasoning_content is not None
+
+    response_case_3 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        stream=False,
+        max_tokens=20,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": False},
+        },
+    )
+    assert response_case_3.choices[0].message.reasoning_content is None

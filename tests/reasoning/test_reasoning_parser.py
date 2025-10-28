@@ -16,7 +16,26 @@
 
 import unittest
 
+from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest, DeltaMessage
 from fastdeploy.reasoning import ReasoningParser, ReasoningParserManager
+from fastdeploy.reasoning.ernie_x1_reasoning_parsers import ErnieX1ReasoningParser
+
+
+class DummyTokenizer:
+    """Minimal tokenizer with vocab for testing."""
+
+    def __init__(self):
+        self.vocab = {
+            "</think>": 100,
+            "<tool_call>": 101,
+            "</tool_call>": 102,
+            "<response>": 103,
+            "</response>": 104,
+        }
+
+    def get_vocab(self):
+        """Return vocab dict for testing."""
+        return self.vocab
 
 
 class TestReasoningParser(ReasoningParser):
@@ -101,6 +120,145 @@ class TestReasoningParserManager(unittest.TestCase):
         """
         with self.assertRaises(KeyError):
             ReasoningParserManager.get_reasoning_parser("nonexistent_parser")
+
+
+class TestErnieX1ReasoningParser(unittest.TestCase):
+    def setUp(self):
+        self.parser = ErnieX1ReasoningParser(DummyTokenizer())
+        self.request = ChatCompletionRequest(model="test", messages=[{"role": "user", "content": "test message"}])
+        self.tokenizer = DummyTokenizer()
+
+    # ---- Streaming parsing ----
+    def test_streaming_thinking_content(self):
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="",
+            current_text="a",
+            delta_text="a",
+            previous_token_ids=[],
+            current_token_ids=[],
+            delta_token_ids=[200],
+        )
+        self.assertEqual(msg.reasoning_content, "a")
+
+    def test_streaming_thinking_newline_preserved(self):
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="abc",
+            current_text="abc\n",
+            delta_text="\n",
+            previous_token_ids=[],
+            current_token_ids=[],
+            delta_token_ids=[201],
+        )
+        self.assertEqual(msg.reasoning_content, "\n")
+
+    def test_streaming_thinking_end_tag(self):
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="abc",
+            current_text="abc</think>",
+            delta_text="</think>",
+            previous_token_ids=[],
+            current_token_ids=[],
+            delta_token_ids=[self.parser.think_end_token_id],
+        )
+        self.assertIsNone(msg)
+
+    def test_streaming_response_content(self):
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="</think><response>",
+            current_text="</think><response>h",
+            delta_text="h",
+            previous_token_ids=[],
+            current_token_ids=[],
+            delta_token_ids=[202],
+        )
+        self.assertEqual(msg.content, "h")
+
+    def test_streaming_response_newline_preserved(self):
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="</think><response>hi",
+            current_text="</think><response>hi\n",
+            delta_text="\n",
+            previous_token_ids=[],
+            current_token_ids=[],
+            delta_token_ids=[203],
+        )
+        self.assertEqual(msg.content, "\n")
+
+    def test_streaming_response_ignore_tags(self):
+        self.assertIsNone(
+            self.parser.extract_reasoning_content_streaming(
+                previous_text="</think>",
+                current_text="</think><response>",
+                delta_text="<response>",
+                previous_token_ids=[],
+                current_token_ids=[],
+                delta_token_ids=[self.parser.vocab["<response>"]],
+            )
+        )
+
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="</think><response>",
+            current_text="</think><response>\n",
+            delta_text="\n",
+            previous_token_ids=[],
+            current_token_ids=[],
+            delta_token_ids=[204],
+        )
+        self.assertIsInstance(msg, DeltaMessage)
+        self.assertEqual(msg.content, "\n")
+
+        self.assertIsNone(
+            self.parser.extract_reasoning_content_streaming(
+                previous_text="</think><response>\n",
+                current_text="</think><response>\n</response>",
+                delta_text="</response>",
+                previous_token_ids=[],
+                current_token_ids=[],
+                delta_token_ids=[self.parser.vocab["</response>"]],
+            )
+        )
+
+    def test_streaming_tool_call(self):
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="</think>",
+            current_text="</think><tool_call>",
+            delta_text="<tool_call>",
+            previous_token_ids=[],
+            current_token_ids=[],
+            delta_token_ids=[self.parser.vocab["<tool_call>"]],
+        )
+        self.assertIsNone(msg)
+
+    # ---- Batch parsing ----
+    def test_batch_reasoning_and_response(self):
+        text = "abc\n</think>\n<response>hello\nworld</response>"
+        reasoning, response = self.parser.extract_reasoning_content(text, self.request)
+        self.assertEqual(reasoning, "abc\n")
+        self.assertEqual(response, "hello\nworld")
+
+    def test_batch_reasoning_and_tool_call(self):
+        text = "abc</think><tool_call>call_here"
+        reasoning, response = self.parser.extract_reasoning_content(text, self.request)
+        self.assertEqual(reasoning, "abc")
+        self.assertEqual(response, "")
+
+    def test_batch_no_thinking_tag(self):
+        text = "no_thinking_here"
+        reasoning, response = self.parser.extract_reasoning_content(text, self.request)
+        self.assertEqual(reasoning, "no_thinking_here")
+        self.assertEqual(response, "")
+
+    def test_batch_response_without_end_tag(self):
+        text = "abc</think><response>partial response"
+        reasoning, response = self.parser.extract_reasoning_content(text, self.request)
+        self.assertEqual(reasoning, "abc")
+        self.assertEqual(response, "partial response")
+
+    def test_batch_preserve_all_newlines(self):
+        text = "abc\n</think>\n<response>line1\nline2\n</response>"
+        reasoning, response = self.parser.extract_reasoning_content(text, self.request)
+        self.assertEqual(reasoning, "abc\n")
+        self.assertEqual(response, "line1\nline2\n")
 
 
 if __name__ == "__main__":

@@ -22,14 +22,20 @@ from fastdeploy import __version__
 
 def main():
     import fastdeploy.entrypoints.cli.benchmark.main
+    import fastdeploy.entrypoints.cli.collect_env
     import fastdeploy.entrypoints.cli.openai
+    import fastdeploy.entrypoints.cli.run_batch
     import fastdeploy.entrypoints.cli.serve
+    import fastdeploy.entrypoints.cli.tokenizer
     from fastdeploy.utils import FlexibleArgumentParser
 
     CMD_MODULES = [
+        fastdeploy.entrypoints.cli.run_batch,
+        fastdeploy.entrypoints.cli.tokenizer,
         fastdeploy.entrypoints.cli.openai,
         fastdeploy.entrypoints.cli.benchmark.main,
         fastdeploy.entrypoints.cli.serve,
+        fastdeploy.entrypoints.cli.collect_env,
     ]
 
     parser = FlexibleArgumentParser(description="FastDeploy CLI")

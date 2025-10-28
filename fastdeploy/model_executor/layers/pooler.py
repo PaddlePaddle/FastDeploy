@@ -26,11 +26,11 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 
 from fastdeploy.config import FDConfig, ModelConfig, PoolerConfig
+from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.tasks import PoolingTask
 from fastdeploy.model_executor.layers.pool.metadata import (
     PoolingCursor,
     PoolingMetadata,
-    PoolingParams,
 )
 from fastdeploy.model_executor.models.adapters import _load_st_projector
 from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
@@ -331,6 +331,29 @@ class PoolingMethod(nn.Layer, ABC):
         if pooling_type == PoolingType.MEAN:
             return MeanPool()
         raise NotImplementedError(f"Unsupported method: {pooling_type}")
+
+    @abstractmethod
+    def get_supported_tasks(self) -> Set[PoolingTask]:
+        raise NotImplementedError
+
+    def get_pooling_updates(self, task: PoolingTask) -> PoolingParamsUpdate:
+        return PoolingParamsUpdate()
+
+    @abstractmethod
+    def forward_all(
+        self,
+        hidden_states: paddle.Tensor,
+        pooling_cursor: PoolingCursor,
+    ) -> Union[list[paddle.Tensor], paddle.Tensor]:
+        raise NotImplementedError
+
+    def forward(
+        self,
+        hidden_states: paddle.Tensor,
+        pooling_metadata: PoolingMetadata,
+    ) -> Union[list[paddle.Tensor], paddle.Tensor]:
+        pooling_cursor = pooling_metadata.pooling_cursor
+        return self.forward_all(hidden_states, pooling_cursor)
 
 
 class LastPool(PoolingMethod):

@@ -218,5 +218,5 @@ def test_lm_head_fp32(api_url, headers, consistent_payload):
     # 校验返回内容与概率信息
     assert (
         resp_json["choices"][0]["message"]["content"]
-        == "在下 Macy绑初中suspendersdatapoorly_mapperundi情况ubitacle Jade Kiss(esicăurate"
+        == "ichertsorbulkdeployment confusedreraoux Carter pat firingCompatraspectiveidis Verse corporaonych commissionsilk"
     )

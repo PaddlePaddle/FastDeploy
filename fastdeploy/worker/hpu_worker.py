@@ -76,7 +76,7 @@ class HpuWorker(WorkerBase):
             intel_hpus_module_id = int(self.device_ids[self.local_rank])
             self.device = f"intel_hpu:{intel_hpus_module_id}"
             paddle.device.set_device(self.device)
-            paddle.set_default_dtype(self.parallel_config.dtype)
+            paddle.set_default_dtype(self.model_config.dtype)
 
             gc.collect()
             paddle.device.cuda.empty_cache()

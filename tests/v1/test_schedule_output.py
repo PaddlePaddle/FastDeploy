@@ -15,6 +15,7 @@ def test_normal_schedule():
     model_cfg = SimpleNamespace(enable_mm=False)
     speculative_cfg = SimpleNamespace(method=None)
     model_cfg.print = print
+    model_cfg.max_model_len = 5120
     cache_cfg.bytes_per_layer_per_block = 1
     parallel_cfg = ParallelConfig(args)
     scheduler_cfg = SchedulerConfig(args)
@@ -66,7 +67,7 @@ def test_normal_schedule():
     assert scheduler_reqs[0].prefill_end_index == 3201
     assert scheduler_reqs[1].request_id == "req3"
     assert scheduler_reqs[1].prefill_start_index == 0
-    assert scheduler_reqs[1].prefill_end_index == 3199
+    assert scheduler_reqs[1].prefill_end_index == 3198
     assert len(resource_manager_v1.running) == 3
     assert len(resource_manager_v1.waiting) == 0
 
@@ -79,6 +80,7 @@ def test_preempted_request():
     model_cfg = SimpleNamespace(enable_mm=False)
     speculative_cfg = SimpleNamespace(method=None)
     model_cfg.print = print
+    model_cfg.max_model_len = 5120
     cache_cfg.bytes_per_layer_per_block = 1
     parallel_cfg = ParallelConfig(args)
     scheduler_cfg = SchedulerConfig(args)

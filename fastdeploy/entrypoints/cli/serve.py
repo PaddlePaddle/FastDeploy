@@ -73,7 +73,7 @@ class ServeSubcommand(CLISubcommand):
             name=self.name,
             help="Start the FastDeploy OpenAI Compatible API server.",
             description="Start the FastDeploy OpenAI Compatible API server.",
-            usage="fastdeploy serve [model_tag] [options]",
+            usage="fastdeploy serve [options]",
         )
         serve_parser = make_arg_parser(serve_parser)
         serve_parser.add_argument("--config", help="Read CLI options from a config file. Must be a YAML file")

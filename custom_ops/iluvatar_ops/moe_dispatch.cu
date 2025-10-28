@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 // Ignore CUTLASS warnings about type punning
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstrict-aliasing"
@@ -29,10 +28,10 @@ __global__ void compute_total_rows_before_expert_kernel(
     const int64_t sorted_experts_len,
     const int64_t num_experts,
     int64_t* total_rows_before_expert) {
-    const int expert = blockIdx.x * blockDim.x + threadIdx.x;
-    if (expert >= num_experts) return;
-    total_rows_before_expert[expert] =
-        phi::find_total_elts_leq_target(sorted_experts, sorted_experts_len, expert);
+  const int expert = blockIdx.x * blockDim.x + threadIdx.x;
+  if (expert >= num_experts) return;
+  total_rows_before_expert[expert] = phi::find_total_elts_leq_target(
+      sorted_experts, sorted_experts_len, expert);
 }
 
 void compute_total_rows_before_expert(int* sorted_indices,
@@ -40,36 +39,38 @@ void compute_total_rows_before_expert(int* sorted_indices,
                                       const int64_t num_experts,
                                       int64_t* total_rows_before_expert,
                                       cudaStream_t stream) {
-    const int threads = std::min(int64_t(1024), num_experts);
-    const int blocks = (num_experts + threads - 1) / threads;
+  const int threads = std::min(int64_t(1024), num_experts);
+  const int blocks = (num_experts + threads - 1) / threads;
 
-    compute_total_rows_before_expert_kernel<<<blocks, threads, 0, stream>>>(
-        sorted_indices, total_indices, num_experts, total_rows_before_expert);
+  compute_total_rows_before_expert_kernel<<<blocks, threads, 0, stream>>>(
+      sorted_indices, total_indices, num_experts, total_rows_before_expert);
 }
 
 template <paddle::DataType T>
-void MoeDispatchKernel(const paddle::Tensor& input,
-                       const paddle::Tensor& gating_output,
-                       const paddle::optional<paddle::Tensor>& gating_correction_bias,
-                       const int moe_topk,
-                       const bool group_moe,
-                       const std::string &moe_quant_type,
-                       const bool topk_only_mode,
-                       const int num_rows,
-                       const int hidden_size,
-                       const int expert_num,
-                       paddle::Tensor* permute_input,
-                       paddle::Tensor* tokens_expert_prefix_sum,
-                       paddle::Tensor* permute_indices_per_token,
-                       paddle::Tensor* top_k_weight,
-                       paddle::Tensor* top_k_indices) {
+void MoeDispatchKernel(
+    const paddle::Tensor& input,
+    const paddle::Tensor& gating_output,
+    const paddle::optional<paddle::Tensor>& gating_correction_bias,
+    const int moe_topk,
+    const bool group_moe,
+    const std::string& moe_quant_type,
+    const bool topk_only_mode,
+    const int num_rows,
+    const int hidden_size,
+    const int expert_num,
+    paddle::Tensor* permute_input,
+    paddle::Tensor* tokens_expert_prefix_sum,
+    paddle::Tensor* permute_indices_per_token,
+    paddle::Tensor* top_k_weight,
+    paddle::Tensor* top_k_indices) {
   using namespace phi;
 
   typedef PDTraits<T> traits_;
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
   auto place = input.place();
-  auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(input.place()));
+  auto dev_ctx = static_cast<const phi::CustomContext*>(
+      paddle::experimental::DeviceContextPool::Instance().Get(input.place()));
   auto stream = static_cast<const cudaStream_t>(dev_ctx->stream());
   if (group_moe) {
     // Check if expert_num is divisible by moe_topk, else throw an error
@@ -131,19 +132,21 @@ void MoeDispatchKernel(const paddle::Tensor& input,
     softmax_out_ = nullptr;
   }
 
-  topk_gating_softmax_kernelLauncher<float>(gating_output.data<float>(),
-                                            gating_correction_bias ? gating_correction_bias.get().data<float>() : nullptr,
-                                            top_k_weight->data<float>(),
-                                            softmax_out_,
-                                            expert_for_source_row,
-                                            source_rows_,
-                                            softmax_max_prob,
-                                            num_rows,
-                                            expert_num,
-                                            moe_topk,
-                                            group_moe,
-                                            stream,
-                                            topk_only_mode);
+  topk_gating_softmax_kernelLauncher<float>(
+      gating_output.data<float>(),
+      gating_correction_bias ? gating_correction_bias.get().data<float>()
+                             : nullptr,
+      top_k_weight->data<float>(),
+      softmax_out_,
+      expert_for_source_row,
+      source_rows_,
+      softmax_max_prob,
+      num_rows,
+      expert_num,
+      moe_topk,
+      group_moe,
+      stream,
+      topk_only_mode);
 
   sorter_.run(reinterpret_cast<void*>(sorter_ws_ptr),
               sorter_ws_size_bytes,
@@ -154,7 +157,6 @@ void MoeDispatchKernel(const paddle::Tensor& input,
               moe_topk * num_rows,
               false,
               stream);
-
 
   initialize_moe_routing_kernelLauncher(
       input.data<data_t>(),
@@ -167,15 +169,12 @@ void MoeDispatchKernel(const paddle::Tensor& input,
       moe_topk,
       stream);
 
-
-  compute_total_rows_before_expert(
-      permuted_experts_,
-      moe_topk * num_rows,
-      expert_num,
-      tokens_expert_prefix_sum->data<int64_t>(),
-      stream);
+  compute_total_rows_before_expert(permuted_experts_,
+                                   moe_topk * num_rows,
+                                   expert_num,
+                                   tokens_expert_prefix_sum->data<int64_t>(),
+                                   stream);
 }
-
 
 std::vector<paddle::Tensor> MoeExpertDispatch(
     const paddle::Tensor& input,
@@ -184,7 +183,7 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
     const paddle::optional<paddle::Tensor>& w4a8_in_scale,
     const int moe_topk,
     const bool group_moe,
-    const std::string &moe_quant_type,
+    const std::string& moe_quant_type,
     const bool topk_only_mode) {
   const auto input_type = input.dtype();
   auto place = input.place();
@@ -213,7 +212,6 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
       GetEmptyTensor({expert_num}, paddle::DataType::INT64, place);
   auto permute_indices_per_token =
       GetEmptyTensor({moe_topk, num_rows}, paddle::DataType::INT32, place);
-
 
   switch (input_type) {
     case paddle::DataType::BFLOAT16:
@@ -261,7 +259,6 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
           top_k_indices};
 }
 
-
 std::vector<std::vector<int64_t>> MoeExpertDispatchInferShape(
     const std::vector<int64_t>& input_shape,
     const std::vector<int64_t>& gating_output_shape,
@@ -299,17 +296,21 @@ std::vector<paddle::DataType> MoeExpertDispatchInferDtype(
           paddle::DataType::INT32};
 }
 
-
 PD_BUILD_STATIC_OP(moe_expert_dispatch)
-    .Inputs({"input", "gating_output", paddle::Optional("gating_correction_bias"),
-     paddle::Optional("w4a8_in_scale")})
+    .Inputs({"input",
+             "gating_output",
+             paddle::Optional("gating_correction_bias"),
+             paddle::Optional("w4a8_in_scale")})
     .Outputs({"permute_input",
               "tokens_expert_prefix_sum",
               "permute_indices_per_token",
               "top_k_weight",
               "top_k_indices",
               "expert_idx_per_token"})
-    .Attrs({"moe_topk:int", "group_moe:bool", "moe_quant_type:std::string", "topk_only_mode:bool"})
+    .Attrs({"moe_topk:int",
+            "group_moe:bool",
+            "moe_quant_type:std::string",
+            "topk_only_mode:bool"})
     .SetKernelFn(PD_KERNEL(MoeExpertDispatch))
     .SetInferShapeFn(PD_INFER_SHAPE(MoeExpertDispatchInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(MoeExpertDispatchInferDtype));

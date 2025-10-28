@@ -1,3 +1,5 @@
+[简体中文](../../zh/get_started/installation/README.md)
+
 # FastDeploy Installation
 
 FastDeploy currently supports installation on the following hardware platforms:

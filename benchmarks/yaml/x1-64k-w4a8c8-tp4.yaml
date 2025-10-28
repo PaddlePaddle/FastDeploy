@@ -6,5 +6,5 @@ max_num_seqs: 128
 enable_prefix_caching: True
 enable_chunked_prefill: True
 gpu_memory_utilization: 0.85
-use_cudagraph: True
-enable_custom_all_reduce: True
+graph_optimization_config:
+  use_cudagraph: True

@@ -31,6 +31,7 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     cuda_graph_buffers,
     support_graph_optimization,
@@ -44,20 +45,15 @@ from fastdeploy.model_executor.models.ernie4_5_moe import (
     Ernie4_5_Attention,
     Ernie4_5_MLP,
 )
+from fastdeploy.model_executor.models.ernie4_5_vl.image_op import (
+    text_image_gather_scatter,
+    text_image_index_out,
+)
 from fastdeploy.model_executor.models.model_base import (
     ModelCategory,
     ModelForCasualLM,
     ModelRegistry,
 )
-from fastdeploy.platforms import current_platform
-
-if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import (
-        text_image_gather_scatter,
-        text_image_index_out,
-    )
-
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 class Ernie4_5_VLMLP(Ernie4_5_MLP):
@@ -304,7 +300,7 @@ class Ernie4_5_VLMoE(nn.Layer):
         if self.num_shared_experts > 0:
             hidden_states += shared_experts_out
         if self.tp_size > 1:
-            tensor_model_parallel_all_reduce(hidden_states)
+            hidden_states = tensor_model_parallel_all_reduce(hidden_states)
         return hidden_states
 
 
@@ -407,27 +403,27 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
 @cuda_graph_buffers(
     {
         "text_input": {
-            "shape": ["parallel_config.max_model_len", "model_config.hidden_size"],
+            "shape": ["model_config.max_model_len", "model_config.hidden_size"],
             "dtype": "model_config.dtype",
             "value": 1,
         },
         "image_input": {
-            "shape": ["parallel_config.max_model_len", "model_config.hidden_size"],
+            "shape": ["model_config.max_model_len", "model_config.hidden_size"],
             "dtype": "model_config.dtype",
             "value": 1,
         },
         "text_index": {
-            "shape": ["parallel_config.max_model_len"],
+            "shape": ["model_config.max_model_len"],
             "dtype": "int32",
             "value": 0,
         },
         "image_index": {
-            "shape": ["parallel_config.max_model_len"],
+            "shape": ["model_config.max_model_len"],
             "dtype": "int32",
             "value": 0,
         },
         "token_type_ids": {
-            "shape": ["parallel_config.max_model_len"],
+            "shape": ["model_config.max_model_len"],
             "dtype": "int32",
             "value": -1,
         },
@@ -552,6 +548,12 @@ class Ernie4_5_VLModel(nn.Layer):
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="Ernie4_5_VLMoeForConditionalGeneration",
+    module_name="ernie4_5_vl.ernie4_5_vl_moe",
+    category=ModelCategory.MULTIMODAL,
+    primary_use=ModelCategory.MULTIMODAL,
+)
 class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
     """
     Ernie4_5_VLMoeForConditionalGeneration
@@ -572,7 +574,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
 
         # Persistent buffers for CUDA graphs.
         self._input_embeddings = paddle.zeros(
-            [fd_config.parallel_config.max_model_len, fd_config.model_config.hidden_size],
+            [fd_config.model_config.max_model_len, fd_config.model_config.hidden_size],
             dtype=fd_config.model_config.dtype,
         )
 
@@ -682,6 +684,13 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         expert_id = None
         shard_id = None
         for loaded_weight_name, loaded_weight in weights_iterator:
+            loaded_weight_name = (
+                self.process_weights_before_loading_fn(loaded_weight_name)
+                if getattr(self, "process_weights_before_loading_fn", None)
+                else loaded_weight_name
+            )
+            if loaded_weight_name is None:
+                continue
             for param_name, weight_name, exp_id, shard_id in all_param_mapping:
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
                 if model_param_name.startswith("model.") and self.fd_config.model_config.model_format == "torch":
@@ -796,12 +805,6 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         self.ernie.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
-@ModelRegistry.register_model_class(
-    architecture="Ernie4_5_VLMoeForConditionalGeneration",
-    module_name="ernie4_5_vl.ernie4_5_vl_moe",
-    category=ModelCategory.MULTIMODAL,
-    primary_use=ModelCategory.MULTIMODAL,
-)
 class Ernie4_5_VLPretrainedModel(PretrainedModel):
     """
     Ernie4_5_MoePretrainedModel

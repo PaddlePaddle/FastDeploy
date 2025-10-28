@@ -41,3 +41,5 @@ class StreamTransferData:
     logprobs: Optional[np.array] = None
     accept_tokens: Optional[np.array] = None
     accept_num: Optional[np.array] = None
+    # [num_reqs, hidden_size]
+    pooler_output: Optional[np.array] = None

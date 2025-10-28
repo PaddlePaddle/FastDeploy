@@ -197,7 +197,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 if isinstance(prompt, list):  # if prompt is a token id list
                     request["prompt_token_ids"] = prompt
                 else:
-                    request["text_after_process"] = prompt
+                    request["prompt_tokens"] = prompt
                     tokens = self.tokenizer.tokenize(prompt)
                     token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
                     request["prompt_token_ids"] = token_ids
@@ -310,6 +310,8 @@ class Ernie4_5Processor(BaseDataProcessor):
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
+                reasoning_tokens = self.tokenizer.tokenize(reasoning_content)
+                response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
             else:
                 response_dict["outputs"]["text"] = full_text
             if self.tool_parser_obj:
@@ -318,7 +320,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 if tool_call_info.tools_called:
                     response_dict["outputs"]["tool_call"] = tool_call_info.tool_calls
                     response_dict["outputs"]["text"] = tool_call_info.content
-            response_dict["outputs"]["raw_prediction"] = full_text
+            response_dict["outputs"]["completion_tokens"] = full_text
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
         return response_dict
@@ -342,7 +344,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             if token_ids[-1] == self.tokenizer.eos_token_id:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
-        response_dict["outputs"]["raw_prediction"] = delta_text
+        response_dict["outputs"]["completion_tokens"] = delta_text
         if self.reasoning_parser and (
             enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
         ):
@@ -355,6 +357,9 @@ class Ernie4_5Processor(BaseDataProcessor):
                 token_ids,
             )
             response_dict["outputs"]["delta_message"] = reasoning_delta_message
+            reasoning_content = reasoning_delta_message.reasoning_content if reasoning_delta_message else None
+            reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
+            response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
         if self.tool_parser_obj:
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
@@ -398,7 +403,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             add_special_tokens=False,
             **kwargs,
         )
-        request_or_messages["text_after_process"] = spliced_message
+        request_or_messages["prompt_tokens"] = spliced_message
         req_id = None
         if isinstance(request_or_messages, dict):
             req_id = request_or_messages.get("request_id", None)

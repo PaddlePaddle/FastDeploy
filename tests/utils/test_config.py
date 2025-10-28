@@ -10,6 +10,7 @@ from fastdeploy.config import (
     ParallelConfig,
     SchedulerConfig,
 )
+from fastdeploy.utils import get_host_ip
 
 
 class TestConfig(unittest.TestCase):
@@ -20,6 +21,7 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
         model_config = Mock()
+        model_config.max_model_len = 512
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -27,11 +29,11 @@ class TestConfig(unittest.TestCase):
             cache_config=cache_config,
             scheduler_config=scheduler_config,
             model_config=model_config,
-            ips=["1.1.1.1", "0.0.0.0"],
+            ips=[get_host_ip(), "0.0.0.0"],
             test_mode=True,
         )
         assert fd_config.nnode == 2
-        assert fd_config.is_master is False
+        assert fd_config.is_master is True
 
     def test_fdconfig_ips(self):
         parallel_config = ParallelConfig({})
@@ -40,6 +42,7 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
         model_config = Mock()
+        model_config.max_model_len = 512
         fd_config = FDConfig(
             parallel_config=parallel_config,
             graph_opt_config=graph_opt_config,
@@ -59,7 +62,8 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         cache_config.enable_chunked_prefill = True
         scheduler_config = SchedulerConfig({})
-        model_config = model_config = Mock()
+        model_config: Mock = Mock()
+        model_config.max_model_len = 512
 
         fd_config = FDConfig(
             parallel_config=parallel_config,
@@ -97,7 +101,8 @@ class TestConfig(unittest.TestCase):
         load_config = LoadConfig({})
         scheduler_config = SchedulerConfig({})
         scheduler_config.splitwise_role = "prefill"
-        model_config = model_config = Mock()
+        model_config: Mock = Mock()
+        model_config.max_model_len = 512
 
         fd_config = FDConfig(
             parallel_config=parallel_config,

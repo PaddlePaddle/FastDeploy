@@ -517,10 +517,15 @@ class CustomAllreduce {
 #undef KL
   }
 
-  ~CustomAllreduce() {
+  void clear_ipc_handles(){
     for (auto [_, ptr] : ipc_handles_) {
       CUDACHECK(cudaIpcCloseMemHandle(ptr));
     }
+    ipc_handles_.clear();
+  }
+
+  ~CustomAllreduce() {
+    clear_ipc_handles();
   }
 };
 }  // namespace paddle

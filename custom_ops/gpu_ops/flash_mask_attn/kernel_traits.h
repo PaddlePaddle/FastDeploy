@@ -48,9 +48,10 @@ struct SharedStorageQKVO {
     };
 };
 
-template<int kHeadDim_, int kBlockM_, int kBlockN_, int kNWarps_, int kStages_, bool NeedMask_, typename elem_type=cutlass::half_t>
+template<int kHeadDim_, int kBlockM_, int kBlockN_, int kNWarps_, int kStages_, bool NeedMask_, typename elem_type=cutlass::half_t, typename out_type=cutlass::half_t>
 struct Flash_mask_kernel_traits {
     using Element = elem_type;
+    using output_type = out_type;
     using ElementAccum = float;
     using index_t = int32_t;
 
@@ -91,22 +92,22 @@ struct Flash_mask_kernel_traits {
         decltype(tile_to_shape(SmemLayoutAtomV{},
                  make_shape(shape<1>(TileShape_MNK{}), shape<2>(TileShape_MNK{}), Int<kStages>{})));
 
-    using SmemLayoutAtomO = decltype(cutlass::gemm::collective::detail::ss_smem_selector<GMMA::Major::K, Element,
+    using SmemLayoutAtomO = decltype(cutlass::gemm::collective::detail::ss_smem_selector<GMMA::Major::K, output_type,
         decltype(cute::get<0>(TileShape_MNK{})), decltype(cute::get<2>(TileShape_MNK{}))>());
     using SmemLayoutO = decltype(tile_to_shape(SmemLayoutAtomO{}, select<0, 2>(TileShape_MNK{})));
 
     using SmemCopyAtomQ = Copy_Atom<cute::SM75_U32x4_LDSM_N, Element>;
-    using SmemCopyAtomO = Copy_Atom<cute::SM90_U32x4_STSM_N, Element>;
+    using SmemCopyAtomO = Copy_Atom<cute::SM90_U32x4_STSM_N, output_type>;
 
-    using SharedStorage = SharedStorageQKVO<kStages, Element, Element, Element, SmemLayoutQ, SmemLayoutK, SmemLayoutV, SmemLayoutO>;
+    using SharedStorage = SharedStorageQKVO<kStages, Element, Element, output_type, SmemLayoutQ, SmemLayoutK, SmemLayoutV, SmemLayoutO>;
 
     static constexpr int NumProducerThreads = cutlass::NumThreadsPerWarpGroup;
     static constexpr int NumMmaThreads = kNThreads - NumProducerThreads;
-    static constexpr int kNumVecElem = ceil_div(128, sizeof_bits_v<Element>);
+    static constexpr int kNumVecElem = ceil_div(128, sizeof_bits_v<output_type>);
     static constexpr int kNumThreadsPerRow = kHeadDim / kNumVecElem;
     static_assert(NumMmaThreads % kNumThreadsPerRow == 0);
     static constexpr int kNumRows = NumMmaThreads / kNumThreadsPerRow;
-    using TiledCopyOAtom = cute::Copy_Atom<cute::UniversalCopy<cutlass::uint128_t>, Element>;
+    using TiledCopyOAtom = cute::Copy_Atom<cute::UniversalCopy<cutlass::uint128_t>, output_type>;
     using TiledCopyOThrLayout = decltype(cute::make_layout(
         cute::make_shape(Int<kNumRows>{}, Int<kNumThreadsPerRow>{}),
         LayoutRight{}));

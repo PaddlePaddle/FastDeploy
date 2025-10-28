@@ -35,6 +35,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
 
     using Element = typename Ktraits::Element;
     using ElementAccum = typename Ktraits::ElementAccum;
+    using output_type = typename Ktraits::output_type;
     using SoftType = ElementAccum;
     using TileShape_MNK = typename Ktraits::TileShape_MNK;
     using ClusterShape = typename Ktraits::ClusterShape_MNK;
@@ -107,7 +108,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
 
     const int real_seq = seq_len_q - m_block * kBlockM;
 
-    const int n_block_max = NeedMask ? cute::ceil_div(mask[min(kBlockM - 1, real_seq - 1)], kBlockN) : cute::ceil_div((m_block + 1) * kBlockM + seq_len_k - seq_len_q, kBlockN);
+    const int n_block_max = NeedMask ? cute::ceil_div(mask[min(kBlockM - 1, real_seq - 1)], kBlockN) : min(cute::ceil_div((m_block + 1) * kBlockM + seq_len_k - seq_len_q, kBlockN), cute::ceil_div(seq_len_k, kBlockN));;
 
     if (warp_group_idx == 0) {  // Producer
         cutlass::arch::warpgroup_reg_dealloc<Ktraits::kNWarps == 8 ? 56 : 24>();
@@ -136,6 +137,8 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
     } else {  // Consumer
         cutlass::arch::warpgroup_reg_alloc<Ktraits::kNWarps == 8 ? 256 : 240>();
         typename Ktraits::TiledMma1 tiled_mma1;
+
+        collective_mainloop.mma_init();
 
         PipelineState smem_pipe_read_k, smem_pipe_read_v;
 
@@ -169,7 +172,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps * cutlass::NumThreadsPerWarp,
             threadIdx.x - NumCopyThreads,
             o_head_stride,
             real_seq,
-            reinterpret_cast<Element*>(data_params.o_ptr) + store_offset);
+            reinterpret_cast<output_type*>(data_params.o_ptr) + store_offset);
     }
 
 }
@@ -187,11 +190,11 @@ void run_flash_mask(Flash_mask_params &params, cudaStream_t stream) {
     typename CollectiveMainloop::Params mainloop_params =
         CollectiveMainloop::to_underlying_arguments({
             static_cast<Element const*>(params.q_ptr),
-            get_gmem_layout<kHeadDim>(params.max_seq_len_q, params.head_num),
+            get_gmem_layout<kHeadDim>(params.max_seq_len_q * params.batch_size, params.head_num),
             static_cast<Element const*>(params.k_ptr),
-            get_gmem_layout<kHeadDim>(params.max_seq_len_k, params.kv_head_num),
+            get_gmem_layout<kHeadDim>(params.max_seq_len_k * params.batch_size, params.kv_head_num),
             static_cast<Element const*>(params.v_ptr),
-            get_gmem_layout<kHeadDim>(params.max_seq_len_k, params.kv_head_num),
+            get_gmem_layout<kHeadDim>(params.max_seq_len_k * params.batch_size, params.kv_head_num),
             params.scale_softmax_log2
         });
 
@@ -219,13 +222,13 @@ void run_flash_mask(Flash_mask_params &params, cudaStream_t stream) {
     cutlass::launch_kernel_on_cluster(launch_params, kernel, mainloop_params, params);
 }
 
-template <int kBlockM, int kBlockN, bool NeedMask, typename InputType>
+template <int kBlockM, int kBlockN, bool NeedMask, typename InputType, typename OutputType>
 void flash_attn_headdim128(Flash_mask_params &params, cudaStream_t stream) {
 
     constexpr static int Headdim = 128;
     constexpr static int kNWarps = kBlockM / 16 + 4;
     constexpr static int kStages = 2;
 
-    using Ktraits = Flash_mask_kernel_traits<Headdim, kBlockM, kBlockN, kNWarps, kStages, NeedMask, InputType>;
+    using Ktraits = Flash_mask_kernel_traits<Headdim, kBlockM, kBlockN, kNWarps, kStages, NeedMask, InputType, OutputType>;
     run_flash_mask<Ktraits>(params, stream);
 }

@@ -26,7 +26,7 @@ class TestCollectEnvSubcommand(unittest.TestCase):
             "collect-env",
             help="Start collecting environment information.",
             description="Start collecting environment information.",
-            usage="vllm collect-env",
+            usage="fastdeploy collect-env",
         )
 
 

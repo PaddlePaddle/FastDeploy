@@ -1,3 +1,4 @@
+"""
 # Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"
@@ -11,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
 
 import json
 import re
@@ -97,29 +99,29 @@ class ErnieX1ToolParser(ToolParser):
             remaining_text = model_output
 
             while True:
-                # 查找下一个tool_call块
+                # Find the next <tool_call>
                 tool_call_pos = remaining_text.find("<tool_call>")
                 if tool_call_pos == -1:
                     break
 
-                # 提取tool_call开始位置后的内容
+                # Extract content after <tool_call>
                 tool_content_start = tool_call_pos + len("<tool_call>")
                 tool_content_end = remaining_text.find("</tool_call>", tool_content_start)
 
                 tool_json = ""
                 if tool_content_end == -1:
-                    # 处理未闭合的tool_call块（截断情况）
+                    # Processing unclosed tool_call block (truncated case)
                     tool_json = remaining_text[tool_content_start:].strip()
-                    remaining_text = ""  # 没有更多内容需要处理
+                    remaining_text = ""  # No more content to process
                 else:
-                    # 处理完整的tool_call块
+                    # Processing closed </tool_call> block
                     tool_json = remaining_text[tool_content_start:tool_content_end].strip()
                     remaining_text = remaining_text[tool_content_end + len("</tool_call>") :]
 
                 if not tool_json:
                     continue
 
-                # 处理JSON内容
+                # Process tool_json
                 tool_json = tool_json.strip()
                 if not tool_json.startswith("{"):
                     tool_json = "{" + tool_json
@@ -127,7 +129,7 @@ class ErnieX1ToolParser(ToolParser):
                     tool_json = tool_json + "}"
 
                 try:
-                    # 首先尝试标准JSON解析
+                    # Parsing strategy: First try standard json.loads
                     try:
                         tool_data = json.loads(tool_json)
 
@@ -136,26 +138,26 @@ class ErnieX1ToolParser(ToolParser):
                                 {
                                     "name": tool_data["name"],
                                     "arguments": tool_data["arguments"],
-                                    "_is_complete": True,  # 明确标记为完整解析
+                                    "_is_complete": True,  # Mark as complete
                                 }
                             )
                             continue
                     except json.JSONDecodeError:
                         pass
 
-                    # 标准解析失败时尝试partial_json_parser
+                    # Try partial_json_parser when standard parsing fails
                     from partial_json_parser.core.options import Allow
 
                     try:
                         tool_data = {}
                         flags = Allow.ALL & ~Allow.STR
 
-                        # 解析name字段
+                        # Parse the name field
                         name_match = re.search(r'"name"\s*:\s*"([^"]*)"', tool_json)
                         if name_match:
                             tool_data["name"] = name_match.group(1)
 
-                        # 解析arguments字段
+                        # Parse the arguments field
                         args_match = re.search(r'"arguments"\s*:\s*(\{.*)', tool_json)
                         if args_match:
                             try:
@@ -168,7 +170,7 @@ class ErnieX1ToolParser(ToolParser):
                                 {
                                     "name": tool_data.get("name", ""),
                                     "arguments": tool_data.get("arguments", {}),
-                                    "_is_partial": True,  # 标记为部分解析
+                                    "_is_partial": True,  # Mark as partial
                                 }
                             )
                     except Exception as e:
@@ -183,18 +185,18 @@ class ErnieX1ToolParser(ToolParser):
                 return ExtractedToolCallInformation(tools_called=False, content=model_output)
 
             tool_calls = []
-            all_complete = True  # 初始设为True，只要有一个不完整就变为False
+            all_complete = True  # Initialize as all complete
 
             for tool_call in function_call_arr:
-                # 记录工具调用解析状态
+                # Set flags
                 is_complete = tool_call.get("_is_complete", False)
                 is_partial = tool_call.get("_is_partial", False)
 
-                # 只要有一个不完整就认为整体不完整
+                # If any tool call is incomplete or partial, mark all_complete as False
                 if not is_complete or is_partial:
                     all_complete = False
 
-                # 处理参数序列化
+                # Process arguments
                 tool_args = tool_call.get("arguments", {})
                 if not isinstance(tool_args, dict):
                     tool_args = {}
@@ -215,7 +217,7 @@ class ErnieX1ToolParser(ToolParser):
                     )
                 )
 
-            # 只有当所有工具调用都明确标记为complete时才返回tools_called=True
+            # Only return tools_called=True if all tool calls are complete
             return ExtractedToolCallInformation(
                 tools_called=all_complete, tool_calls=tool_calls if tool_calls else None, content=""
             )
@@ -237,16 +239,16 @@ class ErnieX1ToolParser(ToolParser):
 
         if self.tool_call_start_token_id not in current_token_ids:
             return DeltaMessage(content=delta_text)
-        # 忽略空chunk
+        # Skip empty chunks
         if len(delta_text.strip()) == 0:
             return None
 
         try:
             delta = None
-            # 使用buffer累积delta_text内容
+            # Use buffer to accumulate delta_text content
             self.buffer += delta_text
 
-            # 处理增量中的新tool_call开始
+            # Process the buffer content
             if "<tool_call>" in delta_text:
                 self.current_tool_id = (
                     max(self.current_tool_id, 0) if self.current_tool_id == -1 else self.current_tool_id + 1
@@ -256,7 +258,7 @@ class ErnieX1ToolParser(ToolParser):
                     self.streamed_args_for_tool.append("")
                 data_processor_logger.debug(f"New tool call started with ID: {self.current_tool_id}")
 
-            # 1. 尝试解析name字段
+            # 1. Try to parse the name field
             if not self.current_tool_name_sent and '"name"' in self.buffer:
                 name_match = re.search(r'"name"\s*:\s*"([^"]*)"', self.buffer)
                 if name_match:
@@ -272,19 +274,18 @@ class ErnieX1ToolParser(ToolParser):
                                 )
                             ]
                         )
-                        # 删除已处理的name部分
+                        # Delete the processed name part from the buffer
                         self.buffer = self.buffer[name_match.end() :]
                         self.current_tool_name_sent = True
                         return delta
-            # 2. 尝试解析arguments字段
+            # 2. Processing arguments field
             if '"arguments"' in self.buffer:
                 args_match = re.search(r'"arguments"\s*:\s*(\{.*)', self.buffer)
                 if args_match:
                     args_content = args_match.group(1)
                     try:
-                        # 检查是否到达arguments结尾(括号完全匹配)
+                        # Check if arguments field is complete by bracket matching
                         if "}}" in args_content:
-                            # 逐个字符检查括号匹配状态
                             matched_pos = -1
                             for i, ch in enumerate(delta_text):
                                 if ch == "{":
@@ -292,12 +293,12 @@ class ErnieX1ToolParser(ToolParser):
                                 elif ch == "}":
                                     self.bracket_counts["total_r"] += 1
 
-                                if self.bracket_counts["total_l"] == self.bracket_counts["total_r"]:  # 括号完全匹配
+                                if self.bracket_counts["total_l"] == self.bracket_counts["total_r"]:
                                     matched_pos = i
                                     break
 
                             if matched_pos >= 0:
-                                # 找到匹配点，清理buffer并返回
+                                # Clean up bracket counts for next tool call
                                 truncate_text = delta_text[: matched_pos + 1]
                                 delta = DeltaMessage(
                                     tool_calls=[
@@ -312,10 +313,10 @@ class ErnieX1ToolParser(ToolParser):
                                 self.buffer = self.buffer[args_match.end() :]
                                 return delta
                             else:
-                                # 没有完全匹配，继续累积
+                                # No complete match yet
                                 return None
                         else:
-                            # 增量返回当前可解析的部分
+                            # Return partial arguments
                             for ch in delta_text:
                                 if ch == "{":
                                     self.bracket_counts["total_l"] += 1
@@ -337,7 +338,6 @@ class ErnieX1ToolParser(ToolParser):
                 end_pos = self.buffer.find("</tool_call>")
                 self.buffer = self.buffer[end_pos + len("</tool_call>") :]
 
-                # 完成当前工具调用处理
                 self.streamed_args_for_tool.append("")
 
             return delta

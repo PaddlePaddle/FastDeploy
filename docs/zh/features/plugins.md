@@ -1,3 +1,5 @@
+[English](../../features/plugins.md)
+
 # FastDeploy 插件机制说明文档
 
 FastDeploy 支持插件机制，允许用户在不修改核心代码的前提下扩展功能。插件通过 Python 的 `entry_points` 机制实现自动发现与加载。

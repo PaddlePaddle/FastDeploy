@@ -45,7 +45,7 @@ class LLMReqClient:
                     continue
                 data = frames[-1]
                 response = msgpack.unpackb(data)
-                print(f"get result data {response}")
+                # print(f"get result data {response}")
                 result_queue.put(response)
                 if self.need_exit:
                     break

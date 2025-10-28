@@ -70,9 +70,6 @@ def speculate_update_np(
 
             draft_tokens[bid, 0] = accept_tokens[bid, accept_num[bid] - 1]
 
-            if stop_flag_now_int:
-                seq_lens_decoder[bid] = 0
-
         elif inactive:
             stop_flag_now_int = 1
 
