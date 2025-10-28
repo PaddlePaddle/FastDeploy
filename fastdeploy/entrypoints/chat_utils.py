@@ -17,7 +17,6 @@
 import os
 import time
 import uuid
-from copy import deepcopy
 from pathlib import Path
 from typing import List, Literal, Optional, Union
 from urllib.parse import urlparse
@@ -29,11 +28,23 @@ from openai.types.chat import (
 from openai.types.chat import (
     ChatCompletionMessageParam as OpenAIChatCompletionMessageParam,
 )
+from openai.types.chat.chat_completion_content_part_image_param import ImageURL
 from typing_extensions import Required, TypeAlias, TypedDict
 
 from fastdeploy.multimodal.image import ImageMediaIO
 from fastdeploy.multimodal.video import VideoMediaIO
 from fastdeploy.utils import api_server_logger
+
+
+class CustomChatCompletionContentPartImageParam(TypedDict, total=False):
+    """Custom Image URL object"""
+
+    type: Required[Literal["image_url"]]
+    """The type of the content part."""
+
+    image_url: Optional[ImageURL]
+
+    uuid: Optional[str]
 
 
 class VideoURL(TypedDict, total=False):
@@ -46,14 +57,17 @@ class VideoURL(TypedDict, total=False):
 class CustomChatCompletionContentPartVideoParam(TypedDict, total=False):
     """Custom Video URL object"""
 
-    video_url: Required[VideoURL]
-
     type: Required[Literal["video_url"]]
-    """The type of the content type."""
+    """The type of the content part."""
+
+    video_url: Optional[VideoURL]
+
+    uuid: Optional[str]
 
 
 CustomChatCompletionContentPartParam: TypeAlias = Union[
     OpenAIChatCompletionContentPartParam,
+    CustomChatCompletionContentPartImageParam,
     CustomChatCompletionContentPartVideoParam,
 ]
 
@@ -77,7 +91,7 @@ class CustomChatCompletionMessageParam(TypedDict, total=False):
 ChatCompletionMessageParam = Union[OpenAIChatCompletionMessageParam, CustomChatCompletionMessageParam]
 
 
-class MultiModalPartParser:
+class MultimodalPartParser:
     """Multi Modal Part parser"""
 
     def __init__(self):
@@ -139,32 +153,46 @@ def parse_content_part(mm_parser, part):
         return part
 
     if part_type == "image_url":
-        content = part.get("image_url", {}).get("url", None)
-        image = mm_parser.parse_image(content)
-        parsed = deepcopy(part)
-        del parsed["image_url"]["url"]
-        parsed["image"] = image
-        parsed["type"] = "image"
-        return parsed
+        if not part.get("image_url", None) and not part.get("uuid", None):
+            raise ValueError("Both image_url and uuid are missing")
 
+        if part.get("image_url", None):
+            url = part["image_url"]["url"]
+            image = mm_parser.parse_image(url)
+        else:
+            image = None
+
+        parsed = {}
+        parsed["type"] = "image"
+        parsed["data"] = image
+        parsed["uuid"] = part.get("uuid", None)
+
+        return parsed
     if part_type == "video_url":
-        content = part.get("video_url", {}).get("url", None)
-        video = mm_parser.parse_video(content)
-        parsed = deepcopy(part)
-        del parsed["video_url"]["url"]
-        parsed["video"] = video
+        if not part.get("video_url", None) and not part.get("uuid", None):
+            raise ValueError("Both video_url and uuid are missing")
+
+        if part.get("video_url", None):
+            url = part["video_url"]["url"]
+            video = mm_parser.parse_video(url)
+        else:
+            video = None
+
+        parsed = {}
         parsed["type"] = "video"
+        parsed["data"] = video
+        parsed["uuid"] = part.get("uuid", None)
+
         return parsed
 
     raise ValueError(f"Unknown content part type: {part_type}")
 
 
 # TODO async
-# def parse_chat_messages(messages: List[ChatCompletionMessageParam]):
-def parse_chat_messages(messages):
+def parse_chat_messages(messages: List[ChatCompletionMessageParam]):
     """Parse chat messages to [dict]"""
 
-    mm_parser = MultiModalPartParser()
+    mm_parser = MultimodalPartParser()
 
     conversation = []
     for message in messages:

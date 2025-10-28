@@ -1137,6 +1137,8 @@ class CacheConfig:
             enc_dec_block_num (int): Number of encoder-decoder blocks.
             prealloc_dec_block_slot_num_threshold (int): Number of token slot threadshold to allocate next blocks for decoding, used when ENABLE_V1_KVCACHE_SCHEDULER=1.
             enable_prefix_caching (bool): Enable prefix caching.
+            max_encoder_cache(int): Maximum number of tokens in the encoder cache.
+            max_processor_cache(int): Maximum number of bytes in the processor cache.
         """
         self.block_size = 64
         self.gpu_memory_utilization = 0.9
@@ -1157,6 +1159,8 @@ class CacheConfig:
         self.enable_ssd_cache = False
         self.cache_queue_port = None
         self.swap_space = None
+        self.max_encoder_cache = None
+        self.max_processor_cache = None
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -1440,7 +1444,7 @@ class FDConfig:
             self.max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "3"))
             if current_platform.is_xpu():
                 self.max_prefill_batch = 1
-            if self.model_config is not None and self.model_config.enable_mm:
+            if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
         else:
             self.max_prefill_batch = self.scheduler_config.max_num_seqs
@@ -1500,7 +1504,7 @@ class FDConfig:
 
         self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         self.cache_config.max_block_num_per_seq = int(self.model_config.max_model_len // self.cache_config.block_size)
-        if self.model_config is not None and self.model_config.enable_mm:
+        if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.cache_config.enable_prefix_caching = False
 
         if (
@@ -1512,6 +1516,20 @@ class FDConfig:
                 self.structured_outputs_config.guided_decoding_backend = "off"
             else:
                 self.structured_outputs_config.guided_decoding_backend = "xgrammar"
+
+        if self.model_config.enable_mm:
+            if self.cache_config.max_encoder_cache is None or self.cache_config.max_encoder_cache < 0:
+                self.cache_config.max_encoder_cache = self.scheduler_config.max_num_batched_tokens
+            elif self.cache_config.max_encoder_cache != 0:
+                if self.cache_config.max_encoder_cache < self.scheduler_config.max_num_batched_tokens:
+                    logger.warning(
+                        f"max_encoder_cache{self.cache_config.max_encoder_cache} is less than "
+                        f"max_num_batched_tokens{self.scheduler_config.max_num_batched_tokens}, "
+                        f"set to max_num_batched_tokens."
+                    )
+                    self.cache_config.max_encoder_cache = self.scheduler_config.max_num_batched_tokens
+        else:
+            self.cache_config.max_encoder_cache = 0
 
         # Adjustment GraphOptConfig
         if self.load_config is not None and self.load_config.dynamic_load_weight is True:

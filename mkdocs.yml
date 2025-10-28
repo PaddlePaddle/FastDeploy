@@ -64,8 +64,14 @@ plugins:
             Scheduler: 调度器
             Graceful Shutdown: 服务优雅关闭
             Offline Inference: 离线推理
-            Best Practices: 最佳实践
-            ERNIE-4.5-0.3B: ERNIE-4.5-0.3B
+            CLI: CLI 使用说明
+            Chat: Chat命令
+            Complete: Complete命令
+            Server: Server命令
+            Bench: Bench命令
+            Collect Env: Collect Env命令
+            Run Batch: Run Batch命令
+            Tokenizer: Tokenizer命令
             ERNIE-4.5-21B-A3B: ERNIE-4.5-21B-A3B
             ERNIE-4.5-21B-A3B-Thinking: ERNIE-4.5-21B-A3B-Thinking
             ERNIE-4.5-300B-A47B: ERNIE-4.5-300B-A47B
@@ -152,3 +158,12 @@ nav:
       - Log Description: usage/log.md
       - Code Overview: usage/code_overview.md
       - Environment Variables: usage/environment_variables.md
+  - CLI:
+      - Overview: cli/README.md
+      - Chat: cli/chat.md
+      - Complete: cli/complete.md
+      - Server: cli/server.md
+      - Collect Env: cli/collect_env.md
+      - Bench: cli/bench.md
+      - Run Batch: cli/run_batch.md
+      - Tokenizer: cli/tokenizer.md

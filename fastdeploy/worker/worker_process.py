@@ -654,6 +654,12 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--max_encoder_cache",
+        type=int,
+        help="Maximum encoder cache tokens(use 0 to disable).",
+    )
+
+    parser.add_argument(
         "--cache-transfer-protocol",
         type=str,
         default="ipc",
@@ -809,6 +815,10 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     update_fd_config_for_mm(fd_config)
     if fd_config.load_config.load_choices == "default_v1" and not v1_loader_support(fd_config):
         fd_config.load_config.load_choices = "default"
+
+    architecture = fd_config.model_config.architectures[0]
+    if "PaddleOCR" in architecture:
+        envs.FD_ENABLE_MAX_PREFILL = 1
     return fd_config
 
 

@@ -80,14 +80,15 @@ class DataProcessor:
         self.temporal_conv_size = self.image_processor.temporal_patch_size
 
         # Special tokens and IDs
-        self.image_token = "<|image_pad|>"
+
+        self.image_token = "<|IMAGE_PLACEHOLDER|>"
         self.video_token = "<|video_pad|>"
 
         self.image_token_id = self.tokenizer.convert_tokens_to_ids(self.image_token)
         self.video_token_id = self.tokenizer.convert_tokens_to_ids(self.video_token)
         self.image_patch_id = self.image_token_id
 
-        self.vision_start = "<|vision_start|>"
+        self.vision_start = "<|IMAGE_START|>"
         self.vision_start_id = self.tokenizer.convert_tokens_to_ids(self.vision_start)
 
         self.tokens_per_second = tokens_per_second
@@ -167,9 +168,8 @@ class DataProcessor:
             "vit_position_ids": [],
         }
         # Define placeholders and their lengths
-        # IMAGE_PLACEHOLDER = "<|vision_start|><|image_pad|><|vision_end|>"
-        IMAGE_PLACEHOLDER = "<|image_pad|>"
-        VIDEO_PLACEHOLDER = "<|video@placeholder|>"
+        IMAGE_PLACEHOLDER = self.image_token
+        VIDEO_PLACEHOLDER = self.video_token
         IMAGE_PLACEHOLDER_LEN = len(IMAGE_PLACEHOLDER)
         VIDEO_PLACEHOLDER_LEN = len(VIDEO_PLACEHOLDER)
 

@@ -16,6 +16,7 @@
 
 import argparse
 import json
+import os
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional, Union
@@ -52,6 +53,16 @@ def nullable_str(x: str) -> Optional[str]:
     Convert an empty string to None, preserving other string values.
     """
     return x if x else None
+
+
+def get_model_architecture(model: str, model_config_name: Optional[str] = "config.json") -> Optional[str]:
+    config_path = os.path.join(model, model_config_name)
+    if os.path.exists(config_path):
+        model_config = json.load(open(config_path, "r", encoding="utf-8"))
+        architecture = model_config["architectures"][0]
+        return architecture
+    else:
+        return model
 
 
 @dataclass
@@ -122,6 +133,14 @@ class EngineArgs:
     limit_mm_per_prompt: Optional[Dict[str, Any]] = None
     """
     Limitation of numbers of multi-modal data.
+    """
+    max_encoder_cache: int = -1
+    """
+    Maximum number of tokens in the encoder cache.
+    """
+    max_processor_cache: float = -1
+    """
+    Maximum number of bytes(in GiB) in the processor cache.
     """
     reasoning_parser: str = None
     """
@@ -197,7 +216,7 @@ class EngineArgs:
     The amount of CPU memory to offload to.
     """
 
-    cache_queue_port: str = "8003"
+    cache_queue_port: str = "0"
     """
     Port for cache queue.
     """
@@ -217,7 +236,7 @@ class EngineArgs:
     Flag to enable the custom all-reduce kernel.
     """
 
-    engine_worker_queue_port: str = "8002"
+    engine_worker_queue_port: str = "0"
     """
     Port for worker queue communication.
     """
@@ -432,6 +451,9 @@ class EngineArgs:
         if self.guided_decoding_backend != "off":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
+        if "PaddleOCR" in get_model_architecture(self.model, self.model_config_name):
+            envs.FD_ENABLE_MAX_PREFILL = 1
+
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
         """
@@ -525,6 +547,18 @@ class EngineArgs:
             default=EngineArgs.mm_processor_kwargs,
             type=json.loads,
             help="Additional keyword arguments for the multi-modal processor.",
+        )
+        model_group.add_argument(
+            "--max-encoder-cache",
+            default=EngineArgs.max_encoder_cache,
+            type=int,
+            help="Maximum encoder cache tokens(use 0 to disable).",
+        )
+        model_group.add_argument(
+            "--max-processor-cache",
+            default=EngineArgs.max_processor_cache,
+            type=float,
+            help="Maximum processor cache bytes(use 0 to disable).",
         )
         model_group.add_argument(
             "--enable-mm",
