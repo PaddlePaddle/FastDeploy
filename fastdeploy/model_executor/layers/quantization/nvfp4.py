@@ -17,6 +17,9 @@
 from typing import Optional
 
 import paddle
+
+paddle.compat.enable_torch_proxy()
+
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
@@ -96,52 +99,46 @@ class ModelOptNvFp4Config(QuantConfigBase):
             self.kv_cache_quant_algo = kv_cache_quant_algo
             self.exclude_modules = exclude_modules
 
+        self.quant_max_bound = 6
+        self.quant_min_bound = -6
+        self.quant_round_type = 1
+
     def name(self) -> str:
         return "modelopt_fp4"
 
     @classmethod
     def from_config(cls, config: dict) -> "ModelOptNvFp4Config":
-        if "quantization" in config:
-            # Traditional ModelOpt format:
-            # {"quantization": {"quant_algo": "..."}}
-            quant_config = cls.get_from_keys(config, ["quantization"])
-            if not isinstance(quant_config, dict):
-                raise ValueError("Expected 'quantization' to be a dictionary in config")
+        quant_config = config
+        quant_method = quant_config.get("quant_algo", "")
+        if not quant_method:
+            raise ValueError("Missing 'quant_algo' in quantization config")
 
-            quant_method = quant_config.get("quant_algo", "")
-            if not quant_method:
-                raise ValueError("Missing 'quant_algo' in quantization config")
-
-            # Handle kv_cache_quant_algo with proper type validation
-            kv_cache_quant_algo_raw = quant_config.get("kv_cache_quant_algo")
-            if kv_cache_quant_algo_raw is None:
-                # No KV cache quantization by default
-                kv_cache_quant_algo = None
-            elif isinstance(kv_cache_quant_algo_raw, str):
-                kv_cache_quant_algo = kv_cache_quant_algo_raw
-            else:
-                raise ValueError(f"kv_cache_quant_algo must be a string, got " f"{type(kv_cache_quant_algo_raw)}")
-
-            # Handle group_size with proper type validation
-            group_size_raw = quant_config.get("group_size")
-            if group_size_raw is None:
-                group_size = 16  # Default value
-            elif isinstance(group_size_raw, int):
-                group_size = group_size_raw
-            else:
-                try:
-                    group_size = int(group_size_raw)
-                except (ValueError, TypeError):
-                    raise ValueError(f"group_size must be an integer, got {type(group_size_raw)}") from None
-
-            # "exclude_modules" is the key in the legacy hf_quant_config.json
-            exclude_modules = quant_config.get("exclude_modules", [])
-            if not isinstance(exclude_modules, list):
-                raise ValueError(f"exclude_modules must be a list, got {type(exclude_modules)}")
+        # Handle kv_cache_quant_algo with proper type validation
+        kv_cache_quant_algo_raw = quant_config.get("kv_cache_quant_algo")
+        if kv_cache_quant_algo_raw is None:
+            # No KV cache quantization by default
+            kv_cache_quant_algo = None
+        elif isinstance(kv_cache_quant_algo_raw, str):
+            kv_cache_quant_algo = kv_cache_quant_algo_raw
         else:
-            raise ValueError(
-                "Missing 'quantization' section in config. Please make sure your model is exported using FastDeploy."
-            )
+            raise ValueError(f"kv_cache_quant_algo must be a string, got " f"{type(kv_cache_quant_algo_raw)}")
+
+        # Handle group_size with proper type validation
+        group_size_raw = quant_config.get("group_size")
+        if group_size_raw is None:
+            group_size = 16  # Default value
+        elif isinstance(group_size_raw, int):
+            group_size = group_size_raw
+        else:
+            try:
+                group_size = int(group_size_raw)
+            except (ValueError, TypeError):
+                raise ValueError(f"group_size must be an integer, got {type(group_size_raw)}") from None
+
+        # "exclude_modules" is the key in the legacy hf_quant_config.json
+        exclude_modules = quant_config.get("exclude_modules", [])
+        if not isinstance(exclude_modules, list):
+            raise ValueError(f"exclude_modules must be a list, got {type(exclude_modules)}")
 
         is_checkpoint_nvfp4_serialized = "NVFP4" in quant_method
 
@@ -216,10 +213,50 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         layer,
         **extra_weight_attrs,
     ):
-        return
+        if not self.quant_config.is_checkpoint_nvfp4_serialized:
+            raise ValueError("NVFP4 quantization was selected, " " dynamic quantization is not supported.")
+
+        input_size = layer.weight_shape[0]
+        output_size = layer.weight_shape[1]
+        if input_size % 16 != 0:
+            raise ValueError("Unsupported model when in features size is not multiple of 16")
+        # Weight
+        # 2 fp4 items are packed in the input dimension
+        print("====aaaaaa======= [output_size, input_size // 2]", [output_size, input_size // 2])
+        layer.weight = layer.create_parameter(
+            shape=[output_size, input_size // 2],
+            dtype=paddle.uint8,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        extra_weight_attrs["weight_need_transpose"] = extra_weight_attrs.get("model_format") == "torch"
+
+        # Input Weight Scale
+        layer.input_scale = layer.create_parameter(
+            shape=[],  # output_size
+            dtype=paddle.float32,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+
+        # Global Weight Scale
+        layer.weight_scale_2 = layer.create_parameter(
+            shape=[],  # output_size
+            dtype=paddle.float32,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+
+        # Per Block Weight Scale
+        layer.weight_scale = layer.create_parameter(
+            shape=[output_size, input_size // self.quant_config.group_size],
+            dtype=paddle.float8_e4m3fn,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
 
     def process_weights_after_loading(self, layer) -> None:
-        return
+        raise ValueError("eeeeeeee")
 
     def apply(
         self,
