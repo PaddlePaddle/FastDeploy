@@ -66,6 +66,7 @@ class CompletionTokenUsageInfo(BaseModel):
     """
 
     reasoning_tokens: Optional[int] = None
+    image_tokens: Optional[int] = None
 
 
 class PromptTokenUsageInfo(BaseModel):

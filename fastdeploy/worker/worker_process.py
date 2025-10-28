@@ -720,7 +720,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         num_experts_per_rank = num_experts // parallel_config.expert_parallel_size
         num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        parallel_config.local_data_parallel_id = expert_parallel_rank % max_chips_per_node
+        parallel_config.local_data_parallel_id = parallel_config.data_parallel_rank % (
+            max_chips_per_node // parallel_config.tensor_parallel_size
+        )
 
         parallel_config.expert_parallel_rank = expert_parallel_rank
         parallel_config.num_experts_per_rank = num_experts_per_rank
@@ -778,13 +780,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
 
-    if (
-        args.speculative_config is not None
-        and ("method" in args.speculative_config)
-        and (args.speculative_config["method"] is not None)
-    ):
-        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not support speculative decoding now.")
-        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
     if args.splitwise_role != "mixed" and args.cache_transfer_protocol != "rdma":
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
     if not current_platform.is_cuda() and not current_platform.is_xpu():
