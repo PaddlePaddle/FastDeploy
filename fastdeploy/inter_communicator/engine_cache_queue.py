@@ -61,6 +61,7 @@ class EngineCacheQueue:
         """
         self.address: Tuple[str, int] = address
         self.authkey: bytes = authkey
+        self.is_server: bool = is_server
         self.num_client: int = num_client
         self.client_id: int = client_id
         self.local_data_parallel_size = local_data_parallel_size
@@ -150,6 +151,12 @@ class EngineCacheQueue:
 
             self.manager: BaseManager = QueueManager(address=self.address, authkey=self.authkey)
             self.manager.start()
+
+            # If the port is 0, an anonymous port will be automatically assigned. The port range can be queried from system configuration,
+            # e.g., by running 'cat /proc/sys/net/ipv4/ip_local_port_range'; typically in the range of 10000-60999.
+            # After manager.start(), its address attribute will be updated to the actual listening address.
+            # We update self.address here so that the real address can be queried later.
+            self.address = self.manager.address
             logger.info(f"EngineCacheQueue server started at {self.address}")
         else:
             # Client-side connection setup
@@ -193,6 +200,15 @@ class EngineCacheQueue:
             # Setup position and total_num for sync operations
             self.position: int = 1 << self.client_id
             logger.info(f"Connected EngineCacheQueue client_id: {self.client_id}")
+
+    def get_server_port(self) -> int:
+        """
+        Returns the actual port that the server instance is listening on.
+        Calling this method only makes sense on instances where is_server=True.
+        """
+        if not self.is_server:
+            raise RuntimeError("Only the server instance can provide the port.")
+        return self.address[1]
 
     def _connect_with_retry(self, max_retries: int = 5, interval: int = 3) -> None:
         """
