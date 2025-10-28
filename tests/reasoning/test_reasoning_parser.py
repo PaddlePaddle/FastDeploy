@@ -329,7 +329,8 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
             current_token_ids=[200, 201, 202, 100, 200, 101],
             delta_token_ids=[100, 200, 101],
         )
-        self.assertIsNone(result)
+        self.assertIsInstance(result, DeltaMessage)
+        self.assertEqual(result.reasoning_content, "")
 
     def test_streaming_with_reasoning_and_illegal_tool(self):
         result = self.parser.extract_reasoning_content_streaming(
