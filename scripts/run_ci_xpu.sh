@@ -6,6 +6,7 @@ echo "$DIR"
 apt install -y lsof
 
 #先kill一遍
+ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 lsof -t -i :8188 | xargs kill -9 || true
@@ -43,82 +44,7 @@ rm -f core*
 # pkill -9 python #流水线不执行这个
 #清空消息队列
 ipcrm --all=msg
-
-echo "============================开始V0模式测试!============================"
-export ENABLE_V1_KVCACHE_SCHEDULER=0
-export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
-
-python -m fastdeploy.entrypoints.openai.api_server \
-    --model ${model_path} \
-    --port 8188 \
-    --tensor-parallel-size 8 \
-    --num-gpu-blocks-override 16384 \
-    --max-model-len 32768 \
-    --max-num-seqs 128 \
-    --quantization wint4   > server.log 2>&1 &
-
-sleep 60
-# 探活
-TIMEOUT=$((15 * 60))
-INTERVAL=10            # 检查间隔（秒）
-ENDPOINT="http://0.0.0.0:8188/health"
-START_TIME=$(date +%s) # 记录开始时间戳
-echo "开始服务健康检查，最长等待时间：${TIMEOUT}秒"
-while true; do
-    # 计算已耗时
-    CURRENT_TIME=$(date +%s)
-    ELAPSED=$((CURRENT_TIME - START_TIME))
-
-    # 超时判断
-    if [ $ELAPSED -ge $TIMEOUT ]; then
-        echo -e "\n服务启动超时：经过 $((TIMEOUT/60)) 分钟服务仍未启动！"
-        cat server.log
-        cat log/workerlog.0
-        cat log/workerlog.1
-        cat log/workerlog.2
-        cat log/workerlog.3
-        exit 1
-    fi
-
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 2 "$ENDPOINT" || true)
-
-    if [ "$HTTP_CODE" = "200" ]; then
-        echo -e "\n服务启动成功！耗时 ${ELAPSED} 秒"
-        break
-    else
-        sleep $INTERVAL
-    fi
-done
-
-cat server.log
-
-# 执行服务化推理
-python -m pytest tests/ci_use/XPU_45T/run_45T.py
-exit_code=$?
-echo exit_code is ${exit_code}
-
-ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-lsof -t -i :8188 | xargs kill -9 || true
-
-if [ ${exit_code} -ne 0 ]; then
-    echo "log/workerlog.0"
-    cat log/workerlog.0
-    echo "模型起服务失败，请检查pr代码"
-    exit 1
-fi
-
-sleep 5
-
-#0731新增kv block集中式管理相关测试，在起服务时启用对应环境变量 export ENABLE_V1_KVCACHE_SCHEDULER=True
-# 起服务
-rm -rf log/*
-rm -f core*
-# pkill -9 python #流水线不执行这个
-#清空消息队列
-ipcrm --all=msg
 echo "============================开始V1模式测试!============================"
-export ENABLE_V1_KVCACHE_SCHEDULER=1
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${model_path} \
@@ -166,7 +92,7 @@ python -m pytest tests/ci_use/XPU_45T/run_45T.py
 kv_block_test_exit_code=$?
 echo kv_block_test_exit_code is ${kv_block_test_exit_code}
 
-unset ENABLE_V1_KVCACHE_SCHEDULER
+ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 lsof -t -i :8188 | xargs kill -9 || true
@@ -175,6 +101,73 @@ if [ ${kv_block_test_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
     cat log/workerlog.0
     echo "kv block相关测试失败，请检查pr代码"
+    exit 1
+fi
+
+sleep 5
+# 起服务
+rm -rf log/*
+rm -f core*
+# pkill -9 python #流水线不执行这个
+#清空消息队列
+ipcrm --all=msg
+echo "============================开始W4A8测试!============================"
+export XPU_VISIBLE_DEVICES="0,1,2,3"
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 4 \
+    --num-gpu-blocks-override 16384 \
+    --max-model-len 32768 \
+    --max-num-seqs 64 \
+    --quantization "W4A8"   > server.log 2>&1 &
+
+sleep 60
+# 探活
+TIMEOUT=$((15 * 60))
+INTERVAL=10            # 检查间隔（秒）
+ENDPOINT="http://0.0.0.0:8188/health"
+START_TIME=$(date +%s) # 记录开始时间戳
+echo "开始服务健康检查，最长等待时间：${TIMEOUT}秒"
+while true; do
+    # 计算已耗时
+    CURRENT_TIME=$(date +%s)
+    ELAPSED=$((CURRENT_TIME - START_TIME))
+
+    # 超时判断
+    if [ $ELAPSED -ge $TIMEOUT ]; then
+        echo -e "\n服务启动超时：经过 $((TIMEOUT/60)) 分钟服务仍未启动！"
+        cat server.log
+        cat log/workerlog.0
+        exit 1
+    fi
+
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 2 "$ENDPOINT" || true)
+
+    if [ "$HTTP_CODE" = "200" ]; then
+        echo -e "\n服务启动成功！耗时 ${ELAPSED} 秒"
+        break
+    else
+        sleep $INTERVAL
+    fi
+done
+
+cat server.log
+
+# 执行服务化推理
+python -m pytest tests/ci_use/XPU_45T/run_w4a8.py
+w4a8_test_exit_code=$?
+echo w4a8_test_exit_code is ${w4a8_test_exit_code}
+
+ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+lsof -t -i :8188 | xargs kill -9 || true
+
+if [ ${w4a8_test_exit_code} -ne 0 ]; then
+    echo "log/workerlog.0"
+    cat log/workerlog.0
+    echo "w4a8 测试失败，请检查pr代码"
     exit 1
 fi
 
@@ -200,6 +193,18 @@ cd -
 
 python -m pytest -s --timeout=300 tests/ci_use/XPU_45T/run_ep.py
 ep_exit_code=$?
+
+unset BKCL_ENABLE_XDR
+unset BKCL_RDMA_NICS
+unset BKCL_TRACE_TOPO
+unset BKCL_PCIE_RING
+unset XSHMEM_MODE
+unset XSHMEM_QP_NUM_PER_RANK
+unset BKCL_RDMA_VERBS
+ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+lsof -t -i :8188 | xargs kill -9 || true
 
 if [ ${ep_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
