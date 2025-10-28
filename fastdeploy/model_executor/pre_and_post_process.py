@@ -259,8 +259,6 @@ def _build_stream_transfer_data(output_tokens: np.ndarray, pooler_outputs: None)
                 pooler_output = pooler_output.astype("float32")
 
             pooler_output = pooler_output.numpy()
-            if pooler_output.dtype != np.float32:
-                pooler_output = pooler_output.astype(np.float32)
 
             stream_transfer_data = StreamTransferData(
                 decoder_state=DecoderState.TEXT, pooler_output=pooler_output, batch_id=bid
