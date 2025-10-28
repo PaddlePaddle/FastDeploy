@@ -227,6 +227,16 @@ class ModelConfig:
         self.think_end_id = args.get("think_end_id", -1)
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
+        
+        # ========== [新增逻辑：统一 partial_rotary_factor] ==========
+        if (hasattr(self, "rotary_dim") and
+            hasattr(self, "head_dim") and
+            self.rotary_dim < self.head_dim):
+            # 如果 config 中定义了 rotary_dim 且小于 head_dim，
+            # 则计算并覆盖 partial_rotary_factor
+            self.partial_rotary_factor = self.rotary_dim / self.head_dim
+            logger.info(f"Partial rotation detected. Calculated partial_rotary_factor: {self.partial_rotary_factor}")
+        # ========== [结束新增] ==========
 
         self._post_init()
 

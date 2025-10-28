@@ -96,7 +96,7 @@ class _Attention(paddle.autograd.PyLayer):
             b=b, h=h, n=n, d=d, e=e,
             BLOCK=BLOCK, NUM_BLOCK=NUM_BLOCK, CBLOCK=CBLOCK_DIAG,
         )
-        print_tensor_stats(o, "PyLayer_After_DiagKernel")
+        # print_tensor_stats(o, "PyLayer_After_DiagKernel")
 
         # Step 2
         NUM_FBLOCK = 1
@@ -113,19 +113,19 @@ class _Attention(paddle.autograd.PyLayer):
             D_FBLOCK=D_FBLOCK, E_FBLOCK=E_FBLOCK, NUM_FBLOCK=NUM_FBLOCK,
             CBLOCK=CBLOCK_KV_AND_NON_DIAG, NUM_CBLOCK=NUM_CBLOCK_KV_AND_NON_DIAG,
         )
-        print_tensor_stats(kv, "PyLayer_After_KVParallelKernel")
+        # print_tensor_stats(kv, "PyLayer_After_KVParallelKernel")
 
         # Step 3: 将新创建的 kv_history_compute 传入
         grid_kv_reduce = (b * h, NUM_FBLOCK)
-        print_tensor_stats(kv_history_compute, "PyLayer_Before_KVReduceKernel_History")
+        # print_tensor_stats(kv_history_compute, "PyLayer_Before_KVReduceKernel_History")
         _fwd_kv_reduce[grid_kv_reduce](
             s, kv, kv_history_compute,  # <--- 使用副本
             b=b, h=h, n=n, d=d, e=e,
             BLOCK=BLOCK, NUM_BLOCK=NUM_BLOCK,
             D_FBLOCK=D_FBLOCK, E_FBLOCK=E_FBLOCK,
         )
-        print_tensor_stats(kv, "PyLayer_After_KVReduceKernel_KV") 
-        print_tensor_stats(kv_history_compute, "PyLayer_After_KVReduceKernel_History")
+        # print_tensor_stats(kv, "PyLayer_After_KVReduceKernel_KV") 
+        # print_tensor_stats(kv_history_compute, "PyLayer_After_KVReduceKernel_History")
 
 
         # Step 4
@@ -136,7 +136,7 @@ class _Attention(paddle.autograd.PyLayer):
             BLOCK=BLOCK, NUM_BLOCK=NUM_BLOCK, E_FBLOCK=E_FBLOCK,
             CBLOCK=CBLOCK_KV_AND_NON_DIAG, NUM_CBLOCK=NUM_CBLOCK_KV_AND_NON_DIAG,
         )
-        print_tensor_stats(o, "PyLayer_After_NoneDiagKernel")
+        # print_tensor_stats(o, "PyLayer_After_NoneDiagKernel")
 
         # 返回计算结果和被更新后的 kv_history 副本
         return o, kv_history_compute
@@ -186,10 +186,10 @@ def lightning_attention(
     #     return dummy_output, dummy_kv_state
     #     # --- [结束解决方案] ---
 
-    logger.info("<<<<< RUNNING TRITON KERNEL FOR LIGHTNING ATTENTION! >>>>>")
-    print_tensor_stats(q, "Kernel_Wrapper_Input_Q")
-    print_tensor_stats(k, "Kernel_Wrapper_Input_K")
-    print_tensor_stats(v, "Kernel_Wrapper_Input_V")
+    # logger.info("<<<<< RUNNING TRITON KERNEL FOR LIGHTNING ATTENTION! >>>>>")
+    # print_tensor_stats(q, "Kernel_Wrapper_Input_Q")
+    # print_tensor_stats(k, "Kernel_Wrapper_Input_K")
+    # print_tensor_stats(v, "Kernel_Wrapper_Input_V")
 
     d = q.shape[-1]
     e = v.shape[-1]
@@ -228,14 +228,14 @@ def lightning_attention(
         # 你的 _Attention.apply 需要能够处理切片后的 Q, K
         # 假设它返回的是一个完整的、更新后的 kv_history
 
-        logger.info(f">>> [DEBUG] Processing chunk {i}: head_dim slice [{s}:{e_chunk}]")
-        print_tensor_stats(q_chunk, f"Kernel_Chunk_{i}_Input_Q")
-        print_tensor_stats(k_chunk, f"Kernel_Chunk_{i}_Input_K")
-        print_tensor_stats(kv_history_for_loop, f"Kernel_Chunk_{i}_Input_KV_History")
+        # logger.info(f">>> [DEBUG] Processing chunk {i}: head_dim slice [{s}:{e_chunk}]")
+        # print_tensor_stats(q_chunk, f"Kernel_Chunk_{i}_Input_Q")
+        # print_tensor_stats(k_chunk, f"Kernel_Chunk_{i}_Input_K")
+        # print_tensor_stats(kv_history_for_loop, f"Kernel_Chunk_{i}_Input_KV_History")
 
         o_chunk, updated_full_kv_history = _Attention.apply(q_chunk, k_chunk, v, slope_rate, kv_history_for_loop)
 
-        print_tensor_stats(o_chunk, f"Kernel_Chunk_{i}_Output_O")
+        # print_tensor_stats(o_chunk, f"Kernel_Chunk_{i}_Output_O")
 
         output = output + o_chunk
 
@@ -243,7 +243,7 @@ def lightning_attention(
         kv_history_for_loop = updated_full_kv_history
         final_kv_state = updated_full_kv_history
 
-    print_tensor_stats(output, "Kernel_Final_Aggregated_Output_O")
+    # print_tensor_stats(output, "Kernel_Final_Aggregated_Output_O")
 
     # 返回最终的累加输出和最后一次更新后的完整 kv 状态
     return output.astype(k.dtype), final_kv_state

@@ -371,35 +371,27 @@ def get_rope_impl(
     """
 
     architecture = model_config.architectures[0]
-    print(f"INFO: Using GlmRotaryEmbedding for {architecture}")
-    rotary_emb_layer = GlmRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
-    rotary_emb = rotary_emb_layer(position_ids)
-    # if architecture.startswith("Qwen"):
-    #     rotary_emb_layer = QwenRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
-    #     rotary_emb = rotary_emb_layer(position_ids)
-    # elif architecture.startswith("Glm") or ("MiniMaxM1" in architecture and partial_rotary_factor < 1.0):
-    #     print(f"INFO: Using GlmRotaryEmbedding for {architecture}")
-    #     # rotary_emb_layer = GlmRotaryEmbedding(model_config.head_dim, base, partial_rotary_factor)
-    #     rotary_emb_layer = GlmRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
-    #     rotary_emb = rotary_emb_layer(position_ids)
-    # # elif architecture.startswith("Glm"):
-    # #     rotary_emb_layer = GlmRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
-    # #     rotary_emb = rotary_emb_layer(position_ids)
-    # elif architecture.startswith("GptOss"):
-    #     rotary_emb_layer = GptOssScalingRotaryEmbedding(
-    #         rotary_dim=model_config.head_dim,
-    #         base=model_config.rope_theta,
-    #         original_max_position_embeddings=model_config.rope_scaling["original_max_position_embeddings"],
-    #         scale=model_config.rope_scaling["factor"],
-    #         beta_fast=model_config.rope_scaling["beta_fast"],
-    #         beta_slow=model_config.rope_scaling["beta_slow"],
-    #         use_neox_rotary_style=True,
-    #     )
-    #     rotary_emb = rotary_emb_layer(position_ids)
-    # else:
-    #     print("进入到ErnieRotaryEmbedding啦~")
-    #     rotary_emb_layer = ErnieRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
-    #     rotary_emb = rotary_emb_layer(position_ids)
+
+    if architecture.startswith("Qwen"):
+        rotary_emb_layer = QwenRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
+        rotary_emb = rotary_emb_layer(position_ids)
+    elif architecture.startswith("Glm") or ("MiniMaxM1" in architecture and partial_rotary_factor < 1.0):
+        rotary_emb_layer = GlmRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
+        rotary_emb = rotary_emb_layer(position_ids)
+    elif architecture.startswith("GptOss"):
+        rotary_emb_layer = GptOssScalingRotaryEmbedding(
+            rotary_dim=model_config.head_dim,
+            base=model_config.rope_theta,
+            original_max_position_embeddings=model_config.rope_scaling["original_max_position_embeddings"],
+            scale=model_config.rope_scaling["factor"],
+            beta_fast=model_config.rope_scaling["beta_fast"],
+            beta_slow=model_config.rope_scaling["beta_slow"],
+            use_neox_rotary_style=True,
+        )
+        rotary_emb = rotary_emb_layer(position_ids)
+    else:
+        rotary_emb_layer = ErnieRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
+        rotary_emb = rotary_emb_layer(position_ids)
     return rotary_emb
 
 

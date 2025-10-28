@@ -1147,19 +1147,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Initialize rotary position embedding
         if not self.enable_mm:
-            # rotary_dimension = getattr(self.model_config, "rotary_dim", self.model_config.head_dim)
-            # head_dimension = self.model_config.head_dim
-            
-            # # 计算正确的 partial_rotary_factor
-            # p_rotary_factor = rotary_dimension / head_dimension
-            
-            # self.share_inputs["rope_emb"] = get_rope(
-            #     rotary_dim=head_dimension, # 保持传入 true rotary_dim
-            #     position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
-            #     base=self.model_config.rope_theta,
-            #     model_config=self.model_config,
-            #     partial_rotary_factor=p_rotary_factor, # <--- 传入计算出的 factor
-            # )
+            print(f"self.share_inputs partial_rotary_factor{self.model_config.partial_rotary_factor}")
             self.share_inputs["rope_emb"] = get_rope(
                 rotary_dim=self.model_config.head_dim,
                 position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),

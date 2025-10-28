@@ -95,51 +95,6 @@ def print_tensor_stats(tensor, name,  is_capturing=False):
 # ============================================================================
 
 
-class InterleavedColumnParallelLinear(ColumnParallelLinear):
-    """
-    A specialized ColumnParallelLinear for MiniMaxM1's Linear Attention.
-    It overrides the default weight_loader to handle the interleaved format.
-    """
-    def set_linear_attention_owner(self, owner_layer):
-        # A helper to get access to layer_id, num_heads etc.
-        self.owner = owner_layer
-
-    def weight_loader(self, param, loaded_weight, *args, **kwargs):
-        """
-        This method is now the official weight_loader for this class.
-        It will be correctly picked up by `getattr(param, 'weight_loader', ...)`.
-        """
-        logger.warning(f"--- [FD DEBUG] INSIDE CUSTOM InterleavedColumnParallelLinear loader for L{self.owner.layer_id} ---")
-
-        tp_rank = self.fd_config.parallel_config.tensor_parallel_rank
-        tp_size = self.nranks
-        
-        full_weight = loaded_weight
-        
-        # 1. Reshape the full weight to interleaved format first
-        hidden_size = full_weight.shape[1]
-        num_total_heads = self.owner.num_heads
-        head_dim = self.owner.head_dim
-        
-        reshaped_weight = full_weight.reshape([3, num_total_heads, head_dim, hidden_size])
-        permuted_weight = reshaped_weight.transpose([1, 0, 2, 3])
-        interleaved_full_weight = permuted_weight.reshape([-1, hidden_size])
-        
-        # 2. Then, slice the shard for the current TP rank
-        output_size_per_partition = interleaved_full_weight.shape[0] // tp_size
-        start_row = tp_rank * output_size_per_partition
-        end_row = (tp_rank + 1) * output_size_per_partition
-        my_shard = interleaved_full_weight[start_row:end_row, :]
-        
-        # 3. Validate and set the value
-        assert my_shard.shape == param.shape, \
-            f"Shape mismatch in L{self.owner.layer_id} QKV loader: loaded shard {my_shard.shape} vs param {param.shape}"
-        param.set_value(my_shard)
-
-        if tp_rank == 0:
-            print_tensor_stats(param, f"FD_L{self.owner.layer_id}_QKV_PROJ_WEIGHT_SHARD_LOADED")
-
-
 class RMSNormTP(nn.Layer):
     """
     RMSNorm with Tensor Parallel support.
@@ -816,11 +771,18 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
     """
 
     def __init__(self, fd_config: FDConfig):
+        # ================== [金丝雀测试] ==================
+        print("\n\n>>>>>> [DEBUG] EXECUTING THE NEWEST VERSION OF MINIMAX_M1_FOR_CAUSALLM INIT <<<<<<\n\n")
+        # =================================================
+
         super().__init__(fd_config)
 
         # Save the model config as a self.config attribute
         self.config = self.fd_config.model_config
         self.config.pretrained_config.prefix_name = "model"
+        print(f"self.config.rotary_dim {self.config.rotary_dim}")
+        print(f"self.config.head_dim {self.config.head_dim}")
+        
         if hasattr(self.config, "num_local_experts") and not hasattr(self.config, "moe_num_experts"):
             self.config.moe_num_experts = self.config.num_local_experts
         if (
@@ -828,7 +790,9 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
             and hasattr(self.config, "head_dim")
             and self.config.rotary_dim < self.config.head_dim
         ):
+            
             self.config.partial_rotary_factor = self.config.rotary_dim / self.config.head_dim
+            print(f"self.config.partial_rotary_factor {self.config.partial_rotary_factor}")
         if not hasattr(self.config, "first_k_dense_replace"):
             self.config.first_k_dense_replace = 0
 
