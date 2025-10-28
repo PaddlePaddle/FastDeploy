@@ -54,6 +54,10 @@ class LogitBiasLogitsProcessor(LogitsProcessor):
 
     def apply(self, logits: paddle.Tensor) -> paddle.Tensor:
         """Apply logit bias to logits: [batch_size, vocab_size]"""
+        # Skip if no bias is applied
+        if len(self.biases) == 0:
+            return logits
+
         # Make bias indices and bias tensor
         bias_indices = (
             paddle.tensor(self.batch_ids, dtype="int32").to(self.device),
