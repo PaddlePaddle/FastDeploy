@@ -886,24 +886,27 @@ class EngineService:
                 for request_id, contents in results.items():
                     new_contents = []
                     for content in contents:
-                        decode_type = content.outputs.decode_type
-                        delta_text = ""
-                        if decode_type == 0:
-                            delta_text, token_ids = self._decode_token(
-                                token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
-                            )
+                        if isinstance(content, RequestOutput):
+                            decode_type = content.outputs.decode_type
+                            delta_text = ""
+                            if decode_type == 0:
+                                delta_text, token_ids = self._decode_token(
+                                    token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
+                                )
+                            else:
+                                token_ids = content.outputs.token_ids
+                            if len(token_ids):
+                                content.outputs.token_ids = token_ids
+                                content.outputs.text = delta_text
+                                new_contents.append(content)
+                            elif content.finished:
+                                new_contents.append(content)
+                            else:
+                                llm_logger.warning(
+                                    f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
+                                )
                         else:
-                            token_ids = content.outputs.token_ids
-                        if len(token_ids):
-                            content.outputs.token_ids = token_ids
-                            content.outputs.text = delta_text
                             new_contents.append(content)
-                        elif content.finished:
-                            new_contents.append(content)
-                        else:
-                            llm_logger.warning(
-                                f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
-                            )
                     if len(new_contents):
                         llm_logger.info(f"Send response for request id: {request_id}")
                         self.send_response_server.send_response(request_id, new_contents)

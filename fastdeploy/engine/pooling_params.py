@@ -86,6 +86,7 @@ class PoolingParams(
         return {
             "embed": ["dimensions", "normalize"],
             "encode": ["softmax", "step_tag_id", "returned_token_ids"],
+            "reward": ["dimensions", "normalize"],
         }
 
     def to_dict(self) -> Dict[str, Any]:
@@ -161,6 +162,9 @@ class PoolingParams(
         elif self.task == "encode":
             if self.softmax is None:
                 self.softmax = True
+        elif self.task == "reward":
+            if self.normalize is None:
+                self.normalize = True
         else:
             raise ValueError(f"Unknown pooling task: {self.task}")
 

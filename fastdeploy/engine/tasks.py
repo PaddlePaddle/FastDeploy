@@ -19,7 +19,7 @@ from typing import Literal, get_args
 GenerationTask = Literal["generate"]
 GENERATION_TASKS = get_args(GenerationTask)
 
-PoolingTask = Literal["encode", "embed"]
+PoolingTask = Literal["encode", "embed", "reward"]
 POOLING_TASKS = get_args(PoolingTask)
 
 SupportedTask = Literal[GenerationTask, PoolingTask]

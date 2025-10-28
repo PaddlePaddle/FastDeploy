@@ -974,3 +974,89 @@ EmbeddingRequest = Union[EmbeddingCompletionRequest, EmbeddingChatRequest]
 
 PoolingCompletionRequest = EmbeddingCompletionRequest
 PoolingChatRequest = EmbeddingChatRequest
+
+
+class ChatRewardRequest(BaseModel):
+    model: Optional[str] = None  # 指定模型，例如 "default" 或支持 embedding 的 chat 模型
+    messages: Union[List[Any], List[int]]  # 聊天消息列表（必选）
+    user: Optional[str] = None  # 调用方标识符
+
+    dimensions: Optional[int] = None
+    truncate_prompt_tokens: Optional[Annotated[int, Field(ge=-1)]] = None
+
+    # --8<-- [start:chat-embedding-extra-params]
+    add_generation_prompt: bool = Field(
+        default=False,
+        description=(
+            "If true, the generation prompt will be added to the chat template. "
+            "This is a parameter used by chat template in tokenizer config of the "
+            "model."
+        ),
+    )
+
+    add_special_tokens: bool = Field(
+        default=False,
+        description=(
+            "If true, special tokens (e.g. BOS) will be added to the prompt "
+            "on top of what is added by the chat template. "
+            "For most models, the chat template takes care of adding the "
+            "special tokens so this should be set to false (as is the "
+            "default)."
+        ),
+    )
+    chat_template: Optional[str] = Field(
+        default=None,
+        description=(
+            "A Jinja template to use for this conversion. "
+            "As of transformers v4.44, default chat template is no longer "
+            "allowed, so you must provide a chat template if the tokenizer "
+            "does not define one."
+        ),
+    )
+    chat_template_kwargs: Optional[dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Additional keyword args to pass to the template renderer. " "Will be accessible by the chat template."
+        ),
+    )
+    mm_processor_kwargs: Optional[dict[str, Any]] = Field(
+        default=None,
+        description=("Additional kwargs to pass to the HF processor."),
+    )
+    priority: int = Field(
+        default=0,
+        description=(
+            "The priority of the request (lower means earlier handling; "
+            "default: 0). Any priority other than 0 will raise an error "
+            "if the served model does not use priority scheduling."
+        ),
+    )
+    request_id: str = Field(
+        default_factory=lambda: f"{uuid.uuid4().hex}",
+        description=(
+            "The request_id related to this request. If the caller does "
+            "not set it, a uuid.uuid4().hex will be generated. This id is used "
+            "through out the inference process and return in response."
+        ),
+    )
+    normalize: Optional[bool] = None
+
+    def to_pooling_params(self):
+        return PoolingParams(
+            truncate_prompt_tokens=self.truncate_prompt_tokens, dimensions=self.dimensions, normalize=self.normalize
+        )
+
+
+class ChatRewardData(BaseModel):
+    index: Optional[int] = None  # 数据索引（可选）
+    object: str = "reward"  # 固定为 "reward"
+    score: List[float]  # reward 分数（浮点数列表）
+
+
+class ChatRewardResponse(BaseModel):
+    id: str  # 响应 ID，例如 chat-reward-<uuid>
+    object: str = "object"  # 固定为 "object"
+    created: int  # 创建时间（Unix 时间戳）
+    model: str  # 使用的模型名
+    data: List[ChatRewardData]  # reward 结果列表
+    usage: Optional[UsageInfo] = None  # Token 使用情况
