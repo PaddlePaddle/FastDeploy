@@ -299,7 +299,7 @@ def switch_service():
     """切换模型服务"""
     # kill掉已有服务
     stop_server()
-    time.sleep(2)
+    time.sleep(10)
 
     try:
         base_config = DEFAULT_PARAMS
