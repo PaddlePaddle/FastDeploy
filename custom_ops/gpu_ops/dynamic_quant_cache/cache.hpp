@@ -239,12 +239,10 @@ __device__ void write_c2_cache_kernel(
     __syncthreads();
 
     pakc_half dequant_scale = (max_value - min_value) * dequant_scale_factor;
-
-    float quant_scale_x = fdividef(1.0f, float(dequant_scale.x) + 0.0000001f);
-    float quant_scale_y = fdividef(1.0f, float(dequant_scale.y) + 0.0000001f);
-    quant_scale_x = min(quant_scale_x, 10000.0f);
-    quant_scale_y = min(quant_scale_y, 10000.0f);
-    pakc_half quant_scale = pakc_half(quant_scale_x, quant_scale_y);
+    pakc_half dequant_scale_min = pakc_half(0.0001f, 0.0001f);
+    dequant_scale = HalfMax<T>()(dequant_scale, dequant_scale_min);
+    const pakc_half quant_scale_factor = pakc_half(1.0f, 1.0f);
+    pakc_half quant_scale = __h2div(quant_scale_factor, dequant_scale);
 
     pakc_half quant_zp = -min_value * quant_scale;
 
@@ -354,11 +352,8 @@ __device__ void write_c2_cache_kernel(
     min_value = s_min[tidx];
 
     dequant_scale = (max_value - min_value) * dequant_scale_factor;
-    quant_scale_x = fdividef(1.0f, float(dequant_scale.x) + 0.0000001f);
-    quant_scale_y = fdividef(1.0f, float(dequant_scale.y) + 0.0000001f);
-    quant_scale_x = min(quant_scale_x, 10000.0f);
-    quant_scale_y = min(quant_scale_y, 10000.0f);
-    quant_scale = pakc_half(quant_scale_x, quant_scale_y);
+    dequant_scale = HalfMax<T>()(dequant_scale, dequant_scale_min);
+    quant_scale = __h2div(quant_scale_factor, dequant_scale);
 
     quant_zp = -min_value * quant_scale;
 
