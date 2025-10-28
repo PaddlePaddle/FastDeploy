@@ -60,6 +60,7 @@ def _create_default_sampling_metadata(
         eos_token_ids=paddle.full(shape=[batch_size], fill_value=-2, dtype="int64"),
         min_p=paddle.randn([batch_size]),
         seed=paddle.to_tensor([[2025]]),
+        logits_processors=None,
     )
     if max_num_logprobs is not None:
         fake_sampling_metadata.max_num_logprobs = max_num_logprobs
@@ -89,6 +90,9 @@ def get_baseline_logprobs(logits, sampling_metadata, logprobs_mode, token_ids):
             apply_penalty_multi_scores,
         )
 
+        for proc in sampling_metadata.logits_processors or []:
+            logits = proc.apply(logits)
+
         logits = apply_penalty_multi_scores(
             sampling_metadata.pre_token_ids,
             sampling_metadata.prompt_ids,
@@ -108,6 +112,9 @@ def get_baseline_logprobs(logits, sampling_metadata, logprobs_mode, token_ids):
         from fastdeploy.model_executor.layers.sample.ops import (
             apply_penalty_multi_scores,
         )
+
+        for proc in sampling_metadata.logits_processors or []:
+            logits = proc.apply(logits)
 
         logits = apply_penalty_multi_scores(
             sampling_metadata.pre_token_ids,

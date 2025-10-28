@@ -686,6 +686,14 @@ def parse_args():
         help="Override configuration for the pooler.",
     )
 
+    parser.add_argument(
+        "--logits-processors",
+        type=str,
+        nargs="+",
+        default=[],
+        help="FQCNs (Fully Qualified Class Names) of logits processors supported by the service.",
+    )
+
     args = parser.parse_args()
     return args
 

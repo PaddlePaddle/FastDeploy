@@ -461,6 +461,7 @@ class CompletionRequest(BaseModel):
     include_stop_str_in_output: Optional[bool] = False
     bad_words: Optional[List[str]] = None
     bad_words_token_ids: Optional[List[int]] = None
+    logits_processors_args: Optional[Dict] = None
     # doc: end-completion-sampling-params
 
     # doc: start-completion-extra-params
@@ -613,6 +614,7 @@ class ChatCompletionRequest(BaseModel):
     bad_words_token_ids: Optional[List[int]] = None
     repetition_penalty: Optional[float] = None
     stop_token_ids: Optional[List[int]] = Field(default_factory=list)
+    logits_processors_args: Optional[Dict] = None
     # doc: end-chat-completion-sampling-params
 
     # doc: start-chat-completion-extra-params
