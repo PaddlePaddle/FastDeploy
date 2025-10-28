@@ -143,9 +143,9 @@ class ForwardMeta:
     # KV caches
     caches: Optional[list[paddle.Tensor]] = None
     
-    # 线性注意力专用的状态缓存
+    # State cache dedicated to linear attention
     linear_attn_caches: Optional[paddle.Tensor] = None
-    # 用于线性注意力 decode 阶段，指示每个 token 属于哪个 slot
+    # Used in the linear attention decode stage to indicate which slot each token belongs to
     slot_mapping: Optional[paddle.Tensor] = None
 
     def clear_caches(self):
