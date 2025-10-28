@@ -502,7 +502,7 @@ class TokenProcessor:
 
     def _compute_speculative_status(self):
         # TODO(liuzichang): Supplement more statistics
-        interval = 10
+        interval = 1
         if self.speculative_stats_step % interval == 0:
             accept_ratio = 1 - self.total_step * 1.0 / self.number_of_output_tokens
             spec_logger.info(
@@ -593,6 +593,9 @@ class TokenProcessor:
                         + accept_num[i]
                     ].tolist()
                     if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] <= 0):
+                        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                            if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                                self.resource_manager.reschedule_preempt_task(task_id)
                         continue
             else:
                 token_id = int(tokens[i, 0])

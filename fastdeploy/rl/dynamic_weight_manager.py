@@ -17,11 +17,10 @@
 import os
 import time
 from multiprocessing.shared_memory import SharedMemory
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import numpy as np
 import paddle
-from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
@@ -31,7 +30,7 @@ from fastdeploy.inter_communicator import ModelWeightsStatus
 class DynamicWeightManager:
     """Manages model weights loading, updating and shared state across processes."""
 
-    def __init__(self, fd_config: FDConfig, model: nn.Layer):
+    def __init__(self, fd_config: FDConfig, models):
         """Initialize with config and model instances."""
         self.fd_config = fd_config
         self.load_config = fd_config.load_config
@@ -42,7 +41,10 @@ class DynamicWeightManager:
         self.meta_src_id = self._get_gpu_id()
         self.first_load = True
         self.ipc_path = f"/shared_ipc_meta/ipc_metas_{self.meta_src_id}"
-        self.model: nn.Layer = model
+        if not isinstance(models, List):
+            self.model_list = [models]
+        else:
+            self.model_list = models
         self._capture_model_state()
         self.update_parameters()
         self.finalize_update()
@@ -55,9 +57,10 @@ class DynamicWeightManager:
     @paddle.no_grad()
     def _capture_model_state(self):
         """Capture and store initial model parameters state."""
-        for name, param in self.model.state_dict().items():
-            logger.debug(f"Model param: {name}, shape={param.shape}, dtype={param.dtype}")
-            self.state_dict[name] = param
+        for model in self.model_list:
+            for name, param in model.state_dict().items():
+                logger.info(f"Model param: {name}, shape={param.shape}, dtype={param.dtype}")
+                self.state_dict[name] = param
 
     def update_parameters(self, pid: int = 0) -> None:
         """Core method to update model parameters based on strategy."""
@@ -137,8 +140,9 @@ class DynamicWeightManager:
 
         paddle.device.cuda.empty_cache()
         # step2: release model weight
-        for param in self.model.state_dict().values():
-            param._clear_data()
+        for model in self.model_list:
+            for param in model.state_dict().values():
+                param._clear_data()
 
         self._verify_parameters("clearance")
 

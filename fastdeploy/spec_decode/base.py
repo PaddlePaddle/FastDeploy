@@ -38,12 +38,19 @@ class Proposer(ABC):
         Init Speculative proposer
         """
         fd_config.parallel_config.tp_group = None
+        fd_config.parallel_config.ep_group = None
         self.fd_config = deepcopy(fd_config)
         fd_config.parallel_config.tp_group = dist.get_group(
             fd_config.parallel_config.data_parallel_rank + envs.FD_TP_GROUP_GID_OFFSET
         )
+        fd_config.parallel_config.ep_group = dist.get_group(
+            fd_config.parallel_config.data_parallel_size + envs.FD_TP_GROUP_GID_OFFSET
+        )
         self.fd_config.parallel_config.tp_group = dist.get_group(
             fd_config.parallel_config.data_parallel_rank + envs.FD_TP_GROUP_GID_OFFSET
+        )
+        self.fd_config.parallel_config.ep_group = dist.get_group(
+            fd_config.parallel_config.data_parallel_size + envs.FD_TP_GROUP_GID_OFFSET
         )
         self.parallel_config = self.fd_config.parallel_config
         self.model_config = self.fd_config.model_config
