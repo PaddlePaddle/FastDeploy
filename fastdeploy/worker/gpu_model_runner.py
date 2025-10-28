@@ -519,22 +519,14 @@ class GPUModelRunner(ModelRunnerBase):
                     self._apply_mm_inputs(request, multi_vision_inputs, rope_3d_position_ids)
 
                 if not self.is_pooling_model:
-                    if request.get("enable_thinking", False):
+                    if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
                         # Enable thinking
-                        req_reasoning_max_tokens = request.get("reasoning_max_tokens")
-                        req_max_tokens = request.get("max_tokens")
-                        final_reasoning_tokens = (
-                            req_reasoning_max_tokens if req_reasoning_max_tokens is not None else req_max_tokens
-                        )
-
-                        self.share_inputs["enable_thinking"][idx : idx + 1] = True
-                        self.share_inputs["need_think_end"][idx : idx + 1, :] = 1
-                        self.share_inputs["reasoning_index"][idx : idx + 1, :] = final_reasoning_tokens
+                        self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
+                        self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
                     else:
                         # Disable thinking
-                        self.share_inputs["enable_thinking"][idx : idx + 1] = False
-                        self.share_inputs["need_think_end"][idx : idx + 1, :] = 0
-                        self.share_inputs["reasoning_index"][idx : idx + 1, :] = 0
+                        self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                        self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
                 if isinstance(request.prompt_token_ids, np.ndarray):
                     prompt_token_ids = request.prompt_token_ids.tolist()
@@ -779,22 +771,14 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
 
                 if not self.is_pooling_model:
-                    if request.get("enable_thinking", False):
+                    if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
                         # Enable thinking
-                        req_reasoning_max_tokens = request.get("reasoning_max_tokens")
-                        req_max_tokens = request.get("max_tokens")
-                        final_reasoning_tokens = (
-                            req_reasoning_max_tokens if req_reasoning_max_tokens is not None else req_max_tokens
-                        )
-
-                        self.share_inputs["enable_thinking"][idx : idx + 1] = True
-                        self.share_inputs["need_think_end"][idx : idx + 1, :] = 1
-                        self.share_inputs["reasoning_index"][idx : idx + 1, :] = final_reasoning_tokens
+                        self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
+                        self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
                     else:
                         # Disable thinking
-                        self.share_inputs["enable_thinking"][idx : idx + 1] = False
-                        self.share_inputs["need_think_end"][idx : idx + 1, :] = 0
-                        self.share_inputs["reasoning_index"][idx : idx + 1, :] = 0
+                        self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                        self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
                 res = request.get(attr, default_value)
@@ -1102,9 +1086,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["kv_num_blocks_x_cpu"] = None  # CPU
 
         # Initialize thinking related buffers
-        self.share_inputs["enable_thinking"] = paddle.full(shape=[max_num_seqs, 1], fill_value=False, dtype="bool")
-        self.share_inputs["need_think_end"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-        self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
         self.share_inputs["max_think_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
         self.share_inputs["limit_think_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
