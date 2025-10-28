@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, fields
+from enum import Enum
 from typing import Any, List, Optional, Union
 
 
@@ -162,8 +163,6 @@ class SamplingParams:
     def __post_init__(self):
         if self.seed is None:
             self.seed = random.randint(0, 922337203685477580)
-        if self.max_tokens is not None and self.reasoning_max_tokens is None:
-            self.reasoning_max_tokens = max(int(self.max_tokens * 0.8), 1)
         self._verify_args()
 
     def _verify_args(self) -> None:
@@ -268,3 +267,12 @@ class GuidedDecodingParams:
                 "You can only use one kind of guided decoding "
                 "('json', 'json_object', 'regex', 'choice', 'grammar', 'structural_tag')."
             )
+
+
+class RequestOutputKind(Enum):
+    # Return entire output so far in every RequestOutput
+    CUMULATIVE = 0
+    # Return only deltas in each RequestOutput
+    DELTA = 1
+    # Do not return intermediate RequestOutput
+    FINAL_ONLY = 2

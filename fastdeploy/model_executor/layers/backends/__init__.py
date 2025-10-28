@@ -55,3 +55,10 @@ if current_platform.is_maca():
     if hasattr(metax, "__all__"):
         globals().update({name: getattr(metax, name) for name in metax.__all__})
         __all__.extend(metax.__all__)
+
+if current_platform.is_intel_hpu():
+    from . import intel_hpu
+
+    if hasattr(intel_hpu, "__all__"):
+        globals().update({name: getattr(intel_hpu, name) for name in intel_hpu.__all__})
+        __all__.extend(intel_hpu.__all__)

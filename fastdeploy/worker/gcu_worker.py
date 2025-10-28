@@ -53,7 +53,7 @@ class GcuWorker(WorkerBase):
             self.device_ids = self.parallel_config.device_ids.split(",")
             self.device = f"gcu:{self.local_rank}"
             paddle.device.set_device(self.device)
-            paddle.set_default_dtype(self.parallel_config.dtype)
+            paddle.set_default_dtype(self.model_config.dtype)
             logger.info(f"GcuWorker init_device:{self.device}, device_ids:{self.device_ids}")
 
             gc.collect()

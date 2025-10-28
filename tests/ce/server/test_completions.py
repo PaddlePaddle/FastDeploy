@@ -13,6 +13,7 @@ from core import TEMPLATE, URL, build_request_payload, send_request
 
 COMPLETIONS_URL = URL.replace("/v1/chat/completions", "/v1/completions")
 
+
 def test_completion_total_tokens():
     data = {
         "prompt": "你是谁",
@@ -48,10 +49,9 @@ def test_completion_echo_stream_one_prompt_rti():
         "max_tokens": 2,
         "return_token_ids": True,
     }
-    
+
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(COMPLETIONS_URL, payload, stream=True)
-    last_data = None
     # 初始化计数器
     counter = 0
     second_data = None
@@ -60,7 +60,7 @@ def test_completion_echo_stream_one_prompt_rti():
             break
         if line.strip() == "" or not line.startswith("data: "):
             continue
-        line = line[len("data: "):]
+        line = line[len("data: ") :]
         stream_data = json.loads(line)
         counter += 1
         if counter == 2:  # 当计数器为2时，保存第二包数据
@@ -81,12 +81,11 @@ def test_completion_echo_stream_one_prompt():
         "stream": True,
         "stream_options": {"include_usage": True, "continuous_usage_stats": True},
         "echo": True,
-        "max_tokens": 2
+        "max_tokens": 2,
     }
-    
+
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(COMPLETIONS_URL, payload, stream=True)
-    last_data = None
     # 初始化计数器
     counter = 0
     second_data = None
@@ -95,7 +94,7 @@ def test_completion_echo_stream_one_prompt():
             break
         if line.strip() == "" or not line.startswith("data: "):
             continue
-        line = line[len("data: "):]
+        line = line[len("data: ") :]
         stream_data = json.loads(line)
         counter += 1
         if counter == 1:  # 当计数器为1时，保存第一包数据
@@ -112,20 +111,16 @@ def test_completion_echo_stream_more_prompt():
     测试echo参数在流式回复中，且设置为回复多个prompt
     """
     data = {
-        "prompt": ["水果的营养价值是如何的？","水的化学式是什么？"],
+        "prompt": ["水果的营养价值是如何的？", "水的化学式是什么？"],
         "stream": True,
         "stream_options": {"include_usage": True, "continuous_usage_stats": True},
         "echo": True,
         "max_tokens": 2,
-        "return_token_ids": True
+        "return_token_ids": True,
     }
-    
+
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(COMPLETIONS_URL, payload, stream=True)
-    last_data = None
-    # 初始化计数器
-    counter = 0
-    second_data = None
     # 初始化字典来存储每个index的第二包数据
     second_data_by_index = {0: None, 1: None}
     # 初始化字典来记录每个index的包计数
@@ -136,9 +131,9 @@ def test_completion_echo_stream_more_prompt():
             break
         if line.strip() == "" or not line.startswith("data: "):
             continue
-        line = line[len("data: "):]
+        line = line[len("data: ") :]
         stream_data = json.loads(line)
-        
+
         for choice in stream_data.get("choices", []):
             index = choice.get("index")
             if index in packet_count_by_index:
@@ -183,13 +178,13 @@ def test_completion_echo_more_prompt():
     """
     data = {
         "stream": False,
-        "prompt": ["水果的营养价值是如何的？","水的化学式是什么？"],
+        "prompt": ["水果的营养价值是如何的？", "水的化学式是什么？"],
         "echo": True,
-        "max_tokens": 100
+        "max_tokens": 100,
     }
     payload = build_request_payload(TEMPLATE, data)
     response = send_request(COMPLETIONS_URL, payload).json()
-    
+
     text_0 = response["choices"][0]["text"]
     text_1 = response["choices"][1]["text"]
     assert data["prompt"][0] in text_0, "echo回显不正确"
@@ -204,12 +199,8 @@ def test_completion_finish_length():
     """
     非流式回复中,因达到max_token截断检查finish_reasoning参数
     """
-    data = {
-        "stream": False,
-        "prompt": "水果的营养价值是如何的？",
-        "max_tokens": 10
-    }
-    
+    data = {"stream": False, "prompt": "水果的营养价值是如何的？", "max_tokens": 10}
+
     payload = build_request_payload(TEMPLATE, data)
     response = send_request(COMPLETIONS_URL, payload).json()
 
@@ -221,15 +212,10 @@ def test_completion_finish_stop():
     """
     非流式回复中,模型自然回复完成，检查finish_reasoning参数
     """
-    data = {
-        "stream": False,
-        "prompt": "简短的回答我：苹果是水果吗？"
-    }
-    
+    data = {"stream": False, "prompt": "简短的回答我：苹果是水果吗？"}
+
     payload = build_request_payload(TEMPLATE, data)
     response = send_request(COMPLETIONS_URL, payload).json()
 
     finish_reason = response["choices"][0]["finish_reason"]
     assert finish_reason == "stop", "无任何中介，finish_reason不为stop"
-
-    

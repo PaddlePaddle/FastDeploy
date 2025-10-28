@@ -14,9 +14,8 @@
 
 from paddleformers.transformers import PretrainedModel
 
-from fastdeploy import ModelRegistry
 from fastdeploy.config import ErnieArchitectures
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import ModelForCasualLM, ModelRegistry
 
 
 class MyPretrainedModel(PretrainedModel):

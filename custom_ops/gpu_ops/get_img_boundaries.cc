@@ -14,6 +14,10 @@
 
 #include "paddle/extension.h"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
+
 std::vector<paddle::Tensor> GetImgBoundaries(const paddle::Tensor& task_input_ids,
                                              const paddle::Tensor& grid_thw,
                                              const int64_t image_patch_id) {
@@ -53,7 +57,7 @@ std::vector<paddle::Tensor> GetImgBoundaries(const paddle::Tensor& task_input_id
     return {out};
 }
 
-PD_BUILD_OP(get_img_boundaries)
+PD_BUILD_STATIC_OP(get_img_boundaries)
     .Inputs({"task_input_ids", "grid_thw"})
     .Attrs({"image_patch_id: int64_t"})
     .Outputs({"img_boundaries"})

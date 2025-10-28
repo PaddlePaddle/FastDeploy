@@ -40,20 +40,21 @@ std::vector<paddle::Tensor> MoeEPCombineKernel(
 
   auto combined_out = paddle::empty(
       {recv_token_num, hidden_dim}, ffn_out.dtype(), ffn_out.place());
-
   const float* dequant_score = nullptr;
-  int ret = infer_ops::moe_ep_ffn_post_fusion(
-      xpu_ctx->x_context(),
-      reinterpret_cast<const XPU_T*>(ffn_out.data<T>()),
-      moe_index.data<int32_t>(),
-      reinterpret_cast<const XPU_T*>(weights.data<T>()),
-      dequant_score,
-      reinterpret_cast<XPU_T*>(combined_out.mutable_data<T>()),
-      recv_token_num,
-      hidden_dim,
-      topk,
-      expand_token_num);
-  PD_CHECK(ret == 0);
+  if (recv_token_num > 0) {
+    int ret = infer_ops::moe_ep_ffn_post_fusion(
+        xpu_ctx->x_context(),
+        reinterpret_cast<const XPU_T*>(ffn_out.data<T>()),
+        moe_index.data<int32_t>(),
+        reinterpret_cast<const XPU_T*>(weights.data<T>()),
+        dequant_score,
+        reinterpret_cast<XPU_T*>(combined_out.mutable_data<T>()),
+        recv_token_num,
+        hidden_dim,
+        topk,
+        expand_token_num);
+    PD_CHECK(ret == 0);
+  }
 
   return {combined_out};
 }

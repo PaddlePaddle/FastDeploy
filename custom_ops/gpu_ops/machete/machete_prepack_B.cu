@@ -51,6 +51,8 @@ std::vector<paddle::Tensor> MachetePrepackBKernel(
 
   if (b_type_str == "uint4b8") {
     b_type_id = machete::kU4B8.id();
+  } else if (b_type_str == "uint8b128") {
+    b_type_id = machete::kU8B128.id();
   } else {
     PADDLE_ENFORCE(false, "b_type_str not supported!");
   }
@@ -69,3 +71,23 @@ std::vector<paddle::Tensor> MachetePrepackBKernel(
   return {B_prepacked};
 
 }
+
+std::vector<std::vector<int64_t>> MachetePrepackBKernelInferShape(
+    std::vector<int64_t> const& B_shape, std::string const& a_type_str, std::string const& b_type_str,
+    std::string const& maybe_group_scales_type_str) {
+  return {{B_shape[1], B_shape[0]}};
+}
+
+std::vector<paddle::DataType> MachetePrepackBKernelInferDtype(
+    paddle::DataType const& B_dtype, std::string const& a_type_str, std::string const& b_type_str,
+    std::string const& maybe_group_scales_type_str) {
+  return {B_dtype};
+}
+
+PD_BUILD_STATIC_OP(machete_prepack_B)
+    .Inputs({"B"})
+    .Outputs({"B_prepacked"})
+    .Attrs({"a_type_str:std::string", "b_type_str:std::string", "maybe_group_scales_type_str:std::string"})
+    .SetKernelFn(PD_KERNEL(MachetePrepackBKernel))
+    .SetInferShapeFn(PD_INFER_SHAPE(MachetePrepackBKernelInferShape))
+    .SetInferDtypeFn(PD_INFER_DTYPE(MachetePrepackBKernelInferDtype));

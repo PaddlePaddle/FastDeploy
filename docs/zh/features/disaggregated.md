@@ -1,3 +1,5 @@
+[English](../../features/disaggregated.md)
+
 # 分离式部署
 
 大模型推理分为两个部分Prefill和Decode阶段，分别为计算密集型（Prefill）和存储密集型（Decode）两部分。将Prefill 和 Decode 分开部署在一定场景下可以提高硬件利用率，有效提高吞吐，降低整句时延，
@@ -75,8 +77,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
 #### 前置依赖 Redis
 * 使用`conda`安装
 
-> **⚠️ 注意**  
-> **Redis 版本要求：6.2.0 及以上**  
+> **⚠️ 注意**
+> **Redis 版本要求：6.2.0 及以上**
 > 低于此版本可能不支持所需的命令。
 
 ```bash

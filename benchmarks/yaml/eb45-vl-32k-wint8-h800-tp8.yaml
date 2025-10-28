@@ -1,7 +1,7 @@
 enable_mm: True
 max_model_len: 32768
 max_num_seqs: 36
-gpu_memory_utilization: 0.8
+gpu_memory_utilization: 0.85
 kv_cache_ratio: 0.8
 tensor_parallel_size: 8
 quantization: wint8

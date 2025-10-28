@@ -31,6 +31,7 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     cuda_graph_buffers,
     support_graph_optimization,
@@ -44,17 +45,15 @@ from fastdeploy.model_executor.models.ernie4_5_moe import (
     Ernie4_5_Attention,
     Ernie4_5_MLP,
 )
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
-from fastdeploy.platforms import current_platform
-
-if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import (
-        extract_text_token_output,
-        text_image_gather_scatter,
-        text_image_index_out,
-    )
-
-from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.models.ernie4_5_vl.image_op import (
+    text_image_gather_scatter,
+    text_image_index_out,
+)
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 
 
 class Ernie4_5_VLMLP(Ernie4_5_MLP):
@@ -301,7 +300,7 @@ class Ernie4_5_VLMoE(nn.Layer):
         if self.num_shared_experts > 0:
             hidden_states += shared_experts_out
         if self.tp_size > 1:
-            tensor_model_parallel_all_reduce(hidden_states)
+            hidden_states = tensor_model_parallel_all_reduce(hidden_states)
         return hidden_states
 
 
@@ -404,27 +403,27 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
 @cuda_graph_buffers(
     {
         "text_input": {
-            "shape": ["parallel_config.max_model_len", "model_config.hidden_size"],
+            "shape": ["model_config.max_model_len", "model_config.hidden_size"],
             "dtype": "model_config.dtype",
             "value": 1,
         },
         "image_input": {
-            "shape": ["parallel_config.max_model_len", "model_config.hidden_size"],
+            "shape": ["model_config.max_model_len", "model_config.hidden_size"],
             "dtype": "model_config.dtype",
             "value": 1,
         },
         "text_index": {
-            "shape": ["parallel_config.max_model_len"],
+            "shape": ["model_config.max_model_len"],
             "dtype": "int32",
             "value": 0,
         },
         "image_index": {
-            "shape": ["parallel_config.max_model_len"],
+            "shape": ["model_config.max_model_len"],
             "dtype": "int32",
             "value": 0,
         },
         "token_type_ids": {
-            "shape": ["parallel_config.max_model_len"],
+            "shape": ["model_config.max_model_len"],
             "dtype": "int32",
             "value": -1,
         },
@@ -507,17 +506,17 @@ class Ernie4_5_VLModel(nn.Layer):
         text_token_num = paddle.maximum((token_num - image_token_num), paddle.ones([], dtype="int64"))
 
         # The scenario requiring padding is CUDA graph, thus we only need to pad the maximum capture size.
-        self._mm_buffers["token_type_ids"][: self.fd_config.graph_opt_config.max_capture_size].fill_(-1)
-        self._mm_buffers["token_type_ids"].copy_(token_type_ids, False)
-        self._mm_buffers["image_token_num"].copy_(image_token_num, False)
+        self._cuda_graph_buffers["token_type_ids"][: self.fd_config.graph_opt_config.max_capture_size].fill_(-1)
+        self._cuda_graph_buffers["token_type_ids"].copy_(token_type_ids, False)
+        self._cuda_graph_buffers["image_token_num"].copy_(image_token_num, False)
 
         return VLMoEMeta(
-            text_input=self._mm_buffers["text_input"][:text_token_num],
-            image_input=self._mm_buffers["image_input"][:image_token_num],
-            text_index=self._mm_buffers["text_index"][:token_num],
-            image_index=self._mm_buffers["image_index"][:token_num],
-            token_type_ids=self._mm_buffers["token_type_ids"][:token_num],
-            image_token_num=self._mm_buffers["image_token_num"],
+            text_input=self._cuda_graph_buffers["text_input"][:text_token_num],
+            image_input=self._cuda_graph_buffers["image_input"][:image_token_num],
+            text_index=self._cuda_graph_buffers["text_index"][:token_num],
+            image_index=self._cuda_graph_buffers["image_index"][:token_num],
+            token_type_ids=self._cuda_graph_buffers["token_type_ids"][:token_num],
+            image_token_num=self._cuda_graph_buffers["image_token_num"],
         )
 
     def get_input_embeddings(self, ids_remove_padding: paddle.Tensor) -> paddle.Tensor:
@@ -544,22 +543,17 @@ class Ernie4_5_VLModel(nn.Layer):
             )
 
         hidden_states = hidden_states + residual
-
-        max_seq_len, max_seq_len_index = paddle.topk(forward_meta.seq_lens_this_time, k=1)
-        hidden_states = extract_text_token_output(
-            max_seq_len,
-            max_seq_len_index.cast("int32"),
-            vl_moe_meta.image_token_num.cast("int32"),
-            forward_meta.seq_lens_this_time,
-            forward_meta.cu_seqlens_q,
-            hidden_states.cast("float32"),
-        ).cast(self._dtype)
-
         out = self.norm(hidden_states)
 
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="Ernie4_5_VLMoeForConditionalGeneration",
+    module_name="ernie4_5_vl.ernie4_5_vl_moe",
+    category=ModelCategory.MULTIMODAL,
+    primary_use=ModelCategory.MULTIMODAL,
+)
 class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
     """
     Ernie4_5_VLMoeForConditionalGeneration
@@ -580,7 +574,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
 
         # Persistent buffers for CUDA graphs.
         self._input_embeddings = paddle.zeros(
-            [fd_config.parallel_config.max_model_len, fd_config.model_config.hidden_size],
+            [fd_config.model_config.max_model_len, fd_config.model_config.hidden_size],
             dtype=fd_config.model_config.dtype,
         )
 
@@ -690,6 +684,13 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         expert_id = None
         shard_id = None
         for loaded_weight_name, loaded_weight in weights_iterator:
+            loaded_weight_name = (
+                self.process_weights_before_loading_fn(loaded_weight_name)
+                if getattr(self, "process_weights_before_loading_fn", None)
+                else loaded_weight_name
+            )
+            if loaded_weight_name is None:
+                continue
             for param_name, weight_name, exp_id, shard_id in all_param_mapping:
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
                 if model_param_name.startswith("model.") and self.fd_config.model_config.model_format == "torch":
@@ -768,10 +769,11 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
     def get_input_embeddings(
         self,
         ids_remove_padding: paddle.Tensor,
+        image_token_num: int,
         image_features: Optional[paddle.Tensor] = None,
     ) -> paddle.Tensor:
         input_embeddings = self.ernie.get_input_embeddings(ids_remove_padding=ids_remove_padding)
-        if image_features is not None and len(image_features) > 0:
+        if image_token_num > 0:
             input_embeddings[ids_remove_padding == self.ernie.im_patch_id] = image_features.cast(self.ernie._dtype)
         return input_embeddings
 
@@ -781,11 +783,13 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         image_features: Optional[paddle.Tensor],
         forward_meta: ForwardMeta,
     ):
+        vl_moe_meta = self.ernie.prepare_vl_moe_meta(ids_remove_padding=ids_remove_padding)
         input_embeddings = self.get_input_embeddings(
-            ids_remove_padding=ids_remove_padding, image_features=image_features
+            ids_remove_padding=ids_remove_padding,
+            image_features=image_features,
+            image_token_num=vl_moe_meta.image_token_num.item(),
         )
         self._input_embeddings.copy_(input_embeddings, False)
-        vl_moe_meta = self.ernie.prepare_vl_moe_meta(ids_remove_padding=ids_remove_padding)
 
         hidden_states = self.ernie(
             input_embeddings=self._input_embeddings,

@@ -15,6 +15,7 @@
 """
 
 import asyncio
+import time
 from typing import Any, Optional, Union
 
 import httpx
@@ -154,10 +155,21 @@ class AsyncTokenizerClient:
                     url = f"{self.base_url}/image/decode"
                 else:
                     raise ValueError("Invalid type")
-                resp = await client.post(url, json=request)
-                resp.raise_for_status()
-                if resp.json().get("code") != 0:
-                    raise RuntimeError(f"Tokenize task creation failed, {resp.json().get('message')}")
-                return resp.json().get("result")
+
+                max_retries = 10
+                for attempt in range(max_retries):
+                    try:
+                        resp = await client.post(url, json=request)
+                        resp.raise_for_status()
+                        if resp.json().get("code") != 0:
+                            raise RuntimeError(f"Tokenize task creation failed, {resp.json().get('message')}")
+                        return resp.json().get("result")
+                    except Exception as e:
+                        data_processor_logger.error(f"Attempt to decode_request {attempt + 1} failed: {e}")
+                        if attempt == max_retries - 1:
+                            data_processor_logger.error(
+                                f"Max retries of decode_request reached. Giving up. request is {request}"
+                            )
+                        time.sleep(10)
             except httpx.RequestError as e:
                 raise RuntimeError(f"Failed to decode: {e}") from e

@@ -1,3 +1,5 @@
+[简体中文](../zh/quantization/README.md)
+
 # Quantization
 
 FastDeploy supports various quantization inference precisions including FP8, INT8, INT4, 2-bits, etc. It supports different precision inference for weights, activations, and KVCache tensors, which can meet the inference requirements of different scenarios such as low cost, low latency, and long context.

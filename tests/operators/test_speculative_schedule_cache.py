@@ -10,7 +10,9 @@ def cpu_reference(
     draft_tokens,
     block_tables,
     stop_flags,
+    prompt_lens,
     seq_lens_this_time,
+    seq_lens_encoder,
     seq_lens_decoder,
     step_seq_lens_decoder,
     step_draft_tokens,
@@ -101,7 +103,9 @@ class TestSpeculateScheduleCache(unittest.TestCase):
         self.block_tables = paddle.to_tensor(np.full((self.real_bsz, self.block_num_per_seq), -1, dtype=np.int32))
         # stop_flags length is max_bsz, others are real_bsz
         self.stop_flags = paddle.to_tensor(np.array([False, True, False, False, False], dtype=np.bool_))
+        self.prompt_lens = paddle.to_tensor(np.array([1, 1, 1], dtype=np.int64))
         self.seq_lens_this_time = paddle.to_tensor(np.array([5, 6, 7], dtype=np.int32))
+        self.seq_lens_encoder = paddle.to_tensor(np.array([1, 1, 1], dtype=np.int32))
         self.seq_lens_decoder = paddle.to_tensor(np.array([1, 1, 10], dtype=np.int32))
 
         # Will be filled by kernel for the triggering bids only
@@ -129,7 +133,9 @@ class TestSpeculateScheduleCache(unittest.TestCase):
         self.np_draft_tokens = self.draft_tokens.numpy().copy()
         self.np_block_tables = self.block_tables.numpy().copy()
         self.np_stop_flags = self.stop_flags.numpy().copy()
+        self.np_prompt_lens = self.prompt_lens.numpy().copy()
         self.np_seq_lens_this_time = self.seq_lens_this_time.numpy().copy()
+        self.np_seq_lens_encoder = self.seq_lens_encoder.numpy().copy()
         self.np_seq_lens_decoder = self.seq_lens_decoder.numpy().copy()
         self.np_step_seq_lens_decoder = self.step_seq_lens_decoder.numpy().copy()
         self.np_step_draft_tokens = self.step_draft_tokens.numpy().copy()
@@ -146,7 +152,9 @@ class TestSpeculateScheduleCache(unittest.TestCase):
             self.draft_tokens,
             self.block_tables,
             self.stop_flags,
+            self.prompt_lens,
             self.seq_lens_this_time,
+            self.seq_lens_encoder,
             self.seq_lens_decoder,
             self.step_seq_lens_decoder,
             self.step_draft_tokens,
@@ -165,7 +173,9 @@ class TestSpeculateScheduleCache(unittest.TestCase):
             self.np_draft_tokens,
             self.np_block_tables,
             self.np_stop_flags,
+            self.prompt_lens,
             self.np_seq_lens_this_time,
+            self.np_seq_lens_encoder,
             self.np_seq_lens_decoder,
             self.np_step_seq_lens_decoder,
             self.np_step_draft_tokens,
@@ -213,7 +223,9 @@ class TestSpeculateScheduleCache(unittest.TestCase):
             self.draft_tokens,
             self.block_tables,
             self.stop_flags,
+            self.prompt_lens,
             self.seq_lens_this_time,
+            self.seq_lens_encoder,
             self.seq_lens_decoder,
             self.step_seq_lens_decoder,
             self.step_draft_tokens,

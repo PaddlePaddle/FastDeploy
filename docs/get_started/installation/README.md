@@ -1,3 +1,5 @@
+[简体中文](../../zh/get_started/installation/README.md)
+
 # FastDeploy Installation
 
 FastDeploy currently supports installation on the following hardware platforms:
@@ -7,3 +9,4 @@ FastDeploy currently supports installation on the following hardware platforms:
 - [Enflame S60 GCU Installation](Enflame_gcu.md)
 - [Iluvatar GPU Installation](iluvatar_gpu.md)
 - [Hygon DCU Installation](hygon_dcu.md)
+- [Intel Gaudi Installation](intel_gaudi.md)

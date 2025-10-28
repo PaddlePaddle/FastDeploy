@@ -42,7 +42,11 @@ from fastdeploy.model_executor.layers.linear import (
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.normalization import RMSNorm
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 
 
 class Glm4MoeMLP(nn.Layer):
@@ -109,6 +113,8 @@ class Glm4Moe(nn.Layer):
         self.n_routed_experts: int = fd_config.model_config.n_routed_experts
         self.n_shared_experts: int = fd_config.model_config.n_shared_experts
 
+        self.norm_topk_prob = fd_config.model_config.norm_topk_prob
+
         weight_key_map = {
             "gate_correction_bias_key": f"{prefix}.gate.e_score_correction_bias",
             "up_gate_proj_expert_weight_key": f"{prefix}.experts.{{}}.up_gate_proj.weight",
@@ -133,6 +139,7 @@ class Glm4Moe(nn.Layer):
         self.experts = FusedMoE(
             fd_config,
             reduce_results=False,
+            renormalize=self.norm_topk_prob,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
             num_experts=fd_config.model_config.n_routed_experts,
             top_k=fd_config.model_config.num_experts_per_tok,
@@ -160,7 +167,7 @@ class Glm4Moe(nn.Layer):
         out = out + shared_experts_out
         # We do to TP all reduce after the sum of experts.
         if self.tensor_parallel_size > 1:
-            tensor_model_parallel_all_reduce(out)
+            out = tensor_model_parallel_all_reduce(out, self.tp_group)
         return out
 
 
@@ -366,6 +373,12 @@ class Glm4MoeModel(nn.Layer):
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="Glm4MoeForCausalLM",
+    module_name="glm4_moe",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class Glm4MoeForCausalLM(ModelForCasualLM):
     """
     Glm4MoeForCausalLM
@@ -471,7 +484,7 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
         """
         glm4_moe only support loader_v1.
         """
-        assert False, "glm4_moe only support --load_choices default_v1."
+        assert False, "glm4_moe only support --load-choices default_v1."
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         """ """
@@ -518,13 +531,15 @@ class Glm4MoePretrainedModel(PretrainedModel):
 
         logger.info("Glm4Moe inference model _get_tensor_parallel_mappings")
 
-        from paddleformers.transformers.conversion_utils import split_or_merge_func
+        from fastdeploy.model_executor.models.tp_utils import split_or_merge_func_v1
 
-        fn = split_or_merge_func(
+        fn = split_or_merge_func_v1(
             is_split=is_split,
             tensor_parallel_degree=config.tensor_parallel_degree,
             tensor_parallel_rank=config.tensor_parallel_rank,
             num_attention_heads=config.num_attention_heads,
+            num_key_value_heads=config.num_key_value_heads,
+            head_dim=config.head_dim,
         )
 
         def get_tensor_parallel_split_mappings(num_layers):
@@ -540,6 +555,9 @@ class Glm4MoePretrainedModel(PretrainedModel):
             base_actions["layers.0.self_attn.q_proj.weight"] = partial(fn, is_column=True)
             base_actions["layers.0.self_attn.k_proj.weight"] = partial(fn, is_column=True)
             base_actions["layers.0.self_attn.v_proj.weight"] = partial(fn, is_column=True)
+            base_actions["layers.0.self_attn.q_proj.bias"] = partial(fn, is_column=True)
+            base_actions["layers.0.self_attn.k_proj.bias"] = partial(fn, is_column=True)
+            base_actions["layers.0.self_attn.v_proj.bias"] = partial(fn, is_column=True)
 
             # MLP Layer
             base_actions["layers.0.mlp.gate_proj.weight"] = partial(fn, is_column=True)

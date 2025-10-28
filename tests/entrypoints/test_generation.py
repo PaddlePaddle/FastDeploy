@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import copy
 import os
 import unittest
 import weakref
@@ -118,6 +119,48 @@ class TestGeneration(unittest.TestCase):
 
         # sampling_params is None, default params should be applied
         outputs = self.llm.generate(prompts=self.PROMPTS, sampling_params=None)
+        self.assertEqual(len(self.PROMPTS), len(outputs))
+
+    def test_consistency_single_prompt_tokens_chat(self):
+        """Test consistency between different prompt input formats"""
+        sampling_params = SamplingParams(temperature=1.0, top_p=0.0)
+
+        for prompt_token_ids in self.TOKEN_IDS:
+            with self.subTest(prompt_token_ids=prompt_token_ids):
+                output1 = self.llm.chat(messages=[prompt_token_ids], sampling_params=sampling_params)
+                output2 = self.llm.chat(
+                    [{"prompt": "", "prompt_token_ids": prompt_token_ids}], sampling_params=sampling_params
+                )
+                self.assert_outputs_equal(output1, output2)
+
+    def test_multiple_sampling_params_chat(self):
+        """Test multiple sampling parameters combinations"""
+        sampling_params = [
+            SamplingParams(temperature=0.01, top_p=0.95),
+            SamplingParams(temperature=0.3, top_p=0.95),
+            SamplingParams(temperature=0.7, top_p=0.95),
+            SamplingParams(temperature=0.99, top_p=0.95),
+        ]
+
+        prompts = copy.copy(self.PROMPTS)
+        # Multiple SamplingParams should be matched with each prompt
+        outputs = self.llm.chat(messages=prompts, sampling_params=sampling_params)
+        self.assertEqual(len(self.PROMPTS), len(outputs))
+
+        prompts = copy.copy(self.PROMPTS)
+        # Exception raised if size mismatch
+        with self.assertRaises(ValueError):
+            self.llm.chat(messages=prompts, sampling_params=sampling_params[:3])
+
+        prompts = copy.copy(self.PROMPTS)
+        # Single SamplingParams should be applied to every prompt
+        single_sampling_params = SamplingParams(temperature=0.3, top_p=0.95)
+        outputs = self.llm.chat(messages=prompts, sampling_params=single_sampling_params)
+        self.assertEqual(len(self.PROMPTS), len(outputs))
+
+        prompts = copy.copy(self.PROMPTS)
+        # sampling_params is None, default params should be applied
+        outputs = self.llm.chat(messages=prompts, sampling_params=None)
         self.assertEqual(len(self.PROMPTS), len(outputs))
 
 

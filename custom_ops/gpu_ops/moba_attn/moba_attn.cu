@@ -15,6 +15,9 @@
 #include "paddle/extension.h"
 #include "moba_attn.h"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
 
 std::vector<paddle::Tensor> MobaAttention(
         const paddle::Tensor& qkv,
@@ -272,7 +275,7 @@ std::vector<paddle::Tensor> MobaAttention(
 }
 
 
-PD_BUILD_OP(moba_attention)
+PD_BUILD_STATIC_OP(moba_attention)
     .Inputs({
         "qkv",
         "q_input",

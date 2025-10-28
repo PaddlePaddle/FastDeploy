@@ -57,6 +57,7 @@ class Attention(nn.Layer):
         use_neox_rotary_style: bool = False,
         use_qk_norm: bool = False,
         rms_norm_eps: float = 1e-6,
+        with_sinks: bool = False,
     ) -> None:
         """
         Initializes `LMLayer` with the given parameters.
@@ -102,6 +103,8 @@ class Attention(nn.Layer):
         self.out_scale: float = out_scale
         self.use_neox_rotary_style: bool = use_neox_rotary_style
 
+        self.with_sinks: bool = with_sinks
+
         if fd_config.quant_config and hasattr(fd_config.quant_config, "kv_cache_quant_type"):
             self.quant_method: QuantMethodBase = fd_config.quant_config.get_quant_method(self)
         else:
@@ -116,22 +119,38 @@ class Attention(nn.Layer):
         if self.use_qk_norm:
             self.q_norm_key = f"{self.prefix}.q_norm"
             self.k_norm_key = f"{self.prefix}.k_norm"
-
         self.init_weight()
+
+        if self.with_sinks:
+            self.sinks = self.create_parameter(
+                shape=[self.num_heads],
+                dtype=self._dtype,
+                is_bias=False,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
         if (
-            fd_config.moba_attention_config is not None
-            and fd_config.moba_attention_config.moba_encoder_top_k_left is not None
-            and fd_config.moba_attention_config.moba_encoder_top_k_right is not None
-            and fd_config.moba_attention_config.moba_decoder_top_k_left is not None
-            and fd_config.moba_attention_config.moba_decoder_top_k_right is not None
+            hasattr(self.fd_config.model_config, "layer_types")
+            and self.fd_config.model_config.layer_types[self.layer_id] == "sliding_attention"
+        ):
+            self.sliding_window = self.fd_config.model_config.sliding_window
+        else:
+            self.sliding_window = 0
+
+        if (
+            fd_config.plas_attention_config is not None
+            and fd_config.plas_attention_config.plas_encoder_top_k_left is not None
+            and fd_config.plas_attention_config.plas_encoder_top_k_right is not None
+            and fd_config.plas_attention_config.plas_decoder_top_k_left is not None
+            and fd_config.plas_attention_config.plas_decoder_top_k_right is not None
         ):
             mlp_weight_path = os.path.join(
-                fd_config.model_config.model, fd_config.moba_attention_config.mlp_weight_name
+                fd_config.model_config.model, fd_config.plas_attention_config.mlp_weight_name
             )
-            self.moba_use_mlp = mlp_weight_path is not None and os.path.exists(mlp_weight_path)
-            moba_block_size = fd_config.moba_attention_config.moba_block_size
-            moba_max_seq_length = fd_config.moba_attention_config.moba_max_seq_length
-            if self.moba_use_mlp:
+            self.plas_use_mlp = mlp_weight_path is not None and os.path.exists(mlp_weight_path)
+            plas_block_size = fd_config.plas_attention_config.plas_block_size
+            plas_max_seq_length = fd_config.plas_attention_config.plas_max_seq_length
+            if self.plas_use_mlp:
                 mlp_weight = {}
                 with safe_open(mlp_weight_path, framework="np", device="cpu") as f:
                     for key_name in f.keys():
@@ -148,12 +167,12 @@ class Attention(nn.Layer):
                         * self.kv_num_heads : (fd_config.parallel_config.tensor_parallel_rank + 1)
                         * self.kv_num_heads
                     ]
-                    assert self.attn_gate_weight.shape[1] % moba_block_size == 0
+                    assert self.attn_gate_weight.shape[1] % plas_block_size == 0
 
             self.cache_k_block_means = paddle.zeros(
                 [
-                    fd_config.parallel_config.max_num_seqs,
-                    moba_max_seq_length // moba_block_size,
+                    fd_config.scheduler_config.max_num_seqs,
+                    plas_max_seq_length // plas_block_size,
                     self.kv_num_heads,
                     self.head_dim,
                 ],
@@ -218,6 +237,10 @@ class Attention(nn.Layer):
             k_norm_weight_tensor = paddle.to_tensor(get_tensor(state_dict.pop(self.k_norm_key + ".weight")))
             self.q_norm_weight.set_value(q_norm_weight_tensor.astype("float32"))
             self.k_norm_weight.set_value(k_norm_weight_tensor.astype("float32"))
+
+        if self.with_sinks:
+            sinks_tensor = paddle.to_tensor(get_tensor(state_dict.pop(f"{self.prefix}.sinks")))
+            self.sinks.set_value(sinks_tensor)
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         loaded_weight = get_tensor(loaded_weight).cast(paddle.get_default_dtype())

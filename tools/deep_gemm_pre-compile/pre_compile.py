@@ -158,7 +158,7 @@ def pre_compile_from_config(config_file: str, num_threads: int, expert_parallel:
 
         pbar.close()
 
-        logger.info(f"Total compliation time: {time() - start_time:.2f} seconds")
+        logger.info(f"Total compilation time: {time() - start_time:.2f} seconds")
 
 
 def main(args):

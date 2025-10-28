@@ -37,6 +37,7 @@ class MockLayer(nn.Layer):
         self.fd_config = get_default_test_fd_config()
         self.fd_config.model_config.num_key_value_heads = 1
         self.head_dim = 1
+        self.kv_num_heads = 1
         self.prefix = "mock_layer"
         self.cache_k_scale = None
         self.cache_v_scale = None
@@ -77,7 +78,7 @@ class TestKVCacheMethodBase(unittest.TestCase):
         method = KVCacheMethodBase(config)
         method.create_weights(self.layer)
 
-        self.assertEqual(self.layer.cache_k_scale.shape, [1, 1])
+        self.assertEqual(self.layer.cache_k_scale.shape, [1])
 
     def test_create_weights_int4_zp(self):
         # Test INT4 with zero point

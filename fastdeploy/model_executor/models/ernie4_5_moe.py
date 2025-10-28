@@ -45,10 +45,15 @@ from fastdeploy.model_executor.layers.linear import (
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.normalization import RMSNorm
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 from fastdeploy.model_executor.models.tp_utils import TensorSplitMode as tsm
 from fastdeploy.model_executor.models.utils import LayerIdPlaceholder as layerid
 from fastdeploy.model_executor.models.utils import WeightMeta
+from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 
 
@@ -460,6 +465,9 @@ class Ernie4_5_Model(nn.Layer):
     ):
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
+        if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
+            hidden_states = forward_meta.attn_backend.transpose(hidden_states)
+
         residual = None
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
@@ -468,9 +476,18 @@ class Ernie4_5_Model(nn.Layer):
 
         out = self.norm(hidden_states)
 
+        if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
+            out = forward_meta.attn_backend.reverse_transpose(out)
+
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="Ernie4_5_MoeForCausalLM",
+    module_name="ernie4_5_moe",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
     """
     Ernie4_5_MoeForCausalLM
@@ -527,6 +544,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         from fastdeploy.model_executor.utils import (
             default_weight_loader,
             process_weights_after_loading,
+            rename_offline_ckpt_suffix_to_fd_suffix,
         )
 
         general_params_mapping = [
@@ -564,15 +582,20 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
                 param_down_proj_name="experts.down_proj_",
                 num_experts_start_offset=num_experts_start_offset,
             )
-        all_param_mapping = general_params_mapping + expert_params_mapping
-
+        all_param_mapping = [
+            (param, weight, exp, shard, False) for param, weight, exp, shard in general_params_mapping
+        ] + [(param, weight, exp, shard, True) for param, weight, exp, shard in expert_params_mapping]
+        checkpoint_to_fd_key_fn = rename_offline_ckpt_suffix_to_fd_suffix(
+            fd_config=self.fd_config, ckpt_weight_suffix="quant_weight", ckpt_scale_suffix="weight_scale"
+        )
         params_dict = dict(self.named_parameters())
 
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
 
         for loaded_weight_name, loaded_weight in weights_iterator:
             loaded_weight_name = loaded_weight_name.replace("model", "ernie")
-            for param_name, weight_name, exp_id, shard_id in all_param_mapping:
+            for param_name, weight_name, exp_id, shard_id, is_moe in all_param_mapping:
+                loaded_weight_name = checkpoint_to_fd_key_fn(loaded_weight_name, is_moe)
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
                 if model_param_name not in params_dict:
                     continue
@@ -583,6 +606,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             else:
                 expert_id = None
                 shard_id = None
+                loaded_weight_name = checkpoint_to_fd_key_fn(loaded_weight_name, is_moe=False)
                 model_param_name = loaded_weight_name
                 if model_param_name not in params_dict.keys():
                     continue
@@ -639,6 +663,12 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         self.ernie.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
+@ModelRegistry.register_model_class(
+    architecture="Ernie4_5_ForCausalLM",
+    module_name="ernie4_5_moe",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class Ernie4_5_ForCausalLM(Ernie4_5_MoeForCausalLM):
     """
     Ernie4_5_ForCausalLM
@@ -652,6 +682,12 @@ class Ernie4_5_ForCausalLM(Ernie4_5_MoeForCausalLM):
         return "Ernie4_5_ForCausalLM"
 
 
+@ModelRegistry.register_model_class(
+    architecture="Ernie4_5ForCausalLM",
+    module_name="ernie4_5_moe",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
 class Ernie4_5ForCausalLM(Ernie4_5_ForCausalLM):
     """
     Ernie4_5ForCausalLM 0.3B-PT

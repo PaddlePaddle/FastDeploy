@@ -22,8 +22,9 @@ def test_rollout_model_with_distributed_launch():
     test_rollout_model
     """
     current_dir = os.path.dirname(os.path.abspath(__file__))
-
-    rollout_script = os.path.join(current_dir, "rollout_model.py")
+    utils_dir = os.path.join(os.path.dirname(current_dir), "utils")
+    rollout_script = os.path.join(utils_dir, "rollout_model.py")
+    baseline_path = os.path.join(current_dir, "baseline.txt")
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
@@ -40,6 +41,11 @@ def test_rollout_model_with_distributed_launch():
         rollout_script,
         "--model_path",
         model_path,
+        "--baseline_path",
+        baseline_path,
+        "--enable_mm",
+        "--quantization",
+        "wint8",
     ]
 
     print(f"Executing command: {' '.join(command)}")
