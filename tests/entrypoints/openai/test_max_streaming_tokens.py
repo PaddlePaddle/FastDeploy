@@ -457,6 +457,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 prompt_token_ids=prompt_token_ids,
                 prompt_tokens=prompt_tokens,
                 completion_token_ids=completion_token_ids[idx],
+                previous_num_tokens=case["test_data"]["previous_num_tokens"],
                 num_cached_tokens=num_cached_tokens,
                 num_input_image_tokens=num_input_image_tokens,
                 num_input_video_tokens=num_input_video_tokens,
