@@ -1068,6 +1068,7 @@ class EngineService:
         """
         exit sub services
         """
+        llm_logger.info("Exit sub services.....")
         self.running = False
         if hasattr(self, "engine_worker_queue_server") and self.engine_worker_queue_server is not None:
             self.engine_worker_queue_server.cleanup()
