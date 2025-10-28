@@ -10,7 +10,7 @@ tqdm
 pynvml
 uvicorn==0.29.0
 fastapi
-paddleformers
+paddleformers==0.3.1
 redis
 etcd3
 httpx
@@ -38,3 +38,4 @@ opentelemetry-distro
 opentelemetry-exporter-otlp
 opentelemetry-instrumentation-fastapi
 partial_json_parser
+msgspec

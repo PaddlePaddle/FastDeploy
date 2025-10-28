@@ -1,3 +1,5 @@
+[简体中文](../zh/features/data_parallel_service.md)
+
 # Data Parallelism
 Under the MOE model, enabling Expert Parallelism (EP) combined with Data Parallelism (DP), where EP distributes expert workloads and DP enables parallel request processing.
 

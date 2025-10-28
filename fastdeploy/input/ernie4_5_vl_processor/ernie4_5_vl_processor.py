@@ -37,6 +37,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         mm_processor_kwargs=None,
         reasoning_parser_obj=None,
         tool_parser_obj=None,
+        enable_processor_cache=False,
     ):
         data_processor_logger.info(f"model_name_or_path: {model_name_or_path}")
         tokenizer_path = model_name_or_path
@@ -46,6 +47,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         self.ernie4_5_processor = DataProcessor(
             tokenizer_name=tokenizer_path,
             image_preprocessor_name=preprocessor_path,
+            enable_processor_cache=enable_processor_cache,
             **processor_kwargs,
         )
         self.ernie4_5_processor.eval()
@@ -222,7 +224,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             self._check_mm_limits(multimodal_data)
             images = multimodal_data.get("image", None)
             videos = multimodal_data.get("video", None)
-            request["text_after_process"] = request.get("prompt")
+            request["prompt_tokens"] = request.get("prompt")
             outputs = self.ernie4_5_processor.text2ids(request["prompt"], images, videos)
         elif request.get("messages"):
             messages = request["messages"]

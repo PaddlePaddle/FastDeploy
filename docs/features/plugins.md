@@ -1,3 +1,5 @@
+[简体中文](../zh/features/plugins.md)
+
 # FastDeploy Plugin Mechanism Documentation
 
 FastDeploy supports a plugin mechanism that allows users to extend functionality without modifying the core code. Plugins are automatically discovered and loaded through Python's `entry_points` mechanism.

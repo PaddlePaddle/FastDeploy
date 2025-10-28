@@ -69,6 +69,7 @@ def speculate_verify_ref(
     verify_window,
     enable_topp,
     benchmark_mode,
+    accept_all_drafts,
 ):
     def is_in_end(token, end_tokens, end_length):
         return token in end_tokens[:end_length]
@@ -311,6 +312,7 @@ def gen_speculate_verify_inputs(
         "verify_window": verify_window,
         "enable_topp": enable_topp,
         "benchmark_mode": False,
+        "accept_all_drafts": False,
     }
 
 

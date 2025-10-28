@@ -62,11 +62,12 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         )
 
         async def mock_chat_completion_full_generator(
-            request, request_id, model_name, prompt_token_ids, text_after_process
+            request, request_id, model_name, prompt_token_ids, prompt_tokens
         ):
             return prompt_token_ids
 
         async def mock_format_and_add_data(current_req_dict):
+            current_req_dict["text_after_process"] = "你好"
             return current_req_dict
 
         self.chat_completion_handler.chat_completion_full_generator = mock_chat_completion_full_generator
@@ -89,11 +90,12 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         )
 
         async def mock_chat_completion_full_generator(
-            request, request_id, model_name, prompt_token_ids, text_after_process
+            request, request_id, model_name, prompt_token_ids, prompt_tokens
         ):
             return prompt_token_ids
 
         async def mock_format_and_add_data(current_req_dict):
+            current_req_dict["text_after_process"] = "你好"
             return current_req_dict
 
         self.chat_completion_handler.chat_completion_full_generator = mock_chat_completion_full_generator

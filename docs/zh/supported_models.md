@@ -1,3 +1,5 @@
+[English](../supported_models.md)
+
 # 支持模型列表
 
 FastDeploy目前支持模型列表如下，在FastDeploy部署时，指定 ``model``参数为如下表格中的模型名，即可自动下载模型权重（均支持断点续传），支持如下3种下载源，

@@ -27,7 +27,6 @@ import numpy as np
 
 from fastdeploy.engine.common_engine import EngineService
 from fastdeploy.inter_communicator import IPCSignal
-from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.utils import console_logger, envs, llm_logger
 
 
@@ -53,7 +52,7 @@ class ExpertService:
         end_pos = start_pos + self.cfg.parallel_config.tensor_parallel_size
         if cfg.scheduler_config.splitwise_role != "mixed":
             self.cfg.cache_config.rdma_comm_ports = self.cfg.cache_config.rdma_comm_ports[start_pos:end_pos]
-        self.cfg.local_device_ids = self.cfg.device_ids.split(",")[start_pos:end_pos]
+        self.cfg.local_device_ids = self.cfg.parallel_config.device_ids.split(",")[start_pos:end_pos]
         llm_logger.info(f"local_data_parallel_id: {local_data_parallel_id}")
         self.cfg.disaggregate_info = None
 
@@ -75,8 +74,6 @@ class ExpertService:
             self.engine.scheduler.reset_nodeid(f"{self.engine.scheduler.infer.nodeid}_{local_data_parallel_id!s}")
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
-        if envs.FD_ENABLE_INTERNAL_ADAPTER:
-            self.internal_adapter = InternalAdapter(cfg=self.cfg, engine=self.engine, dp_rank=local_data_parallel_id)
 
     def start(
         self, ipc_signal_suffix, local_data_parallel_id, request_queues_for_dp_ipc=None, result_queue_for_dp_ipc=None
@@ -90,6 +87,8 @@ class ExpertService:
 
         start_time = time.time()
         self.engine.start()
+        if envs.FD_ENABLE_RETURN_TEXT:
+            self.engine.create_data_processor()
         if self.cfg.scheduler_config.name == "dp":
             self.cfg.init_cache_info()
             assert (request_queues_for_dp_ipc is not None) and (result_queue_for_dp_ipc is not None)
@@ -102,29 +101,6 @@ class ExpertService:
             ipc_signal_suffix = self.cfg.parallel_config.engine_worker_queue_port[0]
 
         llm_logger.info(f"start expert service {local_data_parallel_id}")
-
-        if self.cfg.scheduler_config.splitwise_role != "mixed" or self.cfg.cache_config.enable_prefix_caching:
-            if self.do_profile:
-                get_profile_block_num = np.zeros([1], dtype=np.int32)
-                while True:
-                    try:
-                        self.get_profile_block_num_signal = IPCSignal(
-                            name="get_profile_block_num",
-                            array=get_profile_block_num,
-                            dtype=np.int32,
-                            suffix=int(self.cfg.engine_worker_queue_port[0]),
-                            create=False,
-                        )
-                        break
-                    except:
-                        time.sleep(1)
-                self.reset_kvcache_blocks()
-            ipc_signal_suffix_cache = self.cfg.parallel_config.engine_worker_queue_port[local_data_parallel_id]
-            self.cache_manager_processes = self.engine.start_cache_service(
-                self.cfg.local_device_ids, ipc_signal_suffix_cache
-            )
-            if self.cfg.scheduler_config.splitwise_role != "mixed":
-                self.engine.split_mode_get_tasks()
 
         if self.cfg.scheduler_config.name == "splitwise":
             self.cfg.init_cache_info()
@@ -154,6 +130,28 @@ class ExpertService:
                 create=False,
             )
             self.launched_expert_service_signal.value[local_rank] = 1
+
+        if self.cfg.scheduler_config.splitwise_role != "mixed" or self.cfg.cache_config.enable_prefix_caching:
+            if self.do_profile:
+                get_profile_block_num = np.zeros([1], dtype=np.int32)
+                while True:
+                    try:
+                        self.get_profile_block_num_signal = IPCSignal(
+                            name="get_profile_block_num",
+                            array=get_profile_block_num,
+                            dtype=np.int32,
+                            suffix=int(self.cfg.parallel_config.engine_worker_queue_port[0]),
+                            create=False,
+                        )
+                        break
+                    except:
+                        time.sleep(1)
+                self.reset_kvcache_blocks()
+            ipc_signal_suffix_cache = self.cfg.parallel_config.engine_worker_queue_port[local_data_parallel_id]
+            self.cache_manager_processes = self.engine.start_cache_service(
+                self.cfg.local_device_ids,
+                ipc_signal_suffix_cache,
+            )
 
         console_logger.info(
             f"Worker processes(rank {local_rank}) are launched with {time.time() - start_time} seconds."

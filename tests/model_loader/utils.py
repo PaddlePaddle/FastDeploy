@@ -70,6 +70,7 @@ def run_with_timeout(target, args, timeout=60 * 5):
     finally:
         result_queue.close()
         result_queue.join_thread()
+        clean_ports([FD_CACHE_QUEUE_PORT])
 
     return result
 
@@ -78,6 +79,7 @@ def form_model_get_output_topp0(
     fd_runner,
     model_path,
     tensor_parallel_size,
+    max_num_seqs,
     max_model_len,
     max_tokens,
     quantization,
@@ -91,6 +93,7 @@ def form_model_get_output_topp0(
         with fd_runner(
             model_path,
             tensor_parallel_size=tensor_parallel_size,
+            max_num_seqs=max_num_seqs,
             max_model_len=max_model_len,
             load_choices=load_choices,
             quantization=quantization,
@@ -98,6 +101,42 @@ def form_model_get_output_topp0(
             cache_queue_port=cache_queue_port,
         ) as fd_model:
             fd_outputs = fd_model.generate_topp0(prompts, max_tokens=max_tokens)
+            result_queue.put(fd_outputs)
+    except Exception:
+        print(f"Failed using {load_choices} loader to load model from {model_path}.")
+        traceback.print_exc()
+        pytest.fail(f"Failed to initialize LLM model from {model_path}")
+
+
+def form_model_get_output_topp1(
+    fd_runner,
+    model_path,
+    tensor_parallel_size,
+    max_num_seqs,
+    max_model_len,
+    max_tokens,
+    quantization,
+    load_choices,
+    engine_worker_queue_port,
+    prompts,
+    cache_queue_port,
+    result_queue,
+):
+    try:
+        with fd_runner(
+            model_path,
+            tensor_parallel_size=tensor_parallel_size,
+            max_num_seqs=max_num_seqs,
+            max_model_len=max_model_len,
+            load_choices=load_choices,
+            quantization=quantization,
+            engine_worker_queue_port=engine_worker_queue_port,
+            cache_queue_port=cache_queue_port,
+        ) as fd_model:
+            from fastdeploy.engine.sampling_params import SamplingParams
+
+            sampling_params = SamplingParams(temperature=0, top_p=1, max_tokens=max_tokens)
+            fd_outputs = fd_model.generate(prompts, sampling_params)
             result_queue.put(fd_outputs)
     except Exception:
         print(f"Failed using {load_choices} loader to load model from {model_path}.")

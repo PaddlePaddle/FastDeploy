@@ -2179,7 +2179,9 @@ void gqa_rotary_qk_norm_variable(
       qkv_out_scales
           ? token_num * (num_heads + 2 * kv_num_heads) * dim_head
           : token_num * (num_heads + kv_num_heads) * dim_head;  // for all q k v
-  assert(dim_head == 128 && "dim_head must be 128");
+  if (dim_head != 128) {
+    PADDLE_THROW("gqa rotary with qk norm only support head_dim=128, but got %d.", dim_head);
+  }
   constexpr int HEAD_DIM = 128;
   constexpr int PackSize = HEAD_DIM / kWarpSize;
   const int pack_num = elem_nums / PackSize;

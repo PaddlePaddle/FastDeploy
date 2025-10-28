@@ -355,6 +355,7 @@ class FlashAttentionBackend(AttentionBackend):
             metadata.kv_signal_data_list[layer.layer_id],
             getattr(layer, "q_norm_weight", None),
             getattr(layer, "k_norm_weight", None),
+            getattr(layer, "sinks", None),
             getattr(layer, "rms_norm_eps", 1e-6),
             metadata._fuse_kernel_compute_dtype,
             getattr(layer, "cache_quant_type_str", "none"),

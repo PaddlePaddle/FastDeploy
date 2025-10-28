@@ -133,8 +133,9 @@ class CudaGraphPiecewiseBackend:
             self.cuda_graph_manager.state = jit_utils.CUDAGraphState.CAPTURE
             self.cuda_graph_manager.batch_size = entry.real_shape
             entry.captured = True
-            with self.cuda_graph_manager.run_impl_guard():
-                entry.runnable(**kwargs)
+            with capture_custom_allreduce():
+                with self.cuda_graph_manager.run_impl_guard():
+                    entry.runnable(**kwargs)
 
         # Replay
         self.cuda_graph_manager.state = jit_utils.CUDAGraphState.REPLAY
