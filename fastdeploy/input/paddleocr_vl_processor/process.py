@@ -212,7 +212,7 @@ class DataProcessor:
         Returns:
             Dict with same structure as text2ids() output
         """
-        
+
         # Parse and validate chat messages
         messages = parse_chat_messages(request.get("messages"))
         mm_items = []
