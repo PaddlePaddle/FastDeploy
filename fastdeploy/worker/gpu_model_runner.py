@@ -2029,8 +2029,8 @@ class GPUModelRunner(ModelRunnerBase):
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
 
-        hidden_states = model_output
         if self.is_pooling_model:
+            hidden_states = model_output
             pooler_output = self._pool(hidden_states, num_running_requests)
 
             model_output_data = ModelOutputData(
