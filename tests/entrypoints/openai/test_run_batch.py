@@ -1249,6 +1249,10 @@ class TestBatchProgressTrackerExtended(unittest.TestCase):
                 mock_logger.info.assert_called_with(f"Progress: {i}/100 requests completed")
 
 
+FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8133))
+FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
+
+
 class TestFastDeployBatch(unittest.TestCase):
     """测试 FastDeploy 批处理功能的 unittest 测试类"""
 
@@ -1261,7 +1265,7 @@ class TestFastDeployBatch(unittest.TestCase):
     def run_fastdeploy_command(self, input_content, port=None):
         """运行 FastDeploy 命令的辅助方法"""
         if port is None:
-            port = "1231"
+            port = str(FD_CACHE_QUEUE_PORT)
 
         with tempfile.NamedTemporaryFile("w") as input_file, tempfile.NamedTemporaryFile("r") as output_file:
 
@@ -1288,7 +1292,7 @@ class TestFastDeployBatch(unittest.TestCase):
                 "--load-choices",
                 "default_v1",
                 "--engine-worker-queue-port",
-                "3672",
+                str(FD_ENGINE_QUEUE_PORT),
             ]
 
             # command = self.base_command + param
