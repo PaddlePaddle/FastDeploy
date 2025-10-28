@@ -128,17 +128,6 @@ struct SumOp {
   __device__ __forceinline__ T operator()(T const& x, T const& y) { return x + y; }
 };
 
-template<typename T>
-struct MaxOp {
-__device__ inline T operator()(T const & x, T const & y) { return x > y ? x : y; }
-};
-
-template <>
-struct MaxOp<float> {
-__device__ inline float operator()(float const &x, float const &y) { return fmax(x, y); }
-};
-
-
 template <typename InType, typename OutType>
 __forceinline__ __device__ OutType QuantHelperFunc(const InType input,
                                                    const float scale,
@@ -150,114 +139,101 @@ __forceinline__ __device__ OutType QuantHelperFunc(const InType input,
 
 template <typename T, typename OutT, int VecSize, int Kthread>
 __global__ void masked_quantize_moe_input_kernel(const T* permuted_inputs,
-        const int64_t* expert_idx_per_token,
-        const int64_t token_num,
-        const int64_t dim,
-        float* input_dequant_scale,
-        const int64_t* recv_expert_count,
-        const int num_max_tokens_per_expert,
-        OutT* out) {
-    using LoadT = AlignedVector<T, VecSize>;
-    using LoadOutT = AlignedVector<OutT, VecSize>;
-    LoadT input_vec;
-    LoadOutT output_vec;
-    using vec_t = typename BytesToType<sizeof(OutT) * VecSize>::Type;
-    extern __shared__ char smem_[];
-    for (int token_idx = blockIdx.x; token_idx < token_num; token_idx += gridDim.x) {
-        const auto token_idx_in_expert = token_idx % num_max_tokens_per_expert;
-        const auto expert_id = token_idx / num_max_tokens_per_expert;
-        if (token_idx_in_expert >= recv_expert_count[expert_id]) {
-            auto next_expert_start_idx = (expert_id + 1) * num_max_tokens_per_expert;
-            auto num_iters_to_next_expert = (next_expert_start_idx - token_idx - 1) / gridDim.x;
-            token_idx += num_iters_to_next_expert * gridDim.x;
-            continue;
-        }
-        int64_t expert_idx = expert_idx_per_token[token_idx];
-        float abs_max = 0.0f;
-        for(int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
-            int64_t offset = token_idx * dim + idx * VecSize;
-            #pragma unroll
-            for (int i = 0; i < VecSize; i++) {
-                float res = static_cast<float>(input_vec[i]);
-                abs_max = fmax(abs_max, fabs(res));
-            }
-            Store<T, VecSize>(input_vec, reinterpret_cast<T*>(smem_) + idx * VecSize);
-        }
-        abs_max = BlockAllReduce<MaxOp, float, Kthread>(abs_max);
-        input_dequant_scale[token_idx] = abs_max;
-        float quant_scale = 440.0f / abs_max;
-        for(int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
-            int64_t offset = token_idx * dim + idx * VecSize;
-            Load<T, VecSize>(reinterpret_cast<T*>(smem_) + idx * VecSize, &input_vec);
-            #pragma unroll
-            for (int i = 0; i < VecSize; i++) {
-                float res = static_cast<float>(input_vec[i]);
-                output_vec[i] = static_cast<OutT>(res * quant_scale);
-            }
-            *(reinterpret_cast<vec_t*>(&out[offset])) = *(reinterpret_cast<const vec_t*>(&output_vec));
-        }
+const int64_t* expert_idx_per_token,
+const float* quant_scales,
+const float quant_max_bound,
+const float quant_min_bound,
+const int64_t token_num,
+const int64_t dim,
+float* permuted_input_row_sum,
+const int64_t* recv_expert_count,
+const int num_max_tokens_per_expert,
+OutT* out) {
+using LoadT = AlignedVector<T, VecSize>;
+using LoadOutT = AlignedVector<OutT, VecSize>;
+LoadT input_vec;
+LoadOutT output_vec;
+float scale_factor = -7.0f / 512.0f;
+using vec_t = typename BytesToType<sizeof(OutT) * VecSize>::Type;
+for (int token_idx = blockIdx.x; token_idx < token_num; token_idx += gridDim.x) {
+  const auto token_idx_in_expert = token_idx % num_max_tokens_per_expert;
+  const auto expert_id = token_idx / num_max_tokens_per_expert;
+  if (token_idx_in_expert >= recv_expert_count[expert_id]) {
+      auto next_expert_start_idx = (expert_id + 1) * num_max_tokens_per_expert;
+      auto num_iters_to_next_expert = (next_expert_start_idx - token_idx - 1) / gridDim.x;
+      token_idx += num_iters_to_next_expert * gridDim.x;
+      continue;
+  }
+  int64_t expert_idx = expert_idx_per_token[token_idx];
+  float quant_scale = quant_scales[expert_idx];
+  float thread_row_sum = 0.0f;
+  for(int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
+    int64_t offset = token_idx * dim + idx * VecSize;
+    Load<T, VecSize>(&permuted_inputs[offset], &input_vec);
+    #pragma unroll
+    for (int i = 0; i < VecSize; i++) {
+      output_vec[i] = QuantHelperFunc<T, OutT>(input_vec[i], quant_scale, quant_max_bound, quant_min_bound);
+      thread_row_sum += static_cast<float>(output_vec[i]);
     }
+    *(reinterpret_cast<vec_t*>(&out[offset])) = *(reinterpret_cast<const vec_t*>(&output_vec));
+  }
+  float block_row_sum = BlockAllReduce<SumOp, float, Kthread>(thread_row_sum);
+  permuted_input_row_sum[token_idx] = block_row_sum * scale_factor;
+  }
 }
 
 template <typename T, typename OutT, int VecSize, int Kthread>
 __global__ void quantize_moe_input_kernel(const T* permuted_inputs,
-        const int64_t* expert_idx_per_token,
-        const int64_t token_num,
-        const int64_t dim,
-        float* input_dequant_scale,
-        const int64_t* recv_expert_count,
-        const int num_max_tokens_per_expert,
-        OutT* out) {
-    using LoadT = AlignedVector<T, VecSize>;
-    using LoadOutT = AlignedVector<OutT, VecSize>;
-    LoadT input_vec;
-    LoadOutT output_vec;
-    using vec_t = typename BytesToType<sizeof(OutT) * VecSize>::Type;
-
-    extern __shared__ char smem_[];
-
-    for (int token_idx = blockIdx.x; token_idx < token_num; token_idx += gridDim.x) {
-        int64_t expert_idx = expert_idx_per_token[token_idx];
-        float abs_max = 0.0f;
-        for(int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
-            int64_t offset = token_idx * dim + idx * VecSize;
-            Load<T, VecSize>(&permuted_inputs[offset], &input_vec);
-            #pragma unroll
-            for (int i = 0; i < VecSize; i++) {
-                float res = static_cast<float>(input_vec[i]);
-                abs_max = fmax(abs_max, fabs(res));
-            }
-            Store<T, VecSize>(input_vec, reinterpret_cast<T*>(smem_) + idx * VecSize);
-        }
-        abs_max = BlockAllReduce<MaxOp, float, Kthread>(abs_max);
-        input_dequant_scale[token_idx] = abs_max;
-        float quant_scale = 440.0f / abs_max;
-
-        for(int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
-            int64_t offset = token_idx * dim + idx * VecSize;
-            Load<T, VecSize>(reinterpret_cast<T*>(smem_) + idx * VecSize, &input_vec);
-            #pragma unroll
-            for (int i = 0; i < VecSize; i++) {
-                float res = static_cast<float>(input_vec[i]);
-                output_vec[i] = static_cast<OutT>(res * quant_scale);
-            }
-            *(reinterpret_cast<vec_t*>(&out[offset])) = *(reinterpret_cast<const vec_t*>(&output_vec));
-        }
+const int64_t* expert_idx_per_token,
+const float* quant_scales,
+const float quant_max_bound,
+const float quant_min_bound,
+const int64_t token_num,
+const int64_t dim,
+float* permuted_input_row_sum,
+const int64_t* recv_expert_count,
+const int num_max_tokens_per_expert,
+OutT* out) {
+using LoadT = AlignedVector<T, VecSize>;
+using LoadOutT = AlignedVector<OutT, VecSize>;
+LoadT input_vec;
+LoadOutT output_vec;
+using vec_t = typename BytesToType<sizeof(OutT) * VecSize>::Type;
+float scale_factor = -7.0f / 512.0f;
+for (int token_idx = blockIdx.x; token_idx < token_num; token_idx += gridDim.x) {
+  int64_t expert_idx = expert_idx_per_token[token_idx];
+  float quant_scale = quant_scales[expert_idx];
+  float thread_row_sum = 0.0f;
+  for(int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
+    int64_t offset = token_idx * dim + idx * VecSize;
+    Load<T, VecSize>(&permuted_inputs[offset], &input_vec);
+    #pragma unroll
+    for (int i = 0; i < VecSize; i++) {
+      output_vec[i] = QuantHelperFunc<T, OutT>(input_vec[i], quant_scale, quant_max_bound, quant_min_bound);
+      thread_row_sum += static_cast<float>(output_vec[i]);
     }
+    *(reinterpret_cast<vec_t*>(&out[offset])) = *(reinterpret_cast<const vec_t*>(&output_vec));
+  }
+  float block_row_sum = BlockAllReduce<SumOp, float, Kthread>(thread_row_sum);
+  permuted_input_row_sum[token_idx] = block_row_sum * scale_factor;
+  }
 }
 
 template <typename T, typename OutT>
 void quantize_moe_input(
-        const T* permuted_inputs,
-        const int64_t* expert_idx_per_token,
-        const int64_t token_num,
-        const int64_t dim,
-        float* input_quant_scale,
-        const int64_t* recv_expert_count,
-        const int num_max_tokens_per_expert,
-        bool used_in_ep_low_latency,
-        OutT* out,
-        cudaStream_t stream) {
+  const T* permuted_inputs,
+  const int64_t* expert_idx_per_token,
+  const float* quant_scales,
+  const float quant_max_bound,
+  const float quant_min_bound,
+  const int64_t token_num,
+  const int64_t dim,
+  float* permuted_input_row_sum,
+  const int64_t* recv_expert_count,
+  const int num_max_tokens_per_expert,
+  bool used_in_ep_low_latency,
+  OutT* out,
+  cudaStream_t stream) {
     constexpr int VecSize = 16 / sizeof(T);
     constexpr int threads_per_block = 128;
     const int dev_id = 0;
@@ -271,19 +247,110 @@ void quantize_moe_input(
     const int num_blocks_per_wave = sm_count * act_blocks_per_sm;
     dim3 grid;
     grid.x = min(static_cast<int64_t>(num_blocks_per_wave), token_num);
-    const int smem_size = dim * sizeof(T);
-    if (smem_size >= 48 * 1024) {
-        cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
-    }
-    kernel<<<grid, threads_per_block, smem_size, stream>>>(
+    kernel<<<grid, threads_per_block, 0, stream>>>(
       permuted_inputs,
       expert_idx_per_token,
+      quant_scales,
+      quant_max_bound,
+      quant_min_bound,
       token_num,
       dim,
-      input_quant_scale,
+      permuted_input_row_sum,
       recv_expert_count,
       num_max_tokens_per_expert,
       out);
+  }
+
+template <typename T, int VecSize, int Kthread>
+__global__ void masked_compute_row_sum_kernel(
+const T* permuted_inputs,
+const int64_t token_num,
+const int64_t dim,
+float* permuted_input_row_sum,
+const int64_t* recv_expert_count,
+const int num_max_tokens_per_expert) {
+using LoadT = AlignedVector<T, VecSize>;
+LoadT input_vec;
+float scale_factor = -7.0f / 512.0f;
+for (int token_idx = blockIdx.x; token_idx < token_num; token_idx += gridDim.x) {
+  const auto token_idx_in_expert = token_idx % num_max_tokens_per_expert;
+  const auto expert_id = token_idx / num_max_tokens_per_expert;
+  if (token_idx_in_expert >= recv_expert_count[expert_id]) {
+      auto next_expert_start_idx = (expert_id + 1) * num_max_tokens_per_expert;
+      auto num_iters_to_next_expert = (next_expert_start_idx - token_idx - 1) / gridDim.x;
+      token_idx += num_iters_to_next_expert * gridDim.x;
+      continue;
+  }
+  float thread_row_sum = 0.0f;
+  for(int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
+    int64_t offset = token_idx * dim + idx * VecSize;
+    Load<T, VecSize>(&permuted_inputs[offset], &input_vec);
+    #pragma unroll
+    for (int i = 0; i < VecSize; i++) {
+      thread_row_sum += static_cast<float>(input_vec[i]);
+    }
+  }
+  float block_row_sum = BlockAllReduce<SumOp, float, Kthread>(thread_row_sum);
+  permuted_input_row_sum[token_idx] = block_row_sum * scale_factor;
+  }
+}
+
+template <typename T, int VecSize, int Kthread>
+__global__ void compute_row_sum_kernel(
+const T* permuted_inputs,
+const int64_t token_num,
+const int64_t dim,
+float* permuted_input_row_sum,
+const int64_t* recv_expert_count,
+const int num_max_tokens_per_expert) {
+using LoadT = AlignedVector<T, VecSize>;
+LoadT input_vec;
+float scale_factor = -7.0f / 512.0f;
+for (int token_idx = blockIdx.x; token_idx < token_num; token_idx += gridDim.x) {
+  float thread_row_sum = 0.0f;
+  for(int idx = threadIdx.x; idx < dim / VecSize; idx += blockDim.x) {
+    int64_t offset = token_idx * dim + idx * VecSize;
+    Load<T, VecSize>(&permuted_inputs[offset], &input_vec);
+    #pragma unroll
+    for (int i = 0; i < VecSize; i++) {
+      thread_row_sum += static_cast<float>(input_vec[i]);
+    }
+  }
+  float block_row_sum = BlockAllReduce<SumOp, float, Kthread>(thread_row_sum);
+  permuted_input_row_sum[token_idx] = block_row_sum * scale_factor;
+  }
+}
+
+template <typename T>
+void compute_row_sum(
+  const T* permuted_inputs,
+  const int64_t token_num,
+  const int64_t dim,
+  float* permuted_input_row_sum,
+  const int64_t* recv_expert_count,
+  const int num_max_tokens_per_expert,
+  bool used_in_ep_low_latency,
+  cudaStream_t stream) {
+    constexpr int VecSize = 16 / sizeof(T);
+    constexpr int threads_per_block = 128;
+    const int dev_id = 0;
+    int sm_count;
+    int act_blocks_per_sm;
+    cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev_id);
+    assert(dim % VecSize == 0);
+    auto kernel = used_in_ep_low_latency ? masked_compute_row_sum_kernel<T, VecSize, threads_per_block> : compute_row_sum_kernel<T, VecSize, threads_per_block>;
+    cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+        &act_blocks_per_sm, kernel, threads_per_block, 0);
+    const int num_blocks_per_wave = sm_count * act_blocks_per_sm;
+    dim3 grid;
+    grid.x = min(static_cast<int64_t>(num_blocks_per_wave), token_num);
+    kernel<<<grid, threads_per_block, 0, stream>>>(
+      permuted_inputs,
+      token_num,
+      dim,
+      permuted_input_row_sum,
+      recv_expert_count,
+      num_max_tokens_per_expert);
   }
 
 // ====================== Softmax things ===============================
@@ -1170,7 +1237,7 @@ void topk_gating_softmax_kernelLauncher(const T* input,
 // to row 0 in the original matrix. Thus, to know where to read in the source
 // matrix, we simply take the modulus of the expanded index.
 
-template <typename T, int VecSize, int Kthread, typename OutT=T>
+template <typename T, int VecSize, typename OutT=T>
 __global__ void initialize_moe_routing_kernel(
     const T* unpermuted_input,
     OutT* permuted_output,
@@ -1178,7 +1245,6 @@ __global__ void initialize_moe_routing_kernel(
     const int *expert_idx_per_token,
     const float *w4a8_in_scale,
     int* expanded_source_row_to_expanded_dest_row,
-    float *dequant_scale,
     const int64_t num_rows,
     const int64_t active_rows,
     const int64_t cols,
@@ -1200,49 +1266,15 @@ __global__ void initialize_moe_routing_kernel(
         expanded_dest_row;
   }
 
-  extern __shared__ char smem_[];
-
-  T * data_smem = reinterpret_cast<T*>(smem_);
-
   if (expanded_dest_row < active_rows) {
 
     const int expert_idx = expert_idx_per_token[expanded_dest_row];
-    float scale;
+    const float scale = w4a8_in_scale ? w4a8_in_scale[expert_idx] : -1;
     const int source_row = expanded_source_row % num_rows;
 
     const T* source_row_ptr = unpermuted_input + source_row * cols;
     OutT *dest_row_ptr = permuted_output + expanded_dest_row * cols;
 
-    if constexpr(std::is_same<OutT, phi::dtype::float8_e4m3fn>::value) {
-      if (dequant_scale != nullptr) {
-        float abs_max = 0.f;
-        for (int tid = threadIdx.x * VecSize; tid < cols;
-          tid += blockDim.x * VecSize) {
-            Load<T, VecSize>(&source_row_ptr[tid], &src_vec);
-            Store<T, VecSize>(src_vec, &data_smem[tid]);
-            for (int j = 0; j < VecSize; j++) {
-              abs_max = fmaxf(abs_max, fabsf(static_cast<float>(src_vec[j])));
-            }
-        }
-        abs_max = BlockAllReduce<MaxOp, float, Kthread>(abs_max);
-        scale = 440.0f / abs_max;
-        dequant_scale[expanded_dest_row] = abs_max;
-        for (int tid = threadIdx.x * VecSize; tid < cols;
-          tid += blockDim.x * VecSize) {
-          Load<T, VecSize>(&data_smem[tid], &src_vec);
-          using StoreT = AlignedVector<OutT, VecSize>;
-          StoreT dest_vec;
-          for (int j = 0; j < VecSize; j++) {
-            float quant_value = scale * static_cast<float>(src_vec[j]);
-            dest_vec[j] = static_cast<OutT>(quant_value);
-          }
-          Store<OutT, VecSize>(dest_vec, &dest_row_ptr[tid]);
-        }
-        return;
-      } else {
-        scale = w4a8_in_scale ? w4a8_in_scale[expert_idx] : -1;
-      }
-    }
     for (int tid = threadIdx.x * VecSize; tid < cols;
          tid += blockDim.x * VecSize) {
       // dest_row_ptr[tid] = source_row_ptr[tid];
@@ -1288,35 +1320,41 @@ void initialize_moe_routing_kernelLauncher(
     const int *expert_idx_per_token,
     const float *w4a8_in_scale,
     int* expanded_source_row_to_expanded_dest_row,
-    float * dequant_scale,
     const int64_t num_rows,
     const int64_t active_rows,
     const int64_t cols,
     const int64_t k,
     cudaStream_t stream) {
-  constexpr int threads = 256;
+  const int threads = std::min(cols, int64_t(1024));
   constexpr int max_pack_size = 16 / sizeof(T);
   const auto config_initialize = Get1DBlocksAnd2DGridsMoe(num_rows * k);
-  const int smem_size = cols * sizeof(float);
-  auto kernel = &initialize_moe_routing_kernel<T, max_pack_size, threads, OutT>;
-  if (cols % max_pack_size != 0) {
-    kernel = &initialize_moe_routing_kernel<T, 1, threads, OutT>;
-  }
-  if (smem_size >= 48 * 1024) {
-    cudaFuncSetAttribute(kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
-  }
-  kernel<<<config_initialize.block_per_grid, threads, smem_size, stream>>>(
+  if (cols % max_pack_size == 0) {
+    initialize_moe_routing_kernel<T, max_pack_size>
+        <<<config_initialize.block_per_grid, threads, 0, stream>>>(
             unpermuted_input,
             permuted_output,
             expanded_dest_row_to_expanded_source_row,
             expert_idx_per_token,
             w4a8_in_scale,
             expanded_source_row_to_expanded_dest_row,
-            dequant_scale,
             num_rows,
             k * active_rows,
             cols,
             num_rows * k);
+  } else {
+    initialize_moe_routing_kernel<T, 1>
+        <<<config_initialize.block_per_grid, threads, 0, stream>>>(
+            unpermuted_input,
+            permuted_output,
+            expanded_dest_row_to_expanded_source_row,
+            expert_idx_per_token,
+            w4a8_in_scale,
+            expanded_source_row_to_expanded_dest_row,
+            num_rows,
+            k * active_rows,
+            cols,
+            num_rows * k);
+  }
 }
 
 // ============================== Infer GEMM sizes

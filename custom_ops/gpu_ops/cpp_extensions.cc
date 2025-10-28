@@ -304,6 +304,7 @@ paddle::Tensor MoeExpertFFNFunc(
     const paddle::Tensor& tokens_expert_prefix_sum,
     const paddle::Tensor& up_gate_proj_weight,
     const paddle::Tensor& down_proj_weight,
+    const paddle::optional<paddle::Tensor>& up_proj_in_scale,
     const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
     const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_scale,
@@ -311,8 +312,7 @@ paddle::Tensor MoeExpertFFNFunc(
     const paddle::optional<paddle::Tensor>& expert_idx_per_token,
     const std::string& quant_method,
     const bool used_in_ep_low_latency,
-    const int estimate_total_token_nums,
-    const int hadamard_block_size,
+    const int estimate_total_token_nums, const int hadamard_block_size,
     const std::string& activation);
 
 paddle::Tensor MoeExpertFFNWint2Func(

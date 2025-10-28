@@ -250,7 +250,7 @@ public:
 
     initialize_moe_routing_kernelLauncher(
         input_activations, permuted_data_, permuted_rows_, nullptr, nullptr,
-        expanded_source_row_to_expanded_dest_row, nullptr, num_rows, num_rows,
+        expanded_source_row_to_expanded_dest_row, num_rows, num_rows,
         hidden_size, k, stream);
 
     const int64_t expanded_active_expert_rows = k * num_rows;

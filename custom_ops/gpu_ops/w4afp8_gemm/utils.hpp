@@ -62,12 +62,8 @@ template <int numel>
 __forceinline__ __device__ void convert_c4_2_fp8(const int32_t * src, int32_t * dst1, int32_t * dst2) {
     #pragma unroll
     for (int i = 0; i < numel; ++i) {
-        uint32_t head1 = src[i] & 0x80808080;
-        dst1[i] = (src[i] >> 4) & 0x07070707;
-        dst1[i] = dst1[i] | head1;
-        uint32_t head2 = (src[i] & 0x08080808) << 4;
-        dst2[i] = src[i] & 0x07070707;
-        dst2[i] = dst2[i] | head2;
+        dst1[i] = (src[i] >> 4) & 0x0f0f0f0f;
+        dst2[i] = src[i] & 0x0f0f0f0f;
     }
 }
 
@@ -92,6 +88,7 @@ __forceinline__ __device__ void gemm(
         warpgroup_arrive();
     }
     constexpr int numel = decltype(size(tCrA(_, _, 0)))::value / 4;
+
     Tensor tCrA_copy_view = thr_copy_A.retile_D(tCrA);
     cute::copy(tiled_copy_A, tCsA(_, _, _0{}), tCrA_copy_view(_, _, _0{}));
 
@@ -106,9 +103,7 @@ __forceinline__ __device__ void gemm(
         convert_c4_2_fp8<numel>(tCrA_data, tCrA1_data, tCrA2_data);
 
         cute::gemm(tiled_mma, tCrA1(_,_,k_block), tCrB(_,_,2 * k_block), tCrC);
-        tiled_mma.accumulate_ = GMMA::ScaleOut::One;
         cute::gemm(tiled_mma, tCrA2(_,_,k_block), tCrB(_,_, 2 * k_block + 1), tCrC);
-
     }
     if constexpr (commit) {
         warpgroup_commit_batch();
