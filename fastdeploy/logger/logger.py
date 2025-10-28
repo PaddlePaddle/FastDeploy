@@ -104,7 +104,7 @@ class FastDeployLogger:
         if not os.path.exists(log_dir):
             os.makedirs(log_dir, exist_ok=True)
 
-        is_debug = int(envs.FD_DEBUG)
+        is_debug = envs.FD_DEBUG
         # logger = logging.getLogger(name)
         # 为了兼容原有接口，使用命名空间进行隔离，避免logger覆盖、混乱等问题
         legacy_name = f"legacy.{name}"
