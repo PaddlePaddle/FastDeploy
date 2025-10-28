@@ -485,13 +485,14 @@ void TextImageIndexOut(const paddle::Tensor& token_type_ids,
                        paddle::Tensor& text_input,
                        paddle::Tensor& image_input);
 
-void TextImageGatherScatter(paddle::Tensor& input,
-                            paddle::Tensor& text_input,
-                            paddle::Tensor& image_input,
-                            paddle::Tensor& token_type_ids,
-                            paddle::Tensor& text_index,
-                            paddle::Tensor& image_index,
-                            const bool is_scatter);
+std::vector<paddle::Tensor> TextImageGatherScatter(
+    paddle::Tensor& input,
+    paddle::Tensor& text_input,
+    paddle::Tensor& image_input,
+    paddle::Tensor& token_type_ids,
+    paddle::Tensor& text_index,
+    paddle::Tensor& image_index,
+    const bool is_scatter);
 
 paddle::Tensor count_tokens_per_expert_func(const paddle::Tensor& topk_ids,
                                             int64_t num_experts);
