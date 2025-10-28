@@ -119,15 +119,14 @@ class Ernie45VLThinkingReasoningParser(ReasoningParser):
         # Check if the model output contains the </think> tokens.
         if self.think_end_token not in model_output:
             return model_output, ""
-        else:
-            reasoning_content, _, content = model_output.partition(self.think_end_token)
-            if self.tool_begin_token in content:
-                prefix, _, _ = content.partition(self.tool_begin_token)
-                prefix_strip = prefix.lstrip("\n")
-                if len(prefix_strip) > 0:
-                    return reasoning_content, content
-                return reasoning_content, ""
-            return reasoning_content, content
+        reasoning_content, _, content = model_output.partition(self.think_end_token)
+        if self.tool_begin_token in content:
+            prefix, _, _ = content.partition(self.tool_begin_token)
+            prefix_strip = prefix.lstrip("\n")
+            if len(prefix_strip) > 0:
+                return reasoning_content, content
+            return reasoning_content, ""
+        return reasoning_content, content
 
     def _is_with_tool(self, current_text: str, current_token_ids: Sequence[int]) -> bool:
         think_end_index = current_text.find(self.think_end_token)
