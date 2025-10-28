@@ -528,10 +528,12 @@ class LLMEngine:
             f" --load_choices {self.cfg.load_config.load_choices}"
             f" --plas_attention_config '{self.cfg.plas_attention_config.to_json_string()}'"
             f" --ips {ips}"
+            f" --max_encoder_cache {self.cfg.cache_config.max_encoder_cache}"
             f" --cache-transfer-protocol {self.cfg.cache_config.cache_transfer_protocol}"
             f" --runner {self.cfg.model_config.runner}"
             f" --convert {self.cfg.model_config.convert}"
             f" --override-pooler-config {self.cfg.model_config.override_pooler_config}"
+            f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
         )
 
         worker_append_flag = {

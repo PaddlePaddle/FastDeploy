@@ -470,6 +470,8 @@ class CompletionRequest(BaseModel):
     max_streaming_response_tokens: Optional[int] = None
     return_token_ids: Optional[bool] = None
     prompt_token_ids: Optional[Union[List[int], List[List[int]]]] = None
+
+    mm_hashes: Optional[list] = None
     # doc: end-completion-extra-params
 
     def to_dict_for_infer(self, request_id=None, prompt=None):
@@ -527,6 +529,9 @@ class CompletionRequest(BaseModel):
             if item is not None:
                 req_dict[key] = item
 
+        if self.mm_hashes is not None and len(self.mm_hashes) > 0:
+            req_dict["mm_hashes"] = self.mm_hashes
+
         return req_dict
 
     @model_validator(mode="before")
@@ -552,6 +557,9 @@ class CompletionRequest(BaseModel):
                 "You can only use one kind of guided decoding "
                 "('guided_json', 'guided_regex', 'guided_choice', 'guided_grammar')."
             )
+
+        if data.get("mm_hashes", None):
+            assert isinstance(data["mm_hashes"], list), "`mm_hashes` must be a list."
 
         return data
 
@@ -618,6 +626,8 @@ class ChatCompletionRequest(BaseModel):
     prompt_token_ids: Optional[List[int]] = None
     max_streaming_response_tokens: Optional[int] = None
     disable_chat_template: Optional[bool] = False
+
+    mm_hashes: Optional[list] = None
     completion_token_ids: Optional[List[int]] = None
     # doc: end-chat-completion-extra-params
 
@@ -694,6 +704,9 @@ class ChatCompletionRequest(BaseModel):
             if item is not None:
                 req_dict[key] = item
 
+        if self.mm_hashes is not None and len(self.mm_hashes) > 0:
+            req_dict["mm_hashes"] = self.mm_hashes
+
         return req_dict
 
     @model_validator(mode="before")
@@ -720,6 +733,9 @@ class ChatCompletionRequest(BaseModel):
                 "You can only use one kind of guided decoding "
                 "('guided_json', 'guided_regex', 'guided_choice', 'guided_grammar', 'structural_tag')."
             )
+
+        if data.get("mm_hashes", None):
+            assert isinstance(data["mm_hashes"], list), "`mm_hashes` must be a list."
 
         return data
 
