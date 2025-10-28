@@ -333,8 +333,6 @@ class Sampler(nn.Layer):
     ) -> SamplerOutput:
         """ """
         logits = self.guided_decoding.apply_token_mask(logits, skip_idx_list)
-        for proc in sampling_metadata.logits_processors or []:
-            logits = proc.apply(logits)
 
         num_logprobs = sampling_metadata.max_num_logprobs
         if num_logprobs is not None:
@@ -342,6 +340,9 @@ class Sampler(nn.Layer):
                 raw_logprobs = self.compute_logprobs(logits, sampling_metadata)
             elif self.logprobs_mode == "raw_logits":
                 raw_logprobs = logits.clone()
+
+        for proc in sampling_metadata.logits_processors or []:
+            logits = proc.apply(logits)
 
         logits = apply_penalty_multi_scores(
             sampling_metadata.pre_token_ids,

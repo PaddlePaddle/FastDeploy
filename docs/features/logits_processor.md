@@ -13,7 +13,9 @@ A **Logits Processor (LP)** sits between *model output logits* and the *sampler*
 
 ## Usage
 
-### 1. Start the service (register logits processors)
+### Online Service
+
+#### 1. Start the service (register logits processors)
 
 Register processors with `--logits-processors` when starting the service. For a built-in processor like `LogitBiasLogitsProcessor`, pass the class name directly:
 
@@ -24,13 +26,13 @@ python -m fastdeploy.entrypoints.openai.api_server \
   --logits-processors LogitBiasLogitsProcessor
 ```
 
-### 2. Send a request (enable and configure as needed)
+#### 2. Send a request (enable and configure as needed)
 
 Use the `logits_processors_args` field in the REST request body to enable and configure processors. Example with `LogitBiasLogitsProcessor`, which adds a bias to specified tokens. It accepts a `logit_bias` dictionary mapping *token_id* → *bias value*:
 
 ```bash
 curl -X POST "http://0.0.0.0:8180/v1/chat/completions" -H "Content-Type: application/json" -d '{
-  "messages": [{"role":"user", "content":"The weather is great today."}],
+  "messages": [{"role":"user", "content":"Who is Lu Xun?"}],
   "logits_processors_args": {
     "logit_bias": {"128": 5.0, "50256": -10.0}
   }
@@ -45,13 +47,37 @@ import openai
 client = openai.Client(base_url="http://0.0.0.0:8180/v1", api_key="EMPTY_API_KEY")
 response = client.chat.completions.create(
     model="default",
-    messages=[{"role": "user", "content": "The weather is great today."}],
+    messages=[{"role": "user", "content": "Who is Lu Xun?"}],
     extra_body={
         "logits_processors_args": {
            "logit_bias": {"128": 5.0, "50256": -10.0}
         }
     }
 )
+```
+
+### Offline Inference
+
+For offline inference, pass the `logits_processors` argument (type `list[str]`) when initializing the `LLM` instance. When generating text via the offline `chat()` or `generate()` APIs, provide the logits-processor parameters through `sampling_params`.`logits_processors_args` to enable and pass arguments to the corresponding processors.
+
+```python
+from fastdeploy import LLM, SamplingParams
+
+llm = LLM(
+    model="path/to/model",
+    engine_worker_queue_port=8282,
+    cache_queue_port=8383,
+    logits_processors=['LogitBiasLogitsProcessor'],
+)
+
+messages = [{"role": "user", "content": "Who is Lu Xun?"}]
+sampling_params = SamplingParams(
+    top_p=0.95,
+    max_tokens=128,
+    logits_processors_args={"logit_bias": {128: 5.0, 50256: -10.0}},
+)
+outputs = llm.chat(messages, sampling_params)
+print(outputs[0].outputs.text)
 ```
 
 ## Custom Logits Processor
@@ -106,7 +132,9 @@ class YourLogitsProcessor(LogitsProcessor):
         return logits
 ```
 
-### 2. Start the service (register your logits processor)
+### 2. Use your logits processor via online service
+
+#### 2.2. Start the service (register your logits processor)
 
 When registering a custom processor, pass its **FQCN** (`module.path:ClassName`) to `--logits-processors`:
 
@@ -117,13 +145,13 @@ python -m fastdeploy.entrypoints.openai.api_server \
   --logits-processors your.dotted.path.to.module:YourLogitsProcessor
 ```
 
-### 3. Send a request (enable and configure as needed)
+#### 2.2. Send a request (enable and configure as needed)
 
 Enable your processor per request via `logits_processors_args`:
 
 ```bash
 curl -X POST "http://0.0.0.0:8180/v1/chat/completions" -H "Content-Type: application/json" -d '{
-  "messages": [{"role":"user", "content":"The weather is great today."}],
+  "messages": [{"role":"user", "content":"Who is Lu Xun?"}],
   "logits_processors_args": {
     "enable_your_logits_processor": true
   }
@@ -138,11 +166,35 @@ import openai
 client = openai.Client(base_url="http://0.0.0.0:8180/v1", api_key="EMPTY_API_KEY")
 response = client.chat.completions.create(
     model="default",
-    messages=[{"role": "user", "content": "The weather is great today."}],
+    messages=[{"role": "user", "content": "Who is Lu Xun?"}],
     extra_body={
         "logits_processors_args": {
             "enable_your_logits_processor": True
         }
     }
 )
+```
+
+### 3. Use your logits processor via offline inference
+
+For offline inference, pass the `logits_processors` argument (type `list[str]`) when initializing the `LLM` instance. To specify your custom logits processor, pass its FQCN (`module.path:ClassName`). When generating text via the offline `chat()` or `generate()` APIs, provide the logits-processor parameters through `sampling_params`.`logits_processors_args` to enable and pass arguments to the corresponding processors.
+
+```python
+from fastdeploy import LLM, SamplingParams
+
+llm = LLM(
+    model="path/to/model",
+    engine_worker_queue_port=8282,
+    cache_queue_port=8383,
+    logits_processors=['your.dotted.path.to.module:YourLogitsProcessor'],
+)
+
+messages = [{"role": "user", "content": "Who is Lu Xun?"}]
+sampling_params = SamplingParams(
+    top_p=0.95,
+    max_tokens=128,
+    logits_processors_args={"enable_your_logits_processor": True},
+)
+outputs = llm.chat(messages, sampling_params)
+print(outputs[0].outputs.text)
 ```

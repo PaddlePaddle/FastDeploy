@@ -13,7 +13,9 @@ Logits Processor（LP）位于“模型输出 logits → 采样器（top-k/top-p
 
 ## 使用方法
 
-### 1. 启动服务（注册 logits 处理器）
+### 在线服务
+
+#### 1. 启动服务（注册 logits 处理器）
 
 在启动服务时，通过 `--logits-processors` 参数注册处理器。如果应用内置的 logits 处理器，以 `LogitBiasLogitsProcessor` 为例，直接传入类名即可：
 
@@ -24,7 +26,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
   --logits-processors LogitBiasLogitsProcessor
 ```
 
-### 2. 发送请求（按需启用并传参）
+#### 2. 发送请求（按需启用并传参）
 
 通过 RESTful API 发送请求时，通过 `logits_processors_args` 字段启用并传参，**不同的 logits 处理器需要不同的参数**。以 `LogitBiasLogitsProcessor` 为例，该处理器用于对指定 token 添加偏置。它接收 `logit_bias` 参数，为一个 dict 字典，表示 token id 到偏置值的映射。
 ```bash
@@ -51,6 +53,30 @@ response = client.chat.completions.create(
         }
     }
 )
+```
+
+### 离线推理
+
+离线调用场景，在初始化 `LLM` 实例时传入 `logits_processors` 参数，类型为 `list[str]`。在调用离线 `chat()` 或 `generate()` 接口生成文本时，通过 `sampling_params`.`logits_processors_args` 传入 logits 处理器参数，启用并传参给对应处理器。
+
+```python
+from fastdeploy import LLM, SamplingParams
+
+llm = LLM(
+    model="path/to/model",
+    engine_worker_queue_port=8282,
+    cache_queue_port=8383,
+    logits_processors=['LogitBiasLogitsProcessor'],
+)
+
+messages = [{"role": "user", "content": "鲁迅是谁"}]
+sampling_params = SamplingParams(
+    top_p=0.95,
+    max_tokens=128,
+    logits_processors_args={"logit_bias": {128: 5.0, 50256: -10.0}},
+)
+outputs = llm.chat(messages, sampling_params)
+print(outputs[0].outputs.text)
 ```
 
 ## 自定义 Logits Processor
@@ -106,7 +132,9 @@ class YourLogitsProcessor(LogitsProcessor):
 
 ```
 
-### 2. 启动服务（注册自己的 logits 处理器）
+### 2. 通过在线服务使用自己的 logits 处理器
+
+#### 2.1. 启动服务（注册自己的 logits 处理器）
 
 在启动服务时，通过 `--logits-processors` 参数注册你的处理器。在传入自定义处理器时，需要传入 FQCN（Fully Qualified Class Name），即 `module.path:ClassName`。
 
@@ -117,7 +145,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
   --logits-processors your.dotted.path.to.module:YourLogitsProcessor
 ```
 
-### 3. 发送请求（按需启用并传参）
+#### 2.2. 发送请求（按需启用并传参）
 
 通过 RESTful API 发送请求时，通过 `logits_processors_args` 字段启用并传参：
 ```bash
@@ -145,4 +173,28 @@ response = client.chat.completions.create(
         }
     }
 )
+```
+
+### 3. 通过离线调用使用自己的 logits 处理器
+
+在初始化 `LLM` 实例时传入 `logits_processors` 参数，类型为 `list[str]`。在传入自定义处理器时，需要传入 FQCN（Fully Qualified Class Name），即 `module.path:ClassName`。在调用离线 `chat()` 或 `generate()` 接口生成文本时，通过 `sampling_params`.`logits_processors_args` 传入 logits 处理器参数，启用并传参给对应处理器。
+
+```python
+from fastdeploy import LLM, SamplingParams
+
+llm = LLM(
+    model="path/to/model",
+    engine_worker_queue_port=8282,
+    cache_queue_port=8383,
+    logits_processors=['your.dotted.path.to.module:YourLogitsProcessor'],
+)
+
+messages = [{"role": "user", "content": "鲁迅是谁"}]
+sampling_params = SamplingParams(
+    top_p=0.95,
+    max_tokens=128,
+    logits_processors_args={"enable_your_logits_processor": True},
+)
+outputs = llm.chat(messages, sampling_params)
+print(outputs[0].outputs.text)
 ```
