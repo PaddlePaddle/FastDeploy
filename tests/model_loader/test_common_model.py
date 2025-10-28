@@ -89,7 +89,7 @@ model_param_map = {
             },
         ],
     },
-    "ERNIE-4.5-VL-28B-A3B-Paddle": {
+    "ernie-4_5-vl-28b-a3b-bf16-paddle": {
         "max_num_seqs": 1,
         "quantizations": ["wint4"],
         "is_mm": True,
