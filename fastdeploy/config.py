@@ -183,6 +183,7 @@ class ModelConfig:
         self.max_model_len = 0
         self.dtype = "bfloat16"
         self.enable_logprob = False
+        self.logprobs_mode = "raw_logprobs"
         self.enable_redundant_experts = False
         self.redundant_experts_num = 0
         self.seed = 0
@@ -785,7 +786,7 @@ class GraphOptimizationConfig:
         """
         self.sot_warmup_sizes: list[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 32, 64, 128]
         """  Number of warmup runs for SOT warmup. """
-        self.use_cudagraph: bool = False
+        self.use_cudagraph: bool = True
         """Sizes to capture cudagraph.
         - None (default): capture sizes are inferred from llm config.
         - list[int]: capture sizes are specified as given."""
@@ -821,7 +822,7 @@ class GraphOptimizationConfig:
         """ Record maps mapped from real shape to captured size to reduce runtime overhead """
         self.real_shape_to_captured_size: dict[int, int] = None
         """ Whether to use shared memory pool for multi capture_size """
-        self.use_unique_memory_pool: bool = False
+        self.use_unique_memory_pool: bool = True
 
         # CINN Config ...
         if args is not None:
@@ -907,22 +908,6 @@ class GraphOptimizationConfig:
             assert (
                 len(self.cudagraph_capture_sizes) > 0
             ), "In graph optimization config, When opening the CUDA graph, it is forbidden to set the capture sizes to an empty list."
-
-    def update_use_cudagraph(self, argument: bool):
-        """
-        Unified user specifies the use_cudagraph parameter through two methods,
-        '--use-cudagraph' and '--graph-optimization-config'
-        """
-        if self.use_cudagraph is None:
-            # User only set '--use-cudagraph'
-            self.use_cudagraph = argument
-        else:
-            # User both set '--use-cudagraph' and '--graph-optimization-config'
-            if self.use_cudagraph is False and argument is True:
-                raise ValueError(
-                    "Invalid parameter: Cannot set --use-cudagraph and --graph-optimization-config '{\"use_cudagraph\":false}' simultaneously."
-                )
-            argument = self.use_cudagraph
 
 
 class PlasAttentionConfig:
@@ -1152,6 +1137,8 @@ class CacheConfig:
             enc_dec_block_num (int): Number of encoder-decoder blocks.
             prealloc_dec_block_slot_num_threshold (int): Number of token slot threadshold to allocate next blocks for decoding, used when ENABLE_V1_KVCACHE_SCHEDULER=1.
             enable_prefix_caching (bool): Enable prefix caching.
+            max_encoder_cache(int): Maximum number of tokens in the encoder cache.
+            max_processor_cache(int): Maximum number of bytes in the processor cache.
         """
         self.block_size = 64
         self.gpu_memory_utilization = 0.9
@@ -1160,7 +1147,7 @@ class CacheConfig:
             self.kv_cache_ratio = 1.0
         else:
             self.kv_cache_ratio = 0.75
-        self.enc_dec_block_num = 0 if current_platform.is_maca() else envs.FD_ENC_DEC_BLOCK_NUM
+        self.enc_dec_block_num = envs.FD_ENC_DEC_BLOCK_NUM
         self.prealloc_dec_block_slot_num_threshold = 12
         self.cache_dtype = "bfloat16"
         self.model_cfg = None
@@ -1172,6 +1159,8 @@ class CacheConfig:
         self.enable_ssd_cache = False
         self.cache_queue_port = None
         self.swap_space = None
+        self.max_encoder_cache = None
+        self.max_processor_cache = None
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -1451,11 +1440,14 @@ class FDConfig:
             self.model_config.model_format = "torch"
 
         # TODO
-        self.max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "3"))
-        if current_platform.is_xpu():
-            self.max_prefill_batch = 1
-        if self.model_config is not None and self.model_config.enable_mm:
-            self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
+        if not envs.FD_ENABLE_MAX_PREFILL:
+            self.max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "3"))
+            if current_platform.is_xpu():
+                self.max_prefill_batch = 1
+            if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
+        else:
+            self.max_prefill_batch = self.scheduler_config.max_num_seqs
 
         num_ranks = self.parallel_config.tensor_parallel_size * self.parallel_config.data_parallel_size
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
@@ -1512,7 +1504,7 @@ class FDConfig:
 
         self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         self.cache_config.max_block_num_per_seq = int(self.model_config.max_model_len // self.cache_config.block_size)
-        if self.model_config is not None and self.model_config.enable_mm:
+        if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.cache_config.enable_prefix_caching = False
 
         if (
@@ -1524,6 +1516,30 @@ class FDConfig:
                 self.structured_outputs_config.guided_decoding_backend = "off"
             else:
                 self.structured_outputs_config.guided_decoding_backend = "xgrammar"
+
+        if self.model_config.enable_mm:
+            if self.cache_config.max_encoder_cache is None or self.cache_config.max_encoder_cache < 0:
+                self.cache_config.max_encoder_cache = self.scheduler_config.max_num_batched_tokens
+            elif self.cache_config.max_encoder_cache != 0:
+                if self.cache_config.max_encoder_cache < self.scheduler_config.max_num_batched_tokens:
+                    logger.warning(
+                        f"max_encoder_cache{self.cache_config.max_encoder_cache} is less than "
+                        f"max_num_batched_tokens{self.scheduler_config.max_num_batched_tokens}, "
+                        f"set to max_num_batched_tokens."
+                    )
+                    self.cache_config.max_encoder_cache = self.scheduler_config.max_num_batched_tokens
+        else:
+            self.cache_config.max_encoder_cache = 0
+
+        # Adjustment GraphOptConfig
+        if self.load_config is not None and self.load_config.dynamic_load_weight is True:
+            self.graph_opt_config.graph_opt_level = 0
+            logger.info(
+                "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
+            )
+        if self.device_config is not None and self.device_config.device_type != "cuda":
+            self.graph_opt_config.use_cudagraph = False
+            logger.info(f"CUDAGraph only support on GPU, current device type is {self.device_config.device_type}!")
 
         if self.scheduler_config.splitwise_role == "mixed":
             self.model_config.moe_phase = MoEPhase(phase="prefill")
@@ -1572,10 +1588,6 @@ class FDConfig:
             f"be less than or equal to max_num_partial_prefills: {self.max_num_partial_prefills}"
         )
         assert self.scheduler_config.splitwise_role in ["mixed", "prefill", "decode"]
-        # TODO(@wufeisheng): TP and EP need to be supported simultaneously.
-        assert (self.parallel_config.tensor_parallel_size == 1 and self.parallel_config.expert_parallel_size >= 1) or (
-            self.parallel_config.tensor_parallel_size >= 1 and self.parallel_config.expert_parallel_size == 1
-        ), "TP and EP cannot be enabled at the same time"
 
         if not self.cache_config.enable_chunked_prefill:
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -1627,6 +1639,13 @@ class FDConfig:
 
         if self.scheduler_config is not None:
             self.scheduler_config.check()
+
+        # Check graph optimization config
+        if self.graph_opt_config.graph_opt_level > 0:
+            if self.load_config is not None:
+                assert (
+                    self.load_config.dynamic_load_weight is False
+                ), "Static graph cannot be used in RL scene temporarily"
 
         if int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 1:
             assert (

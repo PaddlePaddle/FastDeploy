@@ -35,9 +35,9 @@
 | ```long_prefill_token_threshold``` | `int`       | 开启Chunked Prefill时，请求Token数超过此值的请求被视为长请求，默认为max_model_len*0.04 |
 | ```static_decode_blocks```         | `int`       | 推理过程中，每条请求强制从Prefill的KVCache分配对应块数给Decode使用，默认2|
 | ```reasoning_parser```             | `str`       | 指定要使用的推理解析器，以便从模型输出中提取推理内容 |
-| ```use_cudagraph```                | `bool`      | 是否使用cuda graph，默认False。开启前建议仔细阅读  [graph_optimization.md](./features/graph_optimization.md)，在多卡场景需要同时开启 Custom all-reduce。 |
-| ```graph_optimization_config```    | `dict[str]`       | 可以配置计算图优化相关的参数，默认值为'{"use_cudagraph":false, "graph_opt_level":0, "cudagraph_capture_sizes": null }'，详细说明参考 [graph_optimization.md](./features/graph_optimization.md)|
-| ```enable_custom_all_reduce```     | `bool`      | 开启Custom all-reduce，默认False |
+| ```use_cudagraph```                | `bool`      | __[已废弃]__ 2.3版本开始 CUDAGraph 默认开启，详细说明参考 [graph_optimization.md](./features/graph_optimization.md) |
+| ```graph_optimization_config```    | `dict[str]`       | 可以配置计算图优化相关的参数，默认值为'{"use_cudagraph":true, "graph_opt_level":0}'，详细说明参考 [graph_optimization.md](./features/graph_optimization.md)|
+| ```disable_custom_all_reduce```     | `bool`      | 关闭Custom all-reduce，默认False |
 | ```splitwise_role```               | `str`       | 是否开启splitwise推理，默认值mixed， 支持参数为["mixed", "decode", "prefill"] |
 | ```innode_prefill_ports```         | `str`       | prefill 实例内部引擎启动端口 （仅单机PD分离需要），默认值None |
 | ```guided_decoding_backend```      | `str`       | 指定要使用的guided decoding后端，支持 `auto`、`xgrammar`、`off`, 默认为 `off` |
@@ -46,12 +46,15 @@
 | ```dynamic_load_weight```          | `int`       | 是否动态加载权重，默认0 |
 | ```enable_expert_parallel```       | `bool`      | 是否启用专家并行 |
 | ```enable_logprob```       | `bool`      | 是否启用输出token返回logprob。如果未使用 logrpob，则在启动时可以省略此参数。 |
+| ```logprobs_mode```       | `str`      | 指定logprobs中返回的内容。支持的模式：`raw_logprobs`、`processed_logprobs'、`raw_logits`,`processed_logits'。processed表示logits应用温度、惩罚、禁止词处理后计算的logprobs。|
 | ```served_model_name```       | `str`      | API 中使用的模型名称，如果未指定，模型名称将与--model参数相同 |
 | ```revision```       | `str`      | 自动下载模型时，用于指定模型的Git版本，分支名或tag |
 | ```chat_template```       | `str`      | 指定模型拼接使用的模板，支持字符串与文件路径，默认为None，如未指定，则使用模型默认模板 |
 | ```tool_call_parser```       | `str`      | 指定要使用的function call解析器，以便从模型输出中抽取 function call内容|
 | ```tool_parser_plugin```       | `str`      | 指定要注册的tool parser文件路径，以便注册不在代码库中的parser，parser中代码格式需遵循代码库中格式|
 | ```load_choices```       | `str`      | 默认使用"default" loader进行权重加载，加载torch权重/权重加速需开启 "default_v1"|
+| ```max_encoder_cache```   | `int` | 编码器缓存的最大token数（使用0表示禁用）。 |
+| ```max_processor_cache```  | `int` | 处理器缓存的最大字节数（以GiB为单位，使用0表示禁用）。 |
 
 ## 1. KVCache分配与```num_gpu_blocks_override```、```block_size```的关系？
 

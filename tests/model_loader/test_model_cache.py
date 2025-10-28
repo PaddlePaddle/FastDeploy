@@ -22,6 +22,8 @@ project_root = os.path.abspath(os.path.join(current_dir, ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+os.environ["FD_USE_MACHETE"] = "0"
+
 from tests.model_loader.utils import (
     check_tokens_id_and_text_close,
     form_model_get_output_topp0,
@@ -44,6 +46,8 @@ model_param_map = {
                 "env": {"FD_ENABLE_MODEL_LOAD_CACHE": "1"},
             }
         ],
+        "max_num_seqs": 1,
+        "graph_optimization_config": {"use_cudagraph": False},
     }
 }
 
@@ -59,6 +63,7 @@ for model, cfg in model_param_map.items():
             pytest.param(
                 model,
                 cfg.get("tensor_parallel_size", 1),
+                cfg.get("max_num_seqs", 1),
                 cfg.get("max_model_len", 1024),
                 quant,
                 cfg.get("max_tokens", 32),
@@ -70,13 +75,14 @@ for model, cfg in model_param_map.items():
 
 
 @pytest.mark.parametrize(
-    "model_name_or_path,tensor_parallel_size,max_model_len,quantization,max_tokens,env",
+    "model_name_or_path,tensor_parallel_size,max_num_seqs,max_model_len,quantization,max_tokens,env",
     params,
 )
 def test_model_cache(
     fd_runner,
     model_name_or_path: str,
     tensor_parallel_size: int,
+    max_num_seqs: int,
     max_model_len: int,
     max_tokens: int,
     quantization: str,
@@ -91,6 +97,7 @@ def test_model_cache(
             fd_runner,
             model_path,
             tensor_parallel_size,
+            max_num_seqs,
             max_model_len,
             max_tokens,
             quantization,
@@ -111,6 +118,7 @@ def test_model_cache(
             fd_runner,
             model_path,
             tensor_parallel_size,
+            max_num_seqs,
             max_model_len,
             max_tokens,
             quantization,

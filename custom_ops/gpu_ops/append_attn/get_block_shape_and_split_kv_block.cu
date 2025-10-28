@@ -14,7 +14,9 @@
 #include "cute/tensor.hpp"
 #include "helper.h"
 #include "paddle/extension.h"
+#ifndef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
 #include "paddle/phi/core/memory/memcpy.h"
+#endif
 #include "utils.cuh"
 
 template <int THREADBLOCK_SIZE>
