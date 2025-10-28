@@ -92,5 +92,4 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # 用于debug，指定路径序列化模型权重，空路径表示不序列化
     "FD_DEBUG_SERIALIZE_MODEL_PATH": lambda: os.getenv("FD_DEBUG_SERIALIZE_MODEL_PATH", ""),
 }
-    "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),}
 ```

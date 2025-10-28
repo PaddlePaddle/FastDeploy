@@ -91,6 +91,5 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # Used for debugging, specifying a path to serialize model weights, empty indicates no serialization.
     "FD_DEBUG_SERIALIZE_MODEL_PATH": lambda: os.getenv("FD_DEBUG_SERIALIZE_MODEL_PATH", ""),
-
 }
 ```
