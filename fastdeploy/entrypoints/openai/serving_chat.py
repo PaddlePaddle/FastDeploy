@@ -646,7 +646,7 @@ class OpenAIServingChat:
         num_cached_tokens[idx] = data.get("num_cached_tokens", 0)
         num_input_image_tokens[idx] = data.get("num_input_image_tokens", 0)
         num_input_video_tokens[idx] = data.get("num_input_video_tokens", 0)
-        num_image_tokens[index] = output.get("num_image_tokens", 0)
+        num_image_tokens[idx] = output.get("num_image_tokens", 0)
 
         finish_reason = "stop"
         if has_no_token_limit or previous_num_tokens != max_tokens:
