@@ -592,7 +592,7 @@ class GraphOptimizationConfig:
         self.use_unique_memory_pool: bool = False
 
         """ Whether to use cudagraph for draft model."""
-        self.draft_model_use_cudagraph: bool = True
+        self.draft_model_use_cudagraph: bool = False
 
         self.max_capture_size: int = None
         self.real_shape_to_captured_size: dict[int, int] = None
