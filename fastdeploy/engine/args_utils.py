@@ -216,7 +216,7 @@ class EngineArgs:
     The amount of CPU memory to offload to.
     """
 
-    cache_queue_port: str = "8003"
+    cache_queue_port: str = "0"
     """
     Port for cache queue.
     """
@@ -236,7 +236,7 @@ class EngineArgs:
     Flag to enable the custom all-reduce kernel.
     """
 
-    engine_worker_queue_port: str = "8002"
+    engine_worker_queue_port: str = "0"
     """
     Port for worker queue communication.
     """
@@ -442,8 +442,7 @@ class EngineArgs:
                 raise NotImplementedError("Only CUDA platform supports logprob.")
             if self.speculative_config is not None and self.logprobs_mode.startswith("processed"):
                 raise NotImplementedError("processed_logprobs not support in speculative.")
-        if self.speculative_config is not None:
-            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+
         if self.splitwise_role != "mixed" and self.cache_transfer_protocol != "rdma":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if not current_platform.is_cuda() and not current_platform.is_xpu():

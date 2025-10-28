@@ -72,6 +72,11 @@ class DefaultModelLoader(BaseModelLoader):
             # register rl model
             import fastdeploy.rl  # noqa
 
+            if fd_config.speculative_config.model_type != "mtp":
+                architectures = architectures.replace("Ernie5ForCausalLM", "Ernie5MoeForCausalLM")
+            else:
+                architectures = architectures.replace("Ernie5ForCausalLM", "Ernie5MTPForCausalLM")
+
             architectures = architectures + "RL"
             context = paddle.LazyGuard()
         else:
