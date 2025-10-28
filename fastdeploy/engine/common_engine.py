@@ -268,6 +268,16 @@ class EngineService:
                 num_client=self.cfg.parallel_config.tensor_parallel_size,
                 local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
             )
+            # Dynamically updates the port value if an anonymous port is used
+            self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id] = str(
+                self.engine_worker_queue_server.get_server_port()
+            )
+            address = (
+                self.cfg.master_ip,
+                int(
+                    self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+                ),
+            )
 
             if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
                 self.cache_task_queue = EngineCacheQueue(
@@ -281,6 +291,8 @@ class EngineService:
                     client_id=-1,
                     local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                 )
+                self.cfg.cache_config.cache_queue_port = self.cache_task_queue.get_server_port()
+
         self.llm_logger.info(
             f"local {min(self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,self.cfg.parallel_config.data_parallel_size - 1)}"
         )
@@ -538,6 +550,7 @@ class EngineService:
                 chunk_grid_thw = grid_thw[grid_thw_st : grid_thw_st + chunk_image_num[idx]]
                 chunk_patch_num = np.sum(np.prod(chunk_grid_thw, axis=1))
                 chunk_images = inputs["images"][patch_st : patch_st + chunk_patch_num]
+                chunk_position_ids = inputs["position_ids"][input_ids_st : input_ids_st + chunk_seq_len[idx]]
 
                 chunks_info.append(
                     {
@@ -546,7 +559,7 @@ class EngineService:
                         "image_type_ids": (chunk_image_type_ids if chunk_image_type_ids.shape[0] else None),
                         "grid_thw": (chunk_grid_thw if chunk_grid_thw.shape[0] else None),
                         "images": (chunk_images if chunk_images.shape[0] else None),
-                        "position_ids": None,
+                        "position_ids": chunk_position_ids,
                     }
                 )
 
@@ -633,13 +646,9 @@ class EngineService:
                     int(self.resource_manager.available_batch()),
                     self.cfg.max_prefill_batch,
                 )
-                if self.cfg.model_config.enable_mm:
-                    available_blocks = self.resource_manager.available_block_num()
-                else:
-                    available_blocks = self.cfg.cache_config.max_block_num_per_seq
 
                 tasks = self.scheduler.get_requests(
-                    available_blocks=available_blocks,
+                    available_blocks=self.cfg.cache_config.max_block_num_per_seq,
                     block_size=self.cfg.cache_config.block_size,
                     reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
                     max_num_batched_tokens=self.cfg.model_config.max_model_len,
