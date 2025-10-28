@@ -130,7 +130,7 @@ class CustomAllreduce:
             rank = dist.get_rank(group=group)
         lib = cuda_wrapper.CudaRTLibrary()
         lib.cudaFree(ctypes.c_void_p(pointers[rank]))
-        
+
     def should_custom_ar(self, inp: paddle.Tensor):
         """
         Determines whether a custom AllReduce (AR) operation should be used for the input tensor.
