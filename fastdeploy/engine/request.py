@@ -47,6 +47,12 @@ class RequestType(Enum):
 
 
 @dataclass
+class ImagePosition:
+    offset: int = 0
+    length: int = 0
+
+
+@dataclass
 class Request:
     def __init__(
         self,

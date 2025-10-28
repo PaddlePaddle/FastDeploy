@@ -28,7 +28,7 @@ import requests
 FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8133))
 FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
-FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8234))
+FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 
 # List of ports to clean before and after tests
 PORTS_TO_CLEAN = [
@@ -36,6 +36,10 @@ PORTS_TO_CLEAN = [
     FD_ENGINE_QUEUE_PORT,
     FD_METRICS_PORT,
     FD_CACHE_QUEUE_PORT,
+    FD_API_PORT + 1,
+    FD_ENGINE_QUEUE_PORT + 1,
+    FD_METRICS_PORT + 1,
+    FD_CACHE_QUEUE_PORT + 1,
 ]
 
 
@@ -92,16 +96,22 @@ def setup_and_run_server():
     print("Pre-test port cleanup...")
     clean_ports()
 
+    print("log dir clean ")
+    if os.path.exists("log") and os.path.isdir("log"):
+        shutil.rmtree("log")
+
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        model_path = os.path.join(base_path, "ernie-4_5-21b-a3b-bf16-paddle")
+        model_path = os.path.join(base_path, "ERNIE-4.5-0.3B-Paddle")
     else:
-        model_path = "./ernie-4_5-21b-a3b-bf16-paddle"
-    mtp_model_path = os.path.join(model_path, "mtp")
-    speculative_config = {"method": "mtp", "num_speculative_tokens": 1, "model": mtp_model_path}
+        model_path = "./ERNIE-4.5-0.3B-Paddle"
 
-    log_path = "server.log"
-    cmd = [
+    # prefill实例
+    env_prefill = os.environ.copy()
+    env_prefill["CUDA_VISIBLE_DEVICES"] = "0"
+    env_prefill["INFERENCE_MSG_QUEUE_ID"] = str(FD_API_PORT)
+    prefill_log_path = "server.log"
+    prefill_cmd = [
         sys.executable,
         "-m",
         "fastdeploy.entrypoints.openai.api_server",
@@ -110,7 +120,7 @@ def setup_and_run_server():
         "--port",
         str(FD_API_PORT),
         "--tensor-parallel-size",
-        "2",
+        "1",
         "--engine-worker-queue-port",
         str(FD_ENGINE_QUEUE_PORT),
         "--metrics-port",
@@ -118,37 +128,80 @@ def setup_and_run_server():
         "--cache-queue-port",
         str(FD_CACHE_QUEUE_PORT),
         "--max-model-len",
-        "32768",
+        "8192",
         "--max-num-seqs",
-        "128",
+        "20",
         "--quantization",
-        "wint4",
-        "--speculative-config",
-        json.dumps(speculative_config),
+        "wint8",
+        "--splitwise-role",
+        "prefill",
     ]
 
     # Start subprocess in new process group
-    # 清除log目录
-    if os.path.exists("log"):
-        shutil.rmtree("log")
-    with open(log_path, "w") as logfile:
-        process = subprocess.Popen(
-            cmd,
+    with open(prefill_log_path, "w") as logfile:
+        process_prefill = subprocess.Popen(
+            prefill_cmd,
             stdout=logfile,
             stderr=subprocess.STDOUT,
             start_new_session=True,  # Enables killing full group via os.killpg
+            env=env_prefill,
+        )
+
+    # decode实例
+    env_decode = os.environ.copy()
+    env_decode["CUDA_VISIBLE_DEVICES"] = "1"
+    env_decode["INFERENCE_MSG_QUEUE_ID"] = str(FD_API_PORT + 1)
+    env_decode["FD_LOG_DIR"] = "decode_log"
+    decode_log_path = "decode_server.log"
+    decode_cmd = [
+        sys.executable,
+        "-m",
+        "fastdeploy.entrypoints.openai.api_server",
+        "--model",
+        model_path,
+        "--port",
+        str(FD_API_PORT + 1),
+        "--tensor-parallel-size",
+        "1",
+        "--engine-worker-queue-port",
+        str(FD_ENGINE_QUEUE_PORT + 1),
+        "--metrics-port",
+        str(FD_METRICS_PORT + 1),
+        "--cache-queue-port",
+        str(FD_CACHE_QUEUE_PORT + 1),
+        "--max-model-len",
+        "8192",
+        "--max-num-seqs",
+        "20",
+        "--quantization",
+        "wint8",
+        "--splitwise-role",
+        "decode",
+    ]
+
+    # Start subprocess in new process group
+    with open(decode_log_path, "w") as logfile:
+        process_decode = subprocess.Popen(
+            decode_cmd,
+            stdout=logfile,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,  # Enables killing full group via os.killpg
+            env=env_decode,
         )
 
     # Wait up to 300 seconds for API server to be ready
     for _ in range(300):
         if is_port_open("127.0.0.1", FD_API_PORT):
-            print(f"Server is up on port {FD_API_PORT}")
-            break
+            if is_port_open("127.0.0.1", FD_API_PORT + 1):
+                print(f"Prefill server is up on port {FD_API_PORT}")
+                print(f"Decode server is up on port {FD_API_PORT + 1}")
+                break
         time.sleep(1)
     else:
         print("[TIMEOUT] API server failed to start in 5 minutes. Cleaning up...")
         try:
-            os.killpg(process.pid, signal.SIGTERM)
+            os.killpg(process_prefill.pid, signal.SIGTERM)
+            os.killpg(process_decode.pid, signal.SIGTERM)
             clean_ports()
         except Exception as e:
             print(f"Failed to kill process group: {e}")
@@ -158,9 +211,11 @@ def setup_and_run_server():
 
     print("\n===== Post-test server cleanup... =====")
     try:
-        os.killpg(process.pid, signal.SIGTERM)
+        os.killpg(process_prefill.pid, signal.SIGTERM)
+        os.killpg(process_decode.pid, signal.SIGTERM)
         clean_ports()
-        print(f"server (pid={process.pid}) terminated")
+        print(f"Prefill server (pid={process_prefill.pid}) terminated")
+        print(f"Decode server (pid={process_decode.pid}) terminated")
     except Exception as e:
         print(f"Failed to terminate API server: {e}")
 
@@ -170,7 +225,7 @@ def api_url(request):
     """
     Returns the API endpoint URL for chat completions.
     """
-    return f"http://0.0.0.0:{FD_API_PORT}/v1/chat/completions"
+    return f"http://0.0.0.0:{FD_API_PORT}/v1/chat/completions", f"http://0.0.0.0:{FD_API_PORT + 1}/v1/chat/completions"
 
 
 @pytest.fixture(scope="session")
@@ -187,6 +242,13 @@ def headers():
     Returns common HTTP request headers.
     """
     return {"Content-Type": "application/json"}
+
+
+def test_metrics_config(metrics_url):
+    timeout = 600
+    url = metrics_url.replace("metrics", "config-info")
+    res = requests.get(url, timeout=timeout)
+    assert res.status_code == 200
 
 
 def send_request(url, payload, timeout=600):
@@ -250,12 +312,26 @@ def test_chat_usage_stream(api_url):
         "stream_options": {"include_usage": True, "continuous_usage_stats": True},
         "metadata": {"min_tokens": 10},
     }
+    p_url, d_url = api_url
 
-    response = send_request(url=api_url, payload=payload)
+    response = send_request(url=p_url, payload=payload)
     chunks = get_stream_chunks(response)
     result = "".join([x["choices"][0]["delta"]["content"] for x in chunks[:-1]])
     print("Prefill Response:", result)
     assert result != "", "结果为空"
+    usage = chunks[-1]["usage"]
+    total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
+    assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
+    assert payload["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
+    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
+
+    response = send_request(url=d_url, payload=payload)
+    chunks = get_stream_chunks(response)
+    result = "".join([x["choices"][0]["delta"]["content"] for x in chunks[:-1]])
+    print("Decode Response:", result)
+    assert result != "", "结果为空"
+    # for idx, chunk in enumerate(chunks):
+    #     print(f"\nchunk[{idx}]:\n{json.dumps(chunk, indent=2, ensure_ascii=False)}")
     usage = chunks[-1]["usage"]
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
     assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
@@ -278,8 +354,18 @@ def test_chat_usage_non_stream(api_url):
         "stream": False,
         "metadata": {"min_tokens": 10},
     }
+    p_url, d_url = api_url
 
-    response = send_request(url=api_url, payload=payload).json()
+    response = send_request(url=p_url, payload=payload).json()
+    usage = response["usage"]
+    result = response["choices"][0]["message"]["content"]
+    assert result != "", "结果为空"
+    total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
+    assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
+    assert payload["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
+    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
+
+    response = send_request(url=d_url, payload=payload).json()
     usage = response["usage"]
     result = response["choices"][0]["message"]["content"]
     assert result != "", "结果为空"
@@ -302,12 +388,25 @@ def test_non_chat_usage_stream(api_url):
         "stream_options": {"include_usage": True, "continuous_usage_stats": True},
         "metadata": {"min_tokens": 10},
     }
-    api_url = api_url.replace("chat/completions", "completions")
+    p_url, d_url = api_url
+    p_url = p_url.replace("chat/completions", "completions")
+    d_url = d_url.replace("chat/completions", "completions")
 
-    response = send_request(url=api_url, payload=payload)
+    response = send_request(url=p_url, payload=payload)
     chunks = get_stream_chunks(response)
     result = "".join([x["choices"][0]["text"] for x in chunks[:-1]])
     # print("Prefill Response:", result)
+    assert result != "", "结果为空"
+    usage = chunks[-1]["usage"]
+    total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
+    assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
+    assert payload["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
+    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
+
+    response = send_request(url=d_url, payload=payload)
+    chunks = get_stream_chunks(response)
+    result = "".join([x["choices"][0]["text"] for x in chunks[:-1]])
+    # print("Decode Response:", result)
     assert result != "", "结果为空"
     usage = chunks[-1]["usage"]
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
@@ -328,12 +427,23 @@ def test_non_chat_usage_non_stream(api_url):
         "stream": False,
         "metadata": {"min_tokens": 10},
     }
-    api_url = api_url.replace("chat/completions", "completions")
+    p_url, d_url = api_url
+    p_url = p_url.replace("chat/completions", "completions")
+    d_url = d_url.replace("chat/completions", "completions")
 
-    response = send_request(url=api_url, payload=payload).json()
+    response = send_request(url=p_url, payload=payload).json()
     usage = response["usage"]
     result = response["choices"][0]["text"]
     # print("Prefill Response:", result)
+    assert result != "", "结果为空"
+    total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
+    assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
+    assert payload["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
+    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
+
+    response = send_request(url=d_url, payload=payload).json()
+    usage = response["usage"]
+    result = response["choices"][0]["text"]
     assert result != "", "结果为空"
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
     assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"

@@ -185,7 +185,7 @@ async def lifespan(app: FastAPI):
         max_model_len=args.max_model_len,
         tensor_parallel_size=args.tensor_parallel_size,
         pid=pid,
-        port=int(args.engine_worker_queue_port[args.local_data_parallel_id]),
+        port=int(os.environ.get("INFERENCE_MSG_QUEUE_ID", "0")),
         limit_mm_per_prompt=args.limit_mm_per_prompt,
         mm_processor_kwargs=args.mm_processor_kwargs,
         reasoning_parser=args.reasoning_parser,
@@ -195,6 +195,7 @@ async def lifespan(app: FastAPI):
         tool_parser=args.tool_call_parser,
         enable_prefix_caching=args.enable_prefix_caching,
         splitwise_role=args.splitwise_role,
+        max_processor_cache=args.max_processor_cache,
     )
     await engine_client.connection_manager.initialize()
     app.state.dynamic_load_weight = args.dynamic_load_weight
