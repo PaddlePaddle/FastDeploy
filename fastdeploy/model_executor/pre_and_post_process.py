@@ -15,7 +15,7 @@
 """
 
 import queue
-from typing import Dict, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 import paddle
@@ -85,7 +85,7 @@ else:
         speculate_limit_thinking_content_length_v2,
     )
 
-from fastdeploy.output.pooler import PoolerOutput
+from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
 from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput, SamplerOutput
 
@@ -239,7 +239,7 @@ def pre_process(
     )
 
 
-def _build_stream_transfer_data(output_tokens: np.ndarray, pooler_outputs: None):
+def _build_stream_transfer_data(output_tokens: np.ndarray, pooler_outputs: List[PoolingSequenceGroupOutput] = None):
     """Split output_tokens and output"""
 
     stream_transfer_datas = []
