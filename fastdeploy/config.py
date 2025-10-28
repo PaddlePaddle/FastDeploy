@@ -583,6 +583,7 @@ class GraphOptimizationConfig:
         only to the layer where CUDA graph functionality is required.
         """
         self.cudagraph_splitting_ops: list[str] = []
+        self.cudagraph_only_prefill: bool = False
         """ Whether to use a full cuda graph for the entire forward pass rather than
         splitting certain operations such as attention into subgraphs.
         Thus this flag cannot be used together with splitting_ops."""
