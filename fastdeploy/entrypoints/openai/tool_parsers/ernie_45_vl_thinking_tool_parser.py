@@ -241,12 +241,13 @@ class Ernie45VLThinkingToolParser(ToolParser):
 
         if self.tool_call_start_token_id not in current_token_ids:
             return DeltaMessage(content=delta_text)
-        # Skip empty chunks
-        if len(delta_text.strip()) == 0:
-            return None
 
         if self.valid is not None and not self.valid:
             return DeltaMessage(content=delta_text)
+
+        # Skip empty chunks
+        if len(delta_text.strip()) == 0:
+            return None
 
         try:
             delta = None
@@ -256,8 +257,8 @@ class Ernie45VLThinkingToolParser(ToolParser):
             # Process the buffer content
             if "<tool_call>" in delta_text:
                 if self.valid is None:
-                    tool_call_begin = self.buffer.find(self.tool_call_start_token)
-                    prefix = self.buffer[:tool_call_begin]
+                    tool_call_begin = current_text.find(self.tool_call_start_token)
+                    prefix = current_text[:tool_call_begin]
                     prefix = prefix.strip("\n")
                     if len(prefix) > 0 and not prefix.endswith("</think>"):
                         self.valid = False

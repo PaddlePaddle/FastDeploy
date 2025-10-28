@@ -71,36 +71,33 @@ class Ernie45VLThinkingReasoningParser(ReasoningParser):
         - 'abc' goes to reasoning_content
         - 'xyz' goes to content
         """
+        if self.think_end_token not in current_text:
+            return DeltaMessage(reasoning_content=delta_text)
         # Skip single special tokens
         if len(delta_token_ids) == 1 and delta_token_ids[0] == self.think_end_token_id:
             return None
-        if not self._is_with_tool(current_text=current_text, current_token_ids=current_token_ids):
+        if self._is_with_tool(current_text=current_text, current_token_ids=current_token_ids):
             if self.think_end_token in delta_text:
-                reasoning_content, _, content = delta_text.partition(self.think_end_token)
-                return (
-                    DeltaMessage(reasoning_content=reasoning_content, content=content)
-                    if reasoning_content
-                    else DeltaMessage(content=content)
-                )
-            return DeltaMessage(content=delta_text)
-        if self.think_end_token_id in delta_token_ids:
-            end_index = delta_text.find(self.think_end_token)
-            reasoning_content = delta_text[:end_index]
-            index = end_index + len(self.think_end_token)
-            content = delta_text[index:]
-            if self.tool_begin_token_id in delta_token_ids:
-                prefix_content, _, _ = content.partition(self.tool_begin_token)
-                prefix = prefix_content.lstrip("\n")
-                if len(prefix) > 0:
-                    return DeltaMessage(reasoning_content=reasoning_content, content=content)
-                return DeltaMessage(reasoning_content=reasoning_content) if reasoning_content else None
-            strip_content = content.lstrip("\n")
-            if len(strip_content) > 0:
-                return DeltaMessage(reasoning_content=reasoning_content, content=content)
-            return DeltaMessage(reasoning_content=reasoning_content) if reasoning_content else None
-        elif self.think_end_token_id in previous_token_ids:
+                think_begin = delta_text.find(self.think_end_token)
+                reasoning_content = delta_text[:think_begin]
+                return DeltaMessage(reasoning_content=reasoning_content)
             return None
-        return DeltaMessage(reasoning_content=delta_text)
+        if self.think_end_token in delta_text:
+            reasoning_content, _, content = delta_text.partition(self.think_end_token)
+            striped_content = content.strip("\n")
+            if len(striped_content) == 0:
+                return DeltaMessage(reasoning_content=reasoning_content) if reasoning_content else None
+            return (
+                DeltaMessage(reasoning_content=reasoning_content, content=content)
+                if reasoning_content
+                else DeltaMessage(content=content)
+            )
+        think_end = current_text.find(self.think_end_token) + len(self.think_end_token)
+        suffix = current_text[think_end:]
+        striped_suffix = suffix.strip("\n")
+        if len(striped_suffix) == 0:
+            return None
+        return DeltaMessage(content=delta_text)
 
     def extract_reasoning_content(
         self, model_output: str, request: ChatCompletionRequest
@@ -130,8 +127,6 @@ class Ernie45VLThinkingReasoningParser(ReasoningParser):
 
     def _is_with_tool(self, current_text: str, current_token_ids: Sequence[int]) -> bool:
         think_end_index = current_text.find(self.think_end_token)
-        if think_end_index == -1:
-            return True
         think_end = think_end_index + len(self.think_end_token)
         middle_str = current_text[think_end:]
         if self.tool_begin_token_id in current_token_ids:
@@ -140,7 +135,4 @@ class Ernie45VLThinkingReasoningParser(ReasoningParser):
             if len(striped_prefix) > 0:
                 return False
             return True
-        striped_str = middle_str.strip("\n")
-        if len(striped_str) > 0:
-            return False
-        return True
+        return False
