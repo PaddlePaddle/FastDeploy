@@ -857,8 +857,7 @@ def post_process_pooling(
             )
 
     if not skip_save_output:
-        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-            if save_each_rank or model_output.mp_rank == 0:
-                output = _build_stream_transfer_data(output_tokens=None, pooler_outputs=pooler_output.outputs)
+        if save_each_rank or model_output.mp_rank == 0:
+            output = _build_stream_transfer_data(output_tokens=None, pooler_outputs=pooler_output.outputs)
 
-                async_output_queue.put(output)
+            async_output_queue.put(output)

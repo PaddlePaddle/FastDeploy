@@ -940,7 +940,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.cache_config.enable_chunked_prefill and "encode" in supported_tasks:
             supported_tasks.remove("encode")
 
-            logger.warning(
+            logger.debug(
                 "Chunked prefill is not supported with "
                 "encode task which using ALL pooling. "
                 "Please turn off chunked prefill by export=FD_DISABLE_CHUNKED_PREFILL=1 before using it."
@@ -1537,6 +1537,11 @@ class GPUModelRunner(ModelRunnerBase):
 
         req_num_tokens = num_tokens // num_reqs
 
+        print("num_tokens", num_tokens)
+        print("max_num_seqs", max_num_seqs)
+        print("num_reqs", num_reqs)
+        print("min_tokens_per_req", min_tokens_per_req)
+        print("num_scheduled_token_list", num_scheduled_tokens_list)
         dummy_prompt_lens = paddle.to_tensor(num_scheduled_tokens_list, dtype="int64")
         dummy_token_ids = paddle.zeros(
             [num_reqs, req_num_tokens],
