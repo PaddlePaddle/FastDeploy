@@ -34,12 +34,10 @@ import numpy as np
 import paddle
 from tqdm import tqdm
 
-from fastdeploy.config import ErnieArchitectures
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.common_engine import EngineService
 from fastdeploy.engine.expert_service import start_data_parallel_service
 from fastdeploy.engine.request import Request
-from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
@@ -88,14 +86,6 @@ class LLMEngine:
         self.running = True
         self.is_started = False
 
-        self.input_processor = InputPreprocessor(
-            cfg.tokenizer,
-            cfg.structured_outputs_config.reasoning_parser,
-            cfg.limit_mm_per_prompt,
-            cfg.mm_processor_kwargs,
-            cfg.model_config.enable_mm,
-            cfg.tool_parser,
-        )
         self.engine = EngineService(cfg)
 
         if self.cfg.cache_config.num_gpu_blocks_override is None:
@@ -119,17 +109,17 @@ class LLMEngine:
         self.ipc_signal_suffix = self.cfg.parallel_config.engine_worker_queue_port[0]
         self._init_worker_signals()
 
-        self.data_processor = self.input_processor.create_processor()
-        self.engine.data_processor = self.data_processor
         # Launch components: scheduler, cache_manager, expert_service et.al.
         self.launch_components()
 
         self.engine.start()
+        self.engine.create_data_processor()
+        self.data_processor = self.engine.data_processor
 
         # If block numer is specified and model is deployed in mixed mode, start cache manager first
         if not self.do_profile and self.cfg.scheduler_config.splitwise_role != "mixed":
             device_ids = self.cfg.parallel_config.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix, True)
+            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
         # Start workers
         self.worker_proc = self._start_worker_service()
@@ -163,7 +153,7 @@ class LLMEngine:
             self._stop_profile()
         elif self.cfg.cache_config.enable_prefix_caching:
             device_ids = self.cfg.parallel_config.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix, False)
+            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
         # Launch components: scheduler, cache_manager, expert_service et.al.
         if self.cfg.scheduler_config.splitwise_role != "mixed":
@@ -248,7 +238,7 @@ class LLMEngine:
         chat_template_kwargs = kwargs.get("chat_template_kwargs") or {}
         chat_template_kwargs["chat_template"] = kwargs.get("chat_template")
         kwargs["chat_template_kwargs"] = chat_template_kwargs
-        request = self.data_processor.process_request(request, self.cfg.model_config.max_model_len, **kwargs)
+        request = self.engine.data_processor.process_request(request, self.cfg.model_config.max_model_len, **kwargs)
         request.prompt_token_ids_len = len(request.prompt_token_ids)
         request.need_prefill_tokens = request.prompt_token_ids_len
         input_ids_len = request.prompt_token_ids_len
@@ -386,6 +376,7 @@ class LLMEngine:
         exit sub services
         """
         self.running = False
+        llm_logger.info("Engine shut down, exiting sub services...")
 
         if hasattr(self, "cache_manager_processes"):
             self.engine.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
@@ -404,6 +395,7 @@ class LLMEngine:
 
         if hasattr(self, "get_profile_block_num_signal"):
             self.get_profile_block_num_signal.clear()
+
         if hasattr(self, "worker_proc") and self.worker_proc is not None:
             try:
                 pgid = os.getpgid(self.worker_proc.pid)
@@ -413,6 +405,7 @@ class LLMEngine:
 
         if hasattr(self, "zmq_server") and self.zmq_server is not None:
             self.zmq_server.close()
+
         if hasattr(self, "dp_processed"):
             for p in self.dp_processed:
                 console_logger.info(f"Waiting for worker {p.pid} to exit")
@@ -428,7 +421,6 @@ class LLMEngine:
             "ENABLE_FASTDEPLOY_LOAD_MODEL_CONCURRENCY": 0,
             "LOAD_STATE_DICT_THREAD_NUM": len(self.cfg.parallel_config.device_ids.split(",")),
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
-            "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
             "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 1024)),
         }
@@ -485,18 +477,18 @@ class LLMEngine:
         py_script = os.path.join(current_dir_path, worker_path)
 
         ori_vocab_size = (
-            len(self.data_processor.tokenizer.sp_model)
-            if hasattr(self.data_processor.tokenizer, "sp_model")
-            else len(self.data_processor.tokenizer.vocab)
+            len(self.engine.data_processor.tokenizer.sp_model)
+            if hasattr(self.engine.data_processor.tokenizer, "sp_model")
+            else len(self.engine.data_processor.tokenizer.vocab)
         )
 
-        is_ernie = ErnieArchitectures.contains_ernie_arch(self.cfg.model_config.architectures)
-        if is_ernie:
-            self.cfg.model_config.think_end_id = self.data_processor.tokenizer.get_vocab().get("</think>", -1)
-            if self.cfg.model_config.think_end_id != -1:
-                llm_logger.info(f"Get think_end_id {self.cfg.model_config.think_end_id} from vocab.")
-            else:
-                llm_logger.info("No </think> token found in vocabulary, the model can not do reasoning.")
+        think_end_id = self.data_processor.tokenizer.get_vocab().get("</think>", -1)
+        if think_end_id > 0:
+            llm_logger.info(f"Get think_end_id {think_end_id} from vocab.")
+        else:
+            llm_logger.info("No </think> token found in vocabulary, the model can not do reasoning.")
+        image_patch_id = self.data_processor.tokenizer.get_vocab().get("<|IMAGE_PLACEHOLDER|>", -1)
+        line_break_id = self.data_processor.tokenizer.get_vocab().get("\n", -1)
 
         ports = ",".join(self.cfg.parallel_config.engine_worker_queue_port)
         ips = None
@@ -514,8 +506,8 @@ class LLMEngine:
             f" --total_block_num {self.cfg.cache_config.total_block_num}"
             f" --block_size {self.cfg.cache_config.block_size}"
             f" --enc_dec_block_num {self.cfg.cache_config.enc_dec_block_num}"
-            f" --eos_tokens_lens {self.data_processor.eos_token_id_len}"
-            f" --pad_token_id {self.data_processor.pad_token_id}"
+            f" --eos_tokens_lens {self.engine.data_processor.eos_token_id_len}"
+            f" --pad_token_id {self.engine.data_processor.pad_token_id}"
             f" --engine_pid {self.cfg.parallel_config.engine_worker_queue_port[0]}"
             f" --max_num_batched_tokens {self.cfg.scheduler_config.max_num_batched_tokens}"
             f" --splitwise_role {self.cfg.scheduler_config.splitwise_role}"
@@ -524,7 +516,9 @@ class LLMEngine:
             f" --data_parallel_size {self.cfg.parallel_config.data_parallel_size}"
             f" --quantization '{json.dumps(self.cfg.model_config.quantization)}'"
             f" --ori_vocab_size {ori_vocab_size}"
-            f" --think_end_id {self.cfg.model_config.think_end_id}"
+            f" --think_end_id {think_end_id}"
+            f" --image_patch_id {image_patch_id}"
+            f" --line_break_id {line_break_id}"
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
             f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.structured_outputs_config.guided_decoding_backend}"
@@ -534,10 +528,12 @@ class LLMEngine:
             f" --load_choices {self.cfg.load_config.load_choices}"
             f" --plas_attention_config '{self.cfg.plas_attention_config.to_json_string()}'"
             f" --ips {ips}"
+            f" --max_encoder_cache {self.cfg.cache_config.max_encoder_cache}"
             f" --cache-transfer-protocol {self.cfg.cache_config.cache_transfer_protocol}"
             f" --runner {self.cfg.model_config.runner}"
             f" --convert {self.cfg.model_config.convert}"
             f" --override-pooler-config {self.cfg.model_config.override_pooler_config}"
+            f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
         )
 
         worker_append_flag = {
@@ -612,7 +608,7 @@ class LLMEngine:
         for result in self._get_generated_tokens(req_id):
             is_end = result.finished
             if stream and not is_end:
-                processed = self.data_processor.process_response(result)
+                processed = self.engine.data_processor.process_response(result)
                 if processed is None:
                     continue
                 output = processed.to_dict()
@@ -620,7 +616,7 @@ class LLMEngine:
 
             # Exit loop if termination condition is met
             if is_end:
-                processed = self.data_processor.process_response(result)
+                processed = self.engine.data_processor.process_response(result)
                 output = processed.to_dict()
                 llm_logger.debug(f"Generate result: {output}")
                 if not stream:
@@ -644,9 +640,7 @@ class LLMEngine:
         self.engine.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
             device_ids = self.cfg.parallel_config.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(
-                device_ids, self.ipc_signal_suffix, self.cfg.scheduler_config.splitwise_role != "mixed"
-            )
+            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
     def check_health(self, time_interval_threashold=30):
         """

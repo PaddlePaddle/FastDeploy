@@ -1,7 +1,12 @@
+import time
 import unittest
 from unittest.mock import AsyncMock, MagicMock
 
-from fastdeploy.engine.request import PoolingOutput, PoolingRequestOutput
+from fastdeploy.engine.request import (
+    PoolingOutput,
+    PoolingRequestOutput,
+    RequestMetrics,
+)
 from fastdeploy.entrypoints.openai.protocol import (
     EmbeddingChatRequest,
     EmbeddingCompletionRequest,
@@ -27,6 +32,7 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
             prompt_token_ids=[1, 2, 3],
             finished=True,
             outputs=PoolingOutput(data=[0.1, 0.2, 0.3]),
+            metrics=RequestMetrics(arrival_time=time.time()),
         )
         mock_response_queue.get = AsyncMock(
             return_value=[
@@ -69,14 +75,14 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
 
     def test_request_to_batch_dicts(self):
         test_cases = [
-            ("string input", EmbeddingCompletionRequest(input="hello"), ["hello"], ["req-1-0"]),
-            ("list of ints", EmbeddingCompletionRequest(input=[1, 2, 3]), [[1, 2, 3]], ["req-1-0"]),
-            ("list of strings", EmbeddingCompletionRequest(input=["a", "b"]), ["a", "b"], ["req-1-0", "req-1-1"]),
+            ("string input", EmbeddingCompletionRequest(input="hello"), ["hello"], ["req-1_0"]),
+            ("list of ints", EmbeddingCompletionRequest(input=[1, 2, 3]), [[1, 2, 3]], ["req-1_0"]),
+            ("list of strings", EmbeddingCompletionRequest(input=["a", "b"]), ["a", "b"], ["req-1_0", "req-1_1"]),
             (
                 "list of list of ints",
                 EmbeddingCompletionRequest(input=[[1, 2], [3, 4]]),
                 [[1, 2], [3, 4]],
-                ["req-1-0", "req-1-1"],
+                ["req-1_0", "req-1_1"],
             ),
         ]
 
@@ -90,7 +96,7 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
                 result = self.embedding_service._request_to_batch_dicts(ctx)
                 self.assertEqual(len(result), len(expected_prompts))
                 for r, prompt, rid in zip(result, expected_prompts, expected_ids):
-                    print(f"assertEqual r:{r} prompt:{prompt} rid:{rid}")
+                    # print(f"assertEqual r:{r} prompt:{prompt} rid:{rid}")
                     self.assertEqual(r["prompt"], prompt)
                     self.assertEqual(r["request_id"], rid)
 

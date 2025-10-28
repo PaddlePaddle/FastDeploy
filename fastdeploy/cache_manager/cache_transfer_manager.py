@@ -190,8 +190,18 @@ class CacheTransferManager:
 
     def _init_gpu_cache(self, args):
 
+        try:
+            assert not args.create_cache_tensor
+        except:
+            logger.warn(
+                f"In current implementation, cache transfer manager do not create cache tensors at all, "
+                f"meaning create_cache_tensor should be False, while we got {args.create_cache_tensor}. "
+                f"Cache tensor creation will occur in: 1) model runner in case of mixed deployment; "
+                f"or 2) cache messager in case of disaggregation deployment. "
+                f"Please check the codes and make sure they work correctly."
+            )
         if not args.create_cache_tensor:
-            logger.info(f"[rank {self.rank}/{self.n_ranks}] Waiting for runners to create kv cache.")
+            logger.info(f"[rank {self.rank}/{self.n_ranks}] Waiting for runners or messagers to create kv cache.")
             while self.cache_ready_signal.value[self.rank] != 1:
                 time.sleep(0.1)
             logger.info(f"[rank {self.rank}/{self.n_ranks}] OK! Stop waiting.")
@@ -223,7 +233,7 @@ class CacheTransferManager:
             self.gpu_cache_v_tensors.append(self.gpu_cache_kvs[val_name])
 
         if args.create_cache_tensor:
-            logger.info("[rank {self.rank}/{self.n_ranks}] ✅ kv cache is ready!")
+            logger.info(f"[rank {self.rank}/{self.n_ranks}] ✅ kv cache is ready!")
             self.cache_ready_signal.value[self.rank] = 1
 
         cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in self.gpu_cache_kvs.items()])
@@ -507,6 +517,7 @@ class CacheTransferManager:
         )
         while True:
             if kv_cache_status_signal.value[0] == KVCacheStatus.CLEARING:
+                assert args.splitwise_role == "mixed", "Only mixed mode supports clearing cache."
                 try:
                     logger.info(
                         f"[rank {self.rank}/{self.n_ranks}] Start clearing caches {self.cache_ready_signal.value}"
@@ -551,6 +562,7 @@ class CacheTransferManager:
                     logger.error(f"[rank {self.rank}/{self.n_ranks}] Failed to clear caches: {e}")
 
             elif kv_cache_status_signal.value[0] == KVCacheStatus.UPDATING:
+                assert args.splitwise_role == "mixed", "Only mixed mode supports updating cache."
                 try:
                     logger.info(
                         f"[rank {self.rank}/{self.n_ranks}] Start restoring caches {self.cache_ready_signal.value}"

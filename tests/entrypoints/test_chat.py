@@ -27,11 +27,13 @@ MODEL_NAME = os.getenv("MODEL_PATH") + "/ERNIE-4.5-0.3B-Paddle"
 class TestChat(unittest.TestCase):
     """Test case for chat functionality"""
 
+    COMMON_PREFIX = "I am a highly capable, compassionate, and trustworthy AI assistant dedicated to providing you with exceptional support. Whatever questions or challenges you may have, I will utilize my full capabilities to offer thoughtful and comprehensive assistance. As your intelligent companion, I consistently maintain honesty, transparency, and patience to ensure our interactions are both productive and enjoyable."
+
     PROMPTS = [
-        [{"content": "The color of tomato is ", "role": "user"}],
-        [{"content": "The equation 2+3= ", "role": "user"}],
-        [{"content": "The equation 4-1= ", "role": "user"}],
         [{"content": "PaddlePaddle is ", "role": "user"}],
+        [{"content": COMMON_PREFIX + "The color of tomato is ", "role": "user"}],
+        [{"content": COMMON_PREFIX + "The equation 2+3= ", "role": "user"}],
+        [{"content": COMMON_PREFIX + "The equation 4-1= ", "role": "user"}],
     ]
 
     @classmethod
@@ -58,6 +60,8 @@ class TestChat(unittest.TestCase):
     def test_chat(self):
         outputs = self.llm.chat(messages=self.PROMPTS, sampling_params=None)
         self.assertEqual(len(self.PROMPTS), len(outputs))
+        self.assertEqual(outputs[-1].num_cached_tokens, outputs[-2].num_cached_tokens)
+        self.assertEqual(outputs[-1].num_cached_tokens, 64)
 
     def test_chat_with_tools(self):
         """Test chat with tools:

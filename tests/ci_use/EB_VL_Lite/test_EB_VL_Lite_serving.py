@@ -34,6 +34,8 @@ FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8234))
 # List of ports to clean before and after tests
 PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT]
 
+os.environ["FD_USE_MACHETE"] = "0"
+
 
 def is_port_open(host: str, port: int, timeout=1.0):
     """
@@ -236,9 +238,9 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     # base result
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2")
+        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2-fp32")
     else:
-        base_file = "ernie-4_5-vl-base-tp2"
+        base_file = "ernie-4_5-vl-base-tp2-fp32"
     with open(base_file, "r") as f:
         content2 = f.read()
 

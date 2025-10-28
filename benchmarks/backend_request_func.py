@@ -112,6 +112,7 @@ async def async_request_eb_openai_chat_completions(
         output = RequestFuncOutput()
         output.prompt_len = 0
         output.no = request_func_input.no
+        request_id = "None"
 
         ttft = 0.0
         st = time.perf_counter()
@@ -127,10 +128,13 @@ async def async_request_eb_openai_chat_completions(
 
                         chunk = chunk_bytes.decode("utf-8").removeprefix("data: ")
                         if chunk != "[DONE]":
-                            # print("####chunk:", chunk, type(chunk))
+                            #print("####chunk:", chunk, type(chunk))
                             timestamp = time.perf_counter()
                             data = json.loads(chunk)
 
+                            if request_id == "None" and "id" in data:
+                                request_id = data["id"]
+                            
                             if choices := data.get("choices"):
                                 content = choices[0]["delta"].get("content")
                                 reason_content = choices[0]["delta"].get("reasoning_content")
@@ -139,9 +143,12 @@ async def async_request_eb_openai_chat_completions(
                                     ttft = timestamp - st
                                     output.ttft = ttft
                                     # cached_tokens
-                                    output.prompt_len = (
-                                        data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
-                                    )
+                                    if data["usage"] and data["usage"].get("prompt_tokens_details", {}):
+                                        output.prompt_len = (
+                                            data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                                        )
+                                    else:
+                                        output.prompt_len = 0
 
                                 # Decoding phase
                                 else:
@@ -153,6 +160,7 @@ async def async_request_eb_openai_chat_completions(
                             elif usage := data.get("usage", {}):
                                 output.output_tokens = usage.get("completion_tokens", 0)
                                 output.prompt_tokens = usage.get("prompt_tokens", 0)
+                            
 
                             most_recent_timestamp = timestamp
 
@@ -175,11 +183,12 @@ async def async_request_eb_openai_chat_completions(
                     )
                     output.error = error_text or ""
                     output.success = False
-                output.request_id = data.get("id", "")
         except Exception:
             output.success = False
             exc_info = sys.exc_info()
             output.error = "".join(traceback.format_exception(*exc_info))
+
+        output.request_id = request_id
 
         # 保存失败请求结果
         if not output.success:

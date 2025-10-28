@@ -24,6 +24,7 @@ from typing import Any, Dict, Generic, Optional, Union
 import numpy as np
 from typing_extensions import TypeVar
 
+from fastdeploy import envs
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
@@ -46,6 +47,12 @@ class RequestType(Enum):
 
 
 @dataclass
+class ImagePosition:
+    offset: int = 0
+    length: int = 0
+
+
+@dataclass
 class Request:
     def __init__(
         self,
@@ -57,10 +64,10 @@ class Request:
         history: Optional[list[list[str]]],
         tools: Optional[list[Dict]],
         system: Optional[Union[str, list[str]]],
-        sampling_params: Optional[SamplingParams],
-        pooling_params: Optional[PoolingParams],
         eos_token_ids: Optional[list[int]],
         arrival_time: float,
+        sampling_params: Optional[SamplingParams] = None,
+        pooling_params: Optional[PoolingParams] = None,
         preprocess_start_time: Optional[float] = None,
         preprocess_end_time: Optional[float] = None,
         multimodal_inputs: Optional[dict] = None,
@@ -285,11 +292,20 @@ class Request:
             setattr(self, key, value)
 
     def __repr__(self) -> str:
-        non_none_fields = []
-        for attr, value in vars(self).items():
-            if value is not None and not attr.startswith("_"):
-                non_none_fields.append(f"{attr}={value!r}")
-        return f"Request({', '.join(non_none_fields)})"
+        """Safe string representation that ignores private and None fields."""
+        try:
+            if not envs.FD_DEBUG:
+                return f"Request(request_id={self.request_id})"
+            else:
+                attrs_snapshot = dict(vars(self))
+                non_none_fields = [
+                    f"{attr}={value!r}"
+                    for attr, value in attrs_snapshot.items()
+                    if value is not None and not attr.startswith("_")
+                ]
+                return f"Request({', '.join(non_none_fields)})"
+        except Exception as e:
+            return f"<{self.__class__.__name__} repr failed: {e}>"
 
 
 @dataclass(slots=True)
@@ -308,6 +324,7 @@ class CompletionOutput:
     decode_type: int = 0
     logprob: Optional[float] = None
     top_logprobs: Optional[LogprobsLists] = None
+    draft_top_logprobs: Optional[LogprobsLists] = None
     logprobs: Optional[SampleLogprobs] = None
     draft_token_ids: list[int] = None
     text: Optional[str] = None
@@ -325,6 +342,7 @@ class CompletionOutput:
             "decode_type": self.decode_type,
             "logprob": self.logprob,
             "top_logprobs": self.top_logprobs,
+            "draft_top_logprobs": self.draft_top_logprobs,
             "logprobs": self.logprobs,
             "draft_token_ids": self.draft_token_ids,
             "text": self.text,
@@ -350,6 +368,8 @@ class CompletionOutput:
             f"draft_token_ids={self.draft_token_ids}, "
             f"reasoning_content={self.reasoning_content!r}, "
             f"logprobs={self.logprobs}, "
+            f"top_logprobs={self.top_logprobs}, "
+            f"draft_top_logprobs={self.draft_top_logprobs}, "
         )
 
 
@@ -434,6 +454,7 @@ class RequestOutput:
         request_id: str,
         prompt: Optional[str] = None,
         prompt_token_ids: Optional[list[int]] = None,
+        output_type: Optional[int] = 3,
         outputs: CompletionOutput = None,
         finished: bool = False,
         metrics: Optional[RequestMetrics] = None,
@@ -444,6 +465,7 @@ class RequestOutput:
         self.request_id = request_id
         self.prompt = prompt
         self.prompt_token_ids = prompt_token_ids
+        self.output_type = output_type
         self.outputs = outputs
         self.finished = finished
         self.metrics = metrics
@@ -472,12 +494,21 @@ class RequestOutput:
             self.outputs.top_logprobs.logprob_token_ids.extend(next_output.outputs.top_logprobs.logprob_token_ids)
             self.outputs.top_logprobs.logprobs.extend(next_output.outputs.top_logprobs.logprobs)
             self.outputs.top_logprobs.sampled_token_ranks.extend(next_output.outputs.top_logprobs.sampled_token_ranks)
+        if next_output.outputs.draft_top_logprobs is not None:
+            self.outputs.draft_top_logprobs.logprob_token_ids.extend(
+                next_output.outputs.draft_top_logprobs.logprob_token_ids
+            )
+            self.outputs.draft_top_logprobs.logprobs.extend(next_output.outputs.draft_top_logprobs.logprobs)
+            self.outputs.draft_top_logprobs.sampled_token_ranks.extend(
+                next_output.outputs.draft_top_logprobs.sampled_token_ranks
+            )
 
     def __repr__(self) -> str:
         return (
             f"RequestOutput(request_id={self.request_id}, "
             f"prompt={self.prompt!r}, "
             f"prompt_token_ids={self.prompt_token_ids}, "
+            f"output_type={self.output_type}, "
             f"outputs={self.outputs}, "
             f"finished={self.finished}, "
             f"num_cached_tokens={self.num_cached_tokens}, "
@@ -498,6 +529,7 @@ class RequestOutput:
             "request_id": self.request_id,
             "prompt": self.prompt,
             "prompt_token_ids": self.prompt_token_ids,
+            "output_type": self.output_type,
             "outputs": None if self.outputs is None else self.outputs.to_dict(),
             "metrics": None if self.metrics is None else self.metrics.to_dict(),
             "finished": self.finished,
@@ -523,6 +555,9 @@ class PoolingOutput:
     def __eq__(self, other: object) -> bool:
         return isinstance(other, self.__class__) and bool((self.data == other.data).all())
 
+    def to_dict(self):
+        return {"data": self.data}
+
 
 _O = TypeVar("_O", default=PoolingOutput)
 
@@ -543,21 +578,30 @@ class PoolingRequestOutput(Generic[_O]):
     outputs: _O
     prompt_token_ids: list[int]
     finished: bool
+    metrics: Optional[RequestMetrics] = (None,)
+    error_code: Optional[int] = (200,)
+    error_msg: Optional[str] = (None,)
 
     def __repr__(self):
         return (
             f"{type(self).__name__}(request_id={self.request_id!r}, "
             f"outputs={self.outputs!r}, "
             f"prompt_token_ids={self.prompt_token_ids}, "
-            f"finished={self.finished})"
+            f"finished={self.finished}, "
+            f"metrics={self.metrics}, "
+            f"error_code={self.error_code}, "
+            f"error_msg={self.error_msg})"
         )
 
     def to_dict(self):
         return {
             "request_id": self.request_id,
-            "outputs": {"data": self.outputs.data},
+            "outputs": None if self.outputs is None else self.outputs.to_dict(),
             "prompt_token_ids": self.prompt_token_ids,
             "finished": self.finished,
+            "metrics": None if self.metrics is None else self.metrics.to_dict(),
+            "error_code": self.error_code,
+            "error_msg": self.error_msg,
         }
 
     @classmethod

@@ -177,7 +177,7 @@ def calculate_metrics(
             output_len = outputs[i].output_tokens
 
             if not output_len:
-                print("no output_len")
+                print("no output_len", outputs[i])
                 # We use the tokenizer to count the number of output tokens
                 # for some serving backends instead of looking at
                 # len(outputs[i].itl) since multiple output tokens may be
@@ -635,7 +635,7 @@ def benchmark_metrics(
     goodput_config_dict = check_goodput_args(args)
 
     metrics, actual_output_lens = calculate_metrics(
-        input_requests=input_requests,
+        # input_requests=input_requests,
         outputs=outputs,
         dur_s=benchmark_duration,
         selected_percentiles=selected_percentiles,

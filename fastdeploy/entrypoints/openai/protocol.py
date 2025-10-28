@@ -60,6 +60,14 @@ class ErrorInfo(BaseModel):
     code: Optional[str] = None
 
 
+class CompletionTokenUsageInfo(BaseModel):
+    """
+    completion token usage info.
+    """
+
+    reasoning_tokens: Optional[int] = None
+
+
 class PromptTokenUsageInfo(BaseModel):
     """
     Prompt-related token usage info.
@@ -77,6 +85,7 @@ class UsageInfo(BaseModel):
     total_tokens: int = 0
     completion_tokens: Optional[int] = 0
     prompt_tokens_details: Optional[PromptTokenUsageInfo] = None
+    completion_tokens_details: Optional[CompletionTokenUsageInfo] = None
 
 
 class ModelPermission(BaseModel):
@@ -205,6 +214,7 @@ class ChatCompletionResponseChoice(BaseModel):
     index: int
     message: ChatMessage
     logprobs: Optional[LogProbs] = None
+    draft_logprobs: Optional[LogProbs] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop"]]
 
 
@@ -265,6 +275,7 @@ class ChatCompletionResponseStreamChoice(BaseModel):
     index: int
     delta: DeltaMessage
     logprobs: Optional[LogProbs] = None
+    draft_logprobs: Optional[LogProbs] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]] = None
     arrival_time: Optional[float] = None
 
@@ -295,6 +306,7 @@ class CompletionResponseChoice(BaseModel):
     completion_tokens: Optional[str] = None
     arrival_time: Optional[float] = None
     logprobs: Optional[CompletionLogprobs] = None
+    draft_logprobs: Optional[CompletionLogprobs] = None
     reasoning_content: Optional[str] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls"]]
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
@@ -333,6 +345,7 @@ class CompletionResponseStreamChoice(BaseModel):
     text: str
     arrival_time: float = None
     logprobs: Optional[CompletionLogprobs] = None
+    draft_logprobs: Optional[CompletionLogprobs] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
     prompt_tokens: Optional[str] = None
@@ -420,6 +433,7 @@ class CompletionRequest(BaseModel):
     echo: Optional[bool] = False
     frequency_penalty: Optional[float] = Field(default=None, ge=-2, le=2)
     logprobs: Optional[int] = None
+    include_draft_logprobs: Optional[bool] = False
     # For logits and logprobs post processing
     temp_scaled_logprobs: bool = False
     top_p_normalized_logprobs: bool = False
@@ -456,6 +470,8 @@ class CompletionRequest(BaseModel):
     max_streaming_response_tokens: Optional[int] = None
     return_token_ids: Optional[bool] = None
     prompt_token_ids: Optional[Union[List[int], List[List[int]]]] = None
+
+    mm_hashes: Optional[list] = None
     # doc: end-completion-extra-params
 
     def to_dict_for_infer(self, request_id=None, prompt=None):
@@ -513,6 +529,9 @@ class CompletionRequest(BaseModel):
             if item is not None:
                 req_dict[key] = item
 
+        if self.mm_hashes is not None and len(self.mm_hashes) > 0:
+            req_dict["mm_hashes"] = self.mm_hashes
+
         return req_dict
 
     @model_validator(mode="before")
@@ -539,6 +558,9 @@ class CompletionRequest(BaseModel):
                 "('guided_json', 'guided_regex', 'guided_choice', 'guided_grammar')."
             )
 
+        if data.get("mm_hashes", None):
+            assert isinstance(data["mm_hashes"], list), "`mm_hashes` must be a list."
+
         return data
 
 
@@ -555,6 +577,7 @@ class ChatCompletionRequest(BaseModel):
     frequency_penalty: Optional[float] = Field(None, le=2, ge=-2)
     logprobs: Optional[bool] = False
     top_logprobs: Optional[int] = 0
+    include_draft_logprobs: Optional[bool] = False
 
     # For logits and logprobs post processing
     temp_scaled_logprobs: bool = False
@@ -603,6 +626,8 @@ class ChatCompletionRequest(BaseModel):
     prompt_token_ids: Optional[List[int]] = None
     max_streaming_response_tokens: Optional[int] = None
     disable_chat_template: Optional[bool] = False
+
+    mm_hashes: Optional[list] = None
     completion_token_ids: Optional[List[int]] = None
     # doc: end-chat-completion-extra-params
 
@@ -679,6 +704,9 @@ class ChatCompletionRequest(BaseModel):
             if item is not None:
                 req_dict[key] = item
 
+        if self.mm_hashes is not None and len(self.mm_hashes) > 0:
+            req_dict["mm_hashes"] = self.mm_hashes
+
         return req_dict
 
     @model_validator(mode="before")
@@ -705,6 +733,9 @@ class ChatCompletionRequest(BaseModel):
                 "You can only use one kind of guided decoding "
                 "('guided_json', 'guided_regex', 'guided_choice', 'guided_grammar', 'structural_tag')."
             )
+
+        if data.get("mm_hashes", None):
+            assert isinstance(data["mm_hashes"], list), "`mm_hashes` must be a list."
 
         return data
 

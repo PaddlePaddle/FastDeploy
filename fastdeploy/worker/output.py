@@ -223,26 +223,6 @@ class ModelOutputData:
     accept_num: paddle.Tensor
 
     """
-        vl model enable to think
-    """
-    enable_thinking: paddle.Tensor = None
-
-    """
-        vl model think end id
-    """
-    think_end_id: int = -1
-
-    """
-        vl model need to think
-    """
-    need_think_end: paddle.Tensor = None
-
-    """
-        vl model reasoning index
-    """
-    reasoning_index: paddle.Tensor = None
-
-    """
         the token ids of stop sequence
     """
     stop_token_ids: paddle.Tensor = None

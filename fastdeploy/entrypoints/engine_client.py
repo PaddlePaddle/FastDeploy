@@ -37,7 +37,6 @@ from fastdeploy.inter_communicator import (
     ZmqIpcClient,
 )
 from fastdeploy.metrics.work_metrics import work_process_metrics
-from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import (
     EngineError,
@@ -62,7 +61,6 @@ class EngineClient:
         port,
         limit_mm_per_prompt,
         mm_processor_kwargs,
-        # enable_mm=False,
         reasoning_parser=None,
         data_parallel_size=1,
         enable_logprob=False,
@@ -70,20 +68,18 @@ class EngineClient:
         tool_parser=None,
         enable_prefix_caching=None,
         splitwise_role=None,
+        max_processor_cache=0,
     ):
-        architectures = ModelConfig({"model": model_name_or_path}).architectures[0]
-        if MultimodalRegistry.contains_model(architectures):
-            self.enable_mm = True
-        else:
-            self.enable_mm = False
-
+        model_config = ModelConfig({"model": model_name_or_path})
+        self.enable_mm = model_config.enable_mm
+        enable_processor_cache = self.enable_mm and max_processor_cache > 0
         input_processor = InputPreprocessor(
-            tokenizer,
+            model_config,
             reasoning_parser,
             limit_mm_per_prompt,
             mm_processor_kwargs,
-            self.enable_mm,
             tool_parser,
+            enable_processor_cache,
         )
         self.enable_logprob = enable_logprob
         self.reasoning_parser = reasoning_parser
@@ -92,6 +88,13 @@ class EngineClient:
         self.enable_prefix_caching = enable_prefix_caching
         self.enable_splitwise = splitwise_role != "mixed"
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+
+        if self.enable_mm and self.enable_prefix_caching:
+            from fastdeploy.cache_manager.cache_data import (
+                is_mm_model_disable_prefix_cache,
+            )
+
+            self.disable_prefix_mm = is_mm_model_disable_prefix_cache(model_config)
 
         if tensor_parallel_size <= max_chips_per_node:
             self.is_master = True
@@ -159,6 +162,16 @@ class EngineClient:
         await self.add_requests(prompts)
         return prompts["prompt_token_ids"]
 
+    def _check_mm_disable_prefix_cache(self, task):
+        is_multimodal_data = False
+        if self.disable_prefix_mm:
+            multimodal_inputs = task.get("multimodal_inputs", [])
+            if multimodal_inputs:
+                token_type_ids = multimodal_inputs.get("token_type_ids", [])
+                if token_type_ids:
+                    is_multimodal_data = np.sum(token_type_ids) > 0
+        return is_multimodal_data
+
     async def add_requests(self, task):
         """
         Add a new request to the queue.
@@ -180,6 +193,16 @@ class EngineClient:
                 await self.data_processor.process_request_dict(task, self.max_model_len)
             else:
                 self.data_processor.process_request_dict(task, self.max_model_len)
+
+            if self.enable_mm and self.enable_prefix_caching:
+                if self._check_mm_disable_prefix_cache(task):
+                    api_server_logger.error(
+                        "The current service does not support processing requests containing multimodal data when prefix cache is enabled. Please send only text-based requests or disable prefix cache"
+                    )
+                    raise EngineError(
+                        "The current service does not support processing requests containing multimodal data when prefix cache is enabled. Please send only text-based requests or disable prefix cache",
+                        error_code=400,
+                    )
 
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]

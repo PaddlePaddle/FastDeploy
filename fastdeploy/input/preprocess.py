@@ -24,7 +24,7 @@ from fastdeploy.reasoning import ReasoningParserManager
 class InputPreprocessor:
     """
     Args:
-    model_name_or_path (str):
+    model_config (ModelConfig):
         Model name or path to the pretrained model. If a model name is provided, it should be a
         key in the Hugging Face Transformers' model registry (https://huggingface.co/models).
         The model will be downloaded from the Hugging Face model hub if necessary.
@@ -32,8 +32,6 @@ class InputPreprocessor:
     reasoning_parser (str, optional):
         Reasoning parser type. Defaults to None.
         Flag specifies the reasoning parser to use for extracting reasoning content from the model output
-    enable_mm (bool, optional):
-        Whether to use the multi-modal model processor. Defaults to False.
 
     Raises:
         ValueError:
@@ -43,32 +41,22 @@ class InputPreprocessor:
 
     def __init__(
         self,
-        model_name_or_path: str,
+        model_config: ModelConfig,
         reasoning_parser: str = None,
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
         mm_processor_kwargs: Optional[Dict[str, Any]] = None,
-        enable_mm: bool = False,
         tool_parser: str = None,
+        enable_processor_cache: bool = False,
     ) -> None:
-
-        self.model_name_or_path = model_name_or_path
+        self.model_config = model_config
+        self.model_name_or_path = self.model_config.model
         self.reasoning_parser = reasoning_parser
-        self.enable_mm = enable_mm
         self.limit_mm_per_prompt = limit_mm_per_prompt
         self.mm_processor_kwargs = mm_processor_kwargs
         self.tool_parser = tool_parser
+        self.enable_processor_cache = enable_processor_cache
 
     def create_processor(self):
-        """
-            创建数据处理器。如果启用了多模态注册表，则使用该表中的模型；否则，使用传递给构造函数的模型名称或路径。
-        返回值：DataProcessor（如果不启用多模态注册表）或MultiModalRegistry.Processor（如果启用多模态注册表）。
-
-        Args:
-            无参数。
-
-        Returns:
-            DataProcessor or MultiModalRegistry.Processor (Union[DataProcessor, MultiModalRegistry.Processor]): 数据处理器。
-        """
         reasoning_parser_obj = None
         tool_parser_obj = None
 
@@ -77,8 +65,7 @@ class InputPreprocessor:
         if self.tool_parser:
             tool_parser_obj = ToolParserManager.get_tool_parser(self.tool_parser)
 
-        config = ModelConfig({"model": self.model_name_or_path})
-        architectures = config.architectures[0]
+        architecture = self.model_config.architectures[0]
 
         try:
             from fastdeploy.plugins.input_processor import load_input_processor_plugins
@@ -90,8 +77,8 @@ class InputPreprocessor:
                 tool_parser_obj=tool_parser_obj,
             )
         except:
-            if not self.enable_mm:
-                if not ErnieArchitectures.contains_ernie_arch(architectures):
+            if not self.model_config.enable_mm:
+                if not ErnieArchitectures.contains_ernie_arch(architecture):
                     from fastdeploy.input.text_processor import DataProcessor
 
                     self.processor = DataProcessor(
@@ -108,7 +95,7 @@ class InputPreprocessor:
                         tool_parser_obj=tool_parser_obj,
                     )
             else:
-                if ErnieArchitectures.contains_ernie_arch(architectures):
+                if ErnieArchitectures.contains_ernie_arch(architecture):
                     from fastdeploy.input.ernie4_5_vl_processor import (
                         Ernie4_5_VLProcessor,
                     )
@@ -119,15 +106,41 @@ class InputPreprocessor:
                         mm_processor_kwargs=self.mm_processor_kwargs,
                         reasoning_parser_obj=reasoning_parser_obj,
                         tool_parser_obj=tool_parser_obj,
+                        enable_processor_cache=self.enable_processor_cache,
+                    )
+                elif "PaddleOCRVL" in architecture:
+                    from fastdeploy.input.paddleocr_vl_processor import (
+                        PaddleOCRVLProcessor,
+                    )
+
+                    self.processor = PaddleOCRVLProcessor(
+                        config=self.model_config,
+                        model_name_or_path=self.model_name_or_path,
+                        limit_mm_per_prompt=self.limit_mm_per_prompt,
+                        mm_processor_kwargs=self.mm_processor_kwargs,
+                        reasoning_parser_obj=reasoning_parser_obj,
+                    )
+                elif "PaddleOCRVL" in architecture:
+                    from fastdeploy.input.paddleocr_vl_processor import (
+                        PaddleOCRVLProcessor,
+                    )
+
+                    self.processor = PaddleOCRVLProcessor(
+                        config=self.model_config,
+                        model_name_or_path=self.model_name_or_path,
+                        limit_mm_per_prompt=self.limit_mm_per_prompt,
+                        mm_processor_kwargs=self.mm_processor_kwargs,
+                        reasoning_parser_obj=reasoning_parser_obj,
                     )
                 else:
                     from fastdeploy.input.qwen_vl_processor import QwenVLProcessor
 
                     self.processor = QwenVLProcessor(
-                        config=config,
+                        config=self.model_config,
                         model_name_or_path=self.model_name_or_path,
                         limit_mm_per_prompt=self.limit_mm_per_prompt,
                         mm_processor_kwargs=self.mm_processor_kwargs,
                         reasoning_parser_obj=reasoning_parser_obj,
+                        enable_processor_cache=self.enable_processor_cache,
                     )
         return self.processor
