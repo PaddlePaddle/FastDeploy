@@ -38,7 +38,6 @@ unset http_proxy
 unset https_proxy
 unset no_proxy
 
-#0731新增kv block集中式管理相关测试，在起服务时启用对应环境变量 export ENABLE_V1_KVCACHE_SCHEDULER=True
 # 起服务
 rm -rf log/*
 rm -f core*
