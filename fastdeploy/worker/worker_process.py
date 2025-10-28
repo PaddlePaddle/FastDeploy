@@ -814,6 +814,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     architecture = fd_config.model_config.architectures[0]
     if "PaddleOCR" in architecture:
         envs.FD_ENABLE_MAX_PREFILL = 1
+        fd_config.cache_config.enable_prefix_caching = False
+        fd_config.cache_config.max_encoder_cache = 0
     return fd_config
 
 
