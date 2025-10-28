@@ -35,7 +35,7 @@ class TestSetupLogging(unittest.TestCase):
         # 统一 patch 环境变量
         self.patches = [
             patch("fastdeploy.envs.FD_LOG_DIR", self.temp_dir),
-            patch("fastdeploy.envs.FD_DEBUG", "0"),
+            patch("fastdeploy.envs.FD_DEBUG", 0),
             patch("fastdeploy.envs.FD_LOG_BACKUP_COUNT", "3"),
         ]
         [p.start() for p in self.patches]
@@ -74,7 +74,7 @@ class TestSetupLogging(unittest.TestCase):
     # 调试级别开关
     # -------------------------------------------------
     def test_debug_level(self):
-        with patch("fastdeploy.envs.FD_DEBUG", "1"):
+        with patch("fastdeploy.envs.FD_DEBUG", 1):
             setup_logging()
             logger = logging.getLogger("fastdeploy")
             self.assertEqual(logger.level, logging.DEBUG)

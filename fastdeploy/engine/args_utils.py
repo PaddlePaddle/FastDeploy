@@ -16,6 +16,7 @@
 
 import argparse
 import json
+import os
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional, Union
@@ -52,6 +53,16 @@ def nullable_str(x: str) -> Optional[str]:
     Convert an empty string to None, preserving other string values.
     """
     return x if x else None
+
+
+def get_model_architecture(model: str, model_config_name: Optional[str] = "config.json") -> Optional[str]:
+    config_path = os.path.join(model, model_config_name)
+    if os.path.exists(config_path):
+        model_config = json.load(open(config_path, "r", encoding="utf-8"))
+        architecture = model_config["architectures"][0]
+        return architecture
+    else:
+        return model
 
 
 @dataclass
@@ -439,6 +450,9 @@ class EngineArgs:
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if self.guided_decoding_backend != "off":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+
+        if "PaddleOCR" in get_model_architecture(self.model, self.model_config_name):
+            envs.FD_ENABLE_MAX_PREFILL = 1
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:

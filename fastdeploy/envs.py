@@ -27,7 +27,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Log directory.
     "FD_LOG_DIR": lambda: os.getenv("FD_LOG_DIR", "log"),
     # Whether to use debug mode, can set 0 or 1
-    "FD_DEBUG": lambda: os.getenv("FD_DEBUG", "0"),
+    "FD_DEBUG": lambda: int(os.getenv("FD_DEBUG", "0")),
     # Number of days to keep fastdeploy logs.
     "FD_LOG_BACKUP_COUNT": lambda: os.getenv("FD_LOG_BACKUP_COUNT", "7"),
     # Model download source, can set "AISTUDIO", "MODELSCOPE" or "HUGGINGFACE".

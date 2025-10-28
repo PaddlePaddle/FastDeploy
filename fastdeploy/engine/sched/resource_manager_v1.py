@@ -340,7 +340,6 @@ class ResourceManagerV1(ResourceManager):
         if not self.config.model_config.enable_mm:
             return num_new_tokens
 
-        request.with_image = False
         inputs = request.multimodal_inputs
         if inputs.get("patch_idx", None) is not None and inputs.get("patch_map", None) is not None:
             pre_end_idx = request.num_computed_tokens

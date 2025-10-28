@@ -30,7 +30,7 @@ from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.utils import current_package_version, envs
 
-if envs.FD_DEBUG != "1":
+if envs.FD_DEBUG != 1:
     import logging
 
     pf_logger.logger.setLevel(logging.INFO)

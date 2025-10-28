@@ -14,25 +14,20 @@
 # limitations under the License.
 """
 
+import os
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-from paddle.nn.functional.flash_attention import flash_attn_unpadded
 from paddleformers.transformers.activations import ACT2FN
 from paddleformers.transformers.model_utils import PretrainedModel
 
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import slice_fn
 
-try:
-    from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
-except:
-    flash_attention_v3_varlen = None
-
-from .config import PPOCRVisionConfig
+from .config import PaddleOCRVisionConfig
 
 
 def rotate_half(x):
@@ -61,22 +56,51 @@ def apply_rotary_pos_emb_vision(x, cos, sin):
     return x_embed.astype(orig_dtype)
 
 
-class QKVLinear(nn.Linear):
-    def __init__(self, config, in_features, out_features, weight_attr=None, bias_attr=None):
-        super().__init__(in_features, out_features, weight_attr, bias_attr)
+class SiglipAttention(nn.Layer):
+    def __init__(self, config):
+        super().__init__()
         self.config = config
-        self.in_features = in_features
-        self.out_features = out_features
         self.embed_dim = config.hidden_size
         self.num_heads = config.num_attention_heads
         self.head_dim = self.embed_dim // self.num_heads
         assert self.head_dim * self.num_heads == self.embed_dim
-        self.weight.weight_loader = self.weight_loader
-        self.bias.weight_loader = self.weight_loader
+        self.scale = self.head_dim**-0.5
 
-    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        # qkv_linear
+        self.qkv_proj = nn.Linear(self.embed_dim, self.embed_dim * 3, bias_attr=True)
+        self.qkv_proj.weight.weight_loader = self.qkv_weight_loader
+        self.qkv_proj.bias.weight_loader = self.qkv_weight_loader
+
+        # out_linear
+        self.out_proj = nn.Linear(self.embed_dim, self.embed_dim)
+        self.out_proj.weight.weight_loader = self.out_proj_weight_loader
+
+        enable_fa3 = False
+        flash_attn_version = int(os.environ.get("FLAGS_flash_attn_version", "2"))
+        if flash_attn_version == 3:
+            prop = paddle.device.cuda.get_device_properties()
+            cc = prop.major * 10 + prop.minor
+            is_current_sm_supported = cc >= 90
+            is_paddle_supported = any(num >= 90 for num in paddle.version.cuda_archs())
+            enable_fa3 = is_current_sm_supported and is_paddle_supported
+
+        if enable_fa3:
+            from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
+
+            self.flash_attn_func = flash_attention_v3_varlen
+            self.flash_attn_kwargs = {}
+        else:
+            from paddle.nn.functional.flash_attention import flash_attn_unpadded
+
+            self.flash_attn_func = flash_attn_unpadded
+            self.flash_attn_kwargs = {"scale": self.scale, "training": False}
+
+    def qkv_weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         # Tensor parallelism splits the weight along the output_dim
         loaded_weight = get_tensor(loaded_weight)
+        if loaded_weight.dim() == 2:
+            loaded_weight = loaded_weight.transpose([1, 0])
+
         if not param._is_initialized():
             param.initialize()
         if loaded_shard_id == "q":
@@ -90,7 +114,7 @@ class QKVLinear(nn.Linear):
             param_shard_offset = self.num_heads * self.head_dim * 2
             param_shard_size = self.num_heads * self.head_dim
 
-        param = slice_fn(param, self.out_features, start=param_shard_offset, end=param_shard_offset + param_shard_size)
+        param = slice_fn(param, -1, start=param_shard_offset, end=param_shard_offset + param_shard_size)
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
@@ -102,30 +126,19 @@ class QKVLinear(nn.Linear):
                 loaded_weight = loaded_weight.cast(param.dtype)
         param.copy_(loaded_weight, False)
 
-
-class SiglipAttention(nn.Layer):
-    def __init__(self, config):
-        super().__init__()
-        self.config = config
-        self.embed_dim = config.hidden_size
-        self.num_heads = config.num_attention_heads
-        self.head_dim = self.embed_dim // self.num_heads
-        assert self.head_dim * self.num_heads == self.embed_dim
-        self.scale = self.head_dim**-0.5
-
-        self.qkv_proj = QKVLinear(config, self.embed_dim, self.embed_dim * 3, bias_attr=True)
-        self.out_proj = nn.Linear(self.embed_dim, self.embed_dim)
-
-        prop = paddle.device.cuda.get_device_properties()
-        cc = prop.major * 10 + prop.minor
-        is_current_sm_supported = cc >= 90
-        is_paddle_supported = any(num >= 90 for num in paddle.version.cuda_archs())
-        if is_current_sm_supported and is_paddle_supported:
-            self.flash_attn_func = flash_attention_v3_varlen
-            self.flash_attn_kwargs = {}
-        else:
-            self.flash_attn_func = flash_attn_unpadded
-            self.flash_attn_kwargs = {"scale": self.scale, "training": False}
+    def out_proj_weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        loaded_weight = get_tensor(loaded_weight)
+        loaded_weight = loaded_weight.transpose([1, 0])
+        assert param.shape == loaded_weight.shape, (
+            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+        )
+        # Ensure loaded weight dtype matches model param dtype
+        if loaded_weight.dtype != param.dtype:
+            if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
+                loaded_weight = loaded_weight.view(param.dtype)
+            else:
+                loaded_weight = loaded_weight.cast(param.dtype)
+        param.copy_(loaded_weight, False)
 
     def forward(
         self,
@@ -170,7 +183,7 @@ class SiglipAttention(nn.Layer):
         )[0]
         # --------
 
-        attn_output = attn_output.reshape(seq_length, -1)
+        attn_output = attn_output.reshape((seq_length, -1))
         attn_output = self.out_proj(attn_output)
 
         return attn_output
@@ -315,11 +328,28 @@ class SiglipMLP(nn.Layer):
         super().__init__()
         self.config = config
         if config.hidden_act == "gelu_pytorch_tanh":
-            config.hidden_act = "silu"
+            config.hidden_act = "gelu_new"
+
         self.activation_fn = ACT2FN[config.hidden_act]
 
         self.fc1 = nn.Linear(config.hidden_size, config.intermediate_size)
+        self.fc1.weight.weight_loader = self.weight_loader
         self.fc2 = nn.Linear(config.intermediate_size, config.hidden_size)
+        self.fc2.weight.weight_loader = self.weight_loader
+
+    def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
+        loaded_weight = get_tensor(loaded_weight)
+        loaded_weight = loaded_weight.transpose([1, 0])
+        assert param.shape == loaded_weight.shape, (
+            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+        )
+        # Ensure loaded weight dtype matches model param dtype
+        if loaded_weight.dtype != param.dtype:
+            if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
+                loaded_weight = loaded_weight.view(param.dtype)
+            else:
+                loaded_weight = loaded_weight.cast(param.dtype)
+        param.copy_(loaded_weight, False)
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         hidden_states = self.fc1(hidden_states)
@@ -576,7 +606,7 @@ class SiglipEncoder(nn.Layer):
 class SiglipMultiheadAttentionPoolingHead(nn.Layer):
     """Multihead Attention Pooling."""
 
-    def __init__(self, config: PPOCRVisionConfig):
+    def __init__(self, config: PaddleOCRVisionConfig):
         super().__init__()
 
         self.probe = self.create_parameter(
@@ -601,7 +631,7 @@ class SiglipMultiheadAttentionPoolingHead(nn.Layer):
 
 
 class SiglipVisionTransformer(nn.Layer):
-    def __init__(self, config: PPOCRVisionConfig):
+    def __init__(self, config: PaddleOCRVisionConfig):
         super().__init__()
         self.config = config
         embed_dim = config.hidden_size
@@ -666,10 +696,10 @@ class SiglipVisionTransformer(nn.Layer):
 
 
 class SiglipVisionModel(PretrainedModel):
-    config_class = PPOCRVisionConfig
+    config_class = PaddleOCRVisionConfig
     main_input_name = "pixel_values"
 
-    def __init__(self, config: PPOCRVisionConfig, prefix=""):
+    def __init__(self, config: PaddleOCRVisionConfig, prefix=""):
         super().__init__(config)
         self.prefix_name = prefix
         self.vision_model = SiglipVisionTransformer(config)

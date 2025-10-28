@@ -16,7 +16,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # 是否启用调试模式，可设置为 0 或 1
     "FD_DEBUG":
-    lambda: os.getenv("FD_DEBUG", "0"),
+    lambda: int(os.getenv("FD_DEBUG", "0")),
 
     # FastDeploy 日志保留天数
     "FD_LOG_BACKUP_COUNT":
