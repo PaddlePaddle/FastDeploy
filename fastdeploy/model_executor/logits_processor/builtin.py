@@ -26,7 +26,6 @@ class LogitBiasLogitsProcessor(LogitsProcessor):
     """
 
     def __init__(self, fd_config: FDConfig):
-        self.biases: dict[str, dict[int, float]] = {}  # req_id -> {tok_id -> bias}
         self.device = paddle.device.get_device()
         self.dtype = fd_config.model_config.dtype
         self.batch_ids: list[int] = []
