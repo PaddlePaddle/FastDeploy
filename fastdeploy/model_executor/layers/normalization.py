@@ -29,7 +29,85 @@ else:
 
 from fastdeploy.config import FDConfig
 
-from .utils import get_tensor
+from .utils import get_tensor, is_arch_support_pdl
+
+
+def rmsnorm(
+    input: paddle.Tensor,
+    weight: paddle.Tensor,
+    eps: float = 1e-6,
+    out: Optional[paddle.Tensor] = None,
+    enable_pdl: Optional[bool] = None,
+) -> paddle.Tensor:
+    r"""Root mean square normalization.
+
+    ``out[i] = (input[i] / RMS(input)) * weight[i]``
+
+    Parameters
+    ----------
+    input: paddle.Tensor
+        Input tensor, shape (batch_size, hidden_size).
+    weight: paddle.Tensor
+        Weight tensor, shape (hidden_size,).
+    eps: float
+        Epsilon for numerical stability.
+    out: Optional[paddle.Tensor]
+        The output tensor, if specified, the kernel will update this tensor inplace.
+    enable_pdl: Optional[bool]
+        Whether to enable `programmatic dependent launch
+        <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#programmatic-dependent-launch-and-synchronization>`_
+        If None, will be automatically enabled on Hopper architecture.
+
+    Returns
+    -------
+    output: paddle.Tensor
+        Normalized tensor, shape [batch_size, hidden_size].
+    """
+    from fastdeploy.model_executor.ops.gpu import rmsnorm
+
+    if out is None:
+        out = paddle.empty_like(input)
+    if enable_pdl is None:
+        enable_pdl = is_arch_support_pdl()
+    rmsnorm(out, input, weight, eps, enable_pdl)
+    return out
+
+
+def fused_add_rmsnorm(
+    input: paddle.Tensor,
+    residual: paddle.Tensor,
+    weight: paddle.Tensor,
+    eps: float = 1e-6,
+    enable_pdl: Optional[bool] = None,
+) -> None:
+    r"""Fused add root mean square normalization.
+
+    Step 1:
+    ``residual[i] += input[i]``
+
+    Step 2:
+    ``input[i] = (residual[i] / RMS(residual)) * weight[i]``
+
+    Parameters
+    ----------
+    input: paddle.Tensor
+        Input tensor, shape (batch_size, hidden_size).
+    residual: paddle.Tensor
+        Residual tensor, shape (batch_size, hidden_size).
+    weight: paddle.Tensor
+        Weight tensor, shape (hidden_size,).
+    eps: float
+        Epsilon for numerical stability.
+    enable_pdl: Optional[bool]
+        Whether to enable `programmatic dependent launch
+        <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#programmatic-dependent-launch-and-synchronization>`_
+        If None, will be automatically enabled on Hopper architecture.
+    """
+    from fastdeploy.model_executor.ops.gpu import fused_add_rmsnorm
+
+    if enable_pdl is None:
+        enable_pdl = is_arch_support_pdl()
+    fused_add_rmsnorm(input, residual, weight, eps, enable_pdl)
 
 
 class RMSNorm(nn.Layer):
@@ -152,19 +230,27 @@ class RMSNorm(nn.Layer):
                 return norm_out.astype(x_dtype)
             norm_out = self.norm_func(x, residual_input, self.weight, self.eps)
         else:
-            norm_out = self.norm_func(
-                x,
-                norm_weight=self.weight,
-                norm_bias=None,
-                epsilon=self.eps,
-                begin_norm_axis=self.begin_norm_axis,
-                bias=self.bias,
-                residual=residual_input,
-                quant_scale=(-1 if self.quant_scale is None else self.quant_scale),
-                quant_round_type=self.quant_round_type,
-                quant_max_bound=self.quant_max_bound,
-                quant_min_bound=self.quant_min_bound,
-            )
+            if self.quant_scale is None:
+                if residual_input is not None:
+                    fused_add_rmsnorm(x, residual=residual_input, weight=self.weight, eps=self.eps)
+                    norm_out = (x, residual_input)
+                else:
+                    out = rmsnorm(x, self.weight, self.eps)
+                    norm_out = (out, None)
+            else:
+                norm_out = self.norm_func(
+                    x,
+                    norm_weight=self.weight,
+                    norm_bias=None,
+                    epsilon=self.eps,
+                    begin_norm_axis=self.begin_norm_axis,
+                    bias=self.bias,
+                    residual=residual_input,
+                    quant_scale=(-1 if self.quant_scale is None else self.quant_scale),
+                    quant_round_type=self.quant_round_type,
+                    quant_max_bound=self.quant_max_bound,
+                    quant_min_bound=self.quant_min_bound,
+                )
         if residual_input is not None:
             return norm_out[0].astype(x_dtype), norm_out[1].astype(residual_input_dtype)
         else:

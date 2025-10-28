@@ -402,3 +402,10 @@ def vocab_range_from_per_partition_vocab_size(per_partition_vocab_size: int, ran
 def vocab_range_from_global_vocab_size(global_vocab_size: int, rank: int, world_size: int, offset: int = 0):
     per_partition_vocab_size = divide(global_vocab_size, world_size)
     return vocab_range_from_per_partition_vocab_size(per_partition_vocab_size, rank, offset=offset)
+
+
+@functools.lru_cache(maxsize=1)
+def is_arch_support_pdl() -> bool:
+    # Hopper arch's compute capability == 9.0
+    prop = paddle.device.cuda.get_device_properties()
+    return prop.major >= 9
