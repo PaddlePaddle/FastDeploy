@@ -493,6 +493,7 @@ class MiniMaxM1DecoderLayer(nn.Layer):
         # Linear Attention
         else:  
             attn_output = self.self_attn(layernorm_output, forward_meta)
+        print_tensor_stats(attn_output, f"FD_L{layer_id}:2_After_Attention")
 
         hidden_states_after_attn = (residual_attn * self.layernorm_attention_alpha) + (attn_output * self.layernorm_attention_beta)
         layernorm_output_mlp = self.post_attention_layernorm(hidden_states_after_attn)
