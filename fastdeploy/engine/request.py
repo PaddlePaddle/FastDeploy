@@ -729,3 +729,44 @@ class ScoringRequestOutput(PoolingRequestOutput[ScoringOutput]):
             prompt_token_ids=request_output.prompt_token_ids,
             finished=request_output.finished,
         )
+
+
+@dataclass
+class RewardOutput:
+    """The output data of one reward output of a request.
+
+    Args:
+        reward: The score, which is a list of floats.
+            Its length depends on the hidden dimension of the model.
+    """
+
+    score: list[float]
+
+    @staticmethod
+    def from_base(pooling_output: PoolingOutput):
+        pooled_data = pooling_output.data
+        # if pooled_data.ndim != 1:
+        #     raise ValueError("pooled_data should be a 1-D embedding vector")
+
+        if isinstance(pooled_data, list):
+            return RewardOutput(pooled_data)
+
+        return RewardOutput(pooled_data.tolist())
+
+    @property
+    def hidden_size(self) -> int:
+        return len(self.score)
+
+    def __repr__(self) -> str:
+        return f"RewardOutput(hidden_size={self.hidden_size})"
+
+
+class RewardRequestOutput(PoolingRequestOutput[RewardOutput]):
+    @staticmethod
+    def from_base(request_output: PoolingRequestOutput):
+        return RewardRequestOutput(
+            request_id=request_output.request_id,
+            outputs=RewardOutput.from_base(request_output.outputs),
+            prompt_token_ids=request_output.prompt_token_ids,
+            finished=request_output.finished,
+        )

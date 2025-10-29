@@ -970,6 +970,9 @@ class PlasAttentionConfig:
         """
         return json.dumps({key: value for key, value in self.__dict__.items() if value is not None})
 
+    def __str__(self) -> str:
+        return json.dumps({key: value for key, value in self.__dict__.items()})
+
 
 class EarlyStopConfig:
     def __init__(
@@ -1070,6 +1073,9 @@ class LoadConfig:
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+
+    def __str__(self) -> str:
+        return json.dumps({key: value for key, value in self.__dict__.items()})
 
 
 class PoolerConfig:
@@ -1339,10 +1345,14 @@ class StructuredOutputsConfig:
         self.guided_decoding_backend: Optional[str] = None
         # disable any whitespace for guided decoding
         self.disable_any_whitespace: bool = True
+        self.logits_processors: Optional[list[str]] = None
 
         for key, value in args.items():
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
+
+    def __str__(self) -> str:
+        return json.dumps({key: value for key, value in self.__dict__.items()})
 
 
 class FDConfig:
