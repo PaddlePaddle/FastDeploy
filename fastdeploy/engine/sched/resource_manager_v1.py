@@ -161,7 +161,7 @@ class ResourceManagerV1(ResourceManager):
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
         num_new_tokens = min(num_new_tokens, token_budget)
 
-        if not self._is_mm_request(request):
+        if not self.config.model_config.enable_mm:
             return num_new_tokens
 
         request.with_image = False
