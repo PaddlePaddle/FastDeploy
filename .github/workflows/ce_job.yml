@@ -127,7 +127,7 @@ jobs:
           target_path=paddle-qa/BRANCH/FastDeploy/${branch_name}/${commit_id}
           wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
           push_file=$(realpath bos_tools.py)
-          python -m pip install bce-python-sdk==0.9.29
+          python -m pip install bce-python-sdk==0.9.29 --index-url http://pip.baidu.com/pypi/simple --trusted-host pip.baidu.com
           ls
           python ${push_file} FastDeploy.tar.gz ${target_path}
           target_path_stripped="${target_path#paddle-qa/}"
@@ -195,7 +195,7 @@ jobs:
 
           wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
           push_file=$(realpath bos_tools.py)
-          python -m pip install bce-python-sdk==0.9.29
+          python -m pip install bce-python-sdk==0.9.29 --index-url http://pip.baidu.com/pypi/simple --trusted-host pip.baidu.com
           ls
           python ${push_file} ${filename} ${target_path}
           target_path_stripped="${target_path#paddle-qa/}"
@@ -234,7 +234,7 @@ jobs:
 
           wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
           push_file=$(realpath bos_tools.py)
-          python -m pip install bce-python-sdk==0.9.29
+          python -m pip install bce-python-sdk==0.9.29 --index-url http://pip.baidu.com/pypi/simple --trusted-host pip.baidu.com
           ls
           python ${push_file} ${filename} ${target_path}
           target_path_stripped="${target_path#paddle-qa/}"

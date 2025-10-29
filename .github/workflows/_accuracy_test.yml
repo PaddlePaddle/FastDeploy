@@ -144,10 +144,10 @@ jobs:
           -e TZ="Asia/Shanghai" \
           --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -xc '
           pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
-          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/ --index-url http://pip.baidu.com/pypi/simple --trusted-host pip.baidu.com
 
           python -m pip install ${fastdeploy_wheel_url}
-          python -m pip install pytest
+          python -m pip install pytest --index-url http://pip.baidu.com/pypi/simple --trusted-host pip.baidu.com
 
           wget https://paddle-qa.bj.bcebos.com/zhengtianyu/tools/llm-deploy-linux-amd64
           chmod +x ./llm-deploy-linux-amd64
