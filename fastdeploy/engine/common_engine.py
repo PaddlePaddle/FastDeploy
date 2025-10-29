@@ -997,6 +997,7 @@ class EngineService:
                                                     f"{task.request_id} prefill failed with msg:{task.error_msg}, recycle resource."
                                                 )
                                                 continue
+                                            self.token_processor.tokens_counter[task.request_id] = 1
                                             self.resource_manager.insert_task_for_decoding(task)
 
                                     else:
