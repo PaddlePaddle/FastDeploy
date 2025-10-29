@@ -447,6 +447,8 @@ class RequestOutput:
         encoder_prompt_token_ids: The token IDs of the encoder prompt.
                                   None if decoder-only.
         num_cached_tokens: The number of tokens with prefix cache hit.
+        num_input_image_tokens: The number of input image tokens.
+        num_input_video_tokens: The number of input video tokens.
     """
 
     def __init__(
@@ -459,6 +461,8 @@ class RequestOutput:
         finished: bool = False,
         metrics: Optional[RequestMetrics] = None,
         num_cached_tokens: Optional[int] = 0,
+        num_input_image_tokens: Optional[int] = 0,
+        num_input_video_tokens: Optional[int] = 0,
         error_code: Optional[int] = 200,
         error_msg: Optional[str] = None,
     ) -> None:
@@ -470,6 +474,8 @@ class RequestOutput:
         self.finished = finished
         self.metrics = metrics
         self.num_cached_tokens = num_cached_tokens
+        self.num_input_image_tokens = num_input_image_tokens
+        self.num_input_video_tokens = num_input_video_tokens
         self.error_code = error_code
         self.error_msg = error_msg
 
@@ -512,6 +518,8 @@ class RequestOutput:
             f"outputs={self.outputs}, "
             f"finished={self.finished}, "
             f"num_cached_tokens={self.num_cached_tokens}, "
+            f"num_input_image_tokens={self.num_input_image_tokens}, "
+            f"num_input_video_tokens={self.num_input_video_tokens}, "
             f"metrics={self.metrics}, "
         )
 
@@ -534,6 +542,8 @@ class RequestOutput:
             "metrics": None if self.metrics is None else self.metrics.to_dict(),
             "finished": self.finished,
             "num_cached_tokens": self.num_cached_tokens,
+            "num_input_image_tokens": self.num_input_image_tokens,
+            "num_input_video_tokens": self.num_input_video_tokens,
             "error_code": self.error_code,
             "error_msg": self.error_msg,
         }
