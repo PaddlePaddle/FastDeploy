@@ -50,7 +50,7 @@ class MockTask:
     def get(self, key: str, default_value=None):
         if hasattr(self, key):
             return getattr(self, key)
-        elif hasattr(self.sampling_params, key):
+        elif hasattr(self, "sampling_params") and hasattr(self.sampling_params, key):
             return getattr(self.sampling_params, key)
         else:
             return default_value
