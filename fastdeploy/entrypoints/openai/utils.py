@@ -125,6 +125,8 @@ class DealerConnectionManager:
                 request_id = response[-1]["request_id"]
                 if request_id[:4] in ["cmpl", "embd"]:
                     request_id = request_id.rsplit("_", 1)[0]
+                elif "reward" == request_id[:6]:
+                    request_id = request_id.rsplit("_", 1)[0]
                 elif "chatcmpl" == request_id[:8]:
                     request_id = request_id.rsplit("_", 1)[0]
                 async with self.lock:

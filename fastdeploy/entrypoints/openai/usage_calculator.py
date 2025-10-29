@@ -14,8 +14,20 @@
 # limitations under the License.
 """
 
-from .abstract_tool_parser import ToolParser, ToolParserManager
-from .ernie_45_vl_thinking_tool_parser import Ernie45VLThinkingToolParser
-from .ernie_x1_tool_parser import ErnieX1ToolParser
+import numpy as np
 
-__all__ = ["ToolParser", "ToolParserManager", "ErnieX1ToolParser", "Ernie45VLThinkingToolParser"]
+
+def count_tokens(tokens):
+    """
+    Count the number of tokens in a nested list or array structure.
+    """
+    count = 0
+    stack = [tokens]
+    while stack:
+        current = stack.pop()
+        if isinstance(current, (list, tuple, np.ndarray)):
+            for item in reversed(current):
+                stack.append(item)
+        else:
+            count += 1
+    return count
