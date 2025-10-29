@@ -206,6 +206,12 @@ class EngineWorkerQueue:
             )
             self.manager: BaseManager = QueueManager(address=self.address, authkey=self.authkey)
             self.manager.start()
+
+            # If the port is 0, an anonymous port will be automatically assigned. The port range can be queried from system configuration,
+            # e.g., by running 'cat /proc/sys/net/ipv4/ip_local_port_range'; typically in the range of 10000-60999.
+            # After manager.start(), its address attribute will be updated to the actual listening address.
+            # We update self.address here so that the real address can be queried later.
+            self.address = self.manager.address
         else:
             # Client-side connection setup
             assert (
@@ -276,6 +282,15 @@ class EngineWorkerQueue:
                 f"Connected EngineWorkerQueue client_id: {self.client_id}, number "
                 f"of connected clients: {self.connected_client_counter.get()}"
             )
+
+    def get_server_port(self) -> int:
+        """
+        Returns the actual port that the server instance is listening on.
+        Calling this method only makes sense on instances where is_server=True.
+        """
+        if not self.is_server:
+            raise RuntimeError("Only the server instance can provide the port.")
+        return self.address[1]
 
     def _connect_with_retry(self, max_retries: int = 5, interval: int = 3) -> None:
         """

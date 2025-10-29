@@ -46,6 +46,7 @@ class InputPreprocessor:
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
         mm_processor_kwargs: Optional[Dict[str, Any]] = None,
         tool_parser: str = None,
+        enable_processor_cache: bool = False,
     ) -> None:
         self.model_config = model_config
         self.model_name_or_path = self.model_config.model
@@ -53,6 +54,7 @@ class InputPreprocessor:
         self.limit_mm_per_prompt = limit_mm_per_prompt
         self.mm_processor_kwargs = mm_processor_kwargs
         self.tool_parser = tool_parser
+        self.enable_processor_cache = enable_processor_cache
 
     def create_processor(self):
         reasoning_parser_obj = None
@@ -104,6 +106,19 @@ class InputPreprocessor:
                         mm_processor_kwargs=self.mm_processor_kwargs,
                         reasoning_parser_obj=reasoning_parser_obj,
                         tool_parser_obj=tool_parser_obj,
+                        enable_processor_cache=self.enable_processor_cache,
+                    )
+                elif "PaddleOCRVL" in architecture:
+                    from fastdeploy.input.paddleocr_vl_processor import (
+                        PaddleOCRVLProcessor,
+                    )
+
+                    self.processor = PaddleOCRVLProcessor(
+                        config=self.model_config,
+                        model_name_or_path=self.model_name_or_path,
+                        limit_mm_per_prompt=self.limit_mm_per_prompt,
+                        mm_processor_kwargs=self.mm_processor_kwargs,
+                        reasoning_parser_obj=reasoning_parser_obj,
                     )
                 elif "PaddleOCRVL" in architecture:
                     from fastdeploy.input.paddleocr_vl_processor import (
@@ -126,5 +141,6 @@ class InputPreprocessor:
                         limit_mm_per_prompt=self.limit_mm_per_prompt,
                         mm_processor_kwargs=self.mm_processor_kwargs,
                         reasoning_parser_obj=reasoning_parser_obj,
+                        enable_processor_cache=self.enable_processor_cache,
                     )
         return self.processor
