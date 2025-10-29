@@ -561,7 +561,7 @@ def get_env_info():
 
     if PADDLE_AVAILABLE:
         paddle_version_str = paddle.__version__
-        paddle_cuda_available_str = str(torch.cuda.is_available())
+        paddle_cuda_available_str = str(paddle.device.is_compiled_with_cuda())
         paddle_cuda_version_str = str(paddle.version.cuda())
     else:
         version_str = paddle_cuda_available_str = cuda_version_str = "N/A"

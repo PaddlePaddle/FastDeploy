@@ -16,7 +16,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # Enable debug mode (0 or 1)
     "FD_DEBUG":
-    lambda: os.getenv("FD_DEBUG", "0"),
+    lambda: int(os.getenv("FD_DEBUG", "0")),
 
     # FastDeploy log retention days
     "FD_LOG_BACKUP_COUNT":
