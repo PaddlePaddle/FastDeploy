@@ -25,10 +25,18 @@ def test_45vl():
     response = client.chat.completions.create(
         model="default",
         messages=[
-            {"role": "user", "content": [
-                {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg"}},
-                {"type": "text", "text": "From which era does the artifact in the image originate?"},
-            ]},
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg"
+                        },
+                    },
+                    {"type": "text", "text": "From which era does the artifact in the image originate?"},
+                ],
+            },
         ],
         temperature=1,
         top_p=0,
