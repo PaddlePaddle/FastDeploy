@@ -1900,6 +1900,7 @@ class GPUModelRunner(ModelRunnerBase):
                             in_capturing=True,
                             expected_decode_len=3,
                             accept_all_drafts=False,
+                            reject_all_drafts=True,
                         )
                         logger.info(
                             f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}"
