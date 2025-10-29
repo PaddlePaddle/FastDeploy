@@ -46,7 +46,7 @@ jobs:
             BASE_BRANCH="${{ github.base_ref }}"
             docker pull ${docker_image}
             # Clean the repository directory before starting
-            docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+            docker run --rm -v $(pwd):/workspace -w /workspace \
             -e "REPO_NAME=${REPO_NAME}" \
             ${docker_image} /bin/bash -c '
               if [ -d ${REPO_NAME} ]; then
@@ -129,7 +129,7 @@ jobs:
             docker rm -f ${runner_name} || true
           fi
 
-          docker run --rm --ipc=host --pid=host --net=host \
+          docker run --rm --ipc=host --pid=host \
           --name ${runner_name} \
           -v $(pwd):/workspace \
           -w /workspace \
