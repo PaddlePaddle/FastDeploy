@@ -226,18 +226,18 @@ cat server.log
 
 # 执行服务化推理
 python -m pytest tests/ci_use/XPU_45T/run_45vl.py
-45vl_test_exit_code=$?
-echo 45vl_test_exit_code is ${45vl_test_exit_code}
+vl_test_exit_code=$?
+echo vl_test_exit_code is ${vl_test_exit_code}
 
 ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
 lsof -t -i :8188 | xargs kill -9 || true
 
-if [ ${45vl_test_exit_code} -ne 0 ]; then
+if [ ${vl_test_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
     cat log/workerlog.0
-    echo "w4a8 测试失败，请检查pr代码"
+    echo " vl模型 测试失败，请检查pr代码"
     exit 1
 fi
 
