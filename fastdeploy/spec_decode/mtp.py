@@ -346,13 +346,15 @@ class MTPProposer(Proposer):
         )
 
         tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
+
+        self.rope_emb_2d = get_rope(
+            rotary_dim=self.model_config.head_dim,
+            position_ids=tmp_position_ids,
+            base=self.model_config.rope_theta,
+            model_config=self.model_config,
+        )
         if not self.enable_mm:
-            self.model_inputs["rope_emb"] = get_rope(
-                rotary_dim=self.model_config.head_dim,
-                position_ids=tmp_position_ids,
-                base=self.model_config.rope_theta,
-                model_config=self.model_config,
-            )
+            self.model_inputs["rope_emb"] = self.rope_emb_2d
         else:
             self.model_inputs["rope_emb"] = self.target_model_inputs["rope_emb"]
 
@@ -450,17 +452,18 @@ class MTPProposer(Proposer):
                 length = prefill_end_index - prefill_start_index
 
                 if self.enable_mm:
-                    inputs = request.multimodal_inputs
-                    if inputs["position_ids"] is not None:
-                        position_ids = paddle.to_tensor(
-                            request.multimodal_inputs["position_ids"],
-                            dtype="int64",
-                        ).unsqueeze([0])
-                    else:
-                        position_ids = None
-                    self.model_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
-                        position_ids, request.get("max_tokens", 2048)
-                    )
+                    # inputs = request.multimodal_inputs
+                    # if inputs["position_ids"] is not None:
+                    #     position_ids = paddle.to_tensor(
+                    #         request.multimodal_inputs["position_ids"],
+                    #         dtype="int64",
+                    #     ).unsqueeze([0])
+                    # else:
+                    #     position_ids = None
+                    # self.model_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
+                    #     position_ids, request.get("max_tokens", 2048)
+                    # )
+                    self.model_inputs["rope_emb"][idx : idx + 1, :] = self.rope_emb_2d.unsqueeze([0])
 
                 input_ids = request.prompt_token_ids + request.output_token_ids
 
@@ -531,17 +534,18 @@ class MTPProposer(Proposer):
             self.input_ids_len[idx] = length - 1
 
             if self.enable_mm:
-                inputs = request.multimodal_inputs
-                if inputs["position_ids"] is not None:
-                    position_ids = paddle.to_tensor(
-                        request.multimodal_inputs["position_ids"],
-                        dtype="int64",
-                    ).unsqueeze([0])
-                else:
-                    position_ids = None
-                self.model_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
-                    position_ids, request.get("max_tokens", 2048)
-                )
+                # inputs = request.multimodal_inputs
+                # if inputs["position_ids"] is not None:
+                #     position_ids = paddle.to_tensor(
+                #         request.multimodal_inputs["position_ids"],
+                #         dtype="int64",
+                #     ).unsqueeze([0])
+                # else:
+                #     position_ids = None
+                # self.model_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
+                #     position_ids, request.get("max_tokens", 2048)
+                # )
+                self.model_inputs["rope_emb"][idx : idx + 1, :] = self.rope_emb_2d.unsqueeze([0])
 
             if req_dicts[i].disaggregate_info is not None and req_dicts[i].disaggregate_info["role"] == "decode":
                 length = len(request.prompt_token_ids)
