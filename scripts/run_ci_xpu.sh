@@ -38,6 +38,13 @@ unset http_proxy
 unset https_proxy
 unset no_proxy
 
+function clear_process() {
+    ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+    ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+    ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+    lsof -t -i :8188 | xargs kill -9 || true
+}
+
 # 起服务
 rm -rf log/*
 rm -f core*
@@ -92,10 +99,7 @@ python -m pytest tests/ci_use/XPU_45T/run_45T.py
 kv_block_test_exit_code=$?
 echo kv_block_test_exit_code is ${kv_block_test_exit_code}
 
-ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-lsof -t -i :8188 | xargs kill -9 || true
+clear_process
 
 if [ ${kv_block_test_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
@@ -159,10 +163,7 @@ python -m pytest tests/ci_use/XPU_45T/run_w4a8.py
 w4a8_test_exit_code=$?
 echo w4a8_test_exit_code is ${w4a8_test_exit_code}
 
-ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-lsof -t -i :8188 | xargs kill -9 || true
+clear_process
 
 if [ ${w4a8_test_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
@@ -171,7 +172,7 @@ if [ ${w4a8_test_exit_code} -ne 0 ]; then
     exit 1
 fi
 
-echo "============================开始EP并行测试!============================"
+echo "============================开始 EP4TP1 测试!============================"
 sleep 5
 rm -rf log/*
 rm -f core*
@@ -191,6 +192,9 @@ cd xDeepEP
 bash build.sh
 cd -
 
+export enable_expert_parallel=1
+export enable_tensor_parallel=0
+
 python -m pytest -s --timeout=600 tests/ci_use/XPU_45T/run_ep.py
 ep_exit_code=$?
 
@@ -201,14 +205,47 @@ unset BKCL_PCIE_RING
 unset XSHMEM_MODE
 unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
-ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-lsof -t -i :8188 | xargs kill -9 || true
+clear_process
 
 if [ ${ep_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
     cat log/workerlog.0
-    echo "EP并行 相关测试失败，请检查pr代码"
+    echo "EP4TP1 相关测试失败，请检查pr代码"
+    exit 1
+fi
+
+echo "============================开始 EP4TP4 测试!============================"
+sleep 5
+rm -rf log/*
+rm -f core*
+xpu-smi
+export XPU_VISIBLE_DEVICES="0,1,2,3"
+export BKCL_ENABLE_XDR=1
+export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
+export BKCL_TRACE_TOPO=1
+export BKCL_PCIE_RING=1
+export XSHMEM_MODE=1
+export XSHMEM_QP_NUM_PER_RANK=32
+export BKCL_RDMA_VERBS=1
+
+export enable_expert_parallel=1
+export enable_tensor_parallel=1
+
+python -m pytest -s --timeout=600 tests/ci_use/XPU_45T/run_ep.py
+ep_exit_code=$?
+
+unset BKCL_ENABLE_XDR
+unset BKCL_RDMA_NICS
+unset BKCL_TRACE_TOPO
+unset BKCL_PCIE_RING
+unset XSHMEM_MODE
+unset XSHMEM_QP_NUM_PER_RANK
+unset BKCL_RDMA_VERBS
+clear_process
+
+if [ ${ep_exit_code} -ne 0 ]; then
+    echo "log/workerlog.0"
+    cat log/workerlog.0
+    echo "EP4TP4 相关测试失败，请检查pr代码"
     exit 1
 fi

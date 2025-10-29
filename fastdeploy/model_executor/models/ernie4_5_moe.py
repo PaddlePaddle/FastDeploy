@@ -224,19 +224,23 @@ class Ernie4_5_MoE(nn.Layer):
     def split_allgather_out(self, hidden_states: paddle.Tensor, token_num: int):
         token_num_per_rank = (token_num + self.tensor_parallel_size - 1) // self.tensor_parallel_size
         # AllGather will hang when the data shapes on multi-ranks are different!
-        part_hidden_states = paddle.zeros(
+        part_hidden_states = paddle.empty(
             shape=[token_num_per_rank, hidden_states.shape[1]], dtype=hidden_states.dtype
         )
+        # bad case: start_offset in rank3 is 6 if ep4, tp4, token_num=5
         start_offset = self.tensor_parallel_rank * token_num_per_rank
         end_offset = (self.tensor_parallel_rank + 1) * token_num_per_rank
+        if start_offset >= token_num:
+            start_offset = token_num
         if end_offset > token_num:
             end_offset = token_num
         part_hidden_states[: (end_offset - start_offset), :] = hidden_states[start_offset:end_offset, :]
         out = self.experts(part_hidden_states, self.gate)
-        multi_outs = []
+        multi_outs = paddle.empty(
+            [token_num_per_rank * self.tensor_parallel_size, hidden_states.shape[1]], dtype=hidden_states.dtype
+        )
         paddle.distributed.all_gather(multi_outs, out, self.tp_group)
-        out = paddle.concat(multi_outs, axis=0)
-        out = out[:token_num, :]
+        out = multi_outs[:token_num, :]
         return out
 
     def forward(self, hidden_states: paddle.Tensor):
