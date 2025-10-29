@@ -1546,11 +1546,8 @@ class GPUModelRunner(ModelRunnerBase):
         assert len(num_scheduled_tokens_list) == num_reqs
 
         req_num_tokens = num_tokens // num_reqs
-        dummy_prompt_lens = paddle.to_tensor(num_scheduled_tokens_list, dtype="int64")
-        dummy_token_ids = paddle.zeros(
-            [num_reqs, req_num_tokens],
-            dtype="int64",
-        )
+        dummy_prompt_lens = paddle.to_tensor(num_scheduled_tokens_list, dtype="int64", place=paddle.CPUPlace())
+        dummy_token_ids = paddle.zeros([num_reqs, req_num_tokens], dtype="int64", device=hidden_states.place)
         model = cast(FdModelForPooling, self.get_model())
         dummy_pooling_params = PoolingParams(task=task)
         to_update = model.pooler.get_pooling_updates(task)
