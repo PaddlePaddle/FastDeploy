@@ -98,7 +98,7 @@ def main(args):
         raise ValueError("--max_concurrency should be same length as --s_itl_base_model")
 
     for max_concurrency, s_itl in zip(args.max_concurrency, args.s_itl_base_model):
-        # Wramup
+        # Warmup
         print("Starting warmup...")
         with open(os.devnull, "w") as f:
             with contextlib.redirect_stdout(f):

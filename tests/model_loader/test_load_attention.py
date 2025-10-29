@@ -65,7 +65,7 @@ class TestAttentionInitWeight(unittest.TestCase):
         self.fd_config.parallel_config = self.parallel_config
         self.fd_config.cache_config = self.cache_config
         self.fd_config.quant_config = None
-        self.fd_config.moba_attention_config = None
+        self.fd_config.plas_attention_config = None
 
     def test_init_weight_without_quantization(self):
         """Test init_weight without quantization."""
@@ -141,7 +141,7 @@ class TestAttentionWeightLoader(unittest.TestCase):
         self.fd_config.model_config = self.model_config
         self.fd_config.parallel_config = self.parallel_config
         self.fd_config.cache_config = self.cache_config
-        self.fd_config.moba_attention_config = None
+        self.fd_config.plas_attention_config = None
 
         # Create mock quant method
         self.mock_quant_method = MockQuantMethod()

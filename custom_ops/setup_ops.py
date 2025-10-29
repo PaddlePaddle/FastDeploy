@@ -208,6 +208,7 @@ if paddle.is_compiled_with_rocm():
         "gpu_ops/rebuild_padding.cu",
         "gpu_ops/step.cu",
         "gpu_ops/set_data_ipc.cu",
+        "gpu_ops/unset_data_ipc.cu",
         "gpu_ops/moe/tritonmoe_preprocess.cu",
         "gpu_ops/step_system_cache.cu",
         "gpu_ops/get_output_ep.cc",
@@ -250,6 +251,7 @@ if paddle.is_compiled_with_rocm():
     )
 elif paddle.is_compiled_with_cuda():
     sources = [
+        "gpu_ops/helper.cu",
         "gpu_ops/save_with_output_msg.cc",
         "gpu_ops/get_output.cc",
         "gpu_ops/get_output_msg_with_topk.cc",
@@ -278,6 +280,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/beam_search_softmax.cu",
         "gpu_ops/rebuild_padding.cu",
         "gpu_ops/set_data_ipc.cu",
+        "gpu_ops/unset_data_ipc.cu",
         "gpu_ops/read_data_ipc.cu",
         "gpu_ops/enforce_generation.cu",
         "gpu_ops/dequant_int8.cu",
@@ -288,7 +291,6 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/cpp_extensions.cc",
         "gpu_ops/share_external_data.cu",
         "gpu_ops/per_token_quant_fp8.cu",
-        "gpu_ops/extract_text_token_output.cu",
         "gpu_ops/update_split_fuse_input.cu",
         "gpu_ops/text_image_index_out.cu",
         "gpu_ops/text_image_gather_scatter.cu",
@@ -300,6 +302,8 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/noaux_tc.cu",
         "gpu_ops/custom_all_reduce/all_reduce.cu",
         "gpu_ops/merge_prefill_decode_output.cu",
+        "gpu_ops/limit_thinking_content_length_v1.cu",
+        "gpu_ops/limit_thinking_content_length_v2.cu",
     ]
 
     # pd_disaggregation
@@ -351,6 +355,8 @@ elif paddle.is_compiled_with_cuda():
         "-Igpu_ops",
         "-Ithird_party/nlohmann_json/include",
     ]
+    worker_threads = os.cpu_count()
+    nvcc_compile_args += ["-t", str(worker_threads)]
 
     nvcc_version = get_nvcc_version()
     print(f"nvcc_version = {nvcc_version}")
@@ -375,6 +381,7 @@ elif paddle.is_compiled_with_cuda():
 
     if cc >= 80:
         # append_attention
+        os.system("python gpu_ops/append_attn/autogen_template_instantiation.py")
         sources += ["gpu_ops/append_attention.cu"]
         sources += find_end_files("gpu_ops/append_attn", ".cu")
         # mla
@@ -493,7 +500,7 @@ elif paddle.is_compiled_with_cuda():
             sources=sources,
             extra_compile_args={"cxx": cc_compile_args, "nvcc": nvcc_compile_args},
             libraries=["cublasLt"],
-            extra_link_args=["-lcuda"],
+            extra_link_args=["-lcuda", "-lnvidia-ml"],
         ),
         packages=find_packages(where="third_party/DeepGEMM"),
         package_dir={"": "third_party/DeepGEMM"},
@@ -533,9 +540,14 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 "gpu_ops/token_penalty_multi_scores.cu",
                 "gpu_ops/sample_kernels/rejection_top_p_sampling.cu",
                 "gpu_ops/sample_kernels/top_k_renorm_probs.cu",
+                "gpu_ops/text_image_index_out.cu",
+                "gpu_ops/text_image_gather_scatter.cu",
+                "gpu_ops/set_data_ipc.cu",
                 "iluvatar_ops/moe_dispatch.cu",
                 "iluvatar_ops/moe_reduce.cu",
                 "iluvatar_ops/paged_attn.cu",
+                "iluvatar_ops/prefill_fused_attn.cu",
+                "iluvatar_ops/mixed_fused_attn.cu",
                 "iluvatar_ops/w8a16_group_gemm.cu",
                 "iluvatar_ops/runtime/iluvatar_context.cc",
             ],
@@ -589,10 +601,20 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/read_data_ipc.cu",
         "gpu_ops/dequant_int8.cu",
         "gpu_ops/share_external_data.cu",
-        "gpu_ops/extract_text_token_output.cu",
+        "gpu_ops/recover_decode_task.cu",
+        "gpu_ops/noaux_tc.cu",
+        "gpu_ops/fused_rotary_position_encoding.cu",
+        "gpu_ops/text_image_gather_scatter.cu",
+        "gpu_ops/text_image_index_out.cu",
+        "gpu_ops/get_position_ids_and_mask_encoder_batch.cu",
+        "gpu_ops/append_attn/mla_cache_kernel.cu",
+        "gpu_ops/append_attn/get_block_shape_and_split_kv_block.cu",
         "gpu_ops/moe/tritonmoe_preprocess.cu",
         "gpu_ops/moe/moe_topk_select.cu",
-        "gpu_ops/recover_decode_task.cu",
+        "metax_ops/moe_dispatch.cu",
+        "metax_ops/moe_ffn.cu",
+        "metax_ops/moe_reduce.cu",
+        "metax_ops/fused_moe.cu",
     ]
 
     sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
@@ -613,7 +635,7 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
                 ],
             },
             library_dirs=[os.path.join(maca_path, "lib")],
-            extra_link_args=["-lruntime_cu"],
+            extra_link_args=["-lruntime_cu", "-lmctlassEx"],
             include_dirs=[
                 os.path.join(maca_path, "include"),
                 os.path.join(maca_path, "include/mcr"),
@@ -621,6 +643,8 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
             ],
         ),
     )
+elif paddle.is_compiled_with_custom_device("intel_hpu"):
+    pass
 else:
     use_bf16 = envs.FD_CPU_USE_BF16 == "True"
 

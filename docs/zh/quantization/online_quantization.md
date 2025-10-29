@@ -1,3 +1,5 @@
+[English](../../quantization/online_quantization.md)
+
 # 在线量化
 
 在线量化是指推理引擎在加载 BF16 权重后对权重做量化，而不是加载离线量化好的低精度权重。FastDeploy 支持将 BF16 在线量化到多种精度，包括：INT4, INT8 和 FP8.
@@ -15,7 +17,7 @@
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-300B-A47B-Paddle \
        --port 8180 --engine-worker-queue-port 8181 \
-       --cache-queue-port 8182 --metrics-port 8182 \
+       --cache-queue-port 8183 --metrics-port 8182 \
        --tensor-parallel-size 8 \
        --quantization wint8 \
        --max-model-len 32768 \
@@ -41,7 +43,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-300B-A47B-Paddle \
        --port 8180 --engine-worker-queue-port 8181 \
-       --cache-queue-port 8182 --metrics-port 8182 \
+       --cache-queue-port 8183 --metrics-port 8182 \
        --tensor-parallel-size 8 \
        --quantization block_wise_fp8 \
        --max-model-len 32768 \

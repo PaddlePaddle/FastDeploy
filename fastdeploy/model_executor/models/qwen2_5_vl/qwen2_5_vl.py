@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import re
 from functools import partial
 from typing import Dict, Optional, Union
 
@@ -27,20 +28,19 @@ from paddleformers.transformers.configuration_utils import PretrainedConfig
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
 )
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.normalization import RMSNorm
-from fastdeploy.model_executor.models.model_base import ModelForCasualLM
+from fastdeploy.model_executor.models.model_base import (
+    ModelCategory,
+    ModelForCasualLM,
+    ModelRegistry,
+)
 from fastdeploy.model_executor.models.qwen2 import Qwen2DecoderLayer
-from fastdeploy.platforms import current_platform
-
-if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import extract_text_token_output
-
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 @support_graph_optimization
@@ -104,31 +104,17 @@ class Qwen2_5_VLModel(nn.Layer):
             logger.info(f"Start load layer {i}")
             self.layers[i].load_state_dict(state_dict)
 
+    def get_input_embeddings(self, ids_remove_padding: paddle.Tensor) -> paddle.Tensor:
+        return self.embed_tokens(ids_remove_padding=ids_remove_padding)
+
     def forward(
         self,
+        input_embeddings: paddle.Tensor,
         ids_remove_padding: paddle.Tensor,
         image_features: Optional[paddle.Tensor],
         forward_meta: ForwardMeta,
     ):
-
-        hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
-
-        # -----------------------
-        # 将 image_embeds 替换 input_embeds 里的 image video 占位符
-        image_mask = ids_remove_padding == self.image_token_id
-        image_token_num = image_mask.sum()
-
-        video_mask = ids_remove_padding == self.video_token_id
-        video_token_num = video_mask.sum()
-
-        # 由于框架只有 image_features，所以目前不支持图片和视频混合
-        # TODO(wangyafeng) 后续考虑支持传入 video_features
-        if image_token_num > 0:
-            hidden_states[image_mask] = image_features.cast(self._dtype)
-        if video_token_num > 0:
-            hidden_states[video_mask] = image_features.cast(self._dtype)
-
-        # -----------------------
+        hidden_states = input_embeddings
 
         residual = None
         for i in range(self.num_layers):
@@ -140,23 +126,17 @@ class Qwen2_5_VLModel(nn.Layer):
 
         hidden_states = hidden_states + residual
 
-        # -----------------------
-        max_seq_len, max_seq_len_index = paddle.topk(forward_meta.seq_lens_this_time, k=1)
-        hidden_states = extract_text_token_output(
-            max_seq_len,
-            max_seq_len_index.cast("int32"),
-            image_token_num.cast("int32"),
-            forward_meta.seq_lens_this_time,
-            forward_meta.cu_seqlens_q,
-            hidden_states.cast("float32"),
-        ).cast(self._dtype)
-        # -----------------------
-
         out = self.norm(hidden_states)
 
         return out
 
 
+@ModelRegistry.register_model_class(
+    architecture="Qwen2_5_VLForConditionalGeneration",
+    module_name="qwen2_5_vl.qwen2_5_vl",
+    category=ModelCategory.MULTIMODAL,
+    primary_use=ModelCategory.MULTIMODAL,
+)
 class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
     """
     Qwen2_5_VLForConditionalGeneration
@@ -172,6 +152,12 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         self.visual = self._init_vision_model(fd_config.model_config)
         # -----------  language model -------------
         self.model = Qwen2_5_VLModel(fd_config=fd_config)
+
+        # Persistent buffers for CUDA graphs.
+        self._input_embeddings = paddle.zeros(
+            [fd_config.model_config.max_model_len, fd_config.model_config.hidden_size],
+            dtype=fd_config.model_config.dtype,
+        )
 
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
@@ -196,6 +182,61 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
     @classmethod
     def name(self):
         return "Qwen2_5_VLForConditionalGeneration"
+
+    @paddle.no_grad()
+    def load_weights(self, weights_iterator) -> None:
+        """
+        Load model parameters from a given weights_iterator object.
+
+        Args:
+            weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
+        """
+
+        from fastdeploy.model_executor.utils import (
+            default_weight_loader,
+            process_weights_after_loading,
+        )
+
+        stacked_params_mapping = [
+            # (param_name, shard_name, shard_id)
+            # 参数变量名与权重key不同的要做映射
+            ("qkv_proj", "q_proj", "q"),
+            ("qkv_proj", "k_proj", "k"),
+            ("qkv_proj", "v_proj", "v"),
+            ("up_gate_proj", "gate_proj", "gate"),
+            ("up_gate_proj", "up_proj", "up"),
+            ("embed_tokens.embeddings", "embed_tokens", None),
+            ("lm_head.linear", "lm_head", None),
+        ]
+
+        params_dict = dict(self.named_parameters())
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        for loaded_weight_name, loaded_weight in weights_iterator:
+            for param_name, weight_name, shard_id in stacked_params_mapping:
+                if weight_name not in loaded_weight_name:
+                    continue
+                model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                if model_param_name not in params_dict:
+                    continue
+                param = params_dict[model_param_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                weight_loader(param, loaded_weight, shard_id)
+                break
+            else:
+                model_param_name = loaded_weight_name
+                if model_param_name not in params_dict:
+                    continue
+                param = params_dict[model_param_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                weight_loader(param, loaded_weight)
+            model_sublayer_name = re.sub(r"\.(weight)$", "", model_param_name)
+            process_weights_after_loading_fn(model_sublayer_name, param)
+
+        if self.tie_word_embeddings:
+            # because we use lazy guard and is not initialized by default
+            if not self.lm_head.linear.weight._is_initialized():
+                self.lm_head.linear.weight.initialize()
+            self.lm_head.load_state_dict({self.lm_head.weight_key: self.model.embed_tokens.embeddings.weight})
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
@@ -236,14 +277,43 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
             self.ernie.layers[i].mlp.text_fused_moe(fake_hidden_states)
             self.ernie.layers[i].mlp.image_fused_moe(fake_hidden_states)
 
+    def get_input_embeddings(
+        self,
+        ids_remove_padding: paddle.Tensor,
+        image_features: Optional[paddle.Tensor] = None,
+    ) -> paddle.Tensor:
+
+        input_embeddings = self.model.get_input_embeddings(ids_remove_padding=ids_remove_padding)
+
+        image_mask = ids_remove_padding == self.model.image_token_id
+        image_token_num = image_mask.sum()
+
+        video_mask = ids_remove_padding == self.model.video_token_id
+        video_token_num = video_mask.sum()
+
+        # Due to the fact that the framework only has image_features,
+        # it currently does not support mixing images and videos
+        # TODO(wangyafeng) Consider supporting the input of video_features in the future
+        if image_token_num.item() > 0:
+            input_embeddings[image_mask] = image_features.cast(self.model._dtype)
+        if video_token_num.item() > 0:
+            input_embeddings[video_mask] = image_features.cast(self.model._dtype)
+
+        return input_embeddings
+
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
         image_features: Optional[paddle.Tensor],
         forward_meta: ForwardMeta,
     ):
+        input_embeddings = self.get_input_embeddings(
+            ids_remove_padding=ids_remove_padding, image_features=image_features
+        )
+        self._input_embeddings.copy_(input_embeddings, False)
 
         hidden_states = self.model(
+            input_embeddings=self._input_embeddings,
             ids_remove_padding=ids_remove_padding,
             image_features=image_features,
             forward_meta=forward_meta,

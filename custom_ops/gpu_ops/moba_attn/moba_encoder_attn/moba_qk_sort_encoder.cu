@@ -15,6 +15,10 @@
 #include "paddle/extension.h"
 #include "moba_attn/moba_attn_utils.hpp"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
+
 template <typename T, int knthreads, int moba_block_size, int kBlockM, int kBlockMaxN, int searchtimes>
 __global__ void qk_gate_sort_encoder_kernel(
         const T* qk_gate_weight,
@@ -320,7 +324,7 @@ std::vector<paddle::Tensor> QkSortEncoder(
     }
 }
 
-PD_BUILD_OP(moba_qk_sort_encoder)
+PD_BUILD_STATIC_OP(moba_qk_sort_encoder)
     .Inputs({
         "qk_gate_weight",
         "seq_len_encoder",

@@ -16,7 +16,7 @@ set +x
 
 # use pre-commit 4.2.0
 if ! [[ $(pre-commit --version) == *"4.2.0"* ]]; then
-    pip install pre-commit==4.2.0 1>nul
+    pip install pre-commit==4.2.0 1>/dev/null
 fi
 
 # Install clang-format before git commit to avoid repeat installation due to
@@ -27,6 +27,11 @@ if ! [[ $(python -V 2>&1 | awk '{print $2}' | awk -F '.' '{print $1$2}') -ge 36 
     echo "clang-format installation by pip need python version great equal 3.6,
           please change the default python to higher version."
     exit 1
+fi
+if ! [[ $version == *"$VERSION"* ]]; then
+    # low version of pip may not have the source of clang-format whl
+    pip install --upgrade pip
+    pip install clang-format==13.0.0
 fi
 
 # Exclude any files under the 'test/ce/server/' directory from code style checks.

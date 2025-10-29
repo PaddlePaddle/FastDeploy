@@ -1,0 +1,6 @@
+tensor_parallel_size: 1
+max_model_len: 131072
+max_num_seqs: 32
+quantization: wint4
+max_num_batched_tokens: 8192
+plas_attention_config: '{"plas_encoder_top_k_left": 50, "plas_encoder_top_k_right": 60, "plas_decoder_top_k_left": 100, "plas_decoder_top_k_right": 120}'

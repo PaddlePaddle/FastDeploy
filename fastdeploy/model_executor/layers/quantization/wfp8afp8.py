@@ -23,6 +23,7 @@ from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
     QKVParallelLinear,
 )
+from fastdeploy.model_executor.layers.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.ops import (
     cutlass_scaled_mm,
     scaled_fp8_quant,
@@ -31,6 +32,7 @@ from fastdeploy.model_executor.layers.quantization.quant_base import (
     QuantConfigBase,
     QuantMethodBase,
 )
+from fastdeploy.model_executor.layers.utils import per_token_cast_to_fp8
 from fastdeploy.model_executor.utils import TensorTracker, set_weight_attrs
 
 
@@ -60,12 +62,19 @@ class WFP8AFP8Config(QuantConfigBase):
     @classmethod
     def from_config(cls, config: dict) -> "WFP8AFP8Config":
         """ """
-        is_checkpoint_bf16 = config.get("is_checkpoint_bf16", False)
+        is_checkpoint_bf16 = not config.get("is_quantized", False)
         return cls(is_checkpoint_bf16=is_checkpoint_bf16)
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         """ """
-        return WFP8AFP8LinearMethod(self)
+        if isinstance(layer, FusedMoE):
+            from fastdeploy.model_executor.layers.moe.fused_moe_triton_backend import (
+                Wfp8Afp8MoEMethod,
+            )
+
+            return Wfp8Afp8MoEMethod(self)
+        else:
+            return WFP8AFP8LinearMethod(self)
 
 
 class WFP8AFP8LinearMethod(QuantMethodBase):
@@ -92,13 +101,14 @@ class WFP8AFP8LinearMethod(QuantMethodBase):
                 (weight_shape[i] + weight_block_size[i] - 1) // weight_block_size[i] if weight_block_size[i] > 0 else 1
             )
         scale_shape = scale_shape[::-1]
-        if self.quant_config.is_checkpoint_bf16:
+        if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
             layer.weight = layer.create_parameter(
                 shape=weight_shape,
                 dtype=layer.weight_dtype,
                 is_bias=False,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
+            extra_weight_attrs["weight_need_transpose"] = extra_weight_attrs.get("model_format") == "torch"
             quant_attrs = extra_weight_attrs
             if isinstance(layer, MergedColumnParallelLinear) or isinstance(layer, QKVParallelLinear):
                 quant_attrs = {
@@ -134,10 +144,7 @@ class WFP8AFP8LinearMethod(QuantMethodBase):
             return
         weight_tensor = layer.weight.transpose([1, 0]).contiguous()
         assert self.quant_config.weight_block_size == [-1, 1]
-        qweight, weight_scale = scaled_fp8_quant(
-            weight_tensor,
-            use_per_token_if_dynamic=True,
-        )
+        qweight, weight_scale = per_token_cast_to_fp8(weight_tensor)
 
         if hasattr(layer.weight, "tensor_track"):
             layer.weight.tensor_track = None

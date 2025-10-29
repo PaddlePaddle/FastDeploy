@@ -30,10 +30,19 @@ from fastdeploy.entrypoints.openai.protocol import (
     CompletionResponseChoice,
     CompletionResponseStreamChoice,
     CompletionStreamResponse,
+    CompletionTokenUsageInfo,
+    ErrorInfo,
     ErrorResponse,
+    PromptTokenUsageInfo,
     UsageInfo,
 )
-from fastdeploy.utils import api_server_logger
+from fastdeploy.utils import (
+    ErrorCode,
+    ErrorType,
+    ParameterError,
+    api_server_logger,
+    get_host_ip,
+)
 from fastdeploy.worker.output import LogprobsLists
 
 
@@ -48,11 +57,14 @@ class OpenAIServingCompletion:
                 self.master_ip = ips[0]
             else:
                 self.master_ip = ips.split(",")[0]
+            self.is_master_ip = get_host_ip() == self.master_ip
         else:
             self.master_ip = "0.0.0.0"
+            self.is_master_ip = True
+        api_server_logger.info(f"master ip: {self.master_ip}")
 
     def _check_master(self):
-        return self.engine_client.is_master
+        return self.engine_client.is_master or self.is_master_ip
 
     async def create_completion(self, request: CompletionRequest):
         """
@@ -63,13 +75,15 @@ class OpenAIServingCompletion:
                 f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
             )
             api_server_logger.error(err_msg)
-            return ErrorResponse(message=err_msg, code=400)
+            return ErrorResponse(error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR))
         if self.models:
             is_supported, request.model = self.models.is_supported_model(request.model)
             if not is_supported:
                 err_msg = f"Unsupported model: [{request.model}], support [{', '.join([x.name for x in self.models.model_paths])}] or default"
                 api_server_logger.error(err_msg)
-                return ErrorResponse(message=err_msg, code=400)
+                return ErrorResponse(
+                    error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
+                )
         created_time = int(time.time())
         if request.user is not None:
             request_id = f"cmpl-{request.user}-{uuid.uuid4()}"
@@ -112,15 +126,15 @@ class OpenAIServingCompletion:
         except Exception as e:
             error_msg = f"OpenAIServingCompletion create_completion: {e}, {str(traceback.format_exc())}"
             api_server_logger.error(error_msg)
-            return ErrorResponse(message=error_msg, code=400)
+            return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
 
         if request_prompt_ids is not None:
             request_prompts = request_prompt_ids
 
-        num_choices = len(request_prompts)
+        num_choices = len(request_prompts) * (1 if request.n is None else request.n)
         api_server_logger.info(f"Start preprocessing request: req_id={request_id}), num_choices={num_choices}")
         prompt_batched_token_ids = []
-        text_after_process_list = []
+        prompt_tokens_list = []
         try:
             if self.max_waiting_time < 0:
                 await self.engine_client.semaphore.acquire()
@@ -132,25 +146,35 @@ class OpenAIServingCompletion:
                 f"max waiting time: {self.max_waiting_time}"
             )
             api_server_logger.error(error_msg)
-            return ErrorResponse(code=408, message=error_msg)
+            return ErrorResponse(
+                error=ErrorInfo(message=error_msg, code=ErrorCode.TIMEOUT, type=ErrorType.TIMEOUT_ERROR)
+            )
 
         try:
             try:
                 for idx, prompt in enumerate(request_prompts):
-                    request_id_idx = f"{request_id}-{idx}"
+                    request_id_idx = f"{request_id}_{idx}"
                     current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                     current_req_dict["arrival_time"] = time.time()
                     prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)  # tokenize
                     if isinstance(prompt_token_ids, np.ndarray):
                         prompt_token_ids = prompt_token_ids.tolist()
-                    text_after_process_list.append(current_req_dict.get("text_after_process"))
+                    prompt_tokens_list.append(current_req_dict.get("prompt_tokens"))
                     prompt_batched_token_ids.append(prompt_token_ids)
                     del current_req_dict
+            except ParameterError as e:
+                api_server_logger.error(f"OpenAIServingCompletion format error: {e}, {e.message}")
+                self.engine_client.semaphore.release()
+                return ErrorResponse(
+                    error=ErrorInfo(code="400", message=str(e.message), type="invalid_request", param=e.param)
+                )
             except Exception as e:
                 error_msg = f"OpenAIServingCompletion format error: {e}, {str(traceback.format_exc())}"
                 api_server_logger.error(error_msg)
                 self.engine_client.semaphore.release()
-                return ErrorResponse(message=str(e), code=400)
+                return ErrorResponse(
+                    error=ErrorInfo(message=str(e), code=ErrorCode.INVALID_VALUE, type=ErrorType.INVALID_REQUEST_ERROR)
+                )
 
             if request.stream:
                 return self.completion_stream_generator(
@@ -160,7 +184,7 @@ class OpenAIServingCompletion:
                     created_time=created_time,
                     model_name=request.model,
                     prompt_batched_token_ids=prompt_batched_token_ids,
-                    text_after_process_list=text_after_process_list,
+                    prompt_tokens_list=prompt_tokens_list,
                 )
             else:
                 try:
@@ -171,19 +195,19 @@ class OpenAIServingCompletion:
                         created_time=created_time,
                         model_name=request.model,
                         prompt_batched_token_ids=prompt_batched_token_ids,
-                        text_after_process_list=text_after_process_list,
+                        prompt_tokens_list=prompt_tokens_list,
                     )
                 except Exception as e:
                     error_msg = (
                         f"OpenAIServingCompletion completion_full_generator error: {e}, {str(traceback.format_exc())}"
                     )
                     api_server_logger.error(error_msg)
-                    return ErrorResponse(code=400, message=error_msg)
+                    return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
 
         except Exception as e:
             error_msg = f"OpenAIServingCompletion create_completion error: {e}, {str(traceback.format_exc())}"
             api_server_logger.error(error_msg)
-            return ErrorResponse(message=error_msg, code=400)
+            return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
 
     async def completion_full_generator(
         self,
@@ -193,14 +217,14 @@ class OpenAIServingCompletion:
         created_time: int,
         model_name: str,
         prompt_batched_token_ids: list(),
-        text_after_process_list: list(),
+        prompt_tokens_list: list(),
     ):
         """
         Process the full completion request with multiple choices.
         """
         dealer = None
         try:
-            request_ids = [f"{request_id}-{i}" for i in range(num_choices)]
+            request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
             # create dealer
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
                 request_id, num_choices
@@ -212,10 +236,19 @@ class OpenAIServingCompletion:
             valid_results = [dict()] * num_choices
             output_tokens = [0] * num_choices
             aggregated_top_logprobs = [[[], [], []] for _ in range(num_choices)]
+            aggregated_draft_top_logprobs = [[[], [], []] for _ in range(num_choices)]
             aggregated_token_ids = [[] for _ in range(num_choices)]
             completion_batched_token_ids = [[] for _ in range(num_choices)]
             current_waiting_time = 0
             while num_choices > 0:
+                if self.engine_client.check_model_weight_status():
+                    return ErrorResponse(
+                        error=ErrorInfo(
+                            message="Model weight cleared",
+                            code=ErrorCode.INVALID_VALUE,
+                            type=ErrorType.INVALID_REQUEST_ERROR,
+                        )
+                    )
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
@@ -231,16 +264,23 @@ class OpenAIServingCompletion:
                     continue
 
                 for data in response:
-                    rid = int(data["request_id"].split("-")[-1])
+                    rid = int(data["request_id"].split("_")[-1])
                     if data.get("error_code", 200) != 200:
                         raise ValueError("{}".format(data["error_msg"]))
 
                     output = data["outputs"]
-                    output_top_logprobs = output["top_logprobs"]
+                    output_top_logprobs = output.get("top_logprobs") or None
+                    output_draft_top_logprobs = output.get("draft_top_logprobs") or None
                     if output_top_logprobs is not None:
                         aggregated_top_logprobs[rid][0].extend(output_top_logprobs[0])
                         aggregated_top_logprobs[rid][1].extend(output_top_logprobs[1])
                         aggregated_top_logprobs[rid][2].extend(output_top_logprobs[2])
+
+                        # draft logprobs
+                        if request.include_draft_logprobs and output_draft_top_logprobs is not None:
+                            aggregated_draft_top_logprobs[rid][0].extend(output_draft_top_logprobs[0])
+                            aggregated_draft_top_logprobs[rid][1].extend(output_draft_top_logprobs[1])
+                            aggregated_draft_top_logprobs[rid][2].extend(output_draft_top_logprobs[2])
 
                     aggregated_token_ids[rid].extend(data["outputs"]["token_ids"])
 
@@ -252,6 +292,7 @@ class OpenAIServingCompletion:
                     if data.get("finished", False):
                         data["output_token_ids"] = output_tokens[rid]
                         data["outputs"]["top_logprobs"] = aggregated_top_logprobs[rid]
+                        data["outputs"]["draft_top_logprobs"] = aggregated_draft_top_logprobs[rid]
                         data["outputs"]["token_ids"] = aggregated_token_ids[rid]
                         valid_results[rid] = data
                         num_choices -= 1
@@ -264,13 +305,12 @@ class OpenAIServingCompletion:
                 model_name=model_name,
                 prompt_batched_token_ids=prompt_batched_token_ids,
                 completion_batched_token_ids=completion_batched_token_ids,
-                text_after_process_list=text_after_process_list,
+                prompt_tokens_list=prompt_tokens_list,
             )
             api_server_logger.info(f"Completion response: {res.model_dump_json()}")
             return res
         except Exception as e:
             api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)
-            raise
         finally:
             self.engine_client.semaphore.release()
             if dealer is not None:
@@ -296,7 +336,7 @@ class OpenAIServingCompletion:
         Process the echo logic and return the modified text.
         """
         if request.echo and res_outputs.get("send_idx", -1) == 0:
-            prompt_text = self._echo_back_prompt(request, idx)
+            prompt_text = self._echo_back_prompt(request, idx // (1 if request.n is None else request.n))
             res_outputs["text"] = prompt_text + (res_outputs["text"] or "")
         return res_outputs
 
@@ -317,7 +357,7 @@ class OpenAIServingCompletion:
         created_time: int,
         model_name: str,
         prompt_batched_token_ids: list(),
-        text_after_process_list: list(),
+        prompt_tokens_list: list(),
     ):
         """
         Process the stream completion request.
@@ -328,10 +368,13 @@ class OpenAIServingCompletion:
             )
 
             for i in range(num_choices):
-                req_id = f"{request_id}-{i}"
+                req_id = f"{request_id}_{i}"
                 dealer.write([b"", req_id.encode("utf-8")])  # 发送多路请求
             output_tokens = [0] * num_choices
+            num_cache_tokens = [0] * num_choices
+            num_image_tokens = [0] * num_choices
             inference_start_time = [0] * num_choices
+            reasoning_tokens = [0] * num_choices
             first_iteration = [True] * num_choices
             tool_called = [False] * num_choices
             max_streaming_response_tokens = (
@@ -349,6 +392,8 @@ class OpenAIServingCompletion:
             )
             current_waiting_time = 0
             while num_choices > 0:
+                if self.engine_client.check_model_weight_status():
+                    raise ValueError("Engine is clearing model weight")
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
@@ -364,7 +409,7 @@ class OpenAIServingCompletion:
                     continue
 
                 for res in response:
-                    idx = int(res["request_id"].split("-")[-1])
+                    idx = int(res["request_id"].split("_")[-1])
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
 
@@ -378,9 +423,12 @@ class OpenAIServingCompletion:
                                     CompletionResponseStreamChoice(
                                         index=idx,
                                         text="",
-                                        prompt_token_ids=list(prompt_batched_token_ids[idx]),
-                                        text_after_process=text_after_process_list[idx],
-                                        prompt_tokens=text_after_process_list[idx],
+                                        prompt_token_ids=list(
+                                            prompt_batched_token_ids[idx // (1 if request.n is None else request.n)]
+                                        ),
+                                        prompt_tokens=prompt_tokens_list[
+                                            idx // (1 if request.n is None else request.n)
+                                        ],
                                         completion_token_ids=None,
                                     )
                                 ],
@@ -403,22 +451,34 @@ class OpenAIServingCompletion:
                     await self._process_echo_logic(request, idx, res["outputs"])
                     output = res["outputs"]
                     output_top_logprobs = output["top_logprobs"]
+                    output_draft_top_logprobs = output["draft_top_logprobs"]
                     logprobs_res: Optional[CompletionLogprobs] = None
+                    draft_logprobs_res: Optional[CompletionLogprobs] = None
                     if request.logprobs and output_top_logprobs is not None:
                         logprobs_res = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
 
-                    output_tokens[idx] += 1
+                        # draft logprobs
+                        if request.include_draft_logprobs and output_draft_top_logprobs is not None:
+                            draft_logprobs_res = self._create_completion_logprobs(
+                                output_draft_top_logprobs, request.logprobs, 0
+                            )
+                    output_tokens[idx] += len(output.get("token_ids", [])) or 0
+                    num_cache_tokens[idx] += output.get("num_cache_tokens") or 0
+                    if output.get("num_image_tokens"):
+                        output_tokens[idx] += output.get("num_image_tokens")
+                        num_image_tokens[idx] += output.get("num_image_tokens")
+                    reasoning_tokens[idx] += output.get("reasoning_token_num", 0)
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
                         text=output["text"],
                         prompt_token_ids=None,
                         completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
                         tool_calls=None,
-                        raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
-                        completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
+                        completion_tokens=output.get("completion_tokens") if request.return_token_ids else None,
                         reasoning_content="",
                         arrival_time=arrival_time,
                         logprobs=logprobs_res,
+                        draft_logprobs=draft_logprobs_res,
                     )
                     if not res["finished"] and "delta_message" in output:
                         delta_message_output = output["delta_message"]
@@ -436,6 +496,7 @@ class OpenAIServingCompletion:
                         choices[-1].finish_reason = self.calc_finish_reason(
                             request.max_tokens, output_tokens[idx], output, tool_called[idx]
                         )
+
                     send_idx = output.get("send_idx")
                     # 只有当 send_idx 明确为 0 时才记录日志
                     if send_idx == 0 and not request.return_token_ids:
@@ -465,9 +526,18 @@ class OpenAIServingCompletion:
                                 model=model_name,
                                 choices=[],
                                 usage=UsageInfo(
-                                    prompt_tokens=len(prompt_batched_token_ids[idx]),
+                                    prompt_tokens=len(
+                                        prompt_batched_token_ids[idx // (1 if request.n is None else request.n)]
+                                    ),
                                     completion_tokens=output_tokens[idx],
-                                    total_tokens=len(prompt_batched_token_ids[idx]) + output_tokens[idx],
+                                    total_tokens=len(
+                                        prompt_batched_token_ids[idx // (1 if request.n is None else request.n)]
+                                    )
+                                    + output_tokens[idx],
+                                    prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cache_tokens[idx]),
+                                    completion_tokens_details=CompletionTokenUsageInfo(
+                                        image_tokens=num_image_tokens[idx], reasoning_tokens=reasoning_tokens[idx]
+                                    ),
                                 ),
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
@@ -475,7 +545,7 @@ class OpenAIServingCompletion:
 
         except Exception as e:
             api_server_logger.error(f"Error in completion_stream_generator: {e}, {str(traceback.format_exc())}")
-            yield f"data: {ErrorResponse(message=str(e), code=400).model_dump_json(exclude_unset=True)}\n\n"
+            yield f"data: {ErrorResponse(error=ErrorInfo(message=str(e), code='400', type=ErrorType.INTERNAL_ERROR)).model_dump_json(exclude_unset=True)}\n\n"
         finally:
             del request
             if dealer is not None:
@@ -492,27 +562,38 @@ class OpenAIServingCompletion:
         model_name: str,
         prompt_batched_token_ids: list(),
         completion_batched_token_ids: list(),
-        text_after_process_list: list(),
+        prompt_tokens_list: list(),
     ) -> CompletionResponse:
         choices: List[CompletionResponseChoice] = []
         num_prompt_tokens = 0
         num_generated_tokens = 0
+        num_cache_tokens = 0
+        num_image_tokens = 0
+        num_reasoning_tokens = 0
 
         for idx in range(len(final_res_batch)):
             final_res = final_res_batch[idx]
-            prompt_token_ids = prompt_batched_token_ids[idx]
+            prompt_token_ids = prompt_batched_token_ids[idx // (1 if request.n is None else request.n)]
             assert prompt_token_ids is not None
+            prompt_text = request.prompt
             completion_token_ids = completion_batched_token_ids[idx]
 
             output = final_res["outputs"]
-            output_top_logprobs = output["top_logprobs"]
+            output_top_logprobs = output.get("top_logprobs") or None
+            output_draft_top_logprobs = output.get("draft_top_logprobs") or None
 
             aggregated_logprobs: Optional[CompletionLogprobs] = None
             if output_top_logprobs is not None:
                 aggregated_logprobs = self._create_completion_logprobs(output_top_logprobs, request.logprobs, 0)
 
+            aggregated_draft_logprobs: Optional[CompletionLogprobs] = None
+            if output_draft_top_logprobs is not None:
+                aggregated_draft_logprobs = self._create_completion_logprobs(
+                    output_draft_top_logprobs, request.logprobs, 0
+                )
+
             if request.echo:
-                prompt_text = self._echo_back_prompt(request, idx)
+                prompt_text = self._echo_back_prompt(request, idx // (1 if request.n is None else request.n))
                 token_ids = [*prompt_token_ids, *output["token_ids"]]
                 output_text = prompt_text + output["text"]
             else:
@@ -526,13 +607,16 @@ class OpenAIServingCompletion:
                 text=output_text,
                 prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
                 completion_token_ids=completion_token_ids if request.return_token_ids else None,
-                raw_prediction=output.get("raw_prediction") if request.return_token_ids else None,
-                completion_tokens=output.get("raw_prediction") if request.return_token_ids else None,
-                text_after_process=text_after_process_list[idx] if request.return_token_ids else None,
-                prompt_tokens=text_after_process_list[idx] if request.return_token_ids else None,
+                completion_tokens=output.get("completion_tokens") if request.return_token_ids else None,
+                prompt_tokens=(
+                    prompt_tokens_list[idx // (1 if request.n is None else request.n)]
+                    if request.return_token_ids
+                    else None
+                ),
                 reasoning_content=output.get("reasoning_content"),
                 tool_calls=output.get("tool_call"),
                 logprobs=aggregated_logprobs,
+                draft_logprobs=aggregated_draft_logprobs,
                 finish_reason=finish_reason,
             )
             choices.append(choice_data)
@@ -540,11 +624,22 @@ class OpenAIServingCompletion:
             num_generated_tokens += final_res["output_token_ids"]
 
             num_prompt_tokens += len(prompt_token_ids)
+            num_cache_tokens += output.get("num_cache_tokens") or 0
+            if output.get("num_image_tokens"):
+                num_generated_tokens += output.get("num_image_tokens")
+                num_image_tokens += output.get("num_image_tokens")
 
+            num_reasoning_tokens += output.get("reasoning_token_num", 0)
+
+        num_prompt_tokens = num_prompt_tokens // (1 if request.n is None else request.n)
         usage = UsageInfo(
             prompt_tokens=num_prompt_tokens,
             completion_tokens=num_generated_tokens,
             total_tokens=num_prompt_tokens + num_generated_tokens,
+            prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cache_tokens),
+            completion_tokens_details=CompletionTokenUsageInfo(
+                reasoning_tokens=num_reasoning_tokens, image_tokens=num_image_tokens
+            ),
         )
         del request
 

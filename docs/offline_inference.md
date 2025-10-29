@@ -1,3 +1,5 @@
+[简体中文](zh/offline_inference.md)
+
 # Offline Inference
 
 ## 1. Usage
@@ -107,7 +109,7 @@ messages = [
      }
 ]
 
-prompt = tokenizer.apply_chat_template(messages, tokenize=False)
+prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 images, videos = [], []
 for message in messages:
     content = message["content"]

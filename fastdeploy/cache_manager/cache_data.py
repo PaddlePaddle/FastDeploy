@@ -18,7 +18,19 @@ from enum import Enum
 
 from fastdeploy.utils import get_logger
 
-logger = get_logger("prefix_cache_manager", "prefix_cache_manager.log")
+logger = get_logger("prefix_cache_manager", "cache_manager.log")
+
+
+DISABLE_PREFIX_CACHE_MM_MODEL: set[str] = {
+    "Ernie5ForCausalLM",
+}
+
+
+def is_mm_model_disable_prefix_cache(model_config):
+    """
+    check if the model architecture is in DISABLE_PREFIX_CACHE_MM_MODEL
+    """
+    return model_config._architecture in DISABLE_PREFIX_CACHE_MM_MODEL
 
 
 class CacheStatus(Enum):

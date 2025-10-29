@@ -68,6 +68,7 @@ def clean_ports():
     """
     for port in PORTS_TO_CLEAN:
         kill_process_on_port(port)
+    time.sleep(2)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -111,7 +112,6 @@ def setup_and_run_server():
         "128",
         "--quantization",
         "wint4",
-        "--use-cudagraph",
         "--graph-optimization-config",
         '{"cudagraph_capture_sizes": [1]}',
         "--guided-decoding-backend",

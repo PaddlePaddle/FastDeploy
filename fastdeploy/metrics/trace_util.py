@@ -7,8 +7,12 @@ from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExport
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.propagate import extract, inject
 from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
+from opentelemetry.sdk.trace.export import (
+    BatchSpanProcessor,
+    ConsoleSpanExporter,
+    SpanExporter,
+)
 
 from fastdeploy import envs
 from fastdeploy.utils import llm_logger
@@ -18,6 +22,45 @@ TRACE_CARRIER = "trace_carrier"
 
 traces_enable = False
 tracer = trace.get_tracer(__name__)
+
+
+class FilteringSpanProcessor(SpanProcessor):
+    def __init__(self, exporter: SpanExporter):
+        self._processor = BatchSpanProcessor(exporter)
+
+    # 父span属性继承逻辑
+    def on_start(self, span, parent_context=None):
+        parent_span = trace.get_current_span()
+        if parent_span and parent_span.is_recording():
+            stream_attr = parent_span.attributes.get("stream")
+            if stream_attr is not None:
+                span.set_attribute("stream", stream_attr)
+        self._processor.on_start(span, parent_context)
+
+    # span导出时的过滤逻辑
+    def on_end(self, span):
+        asgi_event_type = span.attributes.get("asgi.event.type")
+        stream = span.attributes.get("stream")
+        span_name = span.name or ""
+
+        if stream and asgi_event_type == "http.response.body" and "http send" in span_name:
+            return
+
+        self._processor.on_end(span)
+
+    def shutdown(self):
+        self._processor.shutdown()
+
+    def force_flush(self, timeout_millis=None):
+        self._processor.force_flush(timeout_millis)
+
+
+# 标记函数
+def lable_span(request):
+    if request.stream:
+        span = trace.get_current_span()
+        if span is not None and span.is_recording():
+            span.set_attribute("stream", "true")
 
 
 def set_up():
@@ -50,10 +93,10 @@ def set_up():
                 endpoint=endpoint,
                 headers=(dict(item.split("=") for item in headers.split(",")) if headers else None),
             )
-            processor = BatchSpanProcessor(otlp_exporter)
+            processor = FilteringSpanProcessor(otlp_exporter)
             llm_logger.info(f"Using OTLP Exporter, sending to {endpoint} with headers {headers}")
         else:  # default console
-            processor = BatchSpanProcessor(ConsoleSpanExporter())
+            processor = FilteringSpanProcessor(ConsoleSpanExporter())
             llm_logger.info("Using Console Exporter.")
 
         # --- set Tracer Provider ---

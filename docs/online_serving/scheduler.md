@@ -1,3 +1,5 @@
+[简体中文](../zh/online_serving/scheduler.md)
+
 # Scheduler
 
 FastDeploy currently supports two types of schedulers: **Local Scheduler** and **Global Scheduler**. The Global Scheduler is designed for large-scale clusters, enabling secondary load balancing across nodes based on real-time workload metrics.

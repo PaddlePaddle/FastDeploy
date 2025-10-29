@@ -1,3 +1,5 @@
+[简体中文](../zh/usage/environment_variables.md)
+
 # FastDeploy Environment Variables
 
 FastDeploy's environment variables are defined in `fastdeploy/envs.py` at the root of the repository. Below is the documentation:
@@ -14,7 +16,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # Enable debug mode (0 or 1)
     "FD_DEBUG":
-    lambda: os.getenv("FD_DEBUG", "0"),
+    lambda: int(os.getenv("FD_DEBUG", "0")),
 
     # FastDeploy log retention days
     "FD_LOG_BACKUP_COUNT":
@@ -76,7 +78,15 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ENABLE_MODEL_LOAD_CACHE": lambda: bool(int(os.getenv("FD_ENABLE_MODEL_LOAD_CACHE", "0"))),
 
     # Whether to use Machete for wint4 dense GEMM.
-    "FD_USE_MACHETE": lambda: os.getenv("FD_USE_MACHETE", "0"),
+    "FD_USE_MACHETE": lambda: os.getenv("FD_USE_MACHETE", "1"),
 
+    # Used to truncate the string inserted during thinking when reasoning in a model. (</think> for ernie4_5_vl, \n</think>\n\n for ernie_x1)
+    "FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR": lambda: os.getenv("FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR", "</think>"),
+
+    # Timeout for cache_transfer_manager process exit
+    "FD_CACHE_PROC_EXIT_TIMEOUT": lambda: int(os.getenv("FD_CACHE_PROC_EXIT_TIMEOUT", "600")),
+
+    # Count for cache_transfer_manager process error
+    "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),
 }
 ```

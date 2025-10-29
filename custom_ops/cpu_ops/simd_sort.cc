@@ -21,45 +21,45 @@ void probs_sort(const float *probs,
                 float *ProbsVals,
                 int vocab_size,
                 int bsz) {
-    float cursum = 0;
-    std::vector<int64_t> elementsIds(vocab_size);
-    std::vector<float> elementsProbs(vocab_size);
+  float cursum = 0;
+  std::vector<int64_t> elementsIds(vocab_size);
+  std::vector<float> elementsProbs(vocab_size);
 #pragma omp parallel for
-    for (int j = 0; j < vocab_size; j++) {
-        elementsIds[j] = j;
-        elementsProbs[j] = probs[j];
-    }
-    x86simdsortStatic::keyvalue_qsort(
-        elementsProbs.data(), elementsIds.data(), vocab_size, false, true);
+  for (int j = 0; j < vocab_size; j++) {
+    elementsIds[j] = j;
+    elementsProbs[j] = probs[j];
+  }
+  x86simdsortStatic::keyvalue_qsort(
+      elementsProbs.data(), elementsIds.data(), vocab_size, false, true);
 #pragma omp parallel for
-    for (int j = 0; j < vocab_size; ++j) {
-        ProbsVals[j] = elementsProbs[j];
-        ProbsIds[j] = elementsIds[j];
-    }
+  for (int j = 0; j < vocab_size; ++j) {
+    ProbsVals[j] = elementsProbs[j];
+    ProbsIds[j] = elementsIds[j];
+  }
 }
 std::vector<paddle::Tensor> SimdSort(const paddle::Tensor &probs) {
-    const int bsz = probs.shape()[0];
-    const int vocab_size = probs.shape()[1];
-    auto sorted_indices = paddle::empty(
-        {bsz, vocab_size}, paddle::DataType::INT64, probs.place());
-    auto sorted_probs = paddle::empty(
-        {bsz, vocab_size}, paddle::DataType::FLOAT32, probs.place());
-    probs_sort(probs.data<float>(),
-               const_cast<int64_t *>(sorted_indices.data<int64_t>()),
-               const_cast<float *>(sorted_probs.data<float>()),
-               vocab_size,
-               bsz);
-    return {sorted_indices, sorted_probs};
+  const int bsz = probs.shape()[0];
+  const int vocab_size = probs.shape()[1];
+  auto sorted_indices =
+      paddle::empty({bsz, vocab_size}, paddle::DataType::INT64, probs.place());
+  auto sorted_probs = paddle::empty(
+      {bsz, vocab_size}, paddle::DataType::FLOAT32, probs.place());
+  probs_sort(probs.data<float>(),
+             const_cast<int64_t *>(sorted_indices.data<int64_t>()),
+             const_cast<float *>(sorted_probs.data<float>()),
+             vocab_size,
+             bsz);
+  return {sorted_indices, sorted_probs};
 }
 std::vector<std::vector<int64_t>> SimdSortInferShape(
     const std::vector<int64_t> &probs_shape) {
-    int64_t bsz = probs_shape[0];
-    int64_t vocab_size = probs_shape[1];
-    return {{bsz, vocab_size}, {bsz, vocab_size}};
+  int64_t bsz = probs_shape[0];
+  int64_t vocab_size = probs_shape[1];
+  return {{bsz, vocab_size}, {bsz, vocab_size}};
 }
 std::vector<paddle::DataType> SimdSortInferDtype(
     const paddle::DataType &probs_dtype) {
-    return {paddle::DataType::INT64, paddle::DataType::FLOAT32};
+  return {paddle::DataType::INT64, paddle::DataType::FLOAT32};
 }
 PD_BUILD_STATIC_OP(simd_sort)
     .Inputs({"probs"})

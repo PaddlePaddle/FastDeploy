@@ -1,7 +1,7 @@
 """
-# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License"
+# Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
@@ -19,7 +19,6 @@ import io
 import ipaddress
 import mimetypes
 import os
-import random
 import socket
 import subprocess
 import tempfile
@@ -102,6 +101,7 @@ def http_to_pil_image(url):
     pil_image = process_image_data(image_data, mime_type, url)
 
     return pil_image
+
 
 def base64_to_pil_image(base64_string):
     """base64_to_pil_image"""

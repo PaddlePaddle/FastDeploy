@@ -57,7 +57,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             ceil_div(layer.hidden_size, self.quant_config.weight_block_size[0]),
             ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]),
         ]
-        if self.quant_config.is_checkpoint_bf16:
+        # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
+        if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
             layer.up_gate_proj_weight = layer.create_parameter(
                 shape=[layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
                 dtype=layer.weight_dtype,
@@ -69,6 +70,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
+            extra_weight_attrs["weight_need_transpose"] = extra_weight_attrs.get("model_format") == "torch"
             set_weight_attrs(
                 layer.up_gate_proj_weight,
                 {
@@ -127,6 +129,25 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ),
             )
+            extra_weight_attrs["weight_need_transpose"] = not extra_weight_attrs.get("model_format") == "torch"
+            extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}}
+            set_weight_attrs(
+                getattr(layer, up_gate_proj_weight_name),
+                extra_weight_attrs,
+            )
+            set_weight_attrs(
+                getattr(layer, up_gate_proj_scale_name),
+                extra_weight_attrs,
+            )
+
+            set_weight_attrs(
+                getattr(layer, down_proj_weight_name),
+                extra_weight_attrs,
+            )
+            set_weight_attrs(
+                getattr(layer, down_proj_scale_name),
+                extra_weight_attrs,
+            )
 
     def process_weights_after_loading(self, layer):
         """ """
@@ -169,6 +190,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 getattr(layer, unquantized_weight_name)[expert_id], self.quant_config.weight_block_size
             )
             weight[expert_id].copy_(weight_quant, False)
+
         getattr(layer, unquantized_weight_name).value().get_tensor()._clear()
 
         # create weight
@@ -313,17 +335,18 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             recv_num_tokens_per_expert_list,
             handle,
             _,
-        ) = self.ep_prefill_runner.dispatch(x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor)
+        ) = self.ep_prefill_runner.dispatch(
+            x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128
+        )
 
         token_all_num = sum(recv_num_tokens_per_expert_list)
 
         # 4. Compute ffn
         if token_all_num > 0:
-            logger.info(f"token_all_num {token_all_num}")
+            logger.debug(f"token_all_num {token_all_num}")
             (recv_x, recv_x_scale) = recv_x
 
             token_nums_this_rank = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)
-            token_nums_this_rank_padded = sum(token_nums_this_rank[1].numpy().tolist())
 
             (
                 permute_input,
@@ -343,7 +366,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 token_nums_this_rank[0],
                 token_nums_this_rank[1],
                 True,  # use_in_ep
-                token_nums_this_rank_padded,
+                token_all_num,
             )
 
             permute_scale = permute_scale.transpose([1, 0]).contiguous()
@@ -490,6 +513,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 layer.top_k,
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
+                getattr(layer, "renormalize", True),
             )
         else:
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
@@ -571,6 +595,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             1.0,
         )[0]
         if layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(tmp_ffn_out)
+            tmp_ffn_out = tensor_model_parallel_all_reduce(tmp_ffn_out)
 
         return tmp_ffn_out

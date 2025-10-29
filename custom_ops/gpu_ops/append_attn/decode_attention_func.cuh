@@ -13,8 +13,8 @@
 // limitations under the License.
 #pragma once
 
-
-#include "multi_head_latent_attention_kernel.h"
+#include "helper.h"
+#include "utils.cuh"
 
 template <size_t vec_size, typename T>
 struct softmax_state_t {

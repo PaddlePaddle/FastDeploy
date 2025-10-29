@@ -45,6 +45,7 @@ class ModelRunnerBase(ABC):
         self.graph_opt_config = fd_config.graph_opt_config
         self.quant_config = fd_config.quant_config
         self.cache_config = fd_config.cache_config
+        self.scheduler_config = fd_config.scheduler_config
         # ... config
 
         self.device = device
