@@ -34,7 +34,7 @@ def test_45vl():
                             "url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg"
                         },
                     },
-                    {"type": "text", "text": "From which era does the artifact in the image originate?"},
+                    {"type": "text", "text": "图片中的文物来自哪个时代？"},
                 ],
             },
         ],
