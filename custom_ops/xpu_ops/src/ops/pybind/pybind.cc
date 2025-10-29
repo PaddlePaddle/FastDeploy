@@ -482,13 +482,14 @@ std::vector<paddle::Tensor> SpeculateGetSeqLensOutput(
 
 void SetDataIpc(const paddle::Tensor& tmp_input, const std::string& shm_name);
 
-void TextImageGatherScatter(paddle::Tensor& input,
-                            paddle::Tensor& text_input,
-                            paddle::Tensor& image_input,
-                            paddle::Tensor& token_type_ids,
-                            paddle::Tensor& text_index,
-                            paddle::Tensor& image_index,
-                            const bool is_scatter);
+std::vector<paddle::Tensor> TextImageGatherScatter(
+    paddle::Tensor& input,
+    paddle::Tensor& text_input,
+    paddle::Tensor& image_input,
+    paddle::Tensor& token_type_ids,
+    paddle::Tensor& text_index,
+    paddle::Tensor& image_index,
+    const bool is_scatter);
 
 void TextImageIndexOut(const paddle::Tensor& token_type_ids,
                        const paddle::Tensor& text_index,
