@@ -4,9 +4,6 @@ on:
       workflow-name:
         required: true
         type: string
-      commit-sha:
-        required: true
-        type: string
     secrets:
       github-token:
         required: true
@@ -24,41 +21,14 @@ jobs:
     env:
       CI_TEAM_MEMBERS: '["yuanlehome","YuanRisheng","Jiang-Jia-Jun","DDDivano","XieYunshen","EmmonsCurse"]'
     outputs:
-      can-skip: ${{ steps.set-result.outputs.can-skip }}
+      can-skip: ${{ steps.check-bypass.outputs.can-skip }}
     steps:
       - name: Cleanup
         run: |
           rm -rf * .[^.]*
 
-      - name: Restore skip cache
-        id: restore-cache
-        uses: actions/cache@v4
-        with:
-          path: .skip_info
-          key: skip-cache-${{ github.event.pull_request.number || github.run_id }}
-
-      - name: Detect commit change
-        id: detect-change
-        run: |
-          mkdir -p .skip_info
-          last_sha_file=".skip_info/last_skip_sha"
-          last_sha=$(cat "$last_sha_file" 2>/dev/null || echo "")
-          current_sha="${{ inputs.commit-sha }}"
-
-          echo "Last skip SHA: $last_sha"
-          echo "Current commit SHA: $current_sha"
-
-          if [[ "$last_sha" != "$current_sha" ]]; then
-            echo "New commit detected — reset skip state."
-            echo "has-new-commit=true" >> $GITHUB_OUTPUT
-          else
-            echo "No new commit since last skip."
-            echo "has-new-commit=false" >> $GITHUB_OUTPUT
-          fi
-
       - id: check-bypass
-        name: Check Bypass Rules
-        if: steps.detect-change.outputs.has-new-commit == 'false'
+        name: Check Bypass
         uses: PFCCLab/ci-bypass@v1
         with:
           github-token: ${{ secrets.github-token }}
@@ -79,24 +49,3 @@ jobs:
                 }
               ]
             }
-
-      - name: Set final result
-        id: set-result
-        run: |
-          result="false"
-          if [[ "${{ steps.detect-change.outputs.has-new-commit }}" == "false" && "${{ steps.check-bypass.outputs.can-skip }}" == "true" ]]; then
-            result="true"
-            echo "${{ inputs.commit-sha }}" > .skip_info/last_skip_sha
-            echo "Recorded skip SHA: ${{ inputs.commit-sha }}"
-          else
-            rm -f .skip_info/last_skip_sha
-            echo "Cleared skip cache."
-          fi
-          echo "can-skip=$result" >> $GITHUB_OUTPUT
-
-      - name: Save skip cache
-        if: always()
-        uses: actions/cache@v4
-        with:
-          path: .skip_info
-          key: skip-cache-${{ github.event.pull_request.number || github.run_id }}
