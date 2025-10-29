@@ -52,12 +52,16 @@ on:
       wheel_path:
         description: "Output path of the generated wheel"
         value: ${{ jobs.fd-build.outputs.wheel_path }}
+      build_path:
+        description: "Output path of the build workspace "
+        value: ${{ jobs.fd-build.outputs.build_path }}
 jobs:
   fd-build:
     runs-on: [self-hosted, GPU-Build]
     timeout-minutes: 360
     outputs:
       wheel_path: ${{ steps.set_output.outputs.wheel_path }}
+      build_path: ${{ steps.set_output.outputs.build_path }}
     steps:
       - name: Code Prepare
         shell: bash
@@ -167,6 +171,10 @@ jobs:
             export ENABLE_FD_RDMA=1
             bash build.sh 1 python false [${COMPILE_ARCH}]
             ls ./dist/*.whl
+
+            cd ..
+            tar -czf FastDeploy_build.tar.gz FastDeploy
+            mv FastDeploy_build.tar.gz FastDeploy/dist/
             '
       - name: Package Upload
         id: set_output
@@ -201,6 +209,10 @@ jobs:
             echo "Found: $fd_wheel_name"
             tree -L 3
             python ${push_file} fastdeploy*.whl ${target_path}
+            python ${push_file} FastDeploy_build.tar.gz ${target_path}
+
             target_path_stripped="${target_path#paddle-github-action/}"
             WHEEL_PATH=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/${fd_wheel_name}
+            BUILD_PATH=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/FastDeploy_build.tar.gz
             echo "wheel_path=${WHEEL_PATH}" >> $GITHUB_OUTPUT
+            echo "build_path=${BUILD_PATH}" >> $GITHUB_OUTPUT

@@ -72,8 +72,8 @@ jobs:
             '
 
             wget -q --no-proxy ${fd_archive_url}
-            tar -xf FastDeploy.tar.gz
-            rm -rf FastDeploy.tar.gz
+            tar -xf FastDeploy_build.tar.gz
+            rm -rf FastDeploy_build.tar.gz
             cd FastDeploy
             git config --global user.name "FastDeployCI"
             git config --global user.email "fastdeploy_ci@example.com"
@@ -172,10 +172,7 @@ jobs:
           pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
           python -m pip install -r scripts/unittest_requirement.txt
-          python -m pip install ${fd_wheel_url}
-          rm -rf fastdeploy
-          # coverage subprocess use
-          python -m pip install ${fd_wheel_url} --no-deps --target=/workspace/FastDeploy
+          python -m pip install -r requirements.txt
           export PYTHONPATH=/workspace/FastDeploy/
           if [ -d "tests/plugins" ]; then
               cd tests/plugins
@@ -354,7 +351,7 @@ jobs:
           diff_cov_file_url: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url }}
         run: |
           wget -q --no-proxy ${fd_archive_url}
-          tar -xf FastDeploy.tar.gz
+          tar -xf FastDeploy_build.tar.gz
           cd FastDeploy
           if [ -z "${diff_cov_file_url}" ]; then
             echo "No diff coverage file URL provided."
