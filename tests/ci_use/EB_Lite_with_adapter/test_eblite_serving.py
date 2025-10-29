@@ -35,9 +35,7 @@ env = os.environ.copy()
 
 # Read ports from environment variables; use default values if not set
 FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
-FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8133))
 FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
-FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8234))
 
 FD_ENABLE_INTERNAL_ADAPTER = int(os.getenv("FD_ENABLE_INTERNAL_ADAPTER", "1"))
 FD_ZMQ_RECV_REQUEST_SERVER_PORT = int(os.getenv("FD_ZMQ_RECV_REQUEST_SERVER_PORT", "8204"))
@@ -54,9 +52,7 @@ env["FD_ZMQ_CONTROL_CMD_SERVER_PORT"] = str(FD_ZMQ_CONTROL_CMD_SERVER_PORT)
 # List of ports to clean before and after tests
 PORTS_TO_CLEAN = [
     FD_API_PORT,
-    FD_ENGINE_QUEUE_PORT,
     FD_METRICS_PORT,
-    FD_CACHE_QUEUE_PORT,
     FD_ZMQ_RECV_REQUEST_SERVER_PORT,
     FD_ZMQ_SEND_RESPONSE_SERVER_PORT,
     FD_ZMQ_CONTROL_CMD_SERVER_PORT,
@@ -100,20 +96,6 @@ def kill_process_on_port(port: int):
     except subprocess.CalledProcessError:
         pass
 
-    try:
-        result = subprocess.run(
-            f"ps -ef -ww| grep {FD_CACHE_QUEUE_PORT} | grep -v grep", shell=True, capture_output=True, text=True
-        )
-        for line in result.stdout.strip().split("\n"):
-            if not line:
-                continue
-            parts = line.split()
-            pid = int(parts[1])  # ps -ef 的第二列是 PID
-            print(f"Killing PID: {pid}")
-            os.kill(pid, signal.SIGKILL)
-    except Exception as e:
-        print(f"Failed to kill cache manager process: {e}")
-
 
 def clean_ports():
     """
@@ -153,12 +135,8 @@ def setup_and_run_server():
         str(FD_API_PORT),
         "--tensor-parallel-size",
         "1",
-        "--engine-worker-queue-port",
-        str(FD_ENGINE_QUEUE_PORT),
         "--metrics-port",
         str(FD_METRICS_PORT),
-        "--cache-queue-port",
-        str(FD_CACHE_QUEUE_PORT),
         "--max-model-len",
         "32768",
         "--max-num-seqs",
