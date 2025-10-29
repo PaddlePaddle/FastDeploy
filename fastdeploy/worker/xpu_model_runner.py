@@ -850,7 +850,7 @@ class XPUModelRunner(ModelRunnerBase):
             else:  # neox style = False
                 rope_head_dim = head_dim // 2
 
-            if head_dim == self.model_config.head_dim:
+            if rope_head_dim == self.model_config.head_dim:
                 self.share_inputs["pos_emb_type"] = "NORMAL"
             else:
                 self.share_inputs["pos_emb_type"] = "HALF_HEAD_DIM"
