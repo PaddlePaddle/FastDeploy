@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-import os
 import queue
 from typing import Dict, List, Optional, Union
 
@@ -856,9 +855,12 @@ def post_process_pooling(
                 block_size,
                 True,
             )
+        print("model_output.seq_lens_encoder", model_output.seq_lens_encoder)
 
     if not skip_save_output:
-        os.environ["FD_USE_GET_SAVE_OUTPUT_V1"] = "1"
-        if save_each_rank or model_output.mp_rank == 0:
-            output = _build_stream_transfer_data(output_tokens=None, pooler_outputs=pooler_output.outputs)
-            async_output_queue.put(output)
+        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+            if save_each_rank or model_output.mp_rank == 0:
+                output = _build_stream_transfer_data(output_tokens=None, pooler_outputs=pooler_output.outputs)
+                async_output_queue.put(output)
+        else:
+            raise RuntimeError("Not supported save_output mode")
