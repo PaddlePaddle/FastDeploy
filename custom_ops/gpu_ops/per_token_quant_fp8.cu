@@ -272,6 +272,27 @@ std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor& input,
 }
 
 
+std::vector<std::vector<int64_t>> PerTokenQuantPaddingInferShape(
+    std::vector<int64_t> input_shape, const int block_size) {
+
+    using ScaleDtype = float;
+
+    const int token_num = input_shape[0];
+    const int hidden_size = input_shape[1];
+    const int hidden_size_scale = hidden_size / block_size;
+
+    const int tma_alignment_bytes = 16;
+    const int tma_alignment_elements = tma_alignment_bytes / sizeof(ScaleDtype);
+    const int padded_token_num = ((token_num + tma_alignment_elements - 1) / tma_alignment_elements) * tma_alignment_elements;
+
+  return {{token_num, hidden_size}, {padded_token_num, hidden_size_scale}};
+}
+
+std::vector<paddle::DataType> PerTokenQuantPaddingInferDtype(
+    paddle::DataType input_dtype) {
+  return {paddle::DataType::FLOAT8_E4M3FN, paddle::DataType::FLOAT32};
+}
+
 template <typename T>
 __global__ void masked_quant_per_token_per_block(const T *input,
                                           const int* recv_expert_count,
@@ -417,7 +438,9 @@ PD_BUILD_STATIC_OP(per_token_quant_padding)
     .Inputs({"input"})
     .Outputs({"output", "output_scale"})
     .Attrs({"block_size: int"})
-    .SetKernelFn(PD_KERNEL(PerTokenQuantPadding));
+    .SetKernelFn(PD_KERNEL(PerTokenQuantPadding))
+    .SetInferShapeFn(PD_INFER_SHAPE(PerTokenQuantPaddingInferShape))
+    .SetInferDtypeFn(PD_INFER_DTYPE(PerTokenQuantPaddingInferDtype));
 
 PD_BUILD_STATIC_OP(masked_per_token_quant)
     .Inputs({"input", "recv_expert_count"})
