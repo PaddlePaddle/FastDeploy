@@ -33,8 +33,7 @@ __global__ void update_inputs_kernel_v1(bool* not_need_stop,
                                         const int input_ids_stride,
                                         const int block_num_per_seq,
                                         const int block_size,
-                                        bool prefill_one_step_stop,
-                                        bool is_pooling_task) {
+                                        bool prefill_one_step_stop) {
   int thread_idx = threadIdx.x;
   typedef cub::BlockReduce<int64_t, THREADBLOCK_SIZE> BlockReduce;
   __shared__ typename BlockReduce::TempStorage temp_storage;
@@ -49,75 +48,53 @@ __global__ void update_inputs_kernel_v1(bool* not_need_stop,
       stop_flag_now_int = 1;
     }
   }
-
   if (thread_idx < bsz) {
     if (stop_flag_now) {
       seq_lens_this_time[thread_idx] = 0;  // stop at next step
       seq_lens_decoder[thread_idx] = 0;
       seq_lens_encoder[thread_idx] = 0;
     } else {
-      if (is_pooling_task) {
-        if (seq_lens_this_time[thread_idx] > 0) {
-          int total_processed =
-              seq_lens_this_time[thread_idx] + seq_lens_decoder[thread_idx];
-
-          if (total_processed >= prompt_lens[thread_idx]) {
-            stop_flags[thread_idx] = true;
-            seq_lens_encoder[thread_idx] = 0;
-            seq_lens_decoder[thread_idx] = 0;
-            seq_lens_this_time[thread_idx] = 0;
-            stop_flag_now_int = 1;
-          }
-        } else {
-          seq_lens_encoder[thread_idx] = 0;
-          stop_flag_now_int = 1;
-        }
-      } else {
-        // Normal generation task logic
-        if (seq_lens_this_time[thread_idx] + seq_lens_decoder[thread_idx] >=
-            prompt_lens[thread_idx]) {
-          if (prefill_one_step_stop) {
-            // prefill done, stop
-            stop_flags[thread_idx] = true;
-            seq_lens_this_time[thread_idx] = 0;
-            seq_lens_decoder[thread_idx] = 0;
-            seq_lens_encoder[thread_idx] = 0;
-            stop_flag_now_int = 1;
-          } else {
-            // decoding
-            seq_lens_decoder[thread_idx] += seq_lens_this_time[thread_idx];
-            seq_lens_this_time[thread_idx] = 1;
-            seq_lens_encoder[thread_idx] = 0;
-            int64_t* input_ids_now = input_ids + thread_idx * input_ids_stride;
-            input_ids_now[0] = next_tokens[thread_idx];
-
-            // to judge whether block is not enough
-            int* block_table_now =
-                block_tables + thread_idx * block_num_per_seq;
-            if (seq_lens_this_time[thread_idx] != 0 &&
-                block_table_now[seq_lens_decoder[thread_idx] / block_size] ==
-                    -1) {
-              // should be scheduled by server
-              is_block_step[thread_idx] = true;
-              seq_lens_this_time[thread_idx] = 0;
-              stop_flags[thread_idx] = true;
-              step_seq_lens_decoder[thread_idx] = seq_lens_decoder[thread_idx];
-              seq_lens_decoder[thread_idx] = 0;
-              stop_flag_now_int = 1;
-            }
-          }
-        } else {
+      if (seq_lens_this_time[thread_idx] + seq_lens_decoder[thread_idx] >=
+          prompt_lens[thread_idx]) {
+        if (prefill_one_step_stop) {
+          // prefill done, stop
           stop_flags[thread_idx] = true;
           seq_lens_this_time[thread_idx] = 0;
           seq_lens_decoder[thread_idx] = 0;
           seq_lens_encoder[thread_idx] = 0;
-          topk_ids[thread_idx] = -1;
           stop_flag_now_int = 1;
+        } else {
+          // decoding
+          seq_lens_decoder[thread_idx] += seq_lens_this_time[thread_idx];
+          seq_lens_this_time[thread_idx] = 1;
+          seq_lens_encoder[thread_idx] = 0;
+          int64_t* input_ids_now = input_ids + thread_idx * input_ids_stride;
+          input_ids_now[0] = next_tokens[thread_idx];
+
+          // to judge whether block is not enough
+          int* block_table_now = block_tables + thread_idx * block_num_per_seq;
+          if (seq_lens_this_time[thread_idx] != 0 &&
+              block_table_now[seq_lens_decoder[thread_idx] / block_size] ==
+                  -1) {
+            // should be scheduled by server
+            is_block_step[thread_idx] = true;
+            seq_lens_this_time[thread_idx] = 0;
+            stop_flags[thread_idx] = true;
+            step_seq_lens_decoder[thread_idx] = seq_lens_decoder[thread_idx];
+            seq_lens_decoder[thread_idx] = 0;
+            stop_flag_now_int = 1;
+          }
         }
+      } else {
+        stop_flags[thread_idx] = true;
+        seq_lens_this_time[thread_idx] = 0;
+        seq_lens_decoder[thread_idx] = 0;
+        seq_lens_encoder[thread_idx] = 0;
+        topk_ids[thread_idx] = -1;
+        stop_flag_now_int = 1;
       }
     }
   }
-
   __syncthreads();
   int64_t stop_sum = BlockReduce(temp_storage).Sum(stop_flag_now_int);
   if (thread_idx == 0) {
@@ -138,8 +115,7 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
                     const paddle::Tensor& stop_nums,
                     const paddle::Tensor& next_tokens,
                     const paddle::Tensor& is_block_step,
-                    const int block_size,
-                    const bool is_pooling_task) {
+                    const int block_size) {
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
   auto dev_ctx = static_cast<const phi::CustomContext*>(
       paddle::experimental::DeviceContextPool::Instance().Get(
@@ -156,7 +132,6 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
   }
   const int max_bsz = stop_flags.shape()[0];
   const int now_bsz = seq_lens_this_time.shape()[0];
-  const int bsz_to_process = is_pooling_task ? max_bsz : now_bsz;
   const int input_ids_stride = input_ids.shape()[1];
   const int block_num_per_seq = block_tables.shape()[1];
   auto not_need_stop_gpu = not_need_stop.copy_to(stop_flags.place(), false);
@@ -174,13 +149,12 @@ void UpdateInputsV1(const paddle::Tensor& stop_flags,
       const_cast<bool*>(stop_flags.data<bool>()),
       const_cast<bool*>(is_block_step.data<bool>()),
       next_tokens.data<int64_t>(),
-      bsz_to_process,
+      now_bsz,
       max_bsz,
       input_ids_stride,
       block_num_per_seq,
       block_size,
-      prefill_one_step_stop,
-      is_pooling_task);
+      prefill_one_step_stop);
   auto not_need_stop_cpu =
       not_need_stop_gpu.copy_to(not_need_stop.place(), false);
   bool* not_need_stop_data = const_cast<bool*>(not_need_stop.data<bool>());
@@ -201,7 +175,7 @@ PD_BUILD_STATIC_OP(update_inputs_v1)
              "stop_nums",
              "next_tokens",
              "is_block_step"})
-    .Attrs({"block_size: int", "is_pooling_task: bool"})
+    .Attrs({"block_size: int"})
     .Outputs({"not_need_stop_out",
               "seq_lens_this_time_out",
               "seq_lens_encoder_out",

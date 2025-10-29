@@ -358,7 +358,6 @@ def post_process_normal(
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,
-                False,
             )
         else:
             update_inputs(
@@ -853,9 +852,7 @@ def post_process_pooling(
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,
-                True,
             )
-        print("model_output.seq_lens_encoder", model_output.seq_lens_encoder)
 
     if not skip_save_output:
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
@@ -863,4 +860,4 @@ def post_process_pooling(
                 output = _build_stream_transfer_data(output_tokens=None, pooler_outputs=pooler_output.outputs)
                 async_output_queue.put(output)
         else:
-            raise RuntimeError("Not supported save_output mode")
+            raise RuntimeError("Not supported save_output mode,Please set FD_USE_GET_SAVE_OUTPUT_V1=1 ")

@@ -1579,6 +1579,7 @@ class GPUModelRunner(ModelRunnerBase):
     def _dummy_pooler_run(
         self,
         hidden_states: paddle.Tensor,
+        model_output: paddle.Tensor,
     ) -> PoolerOutput:
         output_size = dict[PoolingTask, float]()
         for task in self.get_supported_pooling_tasks():
@@ -1588,8 +1589,49 @@ class GPUModelRunner(ModelRunnerBase):
             del output
 
         max_task = max(output_size.items(), key=lambda x: x[1])[0]
-        final_output = self._dummy_pooler_run_task(hidden_states, max_task)
-        return final_output
+        pooler_output = self._dummy_pooler_run_task(hidden_states, max_task)
+
+        model_output_data = ModelOutputData(
+            next_tokens=self.share_inputs["next_tokens"],
+            stop_flags=self.share_inputs["stop_flags"],
+            step_idx=self.share_inputs["step_idx"],
+            max_dec_len=self.share_inputs["max_dec_len"],
+            pre_ids=self.share_inputs["pre_ids"],
+            seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
+            eos_token_id=self.share_inputs["eos_token_id"],
+            not_need_stop=self.share_inputs["not_need_stop"],
+            input_ids=self.share_inputs["input_ids"],
+            stop_nums=self.share_inputs["stop_nums"],
+            seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
+            seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+            is_block_step=self.share_inputs["is_block_step"],
+            full_hidden_states=model_output,
+            msg_queue_id=self.parallel_config.msg_queue_id,
+            mp_rank=self.parallel_config.tensor_parallel_rank,
+            use_ep=self.parallel_config.use_ep,
+            draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
+            actual_draft_token_num=(
+                self.share_inputs["actual_draft_token_num"] if self.speculative_decoding else None
+            ),
+            accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
+            accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
+            stop_token_ids=self.share_inputs["stop_seqs"],
+            stop_seqs_len=self.share_inputs["stop_seqs_len"],
+            prompt_lens=self.share_inputs["prompt_lens"],
+        )
+
+        post_process(
+            sampler_or_pooler_output=pooler_output,
+            model_output=model_output_data,
+            share_inputs=self.share_inputs,
+            block_size=self.cache_config.block_size,
+            speculative_decoding=self.speculative_decoding,
+            skip_save_output=True,
+            async_output_queue=self.async_output_queue,
+            think_end_id=self.model_config.think_end_id,
+            line_break_id=self.model_config.line_break_id,
+        )
+        return pooler_output
 
     def _dummy_sampler_run(
         self,
@@ -1718,7 +1760,6 @@ class GPUModelRunner(ModelRunnerBase):
             accept_all_drafts: Target model will accept all draft tokens
             reject_all_drafts: Target model will reject all draft tokens
         """
-
         input_length_list, max_dec_len_list, block_num = self.get_input_length_list(
             num_tokens=num_tokens,
             batch_size=batch_size,
@@ -1773,7 +1814,7 @@ class GPUModelRunner(ModelRunnerBase):
             )
 
             if self.is_pooling_model:
-                self._dummy_pooler_run(hidden_states)
+                self._dummy_pooler_run(hidden_states, model_output)
                 break
             else:
                 self._dummy_sampler_run(hidden_states, model_output, accept_all_drafts, reject_all_drafts)
