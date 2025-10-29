@@ -235,13 +235,18 @@ class ModelConfig:
         self.runner_type = self._get_runner_type(self.architectures, self.runner)
         self.convert_type = self._get_convert_type(self.architectures, self.runner_type, self.convert)
         registry = self.registry
+
         is_generative_model = registry.is_text_generation_model(self.architectures, self)
         is_pooling_model = registry.is_pooling_model(self.architectures, self)
+        print("self.architectures", self.architectures)
         is_multimodal_model = registry.is_multimodal_model(self.architectures, self)
         self.is_reasoning_model = registry.is_reasoning_model(self.architectures, self)
 
         self.enable_mm = is_multimodal_model
 
+        print("self.runner_type", self.runner_type)
+        print("is_pooling_model", is_pooling_model)
+        print("is_multimodal_model", is_multimodal_model)
         if self.runner_type == "generate" and not is_generative_model:
             if is_multimodal_model:
                 pass

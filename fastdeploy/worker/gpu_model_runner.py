@@ -1409,6 +1409,12 @@ class GPUModelRunner(ModelRunnerBase):
         min_tokens_per_req = num_tokens // num_reqs
         num_scheduled_tokens_list = [min_tokens_per_req] * num_reqs
         num_scheduled_tokens_list[-1] += num_tokens % num_reqs
+        print("num_tokens", num_tokens)
+        print("max_num_seqs", max_num_seqs)
+        print("num_reqs", num_reqs)
+        print("min_tokens_per_req", min_tokens_per_req)
+        print("num_scheduled_token_list", num_scheduled_tokens_list)
+
         assert sum(num_scheduled_tokens_list) == num_tokens
         assert len(num_scheduled_tokens_list) == num_reqs
 
@@ -1608,6 +1614,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.padding_cudagraph_inputs()
 
             # 3. Run model
+            print("self.enable_mm", self.enable_mm)
             if self.enable_mm:
                 model_output = self.model(
                     self.share_inputs["ids_remove_padding"],

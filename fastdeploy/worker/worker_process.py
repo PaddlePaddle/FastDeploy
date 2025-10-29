@@ -372,6 +372,7 @@ class PaddleDisWorkerProc:
         if self.fd_config.parallel_config.do_profile:
             # 1. Get available memory(bytes)
             available_kv_cache_memory = self.worker.determine_available_memory()
+            print("available_kv_cache_memory", available_kv_cache_memory)
             logger.info(f"------- available_kv_cache_memory:{available_kv_cache_memory / 1024**3} GB --------")
 
             # 2. Calculate the appropriate number of blocks

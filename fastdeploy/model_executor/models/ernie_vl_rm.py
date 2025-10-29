@@ -60,7 +60,7 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
 
         # Persistent buffers for CUDA graphs.
         self._input_embeddings = paddle.zeros(
-            [fd_config.parallel_config.max_model_len, fd_config.model_config.hidden_size],
+            [fd_config.model_config.max_model_len, fd_config.model_config.hidden_size],
             dtype=fd_config.model_config.dtype,
         )
 
@@ -128,8 +128,8 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
 @ModelRegistry.register_model_class(
     architecture="Ernie4_5_VLMoeForProcessRewardModel",
     module_name="ernie_vl_rm",
-    category=[ModelCategory.REWARD],
-    primary_use=ModelCategory.REWARD,
+    category=ModelCategory.EMBEDDING | ModelCategory.MULTIMODAL,
+    primary_use=ModelCategory.EMBEDDING | ModelCategory.MULTIMODAL,
 )
 @default_pooling_type("ALL")
 class Ernie4_5_VLMoeForProcessRewardModel(Ernie4_5_VLMoeRewardBaseModel):

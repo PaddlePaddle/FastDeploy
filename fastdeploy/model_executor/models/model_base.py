@@ -314,6 +314,7 @@ class ModelRegistry:
 
         for arch in architectures:
             model_info = self._try_inspect_model_cls(arch)
+            print("model_info", model_info)
             if model_info is not None:
                 return model_info.is_multimodal
         return False
