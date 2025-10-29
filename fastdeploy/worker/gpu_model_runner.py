@@ -2203,11 +2203,11 @@ class GPUModelRunner(ModelRunnerBase):
         return None
 
     def get_real_bsz(self):
-        i = 0
+        real_bsz = 0
         for i in range(self.share_inputs["stop_flags"].shape[0] - 1, -1, -1):
             if not self.share_inputs["stop_flags"][i][0]:
                 return i + 1
-        return i
+        return real_bsz
 
     def _add_cache(self, model_forward_batch) -> None:
         """
