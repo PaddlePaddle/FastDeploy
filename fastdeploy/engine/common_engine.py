@@ -290,10 +290,7 @@ class EngineService:
             num_client=self.cfg.parallel_config.tensor_parallel_size,
             client_id=0,
             local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
-            local_data_parallel_id=min(
-                self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,
-                self.cfg.parallel_config.data_parallel_size - 1,
-            ),
+            local_data_parallel_id=self.cfg.parallel_config.local_data_parallel_id,
         )
 
     def insert_tasks(self, tasks, current_id=-1, allocated=False):
@@ -646,31 +643,47 @@ class EngineService:
                     batch=num_prefill_batch,
                 )
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
-                    for task in tasks:
-                        # assure can allocate block ids in P
-                        while not self.resource_manager.preallocate_resource_in_p(task):
-                            time.sleep(0.005)
-                        self.llm_logger.info(f"ask D resource for req_id: {task.request_id}")
-                        self.split_connector.send_splitwise_tasks([task], task.idx)
                     need_delete_tasks = []
-                    for task in tasks:
-                        if self.cfg.scheduler_config.splitwise_role != "mixed":
-                            # assure fetch block ids from D
-                            status, msg = self.split_connector.check_decode_allocated(task)
-                            if not status:
-                                self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
-                                self.scheduler.put_results(
-                                    [
-                                        RequestOutput(
-                                            request_id=task.request_id,
-                                            finished=True,
-                                            error_code=500,
-                                            error_msg=msg,
-                                        )
-                                    ]
-                                )
-                                need_delete_tasks.append(task)
-                                continue
+                    if envs.FD_OFFLINE_PERF_TEST_FOR_PD:
+                        for task in tasks:
+                            # assure can allocate block ids in P
+                            while not self.resource_manager.preallocate_resource_in_p(task):
+                                time.sleep(0.005)
+                            self.llm_logger.info(f"ask D resource for req_id: {task.request_id}")
+                            while True:
+                                self.split_connector.send_splitwise_tasks([task], task.idx)
+                                status, msg = self.split_connector.check_decode_allocated(task)
+                                if not status:
+                                    self.llm_logger.error(f"{task.request_id} ask D resource failed, try again.")
+                                    time.sleep(0.05)
+                                else:
+                                    break
+                    else:
+                        for task in tasks:
+                            # assure can allocate block ids in P
+                            while not self.resource_manager.preallocate_resource_in_p(task):
+                                time.sleep(0.005)
+                            self.llm_logger.info(f"ask D resource for req_id: {task.request_id}")
+                            self.split_connector.send_splitwise_tasks([task], task.idx)
+
+                        for task in tasks:
+                            if self.cfg.scheduler_config.splitwise_role != "mixed":
+                                # assure fetch block ids from D
+                                status, msg = self.split_connector.check_decode_allocated(task)
+                                if not status:
+                                    self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
+                                    self.scheduler.put_results(
+                                        [
+                                            RequestOutput(
+                                                request_id=task.request_id,
+                                                finished=True,
+                                                error_code=500,
+                                                error_msg=msg,
+                                            )
+                                        ]
+                                    )
+                                    need_delete_tasks.append(task)
+                                    continue
                     for tmp_task in need_delete_tasks:
                         tasks.remove(tmp_task)
                         # release resource in P

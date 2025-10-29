@@ -371,10 +371,11 @@ class CacheMessager:
         while True:
             try:
                 task = self.engine_worker_queue.get_connect_rdma_task()
-                self.engine_worker_queue.connect_task_barrier.wait()
                 if task is None:
                     time.sleep(0.001)
                     continue
+                else:
+                    self.engine_worker_queue.connect_task_barrier.wait()
                 logger.info(f"_handle_connect_task recv task: {task}")
                 task_id = task["task_id"]
                 ip, rdma_port = task["ip"], task["rdma_ports"][self.rank]
@@ -524,9 +525,9 @@ class CacheMessagerV1:
         while True:
             try:
                 cache_info = self.engine_worker_queue.get_cache_info()
-                self.engine_worker_queue.cache_info_barrier.wait()
                 finished_add_cache_task_req_ids = []
                 if cache_info:
+                    self.engine_worker_queue.cache_info_barrier.wait()
                     for info in cache_info:
                         if info["request_id"] in self.cache_info:
                             self.cache_info[info["request_id"]].update(info)
@@ -708,7 +709,7 @@ class CacheMessagerV1:
                     continue
                 layer_id = kv_signal_data[1].numpy().tolist()
                 if layer_id == self.num_layers - 1:
-                    logger.info(f"tasks_count: {tasks_count}, layer_id: {layer_id}")
+                    logger.info(f"tasks_count: {tasks_count}, layer_id: {layer_id} self.rank_id {self.rank_id}")
                 batch_engine_ids = []
                 with self.engine_cache_task_thread_lock:
                     for bi in range(tasks_count):
@@ -729,10 +730,11 @@ class CacheMessagerV1:
         while True:
             try:
                 task, _ = self.engine_worker_queue.get_connect_rdma_task()
-                self.engine_worker_queue.connect_task_barrier.wait()
                 if task is None:
                     time.sleep(0.001)
                     continue
+                else:
+                    self.engine_worker_queue.connect_task_barrier.wait()
                 logger.info(f"_handle_connect_task recv task: {task}")
                 task_id = task["task_id"]
                 ip, rdma_port = task["ip"], task["rdma_ports"][self.rank]
