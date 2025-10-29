@@ -503,7 +503,6 @@ class LLMEngine:
             f" --tensor_parallel_size {self.cfg.parallel_config.tensor_parallel_size}"
             f" --engine_worker_queue_port {ports}"
             f" --pod_ip {self.cfg.master_ip}"
-            f" --total_block_num {self.cfg.cache_config.total_block_num}"
             f" --block_size {self.cfg.cache_config.block_size}"
             f" --enc_dec_block_num {self.cfg.cache_config.enc_dec_block_num}"
             f" --eos_tokens_lens {self.engine.data_processor.eos_token_id_len}"
@@ -528,14 +527,17 @@ class LLMEngine:
             f" --load_choices {self.cfg.load_config.load_choices}"
             f" --plas_attention_config '{self.cfg.plas_attention_config.to_json_string()}'"
             f" --ips {ips}"
+            f" --max_encoder_cache {self.cfg.cache_config.max_encoder_cache}"
             f" --cache-transfer-protocol {self.cfg.cache_config.cache_transfer_protocol}"
             f" --runner {self.cfg.model_config.runner}"
             f" --convert {self.cfg.model_config.convert}"
             f" --override-pooler-config {self.cfg.model_config.override_pooler_config}"
             f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
         )
+        if self.cfg.structured_outputs_config.logits_processors is not None:
+            arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
 
-        worker_append_flag = {
+        worker_store_true_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,
             "enable_prefix_caching": self.cfg.cache_config.enable_prefix_caching,
             "enable_chunked_prefill": self.cfg.cache_config.enable_chunked_prefill,
@@ -546,9 +548,17 @@ class LLMEngine:
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
         }
-        for worker_flag, value in worker_append_flag.items():
+        for worker_flag, value in worker_store_true_flag.items():
             if value:
                 arguments = arguments + f" --{worker_flag}"
+
+        worker_default_none_flag = {
+            "num_gpu_blocks_override": self.cfg.cache_config.num_gpu_blocks_override,
+        }
+        for worker_flag, value in worker_default_none_flag.items():
+            if value:
+                arguments = arguments + f" --{worker_flag} {value}"
+
         if self.cfg.nnode > 1:
             pd_cmd = pd_cmd + f" --ips {ips} --nnodes {len(self.cfg.ips)}"
         pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
