@@ -113,10 +113,10 @@ class LLMEngine:
             | 1       | 1     | 0           | 0               | 0               |
             | 1       | 0     | 1           | 0               | 1               |
             | 1       | 0     | 0           | 0               | 1               |
-            | 0       | 1     | 1           | 1               | 0               |
+            | 0       | 1     | 1           | 0               | 1               |
             | 0       | 1     | 0           | 0               | 0               |
-            | 0       | 0     | 1           | 0               | 1               |
-            | 0       | 0     | 0           | 0               | 1               |
+            | 0       | 0     | 1           | 1               | 0               |
+            | 0       | 0     | 0           | 1               | 0               |
 
         4. Finally, inform user the engine has successfully started.
 
@@ -134,9 +134,8 @@ class LLMEngine:
         self.engine.create_data_processor()
         self.data_processor = self.engine.data_processor
 
-
         # If block numer is specified and model is deployed in mixed mode, start cache manager first
-        if not self.do_profile and self.cfg.scheduler_config.splitwise_role == "mixed" and self.cfg.cache_config.enable_prefix_caching:
+        if not self.do_profile and self.cfg.scheduler_config.splitwise_role != "mixed":
             device_ids = self.cfg.parallel_config.device_ids.split(",")
             self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
@@ -170,7 +169,7 @@ class LLMEngine:
         # and then start the cache manager
         if self.do_profile:
             self._stop_profile()
-        elif self.cfg.scheduler_config.splitwise_role != "mixed":
+        elif self.cfg.scheduler_config.splitwise_role == "mixed" and self.cfg.cache_config.enable_prefix_caching:
             device_ids = self.cfg.parallel_config.device_ids.split(",")
             self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
