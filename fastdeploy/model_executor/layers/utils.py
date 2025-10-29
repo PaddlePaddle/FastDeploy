@@ -144,7 +144,12 @@ def get_tensor(input: Union[paddle.Tensor, np.ndarray, str], model_path=None) ->
             return input.to(paddle.device.get_device())
         return input
     elif isinstance(input, np.ndarray):
-        return paddle.to_tensor(input)
+        if current_platform.is_xpu() and input.dtype == np.dtype("bfloat16"):
+            input = input.view(np.uint16)
+            tensor = paddle.to_tensor(input, dtype="uint16")
+        else:
+            tensor = paddle.to_tensor(input)
+        return tensor
     elif isinstance(input, str):
         from fastdeploy.model_executor.load_weight_utils import load_reordered_experts
 
