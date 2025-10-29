@@ -689,7 +689,7 @@ void invokeNoAuxTc(T* scores,
   config.stream = stream;
   cudaLaunchAttribute attrs[1];
   attrs[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;
-  attrs[0].val.programmaticStreamSerializationAllowed = true;
+  attrs[0].val.programmaticStreamSerializationAllowed = false;
   config.numAttrs = 1;
   config.attrs = attrs;
   cudaLaunchKernelEx(&config,
