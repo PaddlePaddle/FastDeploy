@@ -1,3 +1,5 @@
+[简体中文](../zh/features/chunked_prefill.md)
+
 # Chunked Prefill
 
 Chunked Prefill employs a segmentation strategy that breaks down Prefill requests into smaller subtasks, which are then batched together with Decode requests. This approach better balances compute-intensive (Prefill) and memory-intensive (Decode) operations, optimizes GPU resource utilization, reduces computational overhead and memory footprint per Prefill, thereby lowering peak memory usage and avoiding out-of-memory issues.

@@ -28,7 +28,7 @@ FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 MAX_WAIT_SECONDS = 60
 
 os.environ["LD_LIBRARY_PATH"] = "/usr/local/nccl/"
-# enbale get_save_output_v1
+# enable get_save_output_v1
 os.environ["FD_USE_GET_SAVE_OUTPUT_V1"] = "1"
 
 

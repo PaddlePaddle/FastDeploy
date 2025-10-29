@@ -1,3 +1,5 @@
+[English](../../features/speculative_decoding.md)
+
 # 🔮 投机解码
 本项目基于 PaddlePaddle 实现了高效的 **投机解码（Speculative Decoding）** 推理框架，支持多 Token 预测（Multi-token Proposing, MTP），用于加速大语言模型（LLM）的生成，显著降低时延并提升吞吐量。
 
@@ -14,6 +16,9 @@
   - ⏳ 即将支持：兼容 Chunk Prefill
   - ⏳ 即将支持：多层 MTP layer
 
+- **混合MTP、Ngram方法解码(Hybrid-MTP-with-Ngram)**
+  - 方法概述：混合MTP与Ngram方法，先使用MTP产出N个草稿Token，再使用Ngram匹配补充草稿Token。
+  - 使用场景：适合在需要更多草稿Token时使用，兼顾MTP生成能力与Ngram匹配的高效性。
 ---
 
 ### ⏳ 规划中
@@ -110,7 +115,12 @@ python -m fastdeploy.entrypoints.openai.api_server  \
        --scheduler-password "scheduler_mtp" \
        --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": ""${path_to_mtp_model}"}'  &
 ```
+## 使用混合MTP、Ngram方法解码
+在启动服务时，只需改动 --speculative-config 即可。例如使用MTP产出两个DraftToken，再额外拼接三个Ngram匹配的DraftToken
+```
+--speculative-config '{"method": "mtp", "num_model_steps": 2, "mtp_strategy": "with_ngram" ,"num_speculative_tokens": 5, "model": "'$model_path'/mtp"}'
 
+```
 ## 🧠 使用 Ngram 解码
 该算法通过 n-gram 窗口从 prompt 和已生成的 Token 中进行匹配生成草稿 Token，适合输入和输出有很大 overlap 的场景，如代码续写、文档查询等。
 > 使用 4×H100；量化方式选择 WINT4

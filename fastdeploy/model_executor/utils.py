@@ -14,14 +14,20 @@
 # limitations under the License.
 """
 
+import os
 import re
+from collections.abc import Mapping
 from contextlib import contextmanager
-from typing import Any, Optional, Union
+from dataclasses import dataclass, field
+from typing import Any, List, Optional, Union
 
 import paddle
+from paddleformers.utils.log import logger
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.platforms import current_platform
 
 
 class BitMaskTracker:
@@ -146,6 +152,36 @@ def process_weights_after_loading(sublayers_dict: dict):
     return fn
 
 
+@dataclass
+class WeightsMapper:
+    orig_to_new_prefix: Mapping[str, Optional[str]] = field(default_factory=dict)
+
+    def _map_name(self, key: str) -> Optional[str]:
+        for prefix, new_key in self.orig_to_new_prefix.items():
+            if key.startswith(prefix):
+                key = key.replace(prefix, new_key, 1)
+        return key
+
+    def apply(self, weight_name):
+        return self._map_name(weight_name)
+
+
+def process_weights_before_loading(
+    *, skip_prefixes: Optional[List[str]] = None, mapper: Optional[WeightsMapper] = None
+):
+    def _can_skip(weight_name):
+        return any(weight_name.startswith(p) for p in (skip_prefixes or []))
+
+    def fn(weight_name):
+        if mapper is not None:
+            weight_name = mapper.apply(weight_name)
+        if _can_skip(weight_name):
+            weight_name = None
+        return weight_name
+
+    return fn
+
+
 def free_tensor(tensor):
     if hasattr(tensor, "tensor_track"):
         tensor.tensor_track = None
@@ -153,18 +189,19 @@ def free_tensor(tensor):
     del tensor
 
 
-def default_weight_loader(fd_config: FDConfig) -> None:
+def default_weight_loader(fd_config: FDConfig = None) -> None:
     """Default weight loader"""
 
     def fn(param, loaded_weight, shard_id: Optional[Union[int, str]] = None):
         """fn"""
+
         output_dim = getattr(param, "output_dim", None)
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
         if weight_need_transpose:
             loaded_weight = get_tensor(loaded_weight)
             loaded_weight = loaded_weight.transpose([1, 0])
         # Tensor parallelism splits the weight along the output_dim
-        if output_dim is not None and fd_config.parallel_config.tensor_parallel_size > 1:
+        if output_dim is not None and fd_config is not None and fd_config.parallel_config.tensor_parallel_size > 1:
             dim = -1 if output_dim else 0
             if isinstance(loaded_weight, paddle.Tensor):
                 size = loaded_weight.shape[dim]
@@ -191,6 +228,75 @@ def default_weight_loader(fd_config: FDConfig) -> None:
         param.copy_(loaded_weight, False)
 
     return fn
+
+
+def is_pre_sliced_weight(model_path):
+    rank_dirs = [
+        f for f in os.listdir(model_path) if f.startswith("rank") and os.path.isdir(os.path.join(model_path, f))
+    ]
+    return len(rank_dirs) > 1
+
+
+def is_paddle_support_v1_loader():
+    src_shape = [32, 32]
+    tgt_shape = [1, 32, 64]
+    src_tensor = paddle.ones(src_shape, dtype="float32")
+    tgt_tensor = paddle.zeros(tgt_shape, dtype="float32")
+    for exp_id in range(tgt_shape[0]):
+        # gate
+        gate_tgt = tgt_tensor[exp_id][..., : tgt_shape[2] // 2]
+        gate_tgt.copy_(src_tensor, False)
+        # up
+        up_tgt = tgt_tensor[exp_id][..., tgt_shape[2] // 2 :]
+        up_tgt.copy_(src_tensor, False)
+    is_same = bool(paddle.all(tgt_tensor == 1))
+    return is_same
+
+
+def v1_loader_support(fd_config):
+    _v1_no_support_archs = [
+        "Qwen2VLForConditionalGeneration",
+    ]
+
+    def _err_msg(msg: str) -> str:
+        logger.info(msg + "; fallback to the v0 loader for model loading.")
+
+    if not current_platform.is_cuda():
+        _err_msg("v1loader currently does not support backends other than CUDA")
+        return False
+
+    if is_pre_sliced_weight(fd_config.model_config.model):
+        _err_msg("v1 loader currently does not support pre-sliced weights")
+        return False
+
+    if fd_config.parallel_config.use_ep:
+        _err_msg("v1 loader currently does not support expert parallelism")
+        return False
+
+    if envs.FD_MOE_BACKEND.lower() == "marlin":
+        _err_msg("v1 loader currently does not support marlin backend")
+        return False
+
+    if fd_config.quant_config is not None:
+        if fd_config.quant_config.name() == "mix_quant":
+            moe_quant_type = fd_config.quant_config.moe_quant_type
+            dense_quant_type = fd_config.quant_config.dense_quant_type
+        else:
+            moe_quant_type = fd_config.quant_config.name()
+            dense_quant_type = fd_config.quant_config.name()
+        unsupported_quant = {"w4a8", "w4afp8", "wint2"}
+
+        if unsupported_quant & {moe_quant_type, dense_quant_type}:
+            _err_msg("v1 loader currently does not support w4a8/w4afp8/win2 quantization")
+            return False
+    if fd_config.model_config.architectures[0] in _v1_no_support_archs:
+        _err_msg(f"v1 loader currently does not support {fd_config.model_config.architectures[0]}")
+        return False
+
+    if not is_paddle_support_v1_loader():
+        _err_msg("The installed Paddle does not support v1 loader")
+        return False
+    return True
 
 
 @contextmanager
@@ -240,7 +346,7 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
     }
     moe_quant_type = ""
     dense_quant_type = ""
-    if fd_config.quant_config is None:
+    if fd_config.quant_config is not None:
         if fd_config.quant_config.name() == "mix_quant":
             moe_quant_type = fd_config.quant_config.moe_quant_type
             dense_quant_type = fd_config.quant_config.dense_quant_type

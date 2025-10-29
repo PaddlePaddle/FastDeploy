@@ -72,6 +72,8 @@ class SiluAndMul(nn.Layer):
             self.forward = self.forward_cuda
         elif current_platform.is_gcu():
             self.forward = self.forward_gcu
+        elif current_platform.is_intel_hpu():
+            self.forward = self.forward_intel_hpu
         else:
             raise NotImplementedError
 
@@ -146,3 +148,36 @@ class SiluAndMul(nn.Layer):
         if self.bias is not None:
             out = out + self.bias
         return out
+
+    def forward_intel_hpu(self, x):
+        """
+        Forward propagation of the custom activation layer.
+        Args:
+            x (Tensor): Input tensor to the activation layer.
+        Returns:
+            Tensor: Output tensor.
+        """
+        return
+
+
+def get_act_fn(act_fn_name: str) -> nn.Layer:
+    """Get an activation function by name."""
+    act_fn_name = act_fn_name.lower()
+
+    if act_fn_name.startswith("paddle.nn.Layer"):
+        activation_name = act_fn_name.split(".")[-1]
+        if activation_name == "identity":
+            return nn.Identity()
+        act_fn_name = activation_name
+
+    activation_map = {
+        "gelu": nn.GELU(),
+        "relu": nn.ReLU(),
+        "silu": nn.Silu(),
+        "tanh": nn.Tanh(),
+        "sigmoid": nn.Sigmoid(),
+    }
+    if act_fn_name in activation_map:
+        return activation_map[act_fn_name]
+    else:
+        raise ValueError(f"Activation function {act_fn_name!r} is not supported.")

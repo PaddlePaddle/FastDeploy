@@ -71,9 +71,6 @@ __global__ void speculate_update(int *seq_lens_encoder,
         }
         draft_tokens[bid * max_draft_tokens] =
             accept_tokens[bid * max_draft_tokens + accept_num_now - 1];
-        if (stop_flag_now_int) {
-            seq_lens_decoder[bid] = 0;
-        }
     } else if (bid >= real_bsz && bid < max_bsz) {
         stop_flag_now_int = 1;
     }

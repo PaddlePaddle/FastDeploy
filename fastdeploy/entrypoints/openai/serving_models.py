@@ -87,7 +87,7 @@ class OpenAIServingModels:
                 f"Only master node can accept models request, please send request to master node: {self.master_ip}"
             )
             api_server_logger.error(err_msg)
-            return ErrorResponse(error=ErrorInfo(message=err_msg, type=ErrorType.SERVER_ERROR))
+            return ErrorResponse(error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR))
         model_infos = [
             ModelInfo(
                 id=model.name, max_model_len=self.max_model_len, root=model.model_path, permission=[ModelPermission()]

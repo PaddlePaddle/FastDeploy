@@ -1,3 +1,5 @@
+[English](../../best_practices/ERNIE-4.5-0.3B-Paddle.md)
+
 # ERNIE-4.5-0.3B
 ## 一、环境准备
 ### 1.1 支持情况
@@ -31,12 +33,12 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --quantization wint4 \
        --max-model-len 32768 \
        --max-num-seqs 128 \
-       --load_choices "default_v1"
+       --load-choices "default_v1"
 ```
 其中：
 - `--quantization`: 表示模型采用的量化策略。不同量化策略，模型的性能和精度也会不同。可选值包括：`wint8` / `wint4` / `block_wise_fp8`(需要Hopper架构)。
 - `--max-model-len`：表示当前部署的服务所支持的最长Token数量。设置得越大，模型可支持的上下文长度也越大，但相应占用的显存也越多，可能影响并发数。
-- `--load_choices`: 表示loader的版本，"default_v1"表示启用v1版本的loader，具有更快的加载速度和更少的内存使用。
+- `--load-choices`: 表示loader的版本，"default_v1"表示启用v1版本的loader，具有更快的加载速度和更少的内存使用。
 
 更多的参数含义与默认设置，请参见[FastDeploy参数说明](../parameters.md)。
 
@@ -73,10 +75,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
 CUDAGraph 是 NVIDIA 提供的一项 GPU 计算加速技术，通过将 CUDA 操作序列捕获（capture）为图结构（graph），实现 GPU 任务的高效执行和优化。CUDAGraph 的核心思想是将一系列 GPU 计算和内存操作封装为一个可重复执行的图，从而减少 CPU-GPU 通信开销、降低内核启动延迟，并提升整体计算性能。
 
 **启用方式：**
-在启动命令中增加
-```
---use-cudagraph
-```
+在2.3版本之前需要通过`--use-cudagraph`启用。
+
+2.3版本开始部分场景已默认开启 CUDAGraph，对于暂时不能兼容 CUDAGraph 的功能（投机解码、强化学习训练、多模模型推理）CUDAGraph 会自动关闭。
 注：
 - 通常情况下不需要额外设置其他参数，但CUDAGraph会产生一些额外的显存开销，在一些显存受限的场景下可能需要调整。详细的参数调整请参考[GraphOptimizationBackend](../features/graph_optimization.md) 相关配置参数说明
 

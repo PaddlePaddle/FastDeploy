@@ -15,19 +15,22 @@
 """
 
 import asyncio
+import json
 import os
+import signal
 import threading
 import time
 import traceback
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from multiprocessing import current_process
 
 import uvicorn
 import zmq
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
+from gunicorn.app.base import BaseApplication
+from opentelemetry import trace
 from prometheus_client import CONTENT_TYPE_LATEST
 
 from fastdeploy.engine.args_utils import EngineArgs
@@ -38,25 +41,35 @@ from fastdeploy.entrypoints.engine_client import EngineClient
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
+    ChatRewardRequest,
     CompletionRequest,
     CompletionResponse,
     ControlSchedulerRequest,
+    EmbeddingRequest,
     ErrorInfo,
     ErrorResponse,
     ModelList,
 )
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
+from fastdeploy.entrypoints.openai.serving_embedding import OpenAIServingEmbedding
 from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServingModels
+from fastdeploy.entrypoints.openai.serving_reward import OpenAIServingReward
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
-from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG
+from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
+from fastdeploy.envs import environment_variables
 from fastdeploy.metrics.metrics import (
     EXCLUDE_LABELS,
     cleanup_prometheus_files,
     get_filtered_metrics,
     main_process_metrics,
 )
-from fastdeploy.metrics.trace_util import fd_start_span, inject_to_metadata, instrument
+from fastdeploy.metrics.trace_util import (
+    fd_start_span,
+    inject_to_metadata,
+    instrument,
+    lable_span,
+)
 from fastdeploy.utils import (
     ExceptionHandler,
     FlexibleArgumentParser,
@@ -67,35 +80,8 @@ from fastdeploy.utils import (
     retrive_model_from_server,
 )
 
-parser = FlexibleArgumentParser()
-parser.add_argument("--port", default=8000, type=int, help="port to the http server")
-parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
-parser.add_argument("--workers", default=None, type=int, help="number of workers")
-parser.add_argument("--metrics-port", default=8001, type=int, help="port for metrics server")
-parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
-parser.add_argument(
-    "--max-waiting-time",
-    default=-1,
-    type=int,
-    help="max waiting time for connection, if set value -1 means no waiting time limit",
-)
-parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
-
-parser.add_argument(
-    "--enable-mm-output", action="store_true", help="Enable 'multimodal_content' field in response output. "
-)
-parser.add_argument(
-    "--timeout-graceful-shutdown",
-    default=0,
-    type=int,
-    help="timeout for graceful shutdown in seconds (used by uvicorn)",
-)
-
-parser = EngineArgs.add_cli_args(parser)
+parser = make_arg_parser(FlexibleArgumentParser())
 args = parser.parse_args()
-
-if args.workers is None:
-    args.workers = max(min(int(args.max_num_seqs // 32), 8), 1)
 
 console_logger.info(f"Number of api-server workers: {args.workers}.")
 
@@ -104,6 +90,24 @@ chat_template = load_chat_template(args.chat_template, args.model)
 if args.tool_parser_plugin:
     ToolParserManager.import_tool_parser(args.tool_parser_plugin)
 llm_engine = None
+
+MAX_CONCURRENT_CONNECTIONS = (args.max_concurrency + args.workers - 1) // args.workers
+connection_semaphore = StatefulSemaphore(MAX_CONCURRENT_CONNECTIONS)
+
+
+class StandaloneApplication(BaseApplication):
+    def __init__(self, app, options=None):
+        self.application = app
+        self.options = options or {}
+        super().__init__()
+
+    def load_config(self):
+        config = {key: value for key, value in self.options.items() if key in self.cfg.settings and value is not None}
+        for key, value in config.items():
+            self.cfg.set(key.lower(), value)
+
+    def load(self):
+        return self.application
 
 
 def load_engine():
@@ -114,21 +118,15 @@ def load_engine():
     if llm_engine is not None:
         return llm_engine
 
-    api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}")
+    api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}, port: {args.port}")
     engine_args = EngineArgs.from_cli_args(args)
     engine = LLMEngine.from_engine_args(engine_args)
-    if not engine.start(api_server_pid=os.getpid()):
+    if not engine.start(api_server_pid=args.port):
         api_server_logger.error("Failed to initialize FastDeploy LLM engine, service exit now!")
         return None
 
     llm_engine = engine
     return engine
-
-
-app = FastAPI()
-
-MAX_CONCURRENT_CONNECTIONS = (args.max_concurrency + args.workers - 1) // args.workers
-connection_semaphore = StatefulSemaphore(MAX_CONCURRENT_CONNECTIONS)
 
 
 def load_data_service():
@@ -138,12 +136,12 @@ def load_data_service():
     global llm_engine
     if llm_engine is not None:
         return llm_engine
-    api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}")
+    api_server_logger.info(f"FastDeploy LLM API server starting... {os.getpid()}, port: {args.port}")
     engine_args = EngineArgs.from_cli_args(args)
     config = engine_args.create_engine_config()
     api_server_logger.info(f"local_data_parallel_id: {config.parallel_config}")
     expert_service = ExpertService(config, config.parallel_config.local_data_parallel_id)
-    if not expert_service.start(os.getpid(), config.parallel_config.local_data_parallel_id):
+    if not expert_service.start(args.port, config.parallel_config.local_data_parallel_id):
         api_server_logger.error("Failed to initialize FastDeploy LLM expert service, service exit now!")
         return None
     llm_engine = expert_service
@@ -155,13 +153,22 @@ async def lifespan(app: FastAPI):
     """
     async context manager for FastAPI lifespan
     """
+    import logging
+
+    uvicorn_access = logging.getLogger("uvicorn.access")
+    uvicorn_access.handlers.clear()
+
+    # 使用 gunicorn 的格式
+    formatter = logging.Formatter("[%(asctime)s] [%(process)d] [INFO] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(formatter)
+    uvicorn_access.addHandler(handler)
+    uvicorn_access.propagate = False
 
     if args.tokenizer is None:
         args.tokenizer = args.model
-    if current_process().name != "MainProcess":
-        pid = os.getppid()
-    else:
-        pid = os.getpid()
+    pid = args.port
     api_server_logger.info(f"{pid}")
 
     if args.served_model_name is not None:
@@ -178,15 +185,17 @@ async def lifespan(app: FastAPI):
         max_model_len=args.max_model_len,
         tensor_parallel_size=args.tensor_parallel_size,
         pid=pid,
-        port=int(args.engine_worker_queue_port[args.local_data_parallel_id]),
+        port=int(os.environ.get("INFERENCE_MSG_QUEUE_ID", "0")),
         limit_mm_per_prompt=args.limit_mm_per_prompt,
         mm_processor_kwargs=args.mm_processor_kwargs,
-        # args.enable_mm,
         reasoning_parser=args.reasoning_parser,
         data_parallel_size=args.data_parallel_size,
         enable_logprob=args.enable_logprob,
         workers=args.workers,
         tool_parser=args.tool_call_parser,
+        enable_prefix_caching=args.enable_prefix_caching,
+        splitwise_role=args.splitwise_role,
+        max_processor_cache=args.max_processor_cache,
     )
     await engine_client.connection_manager.initialize()
     app.state.dynamic_load_weight = args.dynamic_load_weight
@@ -213,11 +222,28 @@ async def lifespan(app: FastAPI):
         args.ips,
         args.max_waiting_time,
     )
+
+    engine_args = EngineArgs.from_cli_args(args)
+    config = engine_args.create_engine_config(port_availability_check=False)
+    embedding_handler = OpenAIServingEmbedding(
+        engine_client,
+        app.state.model_handler,
+        config,
+        pid,
+        args.ips,
+        args.max_waiting_time,
+        chat_template,
+    )
+    reward_handler = OpenAIServingReward(
+        engine_client, app.state.model_handler, config, pid, args.ips, args.max_waiting_time, chat_template
+    )
     engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid
     app.state.engine_client = engine_client
     app.state.chat_handler = chat_handler
     app.state.completion_handler = completion_handler
+    app.state.embedding_handler = embedding_handler
+    app.state.reward_handler = reward_handler
     global llm_engine
     if llm_engine is not None:
         llm_engine.engine.data_processor = engine_client.data_processor
@@ -314,12 +340,39 @@ def wrap_streaming_generator(original_generator: AsyncGenerator):
     """
 
     async def wrapped_generator():
-        try:
-            async for chunk in original_generator:
-                yield chunk
-        finally:
-            api_server_logger.debug(f"release: {connection_semaphore.status()}")
-            connection_semaphore.release()
+        span = trace.get_current_span()
+        if span is not None and span.is_recording():
+            last_time = None
+            count = 0
+            try:
+                async for chunk in original_generator:
+                    last_time = time.time()
+                    # 首包捕获
+                    if count == 0 and span is not None and span.is_recording():
+                        last_time = time.time()
+                        span.add_event("first_chunk", {"time": last_time})
+                    count += 1
+                    yield chunk
+            except Exception as e:
+                # 错误捕获
+                if span is not None and span.is_recording():
+                    span.add_event("stream_error", {"time": time.time(), "error": str(e), "total_chunk": count})
+                    span.record_exception(e)
+                    span.set_status({"code": "ERROR", "description": str(e)})
+                raise
+            finally:
+                # 尾包捕获
+                if span is not None and span.is_recording() and count > 0:
+                    span.add_event("last_chunk", {"time": last_time, "total_chunk": count})
+                api_server_logger.debug(f"release: {connection_semaphore.status()}")
+                connection_semaphore.release()
+        else:
+            try:
+                async for chunk in original_generator:
+                    yield chunk
+            finally:
+                api_server_logger.debug(f"release: {connection_semaphore.status()}")
+                connection_semaphore.release()
 
     return wrapped_generator
 
@@ -329,7 +382,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
     """
     Create a chat completion for the provided prompt and parameters.
     """
-    api_server_logger.info(f"Chat Received request: {request.model_dump_json()}")
+    api_server_logger.debug(f"Chat Received request: {request.model_dump_json()}")
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.is_workers_alive()
         if not status:
@@ -337,6 +390,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
     try:
         async with connection_manager():
             inject_to_metadata(request)
+            lable_span(request)
             generator = await app.state.chat_handler.create_chat_completion(request)
             if isinstance(generator, ErrorResponse):
                 api_server_logger.debug(f"release: {connection_semaphore.status()}")
@@ -367,6 +421,7 @@ async def create_completion(request: CompletionRequest):
             return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
     try:
         async with connection_manager():
+            lable_span(request)
             generator = await app.state.completion_handler.create_completion(request)
             if isinstance(generator, ErrorResponse):
                 connection_semaphore.release()
@@ -396,6 +451,34 @@ async def list_models() -> Response:
         return JSONResponse(content=models.model_dump())
     elif isinstance(models, ModelList):
         return JSONResponse(content=models.model_dump())
+
+
+@app.post("/v1/reward")
+async def create_reward(request: ChatRewardRequest):
+    """
+    Create reward for the input texts
+    """
+    if app.state.dynamic_load_weight:
+        status, msg = app.state.engine_client.is_workers_alive()
+        if not status:
+            return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
+
+    generator = await app.state.reward_handler.create_reward(request)
+    return JSONResponse(content=generator.model_dump())
+
+
+@app.post("/v1/embeddings")
+async def create_embedding(request: EmbeddingRequest):
+    """
+    Create embeddings for the input texts
+    """
+    if app.state.dynamic_load_weight:
+        status, msg = app.state.engine_client.is_workers_alive()
+        if not status:
+            return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
+
+    generator = await app.state.embedding_handler.create_embedding(request)
+    return JSONResponse(content=generator.model_dump())
 
 
 @app.get("/update_model_weight")
@@ -437,16 +520,17 @@ def launch_api_server() -> None:
     api_server_logger.info(f"args: {args.__dict__}")
     fd_start_span("FD_START")
 
+    options = {
+        "bind": f"{args.host}:{args.port}",
+        "workers": args.workers,
+        "worker_class": "uvicorn.workers.UvicornWorker",
+        "loglevel": "info",
+        "graceful_timeout": args.timeout_graceful_shutdown,
+        "timeout": args.timeout,
+    }
+
     try:
-        uvicorn.run(
-            app="fastdeploy.entrypoints.openai.api_server:app",
-            host=args.host,
-            port=args.port,
-            workers=args.workers,
-            log_config=UVICORN_CONFIG,
-            log_level="info",
-            timeout_graceful_shutdown=args.timeout_graceful_shutdown,
-        )  # set log level to error to avoid log
+        StandaloneApplication(app, options).run()
     except Exception as e:
         api_server_logger.error(f"launch sync http server error, {e}, {str(traceback.format_exc())}")
 
@@ -464,6 +548,29 @@ async def metrics():
         extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=args.workers),
     )
     return Response(metrics_text, media_type=CONTENT_TYPE_LATEST)
+
+
+@metrics_app.get("/config-info")
+def config_info() -> Response:
+    """
+    Get the current configuration of the API server.
+    """
+    global llm_engine
+    if llm_engine is None:
+        return Response("Engine not loaded", status_code=500)
+    cfg = llm_engine.cfg
+
+    def process_object(obj):
+        if hasattr(obj, "__dict__"):
+            # 处理有__dict__属性的对象
+            return obj.__dict__
+        return None  # 或其他默认处理
+
+    cfg_dict = {k: v for k, v in cfg.__dict__.items()}
+    env_dict = {k: v() for k, v in environment_variables.items()}
+    cfg_dict["env_config"] = env_dict
+    result_content = json.dumps(cfg_dict, default=process_object, ensure_ascii=False)
+    return Response(result_content, media_type="application/json")
 
 
 def run_metrics_server():
@@ -498,6 +605,8 @@ def reset_scheduler():
 
     if llm_engine is None:
         return Response("Engine not loaded", status_code=500)
+
+    llm_engine.engine.clear_data()
     llm_engine.engine.scheduler.reset()
     return Response("Scheduler Reset Successfully", status_code=200)
 
@@ -517,6 +626,7 @@ def control_scheduler(request: ControlSchedulerRequest):
         return JSONResponse(content=content.model_dump(), status_code=500)
 
     if request.reset:
+        llm_engine.engine.clear_data()
         llm_engine.engine.scheduler.reset()
 
     if request.load_shards_num or request.reallocate_shard:
@@ -561,6 +671,27 @@ def launch_controller_server():
     time.sleep(1)
 
 
+def launch_worker_monitor():
+    """
+    Detect whether worker process is alive. If not, stop the API serverby triggering llm_engine.
+    """
+
+    def _monitor():
+        global llm_engine
+        while True:
+            if hasattr(llm_engine, "worker_proc") and llm_engine.worker_proc.poll() is not None:
+                console_logger.error(
+                    f"Worker process has died in the background (code={llm_engine.worker_proc.returncode}). API server is forced to stop."
+                )
+                os.kill(os.getpid(), signal.SIGINT)
+                break
+            time.sleep(5)
+
+    worker_monitor_thread = threading.Thread(target=_monitor, daemon=True)
+    worker_monitor_thread.start()
+    time.sleep(1)
+
+
 def main():
     """main函数"""
     if args.local_data_parallel_id == 0:
@@ -574,6 +705,7 @@ def main():
     console_logger.info(f"Launching chat completion service at http://{args.host}:{args.port}/v1/chat/completions")
     console_logger.info(f"Launching completion service at http://{args.host}:{args.port}/v1/completions")
 
+    launch_worker_monitor()
     launch_controller_server()
     launch_metrics_server()
     launch_api_server()

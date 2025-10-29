@@ -2,74 +2,103 @@ import unittest
 
 import paddle
 
-from fastdeploy.model_executor.ops.gpu import noaux_tc
+from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 
 
 class TestMoeRouting(unittest.TestCase):
     def setUp(self):
-        self.num_tokens = 10
-        self.num_experts = 64
-        self.gating_output = paddle.rand([self.num_tokens, self.num_experts])
-        self.e_score_correction_bias = paddle.rand([self.num_experts])
-        self.n_group = 8
-        self.topk_group = 4
-        self.top_k = 8
-        self.routed_scaling_factor = 1.5
+        paddle.seed(2024)
+        print(paddle.device.cuda.get_device_properties())
+        print(paddle.__git_commit__)
 
-    def node_limit_routing(self, gate_probs):
-        """将所有专家分组, 只在topk_group个group内选择专家"""
-        assert len(gate_probs.shape) == 2
-        seq_length, n_experts = gate_probs.shape
+    def native_group_topk(
+        self,
+        gating_output: paddle.Tensor,
+        topk: int,
+        renormalize: bool,
+        num_expert_group: int,
+        topk_group: int,
+        routed_scaling_factor: float,
+        e_score_correction_bias: paddle.Tensor,
+    ):
+        original_scores = paddle.nn.functional.sigmoid(gating_output)
+        if len(e_score_correction_bias.shape) == 1:
+            e_score_correction_bias = e_score_correction_bias.unsqueeze(0)
+        scores = original_scores + e_score_correction_bias
 
-        group_scores = gate_probs.reshape([seq_length, 8, -1]).topk(2, axis=-1)[0].sum(axis=-1)
-        group_idx = paddle.topk(group_scores, k=4, axis=-1, sorted=True)[1]
-        group_mask = paddle.zeros_like(group_scores).put_along_axis(
-            group_idx, paddle.ones([], dtype="float32"), axis=-1
+        num_token, n_experts = scores.shape
+        group_scores = scores.reshape([num_token, num_expert_group, -1]).topk(2, axis=-1)[0].sum(axis=-1)
+        group_idx = paddle.topk(group_scores, k=topk_group, axis=-1, sorted=True)[1]  # [n, top_k_group]
+        group_mask = paddle.zeros_like(group_scores)  # [n, n_group]
+        group_mask.put_along_axis_(group_idx, 1.0, axis=-1)  # [n, n_group]
+        score_mask = (
+            group_mask.unsqueeze(-1)
+            .expand([num_token, num_expert_group, n_experts // num_expert_group])
+            .reshape([num_token, -1])
         )
-        score_mask = group_mask.unsqueeze(-1).expand([seq_length, 8, n_experts // 8]).reshape([seq_length, -1])
-        gate_probs = gate_probs.masked_fill(~score_mask.astype(paddle.bool), float("-inf"))
-        return gate_probs
+        tmp_scores = scores.masked_fill(~score_mask.astype(paddle.bool), float("-inf"))
 
-    def ref_moe_routing(self):
-        scores = paddle.nn.functional.sigmoid(self.gating_output)
-        prob_for_choice = scores + self.e_score_correction_bias.unsqueeze(0)
-        prob_for_choice = self.node_limit_routing(prob_for_choice)
-        top_logits, topk_idx_ref = paddle.topk(prob_for_choice, self.top_k, axis=1)
+        topk_ids = paddle.topk(tmp_scores, topk, axis=1)[1]
+        topk_weights = paddle.take_along_axis(original_scores, topk_ids, axis=1)
 
-        token_num, top_k = topk_idx_ref.shape
-        _, num_expert = prob_for_choice.shape
-        topk_idx_expanded = paddle.unsqueeze(topk_idx_ref, axis=-1)
-        indices = paddle.concat(
-            [
-                paddle.arange(token_num, dtype="int64").unsqueeze(1).tile([1, top_k]).unsqueeze(-1),
-                topk_idx_expanded,
-            ],
-            axis=-1,
-        )
-        selected_gate_probs = paddle.gather_nd(scores, indices)
+        if renormalize:
+            topk_weights = topk_weights / paddle.sum(topk_weights, axis=1, keepdim=True)
 
-        selected_gate_probs_sum = paddle.sum(selected_gate_probs, axis=1, keepdim=True)
-        topk_weights_ref = selected_gate_probs / selected_gate_probs_sum
-        topk_weights_ref = topk_weights_ref * self.routed_scaling_factor
-        return topk_weights_ref, topk_idx_ref
+        if routed_scaling_factor != 1.0:
+            topk_weights = topk_weights * routed_scaling_factor
 
-    def test_moe_select(self):
-        scores = paddle.nn.functional.sigmoid(self.gating_output)
-        scores_with_bias = scores + self.e_score_correction_bias.unsqueeze(0)
+        return topk_weights, topk_ids
 
-        scores, topk_values, topk_idx = noaux_tc(
-            scores,
-            scores_with_bias,
-            self.n_group,
-            self.topk_group,
-            self.top_k,
-            self.routed_scaling_factor,
-        )
+    def test_group_topk(self):
 
-        ref_topk_values, ref_topk_idx = self.ref_moe_routing()
+        renormalize = True
 
-        paddle.allclose(topk_values, ref_topk_values)
-        paddle.allclose(topk_idx.cast(int), ref_topk_idx.cast(int))
+        test_cases = [
+            # (num_experts, n_group, topk_group, top_k, routed_scaling_factor)
+            (128, 1, 1, 8, 1.0),  # glm45-air
+            (256, 8, 4, 8, 2.5),  # deepseek
+        ]
+
+        for case_tuple in test_cases:
+            num_experts, n_group, topk_group, top_k, routed_scaling_factor = case_tuple
+            for num_tokens in [1, 32, 64, 128]:
+                gating_output = paddle.rand([num_tokens, num_experts])
+                e_score_correction_bias = paddle.rand([1, num_experts])
+
+                ref_topk_values, ref_topk_idx = self.native_group_topk(
+                    gating_output=gating_output,
+                    topk=top_k,
+                    renormalize=renormalize,
+                    num_expert_group=n_group,
+                    topk_group=topk_group,
+                    routed_scaling_factor=routed_scaling_factor,
+                    e_score_correction_bias=e_score_correction_bias,
+                )
+
+                new_score, topk_values, topk_idx = get_moe_scores(
+                    gating_output=gating_output,
+                    n_group=n_group,
+                    topk_group=topk_group,
+                    top_k=top_k,
+                    routed_scaling_factor=routed_scaling_factor,
+                    e_score_correction_bias=e_score_correction_bias,
+                    renormalize=renormalize,
+                )
+
+                equal_topk_value = paddle.allclose(topk_values, ref_topk_values, atol=1e-03, rtol=1e-03).item()
+                equal_topk_ids = paddle.allclose(
+                    topk_idx.cast("int32"), ref_topk_idx.cast("int32"), atol=0.0, rtol=0.0
+                ).item()
+                print(
+                    f"Test Case[{case_tuple}], num_tokens = {num_tokens}, equal_topk_value: {equal_topk_value}, equal_topk_ids: {equal_topk_ids}"
+                )
+                if not equal_topk_value:
+                    print(f"ref_topk_values = {ref_topk_values}")
+                    print(f"topk_values = {topk_values}")
+                if not equal_topk_ids:
+                    print(f"ref_topk_idx = {ref_topk_idx}")
+                    print(f"topk_idx = {topk_idx}")
+                assert equal_topk_value and equal_topk_ids
 
 
 if __name__ == "__main__":

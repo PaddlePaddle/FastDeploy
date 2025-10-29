@@ -86,7 +86,7 @@ def _add_query_options(parser: FlexibleArgumentParser) -> FlexibleArgumentParser
     parser.add_argument(
         "--url",
         type=str,
-        default="http://localhost:9904/v1",
+        default="http://localhost:8000/v1",
         help="url of the running OpenAI-Compatible RESTful API server",
     )
     parser.add_argument(

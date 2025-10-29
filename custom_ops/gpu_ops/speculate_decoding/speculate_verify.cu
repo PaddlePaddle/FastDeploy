@@ -73,7 +73,7 @@ __global__ void speculate_verify(
     const int *output_cum_offsets, const int *actual_candidate_len,
     const int real_bsz, const int max_draft_tokens, const int end_length,
     const int max_seq_len, const int max_candidate_len, const int verify_window,
-    const bool prefill_one_step_stop, const bool benchmark_mode) {
+    const bool prefill_one_step_stop, const bool benchmark_mode, const bool accept_all_drafts) {
   const int bid = threadIdx.x;
   // verify and set stop flags
   int accept_num_now = 1;
@@ -100,6 +100,24 @@ __global__ void speculate_verify(
         }
         if (seq_lens_encoder[bid] != 0) {
           break;
+        }
+        if (accept_all_drafts) {
+          // accept all draft tokens
+          step_idx[bid]++;
+          auto accept_token = draft_tokens_now[i + 1];
+          accept_tokens[bid * max_draft_tokens + i] = accept_token;
+
+          if (is_in_end(accept_token, end_tokens, end_length) ||
+              step_idx[bid] >= max_dec_len[bid]) {
+            stop_flags[bid] = true;
+            stop_flag_now_int = 1;
+            if (step_idx[bid] >= max_dec_len[bid])
+              accept_tokens[bid * max_draft_tokens + i] = end_tokens[0];
+            break;
+          } else {
+            accept_num_now++;
+          }
+          continue;
         }
         if (USE_TOPK) {
           if (verify_tokens_now[i * max_candidate_len] ==
@@ -249,7 +267,7 @@ void SpeculateVerify(
     const paddle::Tensor &output_cum_offsets,
     const paddle::Tensor &actual_candidate_len,
     const paddle::Tensor &actual_draft_token_nums, const paddle::Tensor &topp,
-    int max_seq_len, int verify_window, bool enable_topp, bool benchmark_mode) {
+    int max_seq_len, int verify_window, bool enable_topp, bool benchmark_mode, bool accept_all_drafts) {
   //   printf("Enter speculate update\n");
   auto bsz = accept_tokens.shape()[0];
   int real_bsz = seq_lens_this_time.shape()[0];
@@ -292,7 +310,7 @@ void SpeculateVerify(
           is_block_step.data<bool>(), output_cum_offsets.data<int>(),
           actual_candidate_len.data<int>(), real_bsz, max_draft_tokens,
           end_length, max_seq_len, max_candidate_len, verify_window,
-          prefill_one_step_stop, benchmark_mode);
+          prefill_one_step_stop, benchmark_mode, accept_all_drafts);
     } else {
       speculate_verify<false, true>
           <<<1, BlockSize, 0, accept_tokens.stream()>>>(
@@ -308,7 +326,7 @@ void SpeculateVerify(
               end_tokens.data<int64_t>(), is_block_step.data<bool>(),
               output_cum_offsets.data<int>(), actual_candidate_len.data<int>(),
               real_bsz, max_draft_tokens, end_length, max_seq_len,
-              max_candidate_len, verify_window, prefill_one_step_stop, benchmark_mode);
+              max_candidate_len, verify_window, prefill_one_step_stop, benchmark_mode, accept_all_drafts);
     }
   } else {
     if (enable_topp) {
@@ -326,7 +344,7 @@ void SpeculateVerify(
               end_tokens.data<int64_t>(), is_block_step.data<bool>(),
               output_cum_offsets.data<int>(), actual_candidate_len.data<int>(),
               real_bsz, max_draft_tokens, end_length, max_seq_len,
-              max_candidate_len, verify_window, prefill_one_step_stop, benchmark_mode);
+              max_candidate_len, verify_window, prefill_one_step_stop, benchmark_mode, accept_all_drafts);
     } else {
       speculate_verify<false, false>
           <<<1, BlockSize, 0, accept_tokens.stream()>>>(
@@ -342,7 +360,7 @@ void SpeculateVerify(
               end_tokens.data<int64_t>(), is_block_step.data<bool>(),
               output_cum_offsets.data<int>(), actual_candidate_len.data<int>(),
               real_bsz, max_draft_tokens, end_length, max_seq_len,
-              max_candidate_len, verify_window, prefill_one_step_stop, benchmark_mode);
+              max_candidate_len, verify_window, prefill_one_step_stop, benchmark_mode, accept_all_drafts);
     }
   }
 
@@ -357,7 +375,7 @@ PD_BUILD_STATIC_OP(speculate_verify)
              "actual_candidate_len", "actual_draft_token_nums", "topp"})
     .Outputs({"accept_tokens_out", "accept_num_out", "step_idx_out",
               "stop_flags_out"})
-    .Attrs({"max_seq_len: int", "verify_window: int", "enable_topp: bool", "benchmark_mode: bool"})
+    .Attrs({"max_seq_len: int", "verify_window: int", "enable_topp: bool", "benchmark_mode: bool","accept_all_drafts: bool"})
     .SetInplaceMap({{"accept_tokens", "accept_tokens_out"},
                     {"accept_num", "accept_num_out"},
                     {"step_idx", "step_idx_out"},

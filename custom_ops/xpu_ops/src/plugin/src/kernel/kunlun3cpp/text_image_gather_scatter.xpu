@@ -1,0 +1,215 @@
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+#include "xpu/kernel/xtdk_io.h"
+
+namespace xpu3 {
+namespace plugin {
+
+template <typename T>
+static __device__ inline void text_image_gather(
+    __global_ptr__ T* input,
+    __global_ptr__ T* text_input,
+    __global_ptr__ T* image_input,
+    __global_ptr__ int* token_type_ids,
+    __global_ptr__ int* text_index,
+    __global_ptr__ int* image_index,
+    int64_t token_num,
+    int64_t text_token_num,
+    int64_t image_token_num,
+    int64_t hidden_size,
+    T* input_lm) {
+  int cid = core_id();
+  int clusterid = cluster_id();
+  int token_start_cluster;
+  int token_end_cluster;
+  int token_start_core;
+  int token_end_core;
+
+  const int BUFSIZE = 2 * 1024 / sizeof(T);  // 1024 for bf16, 512 for fp32
+  // cluster partition
+  partition(cluster_id(),
+            cluster_num(),
+            (int)token_num,
+            1,
+            &token_start_cluster,
+            &token_end_cluster);
+  if (token_start_cluster >= token_end_cluster) {
+    return;
+  }
+  int rows_cluster =
+      token_end_cluster - token_start_cluster;  // total rows for a cluster
+  // core partition
+  partition(core_id(),
+            core_num(),
+            rows_cluster,
+            1,
+            &token_start_core,
+            &token_end_core);
+  int rows_core = token_end_core - token_start_core;  // total rows for a core
+  token_start_core += token_start_cluster;
+  token_end_core += token_start_cluster;
+
+  int read_len;
+  for (int i = token_start_core; i < token_end_core; i += 1) {
+    int token_type, text_image_token_idx;
+    __global_ptr__ T* text_image_input = nullptr;
+    __global_ptr__ int* text_image_index = nullptr;
+
+    GM2LM(token_type_ids + i, &token_type, sizeof(int));
+    if (token_type == 0) {
+      text_image_input = text_input;
+      text_image_index = text_index;
+    } else {
+      text_image_input = image_input;
+      text_image_index = image_index;
+    }
+    GM2LM(text_image_index + i, &text_image_token_idx, sizeof(int));
+    int input_offset = i * hidden_size;
+    int text_image_offset = text_image_token_idx * hidden_size;
+
+    for (int j = 0; j < hidden_size; j += BUFSIZE) {
+      read_len = min(hidden_size - j, BUFSIZE);
+      GM2LM(text_image_input + text_image_offset + j,
+            input_lm,
+            sizeof(T) * read_len);
+      LM2GM(input_lm, input + input_offset + j, sizeof(T) * read_len);
+    }
+  }
+}
+
+template <typename T>
+static __device__ inline void text_image_scatter(
+    __global_ptr__ T* input,
+    __global_ptr__ T* text_input,
+    __global_ptr__ T* image_input,
+    __global_ptr__ int* token_type_ids,
+    __global_ptr__ int* text_index,
+    __global_ptr__ int* image_index,
+    int64_t token_num,
+    int64_t text_token_num,
+    int64_t image_token_num,
+    int64_t hidden_size,
+    T* input_lm) {
+  int cid = core_id();
+  int clusterid = cluster_id();
+  int token_start_cluster;
+  int token_end_cluster;
+  int token_start_core;
+  int token_end_core;
+
+  const int BUFSIZE = 2 * 1024 / sizeof(T);  // 1024 for bf16, 512 for fp32
+  // cluster partition
+  partition(cluster_id(),
+            cluster_num(),
+            (int)token_num,
+            1,
+            &token_start_cluster,
+            &token_end_cluster);
+  if (token_start_cluster >= token_end_cluster) {
+    return;
+  }
+  int rows_cluster =
+      token_end_cluster - token_start_cluster;  // total rows for a cluster
+  // core partition
+  partition(core_id(),
+            core_num(),
+            rows_cluster,
+            1,
+            &token_start_core,
+            &token_end_core);
+  int rows_core = token_end_core - token_start_core;  // total rows for a core
+  token_start_core += token_start_cluster;
+  token_end_core += token_start_cluster;
+
+  int read_len;
+  for (int i = token_start_core; i < token_end_core; i += 1) {
+    int token_type, text_image_token_idx;
+    __global_ptr__ T* text_image_input = nullptr;
+    __global_ptr__ int* text_image_index = nullptr;
+
+    GM2LM(token_type_ids + i, &token_type, sizeof(int));
+    if (token_type == 0) {
+      text_image_input = text_input;
+      text_image_index = text_index;
+    } else {
+      text_image_input = image_input;
+      text_image_index = image_index;
+    }
+    GM2LM(text_image_index + i, &text_image_token_idx, sizeof(int));
+    int input_offset = i * hidden_size;
+    int text_image_offset = text_image_token_idx * hidden_size;
+
+    for (int j = 0; j < hidden_size; j += BUFSIZE) {
+      read_len = min(hidden_size - j, BUFSIZE);
+      GM2LM(input + input_offset + j, input_lm, sizeof(T) * read_len);
+      LM2GM(input_lm,
+            text_image_input + text_image_offset + j,
+            sizeof(T) * read_len);
+    }
+  }
+}
+
+template <typename T>
+__global__ void text_image_gather_scatter(T* input,
+                                          T* text_input,
+                                          T* image_input,
+                                          int* token_type_ids,
+                                          int* text_index,
+                                          int* image_index,
+                                          int64_t token_num,
+                                          int64_t text_token_num,
+                                          int64_t image_token_num,
+                                          int64_t hidden_size,
+                                          bool is_scatter) {
+  int cid = core_id();
+  int ncores = core_num();
+  int clusterid = cluster_id();
+  int nclusters = cluster_num();
+  const int BUFSIZE = 2 * 1024 / sizeof(T);  // 1024 for bf16, 512 for fp32
+  __simd__ T input_lm[BUFSIZE];              // 2KB for bf16 and fp32
+  if (is_scatter) {
+    text_image_scatter(input,
+                       text_input,
+                       image_input,
+                       token_type_ids,
+                       text_index,
+                       image_index,
+                       token_num,
+                       text_token_num,
+                       image_token_num,
+                       hidden_size,
+                       input_lm);
+  } else {
+    text_image_gather(input,
+                      text_input,
+                      image_input,
+                      token_type_ids,
+                      text_index,
+                      image_index,
+                      token_num,
+                      text_token_num,
+                      image_token_num,
+                      hidden_size,
+                      input_lm);
+  }
+}
+
+#define _XPU_DEF_TEXT_IMAGE_GATHER_SCATTER(T)            \
+  template __global__ void text_image_gather_scatter<T>( \
+      T * input,                                         \
+      T * text_input,                                    \
+      T * image_input,                                   \
+      int* token_type_ids,                               \
+      int* text_index,                                   \
+      int* image_index,                                  \
+      int64_t token_num,                                 \
+      int64_t text_token_num,                            \
+      int64_t image_token_num,                           \
+      int64_t hidden_size,                               \
+      bool is_scatter);
+
+_XPU_DEF_TEXT_IMAGE_GATHER_SCATTER(bfloat16);
+
+}  // namespace plugin
+}  // namespace xpu3

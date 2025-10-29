@@ -88,7 +88,6 @@ class Ernie4_5Processor(BaseDataProcessor):
             str: error message
         """
         data_processor_logger.info(f"Start processing request: {request}")
-        request.chat_template = kwargs.get("chat_template")
         request = self._apply_default_parameters(request)
         if request.get("eos_token_ids") is None or len(request.eos_token_ids) == 0:
             request.eos_token_ids = self.eos_token_ids
@@ -127,7 +126,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                     )
             elif request.messages is not None:
                 task = request.to_dict()
-                chat_template_kwargs = kwargs.get("chat_template_kwargs")
+                chat_template_kwargs = kwargs.get("chat_template_kwargs", {})
                 if chat_template_kwargs:
                     if isinstance(chat_template_kwargs, dict):
                         for k, v in chat_template_kwargs.items():
@@ -135,7 +134,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                                 task[k] = v
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-                request.prompt_token_ids = self.messages2ids(task)
+                request.prompt_token_ids = self.messages2ids(task, **chat_template_kwargs)
             else:
                 raise ValueError(f"The request should have `prompt_token_ids`, `prompt` or `messages`: {request}.")
 
@@ -198,14 +197,14 @@ class Ernie4_5Processor(BaseDataProcessor):
                 if isinstance(prompt, list):  # if prompt is a token id list
                     request["prompt_token_ids"] = prompt
                 else:
-                    request["text_after_process"] = prompt
+                    request["prompt_tokens"] = prompt
                     tokens = self.tokenizer.tokenize(prompt)
                     token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
                     request["prompt_token_ids"] = token_ids
                     req_id = request.get("request_id", None)
                     data_processor_logger.info(f"req_id:{req_id}, tokens:{tokens}, token_ids: {token_ids}")
             elif request.get("messages"):
-                chat_template_kwargs = request.get("chat_template_kwargs")
+                chat_template_kwargs = request.get("chat_template_kwargs", {})
                 if chat_template_kwargs:
                     if isinstance(chat_template_kwargs, dict):
                         for k, v in chat_template_kwargs.items():
@@ -213,7 +212,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                                 request[k] = v
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-                request["prompt_token_ids"] = self.messages2ids(request)
+                request["prompt_token_ids"] = self.messages2ids(request, **chat_template_kwargs)
             else:
                 raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")
 
@@ -311,6 +310,8 @@ class Ernie4_5Processor(BaseDataProcessor):
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
+                reasoning_tokens = self.tokenizer.tokenize(reasoning_content)
+                response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
             else:
                 response_dict["outputs"]["text"] = full_text
             if self.tool_parser_obj:
@@ -319,7 +320,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 if tool_call_info.tools_called:
                     response_dict["outputs"]["tool_call"] = tool_call_info.tool_calls
                     response_dict["outputs"]["text"] = tool_call_info.content
-            response_dict["outputs"]["raw_prediction"] = full_text
+            response_dict["outputs"]["completion_tokens"] = full_text
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
         return response_dict
@@ -343,7 +344,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             if token_ids[-1] == self.tokenizer.eos_token_id:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
-        response_dict["outputs"]["raw_prediction"] = delta_text
+        response_dict["outputs"]["completion_tokens"] = delta_text
         if self.reasoning_parser and (
             enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
         ):
@@ -356,6 +357,9 @@ class Ernie4_5Processor(BaseDataProcessor):
                 token_ids,
             )
             response_dict["outputs"]["delta_message"] = reasoning_delta_message
+            reasoning_content = reasoning_delta_message.reasoning_content if reasoning_delta_message else None
+            reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
+            response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
         if self.tool_parser_obj:
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
@@ -379,7 +383,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 del self.tool_parser_dict[req_id]
         return response_dict
 
-    def messages2ids(self, request_or_messages):
+    def messages2ids(self, request_or_messages, **kwargs):
         """
         Convert multi-turn messages into ID sequences.
 
@@ -397,9 +401,9 @@ class Ernie4_5Processor(BaseDataProcessor):
             tokenize=False,
             split_special_tokens=False,
             add_special_tokens=False,
-            chat_template=request_or_messages.get("chat_template", None),
+            **kwargs,
         )
-        request_or_messages["text_after_process"] = spliced_message
+        request_or_messages["prompt_tokens"] = spliced_message
         req_id = None
         if isinstance(request_or_messages, dict):
             req_id = request_or_messages.get("request_id", None)

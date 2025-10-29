@@ -130,7 +130,7 @@ out_pd = weight_only_linear(x_pd, qw_pd, wscale_pd, None, weight_dtype, -1, -1)
 print(f"out_pd:\n{out_pd}")
 print(f"out_np:\n{out_np}")
 
-# comparation
+# comparison
 print(f"out_pd, mean={out_pd.mean()}, std={out_pd.std()}")
 print(f"out_np, mean={out_np.mean()}, std={out_np.std()}")
 sum_diff = np.sum(np.abs(out_pd.astype("float32").numpy() - out_np.astype("float32")))

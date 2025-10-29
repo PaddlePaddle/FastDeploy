@@ -20,6 +20,7 @@ from typing import Optional
 
 import paddle
 from paddle.nn.quant import weight_quantize
+from paddleformers.utils.log import logger
 
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.linear import (
@@ -37,9 +38,17 @@ if current_platform.is_xpu():
 else:
     from paddle.nn.quant import weight_only_linear
 
+from fastdeploy.model_executor.layers.quantization.ops.machete_mm import _ENABLE_MACHETE
+
 from ..moe import FusedMoE
 from ..utils import get_tensor
 from .quant_base import QuantConfigBase, QuantMethodBase
+
+if _ENABLE_MACHETE:
+    from fastdeploy.model_executor.layers.quantization.ops import (
+        machete_quantize_and_pack,
+        machete_wint_mm,
+    )
 
 
 class WeightOnlyConfig(QuantConfigBase):
@@ -78,18 +87,11 @@ class WeightOnlyConfig(QuantConfigBase):
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if current_platform.is_xpu():
             if isinstance(layer, FusedMoE):
-                if layer.ep_size > 1:
-                    from fastdeploy.model_executor.layers.backends import (
-                        XPUWeightOnlyMoeEpMethod,
-                    )
+                from fastdeploy.model_executor.layers.backends import (
+                    XPUWeightOnlyMoEMethod,
+                )
 
-                    return XPUWeightOnlyMoeEpMethod(self)
-                else:
-                    from fastdeploy.model_executor.layers.backends import (
-                        XPUWeightOnlyMoEMethod,
-                    )
-
-                    return XPUWeightOnlyMoEMethod(self)
+                return XPUWeightOnlyMoEMethod(self)
             else:
                 from fastdeploy.model_executor.layers.backends import (
                     XPUWeightOnlyLinearMethod,
@@ -122,10 +124,18 @@ class WeightOnlyConfig(QuantConfigBase):
         elif current_platform.is_maca():
             if isinstance(layer, FusedMoE):
                 from fastdeploy.model_executor.layers.backends import (
+                    MetaxCutlassWeightOnlyMoEMethod,
                     MetaxTritonWeightOnlyMoEMethod,
                 )
 
-                return MetaxTritonWeightOnlyMoEMethod(self)
+                if layer.use_method == "cutlass":
+
+                    return MetaxCutlassWeightOnlyMoEMethod(self)
+                elif layer.use_method == "triton":
+
+                    return MetaxTritonWeightOnlyMoEMethod(self)
+                else:
+                    raise ValueError(f"Unsupported MOE backend {layer.use_method}")
             else:
 
                 return GPUWeightOnlyLinearMethod(self)
@@ -152,17 +162,15 @@ class WeightOnlyConfig(QuantConfigBase):
                 else:
                     raise ValueError(f"Unsupported MOE backend {layer.use_method}")
             else:
-                from fastdeploy.model_executor.layers.quantization.ops.machete_mm import (
-                    _ENABLE_MACHETE,
-                )
-
                 if (
                     _ENABLE_MACHETE
                     and envs.FD_USE_MACHETE == "1"
+                    and not layer.is_quantized
+                    and not layer.fd_config.load_config.dynamic_load_weight
                     and layer.weight_shape[1]
                     and layer.weight_shape[1] % 128 == 0
-                    and not layer.add_bias
                 ):
+                    logger.info("Using Machete kernel for WeightOnlyLinearMethod")
                     return MacheteWeightOnlyLinearMethod(self)
                 return GPUWeightOnlyLinearMethod(self)
 
@@ -244,7 +252,8 @@ class WeightOnlyLinearMethod(QuantMethodBase):
             )
         else:
             if isinstance(self, MacheteWeightOnlyLinearMethod):
-                weight_scale_shape = [1, layer.weight_shape[1]]
+                # Using group scale for machete, group size is 128
+                weight_scale_shape = [(layer.weight_shape[0] + 127) // 128, layer.weight_shape[1]]
                 if self.quant_config.name() == "wint4":
                     layer.weight_shape[0] //= 8
                 else:
@@ -299,10 +308,12 @@ class WeightOnlyLinearMethod(QuantMethodBase):
                 machete_quantize_and_pack,
             )
 
+            # Using group scale for machete, group size is 128
             quanted_weight_tensor, weight_scale_tensor = machete_quantize_and_pack(
                 w=layer.weight,
                 atype=layer._dtype,
                 quant_type="uint4b8" if self.quant_config.name() == "wint4" else "uint8b128",
+                group_size=128,
             )
         else:
             quanted_weight_tensor, weight_scale_tensor = weight_quantize(
@@ -397,30 +408,30 @@ class MacheteWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         super().__init__(quant_config)
 
     def process_prequanted_weights(self, layer, state_dict) -> None:
-        pass
+        raise NotImplementedError("Machete kernel doesn't support prequant. Please set FD_USE_MACHETE to 0.")
 
     def process_loaded_weights(self, layer, weight) -> None:
-        from fastdeploy.model_executor.layers.quantization.ops import (
-            machete_quantize_and_pack,
-        )
 
+        # Using group scale for machete, group size is 128
         quanted_weight_tensor, weight_scale_tensor = machete_quantize_and_pack(
             w=weight,
             atype=layer._dtype,
             quant_type="uint4b8" if self.quant_config.name() == "wint4" else "uint8b128",
+            group_size=128,
         )
         layer.weight.set_value(quanted_weight_tensor)
         layer.weight_scale.set_value(weight_scale_tensor.astype(paddle.get_default_dtype()))
 
     def apply(self, layer, x):
-        assert layer.bias is None, "Machete weight only linear method does not support bias."
-        from fastdeploy.model_executor.layers.quantization.ops import machete_wint_mm
 
+        # Using group scale for machete, group size is 128
         linear_out = machete_wint_mm(
             x,
             w_prepack=layer.weight,
             w_g_s=layer.weight_scale,
             weight_dtype="uint4b8" if self.quant_config.name() == "wint4" else "uint8b128",
+            group_size=128,
         )
-
+        if layer.with_bias:
+            linear_out = paddle.add(linear_out, layer.bias)
         return linear_out

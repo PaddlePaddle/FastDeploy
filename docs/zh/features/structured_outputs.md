@@ -1,3 +1,5 @@
+[English](../../features/structured_outputs.md)
+
 # Structured Outputs
 
 ## 概述

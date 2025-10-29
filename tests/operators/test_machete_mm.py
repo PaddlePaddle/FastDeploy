@@ -135,6 +135,8 @@ class WeightOnlyInt4LinearTestCase(unittest.TestCase):
             weight_dtype="uint4b8" if self.weight_dtype == "int4" else "uint8b128",  # weight_dtype
             group_size=self.machete_group_size,
         )
+        if self.bias is not None:
+            out = paddle.add(out, self.bias)
         return out.numpy()
 
     def test_weight_only_linear(self):
@@ -158,7 +160,7 @@ class WeightOnlyInt8LinearTestCase(unittest.TestCase):
         self.dtype = "float16"
         self.rtol = 1e-5
         self.atol = 1e-1
-        self.bias = False
+        self.bias = True
         self.batch = 1
         self.token = 512
         self.in_features = 7168
@@ -224,6 +226,8 @@ class WeightOnlyInt8LinearTestCase(unittest.TestCase):
             weight_dtype="uint4b8" if self.weight_dtype == "int4" else "uint8b128",  # weight_dtype
             group_size=self.machete_group_size,
         )
+        if self.bias is not None:
+            out = paddle.add(out, self.bias)
         return out.numpy()
 
     def test_weight_only_linear(self):

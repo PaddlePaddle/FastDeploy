@@ -19,8 +19,6 @@ from typing import Any, Callable
 from fastdeploy import envs
 from fastdeploy.utils import llm_logger as logger
 
-plugins_loaded = False
-
 
 def load_plugins_by_group(group: str) -> dict[str, Callable[[], Any]]:
     import sys
@@ -34,7 +32,7 @@ def load_plugins_by_group(group: str) -> dict[str, Callable[[], Any]]:
 
     discovered_plugins = entry_points(group=group)
     if len(discovered_plugins) == 0:
-        logger.info("No plugins for group %s found.", group)
+        logger.debug("No plugins for group %s found.", group)
         return {}
 
     logger.info("Available plugins for group %s:", group)

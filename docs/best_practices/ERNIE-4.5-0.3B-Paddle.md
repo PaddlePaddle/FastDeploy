@@ -1,3 +1,5 @@
+[简体中文](../zh/best_practices/ERNIE-4.5-0.3B-Paddle.md)
+
 # ERNIE-4.5-0.3B
 ## Environmental Preparation
 ### 1.1 Hardware requirements
@@ -31,11 +33,11 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --quantization wint4 \
        --max-model-len 32768 \
        --max-num-seqs 128 \
-       --load_choices "default_v1"
+       --load-choices "default_v1"
 ```
 - `--quantization`: indicates the quantization strategy used by the model. Different quantization strategies will result in different performance and accuracy of the model. It could be one of `wint8` / `wint4` / `block_wise_fp8`(Hopper is needed).
 - `--max-model-len`: Indicates the maximum number of tokens supported by the currently deployed service. The larger the value, the longer the context length the model can support, but the more GPU memory is occupied, which may affect the concurrency.
-- `--load_choices`: indicates the version of the loader. "default_v1" means enabling the v1 version of the loader, which has faster loading speed and less memory usage.
+- `--load-choices`: indicates the version of the loader. "default_v1" means enabling the v1 version of the loader, which has faster loading speed and less memory usage.
 
 For more parameter meanings and default settings, see [FastDeploy Parameter Documentation](../parameters.md)。
 
@@ -72,12 +74,9 @@ For versions 2.1 and earlier, you need to enable it manually by adding
 CUDAGraph is a GPU computing acceleration technology provided by NVIDIA. It achieves efficient execution and optimization of GPU tasks by capturing CUDA operation sequences into a graph structure. The core idea of CUDAGraph is to encapsulate a series of GPU computing and memory operations into a re-executable graph, thereby reducing CPU-GPU communication overhead, reducing kernel startup latency, and improving overall computing performance.
 
 **How to enable:**
-Add the following lines to the startup parameters
-```
---use-cudagraph
-```
+Before version 2.3, it needs to be enabled through `--use-cudagraph`.
+CUDAGraph has been enabled by default in some scenarios at the beginning of version 2.3. CUDAGraph will be automatically closed for functions that are not compatible with CUDAGraph (speculative decoding, RL training, multi-mode model).
 Notes:
-
 - Usually, no additional parameters need to be set, but CUDAGraph will generate some additional memory overhead, which may need to be adjusted in some scenarios with limited memory. For detailed parameter adjustments, please refer to [GraphOptimizationBackend](../features/graph_optimization.md) for related configuration parameter descriptions
 
 #### 2.2.5 Rejection Sampling

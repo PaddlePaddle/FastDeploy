@@ -50,13 +50,18 @@ class ExpertService:
         self.cfg = cfg
         start_pos = (local_data_parallel_id * self.cfg.parallel_config.tensor_parallel_size) % cfg.worker_num_per_node
         end_pos = start_pos + self.cfg.parallel_config.tensor_parallel_size
-        if cfg.splitwise_role != "mixed":
+        if cfg.scheduler_config.splitwise_role != "mixed":
             self.cfg.cache_config.rdma_comm_ports = self.cfg.cache_config.rdma_comm_ports[start_pos:end_pos]
-        self.cfg.local_device_ids = self.cfg.device_ids.split(",")[start_pos:end_pos]
+        self.cfg.local_device_ids = self.cfg.parallel_config.device_ids.split(",")[start_pos:end_pos]
         llm_logger.info(f"local_data_parallel_id: {local_data_parallel_id}")
         self.cfg.disaggregate_info = None
 
-        if cfg.splitwise_role != "mixed":
+        if self.cfg.cache_config.num_gpu_blocks_override is None:
+            self.do_profile = True
+        else:
+            self.do_profile = False
+
+        if cfg.scheduler_config.splitwise_role != "mixed":
             if len(self.cfg.cache_config.pd_comm_port) == 1:
                 self.cfg.cache_config.pd_comm_port[0] = (
                     int(self.cfg.cache_config.pd_comm_port[0]) + local_data_parallel_id
@@ -70,7 +75,9 @@ class ExpertService:
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
-    def start(self, ipc_signal_suffix, local_data_parallel_id):
+    def start(
+        self, ipc_signal_suffix, local_data_parallel_id, request_queues_for_dp_ipc=None, result_queue_for_dp_ipc=None
+    ):
         """
         Initializes the engine and starts its sub-services.
         If `api_server_pid` is defined, will launch a thread
@@ -80,25 +87,29 @@ class ExpertService:
 
         start_time = time.time()
         self.engine.start()
+        if envs.FD_ENABLE_RETURN_TEXT:
+            self.engine.create_data_processor()
+        if self.cfg.scheduler_config.name == "dp":
+            self.cfg.init_cache_info()
+            assert (request_queues_for_dp_ipc is not None) and (result_queue_for_dp_ipc is not None)
+            self.engine.scheduler.start(local_data_parallel_id, request_queues_for_dp_ipc, result_queue_for_dp_ipc)
+
         if ipc_signal_suffix is not None:
             self.api_server_pid = ipc_signal_suffix
             self.engine.start_zmq_service(ipc_signal_suffix)
         else:
-            ipc_signal_suffix = self.cfg.engine_worker_queue_port[0]
+            ipc_signal_suffix = self.cfg.parallel_config.engine_worker_queue_port[0]
 
         llm_logger.info(f"start expert service {local_data_parallel_id}")
-        if self.cfg.splitwise_role != "mixed":
-            self.engine.start_cache_service(self.cfg.local_device_ids, ipc_signal_suffix)
-            self.engine.split_mode_get_tasks()
 
         if self.cfg.scheduler_config.name == "splitwise":
             self.cfg.init_cache_info()
-            role = self.cfg.splitwise_role
+            role = self.cfg.scheduler_config.splitwise_role
             host_ip = self.cfg.host_ip
             disaggregate = self.cfg.disaggregate_info
             self.engine.scheduler.start(role, host_ip, disaggregate)
 
-        if self.cfg.splitwise_role != "mixed":
+        if self.cfg.scheduler_config.splitwise_role != "mixed":
             self.splitwise_receive_thread = threading.Thread(
                 target=self.engine.split_connector.start_receiver, args=()
             )
@@ -120,10 +131,40 @@ class ExpertService:
             )
             self.launched_expert_service_signal.value[local_rank] = 1
 
+        if self.cfg.scheduler_config.splitwise_role != "mixed" or self.cfg.cache_config.enable_prefix_caching:
+            if self.do_profile:
+                get_profile_block_num = np.zeros([1], dtype=np.int32)
+                while True:
+                    try:
+                        self.get_profile_block_num_signal = IPCSignal(
+                            name="get_profile_block_num",
+                            array=get_profile_block_num,
+                            dtype=np.int32,
+                            suffix=int(self.cfg.parallel_config.engine_worker_queue_port[0]),
+                            create=False,
+                        )
+                        break
+                    except:
+                        time.sleep(1)
+                self.reset_kvcache_blocks()
+            ipc_signal_suffix_cache = self.cfg.parallel_config.engine_worker_queue_port[local_data_parallel_id]
+            self.cache_manager_processes = self.engine.start_cache_service(
+                self.cfg.local_device_ids,
+                ipc_signal_suffix_cache,
+            )
+
         console_logger.info(
             f"Worker processes(rank {local_rank}) are launched with {time.time() - start_time} seconds."
         )
         return True
+
+    def reset_kvcache_blocks(self):
+        self.do_profile = 0
+        while self.get_profile_block_num_signal.value[0] == 0:
+            time.sleep(1)
+        num_gpu_blocks = self.get_profile_block_num_signal.value[0]
+        self.cfg.cache_config.reset(num_gpu_blocks)
+        self.engine.resource_manager.reset_cache_config(self.cfg.cache_config)
 
     def _exit_sub_services(self):
         """
@@ -132,7 +173,6 @@ class ExpertService:
 
         if hasattr(self, "cache_manager_processes"):
             self.engine.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
-            self.engine.resource_manager.cache_manager.cache_ready_signal.clear()
             for p in self.cache_manager_processes:
                 llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:
@@ -144,14 +184,18 @@ class ExpertService:
             self.zmq_server.close()
 
 
-def start_data_parallel_service(cfg, local_data_parallel_id, ipc_signal_suffix=None):
+def start_data_parallel_service(
+    cfg, local_data_parallel_id, ipc_signal_suffix=None, request_queues_for_dp_ipc=None, result_queue_for_dp_ipc=None
+):
     """
     Start expert service
     """
     expert_service = ExpertService(cfg, local_data_parallel_id, start_queue=False)
 
     try:
-        expert_service.start(ipc_signal_suffix, local_data_parallel_id)
+        expert_service.start(
+            ipc_signal_suffix, local_data_parallel_id, request_queues_for_dp_ipc, result_queue_for_dp_ipc
+        )
 
         def deamon_thread():
             while True:
@@ -159,5 +203,6 @@ def start_data_parallel_service(cfg, local_data_parallel_id, ipc_signal_suffix=N
 
         t_deamon = threading.Thread(target=deamon_thread, daemon=True)
         t_deamon.start()
+        t_deamon.join()
     except Exception as e:
         llm_logger.exception(f"Expert service failed to start: {e}, {str(traceback.format_exc())}")

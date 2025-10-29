@@ -18,3 +18,7 @@ omit =
     */site-packages/setuptools/*
     */dist-packages/*
     */site-packages/*/fastdeploy/model_executor/ops/gpu*
+    */fastdeploy/benchmarks/lib/endpoint_request_func.py
+    */fastdeploy/model_executor/graph_optimization/utils.py
+    */fastdeploy/model_executor/ops/gpu/fastdeploy_ops.py
+    */fastdeploy/model_executor/ops/gpu/deep_gemm/utils.py

@@ -6,3 +6,4 @@ tensor_parallel_size: 8
 max_num_batched_tokens: 4096
 max_num_partial_prefills: 3
 max_long_partial_prefills: 3
+quantization: wint8

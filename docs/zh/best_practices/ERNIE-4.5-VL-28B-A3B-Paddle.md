@@ -1,3 +1,4 @@
+[English](../../best_practices/ERNIE-4.5-VL-28B-A3B-Paddle.md)
 
 # ERNIE-4.5-VL-28B-A3B-Paddle
 

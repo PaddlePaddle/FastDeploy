@@ -8,6 +8,10 @@ from fastapi.responses import JSONResponse
 from fastdeploy.utils import ErrorCode, ExceptionHandler, ParameterError
 
 
+class DummyRequest:
+    url = "http://testserver/test"
+
+
 class TestParameterError(unittest.TestCase):
     def test_parameter_error_init(self):
         exc = ParameterError("param1", "error message")
@@ -30,7 +34,8 @@ class TestExceptionHandler(unittest.IsolatedAsyncioTestCase):
     async def test_handle_request_validation_missing_messages(self):
         """缺少 messages 参数时，应返回 missing_required_parameter"""
         exc = RequestValidationError([{"loc": ("body", "messages"), "msg": "Field required", "type": "missing"}])
-        resp: JSONResponse = await ExceptionHandler.handle_request_validation_exception(None, exc)
+        dummy_request = DummyRequest()
+        resp: JSONResponse = await ExceptionHandler.handle_request_validation_exception(dummy_request, exc)
         data = json.loads(resp.body.decode())
         self.assertEqual(resp.status_code, HTTPStatus.BAD_REQUEST)
         self.assertEqual(data["error"]["param"], "messages")
@@ -42,7 +47,8 @@ class TestExceptionHandler(unittest.IsolatedAsyncioTestCase):
         exc = RequestValidationError(
             [{"loc": ("body", "top_p"), "msg": "Input should be less than or equal to 1", "type": "value_error"}]
         )
-        resp: JSONResponse = await ExceptionHandler.handle_request_validation_exception(None, exc)
+        dummy_request = DummyRequest()
+        resp: JSONResponse = await ExceptionHandler.handle_request_validation_exception(dummy_request, exc)
         data = json.loads(resp.body.decode())
         self.assertEqual(resp.status_code, HTTPStatus.BAD_REQUEST)
         self.assertEqual(data["error"]["param"], "top_p")

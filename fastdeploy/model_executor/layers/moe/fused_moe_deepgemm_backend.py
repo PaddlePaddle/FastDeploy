@@ -335,17 +335,18 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             recv_num_tokens_per_expert_list,
             handle,
             _,
-        ) = self.ep_prefill_runner.dispatch(x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor)
+        ) = self.ep_prefill_runner.dispatch(
+            x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128
+        )
 
         token_all_num = sum(recv_num_tokens_per_expert_list)
 
         # 4. Compute ffn
         if token_all_num > 0:
-            logger.info(f"token_all_num {token_all_num}")
+            logger.debug(f"token_all_num {token_all_num}")
             (recv_x, recv_x_scale) = recv_x
 
             token_nums_this_rank = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)
-            token_nums_this_rank_padded = sum(token_nums_this_rank[1].numpy().tolist())
 
             (
                 permute_input,
@@ -365,7 +366,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 token_nums_this_rank[0],
                 token_nums_this_rank[1],
                 True,  # use_in_ep
-                token_nums_this_rank_padded,
+                token_all_num,
             )
 
             permute_scale = permute_scale.transpose([1, 0]).contiguous()
@@ -512,6 +513,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 layer.top_k,
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
+                getattr(layer, "renormalize", True),
             )
         else:
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
@@ -593,6 +595,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             1.0,
         )[0]
         if layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(tmp_ffn_out)
+            tmp_ffn_out = tensor_model_parallel_all_reduce(tmp_ffn_out)
 
         return tmp_ffn_out

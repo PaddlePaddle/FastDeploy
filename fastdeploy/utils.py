@@ -24,6 +24,7 @@ import os
 import random
 import re
 import socket
+import subprocess
 import sys
 import tarfile
 import time
@@ -51,10 +52,105 @@ from fastdeploy.entrypoints.openai.protocol import ErrorInfo, ErrorResponse
 from fastdeploy.logger.logger import FastDeployLogger
 
 T = TypeVar("T")
+from typing import Callable, Optional
 
 # [N,2] -> every line is [config_name, enable_xxx_name]
 # Make sure enable_xxx equal to config.enable_xxx
-ARGS_CORRECTION_LIST = [["early_stop_config", "enable_early_stop"], ["graph_optimization_config", "use_cudagraph"]]
+ARGS_CORRECTION_LIST = [
+    ["early_stop_config", "enable_early_stop"],
+]
+
+FASTDEPLOY_SUBCMD_PARSER_EPILOG = (
+    "Tip: Use `fastdeploy [serve|run-batch|bench <bench_type>] "
+    "--help=<keyword>` to explore arguments from help.\n"
+    "   - To view a argument group:     --help=ModelConfig\n"
+    "   - To view a single argument:    --help=max-num-seqs\n"
+    "   - To search by keyword:         --help=max\n"
+    "   - To list all groups:           --help=listgroup\n"
+    "   - To view help with pager:      --help=page"
+)
+
+
+def show_filtered_argument_or_group_from_help(parser: argparse.ArgumentParser, subcommand_name: list[str]):
+
+    # Only handle --help=<keyword> for the current subcommand.
+    # Since subparser_init() runs for all subcommands during CLI setup,
+    # we skip processing if the subcommand name is not in sys.argv.
+    # sys.argv[0] is the program name. The subcommand follows.
+    # e.g., for `vllm bench latency`,
+    # sys.argv is `['vllm', 'bench', 'latency', ...]`
+    # and subcommand_name is "bench latency".
+    if len(sys.argv) <= len(subcommand_name) or sys.argv[1 : 1 + len(subcommand_name)] != subcommand_name:
+        return
+
+    for arg in sys.argv:
+        if arg.startswith("--help="):
+            search_keyword = arg.split("=", 1)[1]
+
+            # Enable paged view for full help
+            if search_keyword == "page":
+                help_text = parser.format_help()
+                _output_with_pager(help_text)
+                sys.exit(0)
+
+            # List available groups
+            if search_keyword == "listgroup":
+                output_lines = ["\nAvailable argument groups:"]
+                for group in parser._action_groups:
+                    if group.title and not group.title.startswith("positional arguments"):
+                        output_lines.append(f"  - {group.title}")
+                        if group.description:
+                            output_lines.append("    " + group.description.strip())
+                        output_lines.append("")
+                _output_with_pager("\n".join(output_lines))
+                sys.exit(0)
+
+            # For group search
+            formatter = parser._get_formatter()
+            for group in parser._action_groups:
+                if group.title and group.title.lower() == search_keyword.lower():
+                    formatter.start_section(group.title)
+                    formatter.add_text(group.description)
+                    formatter.add_arguments(group._group_actions)
+                    formatter.end_section()
+                    _output_with_pager(formatter.format_help())
+                    sys.exit(0)
+
+            # For single arg
+            matched_actions = []
+
+            for group in parser._action_groups:
+                for action in group._group_actions:
+                    # search option name
+                    if any(search_keyword.lower() in opt.lower() for opt in action.option_strings):
+                        matched_actions.append(action)
+
+            if matched_actions:
+                header = f"\nParameters matching '{search_keyword}':\n"
+                formatter = parser._get_formatter()
+                formatter.add_arguments(matched_actions)
+                _output_with_pager(header + formatter.format_help())
+                sys.exit(0)
+
+            print(f"\nNo group or parameter matching '{search_keyword}'")
+            print("Tip: use `--help=listgroup` to view all groups.")
+            sys.exit(1)
+
+
+def _output_with_pager(text: str):
+    """Output text using scrolling view if available and appropriate."""
+
+    pagers = ["less -R", "more"]
+    for pager_cmd in pagers:
+        try:
+            proc = subprocess.Popen(pager_cmd.split(), stdin=subprocess.PIPE, text=True)
+            proc.communicate(input=text)
+            return
+        except (subprocess.SubprocessError, OSError, FileNotFoundError):
+            continue
+
+    # No pager worked, fall back to normal print
+    print(text)
 
 
 class EngineError(Exception):
@@ -82,7 +178,7 @@ class ExceptionHandler:
 
     # 处理请求参数验证异常
     @staticmethod
-    async def handle_request_validation_exception(_: Request, exc: RequestValidationError) -> JSONResponse:
+    async def handle_request_validation_exception(request: Request, exc: RequestValidationError) -> JSONResponse:
         errors = exc.errors()
         if not errors:
             message = str(exc)
@@ -100,6 +196,7 @@ class ExceptionHandler:
                 param=param,
             )
         )
+        api_server_logger.error(f"invalid_request_error: {request.url} {param} {message}")
         return JSONResponse(content=err.model_dump(), status_code=HTTPStatus.BAD_REQUEST)
 
 
@@ -118,6 +215,7 @@ class ErrorCode(str, Enum):
     TIMEOUT = "timeout"
     CONNECTION_ERROR = "connection_error"
     MISSING_REQUIRED_PARAMETER = "missing_required_parameter"
+    INTERNAL_ERROR = "internal_error"
 
 
 class ColoredFormatter(logging.Formatter):
@@ -255,38 +353,10 @@ class DailyRotatingFileHandler(BaseRotatingHandler):
             os.remove(str(self.base_log_path.with_name(file_name)))
 
 
-# def get_logger(name, file_name, without_formater=False, print_to_console=False):
-#     """
-#     get logger
-#     """
-#     log_dir = envs.FD_LOG_DIR
-#     if not os.path.exists(log_dir):
-#         os.mkdir(log_dir)
-#     is_debug = int(envs.FD_DEBUG)
-#     logger = logging.getLogger(name)
-#     if is_debug:
-#         logger.setLevel(level=logging.DEBUG)
-#     else:
-#         logger.setLevel(level=logging.INFO)
-
-#     for handler in logger.handlers[:]:
-#         logger.removeHandler(handler)
-
-#     LOG_FILE = f"{log_dir}/{file_name}"
-#     backup_count = int(envs.FD_LOG_BACKUP_COUNT)
-#     handler = DailyRotatingFileHandler(LOG_FILE, backupCount=backup_count)
-#     formatter = ColoredFormatter("%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s")
-
-#     console_handler = logging.StreamHandler()
-#     if not without_formater:
-#         handler.setFormatter(formatter)
-#         console_handler.setFormatter(formatter)
-#     logger.addHandler(handler)
-#     if print_to_console:
-#         logger.addHandler(console_handler)
-#     handler.propagate = False
-#     console_handler.propagate = False
-#     return logger
+def chunk_list(lst: list[T], chunk_size: int):
+    """Yield successive chunk_size chunks from lst."""
+    for i in range(0, len(lst), chunk_size):
+        yield lst[i : i + chunk_size]
 
 
 def str_to_datetime(date_string):
@@ -755,6 +825,36 @@ def version():
     return content
 
 
+def current_package_version():
+    """
+    读取version.txt文件,解析出fastdeploy version对应的版本号
+
+    Args:
+    Returns:
+        str: fastdeploy版本号,如果解析失败返回Unknown
+    """
+    fd_version = "Unknown"
+    try:
+        content = version()
+        if content == "Unknown":
+            return fd_version
+
+        # 按行分割内容
+        lines = content.strip().split("\n")
+        # 查找包含"fastdeploy version:"的行
+        for line in lines:
+            if line.startswith("fastdeploy version:"):
+                # 提取版本号部分
+                fd_version = line.split("fastdeploy version:")[1].strip()
+                return fd_version
+        llm_logger.warning("fastdeploy version not found in version.txt")
+        # 如果没有找到对应的行，返回None
+        return fd_version
+    except Exception as e:
+        llm_logger.error(f"Failed to parse fastdeploy version from version.txt: {e}")
+        return fd_version
+
+
 class DeprecatedOptionWarning(argparse.Action):
     def __init__(self, option_strings, dest, **kwargs):
         super().__init__(option_strings, dest, nargs=0, **kwargs)
@@ -851,3 +951,24 @@ api_server_logger = get_logger("api_server", "api_server.log")
 console_logger = get_logger("console", "console.log", print_to_console=True)
 spec_logger = get_logger("speculate", "speculate.log")
 zmq_client_logger = get_logger("zmq_client", "zmq_client.log")
+
+
+def parse_type(return_type: Callable[[str], T]) -> Callable[[str], T]:
+
+    def _parse_type(val: str) -> T:
+        try:
+            return return_type(val)
+        except ValueError as e:
+            raise argparse.ArgumentTypeError(f"Value {val} cannot be converted to {return_type}.") from e
+
+    return _parse_type
+
+
+def optional_type(return_type: Callable[[str], T]) -> Callable[[str], Optional[T]]:
+
+    def _optional_type(val: str) -> Optional[T]:
+        if val == "" or val == "None":
+            return None
+        return parse_type(return_type)(val)
+
+    return _optional_type

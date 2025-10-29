@@ -1004,7 +1004,8 @@ __global__ void cache_kernel(
     const uint32_t qkv_bias = bias % hidden_size;
     const uint32_t hi = qkv_bias / head_size;
     const uint32_t h_bias = qkv_bias % head_size;
-    const uint32_t ori_bi = batch_id_per_token[token_idx];
+    const int32_t ori_bi = batch_id_per_token[token_idx];
+    if (ori_bi == -1) continue;  // skip batch_id_per_token[token_idx]=-1
     if (seq_lens[ori_bi] == 0) continue;
     const uint32_t ori_seq_id = (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
 
@@ -2178,7 +2179,9 @@ void gqa_rotary_qk_norm_variable(
       qkv_out_scales
           ? token_num * (num_heads + 2 * kv_num_heads) * dim_head
           : token_num * (num_heads + kv_num_heads) * dim_head;  // for all q k v
-  assert(dim_head == 128 && "dim_head must be 128");
+  if (dim_head != 128) {
+    PADDLE_THROW("gqa rotary with qk norm only support head_dim=128, but got %d.", dim_head);
+  }
   constexpr int HEAD_DIM = 128;
   constexpr int PackSize = HEAD_DIM / kWarpSize;
   const int pack_num = elem_nums / PackSize;

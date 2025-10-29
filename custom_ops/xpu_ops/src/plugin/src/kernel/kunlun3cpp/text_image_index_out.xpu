@@ -1,0 +1,114 @@
+// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+/*
+ * copyright (C) 2025 KUNLUNXIN, Inc
+ */
+
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+#include "xpu/kernel/cluster_primitive_template.h"
+
+namespace xpu3 {
+namespace plugin {
+
+static __device__ void do_calc(const _shared_ptr_ int* lm_x,
+                               int* lm_y1,
+                               int* lm_y2,
+                               int64_t size,
+                               int& text_count,
+                               int& images_count) {
+  for (int j = 0; j < size; j++) {
+    if (lm_x[j] == 0) {
+      lm_y1[j] = text_count;
+      text_count += 1;
+    } else {
+      lm_y2[j] = images_count;
+      images_count += 1;
+    }
+  }
+  mfence_lm_sm();
+}
+
+__global__ void text_image_index_out_kernel(const int* token_type_ids,  // x
+                                            int* text_index,            // y1
+                                            int* image_index,           // y2
+                                            const int64_t token_num) {
+  const int cid = core_id();
+  const int tid = core_id() * cluster_num() + cluster_id();
+  const int nthreads = core_num() * cluster_num();
+  if (tid >= 1) return;
+  constexpr int BUFSIZE = 1024;
+  constexpr int READ_MAX_SIZE = BUFSIZE / sizeof(int);
+  const int64_t len = token_num;
+
+  __simd__ char buffer0[BUFSIZE * 3];
+  __simd__ char buffer1[BUFSIZE * 3];
+  __simd__ __shared__ char buffer2[64][BUFSIZE * 2];
+
+  DoublePtr<READ_MAX_SIZE, SmPtr<int>> buffer_ptr_x(
+      (SmPtr<int>((_shared_ptr_ int*)buffer2[cid])));
+  TriplePtr<READ_MAX_SIZE, LmPtr<int>> buffer_ptr_y1(
+      (LmPtr<int>((int*)buffer0)));
+  TriplePtr<READ_MAX_SIZE, LmPtr<int>> buffer_ptr_y2(
+      (LmPtr<int>((int*)buffer1)));
+  int64_t buflen = get_1d_buflen(len, nthreads, READ_MAX_SIZE, 64);
+  int64_t i = tid * buflen;
+  int read_size = 0;
+  int offset = nthreads * buflen;
+
+  int text_count = 0;
+  int images_count = 0;
+
+  if (i < len) {
+    read_size = min<int64_t>(buflen, len - i);
+    buffer_ptr_y1.gm_load_async(text_index + tid * buflen, read_size);
+    buffer_ptr_y2.gm_load_async(image_index + tid * buflen, read_size);
+    buffer_ptr_x.gm_load_async(token_type_ids + tid * buflen, read_size);
+    mfence();
+  }
+  while (i < len && i + offset < len) {
+    i = i + offset;
+    int read_size_next = min<int64_t>(buflen, len - i);
+    buffer_ptr_x.next().gm_load_async(token_type_ids + i, read_size_next);
+    buffer_ptr_y1.next().gm_load_async(text_index + i, read_size_next);
+    buffer_ptr_y2.next().gm_load_async(image_index + i, read_size_next);
+
+    do_calc(buffer_ptr_x.ptr,
+            buffer_ptr_y1.ptr,
+            buffer_ptr_y2.ptr,
+            read_size,
+            text_count,
+            images_count);
+
+    buffer_ptr_y1.gm_store_async(text_index + i - offset, read_size);
+    buffer_ptr_y2.gm_store_async(image_index + i - offset, read_size);
+    buffer_ptr_x.toggle();
+    buffer_ptr_y1.toggle();
+    buffer_ptr_y2.toggle();
+    read_size = read_size_next;
+  }
+  if (i < len) {
+    do_calc(buffer_ptr_x.ptr,
+            buffer_ptr_y1.ptr,
+            buffer_ptr_y2.ptr,
+            read_size,
+            text_count,
+            images_count);
+    buffer_ptr_y1.gm_store_async(text_index + i, read_size);
+    buffer_ptr_y2.gm_store(image_index + i, read_size);
+  }
+}
+}  // namespace plugin
+}  // namespace xpu3
