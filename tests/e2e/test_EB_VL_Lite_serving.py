@@ -79,8 +79,8 @@ def clean_ports():
     time.sleep(2)
 
 
-@pytest.fixture(scope="session", autouse=True)
-def setup_and_run_server():
+@pytest.fixture(scope="session", autouse=True, params=[0, 1])
+def setup_and_run_server(request):
     """
     Pytest fixture that runs once per test session:
     - Cleans ports before tests
@@ -89,6 +89,7 @@ def setup_and_run_server():
     - Tears down server after all tests finish
     """
     print("Pre-test port cleanup...")
+    graph_opt_level = request.param
     clean_ports()
     print("log dir clean ")
     if os.path.exists("log") and os.path.isdir("log"):
@@ -135,6 +136,9 @@ def setup_and_run_server():
         "wint4",
         "--reasoning-parser",
         "ernie-45-vl",
+        '--graph-optimization-config \'{"graph_opt_level": '
+        + str(graph_opt_level)
+        + ', "use_cudagraph": true, "full_cuda_graph": false}\'',
     ]
 
     # Start subprocess in new process group
