@@ -146,9 +146,9 @@ class DeepEPBuffer:
                 self.deepep_buffer = deep_ep.Buffer(
                     self.group,
                     self.num_nvl_bytes,
-                    0,
-                    low_latency_mode=False,
-                    num_qps_per_rank=1,
+                    self.num_rdma_bytes,
+                    low_latency_mode=True,
+                    num_qps_per_rank=24,
                 )
             else:
                 raise ValueError(f"Unknown generation phase: {self.moe_phase.phase}")
@@ -156,26 +156,20 @@ class DeepEPBuffer:
         logger.info("DeepEP buffer created successfully.")
 
     def _create_low_latency_buffer(self):
-        num_rdma_bytes = deep_ep.Buffer.get_low_latency_rdma_size_hint(
-            self.num_max_dispatch_tokens_per_rank,
-            self.hidden_size,
-            self.ep_size,
-            self.num_experts,
-        )
-
         if (
             self.deepep_buffer is None
-            or self.deepep_buffer.group != self.group
-            or not self.deepep_buffer.low_latency_mode
-            or self.deepep_buffer.num_rdma_bytes < num_rdma_bytes
         ):
             assert self.num_experts % self.ep_size == 0
+            if self.ep_size // 8 > 1:
+                num_qps_per_rank_now = self.ep_size // 8
+            else:
+                num_qps_per_rank_now = 1
             self.deepep_buffer = deep_ep.Buffer(
                 self.group,
-                0,
-                num_rdma_bytes,
+                self.num_nvl_bytes,
+                self.num_rdma_bytes,
                 low_latency_mode=True,
-                num_qps_per_rank=self.num_experts // self.ep_size,
+                num_qps_per_rank=num_qps_per_rank_now,
             )
 
     def clear_buffer(self):
