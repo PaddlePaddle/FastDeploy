@@ -17,6 +17,7 @@
 from fastdeploy.plugins import load_reasoning_parser_plugins
 
 from .abs_reasoning_parsers import ReasoningParser, ReasoningParserManager
+from .ernie_45_vl_thinking_reasoning_parser import Ernie45VLThinkingReasoningParser
 from .ernie_vl_reasoning_parsers import ErnieVLReasoningParser
 from .ernie_x1_reasoning_parsers import ErnieX1ReasoningParser
 from .qwen3_reasoning_parsers import Qwen3ReasoningParser
@@ -27,6 +28,7 @@ __all__ = [
     "ErnieVLReasoningParser",
     "Qwen3ReasoningParser",
     "ErnieX1ReasoningParser",
+    "Ernie45VLThinkingReasoningParser",
 ]
 
 load_reasoning_parser_plugins()
