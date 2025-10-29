@@ -110,7 +110,7 @@ def limit_thinking_content_length(
             think_end_id,
         )
     elif limit_strategy == "\n</think>\n\n":
-        # for ernie_x1
+        # for ernie-x1
         assert line_break_id > 0
         limit_thinking_content_length_v2(
             sampled_token_ids,
@@ -147,7 +147,7 @@ def speculate_limit_thinking_content_length(
             think_end_id,
         )
     elif limit_strategy == "\n</think>\n\n":
-        # for ernie_x1
+        # for ernie-x1
         assert line_break_id > 0
         speculate_limit_thinking_content_length_v2(
             accept_tokens,

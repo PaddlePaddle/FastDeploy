@@ -8,7 +8,7 @@ from fastdeploy.reasoning import ReasoningParser, ReasoningParserManager
 @ReasoningParserManager.register_module("ernie-x1")
 class ErnieX1ReasoningParser(ReasoningParser):
     """
-    Reasoning parser for ernie_x1 model with stricter boundary checking.
+    Reasoning parser for ernie-x1 model with stricter boundary checking.
 
     Unified rules:
     - Do not strip newline before </think>

@@ -212,7 +212,7 @@ def xpu_post_process(
                 think_end_id,
             )
         elif limit_strategy == "\n</think>\n\n":
-            # for ernie_x1
+            # for ernie-x1
             assert line_break_id > 0
             limit_thinking_content_length_v2(
                 sampled_token_ids,
