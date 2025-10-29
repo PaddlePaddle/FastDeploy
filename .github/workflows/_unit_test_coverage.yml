@@ -38,6 +38,7 @@ jobs:
       github-token: ${{ secrets.github-token }}
     with:
       workflow-name: coverage
+      commit-sha: ${{ github.sha }}
 
   run_tests_with_coverage:
     runs-on: [self-hosted, GPU-h1z1-2Cards]
