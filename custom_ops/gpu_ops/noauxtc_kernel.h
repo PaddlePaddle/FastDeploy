@@ -493,11 +493,11 @@ __global__ void topk_with_k2_kernel(T* output,
 
 template <typename T, typename IdxT>
 __global__ void group_idx_and_topk_idx_kernel(
-    T* scores,
+    const T* scores,
     T const* group_scores,
     T* topk_values,
     IdxT* topk_indices,
-    T* scores_with_bias,
+    const T* scores_with_bias,
     int64_t const num_tokens,
     int64_t const n_group,
     int64_t const topk_group,
@@ -621,11 +621,11 @@ __global__ void group_idx_and_topk_idx_kernel(
 
   __syncthreads();
 
-  if (case_id < num_tokens && if_proceed_next_topk) {
-    for (int i = lane_id; i < num_experts; i += WARP_SIZE) {
-      scores[i] = 0;
-    }
-  }
+  // if (case_id < num_tokens && if_proceed_next_topk) {
+  //   for (int i = lane_id; i < num_experts; i += WARP_SIZE) {
+  //     scores[i] = 0;
+  //   }
+  // }
   __syncwarp();
 
   if (case_id < num_tokens) {
@@ -638,7 +638,7 @@ __global__ void group_idx_and_topk_idx_kernel(
         } else {
           value = cuda_cast<float, T>(s_topk_value[i]) * routed_scaling_factor;
         }
-        scores[s_topk_idx[i]] = value;
+        // scores[s_topk_idx[i]] = value;
         topk_indices[i] = s_topk_idx[i];
         topk_values[i] = cuda_cast<T, float>(value);
       }
@@ -689,7 +689,7 @@ void invokeNoAuxTc(T* scores,
   config.stream = stream;
   cudaLaunchAttribute attrs[1];
   attrs[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;
-  attrs[0].val.programmaticStreamSerializationAllowed = false;
+  attrs[0].val.programmaticStreamSerializationAllowed = true;
   config.numAttrs = 1;
   config.attrs = attrs;
   cudaLaunchKernelEx(&config,
