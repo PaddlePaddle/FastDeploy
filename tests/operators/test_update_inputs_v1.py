@@ -103,7 +103,6 @@ def update_inputs_v1_ref(
     next_tokens,
     is_block_step,
     block_size,
-    is_pooling_task=False,
 ):
     max_bsz = stop_flags.shape[0]
     now_bsz = seq_lens_this_time.shape[0]
@@ -174,7 +173,6 @@ class TestUpdateInputsV1(unittest.TestCase):
         next_tokens = paddle.to_tensor(next_tokens)
         is_block_step = paddle.to_tensor(is_block_step)
         block_size = 1024
-        is_pooling_task = False
 
         inputs = (
             stop_flags,
@@ -191,7 +189,6 @@ class TestUpdateInputsV1(unittest.TestCase):
             next_tokens,
             is_block_step,
             block_size,
-            is_pooling_task,
         )
         # inplace modify, need to clone inputs
         inputs_clone = [x.clone() if isinstance(x, paddle.Tensor) else x for x in inputs]
