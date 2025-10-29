@@ -644,7 +644,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
         self.pooling_params = batch_pooling_params
-            # For logits processors
+        # For logits processors
         self.share_inputs["logits_processors_args"][idx] = request.get("logits_processors_args") or {}
 
         if len(multi_vision_inputs["images_lst"]) > 0:
@@ -1556,29 +1556,44 @@ class GPUModelRunner(ModelRunnerBase):
         task: PoolingTask,
     ) -> PoolerOutput:
         num_tokens = hidden_states.shape[0]
-        max_num_seqs = self.scheduler_config.max_num_seqs
-        num_reqs = min(num_tokens, max_num_seqs)
+        max_num_reqs = self.scheduler_config.max_num_seqs
+        num_reqs = min(num_tokens, max_num_reqs)
         min_tokens_per_req = num_tokens // num_reqs
         num_scheduled_tokens_list = [min_tokens_per_req] * num_reqs
         num_scheduled_tokens_list[-1] += num_tokens % num_reqs
-        print("num_tokens", num_tokens)
-        print("max_num_seqs", max_num_seqs)
-        print("num_reqs", num_reqs)
-        print("min_tokens_per_req", min_tokens_per_req)
-        print("num_scheduled_token_list", num_scheduled_tokens_list)
 
         assert sum(num_scheduled_tokens_list) == num_tokens
         assert len(num_scheduled_tokens_list) == num_reqs
 
         req_num_tokens = num_tokens // num_reqs
 
-        dummy_prompt_lens = paddle.to_tensor(num_scheduled_tokens_list, dtype="int64")
-        dummy_token_ids = paddle.zeros(
-            [num_reqs, req_num_tokens],
-            dtype="int64",
+        dummy_prompt_lens = paddle.to_tensor(
+            num_scheduled_tokens_list, dtype="int64", place=paddle.CPUPlace()  # 对应 PyTorch 的 device="cpu"
         )
+        print("dummy_prompt_lens: ", dummy_prompt_lens)
+
+        # ✅ 关键修改 2：使用 place 参数而不是 device
+        # PaddlePaddle 使用 place，PyTorch 使用 device
+        if isinstance(self.device, str):
+            if self.device.startswith("cuda"):
+                gpu_id = int(self.device.split(":")[-1]) if ":" in self.device else 0
+                device_place = paddle.CUDAPlace(gpu_id)
+            else:
+                device_place = paddle.CPUPlace()
+        else:
+            device_place = self.device  # 如果已经是 Place 对象
+
+        print("device_place", device_place)
+        # 使用 device 参数创建（如果你的 PaddlePaddle 版本支持）
+        dummy_token_ids = paddle.zeros(
+            [num_reqs, req_num_tokens], dtype="int32", device=device_place  # 在与 self.device 对应的设备上创建
+        )
+        print("dummy_token_ids", dummy_token_ids)
+
         model = cast(FdModelForPooling, self.get_model())
         dummy_pooling_params = PoolingParams(task=task)
+        # 注意：PaddlePaddle 版本可能没有 verify 方法，需要确认
+        # dummy_pooling_params.verify(task=task, model_config=self.model_config)
         to_update = model.pooler.get_pooling_updates(task)
         to_update.apply(dummy_pooling_params)
 
@@ -1587,7 +1602,11 @@ class GPUModelRunner(ModelRunnerBase):
             prompt_token_ids=dummy_token_ids,
             pooling_params=[dummy_pooling_params] * num_reqs,
         )
-        dummy_metadata.build_pooling_cursor(num_scheduled_tokens_list, device=hidden_states.place)
+
+        # ✅ 关键修改 3：使用 hidden_states.place 而不是 .device
+        dummy_metadata.build_pooling_cursor(
+            num_scheduled_tokens_list, device=hidden_states.place  # PaddlePaddle 用 .place
+        )
 
         try:
             return model.pooler(hidden_states=hidden_states, pooling_metadata=dummy_metadata)
