@@ -47,6 +47,7 @@ class PaddleOCRVLProcessor(TextProcessor):
         mm_processor_kwargs=None,
         reasoning_parser_obj=None,
         tool_parser_obj=None,
+        enable_processor_cache=False,
     ):
         """
         Initialize PaddleOCRVLProcessor instance.
@@ -65,6 +66,7 @@ class PaddleOCRVLProcessor(TextProcessor):
         processor_kwargs = self._parse_processor_kwargs(mm_processor_kwargs)
         self.processor = DataProcessor(
             model_path=model_name_or_path,
+            enable_processor_cache=enable_processor_cache,
             tokens_per_second=config.vision_config.tokens_per_second,
             tokenizer=self.tokenizer,
             **processor_kwargs,
@@ -252,7 +254,7 @@ class PaddleOCRVLProcessor(TextProcessor):
 
         return request
 
-    def append_generated_tokens(self, outputs, generated_token_ids):
+    def append_generated_tokens(self, multimodal_inputs, generated_token_ids):
         """
         Append generated tokens to existing outputs.
 
@@ -260,19 +262,13 @@ class PaddleOCRVLProcessor(TextProcessor):
             outputs: Current model outputs
             generated_token_ids: Generated tokens to append
         """
-        out = {"input_ids": [], "token_type_ids": [], "position_ids": [], "cur_position": outputs["cur_position"]}
-        self.processor._add_text(generated_token_ids, out)
+        num_tokens = len(generated_token_ids)
+        multimodal_inputs["input_ids"].extend(generated_token_ids)
+        multimodal_inputs["token_type_ids"].extend([0] * num_tokens)
 
-        outputs["input_ids"] = np.concatenate(
-            [outputs["input_ids"], np.array(out["input_ids"], dtype=np.int64)], axis=0
-        )
-        outputs["token_type_ids"] = np.concatenate(
-            [outputs["token_type_ids"], np.array(out["token_type_ids"], dtype=np.int64)], axis=0
-        )
-        outputs["position_ids"] = np.concatenate(
-            [outputs["position_ids"], out["position_ids"][0]], axis=1, dtype=np.int64
-        )
-        outputs["cur_position"] = out["cur_position"]
+        pos_ids = self.processor._compute_text_positions(multimodal_inputs["cur_position"], num_tokens)
+        multimodal_inputs["position_ids"].append(pos_ids)
+        multimodal_inputs["cur_position"] += num_tokens
 
     def pack_outputs(self, outputs):
         """
@@ -284,6 +280,22 @@ class PaddleOCRVLProcessor(TextProcessor):
         Returns:
             dict: Packed output dictionary with all required fields
         """
+        if not outputs["images"]:
+            outputs["images"] = None  # No images case
+            outputs["grid_thw"] = None  # No spatial dimensions
+            outputs["image_type_ids"] = None  # No type IDs
+        else:
+            outputs["images"] = np.vstack(outputs["images"])  # Stack image features vertically
+            outputs["grid_thw"] = np.vstack(outputs["grid_thw"])  # Stack spatial dimensions
+            outputs["image_type_ids"] = np.array(outputs["image_type_ids"])  # Convert to numpy array
+
+        # Convert all outputs to numpy arrays with appropriate types
+        outputs["input_ids"] = np.array(outputs["input_ids"], dtype=np.int64)  # Token IDs as int64
+        outputs["token_type_ids"] = np.array(outputs["token_type_ids"], dtype=np.int64)  # Type IDs as int64
+        outputs["position_ids"] = np.concatenate(
+            outputs["position_ids"], axis=1, dtype=np.int64
+        )  # Concatenate position ID
+
         outputs["image_patch_id"] = self.processor.image_token_id
         outputs["video_patch_id"] = self.processor.video_token_id
         outputs["position_ids"] = outputs["position_ids"].transpose(1, 0)

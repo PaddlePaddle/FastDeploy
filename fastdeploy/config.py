@@ -970,6 +970,9 @@ class PlasAttentionConfig:
         """
         return json.dumps({key: value for key, value in self.__dict__.items() if value is not None})
 
+    def __str__(self) -> str:
+        return json.dumps({key: value for key, value in self.__dict__.items()})
+
 
 class EarlyStopConfig:
     def __init__(
@@ -1070,6 +1073,9 @@ class LoadConfig:
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+
+    def __str__(self) -> str:
+        return json.dumps({key: value for key, value in self.__dict__.items()})
 
 
 class PoolerConfig:
@@ -1339,10 +1345,14 @@ class StructuredOutputsConfig:
         self.guided_decoding_backend: Optional[str] = None
         # disable any whitespace for guided decoding
         self.disable_any_whitespace: bool = True
+        self.logits_processors: Optional[list[str]] = None
 
         for key, value in args.items():
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
+
+    def __str__(self) -> str:
+        return json.dumps({key: value for key, value in self.__dict__.items()})
 
 
 class FDConfig:
@@ -1591,10 +1601,6 @@ class FDConfig:
             f"be less than or equal to max_num_partial_prefills: {self.max_num_partial_prefills}"
         )
         assert self.scheduler_config.splitwise_role in ["mixed", "prefill", "decode"]
-        # TODO(@wufeisheng): TP and EP need to be supported simultaneously.
-        assert (self.parallel_config.tensor_parallel_size == 1 and self.parallel_config.expert_parallel_size >= 1) or (
-            self.parallel_config.tensor_parallel_size >= 1 and self.parallel_config.expert_parallel_size == 1
-        ), "TP and EP cannot be enabled at the same time"
 
         if not self.cache_config.enable_chunked_prefill:
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
