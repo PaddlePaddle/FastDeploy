@@ -119,7 +119,7 @@ class LLMEngine:
         # If block numer is specified and model is deployed in mixed mode, start cache manager first
         if not self.do_profile and self.cfg.scheduler_config.splitwise_role != "mixed":
             device_ids = self.cfg.parallel_config.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix, True)
+            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
         # Start workers
         self.worker_proc = self._start_worker_service()
@@ -376,6 +376,7 @@ class LLMEngine:
         exit sub services
         """
         self.running = False
+        llm_logger.info("Engine shut down, exiting sub services...")
 
         if hasattr(self, "cache_manager_processes"):
             self.engine.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
@@ -394,6 +395,7 @@ class LLMEngine:
 
         if hasattr(self, "get_profile_block_num_signal"):
             self.get_profile_block_num_signal.clear()
+
         if hasattr(self, "worker_proc") and self.worker_proc is not None:
             try:
                 pgid = os.getpgid(self.worker_proc.pid)
@@ -403,6 +405,7 @@ class LLMEngine:
 
         if hasattr(self, "zmq_server") and self.zmq_server is not None:
             self.zmq_server.close()
+
         if hasattr(self, "dp_processed"):
             for p in self.dp_processed:
                 console_logger.info(f"Waiting for worker {p.pid} to exit")
@@ -500,7 +503,6 @@ class LLMEngine:
             f" --tensor_parallel_size {self.cfg.parallel_config.tensor_parallel_size}"
             f" --engine_worker_queue_port {ports}"
             f" --pod_ip {self.cfg.master_ip}"
-            f" --total_block_num {self.cfg.cache_config.total_block_num}"
             f" --block_size {self.cfg.cache_config.block_size}"
             f" --enc_dec_block_num {self.cfg.cache_config.enc_dec_block_num}"
             f" --eos_tokens_lens {self.engine.data_processor.eos_token_id_len}"
@@ -525,14 +527,18 @@ class LLMEngine:
             f" --load_choices {self.cfg.load_config.load_choices}"
             f" --plas_attention_config '{self.cfg.plas_attention_config.to_json_string()}'"
             f" --ips {ips}"
+            f" --max_encoder_cache {self.cfg.cache_config.max_encoder_cache}"
             f" --cache-transfer-protocol {self.cfg.cache_config.cache_transfer_protocol}"
             f" --runner {self.cfg.model_config.runner}"
             f" --convert {self.cfg.model_config.convert}"
             f" --override-pooler-config {self.cfg.model_config.override_pooler_config}"
-            f" --attention_dp_time_out_iters {self.cfg.attention_dp_time_out_iters}"
+            f" --attention-dp-time-out-iters {self.cfg.attention_dp_time_out_iters}"
+            f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
         )
+        if self.cfg.structured_outputs_config.logits_processors is not None:
+            arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
 
-        worker_append_flag = {
+        worker_store_true_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,
             "enable_prefix_caching": self.cfg.cache_config.enable_prefix_caching,
             "enable_chunked_prefill": self.cfg.cache_config.enable_chunked_prefill,
@@ -544,9 +550,17 @@ class LLMEngine:
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
             "enable_attention_dp_balance": self.cfg.enable_attention_dp_balance,
         }
-        for worker_flag, value in worker_append_flag.items():
+        for worker_flag, value in worker_store_true_flag.items():
             if value:
                 arguments = arguments + f" --{worker_flag}"
+
+        worker_default_none_flag = {
+            "num_gpu_blocks_override": self.cfg.cache_config.num_gpu_blocks_override,
+        }
+        for worker_flag, value in worker_default_none_flag.items():
+            if value:
+                arguments = arguments + f" --{worker_flag} {value}"
+
         if self.cfg.nnode > 1:
             pd_cmd = pd_cmd + f" --ips {ips} --nnodes {len(self.cfg.ips)}"
         pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"

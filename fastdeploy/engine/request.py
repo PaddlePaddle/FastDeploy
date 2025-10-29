@@ -24,6 +24,7 @@ from typing import Any, Dict, Generic, Optional, Union
 import numpy as np
 from typing_extensions import TypeVar
 
+from fastdeploy import envs
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
@@ -43,6 +44,12 @@ class RequestType(Enum):
     DECODE = 1
     PREEMPTED = 2
     EXTEND = 3
+
+
+@dataclass
+class ImagePosition:
+    offset: int = 0
+    length: int = 0
 
 
 @dataclass
@@ -285,11 +292,20 @@ class Request:
             setattr(self, key, value)
 
     def __repr__(self) -> str:
-        non_none_fields = []
-        for attr, value in vars(self).items():
-            if value is not None and not attr.startswith("_"):
-                non_none_fields.append(f"{attr}={value!r}")
-        return f"Request({', '.join(non_none_fields)})"
+        """Safe string representation that ignores private and None fields."""
+        try:
+            if not envs.FD_DEBUG:
+                return f"Request(request_id={self.request_id})"
+            else:
+                attrs_snapshot = dict(vars(self))
+                non_none_fields = [
+                    f"{attr}={value!r}"
+                    for attr, value in attrs_snapshot.items()
+                    if value is not None and not attr.startswith("_")
+                ]
+                return f"Request({', '.join(non_none_fields)})"
+        except Exception as e:
+            return f"<{self.__class__.__name__} repr failed: {e}>"
 
 
 @dataclass(slots=True)
@@ -323,6 +339,7 @@ class CompletionOutput:
             "index": self.index,
             "send_idx": self.send_idx,
             "token_ids": self.token_ids,
+            "decode_type": self.decode_type,
             "logprob": self.logprob,
             "top_logprobs": self.top_logprobs,
             "draft_top_logprobs": self.draft_top_logprobs,
@@ -709,6 +726,47 @@ class ScoringRequestOutput(PoolingRequestOutput[ScoringOutput]):
         return ScoringRequestOutput(
             request_id=request_output.request_id,
             outputs=ScoringOutput.from_base(request_output.outputs),
+            prompt_token_ids=request_output.prompt_token_ids,
+            finished=request_output.finished,
+        )
+
+
+@dataclass
+class RewardOutput:
+    """The output data of one reward output of a request.
+
+    Args:
+        reward: The score, which is a list of floats.
+            Its length depends on the hidden dimension of the model.
+    """
+
+    score: list[float]
+
+    @staticmethod
+    def from_base(pooling_output: PoolingOutput):
+        pooled_data = pooling_output.data
+        # if pooled_data.ndim != 1:
+        #     raise ValueError("pooled_data should be a 1-D embedding vector")
+
+        if isinstance(pooled_data, list):
+            return RewardOutput(pooled_data)
+
+        return RewardOutput(pooled_data.tolist())
+
+    @property
+    def hidden_size(self) -> int:
+        return len(self.score)
+
+    def __repr__(self) -> str:
+        return f"RewardOutput(hidden_size={self.hidden_size})"
+
+
+class RewardRequestOutput(PoolingRequestOutput[RewardOutput]):
+    @staticmethod
+    def from_base(request_output: PoolingRequestOutput):
+        return RewardRequestOutput(
+            request_id=request_output.request_id,
+            outputs=RewardOutput.from_base(request_output.outputs),
             prompt_token_ids=request_output.prompt_token_ids,
             finished=request_output.finished,
         )
