@@ -87,6 +87,7 @@ from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.pool.metadata import PoolingMetadata
+from fastdeploy.model_executor.logits_processor import build_logits_processors
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.model_executor.models.interfaces_base import FdModelForPooling
 from fastdeploy.output.pooler import PoolerOutput
@@ -623,6 +624,9 @@ class GPUModelRunner(ModelRunnerBase):
                 ] = np.array(request.get("stop_token_ids"), dtype="int64")
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
+
+            # For logits processors
+            self.share_inputs["logits_processors_args"][idx] = request.get("logits_processors_args") or {}
 
         if len(multi_vision_inputs["images_lst"]) > 0:
             self.share_inputs["image_features"] = self.extract_vision_features(multi_vision_inputs)
@@ -1188,6 +1192,11 @@ class GPUModelRunner(ModelRunnerBase):
             )
             self.share_inputs["image_features"] = None
 
+        # For logits processors
+        self.share_inputs["logits_processors"] = build_logits_processors(self.fd_config)
+        self.share_inputs["logits_processors_args"] = [{} for _ in range(max_num_seqs)]
+        logger.info(f"Enabled logits processors: {self.share_inputs['logits_processors']}")
+
     def _prepare_inputs(self) -> None:
         """Prepare the model inputs"""
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -1265,6 +1274,7 @@ class GPUModelRunner(ModelRunnerBase):
             stop_flags=self.share_inputs["stop_flags"],
             temp_scaled_logprobs=self.share_inputs["temp_scaled_logprobs"],
             top_p_normalized_logprobs=self.share_inputs["top_p_normalized_logprobs"],
+            logits_processors=self.share_inputs["logits_processors"],
             share_inputs=self.share_inputs,
         )
 
@@ -1992,6 +2002,10 @@ class GPUModelRunner(ModelRunnerBase):
         skip_idx_list = self._get_skip_idx(model_forward_batch)
         self._prepare_inputs()
         self.sampler.pre_process(skip_idx_list)
+
+        # 1.1 Update state of logits processor
+        for proc in self.sampling_metadata.logits_processors:
+            proc.update_state(self.share_inputs)
 
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
