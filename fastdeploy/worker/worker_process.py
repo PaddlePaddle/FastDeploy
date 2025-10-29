@@ -480,7 +480,7 @@ def parse_args():
         help="model dir",
     )
     parser.add_argument("-mbs", "--max_num_seqs", type=int, default=34, help="max batch size")
-    parser.add_argument("--total_block_num", type=int, default=2000)
+    parser.add_argument("--num_gpu_blocks_override", type=int, default=None)
     parser.add_argument("--block_size", type=int, default=64)
     parser.add_argument("--pod_ip", type=str, default="127.0.0.1")
     parser.add_argument("--engine_worker_queue_port", type=str, default="9923")
@@ -620,6 +620,12 @@ def parse_args():
         help="Enable output of token-level log probabilities.",
     )
     parser.add_argument(
+        "--logprobs_mode",
+        type=str,
+        default="raw_logprobs",
+        help="Indicates the content returned in the logprobs.",
+    )
+    parser.add_argument(
         "--reasoning_parser",
         type=str,
         default=None,
@@ -653,6 +659,12 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--max_encoder_cache",
+        type=int,
+        help="Maximum encoder cache tokens(use 0 to disable).",
+    )
+
+    parser.add_argument(
         "--cache-transfer-protocol",
         type=str,
         default="ipc",
@@ -679,6 +691,14 @@ def parse_args():
         help="Override configuration for the pooler.",
     )
 
+    parser.add_argument(
+        "--logits-processors",
+        type=str,
+        nargs="+",
+        default=[],
+        help="FQCNs (Fully Qualified Class Names) of logits processors supported by the service.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -700,6 +720,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     parallel_config = ParallelConfig(vars(args))
     cache_config = CacheConfig(vars(args))
     scheduler_config = SchedulerConfig(vars(args))
+
     parallel_config.tensor_parallel_rank = local_rank % parallel_config.tensor_parallel_size
     parallel_config.data_parallel_rank = local_rank // parallel_config.tensor_parallel_size
     # config for EP
@@ -713,7 +734,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         num_experts_per_rank = num_experts // parallel_config.expert_parallel_size
         num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        parallel_config.local_data_parallel_id = expert_parallel_rank % max_chips_per_node
+        parallel_config.local_data_parallel_id = parallel_config.data_parallel_rank % (
+            max_chips_per_node // parallel_config.tensor_parallel_size
+        )
 
         parallel_config.expert_parallel_rank = expert_parallel_rank
         parallel_config.num_experts_per_rank = num_experts_per_rank
@@ -771,13 +794,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
 
-    if (
-        args.speculative_config is not None
-        and ("method" in args.speculative_config)
-        and (args.speculative_config["method"] is not None)
-    ):
-        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not support speculative decoding now.")
-        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
     if args.splitwise_role != "mixed" and args.cache_transfer_protocol != "rdma":
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
     if not current_platform.is_cuda() and not current_platform.is_xpu():
@@ -808,6 +824,12 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     update_fd_config_for_mm(fd_config)
     if fd_config.load_config.load_choices == "default_v1" and not v1_loader_support(fd_config):
         fd_config.load_config.load_choices = "default"
+
+    architecture = fd_config.model_config.architectures[0]
+    if "PaddleOCR" in architecture:
+        envs.FD_ENABLE_MAX_PREFILL = 1
+        fd_config.cache_config.enable_prefix_caching = False
+        fd_config.cache_config.max_encoder_cache = 0
     return fd_config
 
 

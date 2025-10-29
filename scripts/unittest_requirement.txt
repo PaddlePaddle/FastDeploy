@@ -7,3 +7,4 @@ diff-cover
 partial_json_parser
 jsonschema
 aistudio_sdk==0.3.5
+pandas

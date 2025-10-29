@@ -521,6 +521,7 @@ class EPPrefillRunner(EPRunner):
         x: paddle.Tensor,
         topk_idx: paddle.Tensor,
         topk_weights: paddle.Tensor,
+        expert_alignment: int = 1,
         *args,
         **kwargs,
     ):
@@ -547,6 +548,7 @@ class EPPrefillRunner(EPRunner):
             "async_finish": self.ep_engine.async_finish,
             "topk_idx": topk_idx,
             "topk_weights": topk_weights,
+            "expert_alignment": expert_alignment,
         }
         return buffer.dispatch(**dispatch_args)
 
