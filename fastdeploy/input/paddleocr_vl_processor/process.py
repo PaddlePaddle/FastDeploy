@@ -147,6 +147,7 @@ class DataProcessor:
             "num_input_video_tokens": 0,
             "fps": [],
             "mm_positions": [],
+            "mm_hashes": [],
             "vit_seqlen": [],
             "vit_position_ids": [],
         }
