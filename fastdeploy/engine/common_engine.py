@@ -47,7 +47,13 @@ from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.output.token_processor import TokenProcessor
 from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
-from fastdeploy.utils import EngineError, envs, llm_logger
+from fastdeploy.utils import (
+    EngineError,
+    check_download_links,
+    envs,
+    init_bos_client,
+    llm_logger,
+)
 
 
 class EngineSevice:
@@ -117,6 +123,7 @@ class EngineSevice:
                 * self.cfg.cache_config.block_size
             )
 
+        self.bos_client = None
         self.guided_decoding_checker = None
         if self.cfg.guided_decoding_backend != "off":
             self.guided_decoding_checker = schema_checker(
@@ -643,6 +650,24 @@ class EngineSevice:
                             llm_logger.error(f"Receive request error: {err_msg}")
                             results.append((request.request_id, err_msg))
 
+                    if self._has_features_info(request) and err_msg is None:
+                        if self.bos_client is None:
+                            self.bos_client = init_bos_client()
+
+                        download_urls = []
+                        inputs = request.multimodal_inputs
+                        if inputs.get("video_feature_urls") is not None:
+                            download_urls.extend(inputs.get("video_feature_urls"))
+                        if inputs.get("image_feature_urls") is not None:
+                            download_urls.extend(inputs.get("image_feature_urls"))
+                        if inputs.get("audio_feature_urls") is not None:
+                            download_urls.extend(inputs.get("audio_feature_urls"))
+
+                        err_msg = check_download_links(self.bos_client, download_urls)
+                        if err_msg:
+                            llm_logger.error(f"Receive request {request.request_id} download error: {err_msg}")
+                            results.append((request.request_id, err_msg))
+
                     if err_msg is None:
                         insert_task.append(request)
 
@@ -692,6 +717,19 @@ class EngineSevice:
             if is_end:
                 del self.data_processor.decode_status[req_id]
         return delta_text, token_ids
+
+    def _has_features_info(self, task):
+        inputs = task.multimodal_inputs
+        if inputs is None or len(inputs) == 0:
+            return False
+
+        if (
+            (inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0)
+            or (inputs.get("image_feature_urls") is not None and len(inputs["image_feature_urls"]) > 0)
+            or (inputs.get("audio_feature_urls") is not None and len(inputs["audio_feature_urls"]) > 0)
+        ):
+            return True
+        return False
 
     def _zmq_send_generated_tokens(self):
         """
