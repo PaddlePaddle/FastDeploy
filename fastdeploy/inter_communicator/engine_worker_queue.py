@@ -27,7 +27,9 @@ from queue import Queue
 from typing import Any, List, Tuple
 
 import numpy as np
+import paddle
 
+from fastdeploy import envs
 from fastdeploy.utils import llm_logger
 
 
@@ -327,6 +329,12 @@ class EngineWorkerQueue:
             )
             self.manager: BaseManager = QueueManager(address=self.address, authkey=self.authkey)
             self.manager.start()
+
+            # If the port is 0, an anonymous port will be automatically assigned. The port range can be queried from system configuration,
+            # e.g., by running 'cat /proc/sys/net/ipv4/ip_local_port_range'; typically in the range of 10000-60999.
+            # After manager.start(), its address attribute will be updated to the actual listening address.
+            # We update self.address here so that the real address can be queried later.
+            self.address = self.manager.address
         else:
             # Client-side connection setup
             assert (
@@ -446,6 +454,15 @@ class EngineWorkerQueue:
                 f"of connected clients: {self.connected_client_counter.get()}"
             )
 
+    def get_server_port(self) -> int:
+        """
+        Returns the actual port that the server instance is listening on.
+        Calling this method only makes sense on instances where is_server=True.
+        """
+        if not self.is_server:
+            raise RuntimeError("Only the server instance can provide the port.")
+        return self.address[1]
+
     def _connect_with_retry(self, max_retries: int = 5, interval: int = 3) -> None:
         """
         Connect to the server with retry mechanism.
@@ -465,6 +482,49 @@ class EngineWorkerQueue:
                 time.sleep(interval)
         raise ConnectionError(f"TaskQueue cannot connect {self.address}")
 
+    @staticmethod
+    def to_tensor(tasks):
+        """
+        Convert NumPy arrays in multimodal inputs to PaddlePaddle tensors.
+
+        Args:
+            tasks: List of tasks containing multimodal inputs.
+        """
+        try:
+            if envs.FD_ENABLE_MAX_PREFILL:
+                llm_logger.debug(f"Convert image to tensor, type: {type(tasks)}")
+                batch_tasks, _ = tasks
+                for task in batch_tasks:
+                    if not hasattr(task, "multimodal_inputs"):
+                        continue
+                    images = task.multimodal_inputs["images"]
+                    if isinstance(images, np.ndarray):
+                        llm_logger.debug(f"Convert image to tensor, shape: {images.shape}")
+                        task.multimodal_inputs["images"] = paddle.to_tensor(images)
+        except Exception as e:
+            llm_logger.warning(f"Failed to convert to tensor: {e}")
+
+    @staticmethod
+    def to_numpy(tasks):
+        """
+        Convert PaddlePaddle tensors in multimodal inputs to NumPy arrays.
+
+        Args:
+            tasks: List of tasks containing multimodal inputs.
+        """
+        try:
+            if envs.FD_ENABLE_MAX_PREFILL:
+                for batch_tasks, _ in tasks:
+                    for task in batch_tasks:
+                        if not hasattr(task, "multimodal_inputs"):
+                            continue
+                        images = task.multimodal_inputs.get("images", None)
+                        if isinstance(images, paddle.Tensor):
+                            llm_logger.debug(f"Convert image to numpy, shape: {images.shape}")
+                            task.multimodal_inputs["images"] = images.numpy()
+        except Exception as e:
+            llm_logger.warning(f"Failed to convert to numpy: {e}")
+
     def put_tasks(self, tasks: List[Any]) -> None:
         """
         Add tasks to the shared queue in a thread-safe manner.
@@ -478,6 +538,10 @@ class EngineWorkerQueue:
             self.lock.release()
             time.sleep(0.001)
             self.lock.acquire()
+
+        # 多模态输入转换为张量
+        EngineWorkerQueue.to_tensor(tasks)
+
         self.tasks[:] = list()
         self.client_read_flag[:] = [0] * self.num_client
         self.tasks.append(tasks)
@@ -492,7 +556,11 @@ class EngineWorkerQueue:
         """
         tasks: List[Any] = list()
         self.lock.acquire()
+
         tasks.extend(self.tasks)
+        # 多模态输入转换为numpy
+        # EngineWorkerQueue.to_numpy(tasks)
+
         self.client_read_flag[self.client_id] = 1
         all_client_read: bool = np.sum(self.client_read_flag) == self.num_client
         if all_client_read:
@@ -553,6 +621,9 @@ class EngineWorkerQueue:
     def get_connect_rdma_task_response(self):
         task_response = None
         self.connect_task_response_lock.acquire()
+        if len(self.connect_rdma_task_responses) == 0:
+            self.connect_task_response_lock.release()
+            return task_response
         while sum(self.client_get_connect_task_response_flag) < self.num_client:
             self.connect_task_response_lock.release()
             time.sleep(0.001)
@@ -657,6 +728,9 @@ class EngineWorkerQueue:
         """
         response = []
         self.finish_send_cache_lock.acquire()
+        if len(self.finished_send_cache_list) == 0:
+            self.finish_send_cache_lock.release()
+            return response
         while sum(self.client_get_finish_send_cache_flag) < self.num_client:
             self.finish_send_cache_lock.release()
             time.sleep(0.001)
@@ -703,6 +777,9 @@ class EngineWorkerQueue:
         """
         response = []
         self.finish_add_cache_task_lock.acquire()
+        if len(self.finished_add_cache_task_list) == 0:
+            self.finish_add_cache_task_lock.release()
+            return response
         while sum(self.client_get_finished_add_cache_task_flag) < self.num_client:
             self.finish_add_cache_task_lock.release()
             time.sleep(0.001)
