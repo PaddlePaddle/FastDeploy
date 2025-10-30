@@ -206,8 +206,6 @@ class PaddleOCRVLProcessor(TextProcessor):
         """
 
         request = self._apply_default_parameters(request)
-        if not request.get("eos_token_ids"):
-            request["eos_token_ids"] = self.eos_token_ids
 
         stop_sequences = request.get("stop", [])
         if stop_sequences:

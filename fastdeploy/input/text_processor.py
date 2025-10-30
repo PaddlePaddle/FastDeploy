@@ -281,8 +281,6 @@ class DataProcessor(BaseDataProcessor):
         """
         data_processor_logger.info(f"Start processing request dict: {request}")
         request = self._apply_default_parameters(request)
-        if not request.get("eos_token_ids"):
-            request["eos_token_ids"] = self.eos_token_ids
 
         # processing stop_sequences
         stop_sequences = request.get("stop", [])
