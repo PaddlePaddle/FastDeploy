@@ -1798,22 +1798,22 @@ class GPUModelRunner(ModelRunnerBase):
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
 
-            hidden_states = rebuild_padding(
-                model_output,
-                self.share_inputs["cu_seqlens_q"],
-                self.share_inputs["seq_lens_this_time"],
-                self.share_inputs["seq_lens_decoder"],
-                self.share_inputs["seq_lens_encoder"],
-                (
-                    self.share_inputs["output_padding_offset"] if self.speculative_decoding else None
-                ),  # speculative decoding requires
-                self.model_config.max_model_len,
-            )
-
             if self.is_pooling_model:
+                hidden_states = model_output
                 self._dummy_pooler_run(hidden_states, model_output)
                 break
             else:
+                hidden_states = rebuild_padding(
+                    model_output,
+                    self.share_inputs["cu_seqlens_q"],
+                    self.share_inputs["seq_lens_this_time"],
+                    self.share_inputs["seq_lens_decoder"],
+                    self.share_inputs["seq_lens_encoder"],
+                    (
+                        self.share_inputs["output_padding_offset"] if self.speculative_decoding else None
+                    ),  # speculative decoding requires
+                    self.model_config.max_model_len,
+                )
                 self._dummy_sampler_run(hidden_states, model_output, accept_all_drafts, reject_all_drafts)
 
             # 7. Updata 'infer_seed' and step_cuda()
