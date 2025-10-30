@@ -303,7 +303,8 @@ class EngineService:
             client_id=0,
             local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
             local_data_parallel_id=min(
-                self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,
+                self.cfg.worker_num_per_node // self.cfg.parallel_config.tensor_parallel_size * self.cfg.node_rank
+                + self.cfg.parallel_config.local_data_parallel_id,
                 self.cfg.parallel_config.data_parallel_size - 1,
             ),
         )
@@ -886,24 +887,27 @@ class EngineService:
                 for request_id, contents in results.items():
                     new_contents = []
                     for content in contents:
-                        decode_type = content.outputs.decode_type
-                        delta_text = ""
-                        if decode_type == 0:
-                            delta_text, token_ids = self._decode_token(
-                                token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
-                            )
+                        if isinstance(content, RequestOutput):
+                            decode_type = content.outputs.decode_type
+                            delta_text = ""
+                            if decode_type == 0:
+                                delta_text, token_ids = self._decode_token(
+                                    token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
+                                )
+                            else:
+                                token_ids = content.outputs.token_ids
+                            if len(token_ids):
+                                content.outputs.token_ids = token_ids
+                                content.outputs.text = delta_text
+                                new_contents.append(content)
+                            elif content.finished:
+                                new_contents.append(content)
+                            else:
+                                llm_logger.warning(
+                                    f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
+                                )
                         else:
-                            token_ids = content.outputs.token_ids
-                        if len(token_ids):
-                            content.outputs.token_ids = token_ids
-                            content.outputs.text = delta_text
                             new_contents.append(content)
-                        elif content.finished:
-                            new_contents.append(content)
-                        else:
-                            llm_logger.warning(
-                                f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
-                            )
                     if len(new_contents):
                         llm_logger.info(f"Send response for request id: {request_id}")
                         self.send_response_server.send_response(request_id, new_contents)
@@ -1068,6 +1072,7 @@ class EngineService:
         """
         exit sub services
         """
+        llm_logger.info("Exit sub services.....")
         self.running = False
         if hasattr(self, "engine_worker_queue_server") and self.engine_worker_queue_server is not None:
             self.engine_worker_queue_server.cleanup()
