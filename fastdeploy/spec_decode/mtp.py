@@ -83,6 +83,7 @@ class MTPProposer(Proposer):
         self._init_model_inputs()
 
         # CUDA Graph
+        self.draft_model_use_cudagraph = self.graph_opt_config.draft_model_use_cudagraph
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
 
@@ -624,7 +625,7 @@ class MTPProposer(Proposer):
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
-        self.forward_meta.step_use_cudagraph = step_use_cudagraph
+        self.forward_meta.step_use_cudagraph = step_use_cudagraph and self.draft_model_use_cudagraph
 
     def exist_prefill(self):
         """
