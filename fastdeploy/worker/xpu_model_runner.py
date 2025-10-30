@@ -45,6 +45,8 @@ from fastdeploy.model_executor.ops.xpu import (
     adjust_batch,
     get_infer_param,
     get_padding_offset,
+    limit_thinking_content_length_v1,
+    limit_thinking_content_length_v2,
     recover_decode_task,
     set_data_ipc,
     share_external_data,
@@ -185,6 +187,8 @@ def xpu_post_process(
     share_inputs: Dict[str, paddle.Tensor],
     block_size: int = 64,
     skip_save_output: bool = False,
+    think_end_id: int = None,
+    line_break_id: int = None,
 ) -> None:
     """ """
     from fastdeploy.model_executor.ops.xpu import (
@@ -192,6 +196,34 @@ def xpu_post_process(
         set_stop_value_multi_ends,
         update_inputs,
     )
+
+    if think_end_id > 0:
+        limit_strategy = envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR
+        max_think_lens = share_inputs["max_think_lens"]
+        step_idx = share_inputs["step_idx"]
+        limit_think_status = share_inputs["limit_think_status"]
+        if limit_strategy == "</think>":
+            # for ernie4_5_vl
+            limit_thinking_content_length_v1(
+                sampled_token_ids,
+                max_think_lens,
+                step_idx,
+                limit_think_status,
+                think_end_id,
+            )
+        elif limit_strategy == "\n</think>\n\n":
+            # for ernie_x1
+            assert line_break_id > 0
+            limit_thinking_content_length_v2(
+                sampled_token_ids,
+                max_think_lens,
+                step_idx,
+                limit_think_status,
+                think_end_id,
+                line_break_id,
+            )
+        else:
+            raise NotImplementedError(f"Not support {limit_strategy=} for limit thinking content length.")
 
     # 1. Set stop value
     paddle.assign(
@@ -388,6 +420,13 @@ class XPUModelRunner(ModelRunnerBase):
         req_len = len(req_dicts)
         has_prefill_task = False
         has_decode_task = False
+        multi_vision_inputs = {"images_lst": [], "grid_thw_lst": [], "vit_position_ids_lst": [], "cu_seqlens": [0]}
+        rope_3d_position_ids = {
+            "position_ids_idx": [],
+            "position_ids_lst": [],
+            "position_ids_offset": [0],
+            "max_tokens_lst": [],
+        }
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
@@ -398,38 +437,58 @@ class XPUModelRunner(ModelRunnerBase):
                 if self.enable_mm:
                     inputs = request.multimodal_inputs
                     if request.with_image:
-                        vision_inputs = {}
-                        vision_inputs["input_ids"] = paddle.to_tensor(
-                            inputs["input_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
-                        )
-                        vision_inputs["token_type_ids"] = paddle.to_tensor(
-                            inputs["token_type_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
-                        )
-                        vision_inputs["image_type_ids"] = paddle.to_tensor(
-                            inputs["image_type_ids"][request.image_type_ids_start : request.image_type_ids_end],
-                            dtype=paddle.int64,
-                        )
-                        vision_inputs["images"] = paddle.to_tensor(
-                            inputs["images"][request.image_start : request.image_end], dtype="uint8"
-                        )
-                        vision_inputs["grid_thw"] = paddle.to_tensor(
-                            inputs["grid_thw"][request.num_image_start : request.num_image_end], dtype="int64"
-                        )
-                        self.share_inputs["image_features"] = self.extract_vision_features(vision_inputs)
+                        if envs.FD_ENABLE_MAX_PREFILL:
+                            multi_vision_inputs["images_lst"].append(
+                                paddle.to_tensor(inputs["images"][request.image_start : request.image_end])
+                            )
+                            multi_vision_inputs["grid_thw_lst"].extend(
+                                inputs["grid_thw"][request.num_image_start : request.num_image_end]
+                            )
+                            multi_vision_inputs["cu_seqlens"].extend(
+                                inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
+                            )
+                            multi_vision_inputs["vit_position_ids_lst"].extend(
+                                inputs["vit_position_ids"][request.num_image_start : request.num_image_end]
+                            )
+                        else:
+                            vision_inputs = {}
+                            vision_inputs["input_ids"] = paddle.to_tensor(
+                                inputs["input_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
+                            )
+                            vision_inputs["token_type_ids"] = paddle.to_tensor(
+                                inputs["token_type_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
+                            )
+                            vision_inputs["image_type_ids"] = paddle.to_tensor(
+                                inputs["image_type_ids"][request.image_type_ids_start : request.image_type_ids_end],
+                                dtype=paddle.int64,
+                            )
+                            vision_inputs["images"] = paddle.to_tensor(
+                                inputs["images"][request.image_start : request.image_end],
+                                dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16",
+                            )
+                            vision_inputs["grid_thw"] = paddle.to_tensor(
+                                inputs["grid_thw"][request.num_image_start : request.num_image_end], dtype="int64"
+                            )
+                            self.share_inputs["image_features"] = self.extract_vision_features(vision_inputs)
                     else:
                         self.share_inputs["image_features"] = None
 
-                    if inputs["position_ids"] is not None:
-                        position_ids = paddle.to_tensor(
-                            request.multimodal_inputs["position_ids"],
-                            dtype="int64",
-                        ).unsqueeze([0])
-                    else:
-                        position_ids = None
-
-                    self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
-                        position_ids, request.get("max_tokens", 2048)
+                    position_ids = request.multimodal_inputs["position_ids"]
+                    rope_3d_position_ids["position_ids_idx"].append(idx)
+                    rope_3d_position_ids["position_ids_lst"].append(position_ids)
+                    rope_3d_position_ids["position_ids_offset"].append(
+                        position_ids.shape[0] + rope_3d_position_ids["position_ids_offset"][-1]
                     )
+                    rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
+
+                if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
+                    # Enable thinking
+                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
+                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                else:
+                    # Disable thinking
+                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
                 if len(request.output_token_ids) == 0:
                     input_ids = request.prompt_token_ids
@@ -447,8 +506,6 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
                     request.block_tables, dtype="int32"
                 )
-                if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
-                    has_decode_task = True
                 self.share_inputs["stop_flags"][idx : idx + 1] = False
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = prefill_start_index
                 self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length
@@ -469,6 +526,8 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
                     request.block_tables, dtype="int32"
                 )
+                if self.share_inputs["is_block_step"][idx]:  # has tasks to continue to decode
+                    has_decode_task = True
                 continue
             else:  # preempted task
                 logger.debug(f"Handle preempted request {request} at idx {idx}")
@@ -527,6 +586,21 @@ class XPUModelRunner(ModelRunnerBase):
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
+        if len(multi_vision_inputs["images_lst"]) > 0:
+            self.share_inputs["image_features"] = self.extract_vision_features(multi_vision_inputs)
+
+        if len(rope_3d_position_ids["position_ids_idx"]) > 0:
+            packed_position_ids = paddle.to_tensor(
+                np.concatenate(rope_3d_position_ids["position_ids_lst"]), dtype="int64"
+            )
+            rope_3d_lst = self.prepare_rope3d(
+                packed_position_ids,
+                rope_3d_position_ids["max_tokens_lst"],
+                rope_3d_position_ids["position_ids_offset"],
+            )
+            for i, idx in enumerate(rope_3d_position_ids["position_ids_idx"]):
+                self.share_inputs["rope_emb"][idx : idx + 1, :] = rope_3d_lst[i]
+
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
 
@@ -562,9 +636,18 @@ class XPUModelRunner(ModelRunnerBase):
 
             if self.enable_mm:
                 self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
-                    position_ids, request.get("max_tokens", 2048)
-                )
+                    position_ids, [request.get("max_tokens", 2048)], [0, position_ids.shape[0]]
+                )[0]
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
+
+            if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
+                # Enable thinking
+                self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
+                self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+            else:
+                # Disable thinking
+                self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
                 res = request.get(attr, default_value)
@@ -712,6 +795,10 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["system_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["system_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int32")
 
+        # Initialize thinking related buffers
+        self.share_inputs["max_think_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
+        self.share_inputs["limit_think_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
 
@@ -758,6 +845,16 @@ class XPUModelRunner(ModelRunnerBase):
 
         if self.enable_mm:
             head_dim = self.model_config.head_dim
+            if "paddleocr" in self.model_config.model_type:  # neox style = True
+                rope_head_dim = head_dim
+            else:  # neox style = False
+                rope_head_dim = head_dim // 2
+
+            if rope_head_dim == self.model_config.head_dim:
+                self.share_inputs["pos_emb_type"] = "NORMAL"
+            else:
+                self.share_inputs["pos_emb_type"] = "HALF_HEAD_DIM"
+
             self.share_inputs["rope_emb"] = paddle.full(
                 shape=[
                     max_num_seqs,
@@ -765,7 +862,7 @@ class XPUModelRunner(ModelRunnerBase):
                     1,
                     self.model_config.max_model_len,
                     1,
-                    head_dim // 2,
+                    rope_head_dim,
                 ],
                 fill_value=0,
                 dtype="float32",
@@ -798,8 +895,8 @@ class XPUModelRunner(ModelRunnerBase):
         # Update bad tokens len
         max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
 
-        if self.enable_mm:  # pos_emb_type is different in EB and VL
-            self.forward_meta.pos_emb_type = "HALF_HEAD_DIM"
+        if self.enable_mm:
+            self.forward_meta.pos_emb_type = self.share_inputs["pos_emb_type"]
         self.forward_meta.attn_backend = self.attn_backends[0]
         self.initialize_attention_backend()
 
@@ -1111,6 +1208,8 @@ class XPUModelRunner(ModelRunnerBase):
             share_inputs=self.share_inputs,
             block_size=self.cache_config.block_size,
             skip_save_output=is_dummy_run,
+            think_end_id=self.model_config.think_end_id,
+            line_break_id=self.model_config.line_break_id,
         )
 
         # 7. Updata 'infer_seed' and step_paddle()
@@ -1254,7 +1353,7 @@ class XPUModelRunner(ModelRunnerBase):
             grid_thw = None
 
         if one["position_ids"] is not None:
-            position_ids = paddle.to_tensor(one["position_ids"], dtype="int64").unsqueeze([0])
+            position_ids = paddle.to_tensor(one["position_ids"], dtype="int64")
         else:
             position_ids = None
 
@@ -1268,12 +1367,10 @@ class XPUModelRunner(ModelRunnerBase):
         )
         return result
 
-    @paddle.no_grad()
-    def extract_vision_features(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
-        """extract_vision_features"""
+    def extract_vision_features_ernie(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
         assert inputs["images"] is not None
         grid_thw = inputs["grid_thw"]
-
+        # ernie-vl has images norm
         images = inputs["images"].cast("float32")
         images = self.image_preprocess.rescale_factor * images - self.image_preprocess.image_mean_tensor
         images = images / self.image_preprocess.image_std_tensor
@@ -1283,7 +1380,6 @@ class XPUModelRunner(ModelRunnerBase):
         token_type_ids_w_video = token_type_ids
         input_ids = inputs["input_ids"]
         # convert to img patch id
-        # TODO(lulinjun): may need to check model_config and model_cfg
         image_mask = input_ids == self.model_config.im_patch_id
         image_type_ids = inputs["image_type_ids"]
         with paddle.amp.auto_cast(
@@ -1299,6 +1395,7 @@ class XPUModelRunner(ModelRunnerBase):
                 image_features = image_features.reshape([-1, C * self.model_config.spatial_conv_size**2])
                 image_features = ScatterOp.apply(image_features, axis=-1)  # mp 切 Fea
                 image_features = image_features.reshape([S, -1])
+            # ernie-vl has resampler_model
             image_features = self.model.resampler_model(
                 image_features,
                 image_mask,
@@ -1308,25 +1405,74 @@ class XPUModelRunner(ModelRunnerBase):
             )
         return image_features
 
+    def extract_vision_features_paddleocr(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
+        if envs.FD_ENABLE_MAX_PREFILL:
+            inputs["vit_position_ids_lst"] = np.concatenate(inputs["vit_position_ids_lst"])
+            images = paddle.concat(inputs["images_lst"]).cast("bfloat16")
+            grid_thw = paddle.to_tensor(inputs["grid_thw_lst"], dtype="int64")
+            position_ids = paddle.to_tensor(inputs["vit_position_ids_lst"], dtype="int64")
+            cu_seqlens = paddle.cumsum(paddle.to_tensor(inputs["cu_seqlens"])).cast("int32")
+        else:
+            assert inputs["images"] is not None
+            grid_thw = inputs["grid_thw"]
+            images = inputs["images"]
+
+            position_ids = []
+            cu_seqlens = [0]
+            for idx, thw in enumerate(grid_thw):
+                numel = np.prod(np.array(thw))
+                position_ids.append(paddle.arange(numel) % np.prod(thw[1:]))
+                cu_seqlens.append(cu_seqlens[-1] + numel)
+
+            position_ids = paddle.concat(position_ids, axis=0).to(images.place)
+            cu_seqlens = paddle.to_tensor(cu_seqlens, dtype=paddle.int32).to(images.place)
+
+        with paddle.amp.auto_cast(
+            True,
+            custom_black_list=self.amp_black,
+            custom_white_list=self.amp_white,
+            level="O2",
+            dtype=self.model_config.dtype,
+        ):
+            image_features = self.model.visual(
+                pixel_values=images,
+                image_grid_thw=grid_thw,
+                position_ids=position_ids,
+                interpolate_pos_encoding=True,
+                cu_seqlens=cu_seqlens,
+                use_rope=True,
+                window_size=-1,
+            )
+            image_features = self.model.projector(image_features, grid_thw)
+            image_features = paddle.concat(image_features, axis=0)
+
+        return image_features
+
     @paddle.no_grad()
-    def prepare_rope3d(self, position_ids: paddle.Tensor, max_len: int) -> paddle.Tensor:
+    def extract_vision_features(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
+        """extract_vision_features"""
+        if "ernie" in self.model_config.model_type:
+            return self.extract_vision_features_ernie(inputs)
+        elif "paddleocr" in self.model_config.model_type:
+            return self.extract_vision_features_paddleocr(inputs)
+        else:
+            raise ValueError(f"multiple modalities model {self.model_config.model_type} is not supported")
+
+    @paddle.no_grad()
+    def prepare_rope3d(
+        self, position_ids: paddle.Tensor, max_len_lst: list[int], cumsum_seqlens: list[int]
+    ) -> list[paddle.Tensor]:
         """prepare_rope3d"""
 
-        prefix_max_position_ids = paddle.max(position_ids) + 1
-        dec_pos_ids = paddle.tile(
-            paddle.arange(max_len, dtype="int64").unsqueeze(0).unsqueeze(-1),
-            [1, 1, 3],
-        )
-        dec_pos_ids = dec_pos_ids + prefix_max_position_ids
-        position_ids_3d_real = paddle.concat([position_ids, dec_pos_ids], axis=1)
-
-        rope_emb = get_rope_3d(
-            position_ids=position_ids_3d_real,
+        rope_emb_lst = get_rope_3d(
+            position_ids=position_ids,
             rotary_dim=self.model_config.head_dim,
             partial_rotary_factor=1.0,
             base=self.model_config.rope_theta,
             max_position=self.model_config.max_model_len,
             freq_allocation=getattr(self.model_config, "freq_allocation", 20),
             model_type=self.model_config.model_type,
+            max_len_lst=max_len_lst,
+            cumsum_seqlens=cumsum_seqlens,
         )
-        return rope_emb
+        return rope_emb_lst
