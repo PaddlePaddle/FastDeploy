@@ -147,16 +147,18 @@ class ResourceManagerV1(ResourceManager):
 
         request.with_image = False
         inputs = request.multimodal_inputs
+        has_video = False
         if inputs.get("patch_idx", None) is not None and inputs.get("patch_map", None) is not None:
             pre_end_idx = request.num_computed_tokens
             new_end_idx = pre_end_idx + num_new_tokens
 
             prompt_token_ids_len = len(request.prompt_token_ids)
 
-            if new_end_idx >= prompt_token_ids_len:
-                return num_new_tokens
+            for x in inputs["patch_map"]:
+                if x["modal_id"] == IDS_TYPE_FLAG["video"]:
+                    has_video = True
 
-            if inputs.get("can_split_idx_list") is not None:
+            if inputs.get("can_split_idx_list") is not None and has_video:
                 if new_end_idx >= prompt_token_ids_len:
                     return num_new_tokens
                 patch_idx = inputs["patch_idx"][new_end_idx]
