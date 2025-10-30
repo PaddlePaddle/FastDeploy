@@ -161,7 +161,7 @@ class PaddleDisWorkerProc:
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         if self.parallel_config.data_parallel_size > 1 and not envs.FD_ENABLE_MULTI_API_SERVER:
             launched_expert_service_signal_data = np.zeros(
-                shape=[min(self.parallel_config.data_parallel_size, self.max_chips_per_node)], dtype=np.int32
+                shape=[self.parallel_config.data_parallel_size // self.fd_config.nnode], dtype=np.int32
             )
             self.launched_expert_service_signal = IPCSignal(
                 name="launched_expert_service_signal",
@@ -170,7 +170,12 @@ class PaddleDisWorkerProc:
                 suffix=self.parallel_config.engine_pid,
                 create=False,
             )
-            while self.launched_expert_service_signal.value[self.local_rank % self.max_chips_per_node] == 0:
+            while (
+                self.launched_expert_service_signal.value[
+                    self.parallel_config.local_data_parallel_id % self.max_chips_per_node
+                ]
+                == 0
+            ):
                 pass
 
         # init worker_ready_signal

@@ -249,6 +249,7 @@ class CacheMessager:
                 cache_info = self.engine_worker_queue.get_cache_info()
                 if cache_info:
                     logger.debug(f"cache info {cache_info}")
+                    self.engine_worker_queue.cache_info_barrier.wait()
                     for info in cache_info:
                         if info["request_id"] in self.cache_info:
                             self.cache_info[info["request_id"]].update(info)
@@ -293,9 +294,6 @@ class CacheMessager:
                         continue
                     if "layer_idx" not in item:
                         item["layer_idx"] = 0
-                    if item["status"] == "error":
-                        del self.cache_info[req_id]
-                        continue
                     if item["current_id"] > prefilled_step_idx:
                         continue
                     current_transfer_protocol = item["transfer_protocol"]
@@ -305,11 +303,7 @@ class CacheMessager:
                         status = self.messager[current_transfer_protocol].connect(target_ip, target_id)
                         if not status:
                             logger.error(f"connect to {target_ip}:{target_id} failed")
-                            item["status"] = "error"
-                            self.engine_worker_queue.finish_request_barrier.wait()
-                            if self.rank == 0:
-                                self.engine_worker_queue.put_finished_req([(item["request_id"], "connect error")])
-                            continue
+                            item["status"] = "connect error"
                     elif item["transfer_protocol"] == "ipc":
                         target_ip = "0.0.0.0"
                         target_id = int(item["device_ids"][self.rank])
@@ -319,48 +313,43 @@ class CacheMessager:
                         current_layer_idx = self.num_layers
                     else:
                         current_layer_idx = prefilled_layer_idx + 1
-
-                    for layer_idx in range(item["layer_idx"], current_layer_idx):
-                        tic = time.time()
-                        return_code = self.messager[current_transfer_protocol].write_cache(
-                            target_ip,
-                            target_id,
-                            src_block_ids,
-                            dest_block_ids,
-                            layer_idx,
-                        )
-                        if return_code != 0:
-                            item["status"] = "error"
-                            self.engine_worker_queue.finish_request_barrier.wait()
-                            if self.rank == 0:
-                                self.engine_worker_queue.put_finished_req([(item["request_id"], "write cache error")])
-                            logger.error(
-                                f"write cache failed, layer_idx: {layer_idx}, "
-                                f"req_id: {item['request_id']}, dest_ip: {target_ip}"
+                    if "error" not in item["status"]:
+                        for layer_idx in range(item["layer_idx"], current_layer_idx):
+                            tic = time.time()
+                            return_code = self.messager[current_transfer_protocol].write_cache(
+                                target_ip,
+                                target_id,
+                                src_block_ids,
+                                dest_block_ids,
+                                layer_idx,
                             )
-                            break
+                            if return_code != 0:
+                                item["status"] = "write cache error"
+                                logger.error(
+                                    f"write cache failed, layer_idx: {layer_idx}, "
+                                    f"req_id: {item['request_id']}, dest_ip: {target_ip}"
+                                )
+                                break
 
-                        tok = time.time()
-                        cost_time = tok - tic
-                        block_num = len(src_block_ids)
-                        avg_time_per_block = cost_time * 1000 / block_num  # ms
-                        send_cache_speed = block_num * self.block_bytes / 1073741824 / cost_time  # GB/s
-                        logger.debug(
-                            f"finish write cache for a layer, {item['request_id']}, {layer_idx}"
-                            f" {current_transfer_protocol}"
-                            f"block_num: {block_num}, send_cache_speed(GB/s): {round(send_cache_speed, 5)},"
-                            f"avg_time per block(ms): {round(avg_time_per_block, 5)}"
-                        )
+                            tok = time.time()
+                            cost_time = tok - tic
+                            block_num = len(src_block_ids)
+                            avg_time_per_block = cost_time * 1000 / block_num  # ms
+                            send_cache_speed = block_num * self.block_bytes / 1073741824 / cost_time  # GB/s
+                            logger.debug(
+                                f"finish write cache for a layer, {item['request_id']}, {layer_idx}"
+                                f" {current_transfer_protocol}"
+                                f"block_num: {block_num}, send_cache_speed(GB/s): {round(send_cache_speed, 5)},"
+                                f"avg_time per block(ms): {round(avg_time_per_block, 5)}"
+                            )
                     item["layer_idx"] = current_layer_idx
                     if item["layer_idx"] == self.num_layers:
                         if item["transfer_protocol"] == "ipc":
                             self.messager["ipc"].write_block_by_sync(target_id)
                         logger.info(f"finish write cache {item['request_id']}")
-                        self.engine_worker_queue.finish_request_barrier.wait()
-                        if self.rank == 0:
-                            # to do: robust in TP: here we assume all status in tp are the same. If wrong, all wrong. If ok, all ok.
-                            self.engine_worker_queue.put_finished_req([(item["request_id"], "finished")])
-                            logger.info(f"put write cache {item['request_id']}")
+                        self.engine_worker_queue.finish_send_cache_barrier.wait()
+                        self.engine_worker_queue.put_finished_req([[item["request_id"], item["status"]]])
+                        logger.info(f"put write cache {item['request_id']}, status {item['status']}")
                         del self.cache_info[req_id]
                 self.last_layer_idx = prefilled_layer_idx
 
