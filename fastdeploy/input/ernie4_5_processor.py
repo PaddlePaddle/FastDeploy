@@ -38,7 +38,6 @@ class Ernie4_5Processor(BaseDataProcessor):
         decode_status (dict): 存储解码状态信息。
         tokenizer (object): 存储分词器实例。
         eos_token_ids (list): 存储结束符号的token ID列表。
-        eos_token_id_len (int): 存储结束符号的token ID列表的长度。
         pad_token_id (int): 存储填充符号的token ID。
     """
 
@@ -69,7 +68,6 @@ class Ernie4_5Processor(BaseDataProcessor):
         from paddleformers.trl.llm_utils import get_eos_token_id
 
         self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
-        self.eos_token_id_len = len(self.eos_token_ids)
         self.pad_token_id = self.get_pad_id()
         self.reasoning_parser = None
         self.tool_parser_obj = tool_parser_obj
@@ -89,8 +87,6 @@ class Ernie4_5Processor(BaseDataProcessor):
         """
         data_processor_logger.info(f"Start processing request: {request}")
         request = self._apply_default_parameters(request)
-        if request.get("eos_token_ids") is None or len(request.eos_token_ids) == 0:
-            request.eos_token_ids = self.eos_token_ids
 
         # processing stop_sequences
         stop_sequences = request.get("stop", [])

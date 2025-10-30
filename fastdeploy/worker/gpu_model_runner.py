@@ -574,8 +574,9 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
                 continue
 
-            assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
-            self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
+            self.share_inputs["eos_token_id"][:] = np.array(self.model_config.eos_token_ids, dtype="int64").reshape(
+                -1, 1
+            )
 
             self.share_inputs["top_p"][idx : idx + 1] = request.get("top_p", 0.7)
             self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
@@ -779,8 +780,9 @@ class GPUModelRunner(ModelRunnerBase):
                 else:
                     return default_value
 
-            assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
-            self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
+            self.share_inputs["eos_token_id"][:] = np.array(self.model_config.eos_token_ids, dtype="int64").reshape(
+                -1, 1
+            )
             self.share_inputs["top_p"][idx : idx + 1] = get_attr_from_request(request, "top_p", 0.7)
             self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
             self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
@@ -950,9 +952,9 @@ class GPUModelRunner(ModelRunnerBase):
             max_dec_len = max_dec_len_list[i]
             self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["prompt_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
-            self.share_inputs["eos_token_id"][:] = np.array(
-                [2] * self.model_config.eos_tokens_lens, dtype="int64"
-            ).reshape(-1, 1)
+            self.share_inputs["eos_token_id"][:] = np.array(self.model_config.eos_token_ids, dtype="int64").reshape(
+                -1, 1
+            )
             self.seq_lens_this_time_buffer[idx : idx + 1] = input_length
             self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = input_length
             self.share_inputs["seq_lens_encoder"][idx : idx + 1] = input_length
@@ -994,7 +996,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.model_config.pad_token_id,
             dtype="int64",
         )
-        self.share_inputs["eos_token_id"] = paddle.full([self.model_config.eos_tokens_lens, 1], 0, dtype="int64")
+        self.share_inputs["eos_token_id"] = paddle.full([len(self.model_config.eos_token_ids), 1], 0, dtype="int64")
         self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
         self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.share_inputs["top_k_list"] = [0] * max_num_seqs

@@ -42,7 +42,6 @@ class RolloutModelConfig:
         engine_pid: int = None,
         do_profile: bool = False,
         pad_token_id: int = -1,
-        eos_tokens_lens: int = 2,
         enable_chunked_prefill: bool = False,
         speculative_method: str = None,
         speculative_max_draft_token_num: int = 1,
@@ -87,7 +86,6 @@ class RolloutModelConfig:
         self.engine_pid = engine_pid
         self.do_profile = do_profile
         self.pad_token_id = pad_token_id
-        self.eos_tokens_lens = eos_tokens_lens
         self.enable_chunked_prefill = enable_chunked_prefill
         self.speculative_config = {}
         self.speculative_config["method"] = speculative_method

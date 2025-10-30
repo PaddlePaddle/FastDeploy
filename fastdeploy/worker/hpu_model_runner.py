@@ -488,9 +488,9 @@ class HPUModelRunner(ModelRunnerBase):
                     self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = length
                     self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
 
-            if len(request.eos_token_ids) < self.model_config.eos_tokens_lens:
-                request.eos_token_ids.append(request.eos_token_ids[0])
-            self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
+            self.share_inputs["eos_token_id"][:] = np.array(self.model_config.eos_token_ids, dtype="int64").reshape(
+                -1, 1
+            )
 
             self.share_inputs["top_p"][idx : idx + 1] = request.get("top_p", 0.7)
             self.share_inputs["temperature"][idx : idx + 1] = request.get("temperature", 0.95)
@@ -573,7 +573,7 @@ class HPUModelRunner(ModelRunnerBase):
         self.share_inputs["input_ids"] = paddle.full(
             [max_num_seqs, self.model_config.max_model_len], self.model_config.pad_token_id, dtype="int64"
         )
-        self.share_inputs["eos_token_id"] = paddle.full([self.model_config.eos_tokens_lens, 1], 0, dtype="int64")
+        self.share_inputs["eos_token_id"] = paddle.full([len(self.model_config.eos_token_ids), 1], 0, dtype="int64")
         self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
         self.share_inputs["temperature"] = paddle.full(
             [max_num_seqs, 1], self.model_config.temperature, dtype="float32"
@@ -1047,9 +1047,9 @@ class HPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["step_idx"][idx : idx + 1] = 0
 
-            if len(request["eos_token_ids"]) < self.model_config.eos_tokens_lens:
-                request["eos_token_ids"].append(request["eos_token_ids"][0])
-            self.share_inputs["eos_token_id"][:] = np.array(request["eos_token_ids"], dtype="int64").reshape(-1, 1)
+            self.share_inputs["eos_token_id"][:] = np.array(self.model_config.eos_token_ids, dtype="int64").reshape(
+                -1, 1
+            )
 
             self.share_inputs["top_p"][idx : idx + 1] = request.get("top_p", 0.7)
             self.share_inputs["temperature"][idx : idx + 1] = request.get("temperature", 0.95)
