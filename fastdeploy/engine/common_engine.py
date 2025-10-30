@@ -782,15 +782,16 @@ class EngineService:
                 self.llm_logger.error(err_msg)
 
     def start_zmq_service(self, api_server_pid=None):
+        if envs.FD_ENABLE_INTERNAL_ADAPTER:
+            self.internal_adapter = InternalAdapter(
+                cfg=self.cfg, engine=self, dp_rank=self.cfg.parallel_config.local_data_parallel_id
+            )
         if api_server_pid is None:
             return
         self.api_server_pid = api_server_pid
         if envs.FD_ENABLE_INTERNAL_ADAPTER:
             self.recv_request_server = ZmqTcpServer(port=envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT, mode=zmq.PULL)
             self.send_response_server = ZmqTcpServer(port=envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT, mode=zmq.ROUTER)
-            self.internal_adapter = InternalAdapter(
-                cfg=self.cfg, engine=self, dp_rank=self.cfg.parallel_config.local_data_parallel_id
-            )
         else:
             self.recv_request_server = ZmqIpcServer(name=api_server_pid, mode=zmq.PULL)
             self.send_response_server = ZmqIpcServer(name=api_server_pid, mode=zmq.ROUTER)
