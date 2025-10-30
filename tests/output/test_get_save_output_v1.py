@@ -1,23 +1,20 @@
-import random
+import queue
 import time
 import unittest
+from threading import Thread
 from unittest.mock import Mock
+
 import paddle
 import zmq
-from fastdeploy.engine.request import RequestOutput
+
+from fastdeploy import envs
+from fastdeploy.inter_communicator import ZmqIpcClient
+from fastdeploy.model_executor.pre_and_post_process import _build_stream_transfer_data
 from fastdeploy.output.token_processor import TokenProcessor
 from fastdeploy.worker.gpu_model_runner import GPUModelRunner
-from fastdeploy import envs
-from fastdeploy.inter_communicator import (
-    ZmqIpcServer,
-    ZmqIpcClient
-)
-from threading import Thread
-import numpy as np
-import queue
 
-from fastdeploy.model_executor.pre_and_post_process import _build_stream_transfer_data
 paddle.set_device("cpu")
+
 
 # Mock classes and constants needed for the test
 class MockConfig:
@@ -100,7 +97,9 @@ class TestGetSaveOutputV1(unittest.TestCase):
         model_runner.zmq_client = None
         model_runner.async_output_queue = None
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-            model_runner.zmq_client = ZmqIpcClient(name=f"get_save_output_rank{cfg.parallel_config.local_data_parallel_id}", mode=zmq.PUSH)
+            model_runner.zmq_client = ZmqIpcClient(
+                name=f"get_save_output_rank{cfg.parallel_config.local_data_parallel_id}", mode=zmq.PUSH
+            )
             model_runner.zmq_client.connect()
             model_runner.zmq_client.socket.SNDTIMEO = 3000
             model_runner.async_output_queue: queue.Queue = queue.Queue()
@@ -144,15 +143,17 @@ class TestGetSaveOutputV1(unittest.TestCase):
 
     def test_normal(self):
         """Test normal senario(without speculative decoding and logprobs)"""
+        # init token_processor, model_runner and start zmq_client
         envs.FD_USE_GET_SAVE_OUTPUT_V1 = 1
         processor = self.setup_token_processor()
         model_runner = self.setup_model_runner()
 
-        #
+        # put data into zmq client
         data = paddle.to_tensor([[100]], dtype="int64")
         output_tokens = _build_stream_transfer_data(data)
         model_runner.async_output_queue.put(output_tokens)
 
+        # check result
         cached_generated_tokens: MockCachedGeneratedTokens = processor.cached_generated_tokens
         for c in cached_generated_tokens.cache:
             assert c.outputs.token_ids == [100]
