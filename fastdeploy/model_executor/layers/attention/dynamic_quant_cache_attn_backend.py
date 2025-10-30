@@ -85,7 +85,7 @@ class DynamciQuantCacheAttentionBackend(AttentionBackend):
         """
         super().__init__()
         self.attention_metadata: DynamciQuantCacheAttentionMetadata = None
-        self.max_seq_len = fd_config.parallel_config.max_model_len
+        self.max_seq_len = fd_config.model_config.max_model_len
         self.kv_num_heads = kv_num_heads
         self.num_heads = num_heads
         self.group_size: int = self.num_heads // self.kv_num_heads
