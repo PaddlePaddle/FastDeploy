@@ -75,7 +75,7 @@ def setup_and_run_embedding_server():
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        model_path = os.path.join(base_path, "Qwen3-Embedding-0.6B")
+        model_path = os.path.join(base_path, "torch", "Qwen3-Embedding-0.6B")
     else:
         model_path = "./Qwen3-Embedding-0.6B"
 
