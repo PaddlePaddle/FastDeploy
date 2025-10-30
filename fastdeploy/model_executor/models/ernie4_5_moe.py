@@ -235,6 +235,7 @@ class Ernie4_5_Attention(nn.Layer):
             prefix=f"{prefix}.o_proj",
             input_size=fd_config.model_config.head_dim * fd_config.model_config.num_attention_heads,
             output_size=fd_config.model_config.hidden_size,
+            layer_id=layer_id,
         )
         self.attn = Attention(
             fd_config=fd_config,
@@ -303,6 +304,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
+            layer_id=layer_id,
         )
 
         self.post_attention_layernorm = RMSNorm(
@@ -329,16 +331,27 @@ class Ernie4_5_DecoderLayer(nn.Layer):
     ):
         if residual is None:
             residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
+            hidden_states = self.input_layernorm(
+                hidden_states,
+                forward_meta=forward_meta,
+            )
         else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+            hidden_states, residual = self.input_layernorm(
+                hidden_states,
+                residual,
+                forward_meta=forward_meta,
+            )
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
             forward_meta=forward_meta,
         )
 
-        hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
+        hidden_states, residual = self.post_attention_layernorm(
+            hidden_states,
+            residual,
+            forward_meta=forward_meta,
+        )
 
         hidden_states = self.mlp(hidden_states)
 
@@ -444,7 +457,7 @@ class Ernie4_5_Model(nn.Layer):
 
         hidden_states = hidden_states + residual
 
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, forward_meta=forward_meta)
 
         if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
             out = forward_meta.attn_backend.reverse_transpose(out)
