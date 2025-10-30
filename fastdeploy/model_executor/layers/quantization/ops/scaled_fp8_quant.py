@@ -18,11 +18,18 @@ from typing import Optional
 
 import paddle
 
-from fastdeploy.model_executor.ops.gpu import (
-    dynamic_per_token_scaled_fp8_quant,
-    dynamic_scaled_fp8_quant,
-    static_scaled_fp8_quant,
-)
+try:
+    from fastdeploy.model_executor.ops.gpu import dynamic_per_token_scaled_fp8_quant
+except ImportError:
+    pass
+try:
+    from fastdeploy.model_executor.ops.gpu import dynamic_scaled_fp8_quant
+except ImportError:
+    pass
+try:
+    from fastdeploy.model_executor.ops.gpu import static_scaled_fp8_quant
+except ImportError:
+    pass
 
 
 def scaled_fp8_quant(

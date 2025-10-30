@@ -25,7 +25,11 @@ from fastdeploy.model_executor.layers.linear import (
     QKVParallelLinear,
 )
 from fastdeploy.model_executor.layers.moe import FusedMoE
-from fastdeploy.model_executor.ops.gpu import deep_gemm
+
+try:
+    from fastdeploy.model_executor.ops.gpu import deep_gemm
+except ImportError:
+    pass
 from fastdeploy.model_executor.utils import TensorTracker, set_weight_attrs
 
 from ..utils import get_tensor, per_block_cast_to_fp8
