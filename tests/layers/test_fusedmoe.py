@@ -612,9 +612,9 @@ class TestFusedMoE(unittest.TestCase):
             times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
             print("num_token:", num_tokens)
             print(times[-5:])
-            GB = 1.0 * num_tokens * self.moe_k * self.hidden_size * 3.0 / (1e9)
+            rdma_GB = 3.0 * num_tokens * self.moe_k * self.hidden_size / (1e9)
             times_s = (times[-1] / num_layers) / (1e3)
-            print(times[-1], round(GB / times_s, 1))
+            print(times[-1], round(rdma_GB / times_s, 1))
 
         shutil.rmtree(self.model_name_or_path)
 
