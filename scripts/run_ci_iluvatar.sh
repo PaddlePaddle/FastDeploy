@@ -15,8 +15,8 @@ python -m pip uninstall paddlepaddle -y
 python -m pip uninstall paddle-iluvatar-gpu -y
 # python -m pip install --pre paddlepaddle==3.0.0.dev20250708 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
 # python -m pip install --pre paddle-iluvatar-gpu==3.0.0.dev20250806 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
-python -m pip install paddlepaddle==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/ --index-url http://pip.baidu.com/pypi/simple --trusted-host pip.baidu.com
-python -m pip install paddle-iluvatar-gpu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/ixuca/ --index-url http://pip.baidu.com/pypi/simple --trusted-host pip.baidu.com
+python -m pip install paddlepaddle==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
+python -m pip install paddle-iluvatar-gpu==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/ixuca/
 # Patch, remove if image updated
 cp /data1/fastdeploy/packages/cusolver.h /usr/local/lib/python3.10/site-packages/paddle/include/paddle/phi/backends/dynload/cusolver.h
 echo "build whl"

@@ -62,7 +62,7 @@ jobs:
             BASE_BRANCH="${{ github.base_ref }}"
             docker pull ${docker_image}
             # Clean the repository directory before starting
-            docker run --rm -v $(pwd):/workspace -w /workspace \
+            docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
             -e "REPO_NAME=${REPO_NAME}" \
             ${docker_image} /bin/bash -c '
               if [ -d ${REPO_NAME} ]; then
@@ -145,7 +145,7 @@ jobs:
             docker rm -f ${runner_name} || true
           fi
 
-          docker run --rm \
+          docker run --rm --net=host \
           --name ${runner_name} \
           --cap-add=SYS_PTRACE --shm-size=64G \
           -v $(pwd):/workspace -w /workspace \
@@ -168,10 +168,10 @@ jobs:
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
           git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
-          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/ --index-url http://pip.baidu.com/pypi/simple --trusted-host pip.baidu.com
+          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
           pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
-          python -m pip install -r scripts/unittest_requirement.txt --index-url http://pip.baidu.com/pypi/simple --trusted-host pip.baidu.com
+          python -m pip install -r scripts/unittest_requirement.txt
           python -m pip install ${fd_wheel_url}
           rm -rf fastdeploy
           # coverage subprocess use
@@ -218,7 +218,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           cd FastDeploy
-          python -m pip install -q bce-python-sdk==0.9.29 --index-url http://pip.baidu.com/pypi/simple --trusted-host pip.baidu.com
+          python -m pip install -q bce-python-sdk==0.9.29
           wget -q --no-proxy --no-check-certificate \
             https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py \
             -O bos_tools.py

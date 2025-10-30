@@ -29,7 +29,7 @@ jobs:
           REPO_NAME="${FULL_REPO##*/}"
           BASE_BRANCH="${{ github.base_ref }}"
           # Clean the repository directory before starting
-          docker run --rm -v $(pwd):/workspace \
+          docker run --rm --net=host -v $(pwd):/workspace \
           -v ${{ github.workspace }}/../../..:${{ github.workspace }}/../../.. \
           -w /workspace \
           -e "REPO_NAME=${REPO_NAME}" \
