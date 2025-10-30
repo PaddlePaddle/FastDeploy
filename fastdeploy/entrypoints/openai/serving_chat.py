@@ -29,6 +29,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionResponseStreamChoice,
     ChatCompletionStreamResponse,
     ChatMessage,
+    CompletionTokenUsageInfo,
     DeltaMessage,
     ErrorInfo,
     ErrorResponse,
@@ -186,7 +187,10 @@ class OpenAIServingChat:
         num_choices = 1 if request.n is None else request.n
         first_iteration = True
         previous_num_tokens = [0] * num_choices
+        reasoning_num_tokens = [0] * num_choices
         num_prompt_tokens = 0
+        num_cached_tokens = 0
+        num_image_tokens = [0] * num_choices
         tool_called = [False] * num_choices
         max_streaming_response_tokens = (
             request.max_streaming_response_tokens
@@ -272,6 +276,8 @@ class OpenAIServingChat:
                     if first_iteration:
                         num_prompt_tokens = len(prompt_token_ids)
                         num_cached_tokens = res.get("num_cached_tokens", 0)
+                        num_input_image_tokens = res.get("num_input_image_tokens", 0)
+                        num_input_video_tokens = res.get("num_input_video_tokens", 0)
                         for i in range(num_choices):
                             choice = ChatCompletionResponseStreamChoice(
                                 index=i,
@@ -308,7 +314,12 @@ class OpenAIServingChat:
                                     prompt_tokens=num_prompt_tokens,
                                     completion_tokens=0,
                                     total_tokens=num_prompt_tokens,
-                                    prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cached_tokens),
+                                    prompt_tokens_details=PromptTokenUsageInfo(
+                                        cached_tokens=num_cached_tokens,
+                                        image_tokens=num_input_image_tokens,
+                                        video_tokens=num_input_video_tokens,
+                                    ),
+                                    completion_tokens_details=CompletionTokenUsageInfo(reasoning_tokens=0),
                                 )
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)} \n\n"
                             api_server_logger.info(f"Chat Streaming response send_idx 0: {chunk.model_dump_json()}")
@@ -318,6 +329,10 @@ class OpenAIServingChat:
                     output_top_logprobs = output["top_logprobs"]
                     output_draft_top_logprobs = output["draft_top_logprobs"]
                     previous_num_tokens[idx] += len(output["token_ids"])
+                    if output.get("num_image_tokens"):
+                        previous_num_tokens[idx] += output.get("num_image_tokens")
+                        num_image_tokens[idx] += output.get("num_image_tokens")
+                    reasoning_num_tokens[idx] += output.get("reasoning_token_num", 0)
                     logprobs_res: Optional[LogProbs] = None
                     draft_logprobs_res: Optional[LogProbs] = None
                     if request.logprobs and output_top_logprobs is not None:
@@ -385,6 +400,11 @@ class OpenAIServingChat:
                             prompt_tokens=num_prompt_tokens,
                             completion_tokens=previous_num_tokens[idx],
                             total_tokens=num_prompt_tokens + previous_num_tokens[idx],
+                            prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cached_tokens),
+                            completion_tokens_details=CompletionTokenUsageInfo(
+                                reasoning_tokens=reasoning_num_tokens[idx],
+                                image_tokens=num_image_tokens[idx],
+                            ),
                         )
                     choices.append(choice)
 
@@ -397,10 +417,15 @@ class OpenAIServingChat:
 
             if include_usage:
                 completion_tokens = sum(previous_num_tokens)
+                reasoning_tokens = sum(reasoning_num_tokens)
                 usage = UsageInfo(
                     prompt_tokens=num_prompt_tokens,
                     completion_tokens=completion_tokens,
                     total_tokens=num_prompt_tokens + completion_tokens,
+                    prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cached_tokens),
+                    completion_tokens_details=CompletionTokenUsageInfo(
+                        image_tokens=sum(num_image_tokens), reasoning_tokens=reasoning_tokens
+                    ),
                 )
                 chunk = ChatCompletionStreamResponse(
                     id=request_id,
@@ -450,12 +475,16 @@ class OpenAIServingChat:
             for rid in request_ids:
                 dealer.write([b"", rid.encode("utf-8")])
             previous_num_tokens = [0] * num_choices
+            reasoning_num_tokens = [0] * num_choices
             current_waiting_time = 0
 
             logprob_contents = [[] for _ in range(num_choices)]
             draft_logprob_contents = [[] for _ in range(num_choices)]
             completion_token_ids = [[] for _ in range(num_choices)]
             num_cached_tokens = [0] * num_choices
+            num_input_image_tokens = [0] * num_choices
+            num_input_video_tokens = [0] * num_choices
+            num_image_tokens = [0] * num_choices
             response_processor = ChatResponseProcessor(
                 data_processor=self.engine_client.data_processor,
                 enable_mm_output=self.enable_mm_output,
@@ -520,15 +549,21 @@ class OpenAIServingChat:
 
                     if data["finished"]:
                         num_choices -= 1
+                        reasoning_num_tokens[idx] = data["outputs"].get("reasoning_token_num", 0)
+                        if data["outputs"].get("image_token_num"):
+                            previous_num_tokens[idx] += data["outputs"].get("image_token_num")
+                            num_image_tokens[idx] = data["outputs"].get("image_token_num")
                         choice = await self._create_chat_completion_choice(
                             data=data,
-                            index=idx,
                             request=request,
-                            previous_num_tokens=previous_num_tokens[idx],
                             prompt_token_ids=prompt_token_ids,
                             prompt_tokens=prompt_tokens,
                             completion_token_ids=completion_token_ids[idx],
+                            previous_num_tokens=previous_num_tokens[idx],
                             num_cached_tokens=num_cached_tokens,
+                            num_input_image_tokens=num_input_image_tokens,
+                            num_input_video_tokens=num_input_video_tokens,
+                            num_image_tokens=num_image_tokens,
                             logprob_contents=logprob_contents,
                             response_processor=response_processor,
                         )
@@ -540,12 +575,21 @@ class OpenAIServingChat:
 
         num_prompt_tokens = len(prompt_token_ids)
         num_generated_tokens = sum(previous_num_tokens)
+        num_reasoning_tokens = sum(reasoning_num_tokens)
         usage = UsageInfo(
             prompt_tokens=num_prompt_tokens,
             completion_tokens=num_generated_tokens,
             total_tokens=num_prompt_tokens + num_generated_tokens,
-            prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=sum(num_cached_tokens)),
+            prompt_tokens_details=PromptTokenUsageInfo(
+                cached_tokens=sum(num_cached_tokens),
+                image_tokens=sum(num_input_image_tokens),
+                video_tokens=sum(num_input_video_tokens),
+            ),
+            completion_tokens_details=CompletionTokenUsageInfo(
+                reasoning_tokens=num_reasoning_tokens, image_tokens=sum(num_image_tokens)
+            ),
         )
+
         choices = sorted(choices, key=lambda x: x.index)
         res = ChatCompletionResponse(
             id=request_id,
@@ -560,16 +604,20 @@ class OpenAIServingChat:
     async def _create_chat_completion_choice(
         self,
         data: dict,
-        index: int,
         request: ChatCompletionRequest,
-        previous_num_tokens: int,
         prompt_token_ids: list,
         prompt_tokens: str,
         completion_token_ids: list,
+        previous_num_tokens: int,
         num_cached_tokens: list,
+        num_input_image_tokens: list,
+        num_input_video_tokens: list,
+        num_image_tokens: list,
         logprob_contents: list,
         response_processor: ChatResponseProcessor,
     ) -> ChatCompletionResponseChoice:
+        idx = int(data["request_id"].split("_")[-1])
+        output = data["outputs"]
 
         output = data["outputs"]
         if output is not None and output.get("metrics") and output["metrics"].get("request_start_time"):
@@ -591,12 +639,15 @@ class OpenAIServingChat:
             message.content = output["text"]
 
         logprobs_full_res = None
-        if logprob_contents[index]:
-            logprobs_full_res = LogProbs(content=logprob_contents[index])
+        if logprob_contents[idx]:
+            logprobs_full_res = LogProbs(content=logprob_contents[idx])
 
         has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
         max_tokens = request.max_completion_tokens or request.max_tokens
-        num_cached_tokens[index] = data.get("num_cached_tokens", 0)
+        num_cached_tokens[idx] = data.get("num_cached_tokens", 0)
+        num_input_image_tokens[idx] = data.get("num_input_image_tokens", 0)
+        num_input_video_tokens[idx] = data.get("num_input_video_tokens", 0)
+        num_image_tokens[idx] = output.get("num_image_tokens", 0)
 
         finish_reason = "stop"
         if has_no_token_limit or previous_num_tokens != max_tokens:
@@ -609,7 +660,7 @@ class OpenAIServingChat:
             finish_reason = "recover_stop"
 
         return ChatCompletionResponseChoice(
-            index=index,
+            index=idx,
             message=message,
             logprobs=logprobs_full_res,
             finish_reason=finish_reason,
