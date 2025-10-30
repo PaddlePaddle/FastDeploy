@@ -434,7 +434,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "raw_prediction": None,
                     "num_cached_tokens": 0,
                     "num_image_tokens": 0,
-                    "finish_reason": "stop",
+                    "finish_reason": "length",
                 },
             },
         ]
