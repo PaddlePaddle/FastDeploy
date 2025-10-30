@@ -484,7 +484,6 @@ async def benchmark(
             print(f"丢弃前数量: {n}")
             print(f"丢弃后数量: {len(benchmark_outputs)}, 返回结果异常")
             exit(8)
-            
 
         print(f"丢弃前数量: {n}")
         print(f"丢弃后数量: {len(benchmark_outputs)}")
