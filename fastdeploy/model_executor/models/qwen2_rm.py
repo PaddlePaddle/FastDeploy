@@ -44,7 +44,7 @@ class Qwen2RewardBaseModel(nn.Layer):
     def __init__(self, fd_config: FDConfig):
         super().__init__()
         self.model = Qwen2Model(fd_config=fd_config)
-        self.head_dtype = paddle.float32
+        self.head_dtype = paddle.bfloat16
 
         self.score = nn.Sequential(
             ColumnParallelLinear(
@@ -80,8 +80,8 @@ class Qwen2RewardBaseModel(nn.Layer):
 @ModelRegistry.register_model_class(
     architecture="Qwen2ForProcessRewardModel",
     module_name="qwen2_rm",
-    category=[ModelCategory.REWARD],
-    primary_use=ModelCategory.REWARD,
+    category=ModelCategory.EMBEDDING,
+    primary_use=ModelCategory.EMBEDDING,
 )
 @default_pooling_type("STEP")
 class Qwen2ForProcessRewardModel(Qwen2RewardBaseModel):
@@ -94,7 +94,7 @@ class Qwen2ForProcessRewardModel(Qwen2RewardBaseModel):
         pooler_config = fd_config.model_config.pooler_config
         assert pooler_config is not None
 
-        self.pooler = DispatchPooler({"encode": Pooler.for_encode(pooler_config)})
+        self.pooler = DispatchPooler({"encode": Pooler.for_encode(pooler_config, model_config=fd_config.model_config)})
 
         self.process_weights_before_loading_fn = process_weights_before_loading(skip_prefixes=["lm_head"])
 

@@ -936,10 +936,13 @@ class GPUModelRunner(ModelRunnerBase):
 
     def get_supported_pooling_tasks(self) -> list[PoolingTask]:
         model = self.get_model()
+        print("self.get_model", self.get_model())
         if not self.is_pooling_model:
             return []
 
         supported_tasks = list(model.pooler.get_supported_tasks())
+        print("model.pooler", model.pooler)
+        print("supported_tasks", supported_tasks)
 
         if self.cache_config.enable_chunked_prefill and "encode" in supported_tasks:
             supported_tasks.remove("encode")
@@ -1546,11 +1549,8 @@ class GPUModelRunner(ModelRunnerBase):
         assert len(num_scheduled_tokens_list) == num_reqs
 
         req_num_tokens = num_tokens // num_reqs
-        dummy_prompt_lens = paddle.to_tensor(num_scheduled_tokens_list, dtype="int64")
-        dummy_token_ids = paddle.zeros(
-            [num_reqs, req_num_tokens],
-            dtype="int64",
-        )
+        dummy_prompt_lens = paddle.to_tensor(num_scheduled_tokens_list, dtype="int64", place=paddle.CPUPlace())
+        dummy_token_ids = paddle.zeros([num_reqs, req_num_tokens], dtype="int64", device=hidden_states.place)
         model = cast(FdModelForPooling, self.get_model())
         dummy_pooling_params = PoolingParams(task=task)
         to_update = model.pooler.get_pooling_updates(task)
@@ -1564,6 +1564,7 @@ class GPUModelRunner(ModelRunnerBase):
         dummy_metadata.build_pooling_cursor(num_scheduled_tokens_list, device=hidden_states.place)
 
         try:
+            print("model_pooer的pooling_metadata", dummy_metadata)
             return model.pooler(hidden_states=hidden_states, pooling_metadata=dummy_metadata)
         except RuntimeError as e:
             if "out of memory" in str(e):
@@ -1581,12 +1582,18 @@ class GPUModelRunner(ModelRunnerBase):
         hidden_states: paddle.Tensor,
         model_output: paddle.Tensor,
     ) -> PoolerOutput:
-        output_size = dict[PoolingTask, float]()
-        for task in self.get_supported_pooling_tasks():
 
+        # Find the task that has the largest output for subsequent steps
+        supported_pooling_tasks = self.get_supported_pooling_tasks()
+        print("supported_pooling_tasks", supported_pooling_tasks)
+
+        output_size = dict[PoolingTask, float]()
+
+        for task in self.get_supported_pooling_tasks():
+            print("task", task)
             output = self._dummy_pooler_run_task(hidden_states, task)
             output_size[task] = sum(o.numel() * o.element_size() if hasattr(o, "numel") else 0 for o in output)
-            del output
+            print("output_size", output_size[task])
 
         max_task = max(output_size.items(), key=lambda x: x[1])[0]
         pooler_output = self._dummy_pooler_run_task(hidden_states, max_task)
@@ -1794,29 +1801,35 @@ class GPUModelRunner(ModelRunnerBase):
                     self.forward_meta,
                 )
             else:
+                print("ids_remove_padding", self.share_inputs["ids_remove_padding"])
+                print("forward_meta", self.forward_meta)
                 model_output = self.model(
                     ids_remove_padding=self.share_inputs["ids_remove_padding"],
                     forward_meta=self.forward_meta,
                 )
+                print("model_output", model_output)
+
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
 
-            hidden_states = rebuild_padding(
-                model_output,
-                self.share_inputs["cu_seqlens_q"],
-                self.share_inputs["seq_lens_this_time"],
-                self.share_inputs["seq_lens_decoder"],
-                self.share_inputs["seq_lens_encoder"],
-                (
-                    self.share_inputs["output_padding_offset"] if self.speculative_decoding else None
-                ),  # speculative decoding requires
-                self.model_config.max_model_len,
-            )
-
+            print("传递给dummy_pooler_run的model_output", model_output)
             if self.is_pooling_model:
+                hidden_states = model_output
                 self._dummy_pooler_run(hidden_states, model_output)
                 break
             else:
+                hidden_states = rebuild_padding(
+                    model_output,
+                    self.share_inputs["cu_seqlens_q"],
+                    self.share_inputs["seq_lens_this_time"],
+                    self.share_inputs["seq_lens_decoder"],
+                    self.share_inputs["seq_lens_encoder"],
+                    (
+                        self.share_inputs["output_padding_offset"] if self.speculative_decoding else None
+                    ),  # speculative decoding requires
+                    self.model_config.max_model_len,
+                )
+
                 self._dummy_sampler_run(hidden_states, model_output, accept_all_drafts, reject_all_drafts)
 
             # 7. Updata 'infer_seed' and step_cuda()

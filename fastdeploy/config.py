@@ -168,6 +168,38 @@ PRETRAINED_INIT_CONFIGURATION = {
     "moe_layer_end_index": None,
 }
 
+_STR_DTYPE_TO_PADDLE_DTYPE = {
+    "half": paddle.float16,
+    "float16": paddle.float16,
+    "float": paddle.float32,
+    "float32": paddle.float32,
+    "bfloat16": paddle.bfloat16,
+}
+
+
+def _get_head_dtype(
+    config: PretrainedConfig,
+    dtype: str,
+    runner_type: str,
+) -> paddle.dtype:
+    head_dtype: str | paddle.dtype | None = getattr(config, "head_dtype", None)
+
+    if head_dtype == "model":
+        return dtype
+    elif isinstance(head_dtype, str):
+        head_dtype = head_dtype.lower()
+        if head_dtype not in _STR_DTYPE_TO_PADDLE_DTYPE:
+            raise ValueError(f"Unknown dtype: {head_dtype!r}")
+        return _STR_DTYPE_TO_PADDLE_DTYPE[head_dtype]
+    elif isinstance(head_dtype, paddle.dtype):
+        return head_dtype
+    elif head_dtype is None:
+        if runner_type == "pooling":
+            return paddle.float32
+        return dtype
+    else:
+        raise ValueError(f"Unknown dtype: {head_dtype!r}")
+
 
 class ModelConfig:
     """
@@ -207,6 +239,7 @@ class ModelConfig:
         assert self.model != ""
         pretrained_config, _ = PretrainedConfig.get_config_dict(self.model)
         self.pretrained_config = PretrainedConfig.from_dict(pretrained_config)
+        print("self.pretrained_config", self.pretrained_config)
 
         # set attribute from pretrained_config
         for key, value in pretrained_config.items():
@@ -511,6 +544,29 @@ class ModelConfig:
         for k, v in self.__dict__.items():
             logger.info("{:<20}:{:<6}{}".format(k, "", v))
         logger.info("=============================================================")
+
+    @property
+    def head_dtype(self) -> paddle.dtype:
+        """
+        "head" refers to the last Linear layer(s) of an LLM,
+        such as the lm_head in a generation model,
+        or the score or classifier in a classification model.
+
+        `head_dtype` currently only supports pooling models.\n
+        - The pooling model defaults to using fp32 head,
+        you can use --hf-overrides '{"head_dtype": "model"}' to disable it.
+        """
+        print("self.dtype", self.dtype)
+        head_dtype = _get_head_dtype(config=self.pretrained_config, dtype=self.dtype, runner_type=self.runner_type)
+        if self.runner_type != "pooling" and head_dtype != self.dtype:
+            logger.warning(
+                "`head_dtype` currently only supports pooling models." "fallback to model dtype [%s].",
+                self.dtype,
+            )
+            return self.dtype
+
+        logger.info("head dtype: %s", head_dtype)
+        return head_dtype
 
 
 class ParallelConfig:
