@@ -381,7 +381,9 @@ elif paddle.is_compiled_with_cuda():
 
     if cc >= 80:
         # append_attention
-        os.system("python gpu_ops/append_attn/autogen_template_instantiation.py")
+        os.system(
+            "python utils/auto_gen_template_instantiation.py --config gpu_ops/append_attn/template_config.json --output gpu_ops/append_attn/template_instantiation/autogen"
+        )
         sources += ["gpu_ops/append_attention.cu"]
         sources += find_end_files("gpu_ops/append_attn", ".cu")
         # mla
@@ -394,6 +396,9 @@ elif paddle.is_compiled_with_cuda():
         nvcc_compile_args += ["-DENABLE_BF16"]
         # moe
         os.system("python gpu_ops/moe/moe_wna16_marlin_utils/generate_kernels.py")
+        os.system(
+            "python utils/auto_gen_template_instantiation.py --config gpu_ops/moe/template_config.json --output gpu_ops/moe/template_instantiation/autogen"
+        )
         sources += find_end_files("gpu_ops/cutlass_kernels/moe_gemm/", ".cu")
         sources += find_end_files("gpu_ops/cutlass_kernels/w4a8_moe/", ".cu")
         sources += find_end_files("gpu_ops/moe/", ".cu")
