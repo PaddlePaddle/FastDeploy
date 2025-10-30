@@ -178,7 +178,8 @@ class ResourceManagerV1(ResourceManager):
                     end_patch_idx -= 1
             end_patch_map = inputs["patch_map"][end_patch_idx]
             end_modal_id = end_patch_map["modal_id"]
-            if end_modal_id > 0:
+
+            if end_modal_id > 0 and end_modal_id != IDS_TYPE_FLAG["video"]:
                 new_end_idx = end_patch_map["end_idx"]  # 当前模态结束位置
 
             if end_modal_id == IDS_TYPE_FLAG["video"]:
