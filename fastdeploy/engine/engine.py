@@ -459,6 +459,7 @@ class LLMEngine:
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
             f" --load_choices {self.cfg.load_config.load_choices}"
             f" --moba_attention_config '{self.cfg.moba_attention_config.to_json_string()}'"
+            f" --attention_dp_time_out_iters {self.cfg.attention_dp_time_out_iters}"
             f" --ips {ips}"
         )
 
@@ -473,6 +474,7 @@ class LLMEngine:
             "use_internode_ll_two_stage": self.cfg.parallel_config.use_internode_ll_two_stage,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
+            "enable_attention_dp_balance": self.cfg.enable_attention_dp_balance,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:

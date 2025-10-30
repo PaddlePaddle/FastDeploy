@@ -26,6 +26,7 @@ __global__ void speculate_update(int *seq_lens_encoder,
                                     const int *seq_lens_this_time,
                                     const bool *is_block_step,
                                     const int64_t *stop_nums,
+                                    int *mask_rollback,
                                     const int real_bsz,
                                     const int max_bsz,
                                     const int max_draft_tokens) {
@@ -35,9 +36,12 @@ __global__ void speculate_update(int *seq_lens_encoder,
     if (!(is_block_step[bid] || bid >= real_bsz)) {
         if (stop_flags[bid]) {
             stop_flag_now_int = 1;
-        }
-        if (seq_lens_encoder[bid] == 0) {
+            mask_rollback[bid] = 0;
+        } else if (seq_lens_encoder[bid] == 0) {    // decoder
             seq_lens_decoder[bid] += accept_num_now;
+            mask_rollback[bid] = seq_lens_this_time[bid] - accept_num_now;
+        } else { // encoder
+            mask_rollback[bid] = 0;
         }
 
         if (seq_lens_this_time[bid] > 1 &&
@@ -97,7 +101,8 @@ void SpeculateUpdate(const paddle::Tensor &seq_lens_encoder,
                        const paddle::Tensor &stop_flags,
                        const paddle::Tensor &seq_lens_this_time,
                        const paddle::Tensor &is_block_step,
-                       const paddle::Tensor &stop_nums) {
+                       const paddle::Tensor &stop_nums,
+                       const paddle::Tensor &mask_rollback) {
     const int real_bsz = seq_lens_this_time.shape()[0];
     const int max_bsz = stop_flags.shape()[0];
     auto max_draft_tokens = draft_tokens.shape()[1];
@@ -117,6 +122,7 @@ void SpeculateUpdate(const paddle::Tensor &seq_lens_encoder,
         seq_lens_this_time.data<int>(),
         is_block_step.data<bool>(),
         stop_nums.data<int64_t>(),
+        const_cast<int *>(mask_rollback.data<int>()),
         real_bsz,
         max_bsz,
         max_draft_tokens);
@@ -138,15 +144,18 @@ PD_BUILD_STATIC_OP(speculate_update)
              "stop_flags",
              "seq_lens_this_time",
              "is_block_step",
-             "stop_nums"})
+             "stop_nums",
+             "mask_rollback"})
     .Outputs({"seq_lens_encoder_out",
               "seq_lens_decoder_out",
               "not_need_stop_out",
               "draft_tokens_out",
-              "actual_draft_token_nums_out"})
+              "actual_draft_token_nums_out",
+              "mask_rollback_out"})
     .SetInplaceMap({{"seq_lens_encoder", "seq_lens_encoder_out"},
                     {"seq_lens_decoder", "seq_lens_decoder_out"},
                     {"not_need_stop", "not_need_stop_out"},
                     {"draft_tokens", "draft_tokens_out"},
-                    {"actual_draft_token_nums", "actual_draft_token_nums_out"}})
+                    {"actual_draft_token_nums", "actual_draft_token_nums_out"},
+                    {"mask_rollback", "mask_rollback_out"}})
     .SetKernelFn(PD_KERNEL(SpeculateUpdate));

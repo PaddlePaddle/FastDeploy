@@ -39,6 +39,7 @@ from fastdeploy.config import (
     ParallelConfig,
     SpeculativeConfig,
 )
+from fastdeploy.engine.request import RequestType
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
@@ -263,6 +264,8 @@ class PaddleDisWorkerProc:
         num_running_requests = 0
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
+        attention_dp_cached_prefill_tasks = []
+        attention_dp_wait_prefill_iters = 0
         while True:
             if local_rank == 0:
                 if self.model_weights_status.value[0] != 0:
@@ -277,7 +280,6 @@ class PaddleDisWorkerProc:
                 )
 
             self.insert_step = False
-            req_dicts = None
             self.worker_healthy_live_signal.value[local_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
@@ -320,6 +322,7 @@ class PaddleDisWorkerProc:
                     self.model_weights_signal[0] = 0
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
 
+            req_dicts = []
             if self.exist_task_signal.value[0] == 1 or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
                 self.insert_step = True
@@ -330,27 +333,63 @@ class PaddleDisWorkerProc:
                     self.exist_task_signal.value[0] = 0
                     self.task_queue.read_finish_flag.set(0)
 
-                req_dicts = []
+                # req_dicts = []
                 for req_dict, bsz in tasks:
                     num_running_requests = int(bsz)
                     req_dicts.extend(req_dict)
 
+            if (
+                envs.ENABLE_V1_KVCACHE_SCHEDULER
+                and self.fd_config.enable_attention_dp_balance
+                and self.parallel_config.splitwise_role == "mixed"
+            ):
+                exist_decode = self.worker.exist_decode()
+                exist_prefill = False
+                tmp_need_cached_prefills = []
+                if len(req_dicts) > 0:
+                    for request in req_dicts:
+                        if request.task_type.value == RequestType.PREFILL.value:
+                            tmp_need_cached_prefills.append(request)
+                if tmp_need_cached_prefills:
+                    attention_dp_cached_prefill_tasks.append(tmp_need_cached_prefills)
+                for request in tmp_need_cached_prefills:
+                    req_dicts.remove(request)
+                # judge whether all ranks have prefill tasks
+                if (len(attention_dp_cached_prefill_tasks) > 0) or (not exist_decode):
+                    exist_prefill = True
+                only_prefill_batch_list = []
+                paddle.distributed.all_gather_object(only_prefill_batch_list, exist_prefill)
+                if_only_prefill = all(only_prefill_batch_list)
+                if if_only_prefill:  # all ranks have prefill tasks
+                    # add a prefill task to current step
+                    if len(attention_dp_cached_prefill_tasks) > 0:
+                        req_dicts.extend(attention_dp_cached_prefill_tasks.pop(0))
+                    attention_dp_wait_prefill_iters = 0
+                else:
+                    # wait until all ranks have prefill tasks or reached timeout
+                    attention_dp_wait_prefill_iters += 1
+                    if attention_dp_wait_prefill_iters > self.fd_config.attention_dp_time_out_iters:
+                        if len(attention_dp_cached_prefill_tasks) > 0:
+                            req_dicts.extend(attention_dp_cached_prefill_tasks.pop(0))
+                        attention_dp_wait_prefill_iters = 0
+
+            if len(req_dicts) > 0:
                 req_ids = [req.request_id for req in req_dicts]
+                # Process prefill inputs
+                if self.fd_config.enable_attention_dp_balance:  # real_bsz may be different with scheduler's view
+                    self.worker.preprocess_new_task(req_dicts, None)
+                    num_running_requests = self.worker.get_real_bsz()
+                else:
+                    self.worker.preprocess_new_task(req_dicts, num_running_requests)
                 logger.info(
                     f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
                     f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
                 )
-
-                # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts, num_running_requests)
-
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 if self.ranks > 1:
                     paddle.distributed.barrier(self.parallel_config.tp_group)
-
                 time.sleep(0.001)
                 continue
-
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             self.worker.execute_model(req_dicts, num_running_requests)
@@ -654,6 +693,19 @@ def parse_args():
         help="Flag to specify dtype of lm_head as FP32",
     )
 
+    parser.add_argument(
+        "--enable_attention_dp_balance",
+        action="store_true",
+        help="enable attention dp balance",
+    )
+
+    parser.add_argument(
+        "--attention_dp_time_out_iters",
+        type=int,
+        default=0,
+        help="max waiting steps to sync all dp for prefill tasks available",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -784,7 +836,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     if parallel_config.guided_decoding_backend != "off":
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported guided_decoding.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-
+    logger.info(f"enable_attention_dp_balance:{args.enable_attention_dp_balance}")
+    logger.info(f"attention_dp_time_out_iters:{args.attention_dp_time_out_iters}")
     fd_config = FDConfig(
         model_config=model_config,
         parallel_config=parallel_config,
@@ -799,6 +852,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         engine_worker_queue_port=args.engine_worker_queue_port,
         ips=args.ips,
         moba_attention_config=moba_attention_config,
+        enable_attention_dp_balance=args.enable_attention_dp_balance,
+        attention_dp_time_out_iters=args.attention_dp_time_out_iters,
     )
     update_fd_config_for_mm(fd_config)
 

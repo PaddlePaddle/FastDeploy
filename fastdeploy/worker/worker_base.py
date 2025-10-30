@@ -100,3 +100,15 @@ class WorkerBase(ABC):
     def exist_prefill(self):
         """check whether prefill stage exist."""
         return True
+
+    def exist_decode(self):
+        """
+        check whether decode stage exist
+        """
+        return False
+
+    def get_real_bsz(self):
+        """
+        Get real bsz
+        """
+        return 0
