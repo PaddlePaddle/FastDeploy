@@ -83,8 +83,13 @@ class FuseMoEWrapper(paddle.nn.Layer):
             moe_intermediate_size=self.fd_config.model_config.moe_intermediate_size,
             num_experts=self.fd_config.model_config.moe_num_experts,
             top_k=self.fd_config.model_config.moe_k,
-            layer_idx=0,
+            # avoiding invoke clean_low_latency_buffer in mixed ep.
+            layer_idx=666,
             weight_key_map=weight_key_map,
+            topk_method="noaux_tc",
+            topk_group=4,
+            n_group=8,
+            gate_correction_bias=paddle.zeros([self.fd_config.model_config.moe_num_experts], paddle.float32),
         )
         moe_layer = self.fused_moe
 

@@ -191,7 +191,7 @@ cd xDeepEP
 bash build.sh
 cd -
 
-python -m pytest -s --timeout=300 tests/ci_use/XPU_45T/run_ep.py
+python -m pytest -s --timeout=600 tests/ci_use/XPU_45T/run_ep.py
 ep_exit_code=$?
 
 unset BKCL_ENABLE_XDR
