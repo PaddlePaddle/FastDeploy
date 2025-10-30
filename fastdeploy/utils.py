@@ -776,7 +776,7 @@ def check_download_links(bos_client, links, timeout=1):
             object_key = link.split("/")[-1]
             response = bos_client.get_object_meta_data(bucket_name, object_key)
             assert (
-                response.metadata.content_length > 0
+                int(response.metadata.content_length) > 0
             ), f"bos download length error, {response.metadata.content_length}"
         except Exception as e:
             return f"link {link} download error: {str(e)}"
