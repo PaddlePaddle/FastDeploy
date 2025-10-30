@@ -44,7 +44,7 @@ def test_45vl():
     )
     print(response.choices[0].message.content)
     # print(base_response)
-    assert (response.choices[0].message.content == base_response)
+    assert response.choices[0].message.content == base_response
 
 
 if __name__ == "__main__":
