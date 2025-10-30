@@ -197,7 +197,7 @@ class Request:
             guided_grammar=d.get("guided_grammar", None),
             structural_tag=d.get("structural_tag", None),
             guided_json_object=d.get("guided_json_object", None),
-            enable_thinking=d.get("enable_thinking", False),
+            enable_thinking=d.get("enable_thinking", None),
             reasoning_max_tokens=d.get("reasoning_max_tokens", None),
             trace_carrier=d.get("trace_carrier", {}),
             chat_template=d.get("chat_template", None),
