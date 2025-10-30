@@ -39,6 +39,7 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchKernel(
   auto xpu_ctx = static_cast<const phi::XPUContext*>(dev_ctx);
 
   const auto input_type = input.dtype();
+  // std::cout << "input_type = " << input_type << std::endl;
   auto m = input.dims()[0];
   auto n = input.dims()[1];
   const int64_t expert_num = token_nums_per_expert.size();
@@ -47,6 +48,7 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchKernel(
 
   auto block_num = xpu_ctx->x_context()->ncluster();
   paddle::Tensor permute_input;
+  paddle::Tensor permute_input_div;
   auto permute_indices_per_token =
       paddle::empty({m, topk}, paddle::DataType::INT32, place);
   auto expert_m = paddle::empty({expert_num}, paddle::DataType::INT32, place);
@@ -60,24 +62,57 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchKernel(
   if (std::is_same<TY, int8_t>::value) {
     permute_input =
         paddle::empty({token_nums_this_rank, n}, paddle::DataType::INT8, place);
-    if (token_nums_this_rank > 0) {
-      auto ret = infer_ops::moe_ffn_pre_sorted_quant_pe<XPU_TX, int>(
-          xpu_ctx->x_context(),
-          reinterpret_cast<const XPU_TX*>(input.data<TX>()),
-          topk_ids.data<int>(),
-          input_scales.get_ptr()->data<float>(),
-          nullptr,
-          reinterpret_cast<int8_t*>(permute_input.data<int8_t>()),
-          const_cast<int*>(permute_indices_per_token.data<int>()),
-          const_cast<int*>(expert_m.data<int>()),
-          const_cast<int*>(recv_num_tokens_per_expert_list_cumsum.data<int>()),
-          expand_input_scales.data<float>(),
-          m,
-          n,
-          expert_num,
-          topk,
-          block_num,
-          token_nums_this_rank);
+    permute_input_div =
+        paddle::empty({token_nums_this_rank, n}, input_type, place);
+      
+    // if (token_nums_this_rank > 0) {
+      // auto ret = infer_ops::moe_ffn_pre_sorted_quant_pe<XPU_TX, int>(
+      //     xpu_ctx->x_context(),
+      //     reinterpret_cast<const XPU_TX*>(input.data<TX>()),
+      //     topk_ids.data<int>(),
+      //     input_scales.get_ptr()->data<float>(),
+      //     nullptr,
+      //     reinterpret_cast<int8_t*>(permute_input.data<int8_t>()),
+      //     const_cast<int*>(permute_indices_per_token.data<int>()),
+      //     const_cast<int*>(expert_m.data<int>()),
+      //     const_cast<int*>(recv_num_tokens_per_expert_list_cumsum.data<int>()),
+      //     expand_input_scales.data<float>(),
+      //     m,
+      //     n,
+      //     expert_num,
+      //     topk,
+      //     block_num,
+      //     token_nums_this_rank);
+      if (token_nums_this_rank > 0) {
+        auto ret = infer_ops::moe_ep_ffn_pre_sorted<XPU_TX, int>(
+            xpu_ctx->x_context(),
+            reinterpret_cast<const XPU_TX*>(input.data<TX>()),
+            topk_ids.data<int>(),
+            nullptr,
+            reinterpret_cast<XPU_TX*>(permute_input_div.data<TX>()),
+            const_cast<int*>(permute_indices_per_token.data<int>()),
+            const_cast<int*>(expert_m.data<int>()),
+            const_cast<int*>(recv_num_tokens_per_expert_list_cumsum.data<int>()),
+            m,
+            n,
+            expert_num,
+            topk,
+            block_num,
+            ep_size,
+            ep_rank,
+            token_nums_this_rank);
+
+        ret = infer_ops::quant2d_per_expert<XPU_TX>(
+            xpu_ctx->x_context(),
+            reinterpret_cast<const XPU_TX*>(permute_input_div.data<TX>()),
+            input_scales.get_ptr()->data<float>(),
+            const_cast<int*>(recv_num_tokens_per_expert_list_cumsum.data<int>()),
+            reinterpret_cast<int8_t*>(permute_input.data<int8_t>()),
+            expand_input_scales.data<float>(),
+            expert_num,
+            m,
+            n);
+
       PD_CHECK(ret == 0, "moe_ep_ffn_pre_sorted failed");
     }
   } else {
