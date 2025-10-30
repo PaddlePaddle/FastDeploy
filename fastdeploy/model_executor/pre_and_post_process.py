@@ -101,7 +101,7 @@ def limit_thinking_content_length(
     line_break_id: int = None,
 ):
     if limit_strategy == "</think>":
-        # for ernie4_5_vl
+        # for ernie-45-vl
         limit_thinking_content_length_v1(
             sampled_token_ids,
             max_think_lens,
@@ -136,7 +136,7 @@ def speculate_limit_thinking_content_length(
     line_break_id: int = None,
 ):
     if limit_strategy == "</think>":
-        # for ernie4_5_vl
+        # for ernie-45-vl
         speculate_limit_thinking_content_length_v1(
             accept_tokens,
             max_think_lens,

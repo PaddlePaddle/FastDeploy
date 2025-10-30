@@ -203,7 +203,7 @@ def xpu_post_process(
         step_idx = share_inputs["step_idx"]
         limit_think_status = share_inputs["limit_think_status"]
         if limit_strategy == "</think>":
-            # for ernie4_5_vl
+            # for ernie-45-vl
             limit_thinking_content_length_v1(
                 sampled_token_ids,
                 max_think_lens,
