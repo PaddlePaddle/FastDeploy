@@ -22,6 +22,7 @@ import subprocess
 import sys
 import time
 
+import openai
 import pytest
 
 # Read ports from environment variables; use default values if not set
@@ -173,6 +174,15 @@ def setup_and_run_server():
 # ==========================
 # OpenAI Client additional chat/completions test
 # ==========================
+@pytest.fixture
+def openai_client():
+    ip = "0.0.0.0"
+    service_http_port = str(FD_API_PORT)
+    client = openai.Client(
+        base_url=f"http://{ip}:{service_http_port}/v1",
+        api_key="EMPTY_API_KEY",
+    )
+    return client
 
 
 def test_non_streaming_chat_with_return_token_ids(openai_client, capsys):
