@@ -566,14 +566,16 @@ class CacheMessagerV1:
         """
         while True:
             try:
-                engine_indexes = self.cache_prefilled_engine_ids_queue.get()
+                batch_engine_signals = self.cache_prefilled_engine_ids_queue.get()
                 self.engine_worker_queue.begin_send_cache_barrier.wait()
                 block_start_end_list = []
                 current_prefilled_token_num_list = []
-                for engine_index in engine_indexes:
-                    assert engine_index in self.idx_cache_task_dict
+                for engine_index, current_step_prefilled_token_num in batch_engine_signals:
+                    assert (
+                        engine_index in self.idx_cache_task_dict
+                    ), f"engine_index {engine_index} not in self.idx_cache_task_dict {self.idx_cache_task_dict}"
                     block_id_start = self.idx_cache_task_dict[engine_index]["sended_block_num"]
-                    prefilled_token_num = self.engine_cache_tasks[engine_index]["prefilled_token_num"]
+                    prefilled_token_num = current_step_prefilled_token_num
                     if (
                         prefilled_token_num == self.idx_cache_task_dict[engine_index]["need_prefill_tokens"]
                     ):  # all chunks have been prefilled
@@ -583,17 +585,20 @@ class CacheMessagerV1:
                     block_start_end_list.append((block_id_start, block_id_end))
                     current_prefilled_token_num_list.append(prefilled_token_num)
                 while True:  # from layer0 to last layer
-                    sended_layer_idx = self.idx_cache_task_dict[engine_indexes[0]]["sended_layer_id"]
+                    sended_layer_idx = self.idx_cache_task_dict[batch_engine_signals[0][0]]["sended_layer_id"]
                     start_layer_idx = sended_layer_idx + 1
                     with self.engine_cache_task_thread_lock:  # to check end_layer_idx
-                        prefilled_layer_idx = self.engine_cache_tasks[engine_indexes[0]]["prefilled_layer_idx"]
+                        prefilled_layer_idx = self.engine_cache_tasks[batch_engine_signals[0][0]][
+                            "prefilled_layer_idx"
+                        ]
                         if sended_layer_idx > prefilled_layer_idx:  # computation must in next chunk
                             logger.info(
-                                f"current_prefilled_token_num_list[0] {current_prefilled_token_num_list[0]} prefilled_token_num {self.engine_cache_tasks[engine_indexes[0]]['prefilled_token_num']}"
+                                f"current_prefilled_token_num_list[0] {current_prefilled_token_num_list[0]} prefilled_token_num {self.engine_cache_tasks[batch_engine_signals[0][0]]['prefilled_token_num']}"
                             )
+
                             assert (
                                 current_prefilled_token_num_list[0]
-                                < self.engine_cache_tasks[engine_indexes[0]]["prefilled_token_num"]
+                                < self.engine_cache_tasks[batch_engine_signals[0][0]]["prefilled_token_num"]
                             ), "when sended_layer_idx > prefilled_layer_idx, must be in next chunk, but not, sth wrong"
                             end_layer_idx = self.num_layers - 1  # [start_layer_idx, end_layer_idx)
                         else:
@@ -602,7 +607,7 @@ class CacheMessagerV1:
                         time.sleep(0.01)
                     for layer_idx in range(start_layer_idx, end_layer_idx + 1):
                         for i, (block_id_start, block_id_end) in enumerate(block_start_end_list):
-                            engine_index = engine_indexes[i]
+                            engine_index = batch_engine_signals[i][0]
                             task = self.idx_cache_task_dict[engine_index]
                             req_id = task["request_id"]
                             if (
@@ -677,7 +682,7 @@ class CacheMessagerV1:
                                         task["sended_layer_id"] = -1
                     if end_layer_idx == self.num_layers - 1:
                         with self.engine_cache_task_thread_lock:
-                            for engine_idx in engine_indexes:
+                            for engine_idx, _ in batch_engine_signals:
                                 task = self.idx_cache_task_dict[engine_idx]
                                 if task["status"] == "finished" or ("error" in task["status"]):
                                     target_id = int(task["rdma_ports"][self.rank])
@@ -710,7 +715,8 @@ class CacheMessagerV1:
                 layer_id = kv_signal_data[1].numpy().tolist()
                 if layer_id == self.num_layers - 1:
                     logger.info(f"tasks_count: {tasks_count}, layer_id: {layer_id} self.rank_id {self.rank_id}")
-                batch_engine_ids = []
+                batch_engine_signals = []
+                # format for signal to put in cache_prefilled_engine_ids_queue: [(engine_idx1, prefilled_token_num1), (engine_idx2, prefilled_token_num2)]
                 with self.engine_cache_task_thread_lock:
                     for bi in range(tasks_count):
                         engine_idx = kv_signal_data[3 * bi + 2].numpy().tolist()
@@ -720,9 +726,9 @@ class CacheMessagerV1:
                         self.engine_cache_tasks[engine_idx]["prefilled_token_num"] = (
                             chuck_token_offset + current_seq_len
                         )
-                        batch_engine_ids.append(engine_idx)
+                        batch_engine_signals.append((engine_idx, chuck_token_offset + current_seq_len))
                     if layer_id == 0:
-                        self.cache_prefilled_engine_ids_queue.put(batch_engine_ids)
+                        self.cache_prefilled_engine_ids_queue.put(batch_engine_signals)
             except Exception as e:
                 logger.error(f"Consume signals get exception: {e}")
 
