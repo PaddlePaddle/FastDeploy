@@ -499,7 +499,7 @@ class Ernie4_5_VLModel(nn.Layer):
         ids_remove_padding: paddle.Tensor,
     ) -> VLMoEMeta:
 
-        image_mask = ids_remove_padding == self.im_patch_id
+        image_mask = ids_remove_padding >= self.im_patch_id
         token_type_ids = image_mask.cast("int32")
         image_token_num = image_mask.sum()
         token_num = ids_remove_padding.shape[0]
