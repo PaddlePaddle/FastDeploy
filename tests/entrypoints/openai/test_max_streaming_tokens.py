@@ -387,9 +387,10 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                         "text": "Normal AI response",
                         "reasoning_content": "Normal reasoning",
                         "tool_call": None,
-                        "num_cached_tokens": 3,
+                        "num_image_tokens": 2,
                         "raw_prediction": "raw_answer_0",
                     },
+                    "num_cached_tokens": 3,
                     "finished": True,
                     "previous_num_tokens": 2,
                 },
@@ -403,6 +404,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "tool_calls": None,
                     "raw_prediction": "raw_answer_0",
                     "num_cached_tokens": 3,
+                    "num_image_tokens": 2,
                     "finish_reason": "stop",
                 },
             },
@@ -414,9 +416,10 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                         "text": "Edge case response",
                         "reasoning_content": None,
                         "tool_call": None,
-                        "num_cached_tokens": 0,
+                        "num_image_tokens": 0,
                         "raw_prediction": None,
                     },
+                    "num_cached_tokens": 0,
                     "finished": True,
                     "previous_num_tokens": 1,
                 },
@@ -430,6 +433,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "tool_calls": None,
                     "raw_prediction": None,
                     "num_cached_tokens": 0,
+                    "num_image_tokens": 0,
                     "finish_reason": "stop",
                 },
             },
@@ -442,17 +446,22 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         mock_response_processor.enable_multimodal_content.return_value = False
         completion_token_ids = [[], []]
         num_cached_tokens = [0, 0]
+        num_input_image_tokens = [0, 0]
+        num_input_video_tokens = [0, 0]
+        num_image_tokens = [0, 0]
 
         for idx, case in enumerate(test_cases):
             actual_choice = await self.chat_serving._create_chat_completion_choice(
-                output=case["test_data"]["outputs"],
-                index=idx,
+                data=case["test_data"],
                 request=case["mock_request"],
-                previous_num_tokens=case["test_data"]["previous_num_tokens"],
                 prompt_token_ids=prompt_token_ids,
                 prompt_tokens=prompt_tokens,
                 completion_token_ids=completion_token_ids[idx],
+                previous_num_tokens=case["test_data"]["previous_num_tokens"],
                 num_cached_tokens=num_cached_tokens,
+                num_input_image_tokens=num_input_image_tokens,
+                num_input_video_tokens=num_input_video_tokens,
+                num_image_tokens=num_image_tokens,
                 logprob_contents=logprob_contents,
                 response_processor=mock_response_processor,
             )
@@ -468,6 +477,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             self.assertEqual(actual_choice.message.completion_token_ids, completion_token_ids[idx])
 
             self.assertEqual(num_cached_tokens[expected["index"]], expected["num_cached_tokens"])
+            self.assertEqual(num_image_tokens[expected["index"]], expected["num_image_tokens"])
             self.assertEqual(actual_choice.finish_reason, expected["finish_reason"])
             assert actual_choice.logprobs is not None
 
