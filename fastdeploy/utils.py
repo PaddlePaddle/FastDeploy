@@ -788,9 +788,9 @@ def init_bos_client():
     from baidubce.bce_client_configuration import BceClientConfiguration
     from baidubce.services.bos.bos_client import BosClient
 
-    AK = os.getenv("ENCODE_FEATURE_BOS_AK")
-    SK = os.getenv("ENCODE_FEATURE_BOS_SK")
-    cfg = BceClientConfiguration(credentials=BceCredentials(AK, SK), endpoint="bj.bcebos.com")
+    cfg = BceClientConfiguration(
+        credentials=BceCredentials(envs.ENCODE_FEATURE_BOS_AK, envs.ENCODE_FEATURE_BOS_SK), endpoint="bj.bcebos.com"
+    )
     return BosClient(cfg)
 
 
