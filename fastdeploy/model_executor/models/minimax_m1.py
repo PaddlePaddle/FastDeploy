@@ -477,7 +477,12 @@ class MiniMaxM1DecoderLayer(nn.Layer):
         # GQA
         if self.attn_type == 1:  
             qkv_out = self.qkv_proj(layernorm_output)
+            # print_tensor_stats(qkv_out, f"FD_L{layer_id}:1b_After_QKV_Proj_Combined")
+            logger.info(f"--- [FD DEBUG] PRE-ATTENTION DUMP FOR LAYER {layer_id} ---")
+            print_tensor_stats(hidden_states, f"FD_L{layer_id}:0_HiddenStates_Input")
+            print_tensor_stats(layernorm_output, f"FD_L{layer_id}:1a_After_InputLayernorm")
             print_tensor_stats(qkv_out, f"FD_L{layer_id}:1b_After_QKV_Proj_Combined")
+
 
             q_size_tp = self.self_attn.num_heads * self.self_attn.head_dim
             k_size_tp = self.self_attn.kv_num_heads * self.self_attn.head_dim
@@ -486,6 +491,32 @@ class MiniMaxM1DecoderLayer(nn.Layer):
             print_tensor_stats(q_before_rope, f"FD_L{layer_id}:1c_Q_BeforeRoPE")
             print_tensor_stats(k_before_rope, f"FD_L{layer_id}:1d_K_BeforeRoPE")
             print_tensor_stats(v_tensor,      f"FD_L{layer_id}:1e_V_Tensor")
+            logger.info(f"--- [FD DEBUG] ForwardMeta DUMP FOR LAYER {layer_id} ---")
+            # 1. RoPE 缓存 (最关键的)
+            # 我们需要知道它的形状，以确认是否正确生成
+            if forward_meta.rotary_embs is not None:
+                logger.info("--- [FD DEBUG] forward_meta.rotary_embs ---")
+                print_tensor_stats(forward_meta.rotary_embs, f"FD_L{layer_id}:meta_rotary_embs")
+                # 预期形状: [2, bsz, max_seq_len, 1, rotary_dim] or [2, bsz, max_seq_len, 1, rotary_dim/2]
+                # 对于 MiniMax-M1 (NEOX风格), 应该是 [2, 1, max_len, 1, 64]
+            else:
+                logger.info("--- [FD DEBUG] forward_meta.rotary_embs is None ---")
+
+            # 2. 序列长度信息
+            print_tensor_stats(forward_meta.seq_lens_encoder, f"FD_L{layer_id}:meta_seq_lens_encoder")
+            print_tensor_stats(forward_meta.seq_lens_decoder, f"FD_L{layer_id}:meta_seq_lens_decoder")
+            print_tensor_stats(forward_meta.seq_lens_this_time, f"FD_L{layer_id}:meta_seq_lens_this_time")
+
+            # 3. Padding 和索引信息
+            print_tensor_stats(forward_meta.ids_remove_padding, f"FD_L{layer_id}:meta_ids_remove_padding")
+            print_tensor_stats(forward_meta.batch_id_per_token, f"FD_L{layer_id}:meta_batch_id_per_token")
+            print_tensor_stats(forward_meta.cu_seqlens_q, f"FD_L{layer_id}:meta_cu_seqlens_q")
+            print_tensor_stats(forward_meta.cu_seqlens_k, f"FD_L{layer_id}:meta_cu_seqlens_k")
+
+            # 4. KV Cache 相关信息
+            print_tensor_stats(forward_meta.block_tables, f"FD_L{layer_id}:meta_block_tables")
+            logger.info(f"--- [FD DEBUG] END OF DUMP FOR LAYER {layer_id} ---\n")
+            # --- 日志打印结束 ---
             
             
             attn_output = self.self_attn(qkv=qkv_out, forward_meta=forward_meta)

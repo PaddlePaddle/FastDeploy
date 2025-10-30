@@ -83,7 +83,7 @@ import zmq
 from fastdeploy import envs
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.tasks import PoolingTask
-from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
+# from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.pool.metadata import PoolingMetadata
@@ -117,8 +117,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         # VL model config:
         if self.enable_mm:
-            if "ernie" in self.fd_config.model_config.model_type:
-                self._init_image_preprocess()
+            # if "ernie" in self.fd_config.model_config.model_type:
+            #     self._init_image_preprocess()
 
             self.amp_black = [
                 "reduce_sum",
@@ -1119,6 +1119,11 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Initialize rotary position embedding
         if not self.enable_mm:
+
+            logger.info(f"Final rotary_dim from config: {self.model_config.rotary_dim}")
+            logger.info(f"Original head_dim from config: {self.model_config.head_dim}")
+            logger.info(f"Calculated partial_rotary_factor from config: {self.model_config.partial_rotary_factor}")
+            
             self.share_inputs["rope_emb"] = get_rope(
                 rotary_dim=self.model_config.head_dim,
                 position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
@@ -1126,7 +1131,6 @@ class GPUModelRunner(ModelRunnerBase):
                 model_config=self.model_config,
                 partial_rotary_factor=self.model_config.partial_rotary_factor,
             )
-
 
 
         # Set block tables
@@ -2423,27 +2427,27 @@ class GPUModelRunner(ModelRunnerBase):
             self.real_token_num = self.forward_meta.ids_remove_padding.shape[0]
         return
 
-    def _init_image_preprocess(self) -> None:
-        processor = DataProcessor(
-            tokenizer_name=self.model_config.model,
-            image_preprocessor_name=str(self.model_config.model),
-        )
-        processor.eval()
-        image_preprocess = processor.image_preprocessor
-        image_preprocess.image_mean_tensor = paddle.to_tensor(image_preprocess.image_mean, dtype="float32").reshape(
-            [1, 3, 1, 1]
-        )
-        image_preprocess.image_std_tensor = paddle.to_tensor(image_preprocess.image_std, dtype="float32").reshape(
-            [1, 3, 1, 1]
-        )
-        image_preprocess.rescale_factor = paddle.to_tensor(image_preprocess.rescale_factor, dtype="float32")
-        image_preprocess.image_mean_tensor = image_preprocess.image_mean_tensor.squeeze([-2, -1]).repeat_interleave(
-            self.model_config.vision_config.patch_size**2 * 1, -1
-        )
-        image_preprocess.image_std_tensor = image_preprocess.image_std_tensor.squeeze([-2, -1]).repeat_interleave(
-            self.model_config.vision_config.patch_size**2 * 1, -1
-        )
-        self.image_preprocess = image_preprocess
+    # def _init_image_preprocess(self) -> None:
+    #     processor = DataProcessor(
+    #         tokenizer_name=self.model_config.model,
+    #         image_preprocessor_name=str(self.model_config.model),
+    #     )
+    #     processor.eval()
+    #     image_preprocess = processor.image_preprocessor
+    #     image_preprocess.image_mean_tensor = paddle.to_tensor(image_preprocess.image_mean, dtype="float32").reshape(
+    #         [1, 3, 1, 1]
+    #     )
+    #     image_preprocess.image_std_tensor = paddle.to_tensor(image_preprocess.image_std, dtype="float32").reshape(
+    #         [1, 3, 1, 1]
+    #     )
+    #     image_preprocess.rescale_factor = paddle.to_tensor(image_preprocess.rescale_factor, dtype="float32")
+    #     image_preprocess.image_mean_tensor = image_preprocess.image_mean_tensor.squeeze([-2, -1]).repeat_interleave(
+    #         self.model_config.vision_config.patch_size**2 * 1, -1
+    #     )
+    #     image_preprocess.image_std_tensor = image_preprocess.image_std_tensor.squeeze([-2, -1]).repeat_interleave(
+    #         self.model_config.vision_config.patch_size**2 * 1, -1
+    #     )
+    #     self.image_preprocess = image_preprocess
 
     def _preprocess_mm_task(self, one: dict) -> None:
         """process batch"""

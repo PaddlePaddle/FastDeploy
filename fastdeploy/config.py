@@ -219,6 +219,23 @@ class ModelConfig:
 
         if not hasattr(self, "head_dim"):
             self.head_dim = self.hidden_size // self.num_attention_heads
+        
+        rotary_dim = getattr(self, "rotary_dim", None)
+        head_dim = getattr(self, "head_dim", None)
+
+        if (rotary_dim is not None and 
+            head_dim is not None and
+            rotary_dim < head_dim):
+
+            # The calculation and overriding are only performed when partial_rotary_factor is still the default value of 1.0.
+            if getattr(self, "partial_rotary_factor", 1.0) == 1.0:
+                self.partial_rotary_factor = rotary_dim / head_dim
+                logger.info(f"Partial rotation detected via 'rotary_dim'. "
+                            f"Calculated and set 'partial_rotary_factor' to: {self.partial_rotary_factor:.4f}")
+
+        current_partial_factor = getattr(self, "partial_rotary_factor", 1.0)
+        if current_partial_factor < 1.0 and head_dim is not None:
+             self.rotary_dim = int(head_dim * current_partial_factor)
 
         if hasattr(self, "vision_config"):
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
@@ -227,12 +244,6 @@ class ModelConfig:
         self.think_end_id = args.get("think_end_id", -1)
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
-        
-        if (hasattr(self, "rotary_dim") and
-            hasattr(self, "head_dim") and
-            self.rotary_dim < self.head_dim):
-            self.partial_rotary_factor = self.rotary_dim / self.head_dim
-            logger.info(f"Partial rotation detected. Calculated partial_rotary_factor: {self.partial_rotary_factor}")
 
         self._post_init()
 
