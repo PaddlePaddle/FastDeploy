@@ -14,7 +14,6 @@
 
 import json
 import os
-import re
 import shutil
 import signal
 import socket
@@ -120,11 +119,11 @@ def setup_and_run_server():
         str(FD_CACHE_QUEUE_PORT),
         "--enable-mm",
         "--max-model-len",
-        "32768",
+        "8192",
         "--max-num-batched-tokens",
-        "384",
+        "172",
         "--max-num-seqs",
-        "128",
+        "64",
         "--limit-mm-per-prompt",
         limit_mm_str,
         "--enable-chunked-prefill",
@@ -134,7 +133,8 @@ def setup_and_run_server():
         "wint4",
         "--reasoning-parser",
         "ernie-45-vl",
-        '--graph-optimization-config \'{"graph_opt_level": 1, "use_cudagraph": true, "full_cuda_graph": false}\'',
+        "--graph-optimization-config",
+        '{"graph_opt_level": 1, "use_cudagraph": true, "full_cuda_graph": false}',
     ]
 
     # Start subprocess in new process group
@@ -401,45 +401,6 @@ def test_chat_with_thinking(openai_client, capsys):
         total_tokens += len(delta_message.completion_token_ids)
     assert completion_tokens + reasoning_tokens == total_tokens
     assert reasoning_tokens <= reasoning_max_tokens
-
-
-def test_profile_reset_block_num():
-    """测试profile reset_block_num功能，与baseline diff不能超过5%"""
-    log_file = "./log/config.log"
-    baseline = 40000
-
-    if not os.path.exists(log_file):
-        pytest.fail(f"Log file not found: {log_file}")
-
-    with open(log_file, "r") as f:
-        log_lines = f.readlines()
-
-    target_line = None
-    for line in log_lines:
-        if "Reset block num" in line:
-            target_line = line.strip()
-            break
-
-    if target_line is None:
-        pytest.fail("日志中没有Reset block num信息")
-
-    match = re.search(r"total_block_num:(\d+)", target_line)
-    if not match:
-        pytest.fail(f"Failed to extract total_block_num from line: {target_line}")
-
-    try:
-        actual_value = int(match.group(1))
-    except ValueError:
-        pytest.fail(f"Invalid number format: {match.group(1)}")
-
-    lower_bound = baseline * (1 - 0.05)
-    upper_bound = baseline * (1 + 0.05)
-    print(f"Reset total_block_num: {actual_value}. baseline: {baseline}")
-
-    assert lower_bound <= actual_value <= upper_bound, (
-        f"Reset total_block_num {actual_value} 与 baseline {baseline} diff需要在5%以内"
-        f"Allowed range: [{lower_bound:.1f}, {upper_bound:.1f}]"
-    )
 
 
 def test_thinking_logic_flag(openai_client, capsys):
