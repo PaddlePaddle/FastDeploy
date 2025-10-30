@@ -208,7 +208,7 @@ class TokenProcessor:
                 result.outputs.token_ids.append(token_id)
                 task.output_token_ids.append(token_id)
 
-            if token_id in task.eos_token_ids or is_prefill or recovery_stop:
+            if token_id in self.cfg.model_config.eos_token_ids or is_prefill or recovery_stop:
                 result.finished = True
                 if recovery_stop:
                     result.error_msg = "Recover is not supported, the result is incomplete!"
@@ -671,7 +671,7 @@ class TokenProcessor:
                 token_id = token_ids[batch_token_index]
                 self.tokens_counter[task_id] += 1
                 if token_id != RECOVERY_STOP_SIGNAL:
-                    if not (envs.FD_ENABLE_INTERNAL_ADAPTER and token_id in task.eos_token_ids):
+                    if not (envs.FD_ENABLE_INTERNAL_ADAPTER and token_id in self.cfg.model_config.eos_token_ids):
                         result.outputs.token_ids.append(token_id)
                     task.output_token_ids.append(token_id)
                     if self.use_logprobs:
@@ -708,7 +708,7 @@ class TokenProcessor:
                                 result.outputs.draft_top_logprobs.logprob_token_ids.extend([topk_token_ids])
                                 result.outputs.draft_top_logprobs.logprobs.extend([topk_logprobs])
                                 result.outputs.draft_top_logprobs.sampled_token_ranks.extend([sampled_rank])
-                if mtype == 3 and (token_id in task.eos_token_ids or is_prefill or recovery_stop):
+                if mtype == 3 and (token_id in self.cfg.model_config.eos_token_ids or is_prefill or recovery_stop):
                     result.finished = True
                     if recovery_stop:
                         result.error_msg = "Recover is not supported, the result is incomplete!"
@@ -831,7 +831,7 @@ class TokenProcessor:
                 outputs=CompletionOutput(
                     index=i,
                     send_idx=self.tokens_counter[task.request_id],
-                    token_ids=task.eos_token_ids,
+                    token_ids=self.cfg.model_config.eos_token_ids,
                     draft_token_ids=[],
                 ),
                 finished=True,

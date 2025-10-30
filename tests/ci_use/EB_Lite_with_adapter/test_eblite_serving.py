@@ -215,7 +215,6 @@ def test_request_and_response(zmq_req_client):
         "dp_rank": 0,  # P实例 DP rank, 从当前环境变量里读取
         "prompt_token_ids": prompt_token_ids,
         "prompt_token_ids_len": len(prompt_token_ids),
-        "eos_token_ids": [2],
         "stop_token_ids": [2],
         "max_dec_len": 32 * 1024,
         "max_tokens": 32 * 1024,

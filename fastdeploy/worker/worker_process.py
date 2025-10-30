@@ -504,7 +504,7 @@ def parse_args():
     parser.add_argument("--engine_pid", type=int, default=None, help="Process ID of engine")
     parser.add_argument("--do_profile", action="store_true", help="do profile or not")
     parser.add_argument("--pad_token_id", type=int, default=-1, help="pad token id")
-    parser.add_argument("--eos_tokens_lens", type=int, default=2, help="eos token lens")
+    parser.add_argument("--eos_token_ids", type=list[int], default=None, help="eos token ids")
     parser.add_argument(
         "--enable_chunked_prefill",
         action="store_true",

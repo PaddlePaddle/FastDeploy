@@ -69,7 +69,6 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         request_dict = {
             "messages": [{"role": "user", "content": "Hello!"}],
             "chat_template_kwargs": {"chat_template": "Hello!"},
-            "eos_token_ids": [1],
             "temperature": 1,
             "top_p": 1,
         }

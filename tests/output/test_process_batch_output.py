@@ -39,7 +39,6 @@ class MockTask:
         self.schedule_start_time = time.time()
         self.preprocess_end_time = time.time() - 0.1
         self.preprocess_start_time = time.time() - 0.2
-        self.eos_token_ids = [2]
         self.output_token_ids = []
         self.messages = "Test prompt"
         self.num_cached_tokens = 0

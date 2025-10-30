@@ -64,7 +64,6 @@ class Request:
         history: Optional[list[list[str]]],
         tools: Optional[list[Dict]],
         system: Optional[Union[str, list[str]]],
-        eos_token_ids: Optional[list[int]],
         arrival_time: float,
         sampling_params: Optional[SamplingParams] = None,
         pooling_params: Optional[PoolingParams] = None,
@@ -106,8 +105,7 @@ class Request:
         self.pooling_params = pooling_params
         self.history = history
         self.tools = tools
-        # model specific token ids: end of sentence token ids
-        self.eos_token_ids = eos_token_ids
+
         self.num_cached_tokens = 0
 
         self.arrival_time = arrival_time
@@ -182,7 +180,6 @@ class Request:
             tools=d.get("tools"),
             sampling_params=sampling_params,
             pooling_params=pooling_params,
-            eos_token_ids=d.get("eos_token_ids"),
             arrival_time=d.get("arrival_time", time.time()),
             preprocess_start_time=d.get("preprocess_start_time"),
             preprocess_end_time=d.get("preprocess_end_time"),
@@ -239,7 +236,6 @@ class Request:
             "system": self.system,
             "history": self.history,
             "tools": self.tools,
-            "eos_token_ids": self.eos_token_ids,
             "arrival_time": self.arrival_time,
             "preprocess_start_time": self.preprocess_start_time,
             "preprocess_end_time": self.preprocess_end_time,

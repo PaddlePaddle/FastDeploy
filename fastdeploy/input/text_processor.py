@@ -188,7 +188,6 @@ class DataProcessor(BaseDataProcessor):
         data_processor_logger.info(
             f"The eos_token_ids obtained by merging tokenizer and generation_config is {self.eos_token_ids}"
         )
-        self.eos_token_id_len = len(self.eos_token_ids)
         self.pad_token_id = self.get_pad_id()
         self.reasoning_parser = None
         self.tool_parser_obj = tool_parser_obj
@@ -209,8 +208,6 @@ class DataProcessor(BaseDataProcessor):
         """
         data_processor_logger.info(f"Start processing request: {request}")
         request = self._apply_default_parameters(request)
-        if request.get("eos_token_ids") is None or len(request.eos_token_ids) == 0:
-            request.eos_token_ids = self.eos_token_ids
 
         # processing stop_sequences
         stop_sequences = request.get("stop", [])
@@ -284,8 +281,6 @@ class DataProcessor(BaseDataProcessor):
         """
         data_processor_logger.info(f"Start processing request dict: {request}")
         request = self._apply_default_parameters(request)
-        if not request.get("eos_token_ids"):
-            request["eos_token_ids"] = self.eos_token_ids
 
         # processing stop_sequences
         stop_sequences = request.get("stop", [])

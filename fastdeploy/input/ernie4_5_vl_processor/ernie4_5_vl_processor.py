@@ -71,7 +71,6 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         from paddleformers.trl.llm_utils import get_eos_token_id
 
         self.eos_token_ids = get_eos_token_id(self.tokenizer, self.generation_config)
-        self.eos_token_id_len = len(self.eos_token_ids)
         self.pad_token_id = self.get_pad_id()
         self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
         self.reasoning_parser = None
@@ -202,8 +201,6 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         """process the input data"""
 
         request = self._apply_default_parameters(request)
-        if not request.get("eos_token_ids"):
-            request["eos_token_ids"] = self.eos_token_ids
 
         stop_sequences = request.get("stop", [])
         if stop_sequences:
