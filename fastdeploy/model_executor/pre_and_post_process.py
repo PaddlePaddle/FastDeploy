@@ -15,7 +15,7 @@
 """
 
 import queue
-from typing import Dict, Optional, Union
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 import paddle
@@ -85,7 +85,7 @@ else:
         speculate_limit_thinking_content_length_v2,
     )
 
-from fastdeploy.output.pooler import PoolerOutput
+from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
 from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput, SamplerOutput
 
@@ -239,7 +239,7 @@ def pre_process(
     )
 
 
-def _build_stream_transfer_data(output_tokens: np.ndarray, pooler_outputs: None):
+def _build_stream_transfer_data(output_tokens: np.ndarray, pooler_outputs: List[PoolingSequenceGroupOutput] = None):
     """Split output_tokens and output"""
 
     stream_transfer_datas = []
@@ -259,8 +259,6 @@ def _build_stream_transfer_data(output_tokens: np.ndarray, pooler_outputs: None)
                 pooler_output = pooler_output.astype("float32")
 
             pooler_output = pooler_output.numpy()
-            if pooler_output.dtype != np.float32:
-                pooler_output = pooler_output.astype(np.float32)
 
             stream_transfer_data = StreamTransferData(
                 decoder_state=DecoderState.TEXT, pooler_output=pooler_output, batch_id=bid
@@ -360,7 +358,6 @@ def post_process_normal(
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,
-                False,
             )
         else:
             update_inputs(
@@ -855,12 +852,12 @@ def post_process_pooling(
                 model_output.next_tokens,
                 model_output.is_block_step,
                 block_size,
-                True,
             )
 
     if not skip_save_output:
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
             if save_each_rank or model_output.mp_rank == 0:
                 output = _build_stream_transfer_data(output_tokens=None, pooler_outputs=pooler_output.outputs)
-
                 async_output_queue.put(output)
+        else:
+            raise RuntimeError("Not supported save_output mode,Please set FD_USE_GET_SAVE_OUTPUT_V1=1 ")

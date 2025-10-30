@@ -520,22 +520,14 @@ class GPUModelRunner(ModelRunnerBase):
                     self._apply_mm_inputs(request, multi_vision_inputs, rope_3d_position_ids)
 
                 if not self.is_pooling_model:
-                    if request.get("enable_thinking", False):
+                    if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
                         # Enable thinking
-                        req_reasoning_max_tokens = request.get("reasoning_max_tokens")
-                        req_max_tokens = request.get("max_tokens")
-                        final_reasoning_tokens = (
-                            req_reasoning_max_tokens if req_reasoning_max_tokens is not None else req_max_tokens
-                        )
-
-                        self.share_inputs["enable_thinking"][idx : idx + 1] = True
-                        self.share_inputs["need_think_end"][idx : idx + 1, :] = 1
-                        self.share_inputs["reasoning_index"][idx : idx + 1, :] = final_reasoning_tokens
+                        self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
+                        self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
                     else:
                         # Disable thinking
-                        self.share_inputs["enable_thinking"][idx : idx + 1] = False
-                        self.share_inputs["need_think_end"][idx : idx + 1, :] = 0
-                        self.share_inputs["reasoning_index"][idx : idx + 1, :] = 0
+                        self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                        self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
                 if isinstance(request.prompt_token_ids, np.ndarray):
                     prompt_token_ids = request.prompt_token_ids.tolist()
@@ -783,22 +775,14 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
 
                 if not self.is_pooling_model:
-                    if request.get("enable_thinking", False):
+                    if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
                         # Enable thinking
-                        req_reasoning_max_tokens = request.get("reasoning_max_tokens")
-                        req_max_tokens = request.get("max_tokens")
-                        final_reasoning_tokens = (
-                            req_reasoning_max_tokens if req_reasoning_max_tokens is not None else req_max_tokens
-                        )
-
-                        self.share_inputs["enable_thinking"][idx : idx + 1] = True
-                        self.share_inputs["need_think_end"][idx : idx + 1, :] = 1
-                        self.share_inputs["reasoning_index"][idx : idx + 1, :] = final_reasoning_tokens
+                        self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
+                        self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
                     else:
                         # Disable thinking
-                        self.share_inputs["enable_thinking"][idx : idx + 1] = False
-                        self.share_inputs["need_think_end"][idx : idx + 1, :] = 0
-                        self.share_inputs["reasoning_index"][idx : idx + 1, :] = 0
+                        self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                        self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
                 res = request.get(attr, default_value)
@@ -960,7 +944,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.cache_config.enable_chunked_prefill and "encode" in supported_tasks:
             supported_tasks.remove("encode")
 
-            logger.warning(
+            logger.debug(
                 "Chunked prefill is not supported with "
                 "encode task which using ALL pooling. "
                 "Please turn off chunked prefill by export=FD_DISABLE_CHUNKED_PREFILL=1 before using it."
@@ -1106,9 +1090,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["kv_num_blocks_x_cpu"] = None  # CPU
 
         # Initialize thinking related buffers
-        self.share_inputs["enable_thinking"] = paddle.full(shape=[max_num_seqs, 1], fill_value=False, dtype="bool")
-        self.share_inputs["need_think_end"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-        self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
         self.share_inputs["max_think_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
         self.share_inputs["limit_think_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
@@ -1556,44 +1537,19 @@ class GPUModelRunner(ModelRunnerBase):
         task: PoolingTask,
     ) -> PoolerOutput:
         num_tokens = hidden_states.shape[0]
-        max_num_reqs = self.scheduler_config.max_num_seqs
-        num_reqs = min(num_tokens, max_num_reqs)
+        max_num_seqs = self.scheduler_config.max_num_seqs
+        num_reqs = min(num_tokens, max_num_seqs)
         min_tokens_per_req = num_tokens // num_reqs
         num_scheduled_tokens_list = [min_tokens_per_req] * num_reqs
         num_scheduled_tokens_list[-1] += num_tokens % num_reqs
-
         assert sum(num_scheduled_tokens_list) == num_tokens
         assert len(num_scheduled_tokens_list) == num_reqs
 
         req_num_tokens = num_tokens // num_reqs
-
-        dummy_prompt_lens = paddle.to_tensor(
-            num_scheduled_tokens_list, dtype="int64", place=paddle.CPUPlace()  # 对应 PyTorch 的 device="cpu"
-        )
-        print("dummy_prompt_lens: ", dummy_prompt_lens)
-
-        # ✅ 关键修改 2：使用 place 参数而不是 device
-        # PaddlePaddle 使用 place，PyTorch 使用 device
-        if isinstance(self.device, str):
-            if self.device.startswith("cuda"):
-                gpu_id = int(self.device.split(":")[-1]) if ":" in self.device else 0
-                device_place = paddle.CUDAPlace(gpu_id)
-            else:
-                device_place = paddle.CPUPlace()
-        else:
-            device_place = self.device  # 如果已经是 Place 对象
-
-        print("device_place", device_place)
-        # 使用 device 参数创建（如果你的 PaddlePaddle 版本支持）
-        dummy_token_ids = paddle.zeros(
-            [num_reqs, req_num_tokens], dtype="int32", device=device_place  # 在与 self.device 对应的设备上创建
-        )
-        print("dummy_token_ids", dummy_token_ids)
-
+        dummy_prompt_lens = paddle.to_tensor(num_scheduled_tokens_list, dtype="int64", place=paddle.CPUPlace())
+        dummy_token_ids = paddle.zeros([num_reqs, req_num_tokens], dtype="int64", device=hidden_states.place)
         model = cast(FdModelForPooling, self.get_model())
         dummy_pooling_params = PoolingParams(task=task)
-        # 注意：PaddlePaddle 版本可能没有 verify 方法，需要确认
-        # dummy_pooling_params.verify(task=task, model_config=self.model_config)
         to_update = model.pooler.get_pooling_updates(task)
         to_update.apply(dummy_pooling_params)
 
@@ -1602,11 +1558,7 @@ class GPUModelRunner(ModelRunnerBase):
             prompt_token_ids=dummy_token_ids,
             pooling_params=[dummy_pooling_params] * num_reqs,
         )
-
-        # ✅ 关键修改 3：使用 hidden_states.place 而不是 .device
-        dummy_metadata.build_pooling_cursor(
-            num_scheduled_tokens_list, device=hidden_states.place  # PaddlePaddle 用 .place
-        )
+        dummy_metadata.build_pooling_cursor(num_scheduled_tokens_list, device=hidden_states.place)
 
         try:
             return model.pooler(hidden_states=hidden_states, pooling_metadata=dummy_metadata)
@@ -1621,9 +1573,11 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 raise e
 
+
     def _dummy_pooler_run(
         self,
         hidden_states: paddle.Tensor,
+        model_output: paddle.Tensor,
     ) -> PoolerOutput:
         output_size = dict[PoolingTask, float]()
         for task in self.get_supported_pooling_tasks():
@@ -1633,8 +1587,49 @@ class GPUModelRunner(ModelRunnerBase):
             del output
 
         max_task = max(output_size.items(), key=lambda x: x[1])[0]
-        final_output = self._dummy_pooler_run_task(hidden_states, max_task)
-        return final_output
+        pooler_output = self._dummy_pooler_run_task(hidden_states, max_task)
+
+        model_output_data = ModelOutputData(
+            next_tokens=self.share_inputs["next_tokens"],
+            stop_flags=self.share_inputs["stop_flags"],
+            step_idx=self.share_inputs["step_idx"],
+            max_dec_len=self.share_inputs["max_dec_len"],
+            pre_ids=self.share_inputs["pre_ids"],
+            seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
+            eos_token_id=self.share_inputs["eos_token_id"],
+            not_need_stop=self.share_inputs["not_need_stop"],
+            input_ids=self.share_inputs["input_ids"],
+            stop_nums=self.share_inputs["stop_nums"],
+            seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
+            seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+            is_block_step=self.share_inputs["is_block_step"],
+            full_hidden_states=model_output,
+            msg_queue_id=self.parallel_config.msg_queue_id,
+            mp_rank=self.parallel_config.tensor_parallel_rank,
+            use_ep=self.parallel_config.use_ep,
+            draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
+            actual_draft_token_num=(
+                self.share_inputs["actual_draft_token_num"] if self.speculative_decoding else None
+            ),
+            accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
+            accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
+            stop_token_ids=self.share_inputs["stop_seqs"],
+            stop_seqs_len=self.share_inputs["stop_seqs_len"],
+            prompt_lens=self.share_inputs["prompt_lens"],
+        )
+
+        post_process(
+            sampler_or_pooler_output=pooler_output,
+            model_output=model_output_data,
+            share_inputs=self.share_inputs,
+            block_size=self.cache_config.block_size,
+            speculative_decoding=self.speculative_decoding,
+            skip_save_output=True,
+            async_output_queue=self.async_output_queue,
+            think_end_id=self.model_config.think_end_id,
+            line_break_id=self.model_config.line_break_id,
+        )
+        return pooler_output
 
     def _dummy_sampler_run(
         self,
@@ -1763,7 +1758,6 @@ class GPUModelRunner(ModelRunnerBase):
             accept_all_drafts: Target model will accept all draft tokens
             reject_all_drafts: Target model will reject all draft tokens
         """
-
         input_length_list, max_dec_len_list, block_num = self.get_input_length_list(
             num_tokens=num_tokens,
             batch_size=batch_size,
@@ -1791,7 +1785,6 @@ class GPUModelRunner(ModelRunnerBase):
             self.padding_cudagraph_inputs()
 
             # 3. Run model
-            print("self.enable_mm", self.enable_mm)
             if self.enable_mm:
                 model_output = self.model(
                     self.share_inputs["ids_remove_padding"],
@@ -1806,22 +1799,22 @@ class GPUModelRunner(ModelRunnerBase):
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
 
-            hidden_states = rebuild_padding(
-                model_output,
-                self.share_inputs["cu_seqlens_q"],
-                self.share_inputs["seq_lens_this_time"],
-                self.share_inputs["seq_lens_decoder"],
-                self.share_inputs["seq_lens_encoder"],
-                (
-                    self.share_inputs["output_padding_offset"] if self.speculative_decoding else None
-                ),  # speculative decoding requires
-                self.model_config.max_model_len,
-            )
-
             if self.is_pooling_model:
-                self._dummy_pooler_run(hidden_states)
+                hidden_states = model_output
+                self._dummy_pooler_run(hidden_states, model_output)
                 break
             else:
+                hidden_states = rebuild_padding(
+                    model_output,
+                    self.share_inputs["cu_seqlens_q"],
+                    self.share_inputs["seq_lens_this_time"],
+                    self.share_inputs["seq_lens_decoder"],
+                    self.share_inputs["seq_lens_encoder"],
+                    (
+                        self.share_inputs["output_padding_offset"] if self.speculative_decoding else None
+                    ),  # speculative decoding requires
+                    self.model_config.max_model_len,
+                )
                 self._dummy_sampler_run(hidden_states, model_output, accept_all_drafts, reject_all_drafts)
 
             # 7. Updata 'infer_seed' and step_cuda()
@@ -2089,8 +2082,8 @@ class GPUModelRunner(ModelRunnerBase):
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
 
-        hidden_states = model_output
         if self.is_pooling_model:
+            hidden_states = model_output
             pooler_output = self._pool(hidden_states, num_running_requests)
 
             model_output_data = ModelOutputData(
