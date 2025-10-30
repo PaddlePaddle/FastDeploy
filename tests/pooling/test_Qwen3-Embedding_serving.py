@@ -69,7 +69,6 @@ def setup_and_run_embedding_server():
     print("Pre-test port cleanup...")
     clean_ports()
 
-    os.environ["ENABLE_V1_KVCACHE_SCHEDULER"] = "1"
     os.environ["FD_DISABLE_CHUNKED_PREFILL"] = "1"
     os.environ["FD_USE_GET_SAVE_OUTPUT_V1"] = "1"
 
@@ -263,7 +262,7 @@ def test_single_text_embedding(embedding_api_url, headers):
     baseline_filename = "Qwen3-Embedding-0.6B-baseline.json"
 
     if base_path:
-        baseline_file = os.path.join(base_path, baseline_filename)
+        baseline_file = os.path.join(base_path, "torch", baseline_filename)
     else:
         baseline_file = baseline_filename
 
