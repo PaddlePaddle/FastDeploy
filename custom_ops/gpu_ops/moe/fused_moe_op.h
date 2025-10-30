@@ -1307,6 +1307,8 @@ __global__ void initialize_moe_routing_kernel(
       } else {
         scale = w4a8_in_scale ? w4a8_in_scale[expert_idx] : -1;
       }
+    } else {
+      scale = w4a8_in_scale ? w4a8_in_scale[expert_idx] : -1;
     }
     for (int tid = threadIdx.x * VecSize; tid < cols;
          tid += blockDim.x * VecSize) {
