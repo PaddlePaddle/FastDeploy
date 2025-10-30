@@ -41,7 +41,12 @@ from fastdeploy.config import (
     StructuredOutputsConfig,
 )
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
-from fastdeploy.inter_communicator import ExistTaskStatus, IPCSignal, ModelWeightsStatus, shared_memory_exists
+from fastdeploy.inter_communicator import (
+    ExistTaskStatus,
+    IPCSignal,
+    ModelWeightsStatus,
+    shared_memory_exists,
+)
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
