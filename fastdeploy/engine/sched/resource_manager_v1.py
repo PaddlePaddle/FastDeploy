@@ -28,10 +28,9 @@ import paddle
 
 from fastdeploy.engine.request import Request, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
+from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import llm_logger
-import os
-from fastdeploy.input.utils import IDS_TYPE_FLAG
 
 
 @dataclass
@@ -181,7 +180,7 @@ class ResourceManagerV1(ResourceManager):
             end_modal_id = end_patch_map["modal_id"]
             if end_modal_id > 0:
                 new_end_idx = end_patch_map["end_idx"]  # 当前模态结束位置
-            
+
             if end_modal_id == IDS_TYPE_FLAG["video"]:
                 can_split_idx_list = inputs["can_split_idx_list"]
                 for i in range(len(can_split_idx_list)):
