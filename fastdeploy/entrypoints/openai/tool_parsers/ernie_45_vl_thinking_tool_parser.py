@@ -44,7 +44,7 @@ from fastdeploy.entrypoints.openai.tool_parsers.abstract_tool_parser import (
 from fastdeploy.utils import data_processor_logger
 
 
-@ToolParserManager.register_module("ernie_45-vl-thinking")
+@ToolParserManager.register_module("ernie-45-vl-thinking")
 class Ernie45VLThinkingToolParser(ToolParser):
     """
     Tool parser for Ernie model version 4.5.1.

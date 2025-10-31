@@ -91,7 +91,7 @@ class TestReasoningParserManager(unittest.TestCase):
         Test that a parser can be registered and retrieved successfully.
         Verifies normal registration and retrieval functionality.
         """
-        ReasoningParserManager.register_module(module=TestReasoningParser, name="test_parser", force=True)
+        ReasoningParserManager.register_module(module=TestReasoningParser, name="test-parser", force=True)
         parser_cls = ReasoningParserManager.get_reasoning_parser("test_parser")
         self.assertIs(parser_cls, TestReasoningParser)
 

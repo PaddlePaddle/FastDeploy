@@ -125,6 +125,7 @@ class ReasoningParserManager:
 
         Raise a KeyError exception if the name is not registered.
         """
+        name = name.replace("_", "-")
         if name in cls.reasoning_parsers:
             return cls.reasoning_parsers[name]
 
