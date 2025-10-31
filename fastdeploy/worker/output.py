@@ -63,6 +63,17 @@ class LogprobsLists(NamedTuple):
             self.sampled_token_ranks,  # unchanged
         )
 
+    def slice_rows(self, start: int, end: int):
+        """
+        Slice rows.
+        Keeps the number of max_num_logprobs unchanged.
+        """
+        return LogprobsLists(
+            self.logprob_token_ids[start:end],
+            self.logprobs[start:end],
+            self.sampled_token_ranks[start:end],
+        )
+
 
 class LogprobsTensors(NamedTuple):
     """ """

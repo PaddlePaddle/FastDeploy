@@ -238,7 +238,11 @@ def pre_process(
     )
 
 
-def _build_stream_transfer_data(output_tokens: np.ndarray):
+def _build_stream_transfer_data(
+    output_tokens: paddle.Tensor,
+    logprobs: paddle.Tensor = None,
+    prompt_logprobs: paddle.Tensor = None,
+):
     """Split output_tokens and output"""
     output_tokens = output_tokens.reshape([-1]).numpy()
     output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
@@ -248,6 +252,11 @@ def _build_stream_transfer_data(output_tokens: np.ndarray):
         stream_transfer_data = StreamTransferData(
             decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
         )
+        if logprobs:
+            logprobs = logprobs.tolists().slice_rows(bid, bid + 1)
+            stream_transfer_data.logprobs = logprobs
+        if prompt_logprobs:
+            raise NotImplementedError("current dont spport prompt_logprobs")
         stream_transfer_datas.append(stream_transfer_data)
     return stream_transfer_datas
 
@@ -262,6 +271,7 @@ def post_process_normal(
     async_output_queue: queue.Queue = None,
     think_end_id: int = -1,
     line_break_id: int = -1,
+    max_logprobs: int = 20,
 ) -> ModelRunnerOutput:
     """Post-processing steps after completing a single token generation."""
     if think_end_id > 0:
@@ -356,30 +366,35 @@ def post_process_normal(
                 sampler_output.sampled_token_ids,
                 model_output.is_block_step,
             )
+    prompt_logprobs_tensors = None
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
     if not skip_save_output:
-        if sampler_output.logprobs_tensors is None:
-            if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-                if save_each_rank or model_output.mp_rank == 0:
-                    output = _build_stream_transfer_data(sampler_output.sampled_token_ids)
-                    async_output_queue.put(output)
-            else:
+        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+            if save_each_rank or model_output.mp_rank == 0:
+                output = _build_stream_transfer_data(
+                    sampler_output.sampled_token_ids,
+                    logprobs=sampler_output.logprobs_tensors,
+                    prompt_logprobs=prompt_logprobs_tensors,
+                )
+                async_output_queue.put(output)
+        else:
+            if sampler_output.logprobs_tensors is None:
                 save_output(
                     sampler_output.sampled_token_ids,
                     model_output.not_need_stop,
                     model_output.mp_rank,
                     save_each_rank,
                 )
-        else:
-            save_output_topk(
-                sampler_output.sampled_token_ids,
-                sampler_output.logprobs_tensors.logprob_token_ids,
-                sampler_output.logprobs_tensors.logprobs,
-                sampler_output.logprobs_tensors.selected_token_ranks,
-                model_output.not_need_stop,
-                model_output.mp_rank,
-            )
+            else:
+                save_output_topk(
+                    sampler_output.sampled_token_ids,
+                    sampler_output.logprobs_tensors.logprob_token_ids,
+                    sampler_output.logprobs_tensors.logprobs,
+                    sampler_output.logprobs_tensors.selected_token_ranks,
+                    model_output.not_need_stop,
+                    model_output.mp_rank,
+                )
 
 
 def post_process_specualate(
@@ -468,6 +483,7 @@ def post_process(
     async_output_queue: queue.Queue = None,
     think_end_id: int = -1,
     line_break_id: int = -1,
+    max_logprobs: int = 20,
 ) -> None:
     """Post-processing steps after completing a single token generation."""
     if speculative_decoding:
@@ -491,6 +507,7 @@ def post_process(
             async_output_queue,
             think_end_id,
             line_break_id,
+            max_logprobs,
         )
 
 

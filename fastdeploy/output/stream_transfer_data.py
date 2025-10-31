@@ -20,6 +20,8 @@ from typing import Optional
 
 import numpy as np
 
+from fastdeploy.worker.output import LogprobsLists
+
 
 class DecoderState(Enum):
     """DecoderState"""
@@ -38,7 +40,8 @@ class StreamTransferData:
     tokens: np.array
     batch_id: int
     speculaive_decoding: bool = False
-    logprobs: Optional[np.array] = None
+    logprobs: Optional[LogprobsLists] = None
+    prompt_logprobs: Optional[LogprobsLists] = None
     accept_tokens: Optional[np.array] = None
     accept_num: Optional[np.array] = None
     # [num_reqs, hidden_size]

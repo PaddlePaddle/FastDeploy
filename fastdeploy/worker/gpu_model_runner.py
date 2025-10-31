@@ -92,7 +92,7 @@ from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import Scat
 from fastdeploy.model_executor.models.interfaces_base import FdModelForPooling
 from fastdeploy.output.pooler import PoolerOutput
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
-from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
+from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, ModelRunnerOutput
 
 
 class GPUModelRunner(ModelRunnerBase):
@@ -112,8 +112,13 @@ class GPUModelRunner(ModelRunnerBase):
         self.speculative_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.speculative_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
+        self.max_logprobs = fd_config.model_config.max_logprobs
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
         self.is_pooling_model = self.fd_config.model_config.runner_type == "pooling"
+        self.vocal_size = self.fd_config.model_config.vocab_size
+        self.running_reqs: list[Request] = self.scheduler_config.max_num_seqs * [None]
+        self.prompt_logprobs_reqs: list[Request] = []
+        self.in_progress_prompt_logprobs: dict[str, LogprobsTensors] = {}
 
         # VL model config:
         if self.enable_mm:
@@ -552,6 +557,12 @@ class GPUModelRunner(ModelRunnerBase):
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
                 self.share_inputs["pre_ids"][idx : idx + 1] = -1
+                # self.running_reqs[idx] = request
+                prompt_logprobs = request.sampling_params.prompt_logprobs
+                if prompt_logprobs is not None:
+                    self.num_prompt_logprobs[request.request_id] = (
+                        self.vocal_size if prompt_logprobs == -1 else prompt_logprobs
+                    )
                 has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
@@ -572,6 +583,8 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
+                self.num_prompt_logprobs.pop(request.request_id, None)
+                self.in_progress_prompt_logprobs.pop(request.request_id, None)
                 continue
 
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
@@ -1269,7 +1282,7 @@ class GPUModelRunner(ModelRunnerBase):
             min_dec_lens=self.share_inputs["min_dec_len"],
             bad_words_token_ids=self.share_inputs["bad_tokens"][:, :max_bad_tokens_len],
             eos_token_ids=self.share_inputs["eos_token_id"],
-            max_num_logprobs=20 if self.enable_logprob else None,
+            max_num_logprobs=self.max_logprobs if self.enable_logprob else None,
             enable_early_stop=self.enable_early_stop,
             stop_flags=self.share_inputs["stop_flags"],
             temp_scaled_logprobs=self.share_inputs["temp_scaled_logprobs"],
@@ -2001,6 +2014,24 @@ class GPUModelRunner(ModelRunnerBase):
         # 1. Prepare inputs of model and sampler.
         skip_idx_list = self._get_skip_idx(model_forward_batch)
         self._prepare_inputs()
+        # print(f'model_forward_batch = {model_forward_batch}')
+        # print(f'self.running_reqs = {self.running_reqs}')
+        # for bid, req in enumerate(self.running_reqs):
+        #     if req is None or self.share_inputs["stop_flags"][bid,0]:
+        #         self.running_reqs[bid] = None        # stop_flags = true
+        #         self.num_prompt_logprobs[bid] = None
+        #         continue
+        #     print(f'req: {req.to_dict()}')
+        #     if req.sampling_params.prompt_logprobs is not None:
+        #         self.num_prompt_logprobs[bid] = self.vocal_size if req.sampling_params.prompt_logprobs == -1 else req.sampling_params.prompt_logprobs
+        print(f"self.in_progress_prompt_logprobs = {self.in_progress_prompt_logprobs}")
+        # print(f'input_ids = {self.share_inputs["input_ids"]}')
+        print(f'ids_remove_padding = {self.share_inputs["ids_remove_padding"]}')
+        print(f"batch_id_per_token = {self.forward_meta.batch_id_per_token}")
+        print(f'cu_seqlens_q = {self.share_inputs["cu_seqlens_q"]}')
+        print(f'seq_lens_encoder = {self.share_inputs["seq_lens_encoder"]}')
+        print(f'seq_lens_decoder = {self.share_inputs["seq_lens_decoder"]}')
+        print(f'seq_lens_this_time = {self.share_inputs["seq_lens_this_time"]}')
         self.sampler.pre_process(skip_idx_list)
 
         # 1.1 Update state of logits processor
@@ -2040,6 +2071,29 @@ class GPUModelRunner(ModelRunnerBase):
             (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
             self.model_config.max_model_len,
         )
+        # 遍历需要计算prompt_logprobs的请求
+        completed_prefill_reqs = []
+        for idx, request in enumerate(self.prompt_logprobs_reqs):
+            # 1.判断当前请求是否已经计算完prompt_logprobs
+            num_prompt_logprobs = request.sampling_params.prompt_logprobs
+            if request.prompt_token_ids is None or num_prompt_logprobs is None:
+                continue
+            if num_prompt_logprobs == -1:
+                num_prompt_logprobs = self.vocal_size
+            num_prompt_tokens = len(request.prompt_token_ids)
+            logprobs_tensors = self.in_progress_prompt_logprobs.get(request.idx)
+            if not logprobs_tensors:
+                logprobs_tensors = LogprobsTensors.empty_cpu(num_prompt_tokens, num_prompt_logprobs + 1)
+                self.in_progress_prompt_logprobs[request.idx] = logprobs_tensors
+            # 2.如果已经计算完prompt_logprobs，记录到completed_prefill_reqs,跳过
+            # 3.判断需要chunked_prefill部分的prompt_logprobs
+
+            # if self.in_progress_prompt_logprobs[bid] is None:
+            #     self.in_progress_prompt_logprobs[bid] = self.share_inputs["input_ids"][:, :prompt_logprobs]
+
+        # 清除已经计算完prompt_logprobs的请求
+
+        # 将prompt_logprob组装成batch，通过zmq返回
 
         # 4. Compute logits, Sample
         logits = None
@@ -2144,6 +2198,7 @@ class GPUModelRunner(ModelRunnerBase):
             async_output_queue=self.async_output_queue,
             think_end_id=self.model_config.think_end_id,
             line_break_id=self.model_config.line_break_id,
+            max_logprobs=self.max_logprobs,
         )
         if self.guided_backend is not None and sampler_output is not None:
             self.sampler.post_process(sampler_output.sampled_token_ids, skip_idx_list)
@@ -2559,3 +2614,12 @@ class GPUModelRunner(ModelRunnerBase):
             cumsum_seqlens=cumsum_seqlens,
         )
         return rope_emb_lst
+
+    def _get_prompt_logprobs_dict(
+        self,
+        hidden_states: paddle.Tensor,
+        num_scheduled_tokens: dict[str, int],
+    ) -> dict[str, Optional[LogprobsTensors]]:
+        # in_progress_dict = self.in_progress_prompt_logprobs_cpu
+        # prompt_logprobs_dict: dict[str, Optional[LogprobsTensors]] = {}
+        pass
