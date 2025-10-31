@@ -1389,6 +1389,8 @@ class FDConfig:
         early_stop_config: Optional[Dict[str, Any]] = None,
         tool_parser: str = None,
         test_mode=False,
+        enable_attention_dp_balance: bool = False,
+        attention_dp_time_out_iters: int = 0,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
@@ -1448,6 +1450,9 @@ class FDConfig:
         self.max_num_partial_prefills = max_num_partial_prefills
         self.max_long_partial_prefills = max_long_partial_prefills
         self.long_prefill_token_threshold = long_prefill_token_threshold
+
+        self.enable_attention_dp_balance = enable_attention_dp_balance
+        self.attention_dp_time_out_iters = attention_dp_time_out_iters
 
         self._str_to_list("innode_prefill_ports", int)
 

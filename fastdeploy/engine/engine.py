@@ -532,6 +532,7 @@ class LLMEngine:
             f" --runner {self.cfg.model_config.runner}"
             f" --convert {self.cfg.model_config.convert}"
             f" --override-pooler-config {self.cfg.model_config.override_pooler_config}"
+            f" --attention-dp-time-out-iters {self.cfg.attention_dp_time_out_iters}"
             f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
@@ -547,6 +548,7 @@ class LLMEngine:
             "disable_custom_all_reduce": self.cfg.parallel_config.disable_custom_all_reduce,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
+            "enable_attention_dp_balance": self.cfg.enable_attention_dp_balance,
         }
         for worker_flag, value in worker_store_true_flag.items():
             if value:

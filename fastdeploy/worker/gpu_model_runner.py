@@ -222,7 +222,10 @@ class GPUModelRunner(ModelRunnerBase):
         """
         check whether decode stage exist
         """
-        return int(paddle.max(self.share_inputs["seq_lens_decoder"])) > 0
+        if paddle.any(self.share_inputs["seq_lens_decoder"].cast("int64") >= self.share_inputs["prompt_lens"]):
+            return True
+        else:
+            return False
 
     def only_prefill(self):
         """
@@ -2194,10 +2197,19 @@ class GPUModelRunner(ModelRunnerBase):
                 self.speculative_config.num_speculative_tokens,
             )
 
+        if num_running_requests is None:
+            num_running_requests = self.get_real_bsz()
         self.seq_lens_this_time_buffer[:num_running_requests].copy_(
             self.share_inputs["seq_lens_this_time"][:num_running_requests], False
         )
         return None
+
+    def get_real_bsz(self):
+        real_bsz = 0
+        for i in range(self.share_inputs["stop_flags"].shape[0] - 1, -1, -1):
+            if not self.share_inputs["stop_flags"][i][0]:
+                return i + 1
+        return real_bsz
 
     def _add_cache(self, model_forward_batch) -> None:
         """
