@@ -60,6 +60,12 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchKernel(
   if (std::is_same<TY, int8_t>::value) {
     permute_input =
         paddle::empty({token_nums_this_rank, n}, paddle::DataType::INT8, place);
+<<<<<<< Updated upstream
+=======
+    permute_input_div =
+        paddle::empty({token_nums_this_rank, n}, input_type, place);
+      
+>>>>>>> Stashed changes
     if (token_nums_this_rank > 0) {
       auto ret = infer_ops::moe_ffn_pre_sorted_quant_pe<XPU_TX, int>(
           xpu_ctx->x_context(),

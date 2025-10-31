@@ -29,9 +29,10 @@ from fastdeploy.model_executor.ops.xpu import (
     weight_quantize_xpu,
     xpu_moe_layer,
 )
+from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import UnquantizedFusedMoEMethod
 
 
-class XPUMoEMethod(MoEMethodBase):
+class XPUMoEMethod(UnquantizedFusedMoEMethod):
     """
     XPU MOE
     """
@@ -57,82 +58,82 @@ class XPUMoEMethod(MoEMethodBase):
         self.EPPrefillRunner = XPUEPPrefillRunner
         self.EPDecoderRunner = XPUEPDecoderRunner
 
-    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
-        """
-        create weight process.
-        """
-        self.up_gate_proj_weight_shape = [
-            layer.num_local_experts,
-            layer.moe_intermediate_size * 2,
-            layer.hidden_size,
-        ]
-        self.down_proj_weight_shape = [
-            layer.num_local_experts,
-            layer.hidden_size,
-            layer.moe_intermediate_size,
-        ]
-        if self.moe_quant_type in ["weight_only_int4", "w4a8"]:
-            self.up_gate_proj_weight_shape[-1] //= 2
-            self.down_proj_weight_shape[-1] //= 2
+    # def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
+    #     """
+    #     create weight process.
+    #     """
+    #     self.up_gate_proj_weight_shape = [
+    #         layer.num_local_experts,
+    #         layer.moe_intermediate_size * 2,
+    #         layer.hidden_size,
+    #     ]
+    #     self.down_proj_weight_shape = [
+    #         layer.num_local_experts,
+    #         layer.hidden_size,
+    #         layer.moe_intermediate_size,
+    #     ]
+    #     if self.moe_quant_type in ["weight_only_int4", "w4a8"]:
+    #         self.up_gate_proj_weight_shape[-1] //= 2
+    #         self.down_proj_weight_shape[-1] //= 2
 
-        setattr(
-            layer,
-            self.added_weight_attrs[0],
-            layer.create_parameter(
-                shape=self.up_gate_proj_weight_shape,
-                dtype=self.weight_dtype,
-                default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
-        setattr(
-            layer,
-            self.added_weight_attrs[1],
-            layer.create_parameter(
-                shape=self.down_proj_weight_shape,
-                dtype=self.weight_dtype,
-                default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
+    #     setattr(
+    #         layer,
+    #         self.added_weight_attrs[0],
+    #         layer.create_parameter(
+    #             shape=self.up_gate_proj_weight_shape,
+    #             dtype=self.weight_dtype,
+    #             default_initializer=paddle.nn.initializer.Constant(0),
+    #         ),
+    #     )
+    #     setattr(
+    #         layer,
+    #         self.added_weight_attrs[1],
+    #         layer.create_parameter(
+        #         shape=self.down_proj_weight_shape,
+        #         dtype=self.weight_dtype,
+        #         default_initializer=paddle.nn.initializer.Constant(0),
+        #     ),
+        # )
 
-        if self.moe_quant_type in ["weight_only_int8", "w8a8", "weight_only_int4", "w4a8"]:
-            self.up_gate_proj_scale_shape = [
-                layer.num_local_experts,
-                layer.moe_intermediate_size * 2,
-            ]
-            self.down_proj_scale_shape = [
-                layer.num_local_experts,
-                layer.hidden_size,
-            ]
-            setattr(
-                layer,
-                self.added_scale_attrs[0],
-                layer.create_parameter(
-                    shape=self.up_gate_proj_scale_shape,
-                    dtype=self.scale_dtype,
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
-            setattr(
-                layer,
-                self.added_scale_attrs[1],
-                layer.create_parameter(
-                    shape=self.down_proj_scale_shape,
-                    dtype=self.scale_dtype,
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                ),
-            )
+        # if self.moe_quant_type in ["weight_only_int8", "w8a8", "weight_only_int4", "w4a8"]:
+        #     self.up_gate_proj_scale_shape = [
+        #         layer.num_local_experts,
+        #         layer.moe_intermediate_size * 2,
+        #     ]
+        #     self.down_proj_scale_shape = [
+        #         layer.num_local_experts,
+        #         layer.hidden_size,
+        #     ]
+        #     setattr(
+        #         layer,
+        #         self.added_scale_attrs[0],
+        #         layer.create_parameter(
+        #             shape=self.up_gate_proj_scale_shape,
+        #             dtype=self.scale_dtype,
+        #             default_initializer=paddle.nn.initializer.Constant(0),
+        #         ),
+        #     )
+        #     setattr(
+        #         layer,
+        #         self.added_scale_attrs[1],
+        #         layer.create_parameter(
+        #             shape=self.down_proj_scale_shape,
+        #             dtype=self.scale_dtype,
+        #             default_initializer=paddle.nn.initializer.Constant(0),
+        #         ),
+        #     )
 
-        if self.moe_quant_type in ["w8a8", "w4a8"]:
-            for in_scale_name in self.added_in_scale_attrs:
-                setattr(
-                    layer,
-                    in_scale_name,
-                    layer.create_parameter(
-                        shape=[layer.num_local_experts],
-                        dtype=self.scale_dtype,
-                        default_initializer=paddle.nn.initializer.Constant(0),
-                    ),
-                )
+        # if self.moe_quant_type in ["w8a8", "w4a8"]:
+        #     for in_scale_name in self.added_in_scale_attrs:
+        #         setattr(
+        #             layer,
+        #             in_scale_name,
+        #             layer.create_parameter(
+        #                 shape=[layer.num_local_experts],
+        #                 dtype=self.scale_dtype,
+        #                 default_initializer=paddle.nn.initializer.Constant(0),
+        #             ),
+        #         )
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
@@ -190,7 +191,15 @@ class XPUMoEMethod(MoEMethodBase):
             layer.top_k,
             True,
         )
+        # print(f"================输入数据===============")
         token_nums_per_expert_list = list(range(64))  # placeholder, not use
+        # print(f"x: {x}")
+        # print(f"topk_idx: {topk_idx}")
+        # print(f"topk_weights: {topk_weights}")
+        # print(f"getattr(layer, self.added_in_scale_attrs[0], None), : {getattr(layer, self.added_in_scale_attrs[0], None)}")
+        # print(f"token_nums_per_expert_list: {token_nums_per_expert_list}")
+        # print(f"x.shape[0] * layer.top_k, : {x.shape[0] * layer.top_k}")
+
         (
             permute_input,
             permute_indices_per_token,
@@ -206,6 +215,12 @@ class XPUMoEMethod(MoEMethodBase):
             x.shape[0] * layer.top_k,
             self.moe_quant_type,
         )
+        # print(f"=============输出数据================")
+        # print(f"permute_input : {permute_input}")
+        # print(f"permute_indices_per_token : {permute_indices_per_token}")
+        # print(f"token_num_lod : {token_num_lod}")
+        # print(f"dst_weights: {dst_weights}")
+        # print(f"ffn1_act_scale_per_token: {ffn1_act_scale_per_token}")
 
         if not hasattr(layer, self.added_in_scale_attrs[0]):
             ffn1_act_scale_per_token = None
