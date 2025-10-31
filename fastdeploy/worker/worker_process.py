@@ -823,6 +823,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     update_fd_config_for_mm(fd_config)
     if fd_config.load_config.load_choices == "default_v1" and not v1_loader_support(fd_config):
         fd_config.load_config.load_choices = "default"
+    print(f"fd_config.load_config.load_choices: {fd_config.load_config.load_choices}")
 
     architecture = fd_config.model_config.architectures[0]
     if "PaddleOCR" in architecture:
