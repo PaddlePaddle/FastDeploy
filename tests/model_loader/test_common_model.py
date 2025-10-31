@@ -645,7 +645,6 @@ def test_common_model(
     request,
     monkeypatch,
 ) -> None:
-    print("当前用例 id:", request.node.callspec.id)
     model_path = get_paddle_model_path(model_name_or_path)
     if env:
         for k, v in env.items():
