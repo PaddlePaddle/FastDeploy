@@ -621,7 +621,7 @@ class OpenAIServingChat:
 
         if output is not None and output.get("metrics") and output["metrics"].get("request_start_time"):
             work_process_metrics.e2e_request_latency.observe(
-                time.time() - output.get("metrics").get("request_start_time")
+                time.time() - data.get("metrics").get("request_start_time")
             )
         message = ChatMessage(
             role="assistant",
@@ -655,7 +655,7 @@ class OpenAIServingChat:
                 finish_reason = "tool_calls"
         else:
             finish_reason = "length"
-        if output.get("error_msg") is not None and "Recover" in output["error_msg"]:
+        if data.get("error_msg") is not None and "Recover" in data["error_msg"]:
             finish_reason = "recover_stop"
 
         return ChatCompletionResponseChoice(
