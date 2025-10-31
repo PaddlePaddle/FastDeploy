@@ -171,7 +171,7 @@ template <uint32_t group_size,
           uint32_t HEAD_DIM,
           typename T>
 __device__ __forceinline__ void load_q_global_smem(
-    T* q_ptr_base,
+    const T* q_ptr_base,
     smem_t* q_smem,
     uint32_t q_idx_base,
     const uint32_t qo_upper_bound,
@@ -194,7 +194,7 @@ __device__ __forceinline__ void load_q_global_smem(
       const uint32_t offset_now = base_offset + j * 4;
       const uint32_t n_offset = offset_now / group_size;
       const uint32_t h_offset = offset_now % group_size;
-      T* q_ptr = q_ptr_base + n_offset * qo_n_stride + h_offset * qo_h_stride;
+      const T* q_ptr = q_ptr_base + n_offset * qo_n_stride + h_offset * qo_h_stride;
 #pragma unroll
       for (uint32_t fyo = 0; fyo < num_frags_y / 4;
            ++fyo) {
