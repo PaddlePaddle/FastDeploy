@@ -909,7 +909,7 @@ class EngineService:
                         else:
                             new_contents.append(content)
                     if len(new_contents):
-                        llm_logger.info(f"Send response for request id: {request_id}")
+                        llm_logger.debug(f"Send response for request id: {request_id}")
                         self.send_response_server.send_response(request_id, new_contents)
             except Exception as e:
                 llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
