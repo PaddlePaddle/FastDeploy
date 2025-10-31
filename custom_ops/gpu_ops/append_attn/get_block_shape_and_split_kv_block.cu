@@ -285,7 +285,7 @@ void GetBlockShapeAndSplitKVBlock(
                      paddle::DataType::INT32,
                      seq_lens_this_time.place());
 
-  GetMaxLenKernel<1024><<<1, 1024, 0, seq_lens_encoder.stream()>>>(
+  GetMaxLenKernel<1024><<<1, 1024, 0, stream>>>(
       seq_lens_decoder.data<int>(),
       seq_lens_this_time.data<int>(),
       seq_lens_encoder.data<int>(),
