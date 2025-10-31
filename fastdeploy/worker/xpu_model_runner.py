@@ -847,12 +847,9 @@ class XPUModelRunner(ModelRunnerBase):
             head_dim = self.model_config.head_dim
             if "paddleocr" in self.model_config.model_type:  # neox style = True
                 rope_head_dim = head_dim
+                self.share_inputs["pos_emb_type"] = "NEOX"
             else:  # neox style = False
                 rope_head_dim = head_dim // 2
-
-            if rope_head_dim == self.model_config.head_dim:
-                self.share_inputs["pos_emb_type"] = "NORMAL"
-            else:
                 self.share_inputs["pos_emb_type"] = "HALF_HEAD_DIM"
 
             self.share_inputs["rope_emb"] = paddle.full(
