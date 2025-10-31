@@ -33,8 +33,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --tensor-parallel-size 1 \
        --max-model-len 131072 \
        --quantization wint8 \
-       --reasoning-parser ernie_x1 \
-       --tool-call-parser ernie_x1 \
+       --reasoning-parser ernie-x1 \
+       --tool-call-parser ernie-x1 \
        --max-num-seqs 32
 ```
 其中：

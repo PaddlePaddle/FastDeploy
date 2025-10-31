@@ -95,6 +95,7 @@ class ToolParserManager:
 
         Raise a KeyError exception if the name is not registered.
         """
+        name = name.replace("_", "-")
         if name in cls.tool_parsers:
             return cls.tool_parsers[name]
 
