@@ -1,3 +1,5 @@
+[简体中文](../zh/quantization/wint2.md)
+
 # WINT2 Quantization
 
 Weights are compressed offline using the [CCQ (Convolutional Coding Quantization)](https://arxiv.org/pdf/2507.07145) method. The actual stored numerical type of weights is INT8, with 4 weights packed into each INT8 value, equivalent to 2 bits per weight. Activations are not quantized. During inference, weights are dequantized and decoded in real-time to BF16 numerical type, and calculations are performed using BF16 numerical type.

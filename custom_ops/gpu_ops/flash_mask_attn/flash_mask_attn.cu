@@ -20,6 +20,10 @@
 #include "kernel_traits.h"
 #include "flash_mask_attn_kernel.hpp"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
+
 template <typename paddle_type>
 struct cuteType;
 
@@ -142,7 +146,7 @@ std::vector<paddle::Tensor> FlashAttentionMask(
 }
 
 
-PD_BUILD_OP(flash_attention_mask)
+PD_BUILD_STATIC_OP(flash_attention_mask)
     .Inputs({
         "q_input",
         "k_input",

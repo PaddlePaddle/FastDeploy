@@ -1,3 +1,5 @@
+[English](../../features/prefix_caching.md)
+
 # Prefix Caching
 
 Prefix Caching（前缀缓存）是一种优化生成式模型推理效率的技术，核心思想是通过缓存输入序列的中间计算结果（KV Cache），避免重复计算，从而加速具有相同前缀的多个请求的响应速度。

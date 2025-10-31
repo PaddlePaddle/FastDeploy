@@ -143,7 +143,9 @@ class TestRebuildPadding(unittest.TestCase):
             seq_lens_decoder,
             seq_lens_encoder,
             None,
+            None,
             max_input_length,
+            False,
         )
         np.testing.assert_allclose(out_no_offset.numpy(), out_no_offset_ref)
 
@@ -191,7 +193,9 @@ class TestRebuildPadding(unittest.TestCase):
             seq_lens_decoder,
             seq_lens_encoder,
             output_padding_offset,
+            None,
             max_input_length,
+            False,
         )
         np.testing.assert_allclose(out_with_offset.numpy(), out_with_offset_ref)
 

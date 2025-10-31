@@ -1,3 +1,5 @@
+[English](../../usage/log.md)
+
 # 日志说明
 
 FastDeploy 在部署过程中，会产生如下日志文件，各日志含义说明
@@ -11,7 +13,7 @@ FastDeploy 在部署过程中，会产生如下日志文件，各日志含义说
 * `fastdeploy.log` : 记录当前实例启动的各个 config 的信息，运行中记录用户请求的 request 及 response 信息
 * `workerlog.*` : 记录模型启动加载进度及推理算子报错信息，每个卡对应一个文件
 * `worker_process.log` : 记录引擎每一轮推理的数据
-* `prefix_cache_manager.log` : 记录每一个请求分配 KV Cache 的逻辑索引，以及当前请求的命中情况
+* `cache_manager.log` : 记录每一个请求分配 KV Cache 的逻辑索引，以及当前请求的命中情况
 * `launch_worker.log` : 记录模型启动信息及报错信息
 * `gpu_worker.log` : 记录 profile 时计算 KV Cache block 数目的信息
 * `gpu_model_runner.log` : 当前的模型信息及加载时间

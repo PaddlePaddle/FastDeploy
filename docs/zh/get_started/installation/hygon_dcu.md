@@ -1,3 +1,5 @@
+[English](../../../get_started/installation/hygon_dcu.md)
+
 # 使用 FastDeploy 在海光 K100AI 上运行 ERNIE-4.5-300B-A47B & ERNIE-4.5-21B-A3B
 当前版本软件只是作为K100AI + Fastdeploy 推理大模型的一个演示 demo，跑最新ERNIE4.5模型可能存在问题，后续进行修复和性能优化，给客户提供一个更稳定的版本。
 

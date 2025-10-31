@@ -85,13 +85,15 @@ class AppendAttentionBackend(AttentionBackend):
         super().__init__()
         self.attention_metadata: AppendAttentionMetadata = None
         self.block_size: int = fd_config.cache_config.block_size
-        self.max_seq_len: int = fd_config.parallel_config.max_model_len
+        self.max_seq_len: int = fd_config.model_config.max_model_len
         self.rope_theta: float = (
             10000.0 if fd_config.model_config.rope_theta is None else fd_config.model_config.rope_theta
         )
         self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False) or getattr(
             fd_config.model_config, "use_3d_rope", False
         )
+        if fd_config.speculative_config.model_type != "main":
+            self.rope_3d = False
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
         self.speculative_method: str = fd_config.speculative_config.method
         self.use_speculate: bool = self.speculative_method is not None
@@ -117,6 +119,7 @@ class AppendAttentionBackend(AttentionBackend):
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
         self.use_output = not fd_config.graph_opt_config.full_cuda_graph
+        self.fd_config = fd_config
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
@@ -134,29 +137,6 @@ class AppendAttentionBackend(AttentionBackend):
         metadata.rotary_embs = forward_meta.rotary_embs
         metadata.attn_mask = forward_meta.attn_mask
         metadata.pre_caches_length = forward_meta.pre_caches_length
-        get_block_shape_and_split_kv_block(
-            forward_meta.seq_lens_encoder,
-            forward_meta.seq_lens_decoder,
-            forward_meta.seq_lens_this_time,
-            forward_meta.decoder_batch_ids,
-            forward_meta.decoder_tile_ids_per_batch,
-            forward_meta.decoder_num_blocks_cpu,
-            forward_meta.decoder_num_blocks_device,
-            forward_meta.decoder_chunk_size_device,
-            forward_meta.max_len_tensor_cpu,
-            forward_meta.encoder_batch_ids,
-            forward_meta.encoder_tile_ids_per_batch,
-            forward_meta.encoder_num_blocks_x_cpu,
-            forward_meta.kv_batch_ids,
-            forward_meta.kv_tile_ids_per_batch,
-            forward_meta.kv_num_blocks_x_cpu,
-            forward_meta.max_len_kv_cpu,
-            self.encoder_block_shape_q,
-            self.decoder_block_shape_q,
-            self.group_size,
-            self.block_size,
-            self.speculate_max_draft_token_num + 1,
-        )
 
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
@@ -219,6 +199,8 @@ class AppendAttentionBackend(AttentionBackend):
         """
         metadata = self.attention_metadata
 
+        sliding_window = layer.sliding_window
+
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
                 metadata.kv_signal_metadata,
@@ -235,6 +217,30 @@ class AppendAttentionBackend(AttentionBackend):
             cache_v = forward_meta.caches[2 * layer.layer_id + 1]
             cache_k_scales = getattr(layer, "cache_k_scale", None)
             cache_v_scales = getattr(layer, "cache_v_scale", None)
+
+        if layer.layer_id == 0:
+            get_block_shape_and_split_kv_block(
+                forward_meta.seq_lens_encoder,
+                forward_meta.seq_lens_decoder,
+                forward_meta.seq_lens_this_time,
+                forward_meta.decoder_batch_ids,
+                forward_meta.decoder_tile_ids_per_batch,
+                forward_meta.decoder_num_blocks_cpu,
+                forward_meta.decoder_num_blocks_device,
+                forward_meta.decoder_chunk_size_device,
+                forward_meta.max_len_tensor_cpu,
+                forward_meta.encoder_batch_ids,
+                forward_meta.encoder_tile_ids_per_batch,
+                forward_meta.encoder_num_blocks_x_cpu,
+                forward_meta.kv_batch_ids,
+                forward_meta.kv_tile_ids_per_batch,
+                forward_meta.kv_num_blocks_x_cpu,
+                self.encoder_block_shape_q,
+                self.decoder_block_shape_q,
+                self.group_size,
+                self.block_size,
+                self.speculate_max_draft_token_num + 1,
+            )
 
         if self.use_output:
             quant_max_bound = getattr(layer, "quant_max_bound", 0.0)
@@ -263,15 +269,15 @@ class AppendAttentionBackend(AttentionBackend):
             # 3. generate output tensor of different dtypes
             if out_scale > 0.0:
                 if abs(quant_max_bound - 127) < 0.000001:
-                    res = paddle.empty([token_nums, q_num_heads * head_dims], dtype="int8").to(qkv.place)
+                    res = paddle.empty([token_nums, q_num_heads * head_dims], dtype="int8")
                 elif abs(quant_max_bound - 448) < 0.000001:
-                    res = paddle.empty([token_nums, q_num_heads * head_dims], dtype="float8_e4m3fn").to(qkv.place)
+                    res = paddle.empty([token_nums, q_num_heads * head_dims], dtype="float8_e4m3fn")
                 else:
                     raise NotImplementedError("Only supported attr of quant_max_bound in ['127', '448'].")
             else:
-                res = paddle.empty([token_nums, q_num_heads * head_dims], dtype=D_type).to(qkv.place)
+                res = paddle.empty([token_nums, q_num_heads * head_dims], dtype=D_type)
 
-            append_attention_with_output(
+            res = append_attention_with_output(
                 qkv,
                 cache_k,
                 cache_v,
@@ -291,7 +297,6 @@ class AppendAttentionBackend(AttentionBackend):
                 forward_meta.decoder_tile_ids_per_batch,
                 forward_meta.decoder_num_blocks_cpu,
                 forward_meta.max_len_tensor_cpu,
-                forward_meta.max_len_kv_cpu,
                 res,
                 metadata.rotary_embs,
                 metadata.attn_mask,
@@ -309,6 +314,7 @@ class AppendAttentionBackend(AttentionBackend):
                 metadata.kv_signal_data_list[layer.layer_id],
                 getattr(layer, "q_norm_weight", None),
                 getattr(layer, "k_norm_weight", None),
+                getattr(layer, "sinks", None),
                 getattr(layer, "rms_norm_eps", 1e-6),
                 metadata._fuse_kernel_compute_dtype,
                 getattr(layer, "cache_quant_type_str", "none"),
@@ -325,6 +331,7 @@ class AppendAttentionBackend(AttentionBackend):
                 self.speculate_max_draft_token_num + 1,
                 self.causal,
                 self.speculative_method is not None,
+                sliding_window,
             )
         else:
             res = append_attention(
@@ -347,7 +354,6 @@ class AppendAttentionBackend(AttentionBackend):
                 forward_meta.decoder_tile_ids_per_batch,
                 forward_meta.decoder_num_blocks_cpu,
                 forward_meta.max_len_tensor_cpu,
-                forward_meta.max_len_kv_cpu,
                 metadata.rotary_embs,
                 metadata.attn_mask,
                 layer.qkv_bias,
@@ -360,10 +366,11 @@ class AppendAttentionBackend(AttentionBackend):
                 getattr(layer, "cache_v_zp", None),
                 layer.linear_shift,
                 layer.linear_smooth,
-                forward_meta.attn_mask_offsets,
+                None if self.use_speculate else forward_meta.attn_mask_offsets,
                 metadata.kv_signal_data_list[layer.layer_id],
                 getattr(layer, "q_norm_weight", None),
                 getattr(layer, "k_norm_weight", None),
+                getattr(layer, "sinks", None),
                 getattr(layer, "rms_norm_eps", 1e-6),
                 metadata._fuse_kernel_compute_dtype,
                 getattr(layer, "cache_quant_type_str", "none"),
@@ -378,7 +385,8 @@ class AppendAttentionBackend(AttentionBackend):
                 metadata.max_partition_size,
                 metadata.encoder_max_partition_size,
                 self.speculate_max_draft_token_num + 1,
-                self.causal,
+                self.causal or self.use_speculate,
                 self.speculative_method is not None,
+                sliding_window,
             )
         return res

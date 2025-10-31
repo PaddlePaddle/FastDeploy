@@ -245,7 +245,7 @@ class DataProcessor(BaseDataProcessor):
                 if chat_template_kwargs:
                     if isinstance(chat_template_kwargs, dict):
                         for k, v in chat_template_kwargs.items():
-                            if k not in task:
+                            if k not in task or task[k] is None:
                                 task[k] = v
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
@@ -403,11 +403,13 @@ class DataProcessor(BaseDataProcessor):
         delta_text, _, previous_texts = self.ids2tokens(token_ids, req_id)
         if is_end:
             full_text = previous_texts + delta_text
-            response_dict["outputs"]["raw_prediction"] = full_text
+            response_dict["outputs"]["completion_tokens"] = full_text
             if enable_thinking and self.reasoning_parser:
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
+                reasoning_tokens = self.tokenizer.tokenize(reasoning_content)
+                response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
             else:
                 response_dict["outputs"]["text"] = full_text
             if self.tool_parser_obj:
@@ -439,7 +441,7 @@ class DataProcessor(BaseDataProcessor):
             if token_ids[-1] in self.eos_token_ids:
                 token_ids = token_ids[:-1]
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
-        response_dict["outputs"]["raw_prediction"] = delta_text
+        response_dict["outputs"]["completion_tokens"] = delta_text
         if self.reasoning_parser and (
             enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
         ):
@@ -452,6 +454,9 @@ class DataProcessor(BaseDataProcessor):
                 token_ids,
             )
             response_dict["outputs"]["delta_message"] = reasoning_delta_message
+            reasoning_content = reasoning_delta_message.reasoning_content if reasoning_delta_message else None
+            reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
+            response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
         if self.tool_parser_obj:
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
@@ -548,7 +553,7 @@ class DataProcessor(BaseDataProcessor):
             return_tensors="pd",
             **kwargs,
         )
-        request["text_after_process"] = spliced_message
+        request["prompt_tokens"] = spliced_message
         req_id = None
         tokens = self.tokenizer.tokenize(spliced_message)
         if isinstance(request, dict):

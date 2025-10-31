@@ -167,8 +167,8 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         super().__init__()
         self.attention_metadata: HPUAttentionMetadata = None
         # TODO(gongshaotian): Use llm_config parameters in the correct location
-        self.block_size = llm_config.parallel_config.block_size
-        self.max_seq_len = llm_config.parallel_config.max_model_len
+        self.block_size = llm_config.cache_config.block_size
+        self.max_seq_len = llm_config.model_config.max_model_len
         self.rope_theta = 10000.0 if llm_config.model_config.rope_theta is None else llm_config.model_config.rope_theta
         self.rope_3d = getattr(llm_config.model_config, "rope_3d", False)
         self.causal = getattr(llm_config.model_config, "causal", True)

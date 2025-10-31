@@ -55,7 +55,7 @@ from fastdeploy.model_executor.models.model_base import (
 )
 from fastdeploy.platforms import current_platform
 
-if current_platform.is_cuda():
+if current_platform.is_cuda() or current_platform.is_maca():
     from fastdeploy.model_executor.ops.gpu import (
         get_position_ids_and_mask_encoder_batch,
     )
@@ -194,7 +194,7 @@ class DeepSeekV3MoE(nn.Layer):
         moe_out = moe_out + shared_experts_out
         # We do to TP all reduce after the sum of experts.
         if self.tp_size > 1:
-            tensor_model_parallel_all_reduce(moe_out)
+            moe_out = tensor_model_parallel_all_reduce(moe_out)
         return moe_out
 
 

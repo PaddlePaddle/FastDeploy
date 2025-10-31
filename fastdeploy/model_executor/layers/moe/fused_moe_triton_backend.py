@@ -393,7 +393,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         down_proj_out.reshape_([token_num, top_k, hidden_size])
         out = down_proj_out.sum(axis=1)
         if layer.reduce_results and layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(out)
+            out = tensor_model_parallel_all_reduce(out)
 
         return out
 
@@ -617,6 +617,7 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
                 layer.top_k,
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
+                getattr(layer, "renormalize", True),
             )
         else:
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
@@ -766,7 +767,7 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
         out = down_proj_out.sum(axis=1)
 
         if layer.reduce_results and layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(out)
+            out = tensor_model_parallel_all_reduce(out)
 
         return out
 
@@ -1055,7 +1056,7 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         out = down_proj_out.sum(axis=1)
 
         if layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(out)
+            out = tensor_model_parallel_all_reduce(out)
 
         return out
 
@@ -1246,11 +1247,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             layer,
             weight_name,
             layer.create_parameter(
-                shape=[
-                    layer.num_local_experts,
-                    ceil_div(layer.moe_intermediate_size * 2, self.quant_config.weight_block_size[0]),
-                    ceil_div(layer.hidden_size, self.quant_config.weight_block_size[1]),
-                ],
+                shape=weight.shape,
                 dtype=weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
@@ -1260,11 +1257,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             layer,
             scale_name,
             layer.create_parameter(
-                shape=[
-                    layer.num_local_experts,
-                    ceil_div(layer.hidden_size, self.quant_config.weight_block_size[0]),
-                    ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]),
-                ],
+                shape=scale.shape,
                 dtype=scale_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
@@ -1467,6 +1460,6 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         out = intermediate_cache3.sum(axis=1)
 
         if layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(out)
+            out = tensor_model_parallel_all_reduce(out)
 
         return out

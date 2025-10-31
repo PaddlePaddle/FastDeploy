@@ -1,3 +1,5 @@
+[English](../../online_serving/metrics.md)
+
 # 监控 Metrics
 
 在 FastDeploy 启动后，支持通过 Metrics 持续监控的 FastDeploy 的服务状态。启动 FastDeploy 时，可以通过配置 `metrics-port` 参数指定 Metircs 服务的端口。

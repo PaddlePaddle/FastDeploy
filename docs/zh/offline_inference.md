@@ -1,3 +1,5 @@
+[English](../offline_inference.md)
+
 # 离线推理
 
 ## 1. 使用方式
@@ -92,7 +94,7 @@ from PIL import Image
 
 from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.engine.sampling_params import SamplingParams
-from fastdeploy.input.ernie_tokenizer import Ernie4_5Tokenizer
+from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 
 PATH = "baidu/ERNIE-4.5-VL-28B-A3B-Paddle"
 tokenizer = Ernie4_5Tokenizer.from_pretrained(PATH)
@@ -196,6 +198,8 @@ for output in outputs:
 * finished(bool)：标识当前query 是否推理结束
 * metrics(fastdeploy.engine.request.RequestMetrics)：记录推理耗时指标
 * num_cached_tokens(int): 缓存的token数量, 仅在开启 ``enable_prefix_caching``时有效
+* num_input_image_tokens(int): 输入图片token的数量
+* num_input_video_tokens(int): 输入视频token的数量
 * error_code(int): 错误码
 * error_msg(str): 错误信息
 

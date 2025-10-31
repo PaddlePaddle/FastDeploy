@@ -1,3 +1,5 @@
+[English](../../get_started/quick_start.md)
+
 # 10分钟完成 ERNIE-4.5-0.3B-Paddle 模型部署
 
 本文档讲解如何部署ERNIE-4.5-0.3B-Base-Paddle模型，在开始部署前，请确保你的硬件环境满足如下条件：

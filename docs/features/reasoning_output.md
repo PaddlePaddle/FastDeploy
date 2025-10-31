@@ -1,3 +1,5 @@
+[简体中文](../zh/features/reasoning_output.md)
+
 # Reasoning Outputs
 
 Reasoning models return an additional `reasoning_content` field in their output, which contains the reasoning steps that led to the final conclusion.

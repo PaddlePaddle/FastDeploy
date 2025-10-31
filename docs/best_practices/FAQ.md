@@ -1,3 +1,5 @@
+[简体中文](../zh/best_practices/FAQ.md)
+
 # FAQ
 ## 1.CUDA out of memory
 1. when starting the service：

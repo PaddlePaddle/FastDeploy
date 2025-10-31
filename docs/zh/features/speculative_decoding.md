@@ -1,3 +1,5 @@
+[English](../../features/speculative_decoding.md)
+
 # 🔮 投机解码
 本项目基于 PaddlePaddle 实现了高效的 **投机解码（Speculative Decoding）** 推理框架，支持多 Token 预测（Multi-token Proposing, MTP），用于加速大语言模型（LLM）的生成，显著降低时延并提升吞吐量。
 

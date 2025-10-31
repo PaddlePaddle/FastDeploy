@@ -15,7 +15,7 @@
 """
 
 from copy import deepcopy
-from typing import TYPE_CHECKING, Annotated, Any, Optional
+from typing import TYPE_CHECKING, Annotated, Any, Dict, Optional
 
 import msgspec
 
@@ -26,15 +26,17 @@ if TYPE_CHECKING:
     from fastdeploy.config import ModelConfig
 
 
-class PoolingParams:
+class PoolingParams(
+    msgspec.Struct,
+    omit_defaults=True,  # type: ignore[call-arg]
+    array_like=True,
+):  # type: ignore[call-arg]:
     """API parameters for pooling models.
 
     Attributes:
         normalize: Whether to normalize the embeddings outputs.
         dimensions: Reduce the dimensions of embeddings
                     if model support matryoshka representation.
-        activation: Whether to apply activation function to
-                    the classification outputs.
         softmax: Whether to apply softmax to the reward outputs.
         step_tag_id: Step tag ID for process reward models to identify
                     specific steps in multi-step reasoning tasks.
@@ -84,7 +86,35 @@ class PoolingParams:
         return {
             "embed": ["dimensions", "normalize"],
             "encode": ["softmax", "step_tag_id", "returned_token_ids"],
+            "reward": ["dimensions", "normalize"],
         }
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert instance to dictionary including only non-None attributes."""
+        result = {}
+        for field_name in self.__annotations__:
+            if field_name == "output_kind":
+                continue
+            value = getattr(self, field_name, None)
+            if isinstance(value, PoolingParams):
+                result[field_name] = value.to_dict()
+            else:
+                result[field_name] = value
+        if self.extra_kwargs:
+            result.update(self.extra_kwargs)
+        return result
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "PoolingParams":
+        """Create instance from dictionary, separating known fields and extra_kwargs."""
+        known_fields = set(cls.__annotations__.keys())
+        init_kwargs = {k: v for k, v in data.items() if k in known_fields}
+        extra_kwargs = {k: v for k, v in data.items() if k not in known_fields}
+
+        if extra_kwargs:
+            init_kwargs["extra_kwargs"] = extra_kwargs
+
+        return cls(**init_kwargs)
 
     def clone(self) -> "PoolingParams":
         """Returns a deep copy of the PoolingParams instance."""
@@ -132,6 +162,9 @@ class PoolingParams:
         elif self.task == "encode":
             if self.softmax is None:
                 self.softmax = True
+        elif self.task == "reward":
+            if self.normalize is None:
+                self.normalize = True
         else:
             raise ValueError(f"Unknown pooling task: {self.task}")
 

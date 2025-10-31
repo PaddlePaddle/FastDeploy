@@ -1,3 +1,5 @@
+[English](../../best_practices/ERNIE-4.5-21B-A3B-Thinking.md)
+
 # ERNIE-4.5-21B-A3B-Thinking
 ## 一、环境准备
 ### 1.1 支持情况
@@ -31,8 +33,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --tensor-parallel-size 1 \
        --max-model-len 131072 \
        --quantization wint8 \
-       --reasoning-parser ernie_x1 \
-       --tool-call-parser ernie_x1 \
+       --reasoning-parser ernie-x1 \
+       --tool-call-parser ernie-x1 \
        --max-num-seqs 32
 ```
 其中：

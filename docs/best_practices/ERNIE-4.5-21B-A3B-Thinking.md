@@ -1,3 +1,5 @@
+[简体中文](../zh/best_practices/ERNIE-4.5-21B-A3B-Thinking.md)
+
 # ERNIE-4.5-21B-A3B
 ## Environmental Preparation
 ### 1.1 Hardware requirements
@@ -31,8 +33,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --tensor-parallel-size 1 \
        --max-model-len 131072 \
        --quantization wint8 \
-       --reasoning-parser ernie_x1 \
-       --tool-call-parser ernie_x1 \
+       --reasoning-parser ernie-x1 \
+       --tool-call-parser ernie-x1 \
        --max-num-seqs 32
 ```
 - `--quantization`: Indicates the quantization strategy used by the model. Different quantization strategies will result in different performance and accuracy of the model. It could be one of `wint8` / `wint4` / `block_wise_fp8`(Hopper is needed).

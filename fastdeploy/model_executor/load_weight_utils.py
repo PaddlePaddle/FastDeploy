@@ -188,7 +188,7 @@ def load_reordered_experts(model_path: str, key_name: str):
             return weight
 
 
-def load_ep_checkpoint(model_path: str, fd_config: FDConfig, return_numpy: bool = False):
+def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfig, return_numpy: bool = False):
     """
     load ep checkpoint
     """
@@ -266,6 +266,10 @@ def load_ep_checkpoint(model_path: str, fd_config: FDConfig, return_numpy: bool 
         if k in weight_list:
             filtered_map[k] = weight_list[k]
 
+    if fd_config.parallel_config.tensor_parallel_size > 1:
+        tp_actions = cls._get_tensor_parallel_mappings(fd_config.model_config.pretrained_config)
+        new_actions = {k: v for k, v in tp_actions.items() if k not in num_local_ffn_keys}
+
     state_dict = {}
     # Get all safetensor file paths that need to be opened
     safetensor_paths = set(filtered_map.values())
@@ -281,6 +285,9 @@ def load_ep_checkpoint(model_path: str, fd_config: FDConfig, return_numpy: bool 
             for k in filtered_map:
                 if filtered_map[k] == safetensor_path and k in f.keys():
                     weight = f.get_tensor(k)
+                    if fd_config.parallel_config.tensor_parallel_size > 1:
+                        if k in new_actions:
+                            weight = new_actions[k](weight)
                     if not return_numpy:
                         weight = paddle.Tensor(weight, zero_copy=True)
                         weight = weight._copy_to(paddle.framework._current_expected_place(), False)
@@ -444,6 +451,29 @@ def deal_state_dict(state_dict):
             src_tensor._share_data_with(dst_tensor)
 
 
+def load_cache_scale(model_path, fd_config, state_dict):
+    file_path = os.path.join(model_path, "kv_cache_scale.json")
+    if os.path.exists(file_path):
+        with open(file_path, "r") as f:
+            data = json.load(f)
+            for i in range(fd_config.model_config.num_hidden_layers):
+
+                k_scale_name = f"ernie.layers.{i}.self_attn.cachek_matmul.activation_scale"
+                v_scale_name = f"ernie.layers.{i}.self_attn.cachev_matmul.activation_scale"
+
+                k_scale = data[k_scale_name]
+                k_scale_tensor = paddle.to_tensor(k_scale, dtype=paddle.get_default_dtype())
+                state_dict[k_scale_name] = k_scale_tensor * 448.0
+
+                v_scale = data[v_scale_name]
+                v_scale_tensor = paddle.to_tensor(v_scale, dtype=paddle.get_default_dtype())
+                state_dict[v_scale_name] = v_scale_tensor * 448.0
+
+                logger.info(f"Loaded kv cache scales for layer {i}.")
+    else:
+        logger.warning(f"No kv_cache_scale.json found at {file_path}, skipping...")
+
+
 def load_composite_checkpoint(
     model_path: str,
     cls: PretrainedModel,
@@ -456,13 +486,8 @@ def load_composite_checkpoint(
     # 2. Tensor Parallel (TP)
     # 3. Pre-sharded (pre-split)
     """
-    # (TODO: remove in the future)
-    if (
-        fd_config.parallel_config.use_ep
-        and fd_config.speculative_config.model_type != "mtp"
-        and fd_config.parallel_config.tensor_parallel_size == 1
-    ):
-        state_dict = load_ep_checkpoint(model_path, fd_config, return_numpy=True)
+    if fd_config.parallel_config.use_ep and fd_config.speculative_config.model_type != "mtp":
+        state_dict = load_ep_checkpoint(cls, model_path, fd_config, return_numpy=True)
     else:
         rank_dirs = [
             f for f in os.listdir(model_path) if f.startswith("rank") and os.path.isdir(os.path.join(model_path, f))
@@ -491,4 +516,10 @@ def load_composite_checkpoint(
                 )
     if not state_dict:
         raise ValueError("weight not found in state_dict !")
+
+    if hasattr(fd_config.quant_config, "kv_cache_quant_type"):
+        kv_cache_quant_type = fd_config.quant_config.kv_cache_quant_type
+        if kv_cache_quant_type == "float8_e4m3fn":
+            load_cache_scale(model_path, fd_config, state_dict)
+
     return state_dict

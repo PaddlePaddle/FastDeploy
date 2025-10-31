@@ -122,8 +122,12 @@ void register_graph_buffers(fptr_t _fa,
   for (int i = 0; i < handles.size(); i++) {
     bytes.emplace_back(handles[i].begin(), handles[i].end());
   }
-  bytes.reserve(handles.size());
   fa->register_graph_buffers(bytes, offsets);
+}
+
+void clear_ipc_handles(fptr_t _fa) {
+  auto fa = reinterpret_cast<paddle::CustomAllreduce*>(_fa);
+  fa->clear_ipc_handles();
 }
 
 std::tuple<fptr_t, paddle::Tensor> allocate_shared_buffer_and_handle(

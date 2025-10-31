@@ -249,7 +249,10 @@ setup(
     ],
     license="Apache 2.0",
     python_requires=">=3.7",
-    extras_require={"test": ["pytest>=6.0"]},
+    extras_require={
+        "test": ["pytest>=6.0"],
+        "eval": ["lm-eval==0.4.9.1"],
+    },
     entry_points={
         "console_scripts": ["fastdeploy=fastdeploy.entrypoints.cli.main:main"],
     },

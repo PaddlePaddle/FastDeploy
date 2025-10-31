@@ -32,6 +32,7 @@ from fastdeploy.model_executor.layers.quantization.quant_base import (
     QuantConfigBase,
     QuantMethodBase,
 )
+from fastdeploy.model_executor.layers.utils import per_token_cast_to_fp8
 from fastdeploy.model_executor.utils import TensorTracker, set_weight_attrs
 
 
@@ -143,10 +144,7 @@ class WFP8AFP8LinearMethod(QuantMethodBase):
             return
         weight_tensor = layer.weight.transpose([1, 0]).contiguous()
         assert self.quant_config.weight_block_size == [-1, 1]
-        qweight, weight_scale = scaled_fp8_quant(
-            weight_tensor,
-            use_per_token_if_dynamic=True,
-        )
+        qweight, weight_scale = per_token_cast_to_fp8(weight_tensor)
 
         if hasattr(layer.weight, "tensor_track"):
             layer.weight.tensor_track = None
