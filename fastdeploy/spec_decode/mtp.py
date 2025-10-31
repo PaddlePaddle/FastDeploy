@@ -760,6 +760,7 @@ class MTPProposer(Proposer):
                     temperature=self.model_inputs["temperature"],
                     top_p=self.model_inputs["top_p"],
                     top_k=self.model_inputs["top_k"],
+                    seed=self.model_inputs["infer_seed"],
                     step_idx=self.model_inputs["step_idx"],
                     pre_token_ids=self.model_inputs["pre_ids"],
                     frequency_penalties=self.model_inputs["frequency_score"],
