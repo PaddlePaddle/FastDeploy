@@ -471,8 +471,6 @@ class GPUModelRunner(ModelRunnerBase):
                 else:
                     raise ValueError(f"multiple modalities model {self.model_config.model_type} is not supported")
                 self.share_inputs["image_features"] = image_features[-actual_image_token_num:]
-        else:
-            self.share_inputs["image_features"] = None
 
         position_ids = request.multimodal_inputs["position_ids"]
         rope_3d_position_ids["position_ids_idx"].append(request.idx)
@@ -495,6 +493,7 @@ class GPUModelRunner(ModelRunnerBase):
         req_len = len(req_dicts)
         has_prefill_task = False
         has_decode_task = False
+        self.share_inputs["image_features"] = None
         multi_vision_inputs = {"images_lst": [], "grid_thw_lst": [], "vit_position_ids_lst": [], "cu_seqlens": [0]}
         rope_3d_position_ids = {
             "position_ids_idx": [],

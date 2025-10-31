@@ -283,7 +283,6 @@ class PaddleDisWorkerProc:
             # The first worker detects whether there are tasks in the task queue
             if local_rank == 0:
                 if self.task_queue.num_tasks() > 0:
-                    # VL only support 1 batch to prefill
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
                     ):
