@@ -1196,7 +1196,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["logits_processors"] = build_logits_processors(self.fd_config)
         self.share_inputs["logits_processors_args"] = [{} for _ in range(max_num_seqs)]
         logger.info(f"Enabled logits processors: {self.share_inputs['logits_processors']}")
-        
+
         self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
     def _prepare_inputs(self) -> None:

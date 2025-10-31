@@ -375,7 +375,13 @@ class TestTreeMask(unittest.TestCase):
         mask = paddle.where(mask == 1, paddle.zeros_like(mask), paddle.full_like(mask, fill_value=float("-inf")))
         self.run_append_c16_attention(prefill_len, 0, True, use_qknorm=self.use_qknorm)
 
-        mask_offset = paddle.tile(paddle.arange(prefill_len, prefill_len + dec_len_q), [self.bsz]).astype("int32")
+        mask_offset = paddle.tile(
+            paddle.tensor(
+                [0, prefill_len + 1, 0, prefill_len + 2, 0, prefill_len + 3, 0, prefill_len + 4, 0, prefill_len + 5],
+                dtype="int32",
+            ),
+            [self.bsz],
+        ).astype("int32")
         dec_out = self.run_append_c16_attention(
             dec_len_q, prefill_len, False, use_qknorm=self.use_qknorm, mask_offset=mask_offset
         )
