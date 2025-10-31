@@ -236,6 +236,16 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
                 else:
                     raise ValueError("Invalid input: chat_template_kwargs must be a dict")
             request.setdefault("enable_thinking", True)
+            options = chat_template_kwargs.get("options")
+            if options:
+                thinking_mode = options.get("thinking_mode")
+                if thinking_mode and thinking_mode in ["open", "close"]:
+                    if thinking_mode == "open":
+                        request["enable_thinking"] = True
+                    elif thinking_mode == "close":
+                        request["enable_thinking"] = False
+                else:
+                    request["enable_thinking"] = True
             outputs = self.ernie4_5_processor.request2ids(request)
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
