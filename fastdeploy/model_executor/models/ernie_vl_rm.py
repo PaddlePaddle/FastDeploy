@@ -107,15 +107,15 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
         forward_meta: ForwardMeta,
     ):
         vl_moe_meta = self.ernie.prepare_vl_moe_meta(ids_remove_padding=ids_remove_padding)
-        print("vl_moe_meta",vl_moe_meta)
+        print("vl_moe_meta", vl_moe_meta)
         input_embeddings = self.get_input_embeddings(
             ids_remove_padding=ids_remove_padding,
             image_features=image_features,
             image_token_num=vl_moe_meta.image_token_num.item(),
         )
-        
+
         self._input_embeddings.copy_(input_embeddings, False)
-        print("input_embedding",self._input_embeddings)
+        print("input_embedding", self._input_embeddings)
 
         hidden_states = self.ernie(
             input_embeddings=self._input_embeddings,
@@ -123,7 +123,7 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
             forward_meta=forward_meta,
             vl_moe_meta=vl_moe_meta,
         )
-        print("hidden_states",hidden_states)
+        print("hidden_states", hidden_states)
         hidden_states = hidden_states.to(self.head_dtype)
         logits = self.rm_head(hidden_states)
         return logits
@@ -147,7 +147,7 @@ class Ernie4_5_VLMoeForProcessRewardModel(Ernie4_5_VLMoeRewardBaseModel):
         pooler_config = fd_config.model_config.pooler_config
         assert pooler_config is not None
 
-        self.pooler = DispatchPooler({"encode": Pooler.for_encode(pooler_config)})
+        self.pooler = DispatchPooler({"encode": Pooler.for_encode(pooler_config, model_config=fd_config.model_config)})
 
         self.process_weights_before_loading_fn = process_weights_before_loading(skip_prefixes=["lm_head"])
 

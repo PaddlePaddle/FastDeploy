@@ -936,10 +936,13 @@ class GPUModelRunner(ModelRunnerBase):
 
     def get_supported_pooling_tasks(self) -> list[PoolingTask]:
         model = self.get_model()
+        print("self.get_model", self.get_model())
         if not self.is_pooling_model:
             return []
 
         supported_tasks = list(model.pooler.get_supported_tasks())
+        print("model.pooler", model.pooler)
+        print("supported_tasks", supported_tasks)
 
         if self.cache_config.enable_chunked_prefill and "encode" in supported_tasks:
             supported_tasks.remove("encode")
@@ -1561,6 +1564,7 @@ class GPUModelRunner(ModelRunnerBase):
         dummy_metadata.build_pooling_cursor(num_scheduled_tokens_list, device=hidden_states.place)
 
         try:
+            print("model_pooer的pooling_metadata", dummy_metadata)
             return model.pooler(hidden_states=hidden_states, pooling_metadata=dummy_metadata)
         except RuntimeError as e:
             if "out of memory" in str(e):
@@ -1573,18 +1577,23 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 raise e
 
-
     def _dummy_pooler_run(
         self,
         hidden_states: paddle.Tensor,
         model_output: paddle.Tensor,
     ) -> PoolerOutput:
-        output_size = dict[PoolingTask, float]()
-        for task in self.get_supported_pooling_tasks():
 
+        # Find the task that has the largest output for subsequent steps
+        supported_pooling_tasks = self.get_supported_pooling_tasks()
+        print("supported_pooling_tasks", supported_pooling_tasks)
+
+        output_size = dict[PoolingTask, float]()
+
+        for task in self.get_supported_pooling_tasks():
+            print("task", task)
             output = self._dummy_pooler_run_task(hidden_states, task)
             output_size[task] = sum(o.numel() * o.element_size() if hasattr(o, "numel") else 0 for o in output)
-            del output
+            print("output_size", output_size[task])
 
         max_task = max(output_size.items(), key=lambda x: x[1])[0]
         pooler_output = self._dummy_pooler_run_task(hidden_states, max_task)
@@ -1792,10 +1801,14 @@ class GPUModelRunner(ModelRunnerBase):
                     self.forward_meta,
                 )
             else:
+                print("ids_remove_padding", self.share_inputs["ids_remove_padding"])
+                print("forward_meta", self.forward_meta)
                 model_output = self.model(
                     ids_remove_padding=self.share_inputs["ids_remove_padding"],
                     forward_meta=self.forward_meta,
                 )
+                print("model_output", model_output)
+
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
 
