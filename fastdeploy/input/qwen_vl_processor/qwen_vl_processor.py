@@ -212,7 +212,7 @@ class QwenVLProcessor(TextProcessor):
         stop_sequences = request.get("stop", [])
         if stop_sequences:
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
-            request["stop_seqs"] = stop_seqs
+            request["stop"] = stop_seqs
             request["stop_seqs_len"] = stop_seqs_len
 
         bad_words = request.get("bad_words")
