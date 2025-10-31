@@ -191,15 +191,7 @@ class XPUMoEMethod(UnquantizedFusedMoEMethod):
             layer.top_k,
             True,
         )
-        # print(f"================输入数据===============")
         token_nums_per_expert_list = list(range(64))  # placeholder, not use
-        # print(f"x: {x}")
-        # print(f"topk_idx: {topk_idx}")
-        # print(f"topk_weights: {topk_weights}")
-        # print(f"getattr(layer, self.added_in_scale_attrs[0], None), : {getattr(layer, self.added_in_scale_attrs[0], None)}")
-        # print(f"token_nums_per_expert_list: {token_nums_per_expert_list}")
-        # print(f"x.shape[0] * layer.top_k, : {x.shape[0] * layer.top_k}")
-
         (
             permute_input,
             permute_indices_per_token,
@@ -215,13 +207,6 @@ class XPUMoEMethod(UnquantizedFusedMoEMethod):
             x.shape[0] * layer.top_k,
             self.moe_quant_type,
         )
-        # print(f"=============输出数据================")
-        # print(f"permute_input : {permute_input}")
-        # print(f"permute_indices_per_token : {permute_indices_per_token}")
-        # print(f"token_num_lod : {token_num_lod}")
-        # print(f"dst_weights: {dst_weights}")
-        # print(f"ffn1_act_scale_per_token: {ffn1_act_scale_per_token}")
-
         if not hasattr(layer, self.added_in_scale_attrs[0]):
             ffn1_act_scale_per_token = None
         ffn_out = self.compute_ffn(

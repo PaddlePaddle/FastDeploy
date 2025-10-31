@@ -371,7 +371,6 @@ std::vector<paddle::Tensor> MoeExpertFFNKernel(
     xffn2_out =
         xftblock::Tensor(ffn2_out.data<TX2>(), xftblock_tx2, input_shape);
   } else {
-    // std:: cout << "step33333\n";
     xffn1_in = xftblock::Tensor(const_cast<TX1*>(ffn_in.data<TX1>()),
                                 nullptr,
                                 ffn1_act_scale_data,
