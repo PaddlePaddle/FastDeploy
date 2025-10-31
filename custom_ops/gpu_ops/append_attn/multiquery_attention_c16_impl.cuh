@@ -61,9 +61,6 @@ __global__ void multi_query_append_attention_kernel(
     OutT *__restrict__ out,
     const int speculate_max_draft_token_num = 5,
     const int sliding_window = 0) {
-  static_assert(num_frags_y * 16 == HEAD_DIM);
-  static_assert(num_frags_z * 16 == BLOCK_SIZE);
-
   constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
   const uint32_t btid = blockIdx.x, kv_head_idx = blockIdx.z;
   const uint32_t kv_num_heads = gridDim.z;
@@ -76,9 +73,7 @@ __global__ void multi_query_append_attention_kernel(
   const uint32_t batch_id = batch_ids[btid];
   const uint32_t tile_id = tile_ids_per_batch[btid];
   const uint32_t num_rows_per_block = NUM_WARPS * num_frags_x * 16;
-  const int *block_table_now = nullptr;
-
-  block_table_now = block_table + batch_id * max_block_num_per_seq;
+  const int *block_table_now = block_table + batch_id * max_block_num_per_seq;
 
   // When cudagraph capture prefill, may launch more gridDim.x
   if (btid >= static_cast<uint32_t>(num_blocks_x_cpu)) {
@@ -115,6 +110,9 @@ __global__ void multi_query_append_attention_kernel(
   const uint32_t chunk_len = chunk_end - chunk_start;
 
   extern __shared__ uint8_t smem[];
+  static_assert(num_frags_y * 16 == HEAD_DIM);
+  static_assert(num_frags_z * 16 == BLOCK_SIZE);
+
   float s_frag[num_frags_x][num_frags_z][8];
   float o_frag[num_frags_x][num_frags_y][8];
   float m_frag[num_frags_x][2];
