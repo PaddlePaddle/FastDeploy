@@ -155,6 +155,37 @@ class AppendAttentionBackend(AttentionBackend):
             )
 
         self.attention_metadata: AttentionMetadata = metadata
+        
+        
+        try:
+            from paddleformers.utils.log import logger
+            is_prefill = int(paddle.max(forward_meta.seq_lens_encoder).item()) > 0
+            if is_prefill: # 只在 prefill 阶段打印
+                logger.info("\n\n" + "="*30)
+                logger.info("GOLDEN METADATA DUMP (FROM OLD VERSION)")
+                logger.info("="*30)
+                
+                def log_tensor_as_list(tensor, name):
+                    if tensor is not None:
+                        # 使用 .numpy() 获取 CPU 上的值
+                        logger.info(f"'{name}': {tensor.numpy().flatten().tolist()},")
+                    else:
+                        logger.info(f"'{name}': None,")
+
+                log_tensor_as_list(forward_meta.encoder_num_blocks_x_cpu, "encoder_num_blocks_x_cpu")
+                log_tensor_as_list(forward_meta.kv_num_blocks_x_cpu, "kv_num_blocks_x_cpu")
+                log_tensor_as_list(forward_meta.decoder_num_blocks_cpu, "decoder_num_blocks_cpu")
+                log_tensor_as_list(forward_meta.max_len_tensor_cpu, "max_len_tensor_cpu")
+                log_tensor_as_list(forward_meta.max_len_kv_cpu, "max_len_kv_cpu")
+                
+                # (可选，但最好有) 如果 encoder_batch_ids 等张量尺寸不大，也打印出来
+                log_tensor_as_list(forward_meta.encoder_batch_ids, "encoder_batch_ids")
+                log_tensor_as_list(forward_meta.encoder_tile_ids_per_batch, "encoder_tile_ids_per_batch")
+                
+                logger.info("="*30 + "\n\n")
+        except Exception as e:
+            # 忽略可能的打印错误
+            pass
 
     def get_attntion_meta(self) -> AttentionMetadata:
         """get_attntion_meta"""
@@ -197,6 +228,76 @@ class AppendAttentionBackend(AttentionBackend):
         """
         forward_mixed
         """
+
+        # ==================== [START] 全面 Debug 打印代码 ====================
+        is_capturing_cudagraph = forward_meta.step_use_cudagraph
+
+        if not is_capturing_cudagraph and layer.layer_id == 7: # 只打印我们关心的GQA层
+            try:
+                from fastdeploy.model_executor.models.minimax_m1 import print_tensor_stats
+                from paddleformers.utils.log import logger
+            except ImportError:
+                import logging
+                logger = logging.getLogger(__name__)
+                def print_tensor_stats(tensor, name):
+                    if tensor is not None:
+                        logger.info(f"--- [FD DEBUG] {name} Shape: {tensor.shape}, DType: {tensor.dtype} ---")
+                    else:
+                        logger.info(f"--- [FD DEBUG] {name} is None ---")
+            
+            logger.info(f"\n{'='*25}\n[FD DEBUG] DETAILED DUMP for append_attention @ Layer {layer.layer_id}\n{'='*25}")
+
+            # 1. 打印 atención 模块的配置参数
+            logger.info(f"--- [FD DEBUG] Attention Config ---")
+            logger.info(f"  - use_neox_rotary_style: {layer.use_neox_rotary_style}")
+            logger.info(f"  - sliding_window: {layer.sliding_window}")
+            logger.info(f"  - causal: {self.causal}")
+            logger.info(f"  - speculative_method is not None: {self.speculative_method is not None}")
+            logger.info(f"  - head_dim: {self.head_dim}, num_heads: {self.num_heads}, num_kv_heads: {self.kv_num_heads}")
+            logger.info(f"--------------------------\n")
+            
+            # 2. 打印核心输入张量 (qkv)
+            print_tensor_stats(qkv, f"FD_L{layer.layer_id}_INPUT:qkv_combined")
+
+            # 3. 打印 KV Cache 相关张量
+            cache_k = forward_meta.caches[2 * layer.layer_id]
+            cache_v = forward_meta.caches[2 * layer.layer_id + 1]
+            print_tensor_stats(cache_k, f"FD_L{layer.layer_id}_INPUT:cache_k")
+            print_tensor_stats(cache_v, f"FD_L{layer.layer_id}_INPUT:cache_v")
+            print_tensor_stats(forward_meta.block_tables, f"FD_L{layer.layer_id}_META:block_tables")
+
+            # 4. 打印序列长度和位置信息
+            print_tensor_stats(forward_meta.seq_lens_encoder, f"FD_L{layer.layer_id}_META:seq_lens_encoder")
+            print_tensor_stats(forward_meta.seq_lens_decoder, f"FD_L{layer.layer_id}_META:seq_lens_decoder")
+            print_tensor_stats(forward_meta.seq_lens_this_time, f"FD_L{layer.layer_id}_META:seq_lens_this_time")
+            print_tensor_stats(forward_meta.batch_id_per_token, f"FD_L{layer.layer_id}_META:batch_id_per_token")
+            print_tensor_stats(forward_meta.cu_seqlens_q, f"FD_L{layer.layer_id}_META:cu_seqlens_q")
+
+            # 5. 打印 RoPE 查找表
+            metadata = self.attention_metadata
+            print_tensor_stats(metadata.rotary_embs, f"FD_L{layer.layer_id}_INPUT:rotary_embs_table")
+
+            # 6. 打印用于 Kernel 内部计算的 Tile/Block 划分信息 (非常重要！)
+            print_tensor_stats(forward_meta.encoder_batch_ids, f"FD_L{layer.layer_id}_META:encoder_batch_ids")
+            print_tensor_stats(forward_meta.encoder_tile_ids_per_batch, f"FD_L{layer.layer_id}_META:encoder_tile_ids_per_batch")
+            print_tensor_stats(forward_meta.encoder_num_blocks_x_cpu, f"FD_L{layer.layer_id}_META:encoder_num_blocks_x_cpu")
+            
+            print_tensor_stats(forward_meta.kv_batch_ids, f"FD_L{layer.layer_id}_META:kv_batch_ids")
+            print_tensor_stats(forward_meta.kv_tile_ids_per_batch, f"FD_L{layer.layer_id}_META:kv_tile_ids_per_batch")
+            print_tensor_stats(forward_meta.kv_num_blocks_x_cpu, f"FD_L{layer.layer_id}_META:kv_num_blocks_x_cpu")
+
+            print_tensor_stats(forward_meta.decoder_batch_ids, f"FD_L{layer.layer_id}_META:decoder_batch_ids")
+            print_tensor_stats(forward_meta.decoder_tile_ids_per_batch, f"FD_L{layer.layer_id}_META:decoder_tile_ids_per_batch")
+            print_tensor_stats(forward_meta.decoder_num_blocks_cpu, f"FD_L{layer.layer_id}_META:decoder_num_blocks_cpu")
+
+            # 7. 打印 max_len_tensor_cpu (非常重要！)
+            print_tensor_stats(forward_meta.max_len_tensor_cpu, f"FD_L{layer.layer_id}_META:max_len_tensor_cpu")
+            
+            logger.info(f"\n{'='*25}\n[FD DEBUG] END OF DUMP for append_attention @ Layer {layer.layer_id}\n{'='*25}\n")
+        
+        # ==================== [END] 全面 Debug 打印代码 ====================
+  
+        
         metadata = self.attention_metadata
 
         sliding_window = layer.sliding_window

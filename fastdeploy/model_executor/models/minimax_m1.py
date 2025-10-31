@@ -492,7 +492,7 @@ class MiniMaxM1DecoderLayer(nn.Layer):
             print_tensor_stats(k_before_rope, f"FD_L{layer_id}:1d_K_BeforeRoPE")
             print_tensor_stats(v_tensor,      f"FD_L{layer_id}:1e_V_Tensor")
             logger.info(f"--- [FD DEBUG] ForwardMeta DUMP FOR LAYER {layer_id} ---")
-            # 1. RoPE 缓存 (最关键的)
+            # 1. RoPE 缓存
             # 我们需要知道它的形状，以确认是否正确生成
             if forward_meta.rotary_embs is not None:
                 logger.info("--- [FD DEBUG] forward_meta.rotary_embs ---")

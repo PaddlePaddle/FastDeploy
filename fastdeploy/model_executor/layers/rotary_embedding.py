@@ -28,6 +28,21 @@ if current_platform.is_cuda() or current_platform.is_maca():
 
 from .utils import CpuGuard
 
+from paddleformers.utils.log import logger # 确保 logger 被导入
+
+# 导入你的打印函数
+try:
+    from fastdeploy.model_executor.models.minimax_m1 import print_tensor_stats
+except ImportError:
+    # 如果无法导入，定义一个备用函数以避免程序崩溃
+    import pprint
+    def print_tensor_stats(tensor, name):
+        logger.info(f"--- [FD DEBUG] {name} --- (print_tensor_stats not found, simple log)")
+        if tensor is not None:
+            logger.info(f"Shape: {tensor.shape}, DType: {tensor.dtype}")
+        else:
+            logger.info("Tensor is None")
+
 
 class ErnieRotaryEmbedding:
     def __init__(self, rotary_dim, base, partial_rotary_factor):
@@ -79,29 +94,82 @@ class ErnieRotaryEmbedding:
             return rot_emb
 
 
+# class GlmRotaryEmbedding:
+#     def __init__(self, rotary_dim, base, partial_rotary_factor):
+#         """
+#         Pre-calculate rotary position embedding for position_ids.
+#         """
+#         self.rotary_dim = rotary_dim
+#         self.base = base
+#         if partial_rotary_factor < 1.0:
+#             self.rotary_dim = int(self.rotary_dim * partial_rotary_factor)
+
+#     def __call__(self, position_ids):
+#         bsz, max_seq_len = position_ids.shape[:2]
+#         inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
+#         freqs = paddle.einsum("ij,k->ijk", position_ids.cast("float32"), inv_freq)
+#         # shape: [B, S, D/2]
+#         rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim // 2), dtype="float32")
+#         emb = paddle.stack([freqs], axis=-1).reshape((bsz, max_seq_len, self.rotary_dim // 2))
+#         # shape: [B, S, 1, D]
+#         emb = paddle.unsqueeze(emb, 2)
+#         rot_emb[0] = paddle.cos(emb)
+#         rot_emb[1] = paddle.sin(emb)
+#         return rot_emb
+
+
+
 class GlmRotaryEmbedding:
     def __init__(self, rotary_dim, base, partial_rotary_factor):
         """
         Pre-calculate rotary position embedding for position_ids.
         """
-        self.rotary_dim = rotary_dim
+        # --- 详细日志 ---
+        logger.info(">>>> [GlmRotaryEmbedding.__init__] <<<<")
+        logger.info(f"    - Received rotary_dim (as head_dim): {rotary_dim}")
+        logger.info(f"    - Received partial_rotary_factor: {partial_rotary_factor}")
+        
         self.base = base
+        
+        # 核心计算
         if partial_rotary_factor < 1.0:
-            self.rotary_dim = int(self.rotary_dim * partial_rotary_factor)
+            self.rotary_dim = int(rotary_dim * partial_rotary_factor)
+        else:
+            self.rotary_dim = rotary_dim
+            
+        logger.info(f"    - Calculated final self.rotary_dim: {self.rotary_dim}")
+        # --- 日志结束 ---
 
     def __call__(self, position_ids):
+        # --- 详细日志 ---
+        logger.info(">>>> [GlmRotaryEmbedding.__call__] <<<<")
+        logger.info(f"    - Using self.rotary_dim: {self.rotary_dim}")
+        logger.info(f"    - Using self.base: {self.base}")
+        
         bsz, max_seq_len = position_ids.shape[:2]
-        inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
+        
+        # 检查 arange 的上界
+        arange_upper_bound = self.rotary_dim
+        logger.info(f"    - paddle.arange upper bound is: {arange_upper_bound}")
+        
+        # 关键计算步骤
+        inv_freq_dims = paddle.arange(0, arange_upper_bound, 2, dtype="float32")
+        logger.info(f"    - Shape of inv_freq_dims (from arange): {inv_freq_dims.shape}") # 这一行会告诉我们最终维度
+        
+        inv_freq = self.base ** (-inv_freq_dims / self.rotary_dim)
         freqs = paddle.einsum("ij,k->ijk", position_ids.cast("float32"), inv_freq)
-        # shape: [B, S, D/2]
+        
         rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim // 2), dtype="float32")
         emb = paddle.stack([freqs], axis=-1).reshape((bsz, max_seq_len, self.rotary_dim // 2))
-        # shape: [B, S, 1, D]
+        
         emb = paddle.unsqueeze(emb, 2)
         rot_emb[0] = paddle.cos(emb)
         rot_emb[1] = paddle.sin(emb)
-        return rot_emb
+            
+        logger.info(f"    - Final returned rot_emb shape: {rot_emb.shape}")
+        logger.info(">>>> [GlmRotaryEmbedding.__call__ END] <<<<")
 
+        return rot_emb
 
 class QwenRotaryEmbedding:
     def __init__(self, rotary_dim, base, partial_rotary_factor):
@@ -130,7 +198,6 @@ class QwenRotaryEmbedding:
         rot_emb[1] = paddle.sin(emb)
 
         return rot_emb
-
 
 def yarn_get_mscale(scale=1, mscale=1):
     """ """
@@ -332,11 +399,14 @@ def get_rope_impl(
     """
     The real implementation of get_rope
     """
+    print_tensor_stats(position_ids[:, :16], "ROPE_IMPL_INPUT:position_ids[:, :16]")
 
     architecture = model_config.architectures[0]
+    # if architecture.startswith("Qwen") or architecture.startswith("MiniMaxM1"):
     if architecture.startswith("Qwen"):
         rotary_emb_layer = QwenRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
         rotary_emb = rotary_emb_layer(position_ids)
+    # elif architecture.startswith("Glm"):
     elif architecture.startswith("Glm") or architecture.startswith("MiniMaxM1"):
         rotary_emb_layer = GlmRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
         rotary_emb = rotary_emb_layer(position_ids)
@@ -354,6 +424,15 @@ def get_rope_impl(
     else:
         rotary_emb_layer = ErnieRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
         rotary_emb = rotary_emb_layer(position_ids)
+        
+    # if rotary_emb.ndim == 5:
+    #     logger.info(f">>>> [ROPE RESHAPE] Squeezing rotary_emb from {rotary_emb.shape} <<<<")
+    #     rotary_emb = paddle.squeeze(rotary_emb, axis=[1, 3])
+    #     logger.info(f">>>> [ROPE RESHAPE] New shape is {rotary_emb.shape} <<<<")
+    
+    # ... (之前的日志打印)
+    print_tensor_stats(rotary_emb[0, :16], "ROPE_IMPL_OUTPUT:cos_emb[:16]")
+    print_tensor_stats(rotary_emb[1, :16], "ROPE_IMPL_OUTPUT:sin_emb[:16]")
     return rotary_emb
 
 
