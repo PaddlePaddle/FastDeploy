@@ -240,7 +240,10 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             if options:
                 thinking_mode = options.get("thinking_mode")
                 if thinking_mode:
-                    request["enable_thinking"] = thinking_mode == "open"
+                    if thinking_mode == "close" or thinking_mode == "false":
+                        request["enable_thinking"] = False
+                    else:
+                        request["enable_thinking"] = True
             outputs = self.ernie4_5_processor.request2ids(request)
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
