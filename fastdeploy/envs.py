@@ -128,6 +128,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_CACHE_PROC_EXIT_TIMEOUT": lambda: int(os.getenv("FD_CACHE_PROC_EXIT_TIMEOUT", "600")),
     # Count for cache_transfer_manager process error
     "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),
+    # Dynamic max_seq_num recover threashold for finished request num
+    "FD_DYNAMIC_MAX_SEQ_NUM_RECOVER_THREASHOLD": lambda: int(
+        os.getenv("FD_DYNAMIC_MAX_SEQ_NUM_RECOVER_THREASHOLD", "128")
+    ),
 }
 
 
