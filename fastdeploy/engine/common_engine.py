@@ -47,7 +47,14 @@ from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.plugins.token_processor import load_token_processor_plugins
 from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
-from fastdeploy.utils import EngineError, envs, get_logger, llm_logger
+from fastdeploy.utils import (
+    EngineError,
+    check_download_links,
+    envs,
+    get_logger,
+    init_bos_client,
+    llm_logger,
+)
 
 try:
     TokenProcessor = load_token_processor_plugins()
@@ -128,6 +135,7 @@ class EngineService:
                 * self.cfg.cache_config.block_size
             )
 
+        self.bos_client = None
         self.guided_decoding_checker = None
         if self.cfg.structured_outputs_config.guided_decoding_backend != "off":
             self.guided_decoding_checker = schema_checker(
@@ -268,6 +276,16 @@ class EngineService:
                 num_client=self.cfg.parallel_config.tensor_parallel_size,
                 local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
             )
+            # Dynamically updates the port value if an anonymous port is used
+            self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id] = str(
+                self.engine_worker_queue_server.get_server_port()
+            )
+            address = (
+                self.cfg.master_ip,
+                int(
+                    self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+                ),
+            )
 
             if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
                 self.cache_task_queue = EngineCacheQueue(
@@ -281,6 +299,8 @@ class EngineService:
                     client_id=-1,
                     local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                 )
+                self.cfg.cache_config.cache_queue_port = self.cache_task_queue.get_server_port()
+
         self.llm_logger.info(
             f"local {min(self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,self.cfg.parallel_config.data_parallel_size - 1)}"
         )
@@ -291,7 +311,8 @@ class EngineService:
             client_id=0,
             local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
             local_data_parallel_id=min(
-                self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,
+                self.cfg.worker_num_per_node // self.cfg.parallel_config.tensor_parallel_size * self.cfg.node_rank
+                + self.cfg.parallel_config.local_data_parallel_id,
                 self.cfg.parallel_config.data_parallel_size - 1,
             ),
         )
@@ -634,13 +655,9 @@ class EngineService:
                     int(self.resource_manager.available_batch()),
                     self.cfg.max_prefill_batch,
                 )
-                if self.cfg.model_config.enable_mm:
-                    available_blocks = self.resource_manager.available_block_num()
-                else:
-                    available_blocks = self.cfg.cache_config.max_block_num_per_seq
 
                 tasks = self.scheduler.get_requests(
-                    available_blocks=available_blocks,
+                    available_blocks=self.cfg.cache_config.max_block_num_per_seq,
                     block_size=self.cfg.cache_config.block_size,
                     reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
                     max_num_batched_tokens=self.cfg.model_config.max_model_len,
@@ -751,6 +768,9 @@ class EngineService:
                 else:
                     time.sleep(0.005)
 
+            except RuntimeError as e:
+                if "cannot schedule new futures after shutdown" in str(e):
+                    break
             except Exception as e:
                 err_msg = "Error happend while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
                 self.llm_logger.error(err_msg)
@@ -815,6 +835,24 @@ class EngineService:
                             self.llm_logger.error(f"Receive request error: {err_msg}")
                             results.append((request.request_id, err_msg))
 
+                    if self._has_features_info(request) and err_msg is None:
+                        if self.bos_client is None:
+                            self.bos_client = init_bos_client()
+
+                        download_urls = []
+                        inputs = request.multimodal_inputs
+                        if inputs.get("video_feature_urls") is not None:
+                            download_urls.extend(inputs.get("video_feature_urls"))
+                        if inputs.get("image_feature_urls") is not None:
+                            download_urls.extend(inputs.get("image_feature_urls"))
+                        if inputs.get("audio_feature_urls") is not None:
+                            download_urls.extend(inputs.get("audio_feature_urls"))
+
+                        err_msg = check_download_links(self.bos_client, download_urls)
+                        if err_msg:
+                            llm_logger.error(f"Receive request {request.request_id} download error: {err_msg}")
+                            results.append((request.request_id, err_msg))
+
                     if err_msg is None:
                         insert_task.append(request)
 
@@ -865,6 +903,19 @@ class EngineService:
                 del self.data_processor.decode_status[req_id]
         return delta_text, token_ids
 
+    def _has_features_info(self, task):
+        inputs = task.multimodal_inputs
+        if inputs is None or len(inputs) == 0:
+            return False
+
+        if (
+            (inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0)
+            or (inputs.get("image_feature_urls") is not None and len(inputs["image_feature_urls"]) > 0)
+            or (inputs.get("audio_feature_urls") is not None and len(inputs["audio_feature_urls"]) > 0)
+        ):
+            return True
+        return False
+
     def _zmq_send_generated_tokens(self):
         """
         Recieve output for zmq
@@ -878,26 +929,29 @@ class EngineService:
                 for request_id, contents in results.items():
                     new_contents = []
                     for content in contents:
-                        decode_type = content.outputs.decode_type
-                        delta_text = ""
-                        if decode_type == 0:
-                            delta_text, token_ids = self._decode_token(
-                                token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
-                            )
+                        if isinstance(content, RequestOutput):
+                            decode_type = content.outputs.decode_type
+                            delta_text = ""
+                            if decode_type == 0:
+                                delta_text, token_ids = self._decode_token(
+                                    token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
+                                )
+                            else:
+                                token_ids = content.outputs.token_ids
+                            if len(token_ids):
+                                content.outputs.token_ids = token_ids
+                                content.outputs.text = delta_text
+                                new_contents.append(content)
+                            elif content.finished:
+                                new_contents.append(content)
+                            else:
+                                llm_logger.warning(
+                                    f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
+                                )
                         else:
-                            token_ids = content.outputs.token_ids
-                        if len(token_ids):
-                            content.outputs.token_ids = token_ids
-                            content.outputs.text = delta_text
                             new_contents.append(content)
-                        elif content.finished:
-                            new_contents.append(content)
-                        else:
-                            llm_logger.warning(
-                                f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
-                            )
                     if len(new_contents):
-                        llm_logger.info(f"Send response for request id: {request_id}")
+                        llm_logger.debug(f"Send response for request id: {request_id}")
                         self.send_response_server.send_response(request_id, new_contents)
             except Exception as e:
                 llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
@@ -1060,6 +1114,7 @@ class EngineService:
         """
         exit sub services
         """
+        llm_logger.info("Exit sub services.....")
         self.running = False
         if hasattr(self, "engine_worker_queue_server") and self.engine_worker_queue_server is not None:
             self.engine_worker_queue_server.cleanup()

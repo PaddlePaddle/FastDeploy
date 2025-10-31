@@ -27,7 +27,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Log directory.
     "FD_LOG_DIR": lambda: os.getenv("FD_LOG_DIR", "log"),
     # Whether to use debug mode, can set 0 or 1
-    "FD_DEBUG": lambda: os.getenv("FD_DEBUG", "0"),
+    "FD_DEBUG": lambda: int(os.getenv("FD_DEBUG", "0")),
     # Number of days to keep fastdeploy logs.
     "FD_LOG_BACKUP_COUNT": lambda: os.getenv("FD_LOG_BACKUP_COUNT", "7"),
     # Model download source, can set "AISTUDIO", "MODELSCOPE" or "HUGGINGFACE".
@@ -122,7 +122,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ENABLE_SWAP_SPACE_CLEARING": lambda: int(os.getenv("FD_ENABLE_SWAP_SPACE_CLEARING", "0")),
     # enable return text, used when FD_ENABLE_INTERNAL_ADAPTER=1
     "FD_ENABLE_RETURN_TEXT": lambda: bool(int(os.getenv("FD_ENABLE_RETURN_TEXT", "0"))),
-    # Used to truncate the string inserted during thinking when reasoning in a model. (</think> for ernie4_5_vl, \n</think>\n\n for ernie_x1)
+    # Used to truncate the string inserted during thinking when reasoning in a model. (</think> for ernie-45-vl, \n</think>\n\n for ernie-x1)
     "FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR": lambda: os.getenv("FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR", "</think>"),
     # Timeout for cache_transfer_manager process exit
     "FD_CACHE_PROC_EXIT_TIMEOUT": lambda: int(os.getenv("FD_CACHE_PROC_EXIT_TIMEOUT", "600")),
@@ -149,6 +149,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_MODEL_USE_SAFETENSORS": lambda: int(os.getenv("FD_MODEL_USE_SAFETENSORS", "1")) == 1,
     "FD_MODEL_USE_OFFLINE_QUANT": lambda: int(os.getenv("FD_MODEL_USE_OFFLINE_QUANT", "1")) == 1,
     "FD_MOE_QUANT_TYPE": lambda: os.getenv("FD_MOE_QUANT_TYPE", "w4a8"),
+    "ENCODE_FEATURE_BOS_AK": lambda: os.getenv("ENCODE_FEATURE_BOS_AK"),
+    "ENCODE_FEATURE_BOS_SK": lambda: os.getenv("ENCODE_FEATURE_BOS_SK"),
 }
 
 

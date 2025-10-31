@@ -485,13 +485,14 @@ void TextImageIndexOut(const paddle::Tensor& token_type_ids,
                        paddle::Tensor& text_input,
                        paddle::Tensor& image_input);
 
-void TextImageGatherScatter(paddle::Tensor& input,
-                            paddle::Tensor& text_input,
-                            paddle::Tensor& image_input,
-                            paddle::Tensor& token_type_ids,
-                            paddle::Tensor& text_index,
-                            paddle::Tensor& image_index,
-                            const bool is_scatter);
+std::vector<paddle::Tensor> TextImageGatherScatter(
+    paddle::Tensor& input,
+    paddle::Tensor& text_input,
+    paddle::Tensor& image_input,
+    paddle::Tensor& token_type_ids,
+    paddle::Tensor& text_index,
+    paddle::Tensor& image_index,
+    const bool is_scatter);
 
 paddle::Tensor count_tokens_per_expert_func(const paddle::Tensor& topk_ids,
                                             int64_t num_experts);
@@ -747,7 +748,8 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor& accept_tokens,
                                const paddle::Tensor& stop_seqs_len,
                                const paddle::Tensor& end_ids);
 
-void SpeculateVerify(const paddle::Tensor& accept_tokens,
+void SpeculateVerify(const paddle::Tensor& sampled_token_ids,
+                     const paddle::Tensor& accept_tokens,
                      const paddle::Tensor& accept_num,
                      const paddle::Tensor& step_idx,
                      const paddle::Tensor& stop_flags,
