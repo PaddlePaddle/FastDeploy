@@ -292,6 +292,7 @@ void GetBlockShapeAndSplitKVBlock(
       max_len_tensor_gpu.data<int>(),
       bsz);
 
+
   max_len_tensor_cpu.copy_(
       max_len_tensor_gpu, max_len_tensor_cpu.place(), false);
 
