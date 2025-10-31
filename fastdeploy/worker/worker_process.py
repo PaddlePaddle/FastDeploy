@@ -41,7 +41,12 @@ from fastdeploy.config import (
     StructuredOutputsConfig,
 )
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
-from fastdeploy.inter_communicator import ExistTaskStatus, IPCSignal, ModelWeightsStatus
+from fastdeploy.inter_communicator import (
+    ExistTaskStatus,
+    IPCSignal,
+    ModelWeightsStatus,
+    shared_memory_exists,
+)
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
@@ -426,7 +431,7 @@ class PaddleDisWorkerProc:
                 array=prefilled_step_idx_data,
                 dtype=np.int32,
                 suffix=gpu_id,
-                create=False,
+                create=not shared_memory_exists(prefilled_step_name),
             )
             step_shm_value.value[0] = -1
 

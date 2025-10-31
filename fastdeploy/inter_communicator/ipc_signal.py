@@ -80,6 +80,7 @@ class IPCSignal:
             name = name + f".{suffix}"
 
         if create:
+            llm_logger.debug(f"creating ipc signal: {name}")
             if shared_memory_exists(name):
                 llm_logger.warning(f"ShareMemory: {name} already exists, delete it")
                 SharedMemory(name=name, create=False).unlink()
@@ -87,6 +88,7 @@ class IPCSignal:
             self.value: np.ndarray = np.ndarray(array.shape, dtype=array.dtype, buffer=self.shm.buf)
             self.value[:] = array  # Initialize with input array data
         else:
+            llm_logger.debug(f"attaching ipc signal: {name}")
             self.shm = SharedMemory(name=name)
             self.value: np.ndarray = np.ndarray(array.shape, dtype=array.dtype, buffer=self.shm.buf)
 
