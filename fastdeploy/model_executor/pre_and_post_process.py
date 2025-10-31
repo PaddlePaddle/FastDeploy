@@ -283,11 +283,6 @@ def post_process_normal(
         ),
         model_output.step_idx,
     )
-    length_cond = paddle.greater_equal(model_output.step_idx, model_output.max_dec_len)
-    paddle.assign(
-        paddle.logical_or(model_output.stop_flags, length_cond),
-        model_output.stop_flags,
-    )
 
     if current_platform.is_cuda() or current_platform.is_iluvatar() or current_platform.is_dcu():
         set_stop_value_multi_ends(
