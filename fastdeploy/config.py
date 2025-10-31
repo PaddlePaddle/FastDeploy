@@ -1556,6 +1556,10 @@ class FDConfig:
             self.graph_opt_config.use_cudagraph = False
             logger.info(f"CUDAGraph only support on GPU, current device type is {self.device_config.device_type}!")
 
+        if self.model_config.enable_mm and self.graph_opt_config.use_cudagraph:
+            self.cache_config.enable_prefix_caching = False
+            logger.info("Multi-modal models do not support prefix caching when using CUDAGraph!")
+
         if self.scheduler_config.splitwise_role == "mixed":
             self.model_config.moe_phase = MoEPhase(phase="prefill")
         elif self.scheduler_config.splitwise_role == "prefill":
