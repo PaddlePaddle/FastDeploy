@@ -57,14 +57,10 @@ LOG_FILE = "server.log"
 base_port = get_base_port()
 FLASK_PORT = get_available_port("FLASK_PORT", base_port + 1)
 FD_API_PORT = get_available_port("FD_API_PORT", FLASK_PORT + 1)
-FD_ENGINE_QUEUE_PORT = get_available_port("FD_ENGINE_QUEUE_PORT", FD_API_PORT + 1)
-FD_METRICS_PORT = get_available_port("FD_METRICS_PORT", FD_ENGINE_QUEUE_PORT + 1)
-FD_CACHE_QUEUE_PORT = get_available_port("FD_CACHE_QUEUE_PORT", FD_METRICS_PORT + 1)
+FD_METRICS_PORT = get_available_port("FD_METRICS_PORT", FD_API_PORT + 1)
 DEFAULT_PARAMS = {
     "--port": FD_API_PORT,
-    "--engine-worker-queue-port": FD_ENGINE_QUEUE_PORT,
     "--metrics-port": FD_METRICS_PORT,
-    "--cache-queue-port": FD_CACHE_QUEUE_PORT,
     "--enable-logprob": True,
 }
 
@@ -180,21 +176,8 @@ def stop_server(signum=None, frame=None):
         os.killpg(os.getpgid(pid_port["PID"]), signal.SIGTERM)
     except Exception as e:
         print(f"Failed to stop server: {e}, {str(traceback.format_exc())}")
-    try:
-        result = subprocess.run(
-            f"ps -efww | grep {FD_CACHE_QUEUE_PORT} | grep -v grep", shell=True, capture_output=True, text=True
-        )
-        for line in result.stdout.strip().split("\n"):
-            if not line:
-                continue
-            parts = line.split()
-            pid = int(parts[1])
-            print(f"Killing PID: {pid}")
-            os.kill(pid, signal.SIGKILL)
-    except Exception as e:
-        print(f"Failed to kill cache manager process: {e}, {str(traceback.format_exc())}")
 
-    for port in [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT]:
+    for port in [FD_API_PORT, FD_METRICS_PORT]:
         try:
             output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
             for pid in output.splitlines():
@@ -239,10 +222,8 @@ def start_service():
         final_config = merge_configs(base_config, override_config)
 
         global FD_API_PORT
-        global FD_ENGINE_QUEUE_PORT
         global FD_METRICS_PORT
         FD_API_PORT = final_config["--port"]
-        FD_ENGINE_QUEUE_PORT = final_config["--engine-worker-queue-port"]
         FD_METRICS_PORT = final_config["--metrics-port"]
 
         # 构建命令
@@ -278,7 +259,6 @@ def start_service():
             "cmd": cmd,
             "port_info": {
                 "api_port": FD_API_PORT,
-                "queue_port": FD_ENGINE_QUEUE_PORT,
                 "metrics_port": FD_METRICS_PORT,
             },
         }
@@ -309,10 +289,8 @@ def switch_service():
         final_config = merge_configs(base_config, override_config)
 
         global FD_API_PORT
-        global FD_ENGINE_QUEUE_PORT
         global FD_METRICS_PORT
         FD_API_PORT = final_config["--port"]
-        FD_ENGINE_QUEUE_PORT = final_config["--engine-worker-queue-port"]
         FD_METRICS_PORT = final_config["--metrics-port"]
 
         # 构建命令
@@ -348,7 +326,6 @@ def switch_service():
             "cmd": cmd,
             "port_info": {
                 "api_port": FD_API_PORT,
-                "queue_port": FD_ENGINE_QUEUE_PORT,
                 "metrics_port": FD_METRICS_PORT,
             },
         }
@@ -375,7 +352,6 @@ def service_status():
     # 检查端口是否监听
     ports_status = {
         "api_port": FD_API_PORT if is_port_in_use(FD_API_PORT) else None,
-        "queue_port": FD_ENGINE_QUEUE_PORT if is_port_in_use(FD_ENGINE_QUEUE_PORT) else None,
         "metrics_port": FD_METRICS_PORT if is_port_in_use(FD_METRICS_PORT) else None,
     }
 
@@ -461,7 +437,6 @@ def wait_for_infer():
             if health:
                 ports_status = {
                     "api_port": FD_API_PORT if is_port_in_use(FD_API_PORT) else None,
-                    "queue_port": FD_ENGINE_QUEUE_PORT if is_port_in_use(FD_ENGINE_QUEUE_PORT) else None,
                     "metrics_port": FD_METRICS_PORT if is_port_in_use(FD_METRICS_PORT) else None,
                 }
                 msg["status"] = "服务启动完成"
@@ -500,6 +475,5 @@ def wait_for_infer():
 if __name__ == "__main__":
     print(f"FLASK_PORT: {FLASK_PORT}")
     print(f"FD_API_PORT: {FD_API_PORT}")
-    print(f"FD_ENGINE_QUEUE_PORT: {FD_ENGINE_QUEUE_PORT}")
     print(f"FD_METRICS_PORT: {FD_METRICS_PORT}")
     app.run(host="0.0.0.0", port=FLASK_PORT, debug=False)
