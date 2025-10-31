@@ -87,6 +87,7 @@ from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.pool.metadata import PoolingMetadata
+from fastdeploy.model_executor.logits_processor import build_logits_processors
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.model_executor.models.interfaces_base import FdModelForPooling
 from fastdeploy.output.pooler import PoolerOutput
@@ -136,6 +137,11 @@ class GPUModelRunner(ModelRunnerBase):
                 "matmul_v2",
                 "fused_gemm_epilogue",
             ]
+
+            if self.cache_config.max_encoder_cache > 0:
+                self.encoder_cache: dict[str, paddle.Tensor] = {}
+            else:
+                self.encoder_cache = None
 
         #  Sampler
         if not self.speculative_decoding:
@@ -297,6 +303,183 @@ class GPUModelRunner(ModelRunnerBase):
             schemata_key,
         )
 
+    def get_chunked_inputs(self, req: Request):
+        """
+        Get inputs in current chunk
+        """
+        prefill_start_index = req.prefill_start_index
+        prefill_end_index = req.prefill_end_index
+        inputs = req.multimodal_inputs
+        input_ids = inputs["input_ids"][prefill_start_index:prefill_end_index]
+        token_type_ids = inputs["token_type_ids"][prefill_start_index:prefill_end_index]
+        image_type_ids = inputs["image_type_ids"][req.image_type_ids_start : req.image_type_ids_end]
+        images = inputs["images"][req.image_start : req.image_end]
+        grid_thw = inputs["grid_thw"][req.num_image_start : req.num_image_end]
+        mm_hashes = inputs["mm_hashes"][req.num_image_start : req.num_image_end]
+
+        return (
+            input_ids,
+            token_type_ids,
+            image_type_ids,
+            images,
+            grid_thw,
+            mm_hashes,
+        )
+
+    def batch_uncached_inputs(self, req: Request):
+        """
+        Batch uncached multimodal inputs
+        """
+        (input_ids, token_type_ids, image_type_ids, images, grid_thw, mm_hashes) = self.get_chunked_inputs(req)
+
+        image_type_ids_size = grid_thw[:, 0]
+        image_type_ids_split = np.cumsum(image_type_ids_size)[:-1]
+        image_type_ids_lst = np.array_split(image_type_ids, image_type_ids_split, axis=0)
+
+        images_size = np.prod(grid_thw, axis=1)
+        images_split = np.cumsum(images_size)[:-1]
+        images_lst = np.array_split(images, images_split, axis=0)
+
+        assert len(image_type_ids_lst) == len(
+            mm_hashes
+        ), f"image_type_ids_lst length {len(image_type_ids_lst)} != mm_hashes length {len(mm_hashes)}"
+        assert len(images_lst) == len(
+            mm_hashes
+        ), f"images_lst length {len(images_lst)} != mm_hashes length {len(mm_hashes)}"
+
+        uncached_image_type_ids = []
+        uncached_images = []
+        uncached_grid_thw = []
+        uncached_mm_hashes = []
+        for i, mm_hash in enumerate(mm_hashes):
+            if mm_hash in self.encoder_cache:
+                continue
+            uncached_image_type_ids.append(image_type_ids_lst[i])
+            uncached_images.append(images_lst[i])
+            uncached_grid_thw.append(grid_thw[i])
+            uncached_mm_hashes.append(mm_hash)
+
+        uncached_input_ids = paddle.to_tensor(input_ids, dtype=paddle.int64)
+        uncached_token_type_ids = paddle.to_tensor(token_type_ids, dtype=paddle.int64)
+        if len(uncached_mm_hashes) > 0:
+            uncached_image_type_ids = paddle.to_tensor(np.hstack(uncached_image_type_ids), dtype=paddle.int64)
+            uncached_images = paddle.to_tensor(
+                np.vstack(uncached_images), dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16"
+            )
+            uncached_grid_thw = paddle.to_tensor(uncached_grid_thw, dtype=paddle.int64)
+
+        return (
+            uncached_input_ids,
+            uncached_token_type_ids,
+            uncached_image_type_ids,
+            uncached_images,
+            uncached_grid_thw,
+            uncached_mm_hashes,
+        )
+
+    def scatter_and_cache_features(self, image_features, inputs):
+        """
+        Split batched image features and cache them
+        """
+        merge_size = 2
+        grid_thw = inputs["grid_thw"]
+        mm_hashes = inputs["mm_hashes"]
+        image_features_size = (paddle.prod(grid_thw[:, 1:], axis=1) // (merge_size**2)).tolist()
+        image_features_lst = paddle.split(image_features, image_features_size, axis=0)
+
+        assert len(image_features_lst) == len(
+            mm_hashes
+        ), f"image_features_lst length {len(image_features_lst)} != mm_hashes length {len(mm_hashes)}"
+        for i, mm_hash in enumerate(mm_hashes):
+            self.encoder_cache[mm_hash] = image_features_lst[i].cpu()
+
+    def _apply_mm_inputs(self, request: Request, multi_vision_inputs: dict, rope_3d_position_ids: dict):
+        """
+        Apply multimodal inputs to share_inputs
+            - add image_features, extract and cache vision features from model
+            - add rope_emb, rotate position embeddings
+        """
+        if self.encoder_cache:
+            evict_mm_hashes = request.get("evict_mm_hashes", None)
+            if evict_mm_hashes:
+                for mm_hash in evict_mm_hashes:
+                    self.encoder_cache.pop(mm_hash, None)
+
+        inputs = request.multimodal_inputs
+        if request.with_image:
+            if envs.FD_ENABLE_MAX_PREFILL:
+                multi_vision_inputs["images_lst"].append(
+                    inputs["images"][request.image_start : request.image_end].cuda()
+                )
+                multi_vision_inputs["grid_thw_lst"].extend(
+                    inputs["grid_thw"][request.num_image_start : request.num_image_end]
+                )
+                multi_vision_inputs["cu_seqlens"].extend(
+                    inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
+                )
+                multi_vision_inputs["vit_position_ids_lst"].extend(
+                    inputs["vit_position_ids"][request.num_image_start : request.num_image_end]
+                )
+            else:
+                vision_inputs = inputs
+                if self.encoder_cache:
+                    (
+                        vision_inputs["input_ids"],
+                        vision_inputs["token_type_ids"],
+                        vision_inputs["image_type_ids"],
+                        vision_inputs["images"],
+                        vision_inputs["grid_thw"],
+                        vision_inputs["mm_hashes"],
+                    ) = self.batch_uncached_inputs(request)
+                    if len(vision_inputs["mm_hashes"]) > 0:
+                        # uncached multimodal inputs exist
+                        image_features = self.extract_vision_features(vision_inputs)
+                        self.scatter_and_cache_features(image_features, vision_inputs)
+
+                    full_image_features_lst = []
+                    for mm_hash in inputs["mm_hashes"][request.num_image_start : request.num_image_end]:
+                        feature = self.encoder_cache[mm_hash].cuda()
+                        full_image_features_lst.append(feature)
+                    image_features = paddle.concat(full_image_features_lst, axis=0)
+                else:
+                    (
+                        input_ids,
+                        token_type_ids,
+                        image_type_ids,
+                        images,
+                        grid_thw,
+                        mm_hashes,
+                    ) = self.get_chunked_inputs(request)
+                    vision_inputs["input_ids"] = paddle.to_tensor(input_ids, dtype=paddle.int64)
+                    vision_inputs["token_type_ids"] = paddle.to_tensor(token_type_ids, dtype=paddle.int64)
+                    vision_inputs["image_type_ids"] = paddle.to_tensor(image_type_ids, dtype=paddle.int64)
+                    vision_inputs["images"] = paddle.to_tensor(
+                        images, dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16"
+                    )
+                    vision_inputs["grid_thw"] = paddle.to_tensor(grid_thw, dtype=paddle.int64)
+                    vision_inputs["mm_hashes"] = mm_hashes
+
+                    image_features = self.extract_vision_features(vision_inputs)
+
+                # part of the first image may be already cached
+                if "ernie" in self.model_config.model_type:
+                    actual_image_token_num = paddle.sum(vision_inputs["input_ids"] == self.model_config.im_patch_id)
+                elif "qwen" in self.model_config.model_type:
+                    actual_image_token_num = paddle.sum(
+                        vision_inputs["input_ids"] == vision_inputs["image_patch_id"]
+                    ) + paddle.sum(vision_inputs["input_ids"] == vision_inputs["video_patch_id"])
+                else:
+                    raise ValueError(f"multiple modalities model {self.model_config.model_type} is not supported")
+                self.share_inputs["image_features"] = image_features[-actual_image_token_num:]
+
+        position_ids = request.multimodal_inputs["position_ids"]
+        rope_3d_position_ids["position_ids_idx"].append(request.idx)
+        rope_3d_position_ids["position_ids_lst"].append(position_ids)
+        rope_3d_position_ids["position_ids_offset"].append(
+            position_ids.shape[0] + rope_3d_position_ids["position_ids_offset"][-1]
+        )
+        rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
+
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int = None):
         """
         Process scheduler output tasks, used when ENABLE_V1_KVCACHE_SCHEDULER=1
@@ -310,6 +493,15 @@ class GPUModelRunner(ModelRunnerBase):
         req_len = len(req_dicts)
         has_prefill_task = False
         has_decode_task = False
+        self.share_inputs["image_features"] = None
+        multi_vision_inputs = {"images_lst": [], "grid_thw_lst": [], "vit_position_ids_lst": [], "cu_seqlens": [0]}
+        rope_3d_position_ids = {
+            "position_ids_idx": [],
+            "position_ids_lst": [],
+            "position_ids_offset": [0],
+            "max_tokens_lst": [],
+        }
+
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
@@ -318,41 +510,7 @@ class GPUModelRunner(ModelRunnerBase):
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
                 if self.enable_mm:
-                    inputs = request.multimodal_inputs
-                    if request.with_image:
-                        vision_inputs = {}
-                        vision_inputs["input_ids"] = paddle.to_tensor(
-                            inputs["input_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
-                        )
-                        vision_inputs["token_type_ids"] = paddle.to_tensor(
-                            inputs["token_type_ids"][prefill_start_index:prefill_end_index], dtype=paddle.int64
-                        )
-                        vision_inputs["image_type_ids"] = paddle.to_tensor(
-                            inputs["image_type_ids"][request.image_type_ids_start : request.image_type_ids_end],
-                            dtype=paddle.int64,
-                        )
-                        vision_inputs["images"] = paddle.to_tensor(
-                            inputs["images"][request.image_start : request.image_end],
-                            dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16",
-                        )
-                        vision_inputs["grid_thw"] = paddle.to_tensor(
-                            inputs["grid_thw"][request.num_image_start : request.num_image_end], dtype="int64"
-                        )
-                        self.share_inputs["image_features"] = self.extract_vision_features(vision_inputs)
-                    else:
-                        self.share_inputs["image_features"] = None
-
-                    if inputs["position_ids"] is not None:
-                        position_ids = paddle.to_tensor(
-                            request.multimodal_inputs["position_ids"],
-                            dtype="int64",
-                        ).unsqueeze([0])
-                    else:
-                        position_ids = None
-
-                    self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
-                        position_ids, request.get("max_tokens", 2048)
-                    )
+                    self._apply_mm_inputs(request, multi_vision_inputs, rope_3d_position_ids)
 
                 if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
                     # Enable thinking
@@ -466,6 +624,24 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
+            # For logits processors
+            self.share_inputs["logits_processors_args"][idx] = request.get("logits_processors_args") or {}
+
+        if len(multi_vision_inputs["images_lst"]) > 0:
+            self.share_inputs["image_features"] = self.extract_vision_features(multi_vision_inputs)
+
+        if len(rope_3d_position_ids["position_ids_idx"]) > 0:
+            packed_position_ids = paddle.to_tensor(
+                np.concatenate(rope_3d_position_ids["position_ids_lst"]), dtype="int64"
+            )
+            rope_3d_lst = self.prepare_rope3d(
+                packed_position_ids,
+                rope_3d_position_ids["max_tokens_lst"],
+                rope_3d_position_ids["position_ids_offset"],
+            )
+            for i, idx in enumerate(rope_3d_position_ids["position_ids_idx"]):
+                self.share_inputs["rope_emb"][idx : idx + 1, :] = rope_3d_lst[i]
+
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
         self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
@@ -545,7 +721,7 @@ class GPUModelRunner(ModelRunnerBase):
                             position_ids = paddle.to_tensor(
                                 request.multimodal_inputs["position_ids"],
                                 dtype="int64",
-                            ).unsqueeze([0])
+                            )
                         else:
                             position_ids = None
                         token_chunk_size = inputs["input_ids"].shape[1]
@@ -582,8 +758,8 @@ class GPUModelRunner(ModelRunnerBase):
 
                 if self.enable_mm:
                     self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
-                        position_ids, request.get("max_tokens", 2048)
-                    )
+                        position_ids, [request.get("max_tokens", 2048)], [0, position_ids.shape[0]]
+                    )[0]
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
 
                 if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
@@ -994,7 +1170,9 @@ class GPUModelRunner(ModelRunnerBase):
 
         if self.enable_mm:
             head_dim = self.model_config.head_dim
-            if "qwen" in self.model_config.model_type:  # neox style = True
+            if (
+                "qwen" in self.model_config.model_type or "paddleocr" in self.model_config.model_type
+            ):  # neox style = True
                 rope_head_dim = head_dim
             else:  # neox style = False
                 rope_head_dim = head_dim // 2
@@ -1012,6 +1190,11 @@ class GPUModelRunner(ModelRunnerBase):
                 dtype="float32",
             )
             self.share_inputs["image_features"] = None
+
+        # For logits processors
+        self.share_inputs["logits_processors"] = build_logits_processors(self.fd_config)
+        self.share_inputs["logits_processors_args"] = [{} for _ in range(max_num_seqs)]
+        logger.info(f"Enabled logits processors: {self.share_inputs['logits_processors']}")
 
     def _prepare_inputs(self) -> None:
         """Prepare the model inputs"""
@@ -1090,6 +1273,7 @@ class GPUModelRunner(ModelRunnerBase):
             stop_flags=self.share_inputs["stop_flags"],
             temp_scaled_logprobs=self.share_inputs["temp_scaled_logprobs"],
             top_p_normalized_logprobs=self.share_inputs["top_p_normalized_logprobs"],
+            logits_processors=self.share_inputs["logits_processors"],
             share_inputs=self.share_inputs,
         )
 
@@ -1159,6 +1343,8 @@ class GPUModelRunner(ModelRunnerBase):
         # TODO(wanglongzhi):Modifying the config at runtime is not appropriate; it needs to be moved to forward_meta. It will be used in MoEMethodBase.apply()
         if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
             self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
+            if self.speculative_decoding:
+                self.proposer.fd_config.parallel_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
         # Update Batch type for cuda graph for only_prefill_batch
         only_prefill_use_cudagraph = self.use_cudagraph and self.cudagraph_only_prefill and self.only_prefill()
@@ -1397,6 +1583,8 @@ class GPUModelRunner(ModelRunnerBase):
         self,
         hidden_states: paddle.Tensor,
         model_output: paddle.Tensor,
+        accept_all_drafts=False,
+        reject_all_drafts=False,
     ) -> paddle.Tensor:
         logits = self.model.compute_logits(hidden_states)
 
@@ -1423,6 +1611,8 @@ class GPUModelRunner(ModelRunnerBase):
                 self.sampling_metadata,
                 self.model_config.max_model_len,
                 self.share_inputs,
+                accept_all_drafts,
+                reject_all_drafts,
             )
             sampler_output = None
             if self.parallel_config.tensor_parallel_size > 1:
@@ -1504,6 +1694,7 @@ class GPUModelRunner(ModelRunnerBase):
         in_capturing: bool = False,
         capture_prefill: bool = False,
         accept_all_drafts: bool = False,
+        reject_all_drafts: bool = False,
     ) -> paddle.Tensor:
         """
         Use dummy inputs to run before formal execution.
@@ -1513,6 +1704,7 @@ class GPUModelRunner(ModelRunnerBase):
             in_capturing: Is cuda graph in capturing state
             capture_prefill: Capture pure prefill for cuda graph
             accept_all_drafts: Target model will accept all draft tokens
+            reject_all_drafts: Target model will reject all draft tokens
         """
 
         input_length_list, max_dec_len_list, block_num = self.get_input_length_list(
@@ -1572,7 +1764,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self._dummy_pooler_run(hidden_states)
                 break
             else:
-                self._dummy_sampler_run(hidden_states, model_output)
+                self._dummy_sampler_run(hidden_states, model_output, accept_all_drafts, reject_all_drafts)
 
             # 7. Updata 'infer_seed' and step_cuda()
             self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
@@ -1691,34 +1883,37 @@ class GPUModelRunner(ModelRunnerBase):
                         logger.info(
                             f"Warm up the Target model with the num_tokens:{batch_size}, expected_decode_len:{1}"
                         )
-                # Capture Draft Model without bsz 1
-                # NOTE(liujundong): expected_decode_len = 1, will affect mtp capture in cudagraph
-                for batch_size in sorted(capture_sizes, reverse=True):
-                    if batch_size == 1:
-                        logger.info("Skip token_num = 1, when capture Draft model for mtp")
-                    else:
-                        assert batch_size % 2 == 0
+                if self.graph_opt_config.draft_model_use_cudagraph:
+                    # Capture Draft Model without bsz 1
+                    # NOTE(liujundong): expected_decode_len = 1, will affect mtp capture in cudagraph
+                    for batch_size in sorted(capture_sizes, reverse=True):
+                        if batch_size == 1:
+                            logger.info("Skip token_num = 1, when capture Draft model for mtp")
+                        else:
+                            assert batch_size % 2 == 0
+                            self._dummy_run(
+                                num_tokens=self.scheduler_config.max_num_batched_tokens,
+                                batch_size=int(batch_size / 2),
+                                in_capturing=True,
+                                expected_decode_len=3,
+                                accept_all_drafts=True,
+                            )
+                            logger.info(
+                                f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}"
+                            )
+                    # Capture Draft Model with bsz 1
+                    if 1 in capture_sizes:
                         self._dummy_run(
                             num_tokens=self.scheduler_config.max_num_batched_tokens,
-                            batch_size=int(batch_size / 2),
+                            batch_size=int(1),
                             in_capturing=True,
                             expected_decode_len=3,
-                            accept_all_drafts=True,
+                            accept_all_drafts=False,
+                            reject_all_drafts=True,
                         )
                         logger.info(
                             f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}"
                         )
-                # Capture Draft Model with bsz 1
-                if 1 in capture_sizes:
-                    self._dummy_run(
-                        num_tokens=self.scheduler_config.max_num_batched_tokens,
-                        batch_size=int(1),
-                        in_capturing=True,
-                        expected_decode_len=3,
-                        accept_all_drafts=False,
-                    )
-                    logger.info(f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}")
-
             else:
                 for batch_size in sorted(capture_sizes, reverse=True):
                     self._dummy_run(
@@ -1808,6 +2003,10 @@ class GPUModelRunner(ModelRunnerBase):
         skip_idx_list = self._get_skip_idx(model_forward_batch)
         self._prepare_inputs()
         self.sampler.pre_process(skip_idx_list)
+
+        # 1.1 Update state of logits processor
+        for proc in self.sampling_metadata.logits_processors:
+            proc.update_state(self.share_inputs)
 
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
@@ -2221,7 +2420,7 @@ class GPUModelRunner(ModelRunnerBase):
             grid_thw = None
 
         if one["position_ids"] is not None:
-            position_ids = paddle.to_tensor(one["position_ids"], dtype="int64").unsqueeze([0])
+            position_ids = paddle.to_tensor(one["position_ids"], dtype="int64")
         else:
             position_ids = None
 
@@ -2288,6 +2487,49 @@ class GPUModelRunner(ModelRunnerBase):
 
         return image_features
 
+    def extract_vision_features_paddleocr(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
+        if envs.FD_ENABLE_MAX_PREFILL:
+            inputs["vit_position_ids_lst"] = np.concatenate(inputs["vit_position_ids_lst"])
+            images = paddle.concat(inputs["images_lst"]).cast("bfloat16")
+            grid_thw = paddle.to_tensor(inputs["grid_thw_lst"], dtype="int64")
+            position_ids = paddle.to_tensor(inputs["vit_position_ids_lst"], dtype="int64")
+            cu_seqlens = paddle.cumsum(paddle.to_tensor(inputs["cu_seqlens"])).cast("int32")
+        else:
+            assert inputs["images"] is not None
+            grid_thw = inputs["grid_thw"]
+            images = inputs["images"]
+
+            position_ids = []
+            cu_seqlens = [0]
+            for idx, thw in enumerate(grid_thw):
+                numel = np.prod(np.array(thw))
+                position_ids.append(paddle.arange(numel) % np.prod(thw[1:]))
+                cu_seqlens.append(cu_seqlens[-1] + numel)
+
+            position_ids = paddle.concat(position_ids, axis=0).to(images.place)
+            cu_seqlens = paddle.to_tensor(cu_seqlens, dtype=paddle.int32).to(images.place)
+
+        with paddle.amp.auto_cast(
+            True,
+            custom_black_list=self.amp_black,
+            custom_white_list=self.amp_white,
+            level="O2",
+            dtype=self.model_config.dtype,
+        ):
+            image_features = self.model.visual(
+                pixel_values=images,
+                image_grid_thw=grid_thw,
+                position_ids=position_ids,
+                interpolate_pos_encoding=True,
+                cu_seqlens=cu_seqlens,
+                use_rope=True,
+                window_size=-1,
+            )
+            image_features = self.model.projector(image_features, grid_thw)
+            image_features = paddle.concat(image_features, axis=0)
+
+        return image_features
+
     @paddle.no_grad()
     def extract_vision_features(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
         """extract_vision_features"""
@@ -2295,28 +2537,26 @@ class GPUModelRunner(ModelRunnerBase):
             return self.extract_vision_features_ernie(inputs)
         elif "qwen" in self.model_config.model_type:
             return self.extract_vision_features_qwen(inputs)
+        elif "paddleocr" in self.model_config.model_type:
+            return self.extract_vision_features_paddleocr(inputs)
         else:
             raise ValueError(f"multiple modalities model {self.model_config.model_type} is not supported")
 
     @paddle.no_grad()
-    def prepare_rope3d(self, position_ids: paddle.Tensor, max_len: int) -> paddle.Tensor:
+    def prepare_rope3d(
+        self, position_ids: paddle.Tensor, max_len_lst: list[int], cumsum_seqlens: list[int]
+    ) -> list[paddle.Tensor]:
         """prepare_rope3d"""
 
-        prefix_max_position_ids = paddle.max(position_ids) + 1
-        dec_pos_ids = paddle.tile(
-            paddle.arange(max_len, dtype="int64").unsqueeze(0).unsqueeze(-1),
-            [1, 1, 3],
-        )
-        dec_pos_ids = dec_pos_ids + prefix_max_position_ids
-        position_ids_3d_real = paddle.concat([position_ids, dec_pos_ids], axis=1)
-
-        rope_emb = get_rope_3d(
-            position_ids=position_ids_3d_real,
+        rope_emb_lst = get_rope_3d(
+            position_ids=position_ids,
             rotary_dim=self.model_config.head_dim,
             partial_rotary_factor=1.0,
             base=self.model_config.rope_theta,
             max_position=self.model_config.max_model_len,
             freq_allocation=getattr(self.model_config, "freq_allocation", 20),
             model_type=self.model_config.model_type,
+            max_len_lst=max_len_lst,
+            cumsum_seqlens=cumsum_seqlens,
         )
-        return rope_emb
+        return rope_emb_lst

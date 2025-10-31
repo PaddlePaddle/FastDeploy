@@ -38,7 +38,7 @@ class TestLatency(unittest.TestCase):
         mock_llm_instance = MagicMock()
         mock_llm.return_value = mock_llm_instance
         mock_cfg = MagicMock()
-        mock_cfg.max_model_len = 2048
+        mock_cfg.model_config.max_model_len = 2048
         mock_llm_instance.llm_engine.cfg = mock_cfg
 
         mock_randint.return_value = np.zeros((8, 32))
@@ -74,7 +74,7 @@ class TestLatency(unittest.TestCase):
         mock_llm_instance = MagicMock()
         mock_llm.return_value = mock_llm_instance
         mock_cfg = MagicMock()
-        mock_cfg.max_model_len = 2048
+        mock_cfg.model_config.max_model_len = 2048
         mock_llm_instance.llm_engine.cfg = mock_cfg
 
         # Build args using parser

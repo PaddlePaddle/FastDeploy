@@ -55,7 +55,7 @@ from fastdeploy.model_executor.models.model_base import (
 )
 from fastdeploy.platforms import current_platform
 
-if current_platform.is_cuda():
+if current_platform.is_cuda() or current_platform.is_maca():
     from fastdeploy.model_executor.ops.gpu import (
         get_position_ids_and_mask_encoder_batch,
     )
