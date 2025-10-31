@@ -32,6 +32,7 @@ def test_unstream_with_logprobs():
         "bytes": [231, 137, 155, 233, 161, 191],
         "top_logprobs": None,
     }
+
     assert resp_json["usage"]["prompt_tokens"] == 22
     assert resp_json["usage"]["completion_tokens"] == 3
     assert resp_json["usage"]["total_tokens"] == 25
