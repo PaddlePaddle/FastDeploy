@@ -85,20 +85,6 @@ __global__ void GetMaxLenKernel(const int *seq_lens_decoder,
   }
 }
 
-void GetMaxLen(const paddle::Tensor &seq_lens_tensor,
-               const paddle::Tensor &seq_lens_this_time,
-               const paddle::Tensor &seq_lens_encoder,
-               paddle::Tensor &max_len_tensor,
-               const int batch_size) {
-  constexpr int blockSize = 1024;
-  GetMaxLenKernel<blockSize><<<1, blockSize, 0, seq_lens_encoder.stream()>>>(
-      seq_lens_tensor.data<int>(),
-      seq_lens_this_time.data<int>(),
-      seq_lens_encoder.data<int>(),
-      max_len_tensor.data<int>(),
-      batch_size);
-}
-
 template <uint32_t config_size>
 __global__ void search_chunk_size_for_mla(
     const int *__restrict__ seq_lens_q,
@@ -298,11 +284,14 @@ void GetBlockShapeAndSplitKVBlock(
       GetEmptyTensor({max_len_tensor_cpu.shape()[0]},
                      paddle::DataType::INT32,
                      seq_lens_this_time.place());
-  GetMaxLen(seq_lens_decoder,
-            seq_lens_this_time,
-            seq_lens_encoder,
-            max_len_tensor_gpu,
-            bsz);
+
+  GetMaxLenKernel<1024><<<1, 1024, 0, seq_lens_encoder.stream()>>>(
+      seq_lens_decoder.data<int>(),
+      seq_lens_this_time.data<int>(),
+      seq_lens_encoder.data<int>(),
+      max_len_tensor_gpu.data<int>(),
+      bsz);
+
   max_len_tensor_cpu.copy_(
       max_len_tensor_gpu, max_len_tensor_cpu.place(), false);
 
