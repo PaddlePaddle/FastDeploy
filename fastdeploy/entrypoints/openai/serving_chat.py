@@ -199,6 +199,14 @@ class OpenAIServingChat:
         enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
         if enable_thinking is None:
             enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
+        options = request.chat_template_kwargs.get("options") if request.chat_template_kwargs else None
+        if options:
+            thinking_mode = options.get("thinking_mode")
+            if thinking_mode:
+                if thinking_mode == "close" or thinking_mode == "false":
+                    enable_thinking = False
+                else:
+                    enable_thinking = True
 
         include_stop_str_in_output = request.include_stop_str_in_output
 
@@ -439,6 +447,14 @@ class OpenAIServingChat:
         enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
         if enable_thinking is None:
             enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
+        options = request.chat_template_kwargs.get("options") if request.chat_template_kwargs else None
+        if options:
+            thinking_mode = options.get("thinking_mode")
+            if thinking_mode:
+                if thinking_mode == "close" or thinking_mode == "false":
+                    enable_thinking = False
+                else:
+                    enable_thinking = True
 
         include_stop_str_in_output = request.include_stop_str_in_output
         try:
