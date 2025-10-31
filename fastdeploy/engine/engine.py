@@ -101,6 +101,25 @@ class LLMEngine:
         Initializes the engine and starts its sub-services.
         If `api_server_pid` is defined, will launch a thread
         to keep getting request from zmq_server.
+
+        NOTE: To clarify the launch order of the components of the LLM engine:
+        1. First, launch splitwise scheduler (if necessary) and expert services (if necessary).
+        2. Then, launch common engine, which includes some background threads that inserts tasks and receives ouptuts.
+        3. Most importantly, launch workers and cache services. The launch order of them are listed as follows.
+
+            | Profile | Mixed | PrefixCache | Cache -> Worker | Worker -> Cache |
+            |---------|-------|-------------|-----------------|-----------------|
+            | 1       | 1     | 1           | 0               | 1               |
+            | 1       | 1     | 0           | 0               | 0               |
+            | 1       | 0     | 1           | 0               | 1               |
+            | 1       | 0     | 0           | 0               | 1               |
+            | 0       | 1     | 1           | 0               | 1               |
+            | 0       | 1     | 0           | 0               | 0               |
+            | 0       | 0     | 1           | 1               | 0               |
+            | 0       | 0     | 0           | 1               | 0               |
+
+        4. Finally, inform user the engine has successfully started.
+
         """
         assert not self.is_started, "The engine is already started."
         start_time = time.time()
@@ -109,7 +128,6 @@ class LLMEngine:
         self.ipc_signal_suffix = self.cfg.parallel_config.engine_worker_queue_port[0]
         self._init_worker_signals()
 
-        # Launch components: scheduler, cache_manager, expert_service et.al.
         self.launch_components()
 
         self.engine.start()
@@ -151,7 +169,7 @@ class LLMEngine:
         # and then start the cache manager
         if self.do_profile:
             self._stop_profile()
-        elif self.cfg.cache_config.enable_prefix_caching:
+        elif self.cfg.scheduler_config.splitwise_role == "mixed" and self.cfg.cache_config.enable_prefix_caching:
             device_ids = self.cfg.parallel_config.device_ids.split(",")
             self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 

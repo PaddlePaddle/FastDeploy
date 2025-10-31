@@ -534,10 +534,11 @@ class CacheMessagerV1:
                             current_info["sended_layer_id"] = -1
                             current_info["sended_block_num"] = current_info["decode_cached_tokens"] // self.block_size
                             current_info["status"] = "init"
-                            logger.info(f"finish add cache task: {current_info}")
+                            logger.info(f"Get cache info from P: finish add cache task: {current_info}")
                             self.cache_info[info["request_id"]] = current_info
                             self.idx_cache_task_dict[current_info["current_id"]] = current_info
                         else:
+                            logger.info(f"Get cache info from D: {info}")
                             self.cache_info[info["request_id"]] = info
 
                     if finished_add_cache_task_req_ids:
@@ -717,6 +718,9 @@ class CacheMessagerV1:
                         )
                         batch_engine_signals.append((engine_idx, chuck_token_offset + current_seq_len))
                     if layer_id == 0:
+                        logger.info(
+                            f"Put batch_engine_signals {batch_engine_signals} into cache_prefilled_engine_ids_queue"
+                        )
                         self.cache_prefilled_engine_ids_queue.put(batch_engine_signals)
             except Exception as e:
                 logger.error(f"Consume signals get exception: {e}")

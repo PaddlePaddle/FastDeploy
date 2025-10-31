@@ -41,7 +41,12 @@ from fastdeploy.config import (
     StructuredOutputsConfig,
 )
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
-from fastdeploy.inter_communicator import ExistTaskStatus, IPCSignal, ModelWeightsStatus
+from fastdeploy.inter_communicator import (
+    ExistTaskStatus,
+    IPCSignal,
+    ModelWeightsStatus,
+    shared_memory_exists,
+)
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
@@ -288,7 +293,6 @@ class PaddleDisWorkerProc:
             # The first worker detects whether there are tasks in the task queue
             if local_rank == 0:
                 if self.task_queue.num_tasks() > 0:
-                    # VL only support 1 batch to prefill
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
                     ):
@@ -432,7 +436,7 @@ class PaddleDisWorkerProc:
                 array=prefilled_step_idx_data,
                 dtype=np.int32,
                 suffix=gpu_id,
-                create=False,
+                create=not shared_memory_exists(prefilled_step_name),
             )
             step_shm_value.value[0] = -1
 
