@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,7 +22,13 @@ FD_CPU_USE_BF16=${3:-"false"}
 # For SM90 (Hopper), use 90. For SM100 (Blackwell), use 100.
 # These will be translated to 90a / 100a in setup_ops.py for specific features.
 FD_BUILDING_ARCS=${4:-""}
-
+# FD_USE_PRECOMPILED: Specify whether to use precompiled custom ops.
+# 1 = use precompiled ops (default)
+# 0 = build ops from source
+FD_USE_PRECOMPILED=${5:-1}
+# FD_COMMIT_ID: Specify the commit ID for locating precompiled wheel packages.
+# If not provided, the current git commit ID will be used automatically.
+FD_COMMIT_ID=${6:-""}
 
 # paddle distributed use to set archs
 unset PADDLE_CUDA_ARCH_LIST
@@ -31,6 +37,7 @@ unset PADDLE_CUDA_ARCH_LIST
 DIST_DIR="dist"
 BUILD_DIR="build"
 EGG_DIR="fastdeploy.egg-info"
+PRE_WHEEL_DIR="pre_wheel"
 
 # custom_ops directory config
 OPS_SRC_DIR="custom_ops"
@@ -40,6 +47,7 @@ OPS_TMP_DIR="tmp"
 RED='\033[0;31m'
 BLUE='\033[0;34m'
 GREEN='\033[1;32m'
+YELLOW='\033[1;33m'
 BOLD='\033[1m'
 NONE='\033[0m'
 
@@ -57,11 +65,10 @@ function python_version_check() {
 
 function init() {
     echo -e "${BLUE}[init]${NONE} removing building directory..."
-    rm -rf $DIST_DIR $BUILD_DIR $EGG_DIR
+    rm -rf $BUILD_DIR $EGG_DIR $DIST_DIR $PRE_WHEEL_DIR
     ${python} -m pip install setuptools_scm
     echo -e "${BLUE}[init]${NONE} ${GREEN}init success\n"
 }
-
 
 function copy_ops(){
     OPS_VERSION="0.0.0"
@@ -141,6 +148,90 @@ function copy_ops(){
     echo -e "CPU ops have been copy to fastdeploy"
     return
 }
+
+function install_from_precompiled_wheel() {
+  local WHL_NAME="fastdeploy_gpu-2.3.0.dev0-py3-none-any.whl"
+  if [ -z "$FD_COMMIT_ID" ]; then
+    if git rev-parse HEAD >/dev/null 2>&1; then
+      FD_COMMIT_ID=$(git rev-parse HEAD)
+      echo -e "${BLUE}[init]${NONE} Using current repo commit ID: ${GREEN}${FD_COMMIT_ID}${NONE}"
+    else
+      echo -e "${RED}[ERROR]${NONE} Cannot determine commit ID (not a git repo). Please provide manually."
+      exit 1
+    fi
+  fi
+
+  local WHL_PATH="${PRE_WHEEL_DIR}/${WHL_NAME}"
+  local REMOTE_URL="https://paddle-github-action.bj.bcebos.com/BRANCH/FastDeploy/develop/${FD_COMMIT_ID}/SM90/${WHL_NAME}"
+
+  mkdir -p "${PRE_WHEEL_DIR}"
+
+  if [ ! -f "$WHL_PATH" ]; then
+    echo -e "${BLUE}[precompiled]${NONE} Local wheel not found, downloading from: ${REMOTE_URL}"
+    wget -q --no-check-certificate -O "$WHL_PATH" "$REMOTE_URL" || {
+        echo -e "${YELLOW}[WARNING]${NONE} ${YELLOW}Failed to download wheel."
+        return 1
+    }
+    echo -e "${GREEN}[SUCCESS]${NONE} Downloaded precompiled wheel to ${WHL_PATH}"
+  else
+    echo -e "${BLUE}[precompiled]${NONE} Found local wheel: ${WHL_PATH}"
+    if ! unzip -t "$WHL_PATH" >/dev/null 2>&1; then
+      echo -e "${BLUE}[WARNING]${NONE} ${YELLOW}Local wheel seems invalid."
+      echo -e "${BLUE}[fallback]${NONE} ${YELLOW}Falling back to source compilation..."
+      return 1
+    fi
+  fi
+
+  local TMP_DIR="${PRE_WHEEL_DIR}/tmp_whl_unpack"
+  rm -rf "$TMP_DIR"
+  mkdir -p "$TMP_DIR"
+
+  echo -e "${BLUE}[precompiled]${NONE} Unpacking wheel..."
+  ${python} -m zipfile -e "$WHL_PATH" "$TMP_DIR"
+
+  local DATA_DIR
+  DATA_DIR=$(find "$TMP_DIR" -maxdepth 1 -type d -name "*.data" | head -n 1)
+  if [ -z "$DATA_DIR" ]; then
+    echo -e "${RED}[ERROR]${NONE} Cannot find *.data directory in unpacked wheel."
+    rm -rf "$TMP_DIR"
+    echo -e "${YELLOW}[fallback]${NONE} Falling back to source compilation..."
+    FD_USE_PRECOMPILED=0
+    return 1
+  fi
+
+  local PLATLIB_DIR="${DATA_DIR}/platlib"
+  local SRC_DIR="${PLATLIB_DIR}/fastdeploy/model_executor/ops/gpu"
+  local DST_DIR="fastdeploy/model_executor/ops/gpu"
+
+  if [ ! -d "$SRC_DIR" ]; then
+    echo -e "${RED}[ERROR]${NONE} GPU ops directory not found in wheel: $SRC_DIR"
+    rm -rf "$TMP_DIR"
+    echo -e "${YELLOW}[fallback]${NONE} Falling back to source compilation..."
+    FD_USE_PRECOMPILED=0
+    return 1
+  fi
+
+  echo -e "${BLUE}[precompiled]${NONE} Copying GPU precompiled contents..."
+  mkdir -p "$DST_DIR"
+  cp -r "$SRC_DIR/deep_gemm" "$DST_DIR/" 2>/dev/null || true
+  cp -r "$SRC_DIR/fastdeploy_ops.py" "$DST_DIR/" 2>/dev/null || true
+  cp -f "$SRC_DIR/"fastdeploy_ops_*.so "$DST_DIR/" 2>/dev/null || true
+  cp -f "$SRC_DIR/version.txt" "$DST_DIR/" 2>/dev/null || true
+
+  echo -e "${BLUE}[precompiled]${NONE} Installing FastDeploy (editable mode)..."
+  if ! ${python} -m pip install -e . --no-build-isolation; then
+    echo -e "${RED}[FAIL]${NONE} pip install failed, fallback to source build..."
+    FD_USE_PRECOMPILED=0
+    rm -rf "$TMP_DIR"
+    return 1
+  fi
+
+  echo -e "${GREEN}[SUCCESS]${NONE} Installed FastDeploy using precompiled wheel."
+
+  rm -rf "${PRE_WHEEL_DIR}/tmp_whl_unpack"
+}
+
+
 
 function build_and_install_ops() {
   cd $OPS_SRC_DIR
@@ -243,9 +334,25 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
 
   init
   version_info
-  build_and_install_ops
-  build_and_install
-  cleanup
+  # Whether to enable Python-only mode
+  if [ "$FD_USE_PRECOMPILED" -eq 1 ]; then
+    echo -e "${BLUE}[MODE]${NONE} Python-only mode using precompiled .whl"
+    if install_from_precompiled_wheel; then
+      echo -e "${GREEN}[DONE]${NONE} Precompiled wheel installed successfully. Exiting."
+      trap : 0
+      exit 0
+    else
+      echo -e "${BLUE}[fallback]${NONE} ${YELLOW}Precompiled .whl unavailable, switching to source build."
+      FD_USE_PRECOMPILED=0
+    fi
+  fi
+  if [ "$FD_USE_PRECOMPILED" -eq 0 ]; then
+    echo -e "${BLUE}[MODE]${NONE} Building from source (ops)..."
+    build_and_install_ops
+    echo -e "${BLUE}[MODE]${NONE} Building full wheel from source..."
+    build_and_install
+    cleanup
+  fi
 
   # get Paddle version
   PADDLE_VERSION=`${python} -c "import paddle; print(paddle.version.full_version)"`
