@@ -493,7 +493,7 @@ __global__ void topk_with_k2_kernel(T* output,
 
 template <typename T, typename IdxT>
 __global__ void group_idx_and_topk_idx_kernel(
-    const T* scores,
+    T* scores,
     T const* group_scores,
     T* topk_values,
     IdxT* topk_indices,
@@ -620,7 +620,7 @@ __global__ void group_idx_and_topk_idx_kernel(
   }
 
   __syncthreads();
-
+  // Note(ZKK): a little trick.
   if (case_id < num_tokens && if_proceed_next_topk) {
     for (int i = lane_id; i < num_experts; i += WARP_SIZE) {
       scores[i] = 0;
