@@ -78,9 +78,6 @@ __global__ void GetMaxLenKernel(const int *seq_lens_decoder,
     max_lens[2] = total_max_len_decoder;
     max_lens[3] = total;
     max_lens[4] = total_just_dec;
-    max_lens[5] = 0;
-    max_lens[6] = 0;
-    max_lens[7] = 0;
     max_lens[8] = total_max_len_kv;
   }
 }
