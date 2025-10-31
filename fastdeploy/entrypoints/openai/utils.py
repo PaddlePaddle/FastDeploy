@@ -123,8 +123,12 @@ class DealerConnectionManager:
                 raw_data = await dealer.read()
                 response = msgpack.unpackb(raw_data[-1])
                 request_id = response[-1]["request_id"]
-                if "cmpl" == request_id[:4]:
-                    request_id = request_id.rsplit("-", 1)[0]
+                if request_id[:4] in ["cmpl", "embd"]:
+                    request_id = request_id.rsplit("_", 1)[0]
+                elif "reward" == request_id[:6]:
+                    request_id = request_id.rsplit("_", 1)[0]
+                elif "chatcmpl" == request_id[:8]:
+                    request_id = request_id.rsplit("_", 1)[0]
                 async with self.lock:
                     if request_id in self.request_map:
                         await self.request_map[request_id].put(response)
@@ -225,7 +229,14 @@ def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
         "--timeout-graceful-shutdown",
         default=0,
         type=int,
-        help="timeout for graceful shutdown in seconds (used by uvicorn)",
+        help="timeout for graceful shutdown in seconds (used by gunicorn).Setting it to 0 has the effect of infinite timeouts by disabling timeouts for all workers entirely.",
+    )
+
+    parser.add_argument(
+        "--timeout",
+        default=0,
+        type=int,
+        help="Workers silent for more than this many seconds are killed and restarted.Value is a positive number or 0. Setting it to 0 has the effect of infinite timeouts by disabling timeouts for all workers entirely.",
     )
 
     parser = EngineArgs.add_cli_args(parser)

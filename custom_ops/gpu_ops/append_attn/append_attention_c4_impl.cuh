@@ -36,6 +36,8 @@ void CascadeAppendAttentionC4Kernel(
         shift_bias,  // [num_kv_heads, head_dim]
     const paddle::optional<paddle::Tensor>&
         smooth_weight,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        sinks,  // [num_heads]
     const paddle::Tensor& seq_lens_q,
     const paddle::Tensor& seq_lens_kv,
     const paddle::Tensor& seq_lens_encoder,
@@ -58,7 +60,8 @@ void CascadeAppendAttentionC4Kernel(
     const bool is_decoder,
     const bool enable_prefill,
     cudaStream_t& stream,
-    paddle::Tensor* out) {
+    paddle::Tensor* out,
+    const int sliding_window) {
   const auto token_num = meta_data.token_nums;
   const auto block_size = meta_data.block_size;
   const auto bsz = meta_data.batch_size;
@@ -103,6 +106,7 @@ void CascadeAppendAttentionC4Kernel(
                                 cache_v_zp,
                                 shift_bias,
                                 smooth_weight,
+                                sinks,
                                 seq_lens_q,
                                 seq_lens_kv,
                                 seq_lens_encoder,
@@ -122,7 +126,8 @@ void CascadeAppendAttentionC4Kernel(
                                 speculate_max_draft_token_num,
                                 is_decoder,
                                 stream,
-                                out);
+                                out,
+                                sliding_window);
                           })})})})})})
 }
 
@@ -146,6 +151,8 @@ template void CascadeAppendAttentionC4Kernel<paddle::bfloat16, paddle::bfloat16>
         shift_bias,  // [num_kv_heads, head_dim]
     const paddle::optional<paddle::Tensor>&
         smooth_weight,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        sinks,  // [num_heads]
     const paddle::Tensor& seq_lens_q,
     const paddle::Tensor& seq_lens_kv,
     const paddle::Tensor& seq_lens_encoder,
@@ -168,7 +175,8 @@ template void CascadeAppendAttentionC4Kernel<paddle::bfloat16, paddle::bfloat16>
     const bool is_decoder,
     const bool enable_prefill,
     cudaStream_t& stream,
-    paddle::Tensor* out);
+    paddle::Tensor* out,
+    const int sliding_window);
 
 template void CascadeAppendAttentionC4Kernel<paddle::bfloat16, paddle::float8_e4m3fn>(
     const AppendAttnMetaData& meta_data,
@@ -190,6 +198,8 @@ template void CascadeAppendAttentionC4Kernel<paddle::bfloat16, paddle::float8_e4
         shift_bias,  // [num_kv_heads, head_dim]
     const paddle::optional<paddle::Tensor>&
         smooth_weight,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        sinks,  // [num_heads]
     const paddle::Tensor& seq_lens_q,
     const paddle::Tensor& seq_lens_kv,
     const paddle::Tensor& seq_lens_encoder,
@@ -212,7 +222,8 @@ template void CascadeAppendAttentionC4Kernel<paddle::bfloat16, paddle::float8_e4
     const bool is_decoder,
     const bool enable_prefill,
     cudaStream_t& stream,
-    paddle::Tensor* out);
+    paddle::Tensor* out,
+    const int sliding_window);
 
 template void CascadeAppendAttentionC4Kernel<paddle::bfloat16, int8_t>(
     const AppendAttnMetaData& meta_data,
@@ -234,6 +245,8 @@ template void CascadeAppendAttentionC4Kernel<paddle::bfloat16, int8_t>(
         shift_bias,  // [num_kv_heads, head_dim]
     const paddle::optional<paddle::Tensor>&
         smooth_weight,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        sinks,  // [num_heads]
     const paddle::Tensor& seq_lens_q,
     const paddle::Tensor& seq_lens_kv,
     const paddle::Tensor& seq_lens_encoder,
@@ -256,7 +269,8 @@ template void CascadeAppendAttentionC4Kernel<paddle::bfloat16, int8_t>(
     const bool is_decoder,
     const bool enable_prefill,
     cudaStream_t& stream,
-    paddle::Tensor* out);
+    paddle::Tensor* out,
+    const int sliding_window);
 
 template void CascadeAppendAttentionC4Kernel<paddle::float16, paddle::float16>(
     const AppendAttnMetaData& meta_data,
@@ -278,6 +292,8 @@ template void CascadeAppendAttentionC4Kernel<paddle::float16, paddle::float16>(
         shift_bias,  // [num_kv_heads, head_dim]
     const paddle::optional<paddle::Tensor>&
         smooth_weight,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        sinks,  // [num_heads]
     const paddle::Tensor& seq_lens_q,
     const paddle::Tensor& seq_lens_kv,
     const paddle::Tensor& seq_lens_encoder,
@@ -300,7 +316,8 @@ template void CascadeAppendAttentionC4Kernel<paddle::float16, paddle::float16>(
     const bool is_decoder,
     const bool enable_prefill,
     cudaStream_t& stream,
-    paddle::Tensor* out);
+    paddle::Tensor* out,
+    const int sliding_window);
 
 template void CascadeAppendAttentionC4Kernel<paddle::float16, paddle::float8_e4m3fn>(
     const AppendAttnMetaData& meta_data,
@@ -322,6 +339,8 @@ template void CascadeAppendAttentionC4Kernel<paddle::float16, paddle::float8_e4m
         shift_bias,  // [num_kv_heads, head_dim]
     const paddle::optional<paddle::Tensor>&
         smooth_weight,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        sinks,  // [num_heads]
     const paddle::Tensor& seq_lens_q,
     const paddle::Tensor& seq_lens_kv,
     const paddle::Tensor& seq_lens_encoder,
@@ -344,7 +363,8 @@ template void CascadeAppendAttentionC4Kernel<paddle::float16, paddle::float8_e4m
     const bool is_decoder,
     const bool enable_prefill,
     cudaStream_t& stream,
-    paddle::Tensor* out);
+    paddle::Tensor* out,
+    const int sliding_window);
 
 template void CascadeAppendAttentionC4Kernel<paddle::float16, int8_t>(
     const AppendAttnMetaData& meta_data,
@@ -366,6 +386,8 @@ template void CascadeAppendAttentionC4Kernel<paddle::float16, int8_t>(
         shift_bias,  // [num_kv_heads, head_dim]
     const paddle::optional<paddle::Tensor>&
         smooth_weight,  // [num_kv_heads, head_dim]
+    const paddle::optional<paddle::Tensor>&
+        sinks,  // [num_heads]
     const paddle::Tensor& seq_lens_q,
     const paddle::Tensor& seq_lens_kv,
     const paddle::Tensor& seq_lens_encoder,
@@ -388,4 +410,5 @@ template void CascadeAppendAttentionC4Kernel<paddle::float16, int8_t>(
     const bool is_decoder,
     const bool enable_prefill,
     cudaStream_t& stream,
-    paddle::Tensor* out);
+    paddle::Tensor* out,
+    const int sliding_window);

@@ -36,6 +36,7 @@ __global__ void multi_query_append_attention_kernel(
     T *__restrict__ cache_v,
     const T *__restrict__ shift_bias,     // [q_num_heads * HEAD_DIM]
     const T *__restrict__ smooth_weight,  // [q_num_heads * HEAD_DIM]
+    const T *__restrict__ sinks,  // [q_num_heads]
     const int *__restrict__ seq_lens,
     const int *__restrict__ seq_lens_kv,
     const int *__restrict__ batch_ids,
@@ -57,7 +58,8 @@ __global__ void multi_query_append_attention_kernel(
     float *__restrict__ tmp_m,      // [token_num, num_chunks, num_heads]
     float *__restrict__ tmp_d,      // [token_num, num_chunks, num_heads]
     OutT *__restrict__ out,
-    const int speculate_max_draft_token_num = 5) {
+    const int speculate_max_draft_token_num = 5,
+    const int sliding_window = 0) {
   constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
   const uint32_t btid = blockIdx.x, kv_head_idx = blockIdx.z;
   const uint32_t kv_num_heads = gridDim.z;
@@ -244,7 +246,7 @@ __global__ void multi_query_append_attention_kernel(
     compute_qk<num_frags_x, num_frags_y, num_frags_z, T>(
         &qo_smem, &q_smem_offset_r, &k_smem, &k_smem_offset_r, s_frag);
     // mask according to kv_idx and q_idx
-    if (iter >= mask_check_iteration) {
+    if (iter >= mask_check_iteration || sliding_window > 0) {
       mask_s<T,
              partition_kv,
              CAUSAL,
@@ -260,7 +262,8 @@ __global__ void multi_query_append_attention_kernel(
                           chunk_end,
                           -1,
                           s_frag,
-                          mask_offset_this_seq);
+                          mask_offset_this_seq,
+                          sliding_window);
 
     }
 
@@ -318,8 +321,21 @@ __global__ void multi_query_append_attention_kernel(
   wait_group<0>();
   __syncthreads();
 
-  if constexpr (!partition_kv) {
-    normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag);
+  if constexpr (!partition_kv ) {
+    if (sinks) {
+      float current_sinks[num_frags_x][2];
+      #pragma unroll
+      for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
+        #pragma unroll
+        for (uint32_t j = 0; j < 2; ++j) {
+          const uint32_t h_offset = (q_base_seq_id_this_block + fx * 16 + tid / 4 + 8 * j) % GROUP_SIZE;
+          current_sinks[fx][j] = static_cast<float>(sinks[q_head_idx + h_offset]);
+        }
+      }
+      normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag, m_frag, current_sinks);
+    } else {
+      normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag);
+    }
   }
   if constexpr (partition_kv) {
     write_o_reg_gmem_shift_smooth_quant<GROUP_SIZE,
@@ -411,6 +427,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     T *__restrict__ cache_v,
     const T *__restrict__ shift_bias,     // [q_num_heads * HEAD_DIM]
     const T *__restrict__ smooth_weight,  // [q_num_heads * HEAD_DIM]
+    const T *__restrict__ sinks,  // [q_num_heads]
     const int *__restrict__ seq_lens,
     const int *__restrict__ seq_lens_kv,
     const int *__restrict__ batch_ids,
@@ -434,7 +451,8 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     float *__restrict__ tmp_d,      // [token_num, num_chunks, num_heads]
     OutT *__restrict__ out,
     const int speculate_max_draft_token_num = 5,
-    const uint32_t attn_mask_len = -1) {
+    const uint32_t attn_mask_len = -1,
+    const int sliding_window = 0) {
   constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
   static_assert(NUM_WARP_Q == 1, "NUM_WARP_Q must be 1");
   static_assert(NUM_WARP_KV == 4, "NUM_WARP_KV must be 4");
@@ -622,7 +640,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     compute_qk<num_frags_x, num_frags_y, num_frags_z, T>(
         &qo_smem, &q_smem_offset_r, &k_smem, &k_smem_offset_r, s_frag);
     // mask according to kv_idx and q_idx
-    if (iter >= mask_check_iteration) {
+    if (iter >= mask_check_iteration || sliding_window > 0) {
       mask_s<T,
              partition_kv,
              CAUSAL,
@@ -638,7 +656,8 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
                           chunk_end,
                           attn_mask_len,
                           s_frag,
-                          mask_offset_this_seq);
+                          mask_offset_this_seq,
+                          sliding_window);
     }
 
     // update m,d
@@ -699,7 +718,20 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
       o_frag, reinterpret_cast<float *>(smem), m_frag, d_frag, wid, tid);
 
   if (num_chunks_this_seq <= 1) {
-    normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag);
+    if (sinks) {
+      float current_sinks[num_frags_x][2];
+      #pragma unroll
+      for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
+        #pragma unroll
+        for (uint32_t j = 0; j < 2; ++j) {
+          const uint32_t h_offset = (q_base_seq_id_this_block + fx * 16 + tid / 4 + 8 * j) % GROUP_SIZE;
+          current_sinks[fx][j] = static_cast<float>(sinks[q_head_idx + h_offset]);
+        }
+      }
+      normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag, m_frag, current_sinks);
+    } else {
+      normalize_d<num_frags_x, num_frags_y>(o_frag, d_frag);
+    }
   }
 
   // write o
@@ -792,6 +824,7 @@ void MultiQueryAppendAttention(
     const paddle::optional<paddle::Tensor> &attn_mask,
     const paddle::optional<paddle::Tensor> &shift_bias,
     const paddle::optional<paddle::Tensor> &smooth_weight,
+    const paddle::optional<paddle::Tensor> &sinks,
     const paddle::Tensor &seq_lens_q,
     const paddle::Tensor &seq_lens_kv,
     const paddle::Tensor &seq_lens_encoder,
@@ -811,7 +844,8 @@ void MultiQueryAppendAttention(
     const int speculate_max_draft_token_num,
     const bool is_decoder,
     cudaStream_t &stream,
-    paddle::Tensor *out) {
+    paddle::Tensor *out,
+    const int sliding_window) {
   using NV_TYPE = typename cascade_attn_type_traits<T>::type;
   using OUT_NV_TYPE = typename cascade_attn_type_traits<OutT>::type;
 
@@ -898,6 +932,9 @@ void MultiQueryAppendAttention(
           smooth_weight ? reinterpret_cast<NV_TYPE *>(
                               const_cast<T *>(smooth_weight.get().data<T>()))
                         : nullptr,
+          sinks ? reinterpret_cast<NV_TYPE *>(
+                              const_cast<T *>(sinks.get().data<T>()))
+                        : nullptr,
           seq_lens_q.data<int>(),
           seq_lens_kv.data<int>(),
           batch_ids.data<int>(),
@@ -918,7 +955,8 @@ void MultiQueryAppendAttention(
           nullptr,
           nullptr,
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
-          speculate_max_draft_token_num);
+          speculate_max_draft_token_num,
+          sliding_window);
 
     } else {
       phi::Allocator::AllocationPtr tmp_workspace, tmp_m, tmp_d;
@@ -957,6 +995,9 @@ void MultiQueryAppendAttention(
           smooth_weight ? reinterpret_cast<NV_TYPE *>(
                               const_cast<T *>(smooth_weight.get().data<T>()))
                         : nullptr,
+          sinks ? reinterpret_cast<NV_TYPE *>(
+                              const_cast<T *>(sinks.get().data<T>()))
+                        : nullptr,
           seq_lens_q.data<int>(),
           seq_lens_kv.data<int>(),
           batch_ids.data<int>(),
@@ -977,7 +1018,8 @@ void MultiQueryAppendAttention(
           static_cast<float *>(tmp_m->ptr()),
           static_cast<float *>(tmp_d->ptr()),
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
-          speculate_max_draft_token_num);
+          speculate_max_draft_token_num,
+          sliding_window);
       // merge
       constexpr int vec_size = num_elems_per_128b<NV_TYPE>();
       if (is_decoder) {
@@ -1005,6 +1047,9 @@ void MultiQueryAppendAttention(
                 smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
                                     smooth_weight.get().data<T>()))
                               : nullptr,
+                sinks ? reinterpret_cast<NV_TYPE *>(
+                              const_cast<T *>(sinks.get().data<T>()))
+                        : nullptr,
                 reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
                 quant_max_bound,
                 quant_min_bound,
@@ -1041,6 +1086,9 @@ void MultiQueryAppendAttention(
                 smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
                                     smooth_weight.get().data<T>()))
                               : nullptr,
+                sinks ? reinterpret_cast<NV_TYPE *>(
+                              const_cast<T *>(sinks.get().data<T>()))
+                        : nullptr,
                 reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
                 quant_max_bound,
                 quant_min_bound,
@@ -1130,6 +1178,9 @@ void MultiQueryAppendAttention(
           smooth_weight ? reinterpret_cast<NV_TYPE *>(
                               const_cast<T *>(smooth_weight.get().data<T>()))
                         : nullptr,
+          sinks ? reinterpret_cast<NV_TYPE *>(
+                              const_cast<T *>(sinks.get().data<T>()))
+                        : nullptr,
           seq_lens_q.data<int>(),
           seq_lens_kv.data<int>(),
           batch_ids.data<int>(),
@@ -1153,7 +1204,8 @@ void MultiQueryAppendAttention(
           nullptr,
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
           speculate_max_draft_token_num,
-          attn_mask_len);
+          attn_mask_len,
+          sliding_window);
     } else {
       phi::Allocator::AllocationPtr tmp_workspace, tmp_m, tmp_d;
       if (is_decoder) {
@@ -1203,6 +1255,9 @@ void MultiQueryAppendAttention(
           smooth_weight ? reinterpret_cast<NV_TYPE *>(
                               const_cast<T *>(smooth_weight.get().data<T>()))
                         : nullptr,
+          sinks ? reinterpret_cast<NV_TYPE *>(
+                              const_cast<T *>(sinks.get().data<T>()))
+                        : nullptr,
           seq_lens_q.data<int>(),
           seq_lens_kv.data<int>(),
           batch_ids.data<int>(),
@@ -1226,7 +1281,8 @@ void MultiQueryAppendAttention(
           static_cast<float *>(tmp_d->ptr()),
           reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
           speculate_max_draft_token_num,
-          attn_mask_len);
+          attn_mask_len,
+          sliding_window);
 
       // merge
       constexpr int vec_size = num_elems_per_128b<NV_TYPE>();
@@ -1255,6 +1311,9 @@ void MultiQueryAppendAttention(
                 smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
                                     smooth_weight.get().data<T>()))
                               : nullptr,
+                sinks ? reinterpret_cast<NV_TYPE *>(
+                              const_cast<T *>(sinks.get().data<T>()))
+                        : nullptr,
                 reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
                 quant_max_bound,
                 quant_min_bound,
@@ -1291,6 +1350,9 @@ void MultiQueryAppendAttention(
                 smooth_weight ? reinterpret_cast<NV_TYPE *>(const_cast<T *>(
                                     smooth_weight.get().data<T>()))
                               : nullptr,
+                sinks ? reinterpret_cast<NV_TYPE *>(
+                                  const_cast<T *>(sinks.get().data<T>()))
+                            : nullptr,
                 reinterpret_cast<OUT_NV_TYPE *>(out->data<OutT>()),
                 quant_max_bound,
                 quant_min_bound,

@@ -26,29 +26,8 @@ T = TypeVar("T", default=paddle.Tensor)
 T_co = TypeVar("T_co", default=paddle.Tensor, covariant=True)
 
 
-def is_text_generation_model(model_cls: Type[nn.Layer]) -> bool:
-    from .model_base import ModelForCasualLM
-
-    return issubclass(model_cls, ModelForCasualLM)
-
-
 def is_pooling_model(model_cls: Type[nn.Layer]) -> bool:
     return getattr(model_cls, "is_pooling_model", False)
-
-
-def is_multimodal_model(class_name: str) -> bool:
-    multimodal_indicators = ["VL", "Vision", "ConditionalGeneration"]
-    return any(indicator in class_name for indicator in multimodal_indicators)
-
-
-def determine_model_category(class_name: str):
-    from fastdeploy.model_executor.models.model_base import ModelCategory
-
-    if any(pattern in class_name for pattern in ["VL", "Vision", "ConditionalGeneration"]):
-        return ModelCategory.MULTIMODAL
-    elif any(pattern in class_name for pattern in ["Embedding", "ForSequenceClassification"]):
-        return ModelCategory.EMBEDDING
-    return ModelCategory.TEXT_GENERATION
 
 
 def get_default_pooling_type(model_cls: Type[nn.Layer] = None) -> str:
@@ -100,3 +79,11 @@ class FdModelForPooling(FdModel[T_co], Protocol[T_co]):
     """
     pooler: Pooler
     """The pooler is only called on TP rank 0."""
+
+
+def default_pooling_type(pooling_type: str):
+    def func(model):
+        model.default_pooling_type = pooling_type  # type: ignore
+        return model
+
+    return func

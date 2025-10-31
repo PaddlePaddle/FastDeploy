@@ -17,6 +17,7 @@
 import asyncio
 import json
 import os
+import signal
 import threading
 import time
 import traceback
@@ -40,6 +41,7 @@ from fastdeploy.entrypoints.engine_client import EngineClient
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
+    ChatRewardRequest,
     CompletionRequest,
     CompletionResponse,
     ControlSchedulerRequest,
@@ -52,6 +54,7 @@ from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
 from fastdeploy.entrypoints.openai.serving_embedding import OpenAIServingEmbedding
 from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServingModels
+from fastdeploy.entrypoints.openai.serving_reward import OpenAIServingReward
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
 from fastdeploy.envs import environment_variables
@@ -182,10 +185,9 @@ async def lifespan(app: FastAPI):
         max_model_len=args.max_model_len,
         tensor_parallel_size=args.tensor_parallel_size,
         pid=pid,
-        port=int(args.engine_worker_queue_port[args.local_data_parallel_id]),
+        port=int(os.environ.get("INFERENCE_MSG_QUEUE_ID", "0")),
         limit_mm_per_prompt=args.limit_mm_per_prompt,
         mm_processor_kwargs=args.mm_processor_kwargs,
-        # args.enable_mm,
         reasoning_parser=args.reasoning_parser,
         data_parallel_size=args.data_parallel_size,
         enable_logprob=args.enable_logprob,
@@ -193,6 +195,7 @@ async def lifespan(app: FastAPI):
         tool_parser=args.tool_call_parser,
         enable_prefix_caching=args.enable_prefix_caching,
         splitwise_role=args.splitwise_role,
+        max_processor_cache=args.max_processor_cache,
     )
     await engine_client.connection_manager.initialize()
     app.state.dynamic_load_weight = args.dynamic_load_weight
@@ -231,12 +234,16 @@ async def lifespan(app: FastAPI):
         args.max_waiting_time,
         chat_template,
     )
+    reward_handler = OpenAIServingReward(
+        engine_client, app.state.model_handler, config, pid, args.ips, args.max_waiting_time, chat_template
+    )
     engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid
     app.state.engine_client = engine_client
     app.state.chat_handler = chat_handler
     app.state.completion_handler = completion_handler
     app.state.embedding_handler = embedding_handler
+    app.state.reward_handler = reward_handler
     global llm_engine
     if llm_engine is not None:
         llm_engine.engine.data_processor = engine_client.data_processor
@@ -375,7 +382,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
     """
     Create a chat completion for the provided prompt and parameters.
     """
-    api_server_logger.info(f"Chat Received request: {request.model_dump_json()}")
+    api_server_logger.debug(f"Chat Received request: {request.model_dump_json()}")
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.is_workers_alive()
         if not status:
@@ -446,6 +453,20 @@ async def list_models() -> Response:
         return JSONResponse(content=models.model_dump())
 
 
+@app.post("/v1/reward")
+async def create_reward(request: ChatRewardRequest):
+    """
+    Create reward for the input texts
+    """
+    if app.state.dynamic_load_weight:
+        status, msg = app.state.engine_client.is_workers_alive()
+        if not status:
+            return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
+
+    generator = await app.state.reward_handler.create_reward(request)
+    return JSONResponse(content=generator.model_dump())
+
+
 @app.post("/v1/embeddings")
 async def create_embedding(request: EmbeddingRequest):
     """
@@ -504,8 +525,8 @@ def launch_api_server() -> None:
         "workers": args.workers,
         "worker_class": "uvicorn.workers.UvicornWorker",
         "loglevel": "info",
-        "log_config": UVICORN_CONFIG,
-        "timeout_graceful_shutdown": args.timeout_graceful_shutdown,
+        "graceful_timeout": args.timeout_graceful_shutdown,
+        "timeout": args.timeout,
     }
 
     try:
@@ -650,6 +671,27 @@ def launch_controller_server():
     time.sleep(1)
 
 
+def launch_worker_monitor():
+    """
+    Detect whether worker process is alive. If not, stop the API serverby triggering llm_engine.
+    """
+
+    def _monitor():
+        global llm_engine
+        while True:
+            if hasattr(llm_engine, "worker_proc") and llm_engine.worker_proc.poll() is not None:
+                console_logger.error(
+                    f"Worker process has died in the background (code={llm_engine.worker_proc.returncode}). API server is forced to stop."
+                )
+                os.kill(os.getpid(), signal.SIGINT)
+                break
+            time.sleep(5)
+
+    worker_monitor_thread = threading.Thread(target=_monitor, daemon=True)
+    worker_monitor_thread.start()
+    time.sleep(1)
+
+
 def main():
     """main函数"""
     if args.local_data_parallel_id == 0:
@@ -663,6 +705,7 @@ def main():
     console_logger.info(f"Launching chat completion service at http://{args.host}:{args.port}/v1/chat/completions")
     console_logger.info(f"Launching completion service at http://{args.host}:{args.port}/v1/completions")
 
+    launch_worker_monitor()
     launch_controller_server()
     launch_metrics_server()
     launch_api_server()

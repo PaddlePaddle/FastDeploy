@@ -34,7 +34,7 @@ def set_value_by_flags_and_idx_numpy(
         current_step_idx = step_idx[i]
         if seq_len_enc == 0 and seq_len_dec == 0:
             continue
-        if current_step_idx >= 0:
+        if current_step_idx > 0:
             if seq_len_enc > 0:
                 token_idx = seq_len_enc - 1
                 token_to_assign = input_ids[i, token_idx]

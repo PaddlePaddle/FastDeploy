@@ -58,7 +58,7 @@ class SamplingParams:
             considered, relative to the probability of the most likely token.
             Must be in [0, 1]. Set to 0 to disable this.
         seed: Random seed to use for the generation.
-        stop_seqs: list of strings that stop the generation when they are generated.
+        stop: list of strings that stop the generation when they are generated.
             The returned output will not contain the stop strings.
         stop_token_ids: list of tokens that stop the generation when they are
             generated. The returned output will contain the stop tokens unless
@@ -90,7 +90,7 @@ class SamplingParams:
     top_k: int = 0
     min_p: float = 0.0
     seed: Optional[int] = None
-    stop_seqs: Optional[Union[str, List[str]]] = None
+    stop: Optional[Union[str, List[str]]] = None
     stop_token_ids: Optional[List[int]] = None
     stop_seqs_len: Optional[int] = None
     max_tokens: Optional[int] = None
@@ -103,6 +103,7 @@ class SamplingParams:
     bad_words: Optional[List[str]] = None
     guided_decoding: Optional[GuidedDecodingParams] = None
     bad_words_token_ids: Optional[List[int]] = None
+    logits_processors_args: Optional[dict[str, Any]] = None
 
     @classmethod
     def from_dict(cls, req_dict: dict[str, Any]) -> SamplingParams:
@@ -127,7 +128,7 @@ class SamplingParams:
         top_k,
         min_p,
         seed=None,
-        stop_seqs=None,
+        stop=None,
         stop_token_ids=None,
         max_tokens=None,
         reasoning_max_tokens=None,
@@ -136,6 +137,7 @@ class SamplingParams:
         bad_words=None,
         guided_decoding=None,
         bad_words_token_ids=None,
+        logits_processors_args=None,
     ) -> SamplingParams:
         """Create instance from command line arguments"""
         return cls(
@@ -149,7 +151,7 @@ class SamplingParams:
             top_k=top_k if top_k is not None else 0,
             min_p=min_p if min_p is not None else 0.0,
             seed=seed,
-            stop_seqs=stop_seqs,
+            stop=stop,
             stop_token_ids=stop_token_ids,
             max_tokens=max_tokens if max_tokens is not None else 8192,
             reasoning_max_tokens=reasoning_max_tokens,
@@ -158,6 +160,7 @@ class SamplingParams:
             bad_words=bad_words,
             guided_decoding=guided_decoding,
             bad_words_token_ids=bad_words_token_ids,
+            logits_processors_args=logits_processors_args,
         )
 
     def __post_init__(self):
@@ -207,6 +210,24 @@ class SamplingParams:
 
         if not 0 <= self.seed <= 922337203685477580:
             raise ValueError("seed must be in [0, 922337203685477580], got " f"{self.seed}.")
+
+        # Verify logits processors arguments
+        if self.logits_processors_args is not None:
+            if self.logits_processors_args.get("logit_bias") is not None:
+                logit_bias = self.logits_processors_args.get("logit_bias")
+                if not isinstance(logit_bias, dict):
+                    raise TypeError(f"logit_bias must be a dict, but got {type(logit_bias)}")
+                elif not all(isinstance(k, int) and isinstance(v, float) for k, v in logit_bias.items()):
+                    # try to cast the dict to the correct type first
+                    try:
+                        cast_logit_bias = {}
+                        for k, v in logit_bias.items():
+                            cast_logit_bias[int(k)] = float(v)
+                        self.logits_processors_args["logit_bias"] = cast_logit_bias
+                    except:
+                        raise TypeError(
+                            "failed to cast logit_bias to the correct {key -> value} type, expected {int -> float}"
+                        )
 
 
 @dataclass

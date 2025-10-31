@@ -92,6 +92,8 @@ class AppendAttentionBackend(AttentionBackend):
         self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False) or getattr(
             fd_config.model_config, "use_3d_rope", False
         )
+        if fd_config.speculative_config.model_type != "main":
+            self.rope_3d = False
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
         self.speculative_method: str = fd_config.speculative_config.method
         self.use_speculate: bool = self.speculative_method is not None
@@ -117,6 +119,7 @@ class AppendAttentionBackend(AttentionBackend):
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
         self.use_output = not fd_config.graph_opt_config.full_cuda_graph
+        self.fd_config = fd_config
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
@@ -195,6 +198,8 @@ class AppendAttentionBackend(AttentionBackend):
         forward_mixed
         """
         metadata = self.attention_metadata
+
+        sliding_window = layer.sliding_window
 
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
@@ -309,6 +314,7 @@ class AppendAttentionBackend(AttentionBackend):
                 metadata.kv_signal_data_list[layer.layer_id],
                 getattr(layer, "q_norm_weight", None),
                 getattr(layer, "k_norm_weight", None),
+                getattr(layer, "sinks", None),
                 getattr(layer, "rms_norm_eps", 1e-6),
                 metadata._fuse_kernel_compute_dtype,
                 getattr(layer, "cache_quant_type_str", "none"),
@@ -325,6 +331,7 @@ class AppendAttentionBackend(AttentionBackend):
                 self.speculate_max_draft_token_num + 1,
                 self.causal,
                 self.speculative_method is not None,
+                sliding_window,
             )
         else:
             res = append_attention(
@@ -359,10 +366,11 @@ class AppendAttentionBackend(AttentionBackend):
                 getattr(layer, "cache_v_zp", None),
                 layer.linear_shift,
                 layer.linear_smooth,
-                forward_meta.attn_mask_offsets,
+                None if self.use_speculate else forward_meta.attn_mask_offsets,
                 metadata.kv_signal_data_list[layer.layer_id],
                 getattr(layer, "q_norm_weight", None),
                 getattr(layer, "k_norm_weight", None),
+                getattr(layer, "sinks", None),
                 getattr(layer, "rms_norm_eps", 1e-6),
                 metadata._fuse_kernel_compute_dtype,
                 getattr(layer, "cache_quant_type_str", "none"),
@@ -377,7 +385,8 @@ class AppendAttentionBackend(AttentionBackend):
                 metadata.max_partition_size,
                 metadata.encoder_max_partition_size,
                 self.speculate_max_draft_token_num + 1,
-                self.causal,
+                self.causal or self.use_speculate,
                 self.speculative_method is not None,
+                sliding_window,
             )
         return res

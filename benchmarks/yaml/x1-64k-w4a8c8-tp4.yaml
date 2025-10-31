@@ -1,10 +1,10 @@
-reasoning-parser: ernie_x1
-tool_call_parser: ernie_x1
+reasoning-parser: ernie-x1
+tool_call_parser: ernie-x1
 tensor_parallel_size: 4
 max_model_len: 65536
 max_num_seqs: 128
 enable_prefix_caching: True
 enable_chunked_prefill: True
 gpu_memory_utilization: 0.85
-use_cudagraph: True
-enable_custom_all_reduce: True
+graph_optimization_config:
+  use_cudagraph: True

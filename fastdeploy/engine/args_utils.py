@@ -16,11 +16,10 @@
 
 import argparse
 import json
+import os
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional, Union
-
-import paddle
 
 from fastdeploy import envs
 from fastdeploy.config import (
@@ -54,6 +53,16 @@ def nullable_str(x: str) -> Optional[str]:
     Convert an empty string to None, preserving other string values.
     """
     return x if x else None
+
+
+def get_model_architecture(model: str, model_config_name: Optional[str] = "config.json") -> Optional[str]:
+    config_path = os.path.join(model, model_config_name)
+    if os.path.exists(config_path):
+        model_config = json.load(open(config_path, "r", encoding="utf-8"))
+        architecture = model_config["architectures"][0]
+        return architecture
+    else:
+        return model
 
 
 @dataclass
@@ -124,6 +133,14 @@ class EngineArgs:
     limit_mm_per_prompt: Optional[Dict[str, Any]] = None
     """
     Limitation of numbers of multi-modal data.
+    """
+    max_encoder_cache: int = -1
+    """
+    Maximum number of tokens in the encoder cache.
+    """
+    max_processor_cache: float = -1
+    """
+    Maximum number of bytes(in GiB) in the processor cache.
     """
     reasoning_parser: str = None
     """
@@ -199,7 +216,7 @@ class EngineArgs:
     The amount of CPU memory to offload to.
     """
 
-    cache_queue_port: str = "8003"
+    cache_queue_port: str = "0"
     """
     Port for cache queue.
     """
@@ -219,7 +236,7 @@ class EngineArgs:
     Flag to enable the custom all-reduce kernel.
     """
 
-    engine_worker_queue_port: str = "8002"
+    engine_worker_queue_port: str = "0"
     """
     Port for worker queue communication.
     """
@@ -354,10 +371,6 @@ class EngineArgs:
     """
     SplitWise Use, Results Writer Batch Size
     """
-    use_cudagraph: bool = False
-    """
-    Flags to enable Cuda Graph
-    """
     graph_optimization_config: Optional[Dict[str, Any]] = None
     """
     Configuration for graph optimization backend execution.
@@ -371,6 +384,15 @@ class EngineArgs:
     """
     Flag to enable logprob output. Default is False (disabled).
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
+    """
+
+    logprobs_mode: str = "raw_logprobs"
+    """
+    Indicates the content returned in the logprobs.
+    Supported mode:
+    1) raw_logprobs, 2) processed_logprobs, 3) raw_logits, 4) processed_logits.
+    Raw means the values before applying logit processors, like bad words.
+    Processed means the values after applying such processors.
     """
 
     seed: int = 0
@@ -400,6 +422,16 @@ class EngineArgs:
     Flag to specify the dtype of lm_head as FP32. Default is False (Using model default dtype).
     """
 
+    logits_processors: Optional[List[str]] = None
+    """
+    A list of FQCNs (Fully Qualified Class Names) of logits processors supported by the service.
+    A fully qualified class name (FQCN) is a string that uniquely identifies a class within a Python module.
+
+    - To enable builtin logits processors, add builtin module paths and class names to the list. Currently support:
+        - fastdeploy.model_executor.logits_processor:LogitBiasLogitsProcessor
+    - To enable custom logits processors, add your dotted paths to module and class names to the list.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -416,18 +448,22 @@ class EngineArgs:
         # if self.dynamic_load_weight:
         #     self.enable_prefix_caching = False
         if self.enable_logprob:
-            if self.speculative_config is not None:
-                raise NotImplementedError("Logprob does not support speculation_config.")
             if not current_platform.is_cuda():
                 raise NotImplementedError("Only CUDA platform supports logprob.")
-        if self.speculative_config is not None:
-            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+            if self.speculative_config is not None and self.logprobs_mode.startswith("processed"):
+                raise NotImplementedError("processed_logprobs not support in speculative.")
+
         if self.splitwise_role != "mixed" and self.cache_transfer_protocol != "rdma":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if not current_platform.is_cuda() and not current_platform.is_xpu():
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if self.guided_decoding_backend != "off":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+
+        if "PaddleOCR" in get_model_architecture(self.model, self.model_config_name):
+            envs.FD_ENABLE_MAX_PREFILL = 1
+            self.enable_prefix_caching = False
+            self.max_encoder_cache = 0
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
@@ -524,6 +560,18 @@ class EngineArgs:
             help="Additional keyword arguments for the multi-modal processor.",
         )
         model_group.add_argument(
+            "--max-encoder-cache",
+            default=EngineArgs.max_encoder_cache,
+            type=int,
+            help="Maximum encoder cache tokens(use 0 to disable).",
+        )
+        model_group.add_argument(
+            "--max-processor-cache",
+            default=EngineArgs.max_processor_cache,
+            type=float,
+            help="Maximum processor cache bytes(use 0 to disable).",
+        )
+        model_group.add_argument(
             "--enable-mm",
             action=DeprecatedOptionWarning,
             default=EngineArgs.enable_mm,
@@ -589,16 +637,10 @@ class EngineArgs:
             "More complex quantization methods need to be configured via the config file.",
         )
         model_group.add_argument(
-            "--use-cudagraph",
-            action="store_true",
-            default=EngineArgs.use_cudagraph,
-            help="Flags to enable cuda graph.",
-        )
-        model_group.add_argument(
             "--graph-optimization-config",
             type=json.loads,
             default=EngineArgs.graph_optimization_config,
-            help="",
+            help="Configuration for graph optimization",
         )
         model_group.add_argument(
             "--plas-attention-config",
@@ -625,6 +667,13 @@ class EngineArgs:
             help="Enable output of token-level log probabilities.",
         )
         model_group.add_argument(
+            "--logprobs-mode",
+            type=str,
+            choices=["raw_logprobs", "raw_logits", "processed_logprobs", "processed_logits"],
+            default=EngineArgs.logprobs_mode,
+            help="Indicates the content returned in the logprobs.",
+        )
+        model_group.add_argument(
             "--seed",
             type=int,
             default=EngineArgs.seed,
@@ -647,6 +696,13 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.lm_head_fp32,
             help="Specify the dtype of lm_head weight as float32.",
+        )
+        model_group.add_argument(
+            "--logits-processors",
+            type=str,
+            nargs="+",
+            default=EngineArgs.logits_processors,
+            help="FQCNs (Fully Qualified Class Names) of logits processors supported by the service.",
         )
 
         # Parallel processing parameters group
@@ -1022,6 +1078,10 @@ class EngineArgs:
         all_dict = asdict(self)
         model_cfg = ModelConfig(all_dict)
 
+        # XPU currently disable prefix cache for VL model
+        if current_platform.is_xpu() and (self.enable_mm or model_cfg.enable_mm):
+            self.enable_prefix_caching = False
+
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size
 
@@ -1037,10 +1097,7 @@ class EngineArgs:
 
         if self.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                if paddle.is_compiled_with_xpu():
-                    self.max_num_batched_tokens = self.max_model_len
-                else:
-                    self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.enable_chunked_prefill:
                     self.max_num_batched_tokens = 2048
@@ -1059,7 +1116,6 @@ class EngineArgs:
         parallel_cfg = ParallelConfig(all_dict)
         scheduler_cfg = self.create_scheduler_config()
         graph_opt_cfg = self.create_graph_optimization_config()
-        graph_opt_cfg.update_use_cudagraph(self.use_cudagraph)
         plas_attention_config = self.create_plas_attention_config()
 
         early_stop_cfg = self.create_early_stop_config()

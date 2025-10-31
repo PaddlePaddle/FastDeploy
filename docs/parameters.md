@@ -37,9 +37,9 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```long_prefill_token_threshold``` | `int` | When Chunked Prefill is enabled, requests with token count exceeding this value are considered long requests, default: max_model_len*0.04 |
 | ```static_decode_blocks``` | `int` | During inference, each request is forced to allocate corresponding number of blocks from Prefill's KVCache for Decode use, default: 2 |
 | ```reasoning_parser``` | `str` | Specify the reasoning parser to extract reasoning content from model output |
-| ```use_cudagraph```                | `bool`      | Whether to use cuda graph, default False. It is recommended to read [graph_optimization.md](./features/graph_optimization.md) carefully before opening. Custom all-reduce needs to be enabled at the same time in multi-card scenarios. |
-| ```graph_optimization_config```    | `dict[str]`       | Can configure parameters related to calculation graph optimization, the default value is'{"use_cudagraph":false, "graph_opt_level":0, "cudagraph_capture_sizes": null }'，Detailed description reference [graph_optimization.md](./features/graph_optimization.md)|
-| ```enable_custom_all_reduce``` | `bool` | Enable Custom all-reduce, default: False |
+| ```use_cudagraph```                | `bool`      | __[DEPRECATED]__ CUDAGraph is enabled by default since version 2.3. It is recommended to read [graph_optimization.md](./features/graph_optimization.md) carefully before opening. |
+| ```graph_optimization_config```    | `dict[str]`       | Can configure parameters related to calculation graph optimization, the default value is'{"use_cudagraph":true, "graph_opt_level":0}'，Detailed description reference [graph_optimization.md](./features/graph_optimization.md)|
+| ```disable_custom_all_reduce``` | `bool` | Disable Custom all-reduce, default: False |
 | ```splitwise_role``` | `str` | Whether to enable splitwise inference, default value: mixed, supported parameters: ["mixed", "decode", "prefill"] |
 | ```innode_prefill_ports``` | `str` | Internal engine startup ports for prefill instances (only required for single-machine PD separation), default: None |
 | ```guided_decoding_backend``` | `str` | Specify the guided decoding backend to use, supports `auto`, `xgrammar`, `off`, default: `off` |
@@ -48,12 +48,15 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```dynamic_load_weight``` | `int` | Whether to enable dynamic weight loading, default: 0 |
 | ```enable_expert_parallel``` | `bool` | Whether to enable expert parallel |
 | ```enable_logprob``` | `bool` | Whether to enable return log probabilities of the output tokens or not. If true, returns the log probabilities of each output token returned in the content of message.If logrpob is not used, this parameter can be omitted when starting |
+| ```logprobs_mode``` | `str` | Indicates the content returned in the logprobs. Supported mode: `raw_logprobs`, `processed_logprobs`, `raw_logits`, `processed_logits`. Raw means the values before applying logit processors, like bad words. Processed means the values after applying such processors. |
 | ```served_model_name```| `str`| The model name used in the API. If not specified, the model name will be the same as the --model argument |
 | ```revision``` | `str` | The specific model version to use. It can be a branch name, a tag name, or a commit id. If unspecified, will use the default version. |
 | ```chat_template``` | `str` | Specify the template used for model concatenation, It supports both string input and file path input. The default value is None. If not specified, the model's default template will be used. |
 | ```tool_call_parser``` | `str` | Specify the function call parser to be used for extracting function call content from the model's output. |
 | ```tool_parser_plugin``` | `str` | Specify the file path of the tool parser to be registered, so as to register parsers that are not in the code repository. The code format within these parsers must adhere to the format used in the code repository. |
 | ```load_choices```       | `str`      | By default, the "default" loader is used for weight loading. To load Torch weights or enable weight acceleration, "default_v1" must be used.|
+| ```max_encoder_cache```   | `int` | Maximum number of tokens in the encoder cache (use 0 to disable). |
+| ```max_processor_cache```  | `int` | Maximum number of bytes(in GiB) in the processor cache (use 0 to disable). |
 
 ## 1. Relationship between KVCache allocation, ```num_gpu_blocks_override``` and ```block_size```?
 

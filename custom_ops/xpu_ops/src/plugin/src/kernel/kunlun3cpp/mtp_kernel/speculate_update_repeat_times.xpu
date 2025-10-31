@@ -152,8 +152,8 @@ __device__ void speculate_update_repeat_times_optimized(
               repeat_times_read_size_per_core * sizeof(int));
       }
       sync_all();
-      // each core loads pre_ids step by step and record the index of pre_ids
-      // which is less than zero, and store the index to boundary
+      // each core loads pre_ids step by step and record the index of
+      // pre_ids which is less than zero, and store the index to boundary
       if (repeat_times_start == 0) {
         bool do_prone = false;
         int64_t j = cid * pre_ids_lm_len;
@@ -190,8 +190,8 @@ __device__ void speculate_update_repeat_times_optimized(
           buffer_ptr_pre_ids.toggle();
         }
       }
-      // each core loads all the needed pre_ids into lm without mfence in between
-      // according to the index recorded by previous iteration
+      // each core loads all the needed pre_ids into lm without mfence in
+      // between according to the index recorded by previous iteration
       else {
         int cnt = -1;
         int64_t pre_ids_read_size = 0;

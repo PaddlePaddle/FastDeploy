@@ -28,7 +28,6 @@ from paddle.distributed import fleet
 from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
-    DecodingConfig,
     DeviceConfig,
     EarlyStopConfig,
     ErnieArchitectures,
@@ -41,7 +40,6 @@ from fastdeploy.config import (
     SpeculativeConfig,
     StructuredOutputsConfig,
 )
-from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import ExistTaskStatus, IPCSignal, ModelWeightsStatus
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
@@ -117,25 +115,9 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     architectures = fd_config.model_config.architectures
     if fd_config.model_config.enable_mm and ErnieArchitectures.contains_ernie_arch(architectures):
-        tokenizer = Ernie4_5Tokenizer.from_pretrained(
-            fd_config.model_config.model,
-            model_max_length=fd_config.model_config.max_model_len,
-            padding_side="right",
-            use_fast=False,
-        )
-        tokenizer.ignored_index = -100
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.unk_token
-
         fd_config.model_config.tensor_parallel_degree = fd_config.parallel_config.tensor_parallel_size
         fd_config.model_config.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
-        vision_config = fd_config.model_config.vision_config
-        vision_config.dtype = fd_config.model_config.dtype
-        # vision_config.tensor_parallel_degree = fd_config.parallel_config.tensor_parallel_size
-        # vision_config.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
-        fd_config.model_config.im_patch_id = tokenizer.get_vocab()["<|IMAGE_PLACEHOLDER|>"]
-        fd_config.model_config.think_end_id = tokenizer.get_vocab()["</think>"]
-        fd_config.model_config.sequence_parallel = fd_config.parallel_config.sequence_parallel
+        fd_config.model_config.vision_config.dtype = fd_config.model_config.dtype
 
 
 class PaddleDisWorkerProc:
@@ -498,7 +480,7 @@ def parse_args():
         help="model dir",
     )
     parser.add_argument("-mbs", "--max_num_seqs", type=int, default=34, help="max batch size")
-    parser.add_argument("--total_block_num", type=int, default=2000)
+    parser.add_argument("--num_gpu_blocks_override", type=int, default=None)
     parser.add_argument("--block_size", type=int, default=64)
     parser.add_argument("--pod_ip", type=str, default="127.0.0.1")
     parser.add_argument("--engine_worker_queue_port", type=str, default="9923")
@@ -577,6 +559,8 @@ def parse_args():
     )
     parser.add_argument("--ori_vocab_size", type=int, default=None)
     parser.add_argument("--think_end_id", type=int, default=-1)
+    parser.add_argument("--image_patch_id", type=int, default=-1)
+    parser.add_argument("--line_break_id", type=int, default=-1)
 
     parser.add_argument(
         "--quantization",
@@ -631,6 +615,12 @@ def parse_args():
         help="Enable output of token-level log probabilities.",
     )
     parser.add_argument(
+        "--logprobs_mode",
+        type=str,
+        default="raw_logprobs",
+        help="Indicates the content returned in the logprobs.",
+    )
+    parser.add_argument(
         "--reasoning_parser",
         type=str,
         default=None,
@@ -664,6 +654,12 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--max_encoder_cache",
+        type=int,
+        help="Maximum encoder cache tokens(use 0 to disable).",
+    )
+
+    parser.add_argument(
         "--cache-transfer-protocol",
         type=str,
         default="ipc",
@@ -690,6 +686,14 @@ def parse_args():
         help="Override configuration for the pooler.",
     )
 
+    parser.add_argument(
+        "--logits-processors",
+        type=str,
+        nargs="+",
+        default=[],
+        help="FQCNs (Fully Qualified Class Names) of logits processors supported by the service.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -707,11 +711,11 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     paddle.set_default_dtype(args.dtype)
     model_config = ModelConfig(vars(args))
     device_config = DeviceConfig(vars(args))
-    decoding_config = DecodingConfig(vars(args))
     speculative_config = SpeculativeConfig(args.speculative_config)
     parallel_config = ParallelConfig(vars(args))
     cache_config = CacheConfig(vars(args))
     scheduler_config = SchedulerConfig(vars(args))
+
     parallel_config.tensor_parallel_rank = local_rank % parallel_config.tensor_parallel_size
     parallel_config.data_parallel_rank = local_rank // parallel_config.tensor_parallel_size
     # config for EP
@@ -725,7 +729,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         num_experts_per_rank = num_experts // parallel_config.expert_parallel_size
         num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        parallel_config.local_data_parallel_id = expert_parallel_rank % max_chips_per_node
+        parallel_config.local_data_parallel_id = parallel_config.data_parallel_rank % (
+            max_chips_per_node // parallel_config.tensor_parallel_size
+        )
 
         parallel_config.expert_parallel_rank = expert_parallel_rank
         parallel_config.num_experts_per_rank = num_experts_per_rank
@@ -783,13 +789,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
 
-    if (
-        args.speculative_config is not None
-        and ("method" in args.speculative_config)
-        and (args.speculative_config["method"] is not None)
-    ):
-        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not support speculative decoding now.")
-        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
     if args.splitwise_role != "mixed" and args.cache_transfer_protocol != "rdma":
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
     if not current_platform.is_cuda() and not current_platform.is_xpu():
@@ -808,7 +807,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         speculative_config=speculative_config,
         device_config=device_config,
         load_config=load_config,
-        decoding_config=decoding_config,
         quant_config=quant_config,
         graph_opt_config=graph_opt_config,
         early_stop_config=early_stop_config,
@@ -821,6 +819,12 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     update_fd_config_for_mm(fd_config)
     if fd_config.load_config.load_choices == "default_v1" and not v1_loader_support(fd_config):
         fd_config.load_config.load_choices = "default"
+
+    architecture = fd_config.model_config.architectures[0]
+    if "PaddleOCR" in architecture:
+        envs.FD_ENABLE_MAX_PREFILL = 1
+        fd_config.cache_config.enable_prefix_caching = False
+        fd_config.cache_config.max_encoder_cache = 0
     return fd_config
 
 

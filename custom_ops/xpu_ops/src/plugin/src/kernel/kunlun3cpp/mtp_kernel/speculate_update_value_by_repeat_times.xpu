@@ -240,18 +240,20 @@ __global__ void speculate_update_value_by_repeat_times_simd(
           alpha,
           logits_,
           logits_,
-          (time_mask &
-           ~logit_mask));  // when time != 0 && logit < 0, do alpha * logit
+          (time_mask & ~logit_mask));  // when time != 0 && logit < 0, do
+                                       // alpha * logit
       logits_ = svmul_float32x16_mh(
           1.0f / alpha,
           logits_,
           logits_,
           (time_mask & logit_mask));  // when time != 0 && >=0, do logit / alpha
-      logits_ = vvsub_float32x16_mh(
-          logits_, time_, logits_, time_mask);  // when time != 0, do logit =
-                                                // logit - time * beta - gamma;
-      logits_ =
-          svmul_float32x16(1.0f / temperature, logits_);  // logit / temperature
+      logits_ = vvsub_float32x16_mh(logits_,
+                                    time_,
+                                    logits_,
+                                    time_mask);  // when time != 0, do logit =
+                                                 // logit - time * beta - gamma;
+      logits_ = svmul_float32x16(1.0f / temperature,
+                                 logits_);  // logit / temperature
       vstore_lm_float32x16(logits_lm + j, logits_);
     }
     mfence_lm();

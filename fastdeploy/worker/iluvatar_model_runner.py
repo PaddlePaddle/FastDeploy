@@ -31,6 +31,8 @@ class IluvatarModelRunner(GPUModelRunner):
         rank: int,
         local_rank: int,
     ):
+        # Iluvatar does not support cudagraph
+        fd_config.graph_opt_config.use_cudagraph = False
         super(IluvatarModelRunner, self).__init__(
             fd_config=fd_config, device=device, device_id=device_id, rank=rank, local_rank=local_rank
         )
@@ -40,6 +42,7 @@ class IluvatarModelRunner(GPUModelRunner):
         assert not self.cache_config.enable_prefix_caching, "Iluvatar does not support prefix caching"
         self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
         assert not self.mla_cache, "Iluvatar does not support MLA"
+        assert not self.use_cudagraph, "Iluvatar does not support cudagraph"
         if self.enable_mm:
             assert (
                 not self.cache_config.enable_chunked_prefill

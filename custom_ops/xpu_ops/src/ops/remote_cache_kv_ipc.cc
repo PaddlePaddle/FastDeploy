@@ -74,8 +74,8 @@ RemoteCacheKvIpc::open_shm_and_get_complete_signal_meta_data(
   using type_meta_data =
       RemoteCacheKvIpc::save_cache_kv_complete_signal_layerwise_meta_data;
 
-  // std::printf("#### open_shm_and_get_complete_signal_meta_data layer idx:%d,
-  // to ptx:%p \n",
+  // std::printf("#### open_shm_and_get_complete_signal_meta_data layer
+  // idx:%d, to ptx:%p \n",
   //             -1, signal_ptr);
 
   type_meta_data meta_data(-1, signal_ptr, signal_shm_fd);
@@ -102,8 +102,8 @@ void RemoteCacheKvIpc::save_cache_kv_complete_signal_layerwise(
   int32_t layer_id = meta_data_ptr[0];
   int32_t* ptr = reinterpret_cast<int32_t*>(meta_data_ptr[1]);
   *ptr = layer_id;
-  // std::printf("#### save_cache_kv_complete_signal_layerwise layer idx:%d, to
-  // ptx:%p \n",
+  // std::printf("#### save_cache_kv_complete_signal_layerwise layer idx:%d,
+  // to ptx:%p \n",
   //             *ptr, meta_data_ptr[1]);
 }
 

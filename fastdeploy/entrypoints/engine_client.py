@@ -19,6 +19,7 @@ import os
 import time
 import traceback
 import uuid
+from copy import copy
 
 import numpy as np
 from filelock import FileLock
@@ -36,7 +37,6 @@ from fastdeploy.inter_communicator import (
     ZmqIpcClient,
 )
 from fastdeploy.metrics.work_metrics import work_process_metrics
-from fastdeploy.multimodal.registry import MultimodalRegistry
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import (
     EngineError,
@@ -61,7 +61,6 @@ class EngineClient:
         port,
         limit_mm_per_prompt,
         mm_processor_kwargs,
-        # enable_mm=False,
         reasoning_parser=None,
         data_parallel_size=1,
         enable_logprob=False,
@@ -69,20 +68,18 @@ class EngineClient:
         tool_parser=None,
         enable_prefix_caching=None,
         splitwise_role=None,
+        max_processor_cache=0,
     ):
-        architectures = ModelConfig({"model": model_name_or_path}).architectures[0]
-        if MultimodalRegistry.contains_model(architectures):
-            self.enable_mm = True
-        else:
-            self.enable_mm = False
-
+        model_config = ModelConfig({"model": model_name_or_path})
+        self.enable_mm = model_config.enable_mm
+        enable_processor_cache = self.enable_mm and max_processor_cache > 0
         input_processor = InputPreprocessor(
-            tokenizer,
+            model_config,
             reasoning_parser,
             limit_mm_per_prompt,
             mm_processor_kwargs,
-            self.enable_mm,
             tool_parser,
+            enable_processor_cache,
         )
         self.enable_logprob = enable_logprob
         self.reasoning_parser = reasoning_parser
@@ -91,6 +88,13 @@ class EngineClient:
         self.enable_prefix_caching = enable_prefix_caching
         self.enable_splitwise = splitwise_role != "mixed"
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+
+        if self.enable_mm and self.enable_prefix_caching:
+            from fastdeploy.cache_manager.cache_data import (
+                is_mm_model_disable_prefix_cache,
+            )
+
+            self.disable_prefix_mm = is_mm_model_disable_prefix_cache(model_config)
 
         if tensor_parallel_size <= max_chips_per_node:
             self.is_master = True
@@ -158,6 +162,16 @@ class EngineClient:
         await self.add_requests(prompts)
         return prompts["prompt_token_ids"]
 
+    def _check_mm_disable_prefix_cache(self, task):
+        is_multimodal_data = False
+        if self.disable_prefix_mm:
+            multimodal_inputs = task.get("multimodal_inputs", [])
+            if multimodal_inputs:
+                token_type_ids = multimodal_inputs.get("token_type_ids", [])
+                if token_type_ids:
+                    is_multimodal_data = np.sum(token_type_ids) > 0
+        return is_multimodal_data
+
     async def add_requests(self, task):
         """
         Add a new request to the queue.
@@ -173,12 +187,22 @@ class EngineClient:
         task["preprocess_start_time"] = time.time()
         try:
             chat_template_kwargs = task.get("chat_template_kwargs") or {}
-            chat_template_kwargs.update({"chat_template": task.get("chat_template"), "tools": task.get("tools")})
+            chat_template_kwargs.update({"chat_template": task.get("chat_template")})
             task["chat_template_kwargs"] = chat_template_kwargs
             if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
                 await self.data_processor.process_request_dict(task, self.max_model_len)
             else:
                 self.data_processor.process_request_dict(task, self.max_model_len)
+
+            if self.enable_mm and self.enable_prefix_caching:
+                if self._check_mm_disable_prefix_cache(task):
+                    api_server_logger.error(
+                        "The current service does not support processing requests containing multimodal data when prefix cache is enabled. Please send only text-based requests or disable prefix cache"
+                    )
+                    raise EngineError(
+                        "The current service does not support processing requests containing multimodal data when prefix cache is enabled. Please send only text-based requests or disable prefix cache",
+                        error_code=400,
+                    )
 
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]
@@ -238,14 +262,28 @@ class EngineClient:
 
         self.valid_parameters(task)
         api_server_logger.debug(f"Receive task: {task}")
+        n = task.get("n", 1)
         try:
-            if not self.enable_mm:
-                self.zmq_client.send_json(task)
+            request_id_idx = task.get("request_id")
+            parts = request_id_idx.rsplit("_", 1)
+            if len(parts) == 1:
+                self._send_task(task)
             else:
-                self.zmq_client.send_pyobj(task)
+                request_id = parts[0]
+                index = int(parts[1])
+                for i in range(index * n, (index + 1) * n):
+                    child_task = copy(task)
+                    child_task["request_id"] = f"{request_id}_{i}"
+                    self._send_task(child_task)
         except Exception as e:
             api_server_logger.error(f"zmq_client send task error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
+
+    def _send_task(self, task):
+        if not self.enable_mm:
+            self.zmq_client.send_json(task)
+        else:
+            self.zmq_client.send_pyobj(task)
 
     def valid_parameters(self, data):
         """
@@ -253,10 +291,6 @@ class EngineClient:
         超参数（top_p、seed、frequency_penalty、temperature、presence_penalty）的校验逻辑
         前置到了ChatCompletionRequest/CompletionRequest中
         """
-
-        if data.get("n") is not None:
-            if data["n"] != 1:
-                raise ParameterError("n", "n only support 1.")
 
         if data.get("max_tokens") is not None:
             if data["max_tokens"] < 1 or data["max_tokens"] >= self.max_model_len:
