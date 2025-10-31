@@ -33,10 +33,14 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         max_think_lens = paddle.to_tensor([10, 15], dtype="int32")
         step_idx = paddle.to_tensor([[5], [8]], dtype="int64")
         limit_think_status = paddle.to_tensor([0, 0], dtype="int32")
+        stop_flags = paddle.to_tensor([False, False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
         think_end_id = 999
 
         # Run operator
-        limit_thinking_content_length_v1(next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id)
+        limit_thinking_content_length_v1(
+            next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, eos_token_ids, think_end_id
+        )
 
         # Verify: tokens unchanged, status unchanged
         assert next_tokens.numpy()[0, 0] == 100
@@ -50,10 +54,14 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         max_think_lens = paddle.to_tensor([5, 8], dtype="int32")
         step_idx = paddle.to_tensor([[5], [10]], dtype="int64")  # Both exceed or equal limit
         limit_think_status = paddle.to_tensor([0, 0], dtype="int32")
+        stop_flags = paddle.to_tensor([False, False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
         think_end_id = 999
 
         # Run operator
-        limit_thinking_content_length_v1(next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id)
+        limit_thinking_content_length_v1(
+            next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, eos_token_ids, think_end_id
+        )
 
         # Verify: tokens replaced with think_end_id, status changed to 2
         assert next_tokens.numpy()[0, 0] == 999  # Replaced
@@ -67,10 +75,14 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         max_think_lens = paddle.to_tensor([10], dtype="int32")
         step_idx = paddle.to_tensor([[3]], dtype="int64")  # Still within limit
         limit_think_status = paddle.to_tensor([0], dtype="int32")
+        stop_flags = paddle.to_tensor([False, False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
         think_end_id = 999
 
         # Run operator
-        limit_thinking_content_length_v1(next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id)
+        limit_thinking_content_length_v1(
+            next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, eos_token_ids, think_end_id
+        )
 
         # Verify: token unchanged (already think_end_id), status changed to 2
         assert next_tokens.numpy()[0, 0] == 999
@@ -82,10 +94,14 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         max_think_lens = paddle.to_tensor([5], dtype="int32")
         step_idx = paddle.to_tensor([[6]], dtype="int64")
         limit_think_status = paddle.to_tensor([1], dtype="int32")  # Status is 1
+        stop_flags = paddle.to_tensor([False, False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
         think_end_id = 999
 
         # Run operator
-        limit_thinking_content_length_v1(next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id)
+        limit_thinking_content_length_v1(
+            next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, eos_token_ids, think_end_id
+        )
 
         # Verify: status changed to 2
         assert limit_think_status.numpy()[0] == 2
@@ -96,10 +112,14 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         max_think_lens = paddle.to_tensor([-1], dtype="int32")  # Disabled
         step_idx = paddle.to_tensor([[100]], dtype="int64")  # Would exceed limit if enabled
         limit_think_status = paddle.to_tensor([0], dtype="int32")
+        stop_flags = paddle.to_tensor([False, False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
         think_end_id = 999
 
         # Run operator
-        limit_thinking_content_length_v1(next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id)
+        limit_thinking_content_length_v1(
+            next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, eos_token_ids, think_end_id
+        )
 
         # Verify: nothing changed
         assert next_tokens.numpy()[0, 0] == 100
@@ -111,10 +131,14 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         max_think_lens = paddle.to_tensor([5], dtype="int32")
         step_idx = paddle.to_tensor([[10]], dtype="int64")
         limit_think_status = paddle.to_tensor([2], dtype="int32")  # Already in response phase
+        stop_flags = paddle.to_tensor([False, False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
         think_end_id = 999
 
         # Run operator
-        limit_thinking_content_length_v1(next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id)
+        limit_thinking_content_length_v1(
+            next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, eos_token_ids, think_end_id
+        )
 
         # Verify: nothing changed
         assert next_tokens.numpy()[0, 0] == 100
@@ -126,10 +150,14 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         max_think_lens = paddle.to_tensor([10, 5, 8, -1], dtype="int32")
         step_idx = paddle.to_tensor([[3], [5], [4], [100]], dtype="int64")
         limit_think_status = paddle.to_tensor([0, 0, 0, 0], dtype="int32")
+        stop_flags = paddle.to_tensor([False, False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
         think_end_id = 999
 
         # Run operator
-        limit_thinking_content_length_v1(next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id)
+        limit_thinking_content_length_v1(
+            next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, eos_token_ids, think_end_id
+        )
 
         # Verify each sequence
         # Seq 0: step 3 < max 10, status 0, token unchanged
