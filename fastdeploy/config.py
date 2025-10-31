@@ -289,6 +289,7 @@ class ModelConfig:
                     raise ValueError("This model does not support '--runner generate.")
         if self.runner_type == "pooling" and not is_pooling_model:
             pooling_converts = _RUNNER_CONVERTS["pooling"]
+            print("pooling_converts", pooling_converts)
             if self.convert_type not in pooling_converts:
                 convert_option = "<" + "|".join(pooling_converts) + ">"
                 raise ValueError(
@@ -297,8 +298,10 @@ class ModelConfig:
                     "it into a pooling model."
                 )
 
+        print("self.convert_type", self.convert_type)
         self.supported_tasks = self._get_supported_tasks(self.architectures, self.runner_type, self.convert_type)
         model_info, arch = registry.inspect_model_cls(self.architectures, self)
+        print("model_info", model_info)
         self._model_info = model_info
         self._architecture = arch
 

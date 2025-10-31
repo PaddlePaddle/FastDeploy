@@ -115,7 +115,6 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
         )
 
         self._input_embeddings.copy_(input_embeddings, False)
-        print("input_embedding", self._input_embeddings)
 
         hidden_states = self.ernie(
             input_embeddings=self._input_embeddings,
@@ -123,19 +122,20 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
             forward_meta=forward_meta,
             vl_moe_meta=vl_moe_meta,
         )
-        print("hidden_states", hidden_states)
         hidden_states = hidden_states.to(self.head_dtype)
+        print("hidden_states", hidden_states)
         logits = self.rm_head(hidden_states)
+        print("logits", logits)
         return logits
 
 
 @ModelRegistry.register_model_class(
     architecture="Ernie4_5_VLMoeForProcessRewardModel",
     module_name="ernie_vl_rm",
-    category=ModelCategory.EMBEDDING | ModelCategory.MULTIMODAL,
-    primary_use=ModelCategory.EMBEDDING | ModelCategory.MULTIMODAL,
+    category=ModelCategory.REWARD | ModelCategory.MULTIMODAL,
+    primary_use=ModelCategory.REWARD | ModelCategory.MULTIMODAL,
 )
-@default_pooling_type("ALL")
+@default_pooling_type("LAST")
 class Ernie4_5_VLMoeForProcessRewardModel(Ernie4_5_VLMoeRewardBaseModel):
 
     def __init__(self, fd_config: FDConfig):
@@ -147,7 +147,12 @@ class Ernie4_5_VLMoeForProcessRewardModel(Ernie4_5_VLMoeRewardBaseModel):
         pooler_config = fd_config.model_config.pooler_config
         assert pooler_config is not None
 
-        self.pooler = DispatchPooler({"encode": Pooler.for_encode(pooler_config, model_config=fd_config.model_config)})
+        self.pooler = DispatchPooler(
+            {
+                "encode": Pooler.for_encode(pooler_config, fd_config.model_config),
+                "embed": Pooler.for_embed(pooler_config, fd_config.model_config),
+            },
+        )
 
         self.process_weights_before_loading_fn = process_weights_before_loading(skip_prefixes=["lm_head"])
 

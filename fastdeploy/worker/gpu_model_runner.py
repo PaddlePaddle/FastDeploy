@@ -509,6 +509,7 @@ class GPUModelRunner(ModelRunnerBase):
             idx = request.idx
 
             if hasattr(request, "pooling_params") and request.pooling_params is not None:
+                request.pooling_params.task = "embed"
                 batch_pooling_params.append(request.pooling_params)
 
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
@@ -2329,6 +2330,7 @@ class GPUModelRunner(ModelRunnerBase):
         pooling_metadata.build_pooling_cursor(num_scheduled_tokens_list, device=device_str)
 
         raw_pooler_output = self.model.pooler(hidden_states=hidden_states, pooling_metadata=pooling_metadata)
+        print("raw_pooler_output", raw_pooler_output)
         seq_lens_cpu = self.share_inputs["seq_lens_this_time"][:num_running_requests]
         pooler_output: list[Optional[paddle.Tensor]] = []
         for raw_output, seq_len, prompt_len in zip(raw_pooler_output, seq_lens_cpu, pooling_metadata.prompt_lens):

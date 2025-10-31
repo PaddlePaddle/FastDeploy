@@ -553,6 +553,7 @@ class DispatchPooler(Pooler):
 
         outputs = list[PoolingSequenceGroupOutput]()
         offset = 0
+        print("pooling_metadata", pooling_metadata)
         for task, group in groupby(get_tasks(pooling_metadata)):
             if not (pooler := poolers_by_task.get(task)):
                 raise ValueError(f"Unsupported task: {task} " f"Supported tasks: {self.get_supported_tasks()}")
