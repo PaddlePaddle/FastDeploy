@@ -669,7 +669,7 @@ class EngineArgs:
         model_group.add_argument(
             "--logprobs-mode",
             type=str,
-            choices=["raw_logprobs", "processed_logprobs", "processed_logits"],
+            choices=["raw_logprobs", "raw_logits", "processed_logprobs", "processed_logits"],
             default=EngineArgs.logprobs_mode,
             help="Indicates the content returned in the logprobs.",
         )
@@ -1077,6 +1077,10 @@ class EngineArgs:
         """
         all_dict = asdict(self)
         model_cfg = ModelConfig(all_dict)
+
+        # XPU currently disable prefix cache for VL model
+        if current_platform.is_xpu() and (self.enable_mm or model_cfg.enable_mm):
+            self.enable_prefix_caching = False
 
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size

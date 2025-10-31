@@ -823,6 +823,8 @@ class GraphOptimizationConfig:
         self.real_shape_to_captured_size: dict[int, int] = None
         """ Whether to use shared memory pool for multi capture_size """
         self.use_unique_memory_pool: bool = True
+        """ Whether to use cudagraph for draft model."""
+        self.draft_model_use_cudagraph: bool = False
 
         # CINN Config ...
         if args is not None:
@@ -1545,6 +1547,8 @@ class FDConfig:
             self.cache_config.max_encoder_cache = 0
 
         # Adjustment GraphOptConfig
+        if self.scheduler_config is not None and self.scheduler_config.splitwise_role == "prefill":
+            self.graph_opt_config.use_cudagraph = self.graph_opt_config.cudagraph_only_prefill
         if self.load_config is not None and self.load_config.dynamic_load_weight is True:
             self.graph_opt_config.graph_opt_level = 0
             logger.info(
@@ -1553,6 +1557,10 @@ class FDConfig:
         if self.device_config is not None and self.device_config.device_type != "cuda":
             self.graph_opt_config.use_cudagraph = False
             logger.info(f"CUDAGraph only support on GPU, current device type is {self.device_config.device_type}!")
+
+        if self.model_config.enable_mm and self.graph_opt_config.use_cudagraph:
+            self.cache_config.enable_prefix_caching = False
+            logger.info("Multi-modal models do not support prefix caching when using CUDAGraph!")
 
         if self.scheduler_config.splitwise_role == "mixed":
             self.model_config.moe_phase = MoEPhase(phase="prefill")

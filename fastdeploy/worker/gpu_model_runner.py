@@ -471,8 +471,6 @@ class GPUModelRunner(ModelRunnerBase):
                 else:
                     raise ValueError(f"multiple modalities model {self.model_config.model_type} is not supported")
                 self.share_inputs["image_features"] = image_features[-actual_image_token_num:]
-        else:
-            self.share_inputs["image_features"] = None
 
         position_ids = request.multimodal_inputs["position_ids"]
         rope_3d_position_ids["position_ids_idx"].append(request.idx)
@@ -495,6 +493,7 @@ class GPUModelRunner(ModelRunnerBase):
         req_len = len(req_dicts)
         has_prefill_task = False
         has_decode_task = False
+        self.share_inputs["image_features"] = None
         multi_vision_inputs = {"images_lst": [], "grid_thw_lst": [], "vit_position_ids_lst": [], "cu_seqlens": [0]}
         rope_3d_position_ids = {
             "position_ids_idx": [],
@@ -1884,35 +1883,37 @@ class GPUModelRunner(ModelRunnerBase):
                         logger.info(
                             f"Warm up the Target model with the num_tokens:{batch_size}, expected_decode_len:{1}"
                         )
-                # Capture Draft Model without bsz 1
-                # NOTE(liujundong): expected_decode_len = 1, will affect mtp capture in cudagraph
-                for batch_size in sorted(capture_sizes, reverse=True):
-                    if batch_size == 1:
-                        logger.info("Skip token_num = 1, when capture Draft model for mtp")
-                    else:
-                        assert batch_size % 2 == 0
+                if self.graph_opt_config.draft_model_use_cudagraph:
+                    # Capture Draft Model without bsz 1
+                    # NOTE(liujundong): expected_decode_len = 1, will affect mtp capture in cudagraph
+                    for batch_size in sorted(capture_sizes, reverse=True):
+                        if batch_size == 1:
+                            logger.info("Skip token_num = 1, when capture Draft model for mtp")
+                        else:
+                            assert batch_size % 2 == 0
+                            self._dummy_run(
+                                num_tokens=self.scheduler_config.max_num_batched_tokens,
+                                batch_size=int(batch_size / 2),
+                                in_capturing=True,
+                                expected_decode_len=3,
+                                accept_all_drafts=True,
+                            )
+                            logger.info(
+                                f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}"
+                            )
+                    # Capture Draft Model with bsz 1
+                    if 1 in capture_sizes:
                         self._dummy_run(
                             num_tokens=self.scheduler_config.max_num_batched_tokens,
-                            batch_size=int(batch_size / 2),
+                            batch_size=int(1),
                             in_capturing=True,
                             expected_decode_len=3,
-                            accept_all_drafts=True,
+                            accept_all_drafts=False,
+                            reject_all_drafts=True,
                         )
                         logger.info(
                             f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}"
                         )
-                # Capture Draft Model with bsz 1
-                if 1 in capture_sizes:
-                    self._dummy_run(
-                        num_tokens=self.scheduler_config.max_num_batched_tokens,
-                        batch_size=int(1),
-                        in_capturing=True,
-                        expected_decode_len=3,
-                        accept_all_drafts=False,
-                        reject_all_drafts=True,
-                    )
-                    logger.info(f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}")
-
             else:
                 for batch_size in sorted(capture_sizes, reverse=True):
                     self._dummy_run(
