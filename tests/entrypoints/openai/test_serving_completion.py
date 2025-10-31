@@ -73,9 +73,9 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         self.assertTrue(serving_completion._check_master())
 
     def test_calc_finish_reason_tool_calls(self):
-        # 创建一个模拟的engine_client，并设置reasoning_parser为"ernie_x1"
+        # 创建一个模拟的engine_client，并设置reasoning_parser为"ernie-x1"
         engine_client = Mock()
-        engine_client.reasoning_parser = "ernie_x1"
+        engine_client.reasoning_parser = "ernie-x1"
         # 创建一个OpenAIServingCompletion实例
         serving_completion = OpenAIServingCompletion(engine_client, None, "pid", "ips", 360)
         # 创建一个模拟的output，并设置finish_reason为"tool_call"
@@ -86,9 +86,9 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         assert result == "tool_calls"
 
     def test_calc_finish_reason_stop(self):
-        # 创建一个模拟的engine_client，并设置reasoning_parser为"ernie_x1"
+        # 创建一个模拟的engine_client，并设置reasoning_parser为"ernie-x1"
         engine_client = Mock()
-        engine_client.reasoning_parser = "ernie_x1"
+        engine_client.reasoning_parser = "ernie-x1"
         # 创建一个OpenAIServingCompletion实例
         serving_completion = OpenAIServingCompletion(engine_client, None, "pid", "ips", 360)
         # 创建一个模拟的output，并设置finish_reason为其他值
