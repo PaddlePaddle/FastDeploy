@@ -299,6 +299,7 @@ class DataProcessor:
             raise ValueError("This model does not support chat template.")
 
         chat_template_kwargs = request.get("chat_template_kwargs", {})
+        data_processor_logger.info(f"chat_template_kwargs:{chat_template_kwargs}")
         prompt = self.tokenizer.apply_chat_template(
             request,
             tokenize=False,

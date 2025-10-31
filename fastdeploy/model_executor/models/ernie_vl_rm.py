@@ -60,7 +60,7 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
 
         # Persistent buffers for CUDA graphs.
         self._input_embeddings = paddle.zeros(
-            [fd_config.parallel_config.max_model_len, fd_config.model_config.hidden_size],
+            [fd_config.model_config.max_model_len, fd_config.model_config.hidden_size],
             dtype=fd_config.model_config.dtype,
         )
 
@@ -107,11 +107,13 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
         forward_meta: ForwardMeta,
     ):
         vl_moe_meta = self.ernie.prepare_vl_moe_meta(ids_remove_padding=ids_remove_padding)
+        print("vl_moe_meta", vl_moe_meta)
         input_embeddings = self.get_input_embeddings(
             ids_remove_padding=ids_remove_padding,
             image_features=image_features,
             image_token_num=vl_moe_meta.image_token_num.item(),
         )
+
         self._input_embeddings.copy_(input_embeddings, False)
 
         hidden_states = self.ernie(
@@ -121,17 +123,19 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
             vl_moe_meta=vl_moe_meta,
         )
         hidden_states = hidden_states.to(self.head_dtype)
+        print("hidden_states", hidden_states)
         logits = self.rm_head(hidden_states)
+        print("logits", logits)
         return logits
 
 
 @ModelRegistry.register_model_class(
     architecture="Ernie4_5_VLMoeForProcessRewardModel",
     module_name="ernie_vl_rm",
-    category=[ModelCategory.REWARD],
-    primary_use=ModelCategory.REWARD,
+    category=ModelCategory.REWARD | ModelCategory.MULTIMODAL,
+    primary_use=ModelCategory.REWARD | ModelCategory.MULTIMODAL,
 )
-@default_pooling_type("ALL")
+@default_pooling_type("LAST")
 class Ernie4_5_VLMoeForProcessRewardModel(Ernie4_5_VLMoeRewardBaseModel):
 
     def __init__(self, fd_config: FDConfig):
@@ -143,7 +147,12 @@ class Ernie4_5_VLMoeForProcessRewardModel(Ernie4_5_VLMoeRewardBaseModel):
         pooler_config = fd_config.model_config.pooler_config
         assert pooler_config is not None
 
-        self.pooler = DispatchPooler({"encode": Pooler.for_encode(pooler_config)})
+        self.pooler = DispatchPooler(
+            {
+                "encode": Pooler.for_encode(pooler_config, fd_config.model_config),
+                "embed": Pooler.for_embed(pooler_config, fd_config.model_config),
+            },
+        )
 
         self.process_weights_before_loading_fn = process_weights_before_loading(skip_prefixes=["lm_head"])
 

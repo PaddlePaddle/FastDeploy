@@ -168,6 +168,38 @@ PRETRAINED_INIT_CONFIGURATION = {
     "moe_layer_end_index": None,
 }
 
+_STR_DTYPE_TO_PADDLE_DTYPE = {
+    "half": paddle.float16,
+    "float16": paddle.float16,
+    "float": paddle.float32,
+    "float32": paddle.float32,
+    "bfloat16": paddle.bfloat16,
+}
+
+
+def _get_head_dtype(
+    config: PretrainedConfig,
+    dtype: str,
+    runner_type: str,
+) -> paddle.dtype:
+    head_dtype: str | paddle.dtype | None = getattr(config, "head_dtype", None)
+
+    if head_dtype == "model":
+        return dtype
+    elif isinstance(head_dtype, str):
+        head_dtype = head_dtype.lower()
+        if head_dtype not in _STR_DTYPE_TO_PADDLE_DTYPE:
+            raise ValueError(f"Unknown dtype: {head_dtype!r}")
+        return _STR_DTYPE_TO_PADDLE_DTYPE[head_dtype]
+    elif isinstance(head_dtype, paddle.dtype):
+        return head_dtype
+    elif head_dtype is None:
+        if runner_type == "pooling":
+            return paddle.float32
+        return dtype
+    else:
+        raise ValueError(f"Unknown dtype: {head_dtype!r}")
+
 
 class ModelConfig:
     """
@@ -207,6 +239,7 @@ class ModelConfig:
         assert self.model != ""
         pretrained_config, _ = PretrainedConfig.get_config_dict(self.model)
         self.pretrained_config = PretrainedConfig.from_dict(pretrained_config)
+        print("self.pretrained_config", self.pretrained_config)
 
         # set attribute from pretrained_config
         for key, value in pretrained_config.items():
@@ -235,12 +268,17 @@ class ModelConfig:
         self.runner_type = self._get_runner_type(self.architectures, self.runner)
         self.convert_type = self._get_convert_type(self.architectures, self.runner_type, self.convert)
         registry = self.registry
+
         is_generative_model = registry.is_text_generation_model(self.architectures, self)
         is_pooling_model = registry.is_pooling_model(self.architectures, self)
+        print("self.architectures", self.architectures)
         is_multimodal_model = registry.is_multimodal_model(self.architectures, self)
         self.is_reasoning_model = registry.is_reasoning_model(self.architectures, self)
 
         self.enable_mm = is_multimodal_model
+
+        if self.runner_type == "pooling":
+            os.environ["FD_USE_GET_SAVE_OUTPUT_V1"] = "1"
 
         if self.runner_type == "generate" and not is_generative_model:
             if is_multimodal_model:
@@ -251,6 +289,7 @@ class ModelConfig:
                     raise ValueError("This model does not support '--runner generate.")
         if self.runner_type == "pooling" and not is_pooling_model:
             pooling_converts = _RUNNER_CONVERTS["pooling"]
+            print("pooling_converts", pooling_converts)
             if self.convert_type not in pooling_converts:
                 convert_option = "<" + "|".join(pooling_converts) + ">"
                 raise ValueError(
@@ -259,8 +298,10 @@ class ModelConfig:
                     "it into a pooling model."
                 )
 
+        print("self.convert_type", self.convert_type)
         self.supported_tasks = self._get_supported_tasks(self.architectures, self.runner_type, self.convert_type)
         model_info, arch = registry.inspect_model_cls(self.architectures, self)
+        print("model_info", model_info)
         self._model_info = model_info
         self._architecture = arch
 
@@ -508,6 +549,29 @@ class ModelConfig:
         for k, v in self.__dict__.items():
             logger.info("{:<20}:{:<6}{}".format(k, "", v))
         logger.info("=============================================================")
+
+    @property
+    def head_dtype(self) -> paddle.dtype:
+        """
+        "head" refers to the last Linear layer(s) of an LLM,
+        such as the lm_head in a generation model,
+        or the score or classifier in a classification model.
+
+        `head_dtype` currently only supports pooling models.\n
+        - The pooling model defaults to using fp32 head,
+        you can use --hf-overrides '{"head_dtype": "model"}' to disable it.
+        """
+        print("self.dtype", self.dtype)
+        head_dtype = _get_head_dtype(config=self.pretrained_config, dtype=self.dtype, runner_type=self.runner_type)
+        if self.runner_type != "pooling" and head_dtype != self.dtype:
+            logger.warning(
+                "`head_dtype` currently only supports pooling models." "fallback to model dtype [%s].",
+                self.dtype,
+            )
+            return self.dtype
+
+        logger.info("head dtype: %s", head_dtype)
+        return head_dtype
 
 
 class ParallelConfig:

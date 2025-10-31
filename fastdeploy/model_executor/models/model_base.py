@@ -58,7 +58,7 @@ class ModelInfo:
             is_text_generation=ModelCategory.TEXT_GENERATION in category,
             is_multimodal=ModelCategory.MULTIMODAL in category,
             is_reasoning=ModelCategory.REASONING in category,
-            is_pooling=ModelCategory.EMBEDDING in category,
+            is_pooling=(ModelCategory.EMBEDDING in category) or (ModelCategory.REWARD in category),
             default_pooling_type=get_default_pooling_type(model_cls),
             module_path=module_path,
         )
@@ -314,6 +314,7 @@ class ModelRegistry:
 
         for arch in architectures:
             model_info = self._try_inspect_model_cls(arch)
+            print("model_info", model_info)
             if model_info is not None:
                 return model_info.is_multimodal
         return False
