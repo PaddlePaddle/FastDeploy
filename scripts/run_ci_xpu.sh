@@ -20,12 +20,15 @@ echo "uninstall org"
 python -m pip uninstall paddlepaddle-xpu -y
 python -m pip uninstall fastdeploy-xpu -y
 
-python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
+python -m pip install https://paddle-qa.bj.bcebos.com/paddle-pipeline/Release-TagBuild-Training-Linux-Xpu-P800-SelfBuiltPypiUse/latest/paddlepaddle_xpu-0.0.0-cp310-cp310-linux_x86_64.whl
 
 echo "build whl"
-bash custom_ops/xpu_ops/download_dependencies.sh develop
+bash custom_ops/xpu_ops/download_dependencies.sh stable
 export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
-export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
+# export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
+# 由于xvllm更新，为了避免影响CI，暂时锁死版本
+wget https://klx-sdk-release-public.su.bcebos.com/xinfer/daily/eb/20251029/output.tar.gz --no-proxy && tar xf output.tar.gz && mv output xvllm
+export XVLLM_PATH=${PWD}/xvllm
 bash build.sh || exit 1
 
 echo "pip others"
@@ -171,6 +174,77 @@ if [ ${w4a8_test_exit_code} -ne 0 ]; then
     exit 1
 fi
 
+sleep 5
+# 起服务
+rm -rf log/*
+rm -f core*
+# pkill -9 python #流水线不执行这个
+#清空消息队列
+ipcrm --all=msg
+echo "============================开始vl模型测试!============================"
+export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model ${MODEL_PATH}/ERNIE-4.5-VL-424B-A47B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 8 \
+    --max-model-len 32768 \
+    --max-num-seqs 10 \
+    --quantization wint8 \
+    --enable-mm \
+    --mm-processor-kwargs '{"video_max_frames": 30}' \
+    --limit-mm-per-prompt '{"image": 10, "video": 3}' \
+    --reasoning-parser ernie-45-vl > server.log 2>&1 &
+
+sleep 60
+# 探活
+TIMEOUT=$((15 * 60))
+INTERVAL=10            # 检查间隔（秒）
+ENDPOINT="http://0.0.0.0:8188/health"
+START_TIME=$(date +%s) # 记录开始时间戳
+echo "开始服务健康检查，最长等待时间：${TIMEOUT}秒"
+while true; do
+    # 计算已耗时
+    CURRENT_TIME=$(date +%s)
+    ELAPSED=$((CURRENT_TIME - START_TIME))
+
+    # 超时判断
+    if [ $ELAPSED -ge $TIMEOUT ]; then
+        echo -e "\n服务启动超时：经过 $((TIMEOUT/60)) 分钟服务仍未启动！"
+        cat server.log
+        cat log/workerlog.0
+        exit 1
+    fi
+
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 2 "$ENDPOINT" || true)
+
+    if [ "$HTTP_CODE" = "200" ]; then
+        echo -e "\n服务启动成功！耗时 ${ELAPSED} 秒"
+        break
+    else
+        sleep $INTERVAL
+    fi
+done
+
+cat server.log
+
+# 执行服务化推理
+python -m pytest tests/ci_use/XPU_45T/run_45vl.py
+vl_test_exit_code=$?
+echo vl_test_exit_code is ${vl_test_exit_code}
+
+ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+lsof -t -i :8188 | xargs kill -9 || true
+
+if [ ${vl_test_exit_code} -ne 0 ]; then
+    echo "log/workerlog.0"
+    cat log/workerlog.0
+    echo " vl模型 测试失败，请检查pr代码"
+    exit 1
+fi
+
+
 echo "============================开始EP并行测试!============================"
 sleep 5
 rm -rf log/*
@@ -191,7 +265,7 @@ cd xDeepEP
 bash build.sh
 cd -
 
-python -m pytest -s --timeout=300 tests/ci_use/XPU_45T/run_ep.py
+python -m pytest -s --timeout=600 tests/ci_use/XPU_45T/run_ep.py
 ep_exit_code=$?
 
 unset BKCL_ENABLE_XDR
