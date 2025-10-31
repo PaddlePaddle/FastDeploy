@@ -265,7 +265,7 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
     for k in num_local_ffn_keys:
         if k in weight_list:
             filtered_map[k] = weight_list[k]
-    
+
     if fd_config.parallel_config.tensor_parallel_size > 1:
         tp_actions = cls._get_tensor_parallel_mappings(fd_config.model_config.pretrained_config)
         new_actions = {k: v for k, v in tp_actions.items() if k not in num_local_ffn_keys}
