@@ -285,13 +285,11 @@ void GetBlockShapeAndSplitKVBlock(
                      paddle::DataType::INT32,
                      seq_lens_this_time.place());
 
-  GetMaxLenKernel<1024><<<1, 1024, 0, stream>>>(
-      seq_lens_decoder.data<int>(),
-      seq_lens_this_time.data<int>(),
-      seq_lens_encoder.data<int>(),
-      max_len_tensor_gpu.data<int>(),
-      bsz);
-
+  GetMaxLenKernel<1024><<<1, 1024, 0, stream>>>(seq_lens_decoder.data<int>(),
+                                                seq_lens_this_time.data<int>(),
+                                                seq_lens_encoder.data<int>(),
+                                                max_len_tensor_gpu.data<int>(),
+                                                bsz);
 
   max_len_tensor_cpu.copy_(
       max_len_tensor_gpu, max_len_tensor_cpu.place(), false);
