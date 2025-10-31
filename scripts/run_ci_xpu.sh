@@ -25,7 +25,7 @@ python -m pip install https://paddle-qa.bj.bcebos.com/paddle-pipeline/Release-Ta
 echo "build whl"
 bash custom_ops/xpu_ops/download_dependencies.sh stable
 export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
-# export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
+export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
 bash build.sh || exit 1
 
 echo "pip others"
