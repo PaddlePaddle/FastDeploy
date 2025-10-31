@@ -982,7 +982,7 @@ def main(args: argparse.Namespace):
         if args.result_dir:
             file_name = os.path.join(args.result_dir, file_name)
         with open(file_name, "w", encoding="utf-8") as outfile:
-            json.dump(result_json, outfile)
+            json.dump(result_json, outfile, ensure_ascii=False)
         save_to_pytorch_benchmark_format(args, result_json, file_name)
 
 
