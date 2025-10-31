@@ -63,7 +63,7 @@ class XPUMoEMethod(MoEMethodBase):
         """
         create weight process.
         """
-        if layer.fd_config.load_config.load_choices == "default_v1" and self.quant_config.is_checkpoint_bf16:
+        if layer.fd_config.load_config.load_choices == "default_v1" and self.moe_quant_type in ["w16a16"]:
             if current_platform.is_cuda():
                 self.up_gate_proj_weight_shape = [
                     layer.num_local_experts,
