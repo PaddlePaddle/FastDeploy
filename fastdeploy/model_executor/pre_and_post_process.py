@@ -121,6 +121,7 @@ def limit_thinking_content_length(
             max_think_lens,
             step_idx,
             limit_think_status,
+            stop_flags,
             think_end_id,
             line_break_id,
         )
@@ -164,6 +165,7 @@ def speculate_limit_thinking_content_length(
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
             think_end_id,
             line_break_id,
         )

@@ -75,8 +75,8 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         max_think_lens = paddle.to_tensor([10], dtype="int32")
         step_idx = paddle.to_tensor([[3]], dtype="int64")  # Still within limit
         limit_think_status = paddle.to_tensor([0], dtype="int32")
-        stop_flags = paddle.to_tensor([False, False], dtype="bool")
-        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2]], dtype="int64")
         think_end_id = 999
 
         # Run operator
@@ -94,8 +94,8 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         max_think_lens = paddle.to_tensor([5], dtype="int32")
         step_idx = paddle.to_tensor([[6]], dtype="int64")
         limit_think_status = paddle.to_tensor([1], dtype="int32")  # Status is 1
-        stop_flags = paddle.to_tensor([False, False], dtype="bool")
-        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2]], dtype="int64")
         think_end_id = 999
 
         # Run operator
@@ -112,8 +112,8 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         max_think_lens = paddle.to_tensor([-1], dtype="int32")  # Disabled
         step_idx = paddle.to_tensor([[100]], dtype="int64")  # Would exceed limit if enabled
         limit_think_status = paddle.to_tensor([0], dtype="int32")
-        stop_flags = paddle.to_tensor([False, False], dtype="bool")
-        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2]], dtype="int64")
         think_end_id = 999
 
         # Run operator
@@ -131,8 +131,8 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         max_think_lens = paddle.to_tensor([5], dtype="int32")
         step_idx = paddle.to_tensor([[10]], dtype="int64")
         limit_think_status = paddle.to_tensor([2], dtype="int32")  # Already in response phase
-        stop_flags = paddle.to_tensor([False, False], dtype="bool")
-        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2]], dtype="int64")
         think_end_id = 999
 
         # Run operator
@@ -150,7 +150,7 @@ class TestLimitThinkingContentLengthV1(unittest.TestCase):
         max_think_lens = paddle.to_tensor([10, 5, 8, -1], dtype="int32")
         step_idx = paddle.to_tensor([[3], [5], [4], [100]], dtype="int64")
         limit_think_status = paddle.to_tensor([0, 0, 0, 0], dtype="int32")
-        stop_flags = paddle.to_tensor([False, False], dtype="bool")
+        stop_flags = paddle.to_tensor([False, False, False, False], dtype="bool")
         eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
         think_end_id = 999
 
@@ -186,12 +186,13 @@ class TestLimitThinkingContentLengthV2(unittest.TestCase):
         max_think_lens = paddle.to_tensor([10, 15], dtype="int32")
         step_idx = paddle.to_tensor([[5], [8]], dtype="int64")
         limit_think_status = paddle.to_tensor([0, 0], dtype="int32")
+        stop_flags = paddle.to_tensor([False, False], dtype="bool")
         think_end_id = 999
         line_break_id = 888
 
         # Run operator
         limit_thinking_content_length_v2(
-            next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id, line_break_id
+            next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, think_end_id, line_break_id
         )
 
         # Verify: tokens unchanged, status unchanged
@@ -207,11 +208,12 @@ class TestLimitThinkingContentLengthV2(unittest.TestCase):
         max_think_lens = paddle.to_tensor([5], dtype="int32")
         step_idx = paddle.to_tensor([[5]], dtype="int64")
         limit_think_status = paddle.to_tensor([0], dtype="int32")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
         think_end_id = 999
         line_break_id = 888
 
         limit_thinking_content_length_v2(
-            next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id, line_break_id
+            next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, think_end_id, line_break_id
         )
         assert next_tokens.numpy()[0, 0] == 888  # line_break_id
         assert limit_think_status.numpy()[0] == 1
@@ -222,7 +224,7 @@ class TestLimitThinkingContentLengthV2(unittest.TestCase):
         limit_think_status = paddle.to_tensor([1], dtype="int32")
 
         limit_thinking_content_length_v2(
-            next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id, line_break_id
+            next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, think_end_id, line_break_id
         )
         assert next_tokens.numpy()[0, 0] == 999  # think_end_id
         assert limit_think_status.numpy()[0] == 1
@@ -233,7 +235,7 @@ class TestLimitThinkingContentLengthV2(unittest.TestCase):
         limit_think_status = paddle.to_tensor([1], dtype="int32")
 
         limit_thinking_content_length_v2(
-            next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id, line_break_id
+            next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, think_end_id, line_break_id
         )
         assert next_tokens.numpy()[0, 0] == 888  # line_break_id
         assert limit_think_status.numpy()[0] == 1
@@ -244,7 +246,7 @@ class TestLimitThinkingContentLengthV2(unittest.TestCase):
         limit_think_status = paddle.to_tensor([1], dtype="int32")
 
         limit_thinking_content_length_v2(
-            next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id, line_break_id
+            next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, think_end_id, line_break_id
         )
         assert next_tokens.numpy()[0, 0] == 888  # line_break_id
         assert limit_think_status.numpy()[0] == 3  # Move to status 3
@@ -255,12 +257,13 @@ class TestLimitThinkingContentLengthV2(unittest.TestCase):
         max_think_lens = paddle.to_tensor([10], dtype="int32")
         step_idx = paddle.to_tensor([[3]], dtype="int64")
         limit_think_status = paddle.to_tensor([0], dtype="int32")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
         think_end_id = 999
         line_break_id = 888
 
         # Run operator
         limit_thinking_content_length_v2(
-            next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id, line_break_id
+            next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, think_end_id, line_break_id
         )
 
         # Verify: status changed to 3 (response phase)
@@ -273,12 +276,13 @@ class TestLimitThinkingContentLengthV2(unittest.TestCase):
         max_think_lens = paddle.to_tensor([5], dtype="int32")
         step_idx = paddle.to_tensor([[9]], dtype="int64")
         limit_think_status = paddle.to_tensor([2], dtype="int32")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
         think_end_id = 999
         line_break_id = 888
 
         # Run operator
         limit_thinking_content_length_v2(
-            next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id, line_break_id
+            next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, think_end_id, line_break_id
         )
 
         # Verify: status changed to 3
@@ -290,12 +294,13 @@ class TestLimitThinkingContentLengthV2(unittest.TestCase):
         max_think_lens = paddle.to_tensor([-1], dtype="int32")
         step_idx = paddle.to_tensor([[100]], dtype="int64")
         limit_think_status = paddle.to_tensor([0], dtype="int32")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
         think_end_id = 999
         line_break_id = 888
 
         # Run operator
         limit_thinking_content_length_v2(
-            next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id, line_break_id
+            next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, think_end_id, line_break_id
         )
 
         # Verify: nothing changed
@@ -308,12 +313,13 @@ class TestLimitThinkingContentLengthV2(unittest.TestCase):
         max_think_lens = paddle.to_tensor([5], dtype="int32")
         step_idx = paddle.to_tensor([[10]], dtype="int64")
         limit_think_status = paddle.to_tensor([3], dtype="int32")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
         think_end_id = 999
         line_break_id = 888
 
         # Run operator
         limit_thinking_content_length_v2(
-            next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id, line_break_id
+            next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, think_end_id, line_break_id
         )
 
         # Verify: nothing changed
@@ -326,12 +332,13 @@ class TestLimitThinkingContentLengthV2(unittest.TestCase):
         max_think_lens = paddle.to_tensor([10, 5, 8, -1, 6], dtype="int32")
         step_idx = paddle.to_tensor([[3], [5], [4], [100], [9]], dtype="int64")
         limit_think_status = paddle.to_tensor([0, 0, 0, 0, 2], dtype="int32")
+        stop_flags = paddle.to_tensor([False, False, False, False, False], dtype="bool")
         think_end_id = 999
         line_break_id = 888
 
         # Run operator
         limit_thinking_content_length_v2(
-            next_tokens, max_think_lens, step_idx, limit_think_status, think_end_id, line_break_id
+            next_tokens, max_think_lens, step_idx, limit_think_status, stop_flags, think_end_id, line_break_id
         )
 
         # Seq 0: step 3 < max 10, status 0, unchanged
