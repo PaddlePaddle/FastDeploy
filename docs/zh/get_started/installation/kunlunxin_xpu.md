@@ -27,9 +27,9 @@
 ```bash
 mkdir Work
 cd Work
-docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.2.1
+docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.3.0
 docker run --name fastdeploy-xpu --net=host -itd --privileged -v $PWD:/Work -w /Work \
-    ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.2.1 \
+    ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.3.0 \
     /bin/bash
 docker exec -it fastdeploy-xpu /bin/bash
 ```
