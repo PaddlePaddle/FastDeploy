@@ -305,19 +305,6 @@ class RewardPoolerHead(PoolerHead):
         return pooled_data
 
 
-def build_output(
-    all_data: Union[paddle.Tensor, list[paddle.Tensor]],
-) -> PoolerOutput:
-    # Pooling models D2H & synchronize occurs here
-    if isinstance(all_data, list):
-        all_data = [d.cpu() for d in all_data]
-    else:
-        all_data = all_data.cpu()
-
-    all_outputs = [PoolingSequenceGroupOutput(data) for data in all_data]
-    return PoolerOutput(outputs=all_outputs)
-
-
 class PoolingMethod(nn.Layer, ABC):
 
     @staticmethod
@@ -473,8 +460,11 @@ class StepPooler(Pooler):
         pooling_metadata: PoolingMetadata,
     ) -> PoolerOutput:
         pooled_data = self.extract_states(hidden_states, pooling_metadata)
-        pooled_data = self.head(pooled_data, pooling_metadata)
-        return build_output(pooled_data)
+        pooling_params = get_pooling_params(pooling_metadata)
+        assert len(pooled_data) == len(pooling_params)
+
+        pooled_data = [self.head(d, p) for d, p in zip(pooled_data, pooling_params)]
+        return pooled_data
 
 
 class SimplePooler(Pooler):
@@ -520,7 +510,7 @@ class SimplePooler(Pooler):
     ) -> PoolerOutput:
         pooled_data = self.pooling(hidden_states, pooling_metadata)
         pooled_data = self.head(pooled_data, pooling_metadata)
-        return build_output(pooled_data)
+        return pooled_data
 
 
 class PoolerNormalize(PoolerActivation):
@@ -567,7 +557,7 @@ class DispatchPooler(Pooler):
                 hidden_states,
                 pooling_metadata[offset : offset + num_items],
             )
-            outputs.extend(group_output.outputs)
+            outputs.extend(group_output)
             offset += num_items
 
         return PoolerOutput(outputs)
