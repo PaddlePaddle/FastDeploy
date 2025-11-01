@@ -46,7 +46,6 @@ __global__ void multi_query_append_attention_kernel(
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
     const int *__restrict__ mask_offset,
     const int max_seq_len,
-    const int max_dec_len,
     const int max_block_num_per_seq,
     const float scale,
     const float quant_max_bound,
@@ -445,7 +444,6 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     const int *__restrict__ mask_offset,
     const bool *__restrict__ attn_mask,  // [bsz, max_q, max_q] for tree-mask
     const int max_seq_len,
-    const int max_dec_len,
     const int max_block_num_per_seq,
     const float scale,
     const float quant_max_bound,
@@ -960,7 +958,6 @@ void MultiQueryAppendAttention(
           block_table.data<int>(),
           meta_data.mask_offset,
           max_seq_len,
-          max_dec_len,
           max_block_num_per_seq,
           scale,
           quant_max_bound,
@@ -1023,7 +1020,6 @@ void MultiQueryAppendAttention(
           block_table.data<int>(),
           meta_data.mask_offset,
           max_seq_len,
-          max_dec_len,
           max_block_num_per_seq,
           scale,
           quant_max_bound,
@@ -1208,7 +1204,6 @@ void MultiQueryAppendAttention(
           attn_mask ? const_cast<bool *>(attn_mask.get().data<bool>())
                     : nullptr,
           max_seq_len,
-          max_dec_len,
           max_block_num_per_seq,
           scale,
           quant_max_bound,
@@ -1285,7 +1280,6 @@ void MultiQueryAppendAttention(
           attn_mask ? const_cast<bool *>(attn_mask.get().data<bool>())
                     : nullptr,
           max_seq_len,
-          max_dec_len,
           max_block_num_per_seq,
           scale,
           quant_max_bound,
