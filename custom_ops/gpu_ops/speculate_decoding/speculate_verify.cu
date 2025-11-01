@@ -111,7 +111,7 @@ __global__ void speculate_verify(const int64_t *sampled_token_ids,
       auto *draft_tokens_now = draft_tokens + bid * max_draft_tokens;
       auto *actual_candidate_len_now = actual_candidate_len + start_token_id;
       auto *sampled_token_id_now = sampled_token_ids + start_token_id;
-
+draft_model_update
       int i = 0;
       // printf("seq_lens_this_time[%d]-1: %d \n",bid,
       // seq_lens_this_time[bid]-1);
