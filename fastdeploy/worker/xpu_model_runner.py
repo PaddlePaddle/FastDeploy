@@ -41,6 +41,8 @@ from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
+from fastdeploy.model_executor.pre_and_post_process import xpu_pre_process, xpu_post_process, xpu_process_output
+
 from fastdeploy.model_executor.ops.xpu import (
     adjust_batch,
     get_infer_param,
@@ -62,273 +64,9 @@ from fastdeploy.model_executor.ops.xpu import (
 from fastdeploy.spec_decode import MTPProposer
 from fastdeploy.utils import get_logger
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
-from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
+from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput, SamplerOutput
 
 logger = get_logger("xpu_model_runner", "xpu_model_runner.log")
-
-def xpu_pre_process(
-    input_ids: paddle.Tensor,
-    seq_lens_this_time: int,
-    share_inputs: Dict,
-    use_speculate_method: bool,
-    block_size: int,
-    draft_tokens: Optional[paddle.Tensor] = None,
-    seq_lens_encoder: Optional[paddle.Tensor] = None,
-    seq_lens_decoder: Optional[paddle.Tensor] = None,
-) -> XPUForwardMeta:
-    """ """
-    max_len = input_ids.shape[1]
-    cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
-    token_num = paddle.sum(seq_lens_this_time)
-
-    if use_speculate_method:
-        (
-            ids_remove_padding,
-            batch_id_per_token,
-            cu_seqlens_q,
-            cu_seqlens_k,
-        ) = speculate_get_padding_offset(
-            input_ids,
-            draft_tokens,
-            cum_offsets_now,
-            token_num,
-            seq_lens_this_time,
-            seq_lens_encoder,
-        )
-        seq_lens_output = speculate_get_seq_lens_output(
-            seq_lens_this_time,
-            seq_lens_encoder,
-            seq_lens_decoder,
-        )
-        if isinstance(seq_lens_output, list):
-            seq_lens_output = seq_lens_output[0]
-        output_token_num = paddle.sum(seq_lens_output)
-        output_cum_offsets_tmp = paddle.cumsum(max_len - seq_lens_output, dtype="int32")
-        output_padding_offset, output_cum_offsets = speculate_get_output_padding_offset(
-            output_cum_offsets_tmp,
-            output_token_num,
-            seq_lens_output,
-            max_len,
-        )
-        share_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
-        share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
-    else:
-        (
-            ids_remove_padding,
-            cum_offsets,
-            batch_id_per_token,
-            cu_seqlens_q,
-            cu_seqlens_k,
-        ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
-
-    share_inputs["ids_remove_padding"] = None  # set this after adjust batch
-    share_inputs["cum_offsets"] = cum_offsets
-    share_inputs["batch_id_per_token"] = batch_id_per_token
-    share_inputs["cu_seqlens_q"] = cu_seqlens_q
-    share_inputs["cu_seqlens_k"] = cu_seqlens_k
-
-    xpu_forward_meta = XPUForwardMeta(
-        input_ids=share_inputs["input_ids"],
-        ids_remove_padding=share_inputs["ids_remove_padding"],
-        rotary_embs=share_inputs["rope_emb"],
-        attn_backend=None,
-        seq_lens_encoder=share_inputs["seq_lens_encoder"],
-        seq_lens_decoder=share_inputs["seq_lens_decoder"],
-        seq_lens_this_time=share_inputs["seq_lens_this_time"],
-        cum_offsets=share_inputs["cum_offsets"],
-        batch_id_per_token=share_inputs["batch_id_per_token"],
-        cu_seqlens_q=share_inputs["cu_seqlens_q"],
-        cu_seqlens_k=share_inputs["cu_seqlens_k"],
-        block_tables=share_inputs["block_tables"],
-        caches=share_inputs["caches"],
-    )
-    print("ch -- after xpu_forward_meta init")
-
-    (
-        xpu_forward_meta.encoder_batch_map,
-        xpu_forward_meta.decoder_batch_map,
-        xpu_forward_meta.encoder_batch_idx,
-        xpu_forward_meta.decoder_batch_idx,
-        xpu_forward_meta.encoder_seq_lod,
-        xpu_forward_meta.decoder_seq_lod,
-        xpu_forward_meta.encoder_kv_lod,
-        xpu_forward_meta.prefix_len,
-        xpu_forward_meta.decoder_context_len,
-        xpu_forward_meta.decoder_context_len_cache,
-        xpu_forward_meta.prefix_block_tables,
-        xpu_forward_meta.encoder_batch_map_cpu,
-        xpu_forward_meta.decoder_batch_map_cpu,
-        xpu_forward_meta.encoder_batch_idx_cpu,
-        xpu_forward_meta.decoder_batch_idx_cpu,
-        xpu_forward_meta.encoder_seq_lod_cpu,
-        xpu_forward_meta.decoder_seq_lod_cpu,
-        xpu_forward_meta.encoder_kv_lod_cpu,
-        xpu_forward_meta.prefix_len_cpu,
-        xpu_forward_meta.decoder_context_len_cpu,
-        xpu_forward_meta.decoder_context_len_cache_cpu,
-        xpu_forward_meta.len_info_cpu,
-    ) = get_infer_param(
-        seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, xpu_forward_meta.block_tables, block_size
-    )
-    xpu_forward_meta.enc_batch = xpu_forward_meta.len_info_cpu[0]
-    xpu_forward_meta.dec_batch = xpu_forward_meta.len_info_cpu[1]
-    xpu_forward_meta.total_enc_len = xpu_forward_meta.len_info_cpu[2]
-
-    # 集中式需要把PD合起来算，PD此处不需要
-    adjusted_input = adjust_batch(
-        ids_remove_padding.reshape([-1, 1]),
-        cum_offsets,
-        xpu_forward_meta.encoder_seq_lod,
-        xpu_forward_meta.encoder_batch_idx,
-        xpu_forward_meta.decoder_batch_idx,
-        xpu_forward_meta.encoder_seq_lod_cpu,
-        xpu_forward_meta.encoder_batch_idx_cpu,
-        xpu_forward_meta.decoder_batch_idx_cpu,
-        xpu_forward_meta.enc_batch,
-        xpu_forward_meta.dec_batch,
-        None,  # output_padding_offset
-        -1,  # max_input_length
-    )
-    adjusted_input = adjusted_input.squeeze(1)
-
-    share_inputs["ids_remove_padding"] = adjusted_input
-    xpu_forward_meta.ids_remove_padding = adjusted_input
-    return xpu_forward_meta
-
-
-
-def xpu_process_output(
-    forward_output,
-    cum_offsets: paddle.Tensor,
-    xpu_forward_meta: XPUForwardMeta,
-) -> paddle.Tensor:
-    """ """
-    from fastdeploy.model_executor.ops.xpu import gather_next_token
-
-    hiddden_states = gather_next_token(
-        forward_output,
-        cum_offsets,
-        xpu_forward_meta.encoder_seq_lod,
-        xpu_forward_meta.encoder_batch_map,
-        xpu_forward_meta.decoder_batch_map,
-        xpu_forward_meta.encoder_seq_lod_cpu,
-        xpu_forward_meta.encoder_batch_map_cpu,
-        xpu_forward_meta.decoder_batch_map_cpu,
-        xpu_forward_meta.enc_batch,
-        xpu_forward_meta.dec_batch,
-        None,  # output_padding_offset
-        -1,  # max_input_length
-    )
-    return hiddden_states
-
-
-def xpu_post_process(
-    sampled_token_ids: paddle.Tensor,
-    model_output: ModelOutputData,
-    share_inputs: Dict[str, paddle.Tensor],
-    block_size: int = 64,
-    skip_save_output: bool = False,
-    think_end_id: int = None,
-    line_break_id: int = None,
-) -> None:
-    """ """
-    from fastdeploy.model_executor.ops.xpu import (
-        save_output,
-        set_stop_value_multi_ends,
-        update_inputs,
-    )
-
-    if think_end_id > 0:
-        limit_strategy = envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR
-        max_think_lens = share_inputs["max_think_lens"]
-        step_idx = share_inputs["step_idx"]
-        limit_think_status = share_inputs["limit_think_status"]
-        if limit_strategy == "</think>":
-            # for ernie-45-vl
-            limit_thinking_content_length_v1(
-                sampled_token_ids,
-                max_think_lens,
-                step_idx,
-                limit_think_status,
-                think_end_id,
-            )
-        elif limit_strategy == "\n</think>\n\n":
-            # for ernie-x1
-            assert line_break_id > 0
-            limit_thinking_content_length_v2(
-                sampled_token_ids,
-                max_think_lens,
-                step_idx,
-                limit_think_status,
-                think_end_id,
-                line_break_id,
-            )
-        else:
-            raise NotImplementedError(f"Not support {limit_strategy=} for limit thinking content length.")
-
-    # 1. Set stop value
-    paddle.assign(
-        paddle.where(
-            model_output.stop_flags,
-            model_output.step_idx,
-            model_output.step_idx + 1,
-        ),
-        model_output.step_idx,
-    )
-    length_cond = paddle.greater_equal(model_output.step_idx, model_output.max_dec_len)
-    paddle.assign(
-        paddle.logical_or(model_output.stop_flags, length_cond),
-        model_output.stop_flags,
-    )
-    set_stop_value_multi_ends(
-        sampled_token_ids,
-        model_output.stop_flags,
-        model_output.seq_lens_this_time,
-        model_output.eos_token_id,
-        model_output.next_tokens,
-        False,
-    )  # multi ends
-
-    # 2. Update the input buffer of the model
-    with paddle.framework._no_check_dy2st_diff():
-        if envs.ENABLE_V1_KVCACHE_SCHEDULER and not skip_save_output:
-            update_inputs_v1(
-                model_output.stop_flags,
-                model_output.not_need_stop,
-                model_output.seq_lens_this_time,
-                model_output.seq_lens_encoder,
-                model_output.seq_lens_decoder,
-                share_inputs["step_seq_lens_decoder"],
-                share_inputs["prompt_lens"],
-                sampled_token_ids,
-                model_output.input_ids,
-                share_inputs["block_tables"],
-                model_output.stop_nums,
-                model_output.next_tokens,
-                model_output.is_block_step,
-                block_size,
-            )
-        else:
-            update_inputs(
-                model_output.stop_flags,
-                model_output.not_need_stop,
-                model_output.seq_lens_this_time,
-                model_output.seq_lens_encoder,
-                model_output.seq_lens_decoder,
-                model_output.input_ids,
-                model_output.stop_nums,
-                sampled_token_ids,
-                model_output.is_block_step,
-            )
-    # 3. Transmit the model's output and stop generation signal via message queue.
-    #    In the future, we will abandon this approach.
-    if not skip_save_output:
-        save_output(
-            sampled_token_ids,
-            model_output.not_need_stop,
-            model_output.mp_rank,
-            False,  # use_ep
-        )
 
 
 def step_paddle(
@@ -592,6 +330,7 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
 
             self.share_inputs["top_p"][idx : idx + 1] = request.get("top_p", 0.7)
+            # self.share_inputs["top_p"][idx : idx + 1] = 0
             self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
             self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
             self.share_inputs["min_p"][idx : idx + 1] = request.get("min_p", 0.0)
@@ -657,7 +396,8 @@ class XPUModelRunner(ModelRunnerBase):
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
 
-        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
+        # self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
 
@@ -716,6 +456,7 @@ class XPUModelRunner(ModelRunnerBase):
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
             self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
             self.share_inputs["top_p"][idx : idx + 1] = get_attr_from_request(request, "top_p", 0.7)
+            # self.share_inputs["top_p"][idx : idx + 1] = 0
             self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
             self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
             self.share_inputs["min_p"][idx : idx + 1] = request.get("min_p", 0.0)
@@ -731,12 +472,12 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["presence_score"][idx : idx + 1] = get_attr_from_request(
                 request, "presence_penalty", 0.0
             )
-            self.share_inputs["temp_scaled_logprobs"][idx : idx + 1] = get_attr_from_request(
-                request, "temp_scaled_logprobs", False
-            )
-            self.share_inputs["top_p_normalized_logprobs"][idx : idx + 1] = get_attr_from_request(
-                request, "top_p_normalized_logprobs", False
-            )
+            # self.share_inputs["temp_scaled_logprobs"][idx : idx + 1] = get_attr_from_request(
+            #     request, "temp_scaled_logprobs", False
+            # )
+            # self.share_inputs["top_p_normalized_logprobs"][idx : idx + 1] = get_attr_from_request(
+            #     request, "top_p_normalized_logprobs", False
+            # )
 
             self.share_inputs["min_dec_len"][idx : idx + 1] = request.get("min_tokens", 1)
             self.share_inputs["max_dec_len"][idx : idx + 1] = request.get(
@@ -778,9 +519,10 @@ class XPUModelRunner(ModelRunnerBase):
                 ] = np.array(request.get("stop_token_ids"), dtype="int64")
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
-            self.sampler.apply_logits_processor(idx, request.get("logits_processor"), prefill_tokens)
+            # self.sampler.apply_logits_processor(idx, request.get("logits_processor"), prefill_tokens)
         self.share_inputs["not_need_stop"][0] = True
-        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
+        # self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
+        self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_prefill_inputs(req_dicts, num_running_requests)
             
@@ -961,8 +703,6 @@ class XPUModelRunner(ModelRunnerBase):
                 dtype="float32",
             )
             self.share_inputs["image_features"] = None
-<<<<<<< HEAD
-=======
             self.share_inputs["need_think_end"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
             self.share_inputs["enable_thinking"] = paddle.full(shape=[1], fill_value=True, dtype="bool")
             self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
@@ -1006,7 +746,6 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["step_seq_lens_this_time"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
 
         self.max_num_seqs = max_num_seqs
->>>>>>> ae4efa24 (rebase)
 
     def _prepare_inputs(self, is_dummy_run=False) -> None:
         """Prepare the model inputs"""
@@ -1021,24 +760,17 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["is_block_step"],
                 self.cache_config.block_size,
             )
-        print("ch -- debug before xpu_pre_process.")
 
         self.forward_meta = xpu_pre_process(
             self.share_inputs["input_ids"],
             self.share_inputs["seq_lens_this_time"],
             self.share_inputs,
-            use_speculate_method=False,
-            block_size=self.cache_config.block_size,
-            draft_tokens=None,
+            use_speculate_method=self.speculative_decoding,
+            block_size=self.parallel_config.block_size,
+            draft_tokens=self.share_inputs["draft_tokens"] if self.speculative_decoding else None,
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
         ) 
-        print("ch -- debug after xpu_pre_process.")
-
-        # TODO:check
-        # self.share_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
-        # self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
-        # self.share_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
 
         # Update bad tokens len
         max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
@@ -1092,6 +824,7 @@ class XPUModelRunner(ModelRunnerBase):
         """
         Initialize attention meta data
         """
+        self.forward_meta.attn_backend = self.attn_backends[0]
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
@@ -1347,13 +1080,20 @@ class XPUModelRunner(ModelRunnerBase):
             num_tokens: Expected number of tokens generated
         """
         self._dummy_prefill_inputs(num_tokens, batch_size)
+        if self.speculative_method in ["mtp"]:
+            self.proposer.dummy_prefill_inputs(
+                num_tokens=num_tokens,
+                batch_size=batch_size,
+                expected_decode_len=1,
+            )
         print("ch -- debug after _dummy_prefill_inputs")
         while True:
             self.execute_model(is_dummy_run=True)
 
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
                 break
-        print("ch -- debug _dummy_run finished.--------------------------------")
+        print("ch -- debug _dummy_run finished.")
+        print("=========================================================")
 
     def _set_debug_level(
         self, debug_level: int = 0x1, model_forward_batch: Optional[List[Request]] = None, is_dummy_run: bool = False
@@ -1422,20 +1162,26 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["ids_remove_padding"], self.share_inputs["image_features"], self.forward_meta
             )
         else:
-            # print("ch -- debug self.model: ", self.model)
-            print("ch -- debug ids_remove_padding:", self.share_inputs["ids_remove_padding"])
+            print("ch -- debug ids_remove_padding in base:", self.share_inputs["ids_remove_padding"])
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
             )
-        print("ch -- debug after model forward.")
-
-        hidden_states = xpu_process_output(model_output, self.share_inputs["cum_offsets"], self.forward_meta)
+        hidden_states = xpu_process_output(model_output, None, self.forward_meta, self.share_inputs)
 
         # 4. Compute logits, Sample
         logits = self.model.compute_logits(hidden_states)
-        sampler_output = self.sampler(logits, self.sampling_metadata)
-
+        sampler_output = None
+        if not self.speculative_decoding:
+            sampler_output = self.sampler(logits, self.sampling_metadata)
+        else:
+            self.sampler(
+                logits,
+                self.sampling_metadata,
+                self.parallel_config.max_model_len,
+                self.share_inputs,
+            )
+            # TODO(chenhuan09): support tp/dp
         # 5. Speculative decode
 
         # 6. Post Process
@@ -1453,11 +1199,11 @@ class XPUModelRunner(ModelRunnerBase):
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
             is_block_step=self.share_inputs["is_block_step"],
-            # 投机解码
-            full_hidden_states=None,
+            full_hidden_states=model_output, # 投机解码
             msg_queue_id=self.parallel_config.msg_queue_id,
             mp_rank=self.local_rank,
             use_ep=self.parallel_config.use_ep,
+<<<<<<< HEAD
             draft_tokens=None,
             actual_draft_token_num=None,
             accept_tokens=None,
@@ -1471,18 +1217,43 @@ class XPUModelRunner(ModelRunnerBase):
             need_think_end=(self.share_inputs["need_think_end"][:num_running_requests] if self.enable_mm else None),
             reasoning_index=(self.share_inputs["reasoning_index"][:num_running_requests] if self.enable_mm else None),
 >>>>>>> ae4efa24 (rebase)
+=======
+            draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
+            actual_draft_token_num=(
+                self.share_inputs["actual_draft_token_num"] if self.speculative_decoding else None
+            ),
+            accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
+            accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
+            enable_thinking=(self.share_inputs["enable_thinking"] if self.enable_mm else None),
+            think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
+            need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
+            reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
+>>>>>>> 2d4b5bd2 (rebase)
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
+        skip_save_output = is_dummy_run
+        if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
+            skip_save_output = True
+        else:
+            skip_save_output = False
+        # TODO(chenhuan09): need check, support mtp
         xpu_post_process(
-            sampled_token_ids=sampler_output.sampled_token_ids,
+            sampler_output=sampler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
-            block_size=self.cache_config.block_size,
+            block_size=self.parallel_config.block_size,
+            speculative_decoding=self.speculative_decoding,
             skip_save_output=is_dummy_run,
             think_end_id=self.model_config.think_end_id,
             line_break_id=self.model_config.line_break_id,
         )
+        print("ch -- debug draft model start ==========================================")
+        print("ch -- debug self.speculative_method:", self.speculative_method)
+        if self.speculative_decoding:
+            if self.speculative_method == "mtp":
+                self.proposer.run(full_hidden_states=model_output)
+        print("ch -- debug draft model end ==========================================")
 
         # 7. Updata 'infer_seed' and step_paddle()
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
@@ -1493,8 +1264,12 @@ class XPUModelRunner(ModelRunnerBase):
             self.cache_config.enc_dec_block_num,
         )
 
-        self.seq_lens_this_time_buffer[:num_running_requests].copy_(
-            self.share_inputs["seq_lens_this_time"][:num_running_requests], False
+        # self.seq_lens_this_time_buffer[:num_running_requests].copy_(
+        #     self.share_inputs["seq_lens_this_time"][:num_running_requests], False
+        # )
+
+        self.seq_lens_this_time_buffer.copy_(
+            self.share_inputs["seq_lens_this_time"], False
         )
         return None
 
@@ -1502,8 +1277,10 @@ class XPUModelRunner(ModelRunnerBase):
     def profile_run(self) -> None:
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 
-        self.num_gpu_blocks = self.cache_config.total_block_num
-        self.initialize_kv_cache(profile=True)
+        self.num_gpu_blocks = self.parallel_config.total_block_num
+        self.initialize_kv_cache()
+        if self.speculative_method in ["mtp"]:
+            self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
 
         self._dummy_run(
             num_tokens=int(self.scheduler_config.max_num_batched_tokens),

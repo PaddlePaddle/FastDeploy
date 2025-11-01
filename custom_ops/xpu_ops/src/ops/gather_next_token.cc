@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -113,7 +113,6 @@ PD_BUILD_OP(gather_next_token)
              "dec_batch_tensor",
              paddle::Optional("output_padding_offset")})
     .Outputs({"out"})
-    .Attrs({"max_input_length: int"})
     .SetKernelFn(PD_KERNEL(GatherNextToken))
     .SetInferShapeFn(PD_INFER_SHAPE(GatherNextTokenInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(GatherNextTokenInferDtype));

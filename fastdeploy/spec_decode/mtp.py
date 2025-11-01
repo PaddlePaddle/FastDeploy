@@ -24,7 +24,7 @@ from paddleformers.utils.log import logger
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
-from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.forward_meta import ForwardMeta, XPUForwardMeta
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
@@ -37,7 +37,7 @@ from fastdeploy.model_executor.models import ModelForCasualLM
 if paddle.is_compiled_with_xpu():
     from fastdeploy.model_executor.ops.xpu import (
         draft_model_postprocess,
-        draft_model_preprocess,
+        draft_model_preprocess_v2,
         draft_model_update,
         eagle_get_hidden_states,
         eagle_get_self_hidden_states,
@@ -62,6 +62,7 @@ else:
     )
 
 from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
+from fastdeploy.model_executor.pre_and_post_process import xpu_pre_process, xpu_process_output
 
 from .base import Proposer
 
@@ -105,7 +106,7 @@ class MTPProposer(Proposer):
         self._initialize_attn_backend()
 
         # Forward meta store the global meta information of the forward
-        self.forward_meta: ForwardMeta = None
+        self.forward_meta = None
 
     def _update_mtp_config(self, main_model):
         """
@@ -178,8 +179,7 @@ class MTPProposer(Proposer):
             and hasattr(self.quant_config, "kv_cache_quant_type")
             and self.quant_config.kv_cache_quant_type is not None
         ):
-            cache_type = "uint8"
-            kv_cache_quant_type = self.quant_config.kv_cache_quant_type
+            cache_type = "int8"
 
         # Get kv cache shape
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
@@ -232,7 +232,7 @@ class MTPProposer(Proposer):
             self.model_inputs["caches"] = list(self.cache_kvs.values())
             for value in self.cache_kvs.values():
                 del value
-        paddle.device.cuda.empty_cache()
+        paddle.device.xpu.empty_cache()
 
     def _initialize_attn_backend(
         self,
@@ -642,6 +642,51 @@ class MTPProposer(Proposer):
 
         self.forward_meta.step_use_cudagraph = step_use_cudagraph and self.draft_model_use_cudagraph
 
+    def _initialize_forward_meta_xpu(self):
+
+        # self.forward_meta = XPUForwardMeta(
+        #     input_ids=self.model_inputs["input_ids"],
+        #     ids_remove_padding=self.model_inputs["ids_remove_padding"],
+        #     rotary_embs=self.model_inputs["rope_emb"],
+        #     attn_backend=self.attn_backends[0],
+        #     decoder_batch_ids=self.model_inputs["decoder_batch_ids"],
+        #     decoder_tile_ids_per_batch=self.model_inputs["decoder_tile_ids_per_batch"],
+        #     decoder_num_blocks_cpu=self.model_inputs["decoder_num_blocks_cpu"],
+        #     decoder_num_blocks_device=self.model_inputs["decoder_num_blocks_device"],
+        #     decoder_chunk_size_device=self.model_inputs["decoder_chunk_size_device"],
+        #     max_len_tensor_cpu=self.model_inputs["max_len_tensor_cpu"],
+        #     seq_lens_encoder=self.model_inputs["seq_lens_encoder"],
+        #     seq_lens_decoder=self.model_inputs["seq_lens_decoder"],
+        #     seq_lens_this_time=self.model_inputs["seq_lens_this_time"],
+        #     batch_id_per_token=self.model_inputs["batch_id_per_token"],
+        #     cu_seqlens_q=self.model_inputs["cu_seqlens_q"],
+        #     cu_seqlens_k=self.model_inputs["cu_seqlens_k"],
+        #     block_tables=self.model_inputs["block_tables"],
+        #     caches=self.model_inputs["caches"],
+        #     encoder_batch_ids=self.model_inputs["encoder_batch_ids"],
+        #     encoder_tile_ids_per_batch=self.model_inputs["encoder_tile_ids_per_batch"],
+        #     encoder_num_blocks_x_cpu=self.model_inputs["encoder_num_blocks_x_cpu"],
+        #     kv_batch_ids=self.model_inputs["kv_batch_ids"],
+        #     kv_tile_ids_per_batch=self.model_inputs["kv_tile_ids_per_batch"],
+        #     kv_num_blocks_x_cpu=self.model_inputs["kv_num_blocks_x_cpu"],
+        #     max_len_kv_cpu=self.model_inputs["max_len_kv_cpu"],
+        # )
+        self.forward_meta.attn_backend = self.attn_backends[0]
+
+        # Initialzie attention meta data
+        for attn_backend in self.attn_backends:
+            attn_backend.init_attention_metadata(self.forward_meta)
+
+        # Mix ep in single node
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
+            only_decode_batch_list = []
+            prefill_exists = self.exist_prefill()
+            paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
+            only_decode_batch = all(only_decode_batch_list)
+            self.fd_config.model_config.moe_phase.phase = "decode" if only_decode_batch else "prefill"
+
+        # TODO: support cudagraph
+
     def exist_prefill(self):
         """
         check whether prefill stage exist
@@ -655,8 +700,9 @@ class MTPProposer(Proposer):
         """
         Prepare MTP inputs
         """
-        use_v1_cache_scheduler = envs.ENABLE_V1_KVCACHE_SCHEDULER
-        draft_model_preprocess(
+        use_v1_cache_scheduler = bool(envs.ENABLE_V1_KVCACHE_SCHEDULER)
+        # draft_model_preprocess(
+        draft_model_preprocess_v2(
             self.model_inputs["draft_tokens"],
             self.model_inputs["input_ids"],
             self.model_inputs["stop_flags"],
@@ -770,6 +816,17 @@ class MTPProposer(Proposer):
                 # Padding inputs for cuda graph
                 self.padding_cudagraph_inputs()
 
+                self.forward_meta = xpu_pre_process(
+                                        self.model_inputs["input_ids"],
+                                        self.model_inputs["seq_lens_this_time"],
+                                        self.model_inputs,
+                                        True,
+                                        self.cache_config.block_size,
+                                        self.model_inputs["draft_tokens"],
+                                        self.model_inputs["seq_lens_encoder"],
+                                        self.model_inputs["seq_lens_decoder"],
+                                    )
+                self._initialize_forward_meta_xpu()
                 # Get sampling metadata
                 self.sampling_metadata = SamplingMetadata(
                     temperature=self.model_inputs["temperature"],
@@ -798,38 +855,10 @@ class MTPProposer(Proposer):
                     previous_hidden_states=self.model_inputs["target_hidden_states"],
                     forward_meta=self.forward_meta,
                 )
-                if self.forward_meta.step_use_cudagraph:
-                    model_output = model_output[: self.real_token_num]
-                hidden_states = rebuild_padding(
-                    model_output,
-                    self.model_inputs["cu_seqlens_q"],
-                    self.model_inputs["seq_lens_this_time"],
-                    self.model_inputs["seq_lens_decoder"],
-                    self.model_inputs["seq_lens_encoder"],
-                    self.model_inputs["output_padding_offset"],
-                    self.model_config.max_model_len,
-                    self.model_inputs["first_token_hidden_states"],
-                    self.enable_logprob if substep == 0 else False,
-                )
-
+                hidden_states = xpu_process_output(model_output, None, self.forward_meta, self.model_inputs)
                 # 4. Compute logits, Sample
                 logits = self.model.compute_logits(hidden_states)
-                if self.enable_logprob and substep == 0:
-                    first_token_logits = self.model.compute_logits(self.model_inputs["first_token_hidden_states"])
-
-                    speculate_get_logits(
-                        self.model_inputs["draft_logits"],
-                        self.model_inputs["next_token_num"],
-                        self.model_inputs["batch_token_num"],
-                        self.model_inputs["cu_next_token_offset"],
-                        self.model_inputs["cu_batch_token_offset"],
-                        logits,
-                        first_token_logits,
-                        self.model_inputs["seq_lens_this_time"],
-                        self.model_inputs["seq_lens_encoder"],
-                    )
-
-                sampled_token_ids, sampler_output = self.sampler(
+                sampled_token_ids = self.sampler(
                     logits,
                     self.sampling_metadata,
                     self.max_model_len,

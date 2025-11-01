@@ -247,8 +247,6 @@ class XPUForwardMeta(ForwardMeta):
     # position embedding type in rope, supports 'NORMAL' or 'HALF_HEAD_DIM'
     pos_emb_type: Optional[str] = "NORMAL"
     #
-    len_info_cpu = None
-    #
     valid_bs_cpu = None
 
 @dataclass

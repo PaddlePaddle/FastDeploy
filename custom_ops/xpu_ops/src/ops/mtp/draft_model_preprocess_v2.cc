@@ -17,6 +17,10 @@
 #include "paddle/phi/core/enforce.h"
 #include "xpu/plugin.h"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
+
 namespace api = baidu::xpu::api;
 void DraftModelPreprocessV2(const paddle::Tensor& draft_tokens,
                           const paddle::Tensor& input_ids,
@@ -99,7 +103,7 @@ void DraftModelPreprocessV2(const paddle::Tensor& draft_tokens,
   not_need_stop_data[0] = not_need_stop_cpu.data<bool>()[0];
 }
 
-PD_BUILD_OP(draft_model_preprocess_v2)
+PD_BUILD_STATIC_OP(draft_model_preprocess_v2)
     .Inputs({"draft_tokens",
              "input_ids",
              "stop_flags",

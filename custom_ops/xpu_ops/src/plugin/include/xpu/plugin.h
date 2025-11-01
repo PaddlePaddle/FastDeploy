@@ -418,6 +418,17 @@ DLL_EXPORT int speculate_get_padding_offset(Context* ctx,
                                             const int max_seq_len,
                                             int bsz);
 
+
+DLL_EXPORT int speculate_get_padding_offset_v2(Context* ctx,
+                                            int* batch_id_per_token,
+                                            int* cum_offsets_out,
+                                            int* cu_seqlens_q,
+                                            int* cu_seqlens_k,
+                                            const int* cum_offsets,
+                                            const int* seq_lens,
+                                            const int max_seq_len,
+                                            int bsz);
+
 DLL_EXPORT int compute_self_order(api::Context* ctx,
                                   const int* last_seq_lens_this_time,
                                   const int* seq_lens_this_time,
