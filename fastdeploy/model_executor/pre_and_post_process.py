@@ -332,51 +332,21 @@ def xpu_pre_process(
     share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
     share_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
 
-    xpu_forward_meta = None
-    if not use_speculate_method:
-        xpu_forward_meta = XPUForwardMeta(
-            input_ids=share_inputs["input_ids"],
-            ids_remove_padding=share_inputs["ids_remove_padding"],
-            rotary_embs=share_inputs["rope_emb"],
-            attn_backend=None,
-            seq_lens_encoder=share_inputs["seq_lens_encoder"],
-            seq_lens_decoder=share_inputs["seq_lens_decoder"],
-            seq_lens_this_time=share_inputs["seq_lens_this_time"],
-            cum_offsets=None if use_speculate_method else share_inputs["cum_offsets"],
-            batch_id_per_token=share_inputs["batch_id_per_token"],
-            cu_seqlens_q=share_inputs["cu_seqlens_q"],
-            cu_seqlens_k=share_inputs["cu_seqlens_k"],
-            block_tables=share_inputs["block_tables"],
-            caches=share_inputs["caches"],
-        )
-    else:
-        xpu_forward_meta = ForwardMeta(
-            input_ids=share_inputs["input_ids"],
-            ids_remove_padding=share_inputs["ids_remove_padding"],
-            rotary_embs=share_inputs["rope_emb"],
-            attn_backend=None,
-            decoder_batch_ids=share_inputs["decoder_batch_ids"],
-            decoder_tile_ids_per_batch=share_inputs["decoder_tile_ids_per_batch"],
-            decoder_num_blocks_cpu=share_inputs["decoder_num_blocks_cpu"],
-            decoder_num_blocks_device=share_inputs["decoder_num_blocks_device"],
-            decoder_chunk_size_device=share_inputs["decoder_chunk_size_device"],
-            max_len_tensor_cpu=share_inputs["max_len_tensor_cpu"],
-            seq_lens_encoder=share_inputs["seq_lens_encoder"],
-            seq_lens_decoder=share_inputs["seq_lens_decoder"],
-            seq_lens_this_time=share_inputs["seq_lens_this_time"],
-            batch_id_per_token=share_inputs["batch_id_per_token"],
-            cu_seqlens_q=share_inputs["cu_seqlens_q"],
-            cu_seqlens_k=share_inputs["cu_seqlens_k"],
-            block_tables=share_inputs["block_tables"],
-            caches=share_inputs["caches"],
-            encoder_batch_ids=share_inputs["encoder_batch_ids"],
-            encoder_tile_ids_per_batch=share_inputs["encoder_tile_ids_per_batch"],
-            encoder_num_blocks_x_cpu=share_inputs["encoder_num_blocks_x_cpu"],
-            kv_batch_ids=share_inputs["kv_batch_ids"],
-            kv_tile_ids_per_batch=share_inputs["kv_tile_ids_per_batch"],
-            kv_num_blocks_x_cpu=share_inputs["kv_num_blocks_x_cpu"],
-            max_len_kv_cpu=share_inputs["max_len_kv_cpu"],
-        )
+    xpu_forward_meta = XPUForwardMeta(
+        input_ids=share_inputs["input_ids"],
+        ids_remove_padding=share_inputs["ids_remove_padding"],
+        rotary_embs=share_inputs["rope_emb"],
+        attn_backend=None,
+        seq_lens_encoder=share_inputs["seq_lens_encoder"],
+        seq_lens_decoder=share_inputs["seq_lens_decoder"],
+        seq_lens_this_time=share_inputs["seq_lens_this_time"],
+        cum_offsets=None if use_speculate_method else share_inputs["cum_offsets"],
+        batch_id_per_token=share_inputs["batch_id_per_token"],
+        cu_seqlens_q=share_inputs["cu_seqlens_q"],
+        cu_seqlens_k=share_inputs["cu_seqlens_k"],
+        block_tables=share_inputs["block_tables"],
+        caches=share_inputs["caches"],
+    )
 
     (
         xpu_forward_meta.encoder_batch_map,
@@ -408,7 +378,7 @@ def xpu_pre_process(
     xpu_forward_meta.dec_batch = xpu_forward_meta.len_info_cpu[1]
     xpu_forward_meta.total_enc_len = xpu_forward_meta.len_info_cpu[2]
 
-    # TODO(chenhuan09)：support MTP
+    # TODO(chenhuan09)：support for MTP
     if not use_speculate_method:
         adjusted_input = adjust_batch(
             ids_remove_padding.reshape([-1, 1]),

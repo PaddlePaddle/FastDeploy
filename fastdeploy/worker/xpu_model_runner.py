@@ -156,7 +156,6 @@ class XPUModelRunner(ModelRunnerBase):
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
 
         #  Sampler
-        print("ch -- debug self.speculative_decoding:", self.speculative_decoding)
         if not self.speculative_decoding:
             self.sampler = Sampler(fd_config)
         else:
@@ -186,6 +185,7 @@ class XPUModelRunner(ModelRunnerBase):
         # In the future, we will expand it as a list.
         self.attn_backends: list[AttentionBackend] = []
         self.initialize_attn_backend()
+        print("ch -- debug max_len_kv_cpu:", self.share_inputs["max_len_kv_cpu"])
 
         # Forward meta store the global meta information of the forward
         self.forward_meta: ForwardMeta = None
@@ -339,11 +339,10 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["penalty_score"][idx : idx + 1] = request.get("repetition_penalty", 1.0)
             self.share_inputs["frequency_score"][idx : idx + 1] = request.get("frequency_penalty", 0.0)
             self.share_inputs["presence_score"][idx : idx + 1] = request.get("presence_penalty", 0.0)
-            # self.share_inputs["temp_scaled_logprobs"][idx : idx + 1] = request.get("temp_scaled_logprobs", False)
-            # self.share_inputs["top_p_normalized_logprobs"][idx : idx + 1] = request.get(
-            #     "top_p_normalized_logprobs", False
-            # )
-
+            self.share_inputs["temp_scaled_logprobs"][idx : idx + 1] = request.get("temp_scaled_logprobs", False)
+            self.share_inputs["top_p_normalized_logprobs"][idx : idx + 1] = request.get(
+                "top_p_normalized_logprobs", False
+            )
             self.share_inputs["min_dec_len"][idx : idx + 1] = request.get("min_tokens", 1)
             self.share_inputs["max_dec_len"][idx : idx + 1] = request.get(
                 "max_tokens", self.model_config.max_model_len
@@ -472,12 +471,12 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["presence_score"][idx : idx + 1] = get_attr_from_request(
                 request, "presence_penalty", 0.0
             )
-            # self.share_inputs["temp_scaled_logprobs"][idx : idx + 1] = get_attr_from_request(
-            #     request, "temp_scaled_logprobs", False
-            # )
-            # self.share_inputs["top_p_normalized_logprobs"][idx : idx + 1] = get_attr_from_request(
-            #     request, "top_p_normalized_logprobs", False
-            # )
+            self.share_inputs["temp_scaled_logprobs"][idx : idx + 1] = get_attr_from_request(
+                request, "temp_scaled_logprobs", False
+            )
+            self.share_inputs["top_p_normalized_logprobs"][idx : idx + 1] = get_attr_from_request(
+                request, "top_p_normalized_logprobs", False
+            )
 
             self.share_inputs["min_dec_len"][idx : idx + 1] = request.get("min_tokens", 1)
             self.share_inputs["max_dec_len"][idx : idx + 1] = request.get(
@@ -611,7 +610,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["system_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int32")
         
         self.share_inputs["ids_remove_padding"] = paddle.full(
-            [max_num_seqs * self.parallel_config.max_model_len],
+            [max_num_seqs * self.model_config.max_model_len],
             0,
             dtype="int64",
         )
@@ -710,7 +709,7 @@ class XPUModelRunner(ModelRunnerBase):
         if self.speculative_decoding:
             max_draft_token_num = self.speculative_config.num_speculative_tokens
             self.share_inputs["input_ids_cpu"] = paddle.full(
-                shape=[max_num_seqs, self.parallel_config.max_model_len],
+                shape=[max_num_seqs, self.model_config.max_model_len],
                 fill_value=1,
                 dtype="int64",
             ).cpu()
@@ -744,7 +743,17 @@ class XPUModelRunner(ModelRunnerBase):
                 dtype="int64",
             )
             self.share_inputs["step_seq_lens_this_time"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-
+            self.share_inputs["temp_scaled_logprobs"] = paddle.full([max_num_seqs, 1], False, dtype=bool)
+            self.share_inputs["top_p_normalized_logprobs"] = paddle.full([max_num_seqs, 1], False, dtype=bool)
+            # For MTP Logprob
+            self.share_inputs["draft_logits"] = paddle.full(
+                [max_num_seqs * (self.speculative_config.num_speculative_tokens + 1), self.model_config.vocab_size],
+                -1,
+                dtype="float32",
+            )
+            self.share_inputs["cu_batch_token_offset"] = paddle.full(
+                shape=[max_num_seqs + 1], fill_value=0, dtype="int32"
+            )
         self.max_num_seqs = max_num_seqs
 
     def _prepare_inputs(self, is_dummy_run=False) -> None:
@@ -766,7 +775,7 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_this_time"],
             self.share_inputs,
             use_speculate_method=self.speculative_decoding,
-            block_size=self.parallel_config.block_size,
+            block_size=self.cache_config.block_size,
             draft_tokens=self.share_inputs["draft_tokens"] if self.speculative_decoding else None,
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
@@ -970,7 +979,6 @@ class XPUModelRunner(ModelRunnerBase):
             self.proposer = None
         elif self.speculative_method == "mtp":
             self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
-            # print("ch -- debug self.share_inputs, before init MTP Proposer:", self.share_inputs)
             self.proposer = MTPProposer(
                 self.fd_config,
                 self.get_model(),
@@ -1015,17 +1023,6 @@ class XPUModelRunner(ModelRunnerBase):
         """
         logger.warn("XPU not support cuda graph currently")
         pass
-
-    @sot_warmup_guard(True)
-    def sot_warmup(self) -> None:
-        start_time = time.perf_counter()
-        for batch_size in self.sot_warmup_sizes:
-            self._dummy_run(
-                num_tokens=self.scheduler_config.max_num_batched_tokens,
-                batch_size=batch_size,
-            )
-            logger.info(f"SOT warmup the model with the batch size:{batch_size}")
-        logger.info(f"SOT warmup took {time.perf_counter() - start_time} seconds")
 
     def exist_prefill(self):
         """
@@ -1086,14 +1083,11 @@ class XPUModelRunner(ModelRunnerBase):
                 batch_size=batch_size,
                 expected_decode_len=1,
             )
-        print("ch -- debug after _dummy_prefill_inputs")
         while True:
             self.execute_model(is_dummy_run=True)
 
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
                 break
-        print("ch -- debug _dummy_run finished.")
-        print("=========================================================")
 
     def _set_debug_level(
         self, debug_level: int = 0x1, model_forward_batch: Optional[List[Request]] = None, is_dummy_run: bool = False
@@ -1153,7 +1147,7 @@ class XPUModelRunner(ModelRunnerBase):
 
         # 1. Prepare inputs of model and decoder.
         self._prepare_inputs(is_dummy_run=is_dummy_run)
-        print("ch -- debug after prepare_inputs.")
+
         # 2. Padding inputs for cuda grph
 
         # 3. Execute model
@@ -1162,7 +1156,6 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["ids_remove_padding"], self.share_inputs["image_features"], self.forward_meta
             )
         else:
-            print("ch -- debug ids_remove_padding in base:", self.share_inputs["ids_remove_padding"])
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
@@ -1178,7 +1171,7 @@ class XPUModelRunner(ModelRunnerBase):
             self.sampler(
                 logits,
                 self.sampling_metadata,
-                self.parallel_config.max_model_len,
+                self.model_config.max_model_len,
                 self.share_inputs,
             )
             # TODO(chenhuan09): support tp/dp
@@ -1242,18 +1235,15 @@ class XPUModelRunner(ModelRunnerBase):
             sampler_output=sampler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
-            block_size=self.parallel_config.block_size,
+            block_size=self.cache_config.block_size,
             speculative_decoding=self.speculative_decoding,
             skip_save_output=is_dummy_run,
             think_end_id=self.model_config.think_end_id,
             line_break_id=self.model_config.line_break_id,
         )
-        print("ch -- debug draft model start ==========================================")
-        print("ch -- debug self.speculative_method:", self.speculative_method)
         if self.speculative_decoding:
             if self.speculative_method == "mtp":
                 self.proposer.run(full_hidden_states=model_output)
-        print("ch -- debug draft model end ==========================================")
 
         # 7. Updata 'infer_seed' and step_paddle()
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
@@ -1277,7 +1267,7 @@ class XPUModelRunner(ModelRunnerBase):
     def profile_run(self) -> None:
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 
-        self.num_gpu_blocks = self.parallel_config.total_block_num
+        self.num_gpu_blocks = self.cache_config.total_block_num
         self.initialize_kv_cache()
         if self.speculative_method in ["mtp"]:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)

@@ -77,7 +77,6 @@ class XpuWorker(WorkerBase):
             device=self.device,
             device_id=self.device_ids[self.local_rank % len(self.device_ids)],
             rank=self.rank,
-            device_id=self.device_id,
             local_rank=self.local_rank,
         )
 

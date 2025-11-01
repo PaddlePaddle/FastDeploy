@@ -63,7 +63,7 @@ else:
 
 from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
 from fastdeploy.model_executor.pre_and_post_process import xpu_pre_process, xpu_process_output
-
+from fastdeploy.platforms import current_platform
 from .base import Proposer
 
 
@@ -644,33 +644,21 @@ class MTPProposer(Proposer):
 
     def _initialize_forward_meta_xpu(self):
 
-        # self.forward_meta = XPUForwardMeta(
-        #     input_ids=self.model_inputs["input_ids"],
-        #     ids_remove_padding=self.model_inputs["ids_remove_padding"],
-        #     rotary_embs=self.model_inputs["rope_emb"],
-        #     attn_backend=self.attn_backends[0],
-        #     decoder_batch_ids=self.model_inputs["decoder_batch_ids"],
-        #     decoder_tile_ids_per_batch=self.model_inputs["decoder_tile_ids_per_batch"],
-        #     decoder_num_blocks_cpu=self.model_inputs["decoder_num_blocks_cpu"],
-        #     decoder_num_blocks_device=self.model_inputs["decoder_num_blocks_device"],
-        #     decoder_chunk_size_device=self.model_inputs["decoder_chunk_size_device"],
-        #     max_len_tensor_cpu=self.model_inputs["max_len_tensor_cpu"],
-        #     seq_lens_encoder=self.model_inputs["seq_lens_encoder"],
-        #     seq_lens_decoder=self.model_inputs["seq_lens_decoder"],
-        #     seq_lens_this_time=self.model_inputs["seq_lens_this_time"],
-        #     batch_id_per_token=self.model_inputs["batch_id_per_token"],
-        #     cu_seqlens_q=self.model_inputs["cu_seqlens_q"],
-        #     cu_seqlens_k=self.model_inputs["cu_seqlens_k"],
-        #     block_tables=self.model_inputs["block_tables"],
-        #     caches=self.model_inputs["caches"],
-        #     encoder_batch_ids=self.model_inputs["encoder_batch_ids"],
-        #     encoder_tile_ids_per_batch=self.model_inputs["encoder_tile_ids_per_batch"],
-        #     encoder_num_blocks_x_cpu=self.model_inputs["encoder_num_blocks_x_cpu"],
-        #     kv_batch_ids=self.model_inputs["kv_batch_ids"],
-        #     kv_tile_ids_per_batch=self.model_inputs["kv_tile_ids_per_batch"],
-        #     kv_num_blocks_x_cpu=self.model_inputs["kv_num_blocks_x_cpu"],
-        #     max_len_kv_cpu=self.model_inputs["max_len_kv_cpu"],
-        # )
+        self.forward_meta.decoder_batch_ids=self.model_inputs["decoder_batch_ids"],
+        self.forward_meta.decoder_tile_ids_per_batch=self.model_inputs["decoder_tile_ids_per_batch"],
+        self.forward_meta.decoder_num_blocks_cpu=self.model_inputs["decoder_num_blocks_cpu"],
+        self.forward_meta.decoder_num_blocks_device=self.model_inputs["decoder_num_blocks_device"],
+        self.forward_meta.decoder_chunk_size_device=self.model_inputs["decoder_chunk_size_device"],
+        self.forward_meta.max_len_tensor_cpu=self.model_inputs["max_len_tensor_cpu"],
+
+
+        self.forward_meta.encoder_batch_ids=self.model_inputs["encoder_batch_ids"],
+        self.forward_meta.encoder_tile_ids_per_batch=self.model_inputs["encoder_tile_ids_per_batch"],
+        self.forward_meta.encoder_num_blocks_x_cpu=self.model_inputs["encoder_num_blocks_x_cpu"],
+        self.forward_meta.kv_batch_ids=self.model_inputs["kv_batch_ids"],
+        self.forward_meta.kv_tile_ids_per_batch=self.model_inputs["kv_tile_ids_per_batch"],
+        self.forward_meta.kv_num_blocks_x_cpu=self.model_inputs["kv_num_blocks_x_cpu"],
+        self.forward_meta.pos_emb_type = "NORMAL"
         self.forward_meta.attn_backend = self.attn_backends[0]
 
         # Initialzie attention meta data
@@ -858,7 +846,7 @@ class MTPProposer(Proposer):
                 hidden_states = xpu_process_output(model_output, None, self.forward_meta, self.model_inputs)
                 # 4. Compute logits, Sample
                 logits = self.model.compute_logits(hidden_states)
-                sampled_token_ids = self.sampler(
+                sampled_token_ids, sampler_output = self.sampler(
                     logits,
                     self.sampling_metadata,
                     self.max_model_len,

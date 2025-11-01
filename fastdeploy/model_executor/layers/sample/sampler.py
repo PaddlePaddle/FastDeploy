@@ -464,11 +464,12 @@ class SpeculativeSampler(nn.Layer):
                 speculate_verify,
                 top_p_candidates,
             )
+            self.forward = self.forward_cuda
         else:
             raise NotImplementedError
         self.logprobs_mode = fd_config.model_config.logprobs_mode
-        self.top_p_candidates = top_p_candidates  # 新增这行
-        self.speculate_verify = speculate_verify  # 新增这行
+        self.top_p_candidates = top_p_candidates  
+        self.speculate_verify = speculate_verify  
         self.speculative_verify_window = fd_config.speculative_config.verify_window
         self.speculative_max_candidate_len = fd_config.speculative_config.max_candidate_len
         self.speculative_benchmark_mode = fd_config.speculative_config.benchmark_mode
@@ -743,7 +744,7 @@ class MTPSampler(nn.Layer):
         """ """
         super().__init__()
         if current_platform.is_cuda() or current_platform.is_xpu():
-            self.forward = self.forward
+            self.forward = self.forward_cuda
         else:
             raise NotImplementedError
         self.logprobs_mode = fd_config.model_config.logprobs_mode
