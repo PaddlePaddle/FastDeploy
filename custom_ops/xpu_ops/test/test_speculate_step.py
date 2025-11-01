@@ -15,7 +15,7 @@
 import numpy as np
 import paddle
 
-from fastdeploy.model_executor.ops.xpu import step_paddle, speculate_step_paddle
+from fastdeploy.model_executor.ops.xpu import speculate_step_paddle
 
 np.random.seed(2023)
 

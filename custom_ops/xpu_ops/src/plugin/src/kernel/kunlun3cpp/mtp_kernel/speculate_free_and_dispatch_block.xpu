@@ -43,28 +43,28 @@ static __device__ bool in_need_block_list(const int qid,
 }
 
 __global__ void speculate_free_and_dispatch_block(
-                                        bool *stop_flags,
-                                        int *seq_lens_this_time,
-                                        int *seq_lens_decoder,
-                                        int *block_tables,
-                                        int *encoder_block_lens,
-                                        bool *is_block_step,
-                                        int *step_block_list,  // [bsz]
-                                        int *step_len,
-                                        int *recover_block_list,
-                                        int *recover_len,
-                                        int *need_block_list,
-                                        int *need_block_len,
-                                        int *used_list_len,
-                                        int *free_list,
-                                        int *free_list_len,
-                                        int64_t *first_token_ids,
-                                        int *accept_num,
-                                        const int bsz,
-                                        const int block_size,
-                                        const int block_num_per_seq,
-                                        const int max_decoder_block_num,
-                                        const int max_draft_tokens) {
+    bool *stop_flags,
+    int *seq_lens_this_time,
+    int *seq_lens_decoder,
+    int *block_tables,
+    int *encoder_block_lens,
+    bool *is_block_step,
+    int *step_block_list,  // [bsz]
+    int *step_len,
+    int *recover_block_list,
+    int *recover_len,
+    int *need_block_list,
+    int *need_block_len,
+    int *used_list_len,
+    int *free_list,
+    int *free_list_len,
+    int64_t *first_token_ids,
+    int *accept_num,
+    const int bsz,
+    const int block_size,
+    const int block_num_per_seq,
+    const int max_decoder_block_num,
+    const int max_draft_tokens) {
   int cid = core_id();
   int ncores = core_num();
   int clusterid = cluster_id();
@@ -148,8 +148,8 @@ __global__ void speculate_free_and_dispatch_block(
         mfence();
         LM2GM(&value_zero, encoder_block_lens + tid, sizeof(int));
       }
-    } else if (seq_lens_this_time_lm != 0 && 
-            max_possible_block_idx < block_num_per_seq) {
+    } else if (seq_lens_this_time_lm != 0 &&
+               max_possible_block_idx < block_num_per_seq) {
       int next_block_id;
       GM2LM(block_tables + tid * block_num_per_seq +
                 (seq_lens_decoder_lm + max_draft_tokens + 1) / block_size,

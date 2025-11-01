@@ -20,27 +20,28 @@
 namespace xpu3 {
 namespace plugin {
 
-__attribute__((global)) void speculate_recover_block(int *recover_block_list,  // [bsz]
-                                                    int *recover_len,
-                                                    bool *stop_flags,
-                                                    int *seq_lens_this_time,
-                                                    const int *ori_seq_lens_encoder,
-                                                    int *seq_lens_encoder,
-                                                    const int *seq_lens_decoder,
-                                                    int *block_tables,
-                                                    int *free_list,
-                                                    int *free_list_len,
-                                                    int64_t *input_ids,
-                                                    const int64_t *pre_ids,
-                                                    const int64_t *step_idx,
-                                                    const int *encoder_block_lens,
-                                                    const int *used_list_len,
-                                                    const int64_t *next_tokens,
-                                                    const int64_t *first_token_ids,
-                                                    const int bsz,
-                                                    const int block_num_per_seq,
-                                                    const int length,
-                                                    const int pre_id_length);
+__attribute__((global)) void speculate_recover_block(
+    int *recover_block_list,  // [bsz]
+    int *recover_len,
+    bool *stop_flags,
+    int *seq_lens_this_time,
+    const int *ori_seq_lens_encoder,
+    int *seq_lens_encoder,
+    const int *seq_lens_decoder,
+    int *block_tables,
+    int *free_list,
+    int *free_list_len,
+    int64_t *input_ids,
+    const int64_t *pre_ids,
+    const int64_t *step_idx,
+    const int *encoder_block_lens,
+    const int *used_list_len,
+    const int64_t *next_tokens,
+    const int64_t *first_token_ids,
+    const int bsz,
+    const int block_num_per_seq,
+    const int length,
+    const int pre_id_length);
 
 }  // namespace plugin
 }  // namespace xpu3
