@@ -26,9 +26,10 @@ __attribute__((global)) void speculate_free_and_dispatch_block(
     int *step_block_list, // [bsz]
     int *step_len, int *recover_block_list, int *recover_len,
     int *need_block_list, int *need_block_len, int *used_list_len,
-    int *free_list, int *free_list_len, int64_t *first_token_ids, const int bsz,
+    int *free_list, int *free_list_len, int64_t *first_token_ids, 
+    int *accept_num, const int bsz,
     const int block_size, const int block_num_per_seq,
-    const int max_decoder_block_num);
+    const int max_decoder_block_num, const int max_draft_tokens);
 
 } // namespace plugin
 } // namespace xpu3
@@ -169,8 +170,8 @@ static int xpu3_wrapper(Context *ctx, bool *stop_flags, int *seq_lens_this_time,
         encoder_block_lens, is_block_step, step_block_list, step_len,
         recover_block_list, recover_len, need_block_list, need_block_len,
         used_list_len, free_list, free_list_len,
-        reinterpret_cast<XPU_INT64 *>(first_token_ids), bsz, block_size,
-        block_num_per_seq, max_decoder_block_num);
+        reinterpret_cast<XPU_INT64 *>(first_token_ids), accept_num, bsz, block_size,
+        block_num_per_seq, max_decoder_block_num, max_draft_tokens);
     return api::SUCCESS;
 }
 
@@ -186,7 +187,7 @@ int speculate_free_and_dispatch_block(Context *ctx, bool *stop_flags,
                             int64_t *first_token_ids, int *accept_num, 
                             const int bsz, const int block_size, 
                             const int block_num_per_seq, 
-                            const int max_decoder_block_num, int max_draft_tokens) {
+                            const int max_decoder_block_num, const int max_draft_tokens) {
     WRAPPER_CHECK_CTX(ctx);
     WRAPPER_DUMP_FUNCTION_T1(ctx, "speculate_free_and_dispatch_block", float);
     WRAPPER_DUMP_PARAM6(ctx, stop_flags, seq_lens_this_time, seq_lens_decoder,

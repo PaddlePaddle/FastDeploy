@@ -105,7 +105,7 @@ __global__ void draft_model_update(const int64_t* inter_next_tokens,
       sum_stop += stop_flag_now_int_sm[i];
     }
     not_need_stop[0] = sum_stop < bsz;
-  }
+}
   mfence();
 }
 }  // namespace plugin

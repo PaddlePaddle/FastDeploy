@@ -75,7 +75,7 @@ void SpeculateStepPaddle(
     auto recover_lens_cpu = recover_lens.copy_to(paddle::CPUPlace(), false);
     int recover_lens_cpu_data = recover_lens_cpu.data<int>()[0];
     if (recover_lens_cpu_data > 0) {
-        r = baidu::xpu::api::plugin::recover_block(
+        r = baidu::xpu::api::plugin::speculate_recover_block(
             xpu_ctx->x_context(),
             const_cast<int *>(recover_block_list.data<int>()),
             const_cast<int *>(recover_lens.data<int>()),
