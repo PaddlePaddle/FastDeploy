@@ -23,30 +23,29 @@
 
 namespace api = baidu::xpu::api;
 void DraftModelPreprocessV2(const paddle::Tensor& draft_tokens,
-                          const paddle::Tensor& input_ids,
-                          const paddle::Tensor& stop_flags,
-                          const paddle::Tensor& seq_lens_this_time,
-                          const paddle::Tensor& seq_lens_encoder,
-                          const paddle::Tensor& seq_lens_decoder,
-                          const paddle::Tensor& step_idx,
-                          const paddle::Tensor& not_need_stop,
-                          const paddle::Tensor& is_block_step,
-                          const paddle::Tensor& batch_drop,
-                          const paddle::Tensor& pre_ids,
-                          const paddle::Tensor& accept_tokens,
-                          const paddle::Tensor& accept_num,
-                          const paddle::Tensor& base_model_seq_lens_this_time,
-                          const paddle::Tensor& base_model_seq_lens_encoder,
-                          const paddle::Tensor& base_model_seq_lens_decoder,
-                          const paddle::Tensor& base_model_step_idx,
-                          const paddle::Tensor& base_model_stop_flags,
-                          const paddle::Tensor& base_model_is_block_step,
-                          const paddle::Tensor& base_model_draft_tokens,
-                          const int num_model_step,
-                          const bool truncate_first_token,
-                          const bool splitwise_prefill,
-                          const bool kvcache_scheduler_v1) {
-
+                            const paddle::Tensor& input_ids,
+                            const paddle::Tensor& stop_flags,
+                            const paddle::Tensor& seq_lens_this_time,
+                            const paddle::Tensor& seq_lens_encoder,
+                            const paddle::Tensor& seq_lens_decoder,
+                            const paddle::Tensor& step_idx,
+                            const paddle::Tensor& not_need_stop,
+                            const paddle::Tensor& is_block_step,
+                            const paddle::Tensor& batch_drop,
+                            const paddle::Tensor& pre_ids,
+                            const paddle::Tensor& accept_tokens,
+                            const paddle::Tensor& accept_num,
+                            const paddle::Tensor& base_model_seq_lens_this_time,
+                            const paddle::Tensor& base_model_seq_lens_encoder,
+                            const paddle::Tensor& base_model_seq_lens_decoder,
+                            const paddle::Tensor& base_model_step_idx,
+                            const paddle::Tensor& base_model_stop_flags,
+                            const paddle::Tensor& base_model_is_block_step,
+                            const paddle::Tensor& base_model_draft_tokens,
+                            const int num_model_step,
+                            const bool truncate_first_token,
+                            const bool splitwise_prefill,
+                            const bool kvcache_scheduler_v1) {
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
   auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
   api::Context* ctx = static_cast<const phi::XPUContext*>(dev_ctx)->x_context();
@@ -134,7 +133,10 @@ PD_BUILD_STATIC_OP(draft_model_preprocess_v2)
               "not_need_stop_out",
               "batch_drop_out",
               "pre_ids_out"})
-    .Attrs({"num_model_step: int", "truncate_first_token: bool", "splitwise_prefill: bool", "kvcache_scheduler_v1: bool"})
+    .Attrs({"num_model_step: int",
+            "truncate_first_token: bool",
+            "splitwise_prefill: bool",
+            "kvcache_scheduler_v1: bool"})
     .SetInplaceMap({{"draft_tokens", "draft_tokens_out"},
                     {"input_ids", "input_ids_out"},
                     {"stop_flags", "stop_flags_out"},
