@@ -191,7 +191,7 @@ jobs:
 
           commit_id=${{ github.sha }}
           branch_name=${{ github.ref_name }}
-          target_path=paddle-qa/paddle-pipeline/FastDeploy_ActionCE/SM${COMPILE_ARCH//,/_}/${branch_name}/${commit_id}
+          target_path=paddle-qa/paddle-pipeline/FastDeploy_ActionCE/cu126/SM${COMPILE_ARCH//,/_}/${branch_name}/${commit_id}
 
           wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
           push_file=$(realpath bos_tools.py)
@@ -201,7 +201,7 @@ jobs:
           target_path_stripped="${target_path#paddle-qa/}"
           WHEEL_PATH=https://paddle-qa.bj.bcebos.com/${target_path_stripped}/${filename}
 
-          target_path_latest=paddle-qa/paddle-pipeline/FastDeploy_ActionCE/SM${COMPILE_ARCH//,/_}/${branch_name}/latest
+          target_path_latest=paddle-qa/paddle-pipeline/FastDeploy_ActionCE/cu126/SM${COMPILE_ARCH//,/_}/${branch_name}/latest
           python ${push_file} ${filename} ${target_path_latest}
           target_path_stripped_latest="${target_path_latest#paddle-qa/}"
           WHEEL_PATH_LATEST=https://paddle-qa.bj.bcebos.com/${target_path_stripped_latest}/${filename}
@@ -230,7 +230,7 @@ jobs:
 
           commit_id=${{ github.sha }}
           branch_name=${{ github.ref_name }}
-          target_path=paddle-qa/paddle-pipeline/FastDeploy_ActionCE/SM${COMPILE_ARCH//,/_}/${branch_name}/${commit_id}
+          target_path=paddle-qa/paddle-pipeline/FastDeploy_ActionCE/cu126/SM${COMPILE_ARCH//,/_}/${branch_name}/${commit_id}
 
           wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
           push_file=$(realpath bos_tools.py)
@@ -240,7 +240,7 @@ jobs:
           target_path_stripped="${target_path#paddle-qa/}"
           WHEEL_PATH=https://paddle-qa.bj.bcebos.com/${target_path_stripped}/${filename}
 
-          target_path_latest=paddle-qa/paddle-pipeline/FastDeploy_ActionCE/SM${COMPILE_ARCH//,/_}/${branch_name}/latest
+          target_path_latest=paddle-qa/paddle-pipeline/FastDeploy_ActionCE/cu126/SM${COMPILE_ARCH//,/_}/${branch_name}/latest
           python ${push_file} ${filename} ${target_path_latest}
           target_path_stripped_latest="${target_path_latest#paddle-qa/}"
           WHEEL_PATH_LATEST=https://paddle-qa.bj.bcebos.com/${target_path_stripped_latest}/${filename}
