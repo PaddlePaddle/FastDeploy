@@ -722,7 +722,7 @@ std::vector<paddle::Tensor> BlockAttnKernel(
               : quant_v_scale_inv,
           nullptr,          // o_maxptr
           param.head_dim);  // vo_head_dim
-      PD_CHECK(0, "speculative_attention unimplemented");
+    //   PD_CHECK(0, "speculative_attention unimplemented");
       PD_CHECK(ret == api::SUCCESS,
                "xfa::speculative_attention_decoder failed.");
       if (!Eq_len) {

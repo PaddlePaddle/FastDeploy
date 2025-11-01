@@ -46,7 +46,6 @@ from fastdeploy.model_executor.pre_and_post_process import xpu_pre_process, xpu_
 from fastdeploy.model_executor.ops.xpu import (
     adjust_batch,
     get_infer_param,
-    get_infer_param_old,
     get_padding_offset,
     limit_thinking_content_length_v1,
     limit_thinking_content_length_v2,
@@ -73,38 +72,73 @@ def step_paddle(
     share_inputs: Dict[str, paddle.Tensor],
     block_size: int,
     enc_dec_block_num: int,
+    speculative_decoding: bool,
+    max_draft_token_num: int,
 ) -> None:
     """
     TODO(gongshaotian): normalization name
     """
-    from fastdeploy.model_executor.ops.xpu import step_paddle
+    from fastdeploy.model_executor.ops.xpu import step_paddle, speculate_step_paddle
+    
+    if speculative_decoding:
+        paddle.device.xpu.set_debug_level(0xa1)
+        speculate_step_paddle(
+            share_inputs["stop_flags"],
+            share_inputs["seq_lens_this_time"],
+            share_inputs["step_seq_lens_encoder"],
+            share_inputs["seq_lens_encoder"],
+            share_inputs["seq_lens_decoder"],
+            share_inputs["block_tables"],
+            share_inputs["encoder_block_lens"],
+            share_inputs["is_block_step"],
+            share_inputs["step_block_list"],
+            share_inputs["step_lens"],
+            share_inputs["recover_block_list"],
+            share_inputs["recover_lens"],
+            share_inputs["need_block_list"],
+            share_inputs["need_block_len"],
+            share_inputs["used_list_len"],
+            share_inputs["free_list"],
+            share_inputs["free_list_len"],
+            share_inputs["input_ids"],
+            share_inputs["pre_ids"],
+            share_inputs["step_idx"],
+            share_inputs["next_tokens"],
+            share_inputs["first_token_ids"],
+            share_inputs["accept_num"],
+            block_size,
+            enc_dec_block_num,
+            max_draft_token_num,
+        )
+        paddle.device.xpu.set_debug_level(0x0)
 
-    step_paddle(
-        share_inputs["stop_flags"],
-        share_inputs["seq_lens_this_time"],
-        share_inputs["step_seq_lens_encoder"],
-        share_inputs["seq_lens_encoder"],
-        share_inputs["seq_lens_decoder"],
-        share_inputs["block_tables"],
-        share_inputs["encoder_block_lens"],
-        share_inputs["is_block_step"],
-        share_inputs["step_block_list"],
-        share_inputs["step_lens"],
-        share_inputs["recover_block_list"],
-        share_inputs["recover_lens"],
-        share_inputs["need_block_list"],
-        share_inputs["need_block_len"],
-        share_inputs["used_list_len"],
-        share_inputs["free_list"],
-        share_inputs["free_list_len"],
-        share_inputs["input_ids"],
-        share_inputs["pre_ids"],
-        share_inputs["step_idx"],
-        share_inputs["next_tokens"],
-        share_inputs["first_token_ids"],
-        block_size,
-        enc_dec_block_num,
-    )
+    else:
+        step_paddle(
+            share_inputs["stop_flags"],
+            share_inputs["seq_lens_this_time"],
+            share_inputs["step_seq_lens_encoder"],
+            share_inputs["seq_lens_encoder"],
+            share_inputs["seq_lens_decoder"],
+            share_inputs["block_tables"],
+            share_inputs["encoder_block_lens"],
+            share_inputs["is_block_step"],
+            share_inputs["step_block_list"],
+            share_inputs["step_lens"],
+            share_inputs["recover_block_list"],
+            share_inputs["recover_lens"],
+            share_inputs["need_block_list"],
+            share_inputs["need_block_len"],
+            share_inputs["used_list_len"],
+            share_inputs["free_list"],
+            share_inputs["free_list_len"],
+            share_inputs["input_ids"],
+            share_inputs["pre_ids"],
+            share_inputs["step_idx"],
+            share_inputs["next_tokens"],
+            share_inputs["first_token_ids"],
+            block_size,
+            enc_dec_block_num,
+        )
 
 
 class XPUModelRunner(ModelRunnerBase):
@@ -337,7 +371,8 @@ class XPUModelRunner(ModelRunnerBase):
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
             self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
 
-            self.share_inputs["top_p"][idx : idx + 1] = request.get("top_p", 0.7)
+            # self.share_inputs["top_p"][idx : idx + 1] = request.get("top_p", 0.7)
+            self.share_inputs["top_p"][idx : idx + 1] = 0
             self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
             self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
             self.share_inputs["min_p"][idx : idx + 1] = request.get("min_p", 0.0)
@@ -456,7 +491,8 @@ class XPUModelRunner(ModelRunnerBase):
 
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
             self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
-            self.share_inputs["top_p"][idx : idx + 1] = get_attr_from_request(request, "top_p", 0.7)
+            # self.share_inputs["top_p"][idx : idx + 1] = get_attr_from_request(request, "top_p", 0.7)
+            self.share_inputs["top_p"][idx : idx + 1] = 0
             self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
             self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
             self.share_inputs["min_p"][idx : idx + 1] = request.get("min_p", 0.0)
@@ -1185,32 +1221,12 @@ class XPUModelRunner(ModelRunnerBase):
             msg_queue_id=self.parallel_config.msg_queue_id,
             mp_rank=self.local_rank,
             use_ep=self.parallel_config.use_ep,
-<<<<<<< HEAD
-            draft_tokens=None,
-            actual_draft_token_num=None,
-            accept_tokens=None,
-            accept_num=None,
-<<<<<<< HEAD
-=======
-            enable_thinking=(self.share_inputs["enable_thinking"] if self.enable_mm else None),
-            think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
-            # need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
-            # reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
-            need_think_end=(self.share_inputs["need_think_end"][:num_running_requests] if self.enable_mm else None),
-            reasoning_index=(self.share_inputs["reasoning_index"][:num_running_requests] if self.enable_mm else None),
->>>>>>> ae4efa24 (rebase)
-=======
             draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
             actual_draft_token_num=(
                 self.share_inputs["actual_draft_token_num"] if self.speculative_decoding else None
             ),
             accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
-            enable_thinking=(self.share_inputs["enable_thinking"] if self.enable_mm else None),
-            think_end_id=(self.model_config.think_end_id if self.enable_mm else -1),
-            need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
-            reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
->>>>>>> 2d4b5bd2 (rebase)
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
@@ -1241,6 +1257,8 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs,
             self.cache_config.block_size,
             self.cache_config.enc_dec_block_num,
+            self.speculative_decoding,
+            self.speculative_config.num_speculative_tokens, 
         )
 
         self.seq_lens_this_time_buffer.copy_(

@@ -429,6 +429,7 @@ def xpu_process_output(
         output_padding_offset,  # output_padding_offset
         -1,  # max_input_length
     )
+
     return hiddden_states
 
 

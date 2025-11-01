@@ -113,6 +113,7 @@ PD_BUILD_OP(gather_next_token)
              "dec_batch_tensor",
              paddle::Optional("output_padding_offset")})
     .Outputs({"out"})
+    .Attrs({"max_input_length: int"})
     .SetKernelFn(PD_KERNEL(GatherNextToken))
     .SetInferShapeFn(PD_INFER_SHAPE(GatherNextTokenInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(GatherNextTokenInferDtype));

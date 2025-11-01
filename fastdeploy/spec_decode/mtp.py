@@ -198,12 +198,9 @@ class MTPProposer(Proposer):
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
             max_num_blocks=self.num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
         )
-<<<<<<< HEAD
         if kv_cache_quant_type == "block_wise_fp8":
             kv_cache_scale_shape = [kv_cache_shape[0], kv_cache_shape[1], kv_cache_shape[2]]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
-=======
->>>>>>> 2de8e754 (multi-hardware adaptation)
         if not profile and (
             self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed"
         ):

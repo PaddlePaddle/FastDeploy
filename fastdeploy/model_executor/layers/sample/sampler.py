@@ -613,13 +613,13 @@ class SpeculativeSampler(nn.Layer):
         probs = F.softmax(logits)
 
 
-        top_p, top_k = padding_sampling_params(
-            sampling_metadata.top_p,
-            sampling_metadata.top_k,
-            share_inputs["seq_lens_this_time"],
-            share_inputs["seq_lens_encoder"],
-        )
-        _, sampled_token_ids = top_k_top_p_sampling(probs, top_p=top_p, top_k=top_k, seed=sampling_metadata.seed[0, 0])
+        # top_p, top_k = padding_sampling_params(
+        #     sampling_metadata.top_p,
+        #     sampling_metadata.top_k,
+        #     share_inputs["seq_lens_this_time"],
+        #     share_inputs["seq_lens_encoder"],
+        # )
+        # _, sampled_token_ids = top_k_top_p_sampling(probs, top_p=top_p, top_k=top_k, seed=sampling_metadata.seed[0, 0])
 
         verify_scores, verify_tokens, actual_candidate_len = self.top_p_candidates(
             probs,
@@ -629,7 +629,8 @@ class SpeculativeSampler(nn.Layer):
             max_model_len,
         )
 
-        if paddle.current_platform.is_xpu():
+        if current_platform.is_xpu():
+            # print("ch -- debug sampling_metadata.top_p:", sampling_metadata.top_p)
             self.speculate_verify(
                 share_inputs["accept_tokens"],
                 share_inputs["accept_num"],
@@ -654,7 +655,7 @@ class SpeculativeSampler(nn.Layer):
                 self.speculative_verify_window,
                 True,  # enable_topp
                 (self.speculative_benchmark_mode or reject_all_drafts),
-                # accept_all_drafts,
+                accept_all_drafts,
             )
         else:
             self.speculate_verify(
@@ -904,14 +905,16 @@ class MTPSampler(nn.Layer):
         )
         probs = F.softmax(logits)
 
-        top_p, top_k = padding_sampling_params(
-            sampling_metadata.top_p,
-            sampling_metadata.top_k,
-            share_inputs["seq_lens_this_time"],
-            share_inputs["seq_lens_encoder"],
+        # top_p, top_k = padding_sampling_params(
+        #     sampling_metadata.top_p,
+        #     sampling_metadata.top_k,
+        #     share_inputs["seq_lens_this_time"],
+        #     share_inputs["seq_lens_encoder"],
+        # )
+        # _, next_tokens = top_k_top_p_sampling(probs, top_p=top_p, top_k=top_k, seed=sampling_metadata.seed[0, 0])
+        _, next_tokens = top_k_top_p_sampling(
+            probs, sampling_metadata.top_p, sampling_metadata.top_k, sampling_metadata.top_k_list
         )
-        _, next_tokens = top_k_top_p_sampling(probs, top_p=top_p, top_k=top_k, seed=sampling_metadata.seed[0, 0])
-
         token_ids = None
         logprobs_tensors = None
         if num_logprobs is not None and share_inputs["substep"] == 0:
