@@ -301,7 +301,8 @@ DLL_EXPORT int speculate_verify(Context* ctx,
                                 const int max_seq_len,
                                 const int max_candidate_len,
                                 const int verify_window,
-                                const bool prefill_one_step_stop);
+                                const bool prefill_one_step_stop,
+                                const bool benchmark_mode);
 
 DLL_EXPORT int speculate_clear_accept_nums(Context* ctx,
                                            int* accept_num,
@@ -531,8 +532,39 @@ DLL_EXPORT int rebuild_self_hidden_states(api::Context* ctx,
                                           T* output,
                                           int dim_embed,
                                           int elem_cnt);
-/*--------------------------------------- MTP end
- * --------------------------------------------*/
+DLL_EXPORT int draft_model_preprocess_v2(api::Context* ctx,
+                                      int64_t* draft_tokens,
+                                      int64_t* input_ids,
+                                      bool* stop_flags,
+                                      int* seq_lens_this_time,
+                                      int* seq_lens_encoder,
+                                      int* seq_lens_decoder,
+                                      int64_t* step_idx,
+                                      bool* not_need_stop,
+                                      bool* is_block_step,
+                                      bool* batch_drop,
+                                      int64_t* pre_ids,
+                                      const int64_t* accept_tokens,
+                                      const int* accept_num,
+                                      const int* base_model_seq_lens_this_time,
+                                      const int* base_model_seq_lens_encoder,
+                                      const int* base_model_seq_lens_decoder,
+                                      const int64_t* base_model_step_idx,
+                                      const bool* base_model_stop_flags,
+                                      const bool* base_model_is_block_step,
+                                      int64_t* base_model_draft_tokens,
+                                      const int bsz,
+                                      const int num_model_step,
+                                      const int accept_tokens_len,
+                                      const int draft_tokens_len,
+                                      const int input_ids_len,
+                                      const int base_model_draft_tokens_len,
+                                      const int pre_ids_len,
+                                      const bool truncate_first_token,
+                                      const bool splitwise_prefill,
+                                      const bool kvcache_scheduler_v1);
+
+/*--------------------------------------- MTP end --------------------------------------------*/
 
 }  // namespace plugin
 }  // namespace api
