@@ -129,6 +129,8 @@ def setup_and_run_server():
         "wint4",
         "--speculative-config",
         json.dumps(speculative_config),
+        "--graph-optimization-config",
+        '{"use_cudagraph":true,  "use_unique_memory_pool":true, "draft_model_use_cudagraph":true}',
     ]
 
     # Start subprocess in new process group
