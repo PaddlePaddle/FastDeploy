@@ -168,7 +168,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.graph_opt_level = self.graph_opt_config.graph_opt_level
         self.use_cudagraph = False
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
-        # self.input_ids = paddle.zeros(self.scheduler_config.max_num_seqs, dtype="int32")
+        self.input_ids = paddle.zeros(self.scheduler_config.max_num_seqs, dtype="int32")
 
         # Initialize share inputs
         self._init_share_inputs(self.fd_config.scheduler_config.max_num_seqs)
@@ -185,7 +185,6 @@ class XPUModelRunner(ModelRunnerBase):
         # In the future, we will expand it as a list.
         self.attn_backends: list[AttentionBackend] = []
         self.initialize_attn_backend()
-        print("ch -- debug max_len_kv_cpu:", self.share_inputs["max_len_kv_cpu"])
 
         # Forward meta store the global meta information of the forward
         self.forward_meta: ForwardMeta = None
@@ -193,6 +192,15 @@ class XPUModelRunner(ModelRunnerBase):
         # # Postprocess Env params
         # os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.engine_worker_queue_port)
         # logger.info(f"queue id is {str(self.parallel_config.engine_worker_queue_port)}")
+
+    def exist_prefill(self):
+        """
+        check whether prefill stage exist
+        """
+        if int(paddle.max(self.share_inputs["seq_lens_encoder"])) != 0:
+            return 1
+        else:
+            return 0
 
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests):
         """
@@ -330,7 +338,6 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
 
             self.share_inputs["top_p"][idx : idx + 1] = request.get("top_p", 0.7)
-            # self.share_inputs["top_p"][idx : idx + 1] = 0
             self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
             self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
             self.share_inputs["min_p"][idx : idx + 1] = request.get("min_p", 0.0)
@@ -395,7 +402,6 @@ class XPUModelRunner(ModelRunnerBase):
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
 
-        # self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
         self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
@@ -455,7 +461,6 @@ class XPUModelRunner(ModelRunnerBase):
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
             self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
             self.share_inputs["top_p"][idx : idx + 1] = get_attr_from_request(request, "top_p", 0.7)
-            # self.share_inputs["top_p"][idx : idx + 1] = 0
             self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
             self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
             self.share_inputs["min_p"][idx : idx + 1] = request.get("min_p", 0.0)
@@ -518,9 +523,7 @@ class XPUModelRunner(ModelRunnerBase):
                 ] = np.array(request.get("stop_token_ids"), dtype="int64")
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
-            # self.sampler.apply_logits_processor(idx, request.get("logits_processor"), prefill_tokens)
         self.share_inputs["not_need_stop"][0] = True
-        # self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
         self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_prefill_inputs(req_dicts, num_running_requests)
@@ -577,7 +580,6 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["max_length"] = paddle.full(
             [max_num_seqs, 1], self.model_config.max_model_len, dtype="int64"
         )
-        # self.share_inputs["seq_lens_this_time"] = paddle.full(max_num_seqs, 0, dtype="int32")
         self.seq_lens_this_time_buffer = paddle.full(max_num_seqs, 0, dtype="int32")
         self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -769,7 +771,6 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["is_block_step"],
                 self.cache_config.block_size,
             )
-
         self.forward_meta = xpu_pre_process(
             self.share_inputs["input_ids"],
             self.share_inputs["seq_lens_this_time"],
@@ -1024,15 +1025,6 @@ class XPUModelRunner(ModelRunnerBase):
         logger.warn("XPU not support cuda graph currently")
         pass
 
-    def exist_prefill(self):
-        """
-        check whether prefill stage exist
-        """
-        if int(paddle.max(self.share_inputs["seq_lens_encoder"])) != 0:
-            return 1
-        else:
-            return 0
-
     def _dummy_prefill_inputs(self, num_tokens: int, batch_size: int):
         """Set dummy prefill inputs to share_inputs"""
         full_length = min(num_tokens // batch_size, self.model_config.max_model_len - 10)
@@ -1077,6 +1069,7 @@ class XPUModelRunner(ModelRunnerBase):
             num_tokens: Expected number of tokens generated
         """
         self._dummy_prefill_inputs(num_tokens, batch_size)
+
         if self.speculative_method in ["mtp"]:
             self.proposer.dummy_prefill_inputs(
                 num_tokens=num_tokens,
@@ -1254,10 +1247,6 @@ class XPUModelRunner(ModelRunnerBase):
             self.cache_config.enc_dec_block_num,
         )
 
-        # self.seq_lens_this_time_buffer[:num_running_requests].copy_(
-        #     self.share_inputs["seq_lens_this_time"][:num_running_requests], False
-        # )
-
         self.seq_lens_this_time_buffer.copy_(
             self.share_inputs["seq_lens_this_time"], False
         )
@@ -1268,7 +1257,7 @@ class XPUModelRunner(ModelRunnerBase):
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 
         self.num_gpu_blocks = self.cache_config.total_block_num
-        self.initialize_kv_cache()
+        self.initialize_kv_cache(profile=True)
         if self.speculative_method in ["mtp"]:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
 

@@ -65,7 +65,6 @@ elif current_platform.is_xpu():
         get_infer_param,
         set_stop_value_multi_ends,
         speculate_get_output_padding_offset,
-        speculate_get_padding_offset,
         speculate_get_padding_offset_v2,
         speculate_clear_accept_nums,
         speculate_get_seq_lens_output,
@@ -76,6 +75,7 @@ elif current_platform.is_xpu():
         update_inputs_v1,
         speculate_update_v3,
     )
+    speculate_get_padding_offset = speculate_get_padding_offset_v2
 elif current_platform.is_intel_hpu():
     pass
 else:
@@ -229,7 +229,7 @@ def pre_process(
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = speculate_get_padding_offset_v2(
+        ) = speculate_get_padding_offset(
             input_ids,
             draft_tokens,
             cum_offsets_now,

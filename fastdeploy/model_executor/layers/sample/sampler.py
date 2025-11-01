@@ -464,10 +464,10 @@ class SpeculativeSampler(nn.Layer):
                 speculate_verify,
                 top_p_candidates,
             )
-            self.forward = self.forward_cuda
         else:
             raise NotImplementedError
         self.logprobs_mode = fd_config.model_config.logprobs_mode
+        self.forward = self.forward_cuda
         self.top_p_candidates = top_p_candidates  
         self.speculate_verify = speculate_verify  
         self.speculative_verify_window = fd_config.speculative_config.verify_window
