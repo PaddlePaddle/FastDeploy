@@ -265,10 +265,10 @@ class PaddleDisWorkerProc:
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
         req_ids = []
         num_running_requests = 0
-        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+        tp_rank = self.local_rank % self.parallel_config.tensor_parallel_size
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
-            if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
+            if tp_rank == 0:
                 if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
@@ -282,11 +282,10 @@ class PaddleDisWorkerProc:
 
             self.insert_step = False
             req_dicts = None
-            local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
-            self.worker_healthy_live_signal.value[local_rank % self.max_chips_per_node] = int(time.time())
+            self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
-            if local_rank == 0:
+            if tp_rank == 0:
                 if self.task_queue.num_tasks() > 0:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
