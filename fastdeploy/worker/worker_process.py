@@ -266,6 +266,7 @@ class PaddleDisWorkerProc:
         req_ids = []
         num_running_requests = 0
         tp_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+        tp_size = self.parallel_config.tensor_parallel_siz
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
             if tp_rank == 0:
@@ -275,7 +276,7 @@ class PaddleDisWorkerProc:
                     self.model_weights_signal[0] = self._broadcast_model_weights_signal(
                         src=0, group=self.parallel_config.ep_group
                     )
-            if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.tensor_parallel_size > 1:
+            if self.fd_config.load_config.dynamic_load_weight and tp_size > 1:
                 self.model_weights_signal[0] = self._broadcast_model_weights_signal(
                     src=0, group=self.parallel_config.tp_group
                 )
@@ -290,12 +291,12 @@ class PaddleDisWorkerProc:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
                     ):
-                        if self.nnode > 1 and self.parallel_config.tensor_parallel_size > self.max_chips_per_node:
+                        if self.nnode > 1 and tp_size > self.max_chips_per_node:
                             self.task_queue.read_finish_flag.set(1)
                         else:
                             self.exist_task_signal.value[0] = ExistTaskStatus.EXIST
 
-            if self.parallel_config.tensor_parallel_size > 1:
+            if tp_size > 1:
                 # Synchronize the signal for other workers
                 self._tp_barrier_wait()
 
@@ -347,8 +348,8 @@ class PaddleDisWorkerProc:
 
                 # Process prefill inputs
                 self.worker.preprocess_new_task(req_dicts, num_running_requests)
-                
-                if not self.worker.model_runner.not_need_stop() and self.parallel_config.tensor_parallel_size > 1:
+
+                if not self.worker.model_runner.not_need_stop() and tp_size > 1:
                     self._tp_barrier_wait()
 
                 time.sleep(0.001)
