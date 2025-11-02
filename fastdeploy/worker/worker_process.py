@@ -266,7 +266,7 @@ class PaddleDisWorkerProc:
         req_ids = []
         num_running_requests = 0
         tp_rank = self.local_rank % self.parallel_config.tensor_parallel_size
-        tp_size = self.parallel_config.tensor_parallel_siz
+        tp_size = self.parallel_config.tensor_parallel_size
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
             if tp_rank == 0:
