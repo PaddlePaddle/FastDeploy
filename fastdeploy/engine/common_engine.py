@@ -746,6 +746,7 @@ class EngineService:
                                 raise
                 # 2. Schedule requests
                 tasks = self.resource_manager.schedule()
+
                 # 3. Send to engine
                 if tasks:
                     if self.cfg.scheduler_config.splitwise_role == "decode":
