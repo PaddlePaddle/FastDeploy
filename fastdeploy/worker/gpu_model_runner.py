@@ -1,3 +1,4 @@
+
 """
 # Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
 #
@@ -1984,7 +1985,7 @@ class GPUModelRunner(ModelRunnerBase):
                 ) from e
             if "CUDA error(700)" in str(e):
                 raise RuntimeError(
-                    "CUDA error(700), an illegal memory access was encountered, "
+                    "CUDA error(700), an illegal memory access was encountered, "
                     "when warming up CUDAGraph. Please try to set the startup parameter: "
                     "--graph-optimization-config '{\"use_cudagraph\": false}' to close CUDAGraph"
                 ) from e
@@ -2289,8 +2290,8 @@ class GPUModelRunner(ModelRunnerBase):
                     self.speculative_config.num_speculative_tokens,
                 )
 
-            self.seq_lens_this_time_buffer[:num_running_requests].copy_(	
-                self.share_inputs["seq_lens_this_time"][:num_running_requests], False	
+            self.seq_lens_this_time_buffer[:num_running_requests].copy_(
+                self.share_inputs["seq_lens_this_time"][:num_running_requests], False
             )
             return None
 
