@@ -2289,9 +2289,6 @@ class GPUModelRunner(ModelRunnerBase):
                     self.speculative_config.num_speculative_tokens,
                 )
 
-            self.seq_lens_this_time_buffer[:num_running_requests].copy_(
-                self.share_inputs["seq_lens_this_time"][:num_running_requests], False
-            )
             return None
 
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
