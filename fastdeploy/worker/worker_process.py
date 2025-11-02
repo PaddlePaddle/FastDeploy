@@ -349,7 +349,7 @@ class PaddleDisWorkerProc:
                 self.worker.preprocess_new_task(req_dicts, num_running_requests)
 
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
-                if self.ranks > 1:
+                if tp_size > 1:
                     self._tp_barrier_wait()
 
                 time.sleep(0.001)
