@@ -347,7 +347,7 @@ class PaddleDisWorkerProc:
 
                 # Process prefill inputs
                 self.worker.preprocess_new_task(req_dicts, num_running_requests)
-
+                
                 if not self.worker.model_runner.not_need_stop() and self.parallel_config.tensor_parallel_size > 1:
                     self._tp_barrier_wait()
 
