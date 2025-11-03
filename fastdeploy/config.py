@@ -1118,6 +1118,29 @@ class PoolerConfig:
     """
 
 
+class EPLBConfig:
+    """
+    Configuration for EPLB manager.
+    """
+
+    def __init__(
+        self,
+    ):
+        self.enable_redundant_experts = envs.FD_ENABLE_REDUNDANT_EXPERTS
+        self.redundant_experts_num = envs.FD_REDUNDANT_EXPERTS_NUM
+        self.redundant_expert_ip_shm_size = envs.FD_REDUNDANT_EXPERT_IP_SHM_SIZE
+        self.redundant_expert_meta_dir = envs.FD_REDUNDANT_EXPERT_META_DIR
+        self.redundant_expert_api_user = envs.FD_REDUNDANT_EXPERT_API_USER
+        self.redundant_expert_api_password = envs.FD_REDUNDANT_EXPERT_API_PASSWORD
+        self.redundant_expert_eplb_strategy = envs.FD_REDUNDANT_EXPERT_EPLB_STRATEGY
+        self.redundant_expert_dump_workload_interval = envs.FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL
+        self.redundant_expert_async_load_model_shmem_size_gb = envs.FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB
+        self.redundant_expert_enable_schedule_cordon = envs.FD_REDUNDANT_EXPERT_ENABLE_SCHEDULE_CORDON
+        self.model_use_safetensors = envs.FD_MODEL_USE_SAFETENSORS
+        self.model_use_offline_quant = envs.FD_MODEL_USE_OFFLINE_QUANT
+        self.moe_quant_type = envs.FD_MOE_QUANT_TYPE
+
+
 class CacheConfig:
     """
     Configuration for the KV cache.
@@ -1379,6 +1402,7 @@ class FDConfig:
         graph_opt_config: GraphOptimizationConfig = None,
         plas_attention_config: PlasAttentionConfig = None,
         speculative_config: SpeculativeConfig = None,
+        eplb_config: EPLBConfig = None,
         structured_outputs_config: StructuredOutputsConfig = None,
         tokenizer: str = None,
         ips: str = None,
@@ -1398,6 +1422,7 @@ class FDConfig:
         self.scheduler_config: SchedulerConfig = scheduler_config  # type: ignore
         self.parallel_config = parallel_config  # type: ignore
         self.speculative_config: SpeculativeConfig = speculative_config
+        self.eplb_config: Optional[EPLBConfig] = eplb_config
         self.device_config: DeviceConfig = device_config  # type: ignore
         self.load_config: LoadConfig = load_config
         self.quant_config: Optional[QuantConfigBase] = quant_config

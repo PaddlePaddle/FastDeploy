@@ -26,6 +26,7 @@ from fastdeploy.config import (
     CacheConfig,
     ConvertOption,
     EarlyStopConfig,
+    EPLBConfig,
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
@@ -1076,6 +1077,8 @@ class EngineArgs:
         Create and return a Config object based on the current settings.
         """
         all_dict = asdict(self)
+        eplb_cfg = EPLBConfig()
+        all_dict["enable_redundant_experts"] = eplb_cfg.enable_redundant_experts
         model_cfg = ModelConfig(all_dict)
 
         # XPU currently disable prefix cache for VL model
@@ -1134,6 +1137,7 @@ class EngineArgs:
             load_config=load_cfg,
             parallel_config=parallel_cfg,
             speculative_config=speculative_cfg,
+            eplb_config=eplb_cfg,
             structured_outputs_config=structured_outputs_config,
             ips=self.ips,
             use_warmup=self.use_warmup,
