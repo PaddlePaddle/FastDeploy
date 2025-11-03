@@ -101,6 +101,10 @@ std::vector<paddle::Tensor> FusedExpertMoe(
   const auto input_type = input.dtype();
   auto output = paddle::empty_like(input);
 
+  if (output.dims()[0] == 0) {
+    return {output};
+  }
+
   switch (input_type) {
     case paddle::DataType::BFLOAT16:
       FusedMoeKernel<paddle::DataType::BFLOAT16,
