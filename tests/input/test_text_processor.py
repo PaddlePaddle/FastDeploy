@@ -20,7 +20,7 @@ class TestDataProcessorProcess(unittest.TestCase):
         self.processor.tool_parser_dict = {}
         self.processor.generation_config = MagicMock()
         self.processor.eos_token_ids = [1]
-        self.processor.model_status_dict = {}
+        self.processor.model_status_dict = {"request-id_0": "think_start"}
         self.processor.reasoning_parser = MagicMock()
 
         def mock_messages2ids(request, **kwargs):

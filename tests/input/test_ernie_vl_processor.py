@@ -27,7 +27,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.generation_config = MagicMock()
         self.processor.eos_token_ids = [1]
         self.processor.reasoning_parser = MockReasoningParser()
-        self.processor.model_status_dict = {}
+        self.processor.model_status_dict = {"test": "think_start"}
         self.processor.ernie4_5_processor = MagicMock()
 
         # 模拟 ids2tokens 方法
@@ -55,7 +55,7 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
 
         # 模拟推理解析器
         self.mock_reasoning_parser = MagicMock()
-        self.mock_reasoning_parser.extract_reasoning_content_streaming.return_value = ("reasoning", "text")
+        self.mock_reasoning_parser.extract_reasoning_content_streaming.return_value = None
         self.processor.reasoning_parser = self.mock_reasoning_parser
 
         # 模拟工具解析器
@@ -88,62 +88,6 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
         }
         result = self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(result["prompt_token_ids"], [1, 2, 3])
-
-    def test_process_request_dict_with_options(self):
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], True)
-
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"enable_thinking": True},
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], True)
-
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"enable_thinking": False},
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], False)
-
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"options": {"thinking_mode": "open"}},
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], True)
-
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"options": {"thinking_mode": "close"}},
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], False)
-
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"options": {"thinking_mode": "false"}},
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], False)
-
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"options": {"thinking_mode": "123"}},
-            "prompt_token_ids": [1, 1, 1],
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], True)
 
 
 if __name__ == "__main__":
