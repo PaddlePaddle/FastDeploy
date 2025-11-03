@@ -241,11 +241,6 @@ class TokenProcessor:
 
             task_id = task.request_id
             token_ids = stream_data.tokens  # numpy.array
-            logprobs = stream_data.logprobs
-            prompt_logprobs = stream_data.prompt_logprobs
-            llm_logger.info(
-                f"batch_id = {i}, task_id={task_id},token_ids={token_ids},logprobs={logprobs}, prompt_logprobs={prompt_logprobs}"
-            )
 
             current_time = time.time()
             if self.tokens_counter[task_id] == 0:
@@ -290,21 +285,6 @@ class TokenProcessor:
                     finished=False,
                     metrics=metrics,
                 )
-                if self.use_logprobs:
-                    result.outputs.logprob = logprobs.logprobs[0]
-                    topk_token_ids = logprobs.logprob_token_ids[1:]
-                    topk_logprobs = logprobs.logprobs[1:]
-                    sampled_rank = logprobs.sampled_token_ranks[0]
-                    if result.outputs.top_logprobs is None:
-                        result.outputs.top_logprobs = LogprobsLists(
-                            logprob_token_ids=[topk_token_ids],
-                            logprobs=[topk_logprobs],
-                            sampled_token_ranks=[sampled_rank],
-                        )
-                    else:
-                        result.outputs.top_logprobs.logprob_token_ids.extend([topk_token_ids])
-                        result.outputs.top_logprobs.logprobs.extend([topk_logprobs])
-                        result.outputs.top_logprobs.sampled_token_ranks.extend([sampled_rank])
                 if self.tokens_counter[task_id] == 0:
                     if task.messages is not None:
                         result.prompt = task.messages
@@ -326,8 +306,8 @@ class TokenProcessor:
         """
         if self.speculative_decoding:
             raise NotImplementedError("GET_SAVE_OUTPUT_V1 does not support speculative decoding")
-        # if self.use_logprobs:
-        #     raise NotImplementedError("GET_SAVE_OUTPUT_V1 does not support use_logprobs")
+        if self.use_logprobs:
+            raise NotImplementedError("GET_SAVE_OUTPUT_V1 does not support use_logprobs")
         rank_id = self.cfg.parallel_config.local_data_parallel_id
         while True:
             try:

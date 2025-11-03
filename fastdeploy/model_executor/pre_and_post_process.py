@@ -258,7 +258,7 @@ def _build_stream_transfer_data(
             decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
         )
         if logprobs:
-            logprobs = logprobs.tolists().slice_rows(bid, bid + 1)
+            logprobs = logprobs.slice_rows(bid, bid + 1)
             stream_transfer_data.logprobs = logprobs
         if prompt_logprobs_list:
             stream_transfer_data.prompt_logprobs = prompt_logprobs_list[bid]

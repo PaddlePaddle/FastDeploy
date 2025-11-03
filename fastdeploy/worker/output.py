@@ -119,6 +119,17 @@ class LogprobsTensors(NamedTuple):
             selected_token_ranks=selected_token_ranks,
         )
 
+    def slice_rows(self, start: int, end: int):
+        """
+        Slice rows.
+        Keeps the number of max_num_logprobs unchanged.
+        """
+        return LogprobsTensors(
+            self.logprob_token_ids[start:end],
+            self.logprobs[start:end],
+            self.selected_token_ranks[start:end],
+        )
+
 
 @dataclass
 class SamplerOutput:

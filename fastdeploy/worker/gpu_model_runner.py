@@ -2009,8 +2009,6 @@ class GPUModelRunner(ModelRunnerBase):
         # 1. Prepare inputs of model and sampler.
         skip_idx_list = self._get_skip_idx(model_forward_batch)
         self._prepare_inputs()
-        # print(f"self.in_progress_prompt_logprobs = {self.in_progress_prompt_logprobs}")
-        print(f'ids_remove_padding = {self.share_inputs["ids_remove_padding"]}')
         self.sampler.pre_process(skip_idx_list)
 
         # 1.1 Update state of logits processor
