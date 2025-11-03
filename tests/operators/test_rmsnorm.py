@@ -129,6 +129,7 @@ class TestFusedMoE(unittest.TestCase):
             out = x.cast("float32")
             if not self.profile:
                 np.testing.assert_allclose(out_ref.numpy(), out.numpy(), rtol=1e-02, atol=1e-02)
+                np.testing.assert_allclose(residual_ref.numpy(), residual_input.numpy(), rtol=1e-02, atol=1e-02)
 
 
 if __name__ == "__main__":
