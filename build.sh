@@ -150,7 +150,7 @@ function copy_ops(){
 }
 
 function install_from_precompiled_wheel() {
-  local WHL_NAME="fastdeploy_gpu-2.3.0.dev0-py3-none-any.whl"
+  local WHL_NAME="fastdeploy_gpu-0.0.0-py3-none-any.whl"
   if [ -z "$FD_COMMIT_ID" ]; then
     if git rev-parse HEAD >/dev/null 2>&1; then
       FD_COMMIT_ID=$(git rev-parse HEAD)
@@ -161,23 +161,30 @@ function install_from_precompiled_wheel() {
     fi
   fi
 
+  CUDA_VERSION=$(nvcc --version | grep "release" | sed -E 's/.*release ([0-9]+)\.([0-9]+).*/\1\2/')
+  echo -e "${BLUE}[info]${NONE} Detected CUDA version: ${GREEN}cu${CUDA_VERSION}${NONE}"
+
+  GPU_ARCH_STR=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader \
+    | awk '{printf("%d\n",$1*10)}' | sort -u | awk '{printf("SM%s_",$1)}' | sed 's/_$//')
+  echo -e "${BLUE}[info]${NONE} Detected GPU arch: ${GREEN}${GPU_ARCH_STR}${NONE}"
+
   local WHL_PATH="${PRE_WHEEL_DIR}/${WHL_NAME}"
-  local REMOTE_URL="https://paddle-github-action.bj.bcebos.com/BRANCH/FastDeploy/develop/${FD_COMMIT_ID}/SM90/${WHL_NAME}"
+  local REMOTE_URL="https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/cu${CUDA_VERSION}/${GPU_ARCH_STR}/develop/${FD_COMMIT_ID}/${WHL_NAME}"
 
   mkdir -p "${PRE_WHEEL_DIR}"
 
   if [ ! -f "$WHL_PATH" ]; then
     echo -e "${BLUE}[precompiled]${NONE} Local wheel not found, downloading from: ${REMOTE_URL}"
-    wget -q --no-check-certificate -O "$WHL_PATH" "$REMOTE_URL" || {
-        echo -e "${YELLOW}[WARNING]${NONE} ${YELLOW}Failed to download wheel."
+    wget --no-check-certificate -O "$WHL_PATH" "$REMOTE_URL" || {
+        echo -e "${YELLOW}[WARNING]${NONE} Failed to download wheel."
         return 1
     }
     echo -e "${GREEN}[SUCCESS]${NONE} Downloaded precompiled wheel to ${WHL_PATH}"
   else
     echo -e "${BLUE}[precompiled]${NONE} Found local wheel: ${WHL_PATH}"
     if ! unzip -t "$WHL_PATH" >/dev/null 2>&1; then
-      echo -e "${BLUE}[WARNING]${NONE} ${YELLOW}Local wheel seems invalid."
-      echo -e "${BLUE}[fallback]${NONE} ${YELLOW}Falling back to source compilation..."
+      echo -e "${BLUE}[WARNING]${NONE} Local wheel seems invalid."
+      echo -e "${BLUE}[fallback]${NONE} Falling back to source compilation..."
       return 1
     fi
   fi
@@ -227,11 +234,8 @@ function install_from_precompiled_wheel() {
   fi
 
   echo -e "${GREEN}[SUCCESS]${NONE} Installed FastDeploy using precompiled wheel."
-
   rm -rf "${PRE_WHEEL_DIR}/tmp_whl_unpack"
 }
-
-
 
 function build_and_install_ops() {
   cd $OPS_SRC_DIR
