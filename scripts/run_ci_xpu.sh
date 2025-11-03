@@ -26,7 +26,6 @@ echo "build whl"
 bash custom_ops/xpu_ops/download_dependencies.sh develop
 export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
 export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
-
 bash build.sh || exit 1
 
 echo "pip others"
@@ -54,7 +53,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
     --max-num-seqs 128 \
-    --quantization wint4   > server.log 2>&1 &
+    --quantization wint4  \
+    --load-choices default  > server.log 2>&1 &
 
 sleep 60
 # 探活
@@ -121,7 +121,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
     --max-num-seqs 64 \
-    --quantization "W4A8"   > server.log 2>&1 &
+    --quantization "W4A8" \
+    --load-choices default  > server.log 2>&1 &
 
 sleep 60
 # 探活
@@ -191,7 +192,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --enable-mm \
     --mm-processor-kwargs '{"video_max_frames": 30}' \
     --limit-mm-per-prompt '{"image": 10, "video": 3}' \
-    --reasoning-parser ernie-45-vl > server.log 2>&1 &
+    --reasoning-parser ernie-45-vl \
+    --load-choices default > server.log 2>&1 &
 
 sleep 60
 # 探活
