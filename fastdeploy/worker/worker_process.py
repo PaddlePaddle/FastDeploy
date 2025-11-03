@@ -96,12 +96,12 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
 def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
     """Initialize Paddle Fleet and get rank of worker"""
     # Global rank
-    ranks = dist.get_world_size()
+    num_ranks = dist.get_world_size()
     dist_strategy = fleet.DistributedStrategy()
-    if ranks > 0:
+    if num_ranks > 0:
         dist_strategy.hybrid_configs = {
             "dp_degree": 1,
-            "mp_degree": ranks,
+            "mp_degree": num_ranks,
             "pp_degree": 1,
             "sharding_degree": 1,
         }
@@ -114,7 +114,7 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
         local_rank = fleet.worker_index()
     else:
         local_rank = 0
-    return ranks, local_rank
+    return num_ranks, local_rank
 
 
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
