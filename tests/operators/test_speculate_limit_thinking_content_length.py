@@ -37,6 +37,8 @@ class TestSpeculateLimitThinkingContentLengthV1(unittest.TestCase):
         limit_think_status = paddle.to_tensor([0, 0], dtype="int32")
         accept_num = paddle.to_tensor([3, 2], dtype="int32")
         seq_lens_decoder = paddle.to_tensor([5, 8], dtype="int32")
+        stop_flags = paddle.to_tensor([False, False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
         think_end_id = 999
 
         # Run operator
@@ -47,6 +49,8 @@ class TestSpeculateLimitThinkingContentLengthV1(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
+            eos_token_ids,
             think_end_id,
         )
 
@@ -72,6 +76,8 @@ class TestSpeculateLimitThinkingContentLengthV1(unittest.TestCase):
         limit_think_status = paddle.to_tensor([0], dtype="int32")
         accept_num = paddle.to_tensor([4], dtype="int32")
         seq_lens_decoder = paddle.to_tensor([12], dtype="int32")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
         think_end_id = 999
 
         # Run operator
@@ -82,6 +88,8 @@ class TestSpeculateLimitThinkingContentLengthV1(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
+            eos_token_ids,
             think_end_id,
         )
 
@@ -103,6 +111,8 @@ class TestSpeculateLimitThinkingContentLengthV1(unittest.TestCase):
         limit_think_status = paddle.to_tensor([0], dtype="int32")
         accept_num = paddle.to_tensor([3], dtype="int32")
         seq_lens_decoder = paddle.to_tensor([5], dtype="int32")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
         think_end_id = 999
 
         # Run operator
@@ -113,6 +123,8 @@ class TestSpeculateLimitThinkingContentLengthV1(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
+            eos_token_ids,
             think_end_id,
         )
 
@@ -129,6 +141,8 @@ class TestSpeculateLimitThinkingContentLengthV1(unittest.TestCase):
         limit_think_status = paddle.to_tensor([0], dtype="int32")
         accept_num = paddle.to_tensor([3], dtype="int32")
         seq_lens_decoder = paddle.to_tensor([100], dtype="int32")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
         think_end_id = 999
 
         # Run operator
@@ -139,6 +153,8 @@ class TestSpeculateLimitThinkingContentLengthV1(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
+            eos_token_ids,
             think_end_id,
         )
 
@@ -155,6 +171,8 @@ class TestSpeculateLimitThinkingContentLengthV1(unittest.TestCase):
         limit_think_status = paddle.to_tensor([0], dtype="int32")
         accept_num = paddle.to_tensor([0], dtype="int32")  # No tokens accepted
         seq_lens_decoder = paddle.to_tensor([10], dtype="int32")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
         think_end_id = 999
 
         # Run operator
@@ -165,6 +183,8 @@ class TestSpeculateLimitThinkingContentLengthV1(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
+            eos_token_ids,
             think_end_id,
         )
 
@@ -180,6 +200,8 @@ class TestSpeculateLimitThinkingContentLengthV1(unittest.TestCase):
         limit_think_status = paddle.to_tensor([3], dtype="int32")  # Terminal status
         accept_num = paddle.to_tensor([2], dtype="int32")
         seq_lens_decoder = paddle.to_tensor([10], dtype="int32")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
         think_end_id = 999
 
         # Run operator
@@ -190,6 +212,8 @@ class TestSpeculateLimitThinkingContentLengthV1(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
+            eos_token_ids,
             think_end_id,
         )
 
@@ -205,6 +229,8 @@ class TestSpeculateLimitThinkingContentLengthV1(unittest.TestCase):
         limit_think_status = paddle.to_tensor([0], dtype="int32")
         accept_num = paddle.to_tensor([2], dtype="int32")
         seq_lens_decoder = paddle.to_tensor([9], dtype="int32")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
         think_end_id = 999
 
         speculate_limit_thinking_content_length_v1(
@@ -214,6 +240,8 @@ class TestSpeculateLimitThinkingContentLengthV1(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
+            eos_token_ids,
             think_end_id,
         )
 
@@ -231,6 +259,8 @@ class TestSpeculateLimitThinkingContentLengthV1(unittest.TestCase):
         limit_think_status = paddle.to_tensor([0, 0, 0], dtype="int32")
         accept_num = paddle.to_tensor([3, 3, 2], dtype="int32")
         seq_lens_decoder = paddle.to_tensor([6, 8, 50], dtype="int32")
+        stop_flags = paddle.to_tensor([False, False, False], dtype="bool")
+        eos_token_ids = paddle.to_tensor([[2], [2]], dtype="int64")
         think_end_id = 999
 
         # Run operator
@@ -241,6 +271,8 @@ class TestSpeculateLimitThinkingContentLengthV1(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
+            eos_token_ids,
             think_end_id,
         )
 
@@ -271,6 +303,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
         limit_think_status = paddle.to_tensor([0, 0], dtype="int32")
         accept_num = paddle.to_tensor([3, 2], dtype="int32")
         seq_lens_decoder = paddle.to_tensor([5, 8], dtype="int32")
+        stop_flags = paddle.to_tensor([False, False], dtype="bool")
         think_end_id = 999
         line_break_id = 888
 
@@ -282,6 +315,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
             think_end_id,
             line_break_id,
         )
@@ -302,6 +336,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
         limit_think_status = paddle.to_tensor([0], dtype="int32")
         accept_num = paddle.to_tensor([5], dtype="int32")
         seq_lens_decoder = paddle.to_tensor([12], dtype="int32")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
         think_end_id = 999
         line_break_id = 888
 
@@ -313,6 +348,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
             think_end_id,
             line_break_id,
         )
@@ -336,6 +372,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
         limit_think_status = paddle.to_tensor([0], dtype="int32")
         accept_num = paddle.to_tensor([1], dtype="int32")
         seq_lens_decoder = paddle.to_tensor([5], dtype="int32")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
 
         speculate_limit_thinking_content_length_v2(
             next_tokens,
@@ -344,6 +381,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
             think_end_id,
             line_break_id,
         )
@@ -364,6 +402,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
             think_end_id,
             line_break_id,
         )
@@ -384,6 +423,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
             think_end_id,
             line_break_id,
         )
@@ -404,6 +444,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
             think_end_id,
             line_break_id,
         )
@@ -418,6 +459,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
         limit_think_status = paddle.to_tensor([0], dtype="int32")
         accept_num = paddle.to_tensor([3], dtype="int32")
         seq_lens_decoder = paddle.to_tensor([5], dtype="int32")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
         think_end_id = 999
         line_break_id = 888
 
@@ -429,6 +471,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
             think_end_id,
             line_break_id,
         )
@@ -444,6 +487,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
         limit_think_status = paddle.to_tensor([2], dtype="int32")
         accept_num = paddle.to_tensor([1], dtype="int32")
         seq_lens_decoder = paddle.to_tensor([10], dtype="int32")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
         think_end_id = 999
         line_break_id = 888
 
@@ -455,6 +499,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
             think_end_id,
             line_break_id,
         )
@@ -470,6 +515,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
         limit_think_status = paddle.to_tensor([0], dtype="int32")
         accept_num = paddle.to_tensor([2], dtype="int32")
         seq_lens_decoder = paddle.to_tensor([100], dtype="int32")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
         think_end_id = 999
         line_break_id = 888
 
@@ -481,6 +527,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
             think_end_id,
             line_break_id,
         )
@@ -497,6 +544,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
         limit_think_status = paddle.to_tensor([0], dtype="int32")
         accept_num = paddle.to_tensor([0], dtype="int32")
         seq_lens_decoder = paddle.to_tensor([10], dtype="int32")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
         think_end_id = 999
         line_break_id = 888
 
@@ -508,6 +556,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
             think_end_id,
             line_break_id,
         )
@@ -524,6 +573,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
         limit_think_status = paddle.to_tensor([3], dtype="int32")
         accept_num = paddle.to_tensor([1], dtype="int32")
         seq_lens_decoder = paddle.to_tensor([10], dtype="int32")
+        stop_flags = paddle.to_tensor([False], dtype="bool")
         think_end_id = 999
         line_break_id = 888
 
@@ -535,6 +585,7 @@ class TestSpeculateLimitThinkingContentLengthV2(unittest.TestCase):
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
             think_end_id,
             line_break_id,
         )
