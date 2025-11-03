@@ -30,3 +30,11 @@ class ExistTaskStatus:
     EMPTY = 0
     EXIST = 1
     REFUSE = 2
+
+
+@dataclass
+class RearrangeExpertStatus:
+    FREE = 0
+    DOING = 1
+    LOAD_SUCC = 2  # load weight from disk success
+    DONE = 3
