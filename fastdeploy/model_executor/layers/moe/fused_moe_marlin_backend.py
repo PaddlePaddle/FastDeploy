@@ -256,7 +256,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         if topk_method == "noaux_tc":
             from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 
-            gate_out, _, _ = get_moe_scores(
+            _, topk_weights, topk_ids = get_moe_scores(
                 gate_out,
                 layer.n_group,
                 layer.topk_group,
@@ -265,8 +265,6 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
             )
-
-            topk_weights, topk_ids = paddle.topk(gate_out, k=layer.top_k, axis=-1, sorted=False)
         else:
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                 gate_out,
