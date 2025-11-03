@@ -26,6 +26,7 @@ from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
     EarlyStopConfig,
+    EPLBConfig,
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
@@ -1021,7 +1022,7 @@ class EngineArgs:
                 early_stop_args[k] = v
         return EarlyStopConfig(early_stop_args)
 
-    def create_engine_config(self) -> FDConfig:
+    def create_engine_config(self, port_availability_check: bool = True) -> FDConfig:
         """
         Create and return a Config object based on the current settings.
         """
@@ -1054,6 +1055,8 @@ class EngineArgs:
                     self.max_num_batched_tokens = self.max_model_len
 
         all_dict = asdict(self)
+        eplb_cfg = EPLBConfig()
+        all_dict["enable_redundant_experts"] = eplb_cfg.enable_redundant_experts
         all_dict["model_cfg"] = model_cfg
         cache_cfg = CacheConfig(all_dict)
         load_cfg = LoadConfig(all_dict)
@@ -1071,9 +1074,10 @@ class EngineArgs:
         if isinstance(self.engine_worker_queue_port, str):
             self.engine_worker_queue_port = self.engine_worker_queue_port.split(",")
 
-        assert is_port_available(
-            "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
-        ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
+        if port_availability_check:
+            assert is_port_available(
+                "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
+            ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
 
         return FDConfig(
             model_config=model_cfg,
@@ -1083,6 +1087,7 @@ class EngineArgs:
             load_config=load_cfg,
             parallel_config=parallel_cfg,
             max_model_len=self.max_model_len,
+            eplb_config=eplb_cfg,
             max_num_seqs=self.max_num_seqs,
             speculative_config=speculative_cfg,
             max_num_batched_tokens=self.max_num_batched_tokens,
