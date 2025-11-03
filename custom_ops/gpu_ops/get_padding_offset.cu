@@ -64,7 +64,6 @@ __global__ void PrefixSumKernel(int64_t *ids_remove_padding,
 }
 
 std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
-                                             const paddle::Tensor &cum_offsets,
                                              const paddle::Tensor &token_num,
                                              const paddle::Tensor &seq_len) {
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
@@ -110,7 +109,6 @@ std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor &input_ids,
 
 std::vector<std::vector<int64_t>> GetPaddingOffsetInferShape(
     const std::vector<int64_t> &input_ids_shape,
-    const std::vector<int64_t> &cum_offsets_shape,
     const std::vector<int64_t> &token_num_shape,
     const std::vector<int64_t> &seq_len_shape) {
   int64_t bsz = seq_len_shape[0];
@@ -120,14 +118,13 @@ std::vector<std::vector<int64_t>> GetPaddingOffsetInferShape(
 
 std::vector<paddle::DataType> GetPaddingOffsetInferDtype(
     const paddle::DataType &input_ids_dtype,
-    const paddle::DataType &cum_offsets_dtype,
     const paddle::DataType &token_num_dtype,
     const paddle::DataType &seq_len_dtype) {
   return {input_ids_dtype, seq_len_dtype, seq_len_dtype, seq_len_dtype};
 }
 
 PD_BUILD_STATIC_OP(get_padding_offset)
-    .Inputs({"input_ids", "cum_offsets", "token_num", "seq_len"})
+    .Inputs({"input_ids", "token_num", "seq_len"})
     .Outputs({"x_remove_padding",
               "batch_id_per_token",
               "cu_seqlens_q",
