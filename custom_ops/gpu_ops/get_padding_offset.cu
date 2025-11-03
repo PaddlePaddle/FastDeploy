@@ -31,17 +31,16 @@ __global__ void PrefixSumKernel(int64_t *ids_remove_padding,
   const int warp_id = threadIdx.x / 32;
   const int lane_id = threadIdx.x % 32;
 
-  int seq = 0;
+  int cum_seq_len = 0;
 
   // compute sum of seq_lens[0,1,2,...,bi]
   for (int i = lane_id; i < bi + 1; i += warpSize) {
-    seq += seq_lens[i];
+    cum_seq_len += seq_lens[i];
   }
 
-  int cum_seq_len = seq;
   for (int offset = 1; offset < warpSize; offset <<= 1) {
-    int y = __shfl_up_sync(0xffffffff, cum_seq_len, offset);
-    if (lane_id >= offset) cum_seq_len += y;
+    const int tmp = __shfl_up_sync(0xffffffff, cum_seq_len, offset);
+    if (lane_id >= offset) cum_seq_len += tmp;
   }
 
   cum_seq_len = __shfl_sync(0xffffffff, cum_seq_len, warpSize - 1);
