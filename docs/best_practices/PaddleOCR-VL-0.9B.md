@@ -40,7 +40,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --max-num-seqs 196
 ```
 
-**Example 2:** Deploying a 16K Context Service on a Single A100 GPU
+**Example 3:** Deploying a 16K Context Service on a Single A100 GPU
 ```shell
 python -m fastdeploy.entrypoints.openai.api_server \
     --model PaddlePaddle/PaddleOCR-VL \
