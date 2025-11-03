@@ -788,6 +788,11 @@ def init_bos_client():
     from baidubce.bce_client_configuration import BceClientConfiguration
     from baidubce.services.bos.bos_client import BosClient
 
+    if envs.ENCODE_FEATURE_BOS_AK == "" or envs.ENCODE_FEATURE_BOS_SK == "":
+        raise ValueError(
+            "ENCODE_FEATURE_BOS_AK or ENCODE_FEATURE_BOS_SK not set, please check you environment variables"
+        )
+
     cfg = BceClientConfiguration(
         credentials=BceCredentials(envs.ENCODE_FEATURE_BOS_AK, envs.ENCODE_FEATURE_BOS_SK), endpoint="bj.bcebos.com"
     )

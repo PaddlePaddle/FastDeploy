@@ -644,13 +644,13 @@ class EngineSevice:
                         err_msg = str(e)
                         results.append((data["request_id"], err_msg))
 
-                    if self.guided_decoding_checker is not None and err_msg is None:
+                    if request is not None and self.guided_decoding_checker is not None and err_msg is None:
                         request, err_msg = self.guided_decoding_checker.schema_format(request)
                         if err_msg is not None:
                             llm_logger.error(f"Receive request error: {err_msg}")
                             results.append((request.request_id, err_msg))
 
-                    if self._has_features_info(request) and err_msg is None:
+                    if request is not None and self._has_features_info(request) and err_msg is None:
                         if self.bos_client is None:
                             self.bos_client = init_bos_client()
 
@@ -668,7 +668,7 @@ class EngineSevice:
                             llm_logger.error(f"Receive request {request.request_id} download error: {err_msg}")
                             results.append((request.request_id, err_msg))
 
-                    if err_msg is None:
+                    if request is not None and err_msg is None:
                         insert_task.append(request)
 
                 response = self.scheduler.put_requests(insert_task)
