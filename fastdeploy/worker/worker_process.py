@@ -345,11 +345,13 @@ class PaddleDisWorkerProc:
                 mmap_infos = create_mmap(
                     [MODEL_MAIN_NAME], self.local_rank, self.ranks, shm_uuid=os.getenv("SHM_UUID", ""), logger=logger
                 )
+
+        tp_size = self.parallel_config.tensor_parallel_size
         # Currently, only support single node
-        self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
+        self.nnode = int((tp_size + 7) // 8)
         req_ids = []
         num_running_requests = 0
-        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+        local_rank = self.local_rank % tp_size
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
             if self.eplb_config.enable_redundant_experts:
@@ -390,14 +392,14 @@ class PaddleDisWorkerProc:
                     if self.local_rank == 0:
                         rearrange_experts_status_array[0] = RearrangeExpertState.done.value
                     logger.info("redundant_expert: done")
-            if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
+            if self.local_rank % tp_size == 0:
                 if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
                     self.model_weights_signal[0] = self._broadcast_model_weights_signal(
                         src=0, group=self.parallel_config.ep_group
                     )
-            if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.tensor_parallel_size > 1:
+            if self.fd_config.load_config.dynamic_load_weight and tp_size > 1:
                 self.model_weights_signal[0] = self._broadcast_model_weights_signal(
                     src=0, group=self.parallel_config.tp_group
                 )
@@ -412,12 +414,12 @@ class PaddleDisWorkerProc:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
                     ):
-                        if self.nnode > 1 and self.parallel_config.tensor_parallel_size > self.max_chips_per_node:
+                        if self.nnode > 1 and tp_size > self.max_chips_per_node:
                             self.task_queue.read_finish_flag.set(1)
                         else:
                             self.exist_task_signal.value[0] = ExistTaskStatus.EXIST
 
-            if self.parallel_config.tensor_parallel_size > 1:
+            if tp_size > 1:
                 # Synchronize the signal for other workers
                 self._tp_barrier_wait()
 
