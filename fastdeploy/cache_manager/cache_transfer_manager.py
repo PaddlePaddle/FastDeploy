@@ -28,6 +28,9 @@ import paddle
 
 from fastdeploy import envs
 from fastdeploy.cache_manager.cache_data import CacheStatus
+
+from fastdeploy.cache_manager.transfer_factory.mooncake_store.mooncake_store import MooncakeStore
+
 from fastdeploy.cache_manager.ops import (
     cuda_host_alloc,
     cuda_host_free,
@@ -36,6 +39,7 @@ from fastdeploy.cache_manager.ops import (
     set_device,
     share_external_data_,
     swap_cache_all_layers,
+    swap_cache_layout,
     unset_data_ipc,
 )
 from fastdeploy.config import SpeculativeConfig
@@ -94,6 +98,13 @@ def parse_args():
         help="speculative config",
     )
     parser.add_argument("--create_cache_tensor", action="store_true")
+    parser.add_argument(
+        "--kvcache_storage_backend",
+        type=str,
+        default="mooncake",
+        choices=["mooncake"],
+        help="The storage backend for kvcache storage.",
+    )
 
     args = parser.parse_args()
     return args
@@ -127,6 +138,7 @@ class CacheTransferManager:
 
         self.swap_to_cpu_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.swap_to_gpu_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self.swap_to_storage_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.transfer_task_queue = queue.Queue()  # 用来接收传输任务
         self.tansfer_done_queue = queue.Queue()  # 用来告知任务执行完毕
         self.n_ranks = args.mp_num
@@ -186,7 +198,37 @@ class CacheTransferManager:
             suffix=args.engine_worker_queue_port,
             create=False,
         )
+        storage_backend = args.kvcache_storage_backend
+        if storage_backend is not None:
+            if storage_backend == "mooncake":
+                self.storage_backend = MooncakeStore()
+                self._init_storage_buffer()
+            else:
+                raise NotImplementedError(
+                    f"Unsupported storage backend: {storage_backend}"
+                )
+            
+        write_policy = args.write_policy
+        if write_policy not in [
+            "write_through",
+            "write_back",
+        ]:
+            raise ValueError(f"Invalid write policy: {write_policy}")
+        self.write_policy = write_policy
+    
+
         threading.Thread(target=self.clear_or_update_caches, args=[args], daemon=True).start()
+
+
+    def _init_storage_buffer(self):
+        total_layers = args.num_layers + self.num_extra_layers
+        need_to_allocate_bytes = args.max_model_len * args.bytes_per_layer_per_block * total_layers // args.block_size
+        self.cache_stride = args.bytes_per_layer_per_block * total_layers
+        logger.info(
+            f"[rank {self.rank}/{self.n_ranks}] ..creating cpu cache for alllayers {total_layers}: {2 * need_to_allocate_bytes / 1024 ** 3:.2f}GB"
+        )
+        self.key_register_buffer = cuda_host_alloc(need_to_allocate_bytes)
+        self.val_register_buffer = cuda_host_alloc(need_to_allocate_bytes)
 
     def _init_gpu_cache(self, args):
 
@@ -359,6 +401,142 @@ class CacheTransferManager:
         logger.info(f"[rank {self.rank}/{self.n_ranks}] ✅ swap space (cpu cache) is ready!")
         self.swap_space_ready_signal.value[self.rank] = 1
 
+
+    def load_storage_task(
+        self,
+        task_id,
+        hash_keys,
+        gpu_block_ids,
+    ):
+        keys = [f"{key}_key_{self.rank}" for key in hash_keys]
+        results = self.storage_backend.exists(keys)
+        current_number = 0
+        for _, exist in results.items():
+            if exist:
+                current_number += 1
+            else:
+                break
+        gpu_block_ids = gpu_block_ids[current_number:]
+        # timeout 系数 自行调节
+        # timeout = 0.100 * len(gpu_block_ids)
+        # 计算最小block 传输时间，应传尽传
+        if current_number > 0:
+            keys_k = [f"{key}_key_{self.rank}" for key in hash_keys]
+            keys_v = [f"{key}_value_{self.rank}" for key in hash_keys]
+            
+
+            target_location_k = [self.key_register_buffer + i * self.cache_stride for i in range(len(gpu_block_ids))]
+            target_location_v = [self.val_register_buffer + i * self.cache_stride for i in range(len(gpu_block_ids))]
+
+            target_sizes = [self.cache_stride] * len(gpu_block_ids) * 2
+
+            keys = keys_k + keys_v
+            target_location = target_location_k + target_location_v
+
+
+            self.storage_backend.get(
+                keys_k,
+                target_location=target_location,
+                target_sizes=target_sizes
+            )
+
+            swap_cache_layout(
+               self.gpu_cache_k_tensors,
+               self.key_register_buffer,
+               gpu_block_ids,
+               self.rank,
+               0 # gpu ==> cpu
+            )
+            swap_cache_layout(
+               self.gpu_cache_v_tensors,
+               self.val_register_buffer,
+               gpu_block_ids,
+               self.rank,
+               0
+            )
+        result =(
+            hash_keys,
+            gpu_block_ids,
+            [],
+            CacheStatus.STORAGE2GPU.value,
+            task_id
+        )
+        self.cache_task_queue.swap_storage_to_gpu_barrier.wait()
+        if self.rank == 0:
+            logger.info(f"[rank {self.rank}/{self.n_ranks}] No data found in storage for task {task_id}, skipping...")
+            self.cache_task_queue.swap_storage_to_gpu_barrier.reset()
+            self.cache_task_queue.put_transfer_done_signal(result)
+
+
+    def write_back_storage_task(
+            self,
+            keys,
+            gpu_block_ids,
+            transfer_task_id,
+        ):
+        """
+        writeback kv cache to storage
+        """
+        target_location = []
+        if gpu_block_ids is None:
+            raise ValueError("gpu_block_ids cannot be None")
+        
+        keys_k = [f"{key}_key_{self.rank}" for key in keys]
+
+        result  = self.storage_backend.exists(keys_k)
+        uncached_keys_k = []
+        uncached_keys_v = []
+        uncached_block_ids = []
+        current_id = 0
+        for k, v in result.items():
+            if v == 0:
+                uncached_keys_k.append(k)
+                uncached_keys_v.append(f"{keys[current_id]}_value_{self.rank}")
+                uncached_block_ids.append(gpu_block_ids[current_id])
+            current_id += 1
+        
+
+        if len(uncached_keys_k) > 0:
+            swap_cache_layout(
+               self.gpu_cache_k_tensors,
+               self.key_register_buffer,
+               uncached_block_ids,
+               self.rank,
+               1 # gpu ==> cpu
+            )
+            swap_cache_layout(
+               self.gpu_cache_v_tensors,
+               self.val_register_buffer,
+               uncached_block_ids,
+               self.rank,
+               1 # gpu ==> cpu
+            )
+
+            target_location_k = [self.key_register_buffer.data_ptr() + i * self.cache_stride for i in range(len(uncached_block_ids))]
+            target_location_v = [self.val_register_buffer.data_ptr() + i * self.cache_stride for i in range(len(uncached_block_ids))]
+
+            target_sizes = [self.cache_stride] * len(uncached_block_ids) * 2
+
+            target_location = target_location_k + target_location_v
+            self.storage_backend.set(
+                uncached_keys_k + uncached_keys_v,
+                target_location=target_location,
+                target_sizes=target_sizes
+            )
+
+        result = (
+            keys,
+            gpu_block_ids,
+            transfer_task_id,
+            CacheStatus.GPU2STORAGE.value
+        )
+        self.cache_task_queue.swap_to_storage_barrier.wait()
+        if self.rank == 0:
+            self.cache_task_queue.swap_to_storage_barrier.reset()
+            self.cache_task_queue.put_transfer_done_signal(result)
+            logger.debug(f"_do_swap_to_storage: put_transfer_done_signal {result}")
+            logger.info(f"_do_swap_to_storage: put_transfer_done_signal for transfer_task_id {transfer_task_id}")
+
     def _do_swap_to_cpu_task(
         self,
         swap_node_ids,
@@ -467,7 +645,7 @@ class CacheTransferManager:
                             event_type,
                             transfer_task_id,
                         )
-                    else:
+                    elif event_type.value == CacheStatus.SWAP2GPU.value:
                         self.swap_to_gpu_thread_pool.submit(
                             self._do_swap_to_gpu_task,
                             swap_node_ids,
@@ -475,6 +653,20 @@ class CacheTransferManager:
                             cpu_block_id,
                             event_type,
                             transfer_task_id,
+                        )
+                    elif event_type.value == CacheStatus.STORAGE2GPU.value:
+                        self.swap_to_storage_thread_pool.submit(
+                            self.load_storage_task,
+                            task_id=transfer_task_id,
+                            hash_key=swap_node_ids,
+                            gpu_block_id=gpu_block_id,
+                        )
+                    elif event_type.value == CacheStatus.GPU2STORAGE.value:
+                        self.write_to_storage_thread_pool.submit(
+                            self.write_back_storage_task,
+                            keys=swap_node_ids,
+                            gpu_block_id=gpu_block_id,
+                            transfer_task_id=transfer_task_id,
                         )
                 else:
                     if self.n_ranks > 1:
