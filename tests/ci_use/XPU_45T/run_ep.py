@@ -44,6 +44,7 @@ def test_fd_ep():
         quantization="wint4",
         engine_worker_queue_port=engine_worker_queue_port,
         max_num_seqs=8,
+        load_choices="default",
     )
 
     try:
