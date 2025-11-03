@@ -53,6 +53,8 @@
 | ```tool_call_parser```       | `str`      | 指定要使用的function call解析器，以便从模型输出中抽取 function call内容|
 | ```tool_parser_plugin```       | `str`      | 指定要注册的tool parser文件路径，以便注册不在代码库中的parser，parser中代码格式需遵循代码库中格式|
 | ```load_choices```       | `str`      | 默认使用"default" loader进行权重加载，加载torch权重/权重加速需开启 "default_v1"|
+| ```max_encoder_cache```   | `int` | 编码器缓存的最大token数（使用0表示禁用）。 |
+| ```max_processor_cache```  | `int` | 处理器缓存的最大字节数（以GiB为单位，使用0表示禁用）。 |
 
 ## 1. KVCache分配与```num_gpu_blocks_override```、```block_size```的关系？
 

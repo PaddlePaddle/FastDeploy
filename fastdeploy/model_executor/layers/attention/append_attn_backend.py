@@ -92,9 +92,10 @@ class AppendAttentionBackend(AttentionBackend):
         self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False) or getattr(
             fd_config.model_config, "use_3d_rope", False
         )
+        if fd_config.speculative_config.model_type != "main":
+            self.rope_3d = False
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
         self.speculative_method: str = fd_config.speculative_config.method
-        self.use_speculate: bool = self.speculative_method is not None
         self.speculate_max_draft_token_num: int = fd_config.speculative_config.num_speculative_tokens
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
         self.num_layers_draft_model: int = int(fd_config.speculative_config.method in ["mtp"])
@@ -364,7 +365,7 @@ class AppendAttentionBackend(AttentionBackend):
                 getattr(layer, "cache_v_zp", None),
                 layer.linear_shift,
                 layer.linear_smooth,
-                forward_meta.attn_mask_offsets,
+                None,
                 metadata.kv_signal_data_list[layer.layer_id],
                 getattr(layer, "q_norm_weight", None),
                 getattr(layer, "k_norm_weight", None),
@@ -383,7 +384,7 @@ class AppendAttentionBackend(AttentionBackend):
                 metadata.max_partition_size,
                 metadata.encoder_max_partition_size,
                 self.speculate_max_draft_token_num + 1,
-                self.causal,
+                True,
                 self.speculative_method is not None,
                 sliding_window,
             )
