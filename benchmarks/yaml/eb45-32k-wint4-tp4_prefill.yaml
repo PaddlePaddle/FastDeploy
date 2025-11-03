@@ -10,3 +10,4 @@ engine_worker_queue_port: 6677
 cache_transfer_protocol: "rdma,ipc"
 rdma_comm_ports: "7675,7676,7677,7678"
 pd_comm_port: "2333"
+quantization: wint4

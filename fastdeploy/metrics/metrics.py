@@ -19,6 +19,7 @@ metrics
 """
 import os
 import shutil
+import uuid
 from typing import Set
 
 from prometheus_client import (
@@ -35,24 +36,20 @@ from fastdeploy.metrics import build_1_2_5_buckets
 from fastdeploy.metrics.work_metrics import work_process_metrics
 
 
-def cleanup_prometheus_files(is_main):
+def cleanup_prometheus_files(is_main: bool, instance_id: str = None):
     """
     Cleans and recreates the Prometheus multiprocess directory.
-
-    Depending on whether it's the main process or a worker, this function removes the corresponding
-    Prometheus multiprocess directory (/tmp/prom_main or /tmp/prom_worker) and recreates it as an empty directory.
-
-    Args:
-        is_main (bool): Indicates whether the current process is the main process.
-
-    Returns:
-        str: The path to the newly created Prometheus multiprocess directory.
     """
-    PROM_DIR = "/tmp/prom_main" if is_main else "/tmp/prom_worker"
-    if os.path.exists(PROM_DIR):
-        shutil.rmtree(PROM_DIR)
-    os.makedirs(PROM_DIR, exist_ok=True)
-    return PROM_DIR
+    base_dir = "/tmp/prom_main" if is_main else "/tmp/prom_worker"
+    if instance_id is None:
+        instance_id = str(uuid.uuid4())
+    prom_dir = f"{base_dir}_{instance_id}"
+
+    if os.path.exists(prom_dir):
+        shutil.rmtree(prom_dir, ignore_errors=True)
+    os.makedirs(prom_dir, exist_ok=True)
+
+    return prom_dir
 
 
 class SimpleCollector(Collector):
@@ -155,10 +152,10 @@ class MetricsManager:
     spec_decode_draft_single_head_acceptance_rate: "list[Gauge]"
 
     # for YIYAN Adapter
-    prefix_cache_token_num: "Gauge"
-    prefix_gpu_cache_token_num: "Gauge"
-    prefix_cpu_cache_token_num: "Gauge"
-    prefix_ssd_cache_token_num: "Gauge"
+    prefix_cache_token_num: "Counter"
+    prefix_gpu_cache_token_num: "Counter"
+    prefix_cpu_cache_token_num: "Counter"
+    prefix_ssd_cache_token_num: "Counter"
     batch_size: "Gauge"
     max_batch_size: "Gauge"
     available_gpu_block_num: "Gauge"
@@ -319,7 +316,7 @@ class MetricsManager:
         "available_gpu_block_num": {
             "type": Gauge,
             "name": "fastdeploy:available_gpu_block_num",
-            "description": "Number of available gpu blocks in cache, including prefix caching blocks that are not officially released",
+            "description": "Number of available gpu blocks in cache, including blocks in LRU list",
             "kwargs": {},
         },
         "free_gpu_block_num": {

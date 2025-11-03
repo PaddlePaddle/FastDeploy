@@ -45,18 +45,18 @@ std::vector<paddle::Tensor> InvokeAllLLaMALayer(
     int maxPositions,
     int maxPosEmbed,
     int intermediateSize) {
-    auto out = paddle::empty_like(input);
-    return {out};
+  auto out = paddle::empty_like(input);
+  return {out};
 }
 
 std::vector<std::vector<int64_t>> AllLLaMALayerInferShape(
     std::vector<int64_t> x_shape) {
-    return {x_shape};
+  return {x_shape};
 }
 
 std::vector<paddle::DataType> AllLLaMALayerInferDtype(
     paddle::DataType x_dtype) {
-    return {x_dtype};
+  return {x_dtype};
 }
 
 PD_BUILD_STATIC_OP(xft_llama_all_layer)

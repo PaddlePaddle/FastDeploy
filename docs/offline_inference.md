@@ -1,3 +1,5 @@
+[简体中文](zh/offline_inference.md)
+
 # Offline Inference
 
 ## 1. Usage
@@ -107,7 +109,7 @@ messages = [
      }
 ]
 
-prompt = tokenizer.apply_chat_template(messages, tokenize=False)
+prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 images, videos = [], []
 for message in messages:
     content = message["content"]
@@ -196,6 +198,8 @@ For ``LLM`` configuration, refer to [Parameter Documentation](parameters.md).
 * finished(bool): Completion status
 * metrics(fastdeploy.engine.request.RequestMetrics): Performance metrics
 * num_cached_tokens(int): Cached token count (only valid when enable_prefix_caching``` is enabled)
+* num_input_image_tokens(int): Number of input image tokens.
+* num_input_video_tokens(int): Number of input video tokens.
 * error_code(int): Error code
 * error_msg(str): Error message
 

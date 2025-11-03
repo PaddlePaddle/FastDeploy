@@ -150,7 +150,7 @@ async def get_request(
 
 
 def calculate_metrics(
-    input_requests: list[SampleRequest],
+    # input_requests: list[SampleRequest],
     outputs: list[RequestFuncOutput],
     dur_s: float,
     selected_percentiles: list[float],
@@ -177,7 +177,7 @@ def calculate_metrics(
             output_len = outputs[i].output_tokens
 
             if not output_len:
-                print("no output_len")
+                print("no output_len", outputs[i])
                 # We use the tokenizer to count the number of output tokens
                 # for some serving backends instead of looking at
                 # len(outputs[i].itl) since multiple output tokens may be
@@ -336,6 +336,7 @@ async def benchmark(
         input_requests[0].no,
     )
     test_history_QA = input_requests[0].history_QA
+    response_format = input_requests[0].response_format
 
     test_input = RequestFuncInput(
         model=model_id,
@@ -351,6 +352,7 @@ async def benchmark(
         ignore_eos=ignore_eos,
         debug=debug,
         extra_body=extra_body,
+        response_format=response_format
     )
 
     print("test_input:", test_input)
@@ -382,6 +384,7 @@ async def benchmark(
             logprobs=logprobs,
             ignore_eos=ignore_eos,
             extra_body=extra_body,
+            response_format=response_format
         )
         profile_output = await request_func(request_func_input=profile_input)
         if profile_output.success:
@@ -395,6 +398,7 @@ async def benchmark(
     print(f"Traffic request rate: {request_rate}")
     print(f"Burstiness factor: {burstiness} ({distribution})")
     print(f"Maximum request concurrency: {max_concurrency}")
+    print(f"Drop ratio: {args.drop_ratio}")
 
     pbar = None if disable_tqdm else tqdm(total=len(input_requests))
 
@@ -419,6 +423,7 @@ async def benchmark(
             request.no,
         )
         history_QA = request.history_QA
+        response_format = request.response_format
 
         req_model_id, req_model_name = model_id, model_name
         if lora_modules:
@@ -439,9 +444,12 @@ async def benchmark(
             debug=debug,
             ignore_eos=ignore_eos,
             extra_body=extra_body,
+            response_format=response_format
         )
         tasks.append(asyncio.create_task(limited_request_func(request_func_input=request_func_input, pbar=pbar)))
     outputs: list[RequestFuncOutput] = await asyncio.gather(*tasks)
+
+    outputs.sort(key=lambda x: x.end_timestamp)
 
     if profile:
         print("Stopping profiler...")
@@ -452,6 +460,7 @@ async def benchmark(
             api_url=base_url + "/stop_profile",
             output_len=test_output_len,
             logprobs=logprobs,
+            response_format=response_format
         )
         profile_output = await request_func(request_func_input=profile_input)
         if profile_output.success:
@@ -460,12 +469,35 @@ async def benchmark(
     if pbar is not None:
         pbar.close()
 
-    benchmark_duration = time.perf_counter() - benchmark_start_time
-    print("benchmark_duration:", benchmark_duration)
+    benchmark_outputs = outputs
+    drop_ratio = args.drop_ratio
+    if 0.0 < drop_ratio < 1:
+        # 按drop_ratio头尾各舍弃一半请求，不计入benchmark统计
+        n = len(outputs)
+        drop_count = int(n * drop_ratio)
+        half = drop_count // 2
+        if half > 0:
+            benchmark_outputs = outputs[half : n - half]
+
+        # 先过滤掉 end_timestamp == 0.0 的请求（失败请求）
+        benchmark_outputs = [o for o in benchmark_outputs if o.end_timestamp != 0.0]
+
+        # 根据收到最后一个chunk的时间戳计算总时长
+        if len(benchmark_outputs) >= 2:
+            benchmark_duration = benchmark_outputs[-1].end_timestamp - benchmark_outputs[0].end_timestamp
+        else:
+            benchmark_duration = 0.0
+
+        print(f"丢弃前数量: {n}")
+        print(f"丢弃后数量: {len(benchmark_outputs)}")
+        print(f"benchmark_duration: {benchmark_duration} 秒")
+    else:
+        benchmark_duration = time.perf_counter() - benchmark_start_time
+        print(f"benchmark_duration: {benchmark_duration} 秒")
 
     metrics, actual_output_lens = calculate_metrics(
-        input_requests=input_requests,
-        outputs=outputs,
+        # input_requests=input_requests,
+        outputs=benchmark_outputs,
         dur_s=benchmark_duration,
         # tokenizer=tokenizer,
         selected_percentiles=selected_percentiles,
@@ -494,7 +526,7 @@ async def benchmark(
         "total_token_throughput": metrics.total_token_throughput,
         "input_lens": [output.prompt_len for output in outputs],
         "infer_input_lens": [output.prompt_tokens for output in outputs],
-        "output_lens": actual_output_lens,
+        "output_lens": [output.output_tokens for output in outputs],
         "ttfts": [output.ttft for output in outputs],
         "itls": [output.itl for output in outputs],
         "input_texts": [input.prompt for input in input_requests],
@@ -609,7 +641,7 @@ def benchmark_metrics(
     goodput_config_dict = check_goodput_args(args)
 
     metrics, actual_output_lens = calculate_metrics(
-        input_requests=input_requests,
+        # input_requests=input_requests,
         outputs=outputs,
         dur_s=benchmark_duration,
         selected_percentiles=selected_percentiles,
@@ -956,7 +988,7 @@ def main(args: argparse.Namespace):
         if args.result_dir:
             file_name = os.path.join(args.result_dir, file_name)
         with open(file_name, "w", encoding="utf-8") as outfile:
-            json.dump(result_json, outfile)
+            json.dump(result_json, outfile, ensure_ascii=False)
         save_to_pytorch_benchmark_format(args, result_json, file_name)
 
 
@@ -965,7 +997,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--backend",
         type=str,
-        default="vllm",
+        default="openai-chat",
         choices=list(ASYNC_REQUEST_FUNCS.keys()),
     )
     parser.add_argument(
@@ -1080,6 +1112,12 @@ if __name__ == "__main__":
         "--shuffle",
         action="store_true",
         help="shuffle dataset",
+    )
+    parser.add_argument(
+        "--drop-ratio",
+        type=float,
+        default=0.0,
+        help="Drop ratio of the outputs. [0, 1)",
     )
     parser.add_argument(
         "--trust-remote-code",

@@ -106,6 +106,8 @@ class SamplerOutput:
     # PLACEHOLDER_TOKEN_ID (-1 by default) is used for padding.
     sampled_token_ids: paddle.Tensor
     logprobs_tensors: Optional[LogprobsTensors]
+    token_num_per_batch: Optional[paddle.Tensor] = None
+    cu_batch_token_offset: Optional[paddle.Tensor] = None
 
 
 @dataclass
@@ -221,26 +223,6 @@ class ModelOutputData:
     accept_num: paddle.Tensor
 
     """
-        vl model enable to think
-    """
-    enable_thinking: paddle.Tensor = None
-
-    """
-        vl model think end id
-    """
-    think_end_id: int = -1
-
-    """
-        vl model need to think
-    """
-    need_think_end: paddle.Tensor = None
-
-    """
-        vl model reasoning index
-    """
-    reasoning_index: paddle.Tensor = None
-
-    """
         the token ids of stop sequence
     """
     stop_token_ids: paddle.Tensor = None
@@ -249,6 +231,16 @@ class ModelOutputData:
         the length of stop sequence
     """
     stop_seqs_len: paddle.Tensor = None
+
+    """
+        the length of input prompt
+    """
+    prompt_lens: paddle.Tensor = None
+
+    """
+        step mask rollback in some cases
+    """
+    mask_rollback: paddle.Tensor = None
 
 
 @dataclass
@@ -276,3 +268,8 @@ class ModelRunnerOutput:
         [num_reqs, num_spec_tokens]
     """
     spec_token_ids: Optional[list[list[int]]]
+
+    """
+    [num_reqs, hidden_size]
+    """
+    pooler_output: list[Optional[paddle.Tensor]]

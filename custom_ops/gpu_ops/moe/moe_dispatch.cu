@@ -36,6 +36,9 @@ void MoeDispatchKernel(
     paddle::Tensor *topk_idx, paddle::Tensor *expert_idx_per_token) {
   using namespace phi;
 
+  if (num_rows == 0){
+    return;
+  }
   typedef PDTraits<T> traits_;
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
@@ -100,7 +103,7 @@ void MoeDispatchKernel(
     softmax_out_ = nullptr;
   }
 
-  topk_gating_softmax_kernelLauncher<float, int>::run(
+  topk_gating_softmax_kernelLauncher(
       gating_output.data<float>(),
       gating_correction_bias ? gating_correction_bias.get().data<float>()
                              : nullptr,
@@ -114,13 +117,13 @@ void MoeDispatchKernel(
 
   if (w4a8_in_scale) {
     if (permute_input->dtype() == paddle::DataType::INT8) {
-      initialize_moe_routing_kernelLauncher<data_t, int8_t>::run(
+      initialize_moe_routing_kernelLauncher(
         input.data<data_t>(), permute_input->data<int8_t>(), permuted_rows_,
         expert_idx_per_token->data<int32_t>(), w4a8_in_scale->data<float>(),
         permute_indices_per_token->data<int32_t>(), num_rows, num_rows,
         hidden_size, moe_topk, stream);
     } else if (permute_input->dtype() == paddle::DataType::FLOAT8_E4M3FN) {
-      initialize_moe_routing_kernelLauncher<data_t, float8_e4m3fn>::run(
+      initialize_moe_routing_kernelLauncher(
         input.data<data_t>(), permute_input->data<float8_e4m3fn>(),
         permuted_rows_, expert_idx_per_token->data<int32_t>(),
         w4a8_in_scale->data<float>(),
@@ -128,7 +131,7 @@ void MoeDispatchKernel(
         hidden_size, moe_topk, stream);
     }
   } else {
-    initialize_moe_routing_kernelLauncher<data_t>::run(
+    initialize_moe_routing_kernelLauncher(
         input.data<data_t>(), permute_input->data<data_t>(), permuted_rows_,
         expert_idx_per_token->data<int32_t>(), nullptr,
         permute_indices_per_token->data<int32_t>(), num_rows, num_rows,
@@ -184,6 +187,15 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
 
   auto expert_idx_per_token =
       GetEmptyTensor({num_rows * moe_topk}, paddle::DataType::INT32, place);
+
+  if (token_rows == 0){
+    return {permute_input,
+            tokens_expert_prefix_sum,
+            permute_indices_per_token,
+            topk_weight,
+            topk_idx,
+            expert_idx_per_token};
+  }
 
   switch (input_type) {
   case paddle::DataType::BFLOAT16:

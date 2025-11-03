@@ -54,7 +54,7 @@ def pdparams_weight_iterator(paddle_file_list: list[str]):
         del state_dict
 
 
-def load_weights_form_cache(model, weights_iterator):
+def load_weights_from_cache(model, weights_iterator):
     params_dict = dict(model.named_parameters())
     for loaded_weight_name, loaded_weight in weights_iterator:
         param = params_dict[loaded_weight_name]
@@ -79,7 +79,7 @@ def is_weight_cache_enabled(fd_config, weight_cache_path=".cache"):
     weight_cache_context = contextlib.nullcontext()
     weight_cache_dir = None
     enable_cache = False
-    if envs.FD_ENABLE_MODEL_CACHE:
+    if envs.FD_ENABLE_MODEL_LOAD_CACHE:
         model_weight_cache_path = os.path.join(fd_config.model_config.model, weight_cache_path)
         # model_type + quantization + tp_size + ep_size
         weight_cache_key = "_".join(
@@ -98,7 +98,7 @@ def is_weight_cache_enabled(fd_config, weight_cache_path=".cache"):
                 f"Loading will prioritize cached models. Users are responsible for ensuring the saved model is correct. If any error occurs, deleting the cache at {weight_cache_dir} may resolve it."
             )
             enable_cache = True
-            weight_cache_context = switch_config_context(fd_config.quant_config, "is_checkpoint_bf16", False)
+            weight_cache_context = switch_config_context(fd_config.quant_config, "is_quantized", True)
 
     return enable_cache, weight_cache_dir, weight_cache_context
 
@@ -132,7 +132,11 @@ def save_model(model_arg_name="model", config_arg_name="fd_config"):
 
             with context:
                 result = func(*args, **kwargs)
-            if envs.FD_ENABLE_MODEL_CACHE and weight_cache_dir is not None and not os.path.exists(weight_cache_dir):
+            if (
+                envs.FD_ENABLE_MODEL_LOAD_CACHE
+                and weight_cache_dir is not None
+                and not os.path.exists(weight_cache_dir)
+            ):
                 assert fd_config.quant_config is not None and getattr(
                     fd_config.quant_config, "is_checkpoint_bf16", False
                 ), "Save cache only for dynamic quantization"
@@ -146,7 +150,8 @@ def save_model(model_arg_name="model", config_arg_name="fd_config"):
                 )
                 _save_model(model.state_dict(), os.path.join(tp_weight_cache_dir, "cache.pdparams"))
             else:
-                logger.info("Weights are already cached, skip saving")
+                reason = "weights already cached" if envs.FD_ENABLE_MODEL_LOAD_CACHE else "cache disabled"
+                logger.info(f"Skip saving ,{reason}")
             return result
 
         return wrapper
@@ -183,7 +188,7 @@ def load_reordered_experts(model_path: str, key_name: str):
             return weight
 
 
-def load_ep_checkpoint(model_path: str, fd_config: FDConfig, return_numpy: bool = False):
+def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfig, return_numpy: bool = False):
     """
     load ep checkpoint
     """
@@ -261,6 +266,10 @@ def load_ep_checkpoint(model_path: str, fd_config: FDConfig, return_numpy: bool 
         if k in weight_list:
             filtered_map[k] = weight_list[k]
 
+    if fd_config.parallel_config.tensor_parallel_size > 1:
+        tp_actions = cls._get_tensor_parallel_mappings(fd_config.model_config.pretrained_config)
+        new_actions = {k: v for k, v in tp_actions.items() if k not in num_local_ffn_keys}
+
     state_dict = {}
     # Get all safetensor file paths that need to be opened
     safetensor_paths = set(filtered_map.values())
@@ -276,6 +285,9 @@ def load_ep_checkpoint(model_path: str, fd_config: FDConfig, return_numpy: bool 
             for k in filtered_map:
                 if filtered_map[k] == safetensor_path and k in f.keys():
                     weight = f.get_tensor(k)
+                    if fd_config.parallel_config.tensor_parallel_size > 1:
+                        if k in new_actions:
+                            weight = new_actions[k](weight)
                     if not return_numpy:
                         weight = paddle.Tensor(weight, zero_copy=True)
                         weight = weight._copy_to(paddle.framework._current_expected_place(), False)
@@ -439,6 +451,29 @@ def deal_state_dict(state_dict):
             src_tensor._share_data_with(dst_tensor)
 
 
+def load_cache_scale(model_path, fd_config, state_dict):
+    file_path = os.path.join(model_path, "kv_cache_scale.json")
+    if os.path.exists(file_path):
+        with open(file_path, "r") as f:
+            data = json.load(f)
+            for i in range(fd_config.model_config.num_hidden_layers):
+
+                k_scale_name = f"ernie.layers.{i}.self_attn.cachek_matmul.activation_scale"
+                v_scale_name = f"ernie.layers.{i}.self_attn.cachev_matmul.activation_scale"
+
+                k_scale = data[k_scale_name]
+                k_scale_tensor = paddle.to_tensor(k_scale, dtype=paddle.get_default_dtype())
+                state_dict[k_scale_name] = k_scale_tensor * 448.0
+
+                v_scale = data[v_scale_name]
+                v_scale_tensor = paddle.to_tensor(v_scale, dtype=paddle.get_default_dtype())
+                state_dict[v_scale_name] = v_scale_tensor * 448.0
+
+                logger.info(f"Loaded kv cache scales for layer {i}.")
+    else:
+        logger.warning(f"No kv_cache_scale.json found at {file_path}, skipping...")
+
+
 def load_composite_checkpoint(
     model_path: str,
     cls: PretrainedModel,
@@ -451,13 +486,8 @@ def load_composite_checkpoint(
     # 2. Tensor Parallel (TP)
     # 3. Pre-sharded (pre-split)
     """
-    # (TODO: remove in the future)
-    if (
-        fd_config.parallel_config.use_ep
-        and fd_config.speculative_config.model_type != "mtp"
-        and fd_config.parallel_config.tensor_parallel_size == 1
-    ):
-        state_dict = load_ep_checkpoint(model_path, fd_config, return_numpy=True)
+    if fd_config.parallel_config.use_ep and fd_config.speculative_config.model_type != "mtp":
+        state_dict = load_ep_checkpoint(cls, model_path, fd_config, return_numpy=True)
     else:
         rank_dirs = [
             f for f in os.listdir(model_path) if f.startswith("rank") and os.path.isdir(os.path.join(model_path, f))
@@ -486,4 +516,10 @@ def load_composite_checkpoint(
                 )
     if not state_dict:
         raise ValueError("weight not found in state_dict !")
+
+    if hasattr(fd_config.quant_config, "kv_cache_quant_type"):
+        kv_cache_quant_type = fd_config.quant_config.kv_cache_quant_type
+        if kv_cache_quant_type == "float8_e4m3fn":
+            load_cache_scale(model_path, fd_config, state_dict)
+
     return state_dict

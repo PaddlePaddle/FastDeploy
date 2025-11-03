@@ -19,10 +19,13 @@ from __future__ import annotations
 import time
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Generic, Optional, Union
 
 import numpy as np
+from typing_extensions import TypeVar
 
+from fastdeploy import envs
+from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
 from fastdeploy.utils import data_processor_logger
@@ -44,6 +47,12 @@ class RequestType(Enum):
 
 
 @dataclass
+class ImagePosition:
+    offset: int = 0
+    length: int = 0
+
+
+@dataclass
 class Request:
     def __init__(
         self,
@@ -55,9 +64,10 @@ class Request:
         history: Optional[list[list[str]]],
         tools: Optional[list[Dict]],
         system: Optional[Union[str, list[str]]],
-        sampling_params: SamplingParams,
         eos_token_ids: Optional[list[int]],
         arrival_time: float,
+        sampling_params: Optional[SamplingParams] = None,
+        pooling_params: Optional[PoolingParams] = None,
         preprocess_start_time: Optional[float] = None,
         preprocess_end_time: Optional[float] = None,
         multimodal_inputs: Optional[dict] = None,
@@ -72,7 +82,9 @@ class Request:
         structural_tag: Optional[Any] = None,
         guided_json_object: Optional[bool] = None,
         enable_thinking: Optional[bool] = True,
+        reasoning_max_tokens: Optional[int] = None,
         trace_carrier: dict = dict(),
+        dp_rank: Optional[int] = None,
         chat_template: Optional[str] = None,
         image_start: int = 0,
         video_start: int = 0,
@@ -91,6 +103,7 @@ class Request:
         self.messages = messages
         self.system = system
         self.sampling_params = sampling_params
+        self.pooling_params = pooling_params
         self.history = history
         self.tools = tools
         # model specific token ids: end of sentence token ids
@@ -120,6 +133,7 @@ class Request:
         self.multimodal_img_boundaries = None
 
         self.enable_thinking = enable_thinking
+        self.reasoning_max_tokens = reasoning_max_tokens
         self.trace_carrier = trace_carrier
 
         self.chat_template = chat_template
@@ -145,11 +159,18 @@ class Request:
         # extend block tables
         self.use_extend_tables = False
         self.extend_block_tables = []
+        # dp
+        self.dp_rank = dp_rank
 
     @classmethod
     def from_dict(cls, d: dict):
         data_processor_logger.debug(f"{d}")
-        sampling_params = SamplingParams.from_dict(d)
+        sampling_params: SamplingParams = None
+        pooling_params: PoolingParams = None
+        if "pooling_params" in d and d["pooling_params"] is not None:
+            pooling_params = PoolingParams.from_dict(d["pooling_params"])
+        else:
+            sampling_params = SamplingParams.from_dict(d)
         return cls(
             request_id=d["request_id"],
             prompt=d.get("prompt"),
@@ -160,6 +181,7 @@ class Request:
             history=d.get("history"),
             tools=d.get("tools"),
             sampling_params=sampling_params,
+            pooling_params=pooling_params,
             eos_token_ids=d.get("eos_token_ids"),
             arrival_time=d.get("arrival_time", time.time()),
             preprocess_start_time=d.get("preprocess_start_time"),
@@ -175,7 +197,8 @@ class Request:
             guided_grammar=d.get("guided_grammar", None),
             structural_tag=d.get("structural_tag", None),
             guided_json_object=d.get("guided_json_object", None),
-            enable_thinking=d.get("enable_thinking", True),
+            enable_thinking=d.get("enable_thinking", None),
+            reasoning_max_tokens=d.get("reasoning_max_tokens", None),
             trace_carrier=d.get("trace_carrier", {}),
             chat_template=d.get("chat_template", None),
             num_computed_tokens=d.get("num_computed_tokens", 0),
@@ -187,6 +210,7 @@ class Request:
             image_end=d.get("image_end", 0),
             video_end=d.get("video_end", 0),
             audio_end=d.get("audio_end", 0),
+            dp_rank=d.get("dp_rank", None),
         )
 
     @property
@@ -225,6 +249,7 @@ class Request:
             "disaggregate_info": self.disaggregate_info,
             "draft_token_ids": self.draft_token_ids,
             "enable_thinking": self.enable_thinking,
+            "reasoning_max_tokens": self.reasoning_max_tokens,
             "trace_carrier": self.trace_carrier,
             "chat_template": self.chat_template,
             "num_computed_tokens": self.num_computed_tokens,
@@ -267,11 +292,20 @@ class Request:
             setattr(self, key, value)
 
     def __repr__(self) -> str:
-        non_none_fields = []
-        for attr, value in vars(self).items():
-            if value is not None and not attr.startswith("_"):
-                non_none_fields.append(f"{attr}={value!r}")
-        return f"Request({', '.join(non_none_fields)})"
+        """Safe string representation that ignores private and None fields."""
+        try:
+            if not envs.FD_DEBUG:
+                return f"Request(request_id={self.request_id})"
+            else:
+                attrs_snapshot = dict(vars(self))
+                non_none_fields = [
+                    f"{attr}={value!r}"
+                    for attr, value in attrs_snapshot.items()
+                    if value is not None and not attr.startswith("_")
+                ]
+                return f"Request({', '.join(non_none_fields)})"
+        except Exception as e:
+            return f"<{self.__class__.__name__} repr failed: {e}>"
 
 
 @dataclass(slots=True)
@@ -290,6 +324,7 @@ class CompletionOutput:
     decode_type: int = 0
     logprob: Optional[float] = None
     top_logprobs: Optional[LogprobsLists] = None
+    draft_top_logprobs: Optional[LogprobsLists] = None
     logprobs: Optional[SampleLogprobs] = None
     draft_token_ids: list[int] = None
     text: Optional[str] = None
@@ -304,8 +339,10 @@ class CompletionOutput:
             "index": self.index,
             "send_idx": self.send_idx,
             "token_ids": self.token_ids,
+            "decode_type": self.decode_type,
             "logprob": self.logprob,
             "top_logprobs": self.top_logprobs,
+            "draft_top_logprobs": self.draft_top_logprobs,
             "logprobs": self.logprobs,
             "draft_token_ids": self.draft_token_ids,
             "text": self.text,
@@ -331,6 +368,8 @@ class CompletionOutput:
             f"draft_token_ids={self.draft_token_ids}, "
             f"reasoning_content={self.reasoning_content!r}, "
             f"logprobs={self.logprobs}, "
+            f"top_logprobs={self.top_logprobs}, "
+            f"draft_top_logprobs={self.draft_top_logprobs}, "
         )
 
 
@@ -408,6 +447,8 @@ class RequestOutput:
         encoder_prompt_token_ids: The token IDs of the encoder prompt.
                                   None if decoder-only.
         num_cached_tokens: The number of tokens with prefix cache hit.
+        num_input_image_tokens: The number of input image tokens.
+        num_input_video_tokens: The number of input video tokens.
     """
 
     def __init__(
@@ -415,20 +456,26 @@ class RequestOutput:
         request_id: str,
         prompt: Optional[str] = None,
         prompt_token_ids: Optional[list[int]] = None,
+        output_type: Optional[int] = 3,
         outputs: CompletionOutput = None,
         finished: bool = False,
         metrics: Optional[RequestMetrics] = None,
         num_cached_tokens: Optional[int] = 0,
+        num_input_image_tokens: Optional[int] = 0,
+        num_input_video_tokens: Optional[int] = 0,
         error_code: Optional[int] = 200,
         error_msg: Optional[str] = None,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
         self.prompt_token_ids = prompt_token_ids
+        self.output_type = output_type
         self.outputs = outputs
         self.finished = finished
         self.metrics = metrics
         self.num_cached_tokens = num_cached_tokens
+        self.num_input_image_tokens = num_input_image_tokens
+        self.num_input_video_tokens = num_input_video_tokens
         self.error_code = error_code
         self.error_msg = error_msg
 
@@ -453,15 +500,26 @@ class RequestOutput:
             self.outputs.top_logprobs.logprob_token_ids.extend(next_output.outputs.top_logprobs.logprob_token_ids)
             self.outputs.top_logprobs.logprobs.extend(next_output.outputs.top_logprobs.logprobs)
             self.outputs.top_logprobs.sampled_token_ranks.extend(next_output.outputs.top_logprobs.sampled_token_ranks)
+        if next_output.outputs.draft_top_logprobs is not None:
+            self.outputs.draft_top_logprobs.logprob_token_ids.extend(
+                next_output.outputs.draft_top_logprobs.logprob_token_ids
+            )
+            self.outputs.draft_top_logprobs.logprobs.extend(next_output.outputs.draft_top_logprobs.logprobs)
+            self.outputs.draft_top_logprobs.sampled_token_ranks.extend(
+                next_output.outputs.draft_top_logprobs.sampled_token_ranks
+            )
 
     def __repr__(self) -> str:
         return (
             f"RequestOutput(request_id={self.request_id}, "
             f"prompt={self.prompt!r}, "
             f"prompt_token_ids={self.prompt_token_ids}, "
+            f"output_type={self.output_type}, "
             f"outputs={self.outputs}, "
             f"finished={self.finished}, "
             f"num_cached_tokens={self.num_cached_tokens}, "
+            f"num_input_image_tokens={self.num_input_image_tokens}, "
+            f"num_input_video_tokens={self.num_input_video_tokens}, "
             f"metrics={self.metrics}, "
         )
 
@@ -479,10 +537,246 @@ class RequestOutput:
             "request_id": self.request_id,
             "prompt": self.prompt,
             "prompt_token_ids": self.prompt_token_ids,
+            "output_type": self.output_type,
             "outputs": None if self.outputs is None else self.outputs.to_dict(),
             "metrics": None if self.metrics is None else self.metrics.to_dict(),
             "finished": self.finished,
             "num_cached_tokens": self.num_cached_tokens,
+            "num_input_image_tokens": self.num_input_image_tokens,
+            "num_input_video_tokens": self.num_input_video_tokens,
             "error_code": self.error_code,
             "error_msg": self.error_msg,
         }
+
+
+@dataclass
+class PoolingOutput:
+    """The output data of one pooling output of a request.
+
+    Args:
+        data: The extracted hidden states.
+    """
+
+    data: list[Any]
+
+    def __repr__(self) -> str:
+        return f"PoolingOutput(data={self.data})"
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, self.__class__) and bool((self.data == other.data).all())
+
+    def to_dict(self):
+        return {"data": self.data}
+
+
+_O = TypeVar("_O", default=PoolingOutput)
+
+
+@dataclass
+class PoolingRequestOutput(Generic[_O]):
+    """
+    The output data of a pooling request to the LLM.
+
+    Args:
+        request_id (str): A unique identifier for the pooling request.
+        outputs (PoolingOutput): The pooling results for the given input.
+        prompt_token_ids (list[int]): A list of token IDs used in the prompt.
+        finished (bool): A flag indicating whether the pooling is completed.
+    """
+
+    request_id: str
+    outputs: _O
+    prompt_token_ids: list[int]
+    finished: bool
+    metrics: Optional[RequestMetrics] = (None,)
+    error_code: Optional[int] = (200,)
+    error_msg: Optional[str] = (None,)
+
+    def __repr__(self):
+        return (
+            f"{type(self).__name__}(request_id={self.request_id!r}, "
+            f"outputs={self.outputs!r}, "
+            f"prompt_token_ids={self.prompt_token_ids}, "
+            f"finished={self.finished}, "
+            f"metrics={self.metrics}, "
+            f"error_code={self.error_code}, "
+            f"error_msg={self.error_msg})"
+        )
+
+    def to_dict(self):
+        return {
+            "request_id": self.request_id,
+            "outputs": None if self.outputs is None else self.outputs.to_dict(),
+            "prompt_token_ids": self.prompt_token_ids,
+            "finished": self.finished,
+            "metrics": None if self.metrics is None else self.metrics.to_dict(),
+            "error_code": self.error_code,
+            "error_msg": self.error_msg,
+        }
+
+    @classmethod
+    def from_dict(cls, req_dict: dict):
+        """Create instance from dict arguments"""
+        outputs = PoolingOutput(req_dict["outputs"]["data"])
+        init_args = {
+            field.name: (outputs if field.name == "outputs" else req_dict.get(field.name, field.default))
+            for field in fields(cls)
+        }
+        return cls(**init_args)
+
+
+@dataclass
+class EmbeddingOutput:
+    """The output data of one embedding output of a request.
+
+    Args:
+        embedding: The embedding vector, which is a list of floats.
+            Its length depends on the hidden dimension of the model.
+    """
+
+    embedding: list[float]
+
+    @staticmethod
+    def from_base(pooling_output: PoolingOutput):
+        pooled_data = pooling_output.data
+        # if pooled_data.ndim != 1:
+        #     raise ValueError("pooled_data should be a 1-D embedding vector")
+
+        if isinstance(pooled_data, list):
+            return EmbeddingOutput(pooled_data)
+
+        return EmbeddingOutput(pooled_data.tolist())
+
+    @property
+    def hidden_size(self) -> int:
+        return len(self.embedding)
+
+    def __repr__(self) -> str:
+        return f"EmbeddingOutput(hidden_size={self.hidden_size})"
+
+
+class EmbeddingRequestOutput(PoolingRequestOutput[EmbeddingOutput]):
+    @staticmethod
+    def from_base(request_output: PoolingRequestOutput):
+        return EmbeddingRequestOutput(
+            request_id=request_output.request_id,
+            outputs=EmbeddingOutput.from_base(request_output.outputs),
+            prompt_token_ids=request_output.prompt_token_ids,
+            finished=request_output.finished,
+        )
+
+
+@dataclass
+class ClassificationOutput:
+    """The output data of one classification output of a request.
+
+    Args:
+        probs: The probability vector, which is a list of floats.
+            Its length depends on the number of classes.
+    """
+
+    probs: list[float]
+
+    @staticmethod
+    def from_base(pooling_output: PoolingOutput):
+        # pooling_output shape: (num_classes)
+        pooled_data = pooling_output.data
+        if pooled_data.ndim != 1:
+            raise ValueError("pooled_data should be a 1-D probability vector")
+
+        return ClassificationOutput(pooled_data.tolist())
+
+    @property
+    def num_classes(self) -> int:
+        return len(self.probs)
+
+    def __repr__(self) -> str:
+        return f"ClassificationOutput(num_classes={self.num_classes})"
+
+
+class ClassificationRequestOutput(PoolingRequestOutput[ClassificationOutput]):
+    @staticmethod
+    def from_base(request_output: PoolingRequestOutput):
+        return ClassificationRequestOutput(
+            request_id=request_output.request_id,
+            outputs=ClassificationOutput.from_base(request_output.outputs),
+            prompt_token_ids=request_output.prompt_token_ids,
+            finished=request_output.finished,
+        )
+
+
+@dataclass
+class ScoringOutput:
+    """The output data of one scoring output of a request.
+
+    Args:
+        score: The similarity score, which is a scalar value.
+    """
+
+    score: float
+
+    @staticmethod
+    def from_base(pooling_output: PoolingOutput):
+        # pooling_output shape:
+        #   classify task: (num_classes) num_classes == 1
+        #   embed task: a scalar value
+        pooled_data = pooling_output.data.squeeze()
+        if pooled_data.ndim != 0:
+            raise ValueError("pooled_data should be a scalar score")
+
+        return ScoringOutput(pooled_data.item())
+
+    def __repr__(self) -> str:
+        return f"ScoringOutput(score={self.score})"
+
+
+class ScoringRequestOutput(PoolingRequestOutput[ScoringOutput]):
+    @staticmethod
+    def from_base(request_output: PoolingRequestOutput):
+        return ScoringRequestOutput(
+            request_id=request_output.request_id,
+            outputs=ScoringOutput.from_base(request_output.outputs),
+            prompt_token_ids=request_output.prompt_token_ids,
+            finished=request_output.finished,
+        )
+
+
+@dataclass
+class RewardOutput:
+    """The output data of one reward output of a request.
+
+    Args:
+        reward: The score, which is a list of floats.
+            Its length depends on the hidden dimension of the model.
+    """
+
+    score: list[float]
+
+    @staticmethod
+    def from_base(pooling_output: PoolingOutput):
+        pooled_data = pooling_output.data
+        # if pooled_data.ndim != 1:
+        #     raise ValueError("pooled_data should be a 1-D embedding vector")
+
+        if isinstance(pooled_data, list):
+            return RewardOutput(pooled_data)
+
+        return RewardOutput(pooled_data.tolist())
+
+    @property
+    def hidden_size(self) -> int:
+        return len(self.score)
+
+    def __repr__(self) -> str:
+        return f"RewardOutput(hidden_size={self.hidden_size})"
+
+
+class RewardRequestOutput(PoolingRequestOutput[RewardOutput]):
+    @staticmethod
+    def from_base(request_output: PoolingRequestOutput):
+        return RewardRequestOutput(
+            request_id=request_output.request_id,
+            outputs=RewardOutput.from_base(request_output.outputs),
+            prompt_token_ids=request_output.prompt_token_ids,
+            finished=request_output.finished,
+        )

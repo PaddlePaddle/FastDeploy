@@ -51,6 +51,7 @@ class RequestFuncInput:
     ignore_eos: bool = False
     language: Optional[str] = None
     debug: bool = False
+    response_format: Optional[dict] = None
 
 
 @dataclass
@@ -58,10 +59,12 @@ class RequestFuncOutput:
     """Output for requesting LLMs via API"""
 
     no: int = 0
+    request_id: str = ""
     generated_text: str = ""
     reasoning_content: str = ""
     success: bool = False
     latency: float = 0.0
+    end_timestamp: float = 0.0  # 模型完全返回的时间戳（秒, perf_counter基准）
     output_tokens: int = 0
     ttft: float = 0.0  # Time to first token
     arrival_time: list = field(default_factory=list)  # arrival_time
@@ -91,8 +94,11 @@ async def async_request_eb_openai_chat_completions(
             "stream_options": {
                 "include_usage": True,
                 "continuous_usage_stats": True,
-            },
+            }
         }
+        if request_func_input.response_format:
+            payload["response_format"] =request_func_input.response_format
+
         # 超参由yaml传入
         payload.update(request_func_input.hyper_parameters)
 
@@ -110,12 +116,14 @@ async def async_request_eb_openai_chat_completions(
         output = RequestFuncOutput()
         output.prompt_len = 0
         output.no = request_func_input.no
+        request_id = "None"
 
         ttft = 0.0
         st = time.perf_counter()
         most_recent_timestamp = st
         try:
             async with session.post(url=api_url, json=payload, headers=headers) as response:
+                data = {}
                 if response.status == 200:
                     async for chunk_bytes in response.content:
                         chunk_bytes = chunk_bytes.strip()
@@ -124,10 +132,13 @@ async def async_request_eb_openai_chat_completions(
 
                         chunk = chunk_bytes.decode("utf-8").removeprefix("data: ")
                         if chunk != "[DONE]":
-                            # print("####chunk:", chunk, type(chunk))
+                            #print("####chunk:", chunk, type(chunk))
                             timestamp = time.perf_counter()
                             data = json.loads(chunk)
 
+                            if request_id == "None" and "id" in data:
+                                request_id = data["id"]
+                            
                             if choices := data.get("choices"):
                                 content = choices[0]["delta"].get("content")
                                 reason_content = choices[0]["delta"].get("reasoning_content")
@@ -136,9 +147,12 @@ async def async_request_eb_openai_chat_completions(
                                     ttft = timestamp - st
                                     output.ttft = ttft
                                     # cached_tokens
-                                    output.prompt_len = (
-                                        data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
-                                    )
+                                    if data["usage"] and data["usage"].get("prompt_tokens_details", {}):
+                                        output.prompt_len = (
+                                            data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                                        )
+                                    else:
+                                        output.prompt_len = 0
 
                                 # Decoding phase
                                 else:
@@ -150,10 +164,13 @@ async def async_request_eb_openai_chat_completions(
                             elif usage := data.get("usage", {}):
                                 output.output_tokens = usage.get("completion_tokens", 0)
                                 output.prompt_tokens = usage.get("prompt_tokens", 0)
+                            
 
                             most_recent_timestamp = timestamp
 
                     # output.generated_text = generated_text
+                    # 在流式结束时，记录最后一个 chunk 收到的时间戳
+                    output.end_timestamp = most_recent_timestamp
                     if output.generated_text.strip() == "":
                         output.success = False
                         output.error = "No generated text found!"
@@ -174,6 +191,8 @@ async def async_request_eb_openai_chat_completions(
             output.success = False
             exc_info = sys.exc_info()
             output.error = "".join(traceback.format_exception(*exc_info))
+
+        output.request_id = request_id
 
         # 保存失败请求结果
         if not output.success:

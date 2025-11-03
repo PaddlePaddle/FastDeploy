@@ -1,4 +1,4 @@
-// Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "append_attn/multi_head_latent_attention_kernel.h"
+#include "append_attn/decoder_mla_attention_kernel.h"
 #include "helper.h"
 #include "mla_attn/batch_mla_with_paged_kv_cache.h"
 
@@ -22,23 +22,18 @@ std::vector<paddle::Tensor> MultiHeadLatentAttentionKernel(
     const paddle::Tensor& query,
     const paddle::Tensor& key_cache,
     const paddle::Tensor& value_cache,
-    const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& block_tables,
-    const paddle::Tensor& encoder_batch_ids,
-    const paddle::Tensor& encoder_tile_ids_per_batch,
-    const paddle::Tensor& encoder_num_blocks,
     const paddle::Tensor& kv_batch_ids,
     const paddle::Tensor& kv_tile_ids_per_batch,
     const paddle::Tensor& kv_num_blocks,
     const paddle::Tensor& decoder_batch_ids,
     const paddle::Tensor& decoder_tile_ids_per_batch,
     const paddle::Tensor& decoder_num_blocks,
-    const paddle::Tensor& decoder_num_blocks_cpu,
-    const paddle::Tensor& max_enc_len_this_time,
+    const paddle::Tensor& decoder_chunk_size_device,
     const paddle::Tensor& max_dec_len_this_time,
     const paddle::Tensor& max_len_kv,
     const paddle::optional<paddle::Tensor>& attn_mask,
@@ -64,14 +59,19 @@ std::vector<paddle::Tensor> MultiHeadLatentAttentionKernel(
   typedef PDTraits<D> traits_;
   typedef typename traits_::data_t data_t;
 
-  int decoder_num_blocks_data = decoder_num_blocks_cpu.data<int>()[0];
+  // NOTE: (changwenbin) In cuda graph, it will be fixed in the capture stage
+  // int decoder_num_blocks_data = decoder_num_blocks_cpu.data<int>()[0];
   int max_dec_len_this_time_data = max_dec_len_this_time.data<int>()[0];
   int max_len_kv_data = max_len_kv.data<int>()[0];
+  // int chunk_size = decoder_chunk_size_cpu.data<int>()[0];
+  //
 
-  const bool mla_use_tensorcore = get_mla_use_tensorcore();
+  const bool mla_use_tensorcore = true;  // get_mla_use_tensorcore();
   auto sm_version = GetSMVersion();
   if ((speculate_decoder || mla_use_tensorcore) && sm_version < 90) {
-    PD_THROW("Please use speculate_decoder=0 and FLAGS_mla_use_tensorcore=0 when sm < 90.");
+    PD_THROW(
+        "Please use speculate_decoder=0 and FLAGS_mla_use_tensorcore=0 when sm "
+        "< 90.");
   }
 
   auto main_stream = query.stream();
@@ -96,7 +96,6 @@ std::vector<paddle::Tensor> MultiHeadLatentAttentionKernel(
                                              out_linear_smooths,
                                              seq_lens_this_time,
                                              seq_lens_decoder,
-                                             seq_lens_encoder,
                                              cu_seqlens_q,
                                              batch_id_per_token,
                                              block_tables,
@@ -104,9 +103,8 @@ std::vector<paddle::Tensor> MultiHeadLatentAttentionKernel(
                                              decoder_tile_ids_per_batch,
                                              decoder_num_blocks,
                                              cache_quant_type_str,
-                                             decoder_num_blocks_data,
+                                             decoder_chunk_size_device,
                                              max_input_length,
-                                             max_len_kv_data,
                                              softmax_scale,
                                              quant_max_bound,
                                              quant_min_bound,
@@ -145,23 +143,18 @@ std::vector<paddle::Tensor> MultiHeadLatentAttention(
     const paddle::Tensor& query,
     const paddle::Tensor& key_cache,
     const paddle::Tensor& value_cache,
-    const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& block_tables,
-    const paddle::Tensor& encoder_batch_ids,
-    const paddle::Tensor& encoder_tile_ids_per_batch,
-    const paddle::Tensor& encoder_num_blocks,
     const paddle::Tensor& kv_batch_ids,
     const paddle::Tensor& kv_tile_ids_per_batch,
     const paddle::Tensor& kv_num_blocks,
     const paddle::Tensor& decoder_batch_ids,
     const paddle::Tensor& decoder_tile_ids_per_batch,
     const paddle::Tensor& decoder_num_blocks,
-    const paddle::Tensor& decoder_num_blocks_cpu,
-    const paddle::Tensor& max_enc_len_this_time,
+    const paddle::Tensor& decoder_chunk_size_device,
     const paddle::Tensor& max_dec_len_this_time,
     const paddle::Tensor& max_len_kv,
     const paddle::optional<paddle::Tensor>& attn_mask,
@@ -208,23 +201,18 @@ std::vector<paddle::Tensor> MultiHeadLatentAttention(
           query,
           key_cache,
           value_cache,
-          seq_lens_encoder,
           seq_lens_decoder,
           seq_lens_this_time,
           cu_seqlens_q,
           batch_id_per_token,
           block_tables,
-          encoder_batch_ids,
-          encoder_tile_ids_per_batch,
-          encoder_num_blocks,
           kv_batch_ids,
           kv_tile_ids_per_batch,
           kv_num_blocks,
           decoder_batch_ids,
           decoder_tile_ids_per_batch,
           decoder_num_blocks,
-          decoder_num_blocks_cpu,
-          max_enc_len_this_time,
+          decoder_chunk_size_device,
           max_dec_len_this_time,
           max_len_kv,
           attn_mask,
@@ -254,23 +242,18 @@ std::vector<paddle::Tensor> MultiHeadLatentAttention(
           query,
           key_cache,
           value_cache,
-          seq_lens_encoder,
           seq_lens_decoder,
           seq_lens_this_time,
           cu_seqlens_q,
           batch_id_per_token,
           block_tables,
-          encoder_batch_ids,
-          encoder_tile_ids_per_batch,
-          encoder_num_blocks,
           kv_batch_ids,
           kv_tile_ids_per_batch,
           kv_num_blocks,
           decoder_batch_ids,
           decoder_tile_ids_per_batch,
           decoder_num_blocks,
-          decoder_num_blocks_cpu,
-          max_enc_len_this_time,
+          decoder_chunk_size_device,
           max_dec_len_this_time,
           max_len_kv,
           attn_mask,
@@ -307,23 +290,18 @@ std::vector<std::vector<int64_t>> MultiHeadLatentAttentionInferShape(
     const std::vector<int64_t>& query_shape,
     const std::vector<int64_t>& key_cache_shape,
     const std::vector<int64_t>& value_cache_shape,
-    const std::vector<int64_t>& seq_lens_encoder_shape,
     const std::vector<int64_t>& seq_lens_decoder_shape,
     const std::vector<int64_t>& seq_lens_this_time_shape,
     const std::vector<int64_t>& cu_seqlens_q_shape,
     const std::vector<int64_t>& batch_id_per_token_shape,
     const std::vector<int64_t>& block_tables_shape,
-    const std::vector<int64_t>& encoder_batch_ids_shape,
-    const std::vector<int64_t>& encoder_tile_ids_per_batch_shape,
-    const std::vector<int64_t>& encoder_num_blocks_shape,
     const std::vector<int64_t>& kv_batch_ids_shape,
     const std::vector<int64_t>& kv_tile_ids_per_batch_shape,
     const std::vector<int64_t>& kv_num_blocks_shape,
     const std::vector<int64_t>& decoder_batch_ids_shape,
     const std::vector<int64_t>& decoder_tile_ids_per_batch_shape,
     const std::vector<int64_t>& decoder_num_blocks_shape,
-    const std::vector<int64_t>& decoder_num_blocks_cpu_shape,
-    const std::vector<int64_t>& max_enc_len_this_time_shape,
+    const std::vector<int64_t>& decoder_chunk_size_device_shape,
     const std::vector<int64_t>& max_dec_len_this_time_shape,
     const std::vector<int64_t>& max_len_kv_shape,
     const paddle::optional<std::vector<int64_t>>& attn_mask_shape,
@@ -361,23 +339,18 @@ std::vector<paddle::DataType> MultiHeadLatentAttentionInferDtype(
     const paddle::DataType& query_dtype,
     const paddle::DataType& key_cache_dtype,
     const paddle::DataType& value_cache_dtype,
-    const paddle::DataType& seq_lens_encoder_dtype,
     const paddle::DataType& seq_lens_decoder_dtype,
     const paddle::DataType& seq_lens_this_time_dtype,
     const paddle::DataType& cu_seqlens_q_dtype,
     const paddle::DataType& batch_id_per_token_dtype,
     const paddle::DataType& block_tables_dtype,
-    const paddle::DataType& encoder_batch_ids_dtype,
-    const paddle::DataType& encoder_tile_ids_per_batch_dtype,
-    const paddle::DataType& encoder_num_blocks_dtype,
     const paddle::DataType& kv_batch_ids_dtype,
     const paddle::DataType& kv_tile_ids_per_batch_dtype,
     const paddle::DataType& kv_num_blocks_dtype,
     const paddle::DataType& decoder_batch_ids_dtype,
     const paddle::DataType& decoder_tile_ids_per_batch_dtype,
     const paddle::DataType& decoder_num_blocks_dtype,
-    const paddle::DataType& decoder_num_blocks_cpu_dtype,
-    const paddle::DataType& max_enc_len_this_time_dtype,
+    const paddle::DataType& decoder_chunk_size_device_dtype,
     const paddle::DataType& max_dec_len_this_time_dtype,
     const paddle::DataType& max_len_kv_dtype,
     const paddle::optional<paddle::DataType>& attn_mask_dtype,
@@ -415,23 +388,18 @@ PD_BUILD_STATIC_OP(multi_head_latent_attention)
     .Inputs({"query",
              "key_cache",
              "value_cache",
-             "seq_lens_encoder",
              "seq_lens_decoder",
              "seq_lens_this_time",
              "cu_seqlens_q",
              "batch_id_per_token",
              "block_tables",
-             "encoder_batch_ids",
-             "encoder_tile_ids_per_batch",
-             "encoder_num_blocks",
              "kv_batch_ids",
              "kv_tile_ids_per_batch",
              "kv_num_blocks",
              "decoder_batch_ids",
              "decoder_tile_ids_per_batch",
              "decoder_num_blocks",
-             "decoder_num_blocks_cpu",
-             "max_enc_len_this_time",
+             "decoder_chunk_size_device",
              "max_dec_len_this_time",
              "max_len_kv",
              paddle::Optional("attn_mask"),

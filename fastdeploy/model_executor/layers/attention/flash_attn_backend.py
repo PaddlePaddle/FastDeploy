@@ -110,7 +110,7 @@ class FlashAttentionBackend(AttentionBackend):
         """
         super().__init__()
         self.attention_metadata: FlashAttentionMetadata = None
-        self.max_seq_len = fd_config.parallel_config.max_model_len
+        self.max_seq_len = fd_config.model_config.max_model_len
         self.causal = getattr(fd_config.model_config, "causal", True)
 
         self.kv_num_heads = kv_num_heads
@@ -156,7 +156,7 @@ class FlashAttentionBackend(AttentionBackend):
         self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False)
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", "32768"))
         self.zero_seq_enc_lens_for_decode = paddle.zeros(
-            shape=[fd_config.parallel_config.max_num_seqs, 1], dtype=paddle.int32
+            shape=[fd_config.scheduler_config.max_num_seqs, 1], dtype=paddle.int32
         )
 
     def get_attntion_meta(self):
@@ -198,6 +198,8 @@ class FlashAttentionBackend(AttentionBackend):
             forward_meta.decoder_batch_ids,
             forward_meta.decoder_tile_ids_per_batch,
             forward_meta.decoder_num_blocks_cpu,
+            forward_meta.decoder_num_blocks_device,
+            forward_meta.decoder_chunk_size_device,
             forward_meta.max_len_tensor_cpu,
             forward_meta.encoder_batch_ids,
             forward_meta.encoder_tile_ids_per_batch,
@@ -205,7 +207,6 @@ class FlashAttentionBackend(AttentionBackend):
             forward_meta.kv_batch_ids,
             forward_meta.kv_tile_ids_per_batch,
             forward_meta.kv_num_blocks_x_cpu,
-            forward_meta.max_len_kv_cpu,
             self.encoder_block_shape_q,
             self.decoder_block_shape_q,
             self.group_size,
@@ -338,7 +339,6 @@ class FlashAttentionBackend(AttentionBackend):
             forward_meta.decoder_tile_ids_per_batch,  # from buffer
             forward_meta.decoder_num_blocks_cpu,
             metadata.max_len_tensor_cpu_decoder,
-            forward_meta.max_len_kv_cpu,
             metadata.rotary_embs,
             forward_meta.attn_mask,
             layer.qkv_bias,
@@ -355,6 +355,7 @@ class FlashAttentionBackend(AttentionBackend):
             metadata.kv_signal_data_list[layer.layer_id],
             getattr(layer, "q_norm_weight", None),
             getattr(layer, "k_norm_weight", None),
+            getattr(layer, "sinks", None),
             getattr(layer, "rms_norm_eps", 1e-6),
             metadata._fuse_kernel_compute_dtype,
             getattr(layer, "cache_quant_type_str", "none"),

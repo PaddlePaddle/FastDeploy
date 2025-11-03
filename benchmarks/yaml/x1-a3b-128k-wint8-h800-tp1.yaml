@@ -1,0 +1,7 @@
+tensor_parallel_size: 1
+max_model_len: 131072
+max_num_seqs: 32
+reasoning_parser: ernie-x1
+tool_call_parser: ernie-x1
+load_choices: "default_v1"
+quantization: wint8

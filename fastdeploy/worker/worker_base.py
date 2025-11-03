@@ -51,6 +51,7 @@ class WorkerBase(ABC):
         self.parallel_config = fd_config.parallel_config
         self.device_config = fd_config.device_config
         self.cache_config = fd_config.cache_config
+        self.scheduler_config = fd_config.scheduler_config
         # ... config
 
         # Device and Runner

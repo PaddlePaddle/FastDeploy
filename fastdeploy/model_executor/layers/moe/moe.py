@@ -27,6 +27,11 @@ from fastdeploy.model_executor.utils import slice_fn
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 
+try:
+    from fastdeploy.model_executor.ops.gpu import noaux_tc
+except:
+    logger.warning("import noaux_tc Failed!")
+
 
 def get_moe_method():
     """
@@ -38,20 +43,54 @@ def get_moe_method():
 
         return CutlassMoEMethod(None)
     elif current_platform.is_xpu():
-        from .fused_moe_xpu_backend import XPUMoEMethod
+        from fastdeploy.model_executor.layers.backends import XPUMoEMethod
 
         return XPUMoEMethod(None)
     elif current_platform.is_gcu():
         from fastdeploy.model_executor.layers.backends import GCUFusedMoeMethod
 
         return GCUFusedMoeMethod(None)
+
+    elif current_platform.is_intel_hpu():
+        from fastdeploy.model_executor.layers.backends import HpuMoEMethod
+
+        return HpuMoEMethod(None)
+        # return HpuTensorWiseFP8MoEMethod(None)
+
     elif current_platform.is_maca():
         from fastdeploy.model_executor.layers.backends import (
-            MetaxTritonWeightOnlyMoEMethod,
+            MetaxCutlassWeightOnlyMoEMethod,
         )
 
-        return MetaxTritonWeightOnlyMoEMethod(None)
+        return MetaxCutlassWeightOnlyMoEMethod(None)
     raise NotImplementedError
+
+
+def get_moe_scores(
+    gating_output: paddle.Tensor,
+    n_group,
+    topk_group,
+    top_k,
+    routed_scaling_factor,
+    e_score_correction_bias,
+    renormalize: bool = False,
+) -> paddle.Tensor:
+    """
+    compute moe scores using e_score_correction_bias.
+    """
+    scores = paddle.nn.functional.sigmoid(gating_output)
+    assert e_score_correction_bias is not None, "e_score_correction_bias is none!"
+    scores_with_bias = scores + e_score_correction_bias
+    scores, topk_values, topk_idx = noaux_tc(
+        scores,
+        scores_with_bias,
+        n_group if n_group > 0 else 1,
+        topk_group if topk_group > 0 else 1,
+        top_k,
+        renormalize,
+        routed_scaling_factor,
+    )
+    return scores, topk_values, topk_idx
 
 
 class FusedMoE(nn.Layer):
@@ -63,6 +102,7 @@ class FusedMoE(nn.Layer):
         self,
         fd_config,
         reduce_results: bool = True,
+        renormalize: bool = False,
         moe_intermediate_size: int = -1,
         num_experts: int = -1,
         expert_id_offset: int = 0,
@@ -76,6 +116,8 @@ class FusedMoE(nn.Layer):
         gate_correction_bias=None,
         redundant_table_manger: RedundantExpertManger = None,
         weight_key_map: dict = {},
+        with_bias: bool = False,
+        activation="swiglu",
     ):
         """
         Initialize the Moe layer with given parameters.
@@ -89,6 +131,7 @@ class FusedMoE(nn.Layer):
         self.fd_config = fd_config
         self.layer_idx = layer_idx
         self.reduce_results = reduce_results
+        self.renormalize = renormalize
         self.tp_rank = fd_config.parallel_config.tensor_parallel_rank
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
         self.ep_size = fd_config.parallel_config.expert_parallel_size
@@ -105,6 +148,7 @@ class FusedMoE(nn.Layer):
 
         self.hidden_size = fd_config.model_config.hidden_size
         self.num_experts = num_experts
+
         self.num_local_experts = self.num_experts // self.ep_size
 
         self.moe_intermediate_size = moe_intermediate_size // self.tp_size
@@ -114,6 +158,9 @@ class FusedMoE(nn.Layer):
 
         self.use_method = envs.FD_MOE_BACKEND.lower()
         self.moe_tag = moe_tag
+        self.with_bias = with_bias
+        self.activation = activation
+
         if self.ep_size > 1:
             expert_id_offset = expert_id_offset + self.ep_rank * self.num_local_experts
 
@@ -163,7 +210,10 @@ class FusedMoE(nn.Layer):
         )
 
     def weight_loader(self, param, loaded_weight, expert_id, shard_id: Optional[str] = None):
-
+        if expert_id is None and shard_id is None:
+            # MoE experts has been fused in disk
+            self._load_fused_experts_weight(param, loaded_weight)
+            return
         if hasattr(param, "SHARD_ID_TO_SHARDED_DIM"):
             SHARD_ID_TO_SHARDED_DIM = param.SHARD_ID_TO_SHARDED_DIM
         elif current_platform.is_cuda():
@@ -176,20 +226,19 @@ class FusedMoE(nn.Layer):
 
         if shard_id is None:
             # 1.gate up fused in disk
-            model_format = getattr(param, "model_format", "")
-            is_torch_model = model_format == "torch"
+            weight_need_transpose = getattr(param, "weight_need_transpose", False)
             output_size = param[expert_id - self.expert_id_offset].shape[SHARD_ID_TO_SHARDED_DIM["gate"]]
             per_rank = output_size // 2
             start = self.tp_rank * per_rank
             loaded_weight_shard_gate = slice_fn(
-                loaded_weight, is_torch_model ^ SHARD_ID_TO_SHARDED_DIM["gate"], start, start + per_rank
+                loaded_weight, weight_need_transpose ^ SHARD_ID_TO_SHARDED_DIM["gate"], start, start + per_rank
             )
             self._load_gate_up_weight(
                 param, expert_id, loaded_weight_shard_gate, "gate", SHARD_ID_TO_SHARDED_DIM["gate"], is_sharded=True
             )
             start_up = output_size // 2 * self.tp_size + self.tp_rank * per_rank
             loaded_weight_shard_up = slice_fn(
-                loaded_weight, is_torch_model ^ SHARD_ID_TO_SHARDED_DIM["up"], start_up, start_up + per_rank
+                loaded_weight, weight_need_transpose ^ SHARD_ID_TO_SHARDED_DIM["up"], start_up, start_up + per_rank
             )
             self._load_gate_up_weight(
                 param, expert_id, loaded_weight_shard_up, "up", SHARD_ID_TO_SHARDED_DIM["up"], is_sharded=True
@@ -206,10 +255,9 @@ class FusedMoE(nn.Layer):
             )
 
     def _load_gate_up_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None, is_sharded=False):
-        model_format = getattr(param, "model_format", "")
-        is_torch_model = model_format == "torch"
+        weight_need_transpose = getattr(param, "weight_need_transpose", False)
         if self.tp_size > 1 and not is_sharded:
-            tp_shard_dim = is_torch_model ^ shard_dim
+            tp_shard_dim = weight_need_transpose ^ shard_dim
             weight_dim = -1 if tp_shard_dim else 0
             if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                 size = loaded_weight.shape[weight_dim]
@@ -245,13 +293,17 @@ class FusedMoE(nn.Layer):
         assert expert_param.shape == loaded_weight.shape, (
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
         )
+        if expert_param.dtype != loaded_weight.dtype:
+            if loaded_weight.dtype == paddle.int8 and expert_param.dtype == paddle.float8_e4m3fn:
+                loaded_weight = loaded_weight.view(expert_param.dtype)
+            else:
+                loaded_weight = loaded_weight.cast(expert_param.dtype)
         expert_param.copy_(loaded_weight, False)
 
     def _load_down_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None):
-        model_format = getattr(param, "model_format", "")
-        is_torch_model = model_format == "torch"
+        weight_need_transpose = getattr(param, "weight_need_transpose", False)
         if self.tp_size > 1 and shard_dim is not None:
-            tp_shard_dim = is_torch_model ^ shard_dim
+            tp_shard_dim = weight_need_transpose ^ shard_dim
             dim = -1 if tp_shard_dim else 0
             if isinstance(loaded_weight, paddle.Tensor):
                 size = loaded_weight.shape[dim]
@@ -272,7 +324,33 @@ class FusedMoE(nn.Layer):
         assert expert_param.shape == loaded_weight.shape, (
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
         )
+        if expert_param.dtype != loaded_weight.dtype:
+            if loaded_weight.dtype == paddle.int8 and expert_param.dtype == paddle.float8_e4m3fn:
+                loaded_weight = loaded_weight.view(expert_param.dtype)
+            else:
+                loaded_weight = loaded_weight.cast(expert_param.dtype)
         expert_param.copy_(loaded_weight, False)
+
+    def _load_fused_experts_weight(self, param, loaded_weight):
+        if self.tp_size > 1:
+            dim = -1
+            if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
+                size = loaded_weight.shape[dim]
+            else:
+                size = loaded_weight.get_shape()[dim]
+            block_size = size // self.tp_size
+            shard_offset = self.tp_rank * block_size
+            shard_size = (self.tp_rank + 1) * block_size
+            loaded_weight = slice_fn(loaded_weight, dim, shard_offset, shard_size)
+        assert param.shape == loaded_weight.shape, (
+            f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+        )
+        loaded_weight = get_tensor(loaded_weight)
+        param.copy_(loaded_weight, False)
+
+        if hasattr(param, "tensor_track"):
+            for i in range(self.num_local_experts):
+                param.tensor_track.mark(start=0, batch_id=i)
 
     def _load_expert_weight(
         self,

@@ -1,3 +1,5 @@
+[简体中文](../zh/features/prefix_caching.md)
+
 # Prefix Caching
 
 Prefix Caching is a technique to optimize the inference efficiency of generative models. Its core idea is to cache intermediate computation results (KV Cache) of input sequences, avoiding redundant computations and thereby accelerating response times for multiple requests sharing the same prefix.

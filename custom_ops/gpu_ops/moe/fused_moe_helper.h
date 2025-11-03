@@ -236,7 +236,7 @@ public:
                                                num_experts, k, stream);
     }
 
-    topk_gating_softmax_kernelLauncher<float, int>::run(
+    topk_gating_softmax_kernelLauncher<float, int>(
         gating_output, nullptr, expert_scales_float, softmax_out_,
         expert_for_source_row, source_rows_, softmax_max_prob, num_rows,
         num_experts, k, group_moe, stream);
@@ -248,7 +248,7 @@ public:
                 permuted_experts_, source_rows_, permuted_rows_, k * num_rows,
                 false, stream);
 
-    initialize_moe_routing_kernelLauncher<T>::run(
+    initialize_moe_routing_kernelLauncher(
         input_activations, permuted_data_, permuted_rows_, nullptr, nullptr,
         expanded_source_row_to_expanded_dest_row, num_rows, num_rows,
         hidden_size, k, stream);
@@ -335,14 +335,14 @@ public:
             num_experts, down_proj_quant_args, stream);
       }
 
-      finalize_moe_routing_kernelLauncher<T>::run(
+      finalize_moe_routing_kernelLauncher(
           fc2_result, output_, fc2_expert_biases,
           reinterpret_cast<float *>(expert_scales_float),
           expanded_source_row_to_expanded_dest_row, expert_for_source_row,
           num_rows, hidden_size, k, static_cast<int>(1), norm_topk_prob,
           routed_scaling_factor, stream);
     } else {
-      finalize_moe_routing_kernelLauncher<T>::run(
+      finalize_moe_routing_kernelLauncher(
           // fc2_result,
           fc1_out, output_,
           fc1_expert_biases, // fc2_expert_biases,

@@ -1,3 +1,5 @@
+[English](../../get_started/quick_start_qwen.md)
+
 # 10分钟完成 Qwen3-0.6b 模型部署
 
 本文档讲解如何部署Qwen3-0.6b模型，在开始部署前，请确保你的硬件环境满足如下条件：
@@ -15,7 +17,7 @@
 安装FastDeploy后，在终端执行如下命令，启动服务，其中启动命令配置方式参考[参数说明](../parameters.md)
 
 > ⚠️ **注意:**
-> 当使用HuggingFace 模型(torch格式)时, 需要开启 `--load_choices "default_v1"`
+> 当使用HuggingFace 模型(torch格式)时, 需要开启 `--load-choices "default_v1"`
 
 ```shell
 export ENABLE_V1_KVCACHE_SCHEDULER=1
@@ -26,7 +28,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --engine-worker-queue-port 8182 \
        --max-model-len 32768 \
        --max-num-seqs 32 \
-       --load_choices "default_v1"
+       --load-choices "default_v1"
 ```
 
 >💡 注意：在 ```--model``` 指定的路径中，若当前目录下不存在该路径对应的子目录，则会尝试根据指定的模型名称（如 ```Qwen/Qwen3-0.6B```）查询AIStudio是否存在预置模型，若存在，则自动启动下载。默认的下载路径为：```~/xx```。关于模型自动下载的说明和配置参阅[模型下载](../supported_models.md)。

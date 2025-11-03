@@ -51,7 +51,7 @@ def start_servers(server_count, server_args, ports, metrics_ports, controller_po
         controller_port = int(controller_ports[i])
 
         env = os.environ.copy()
-        env["FD_LOG_DIR"] = f"log_{i}"
+        env["FD_LOG_DIR"] = env.get("FD_LOG_DIR", "log") + f"/log_{i}"
         cmd = [
             sys.executable,
             "-m",

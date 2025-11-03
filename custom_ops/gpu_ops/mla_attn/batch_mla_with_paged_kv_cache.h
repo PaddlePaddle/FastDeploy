@@ -47,7 +47,6 @@ void BatchMLAWithPagedKVCacheKernel(
     const paddle::optional<paddle::Tensor>& smooth_weight,  // [num_kv_heads, head_dim]
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& seq_lens_decoder,
-    const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& block_tables,
@@ -55,9 +54,8 @@ void BatchMLAWithPagedKVCacheKernel(
     const paddle::Tensor& tile_ids_per_batch,
     const paddle::Tensor& num_blocks_x_device,
     const std::string& cache_quant_type_str,
-    const int num_blocks_x,
+    const paddle::Tensor& decoder_chunk_size_device,
     const int max_seq_len,
-    const int max_dec_len,
     const float softmax_scale,
     const float quant_max_bound,
     const float quant_min_bound,

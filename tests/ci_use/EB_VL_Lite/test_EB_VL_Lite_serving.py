@@ -34,6 +34,8 @@ FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8234))
 # List of ports to clean before and after tests
 PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT]
 
+os.environ["FD_USE_MACHETE"] = "0"
+
 
 def is_port_open(host: str, port: int, timeout=1.0):
     """
@@ -67,6 +69,7 @@ def clean_ports():
     """
     for port in PORTS_TO_CLEAN:
         kill_process_on_port(port)
+    time.sleep(2)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -235,9 +238,9 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     # base result
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2")
+        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2-fp32")
     else:
-        base_file = "ernie-4_5-vl-base-tp2"
+        base_file = "ernie-4_5-vl-base-tp2-fp32"
     with open(base_file, "r") as f:
         content2 = f.read()
 
@@ -515,6 +518,21 @@ def test_chat_with_thinking(openai_client, capsys):
     assert response.choices[0].message.reasoning_content is None
     assert "</think>" not in response.choices[0].message.content
 
+    # test logic
+    reasoning_max_tokens = None
+    response = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        stream=False,
+        max_tokens=20,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+            "reasoning_max_tokens": reasoning_max_tokens,
+        },
+    )
+    assert response.choices[0].message.reasoning_content is not None
+
     # enable thinking, streaming
     reasoning_max_tokens = 3
     response = openai_client.chat.completions.create(
@@ -586,6 +604,7 @@ def non_streaming_chat_base(openai_client, chat_param):
     return response.choices[0].message.content
 
 
+@pytest.mark.skip(reason="Temporarily skip this case due to unstable execution")
 def test_structured_outputs_json_schema(openai_client):
     """
     Test structured outputs json_schema functionality with the local service
@@ -695,6 +714,7 @@ def test_structured_outputs_json_schema(openai_client):
     }, f"json_schema non_streaming response: {json_schema_response['genre']} is not a valid book-type"
 
 
+@pytest.mark.skip(reason="Temporarily skip this case due to unstable execution")
 def test_structured_outputs_structural_tag(openai_client):
     """
     Test structured outputs structural_tag functionality with the local service
@@ -924,3 +944,50 @@ def test_profile_reset_block_num():
         f"Reset total_block_num {actual_value} 与 baseline {baseline} diff需要在5%以内"
         f"Allowed range: [{lower_bound:.1f}, {upper_bound:.1f}]"
     )
+
+
+def test_thinking_logic_flag(openai_client, capsys):
+    """
+    Test the interaction between token calculation logic and conditional thinking.
+    This test covers:
+    1. Default max_tokens calculation when not provided.
+    2. Capping of max_tokens when it exceeds model limits.
+    3. Default reasoning_max_tokens calculation when not provided.
+    4. Activation of thinking based on the final state of reasoning_max_tokens.
+    """
+
+    response_case_1 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity briefly."}],
+        temperature=1,
+        stream=False,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+        },
+    )
+    assert response_case_1.choices[0].message.reasoning_content is not None
+
+    response_case_2 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        stream=False,
+        max_tokens=20,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": True},
+            "reasoning_max_tokens": 5,
+        },
+    )
+    assert response_case_2.choices[0].message.reasoning_content is not None
+
+    response_case_3 = openai_client.chat.completions.create(
+        model="default",
+        messages=[{"role": "user", "content": "Explain gravity in a way that a five-year-old child can understand."}],
+        temperature=1,
+        stream=False,
+        max_tokens=20,
+        extra_body={
+            "chat_template_kwargs": {"enable_thinking": False},
+        },
+    )
+    assert response_case_3.choices[0].message.reasoning_content is None

@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <cuda_fp8.h>
+
 #ifndef PADDLE_WITH_COREX
 #include "glog/logging.h"
 #endif
@@ -25,6 +27,11 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <nvml.h>
+#include <cassert>
+#include <cstdlib>
+#include <cstdlib>
+#include <cstring>
 
 #ifdef PADDLE_WITH_HIP
 #include <hip/hip_bfloat16.h>
@@ -151,6 +158,34 @@ inline int GetGPUComputeCapability(int id) {
 
 #endif
 
+#ifndef FP8_E4M3_MAX
+#define FP8_E4M3_MAX 448.0
+#endif
+
+#ifndef DISPATCH_FLOAT_FP6_DTYPE
+#define DISPATCH_FLOAT_FP6_DTYPE(pd_dtype, c_type, ...)           \
+    switch (pd_dtype) {                                           \
+      case phi::DataType::FLOAT32: {                           \
+        using c_type = float;                                  \
+        __VA_ARGS__                                            \
+        break;                                                 \
+      }                                                        \
+      case phi::DataType::BFLOAT16: {                          \
+        using c_type = phi::dtype::bfloat16;                   \
+        __VA_ARGS__                                            \
+        break;                                                 \
+      }                                                        \
+      case phi::DataType::FLOAT16: {                          \
+        using c_type = phi::dtype::float16;                 \
+        __VA_ARGS__                                            \
+        break;                                                 \
+      }                                                        \
+      default: {                                               \
+        PD_THROW("Only supported attr of input type in [fp32, fp16, bf16].");  \
+      }                                                        \
+    }
+#endif
+
 inline constexpr uint32_t next_pow_2(uint32_t const num) {
   if (num <= 1)
     return num;
@@ -193,11 +228,13 @@ public:
   typedef uint8_t data_t;
 };
 
+#ifndef PADDLE_WITH_COREX
 template <> class PDTraits<paddle::DataType::FLOAT8_E4M3FN> {
 public:
   typedef __nv_fp8_e4m3 DataType;
   typedef paddle::float8_e4m3fn data_t;
 };
+#endif
 
 template <typename T, int Size> struct alignas(sizeof(T) * Size) AlignedVector {
   T val[Size];
@@ -558,8 +595,82 @@ inline int get_cuda_max_shared_memory_per_block_opt_in(int const device) {
 #endif
 
 inline int GetSMVersion() {
+#ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
+  return 80;
+#else
   static int sm_version = phi::backends::gpu::GetGPUComputeCapability(
       phi::backends::gpu::GetCurrentDeviceId());
   return sm_version;
+#endif
+}
 
+inline bool GetMlaUseTensorcore() {
+  static const bool flags_mla_use_tensorcore = get_mla_use_tensorcore();
+  static const bool enable_mla_tensorcore = GetSMVersion() >= 90 ? true : false;
+  const bool mla_use_tensorcore =
+      flags_mla_use_tensorcore && enable_mla_tensorcore;
+  return mla_use_tensorcore;
+}
+
+inline const char *getEnvVar(const char *varName) {
+  return std::getenv(varName);
+}
+
+inline bool checkAttentionBackend() {
+  const char *backend = getEnvVar("FD_ATTENTION_BACKEND");
+  if (backend && std::strcmp(backend, "MLA_ATTN") == 0) {
+    return true;
+  }
+  return false;
+}
+
+#ifndef GPU_MEMORY_CHECKER_H
+#define GPU_MEMORY_CHECKER_H
+class GPUMemoryChecker {
+public:
+    static GPUMemoryChecker* getInstance() {
+        static GPUMemoryChecker instance;
+        return &instance;
+    }
+
+    void addCheckPoint(const char* call_file, int call_line);
+    unsigned int getGPUCount() const { return deviceCount_; }
+    void getCUDAVisibleDevice();
+
+    GPUMemoryChecker(const GPUMemoryChecker&) = delete;
+    void operator=(const GPUMemoryChecker&) = delete;
+
+private:
+    GPUMemoryChecker();
+    ~GPUMemoryChecker();
+
+    unsigned int deviceCount_;
+    std::vector<unsigned int> visible_device_;
+    std::vector<unsigned int> visible_device_mem_usage_;
+};
+
+#endif // GPU_MEMORY_CHECKER_H
+__device__ __forceinline__ float warpReduceMax(float value) {
+  value = fmaxf(value, __shfl_xor_sync(0xffffffff, value, 16));
+  value = fmaxf(value, __shfl_xor_sync(0xffffffff, value, 8));
+  value = fmaxf(value, __shfl_xor_sync(0xffffffff, value, 4));
+  value = fmaxf(value, __shfl_xor_sync(0xffffffff, value, 2));
+  value = fmaxf(value, __shfl_xor_sync(0xffffffff, value, 1));
+  return value;
+}
+
+__device__ __forceinline__ float blockReduceMax(float value) {
+  static __shared__ float warpLevelMaxs[WARP_SIZE];
+  const int laneId = threadIdx.x % WARP_SIZE;
+  const int warpId = threadIdx.x / WARP_SIZE;
+
+  value = warpReduceMax(value);
+
+  if (laneId == 0) warpLevelMaxs[warpId] = value;
+  __syncthreads();
+
+  value = (threadIdx.x < blockDim.x / WARP_SIZE) ? warpLevelMaxs[laneId] : 0;
+  if (warpId == 0) value = warpReduceMax(value);
+
+  return value;
 }

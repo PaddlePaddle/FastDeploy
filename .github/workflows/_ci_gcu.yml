@@ -1,0 +1,98 @@
+name: CI_GCU
+
+on:
+  #pull_request:
+    #branches:
+      #- develop
+      #- 'release/*'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.event.pull_request.number }}-gcu-ci
+  cancel-in-progress: true
+
+jobs:
+  CI_GCU:
+    runs-on:
+      group: GCU
+    steps:
+      - name: Print current runner name
+        run: |
+          echo "Current runner name: ${{ runner.name }}"
+
+      - name: Code Checkout
+        env:
+          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-gcu:topsrider3.5.102-ubuntu20-x86_64-gcc84
+        run: |
+          REPO="https://github.com/${{ github.repository }}.git"
+          FULL_REPO="${{ github.repository }}"
+          REPO_NAME="${FULL_REPO##*/}"
+          BASE_BRANCH="${{ github.base_ref }}"
+          # Clean the repository directory before starting
+          docker run --rm --net=host -v $(pwd):/workspace \
+          -v ${{ github.workspace }}/../../..:${{ github.workspace }}/../../.. \
+          -w /workspace \
+          -e "REPO_NAME=${REPO_NAME}" \
+          -e "BASE_BRANCH=${BASE_BRANCH}" \
+          ${docker_image} /bin/bash -c '
+            if [ -d ${REPO_NAME} ]; then
+              echo "Directory ${REPO_NAME} exists, removing it..."
+              rm -rf ${REPO_NAME}
+            fi
+          '
+          git config --global user.name "FastDeployCI"
+          git config --global user.email "fastdeploy_ci@example.com"
+          source ${{ github.workspace }}/../../../proxy
+          git clone ${REPO} ${REPO_NAME} -b ${BASE_BRANCH}
+          cd FastDeploy
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin pull/${{ github.event.pull_request.number }}/head:pr/${{ github.event.pull_request.number }}
+            git merge pr/${{ github.event.pull_request.number }}
+            git log -n 3 --oneline
+          else
+            git checkout ${{ github.sha }}
+            git log -n 3 --oneline
+          fi
+          echo "Copy models..."
+          sudo mkdir -p ci_models && sudo cp -r /work/deps/ERNIE-4.5-21B-A3B-Paddle ci_models
+          echo "Copy models done."
+
+      - name: Run CI unittest
+        env:
+          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-gcu:topsrider3.5.102-ubuntu20-x86_64-gcc84
+        run: |
+          runner_name="${{ runner.name }}"
+          last_char="${runner_name: -1}"
+
+          if [[ "$last_char" =~ [0-3] ]]; then
+            gcu_id="$last_char"
+          else
+            gcu_id="0"
+          fi
+          FD_API_PORT=$((9180 + gcu_id * 100))
+          FD_ENGINE_QUEUE_PORT=$((9150 + gcu_id * 100))
+          FD_METRICS_PORT=$((9170 + gcu_id * 100))
+
+          PARENT_DIR=$(dirname "$WORKSPACE")
+          echo "PARENT_DIR:$PARENT_DIR"
+          echo "Install drivers..."
+          cd /work/deps
+          sudo bash TopsRider_i3x_*_deb_amd64.run --driver --no-auto-load -y
+          cd -
+          echo "Create docker..."
+          docker run --rm --network=host --ipc=host --privileged \
+          -v $(pwd):/workspace \
+          -v /home:/home \
+          -v /work:/work \
+          -w /workspace \
+          -e "MODEL_PATH=./ci_models" \
+          -e "http_proxy=$(git config --global --get http.proxy)" \
+          -e "https_proxy=$(git config --global --get https.proxy)" \
+          -e "FD_API_PORT=${FD_API_PORT}" \
+          -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
+          -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
+          ${docker_image} /bin/bash -c "
+          git config --global --add safe.directory /workspace/FastDeploy
+          cd FastDeploy
+          bash scripts/run_ci_gcu.sh
+          "

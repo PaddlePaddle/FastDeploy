@@ -37,6 +37,52 @@ def load_module_from_path(module_name, path):
     return module
 
 
+def update_git_repo():
+    try:
+        print("update third party repo...", flush=True)
+        original_dir = os.getcwd()
+        submodule_dir = os.path.dirname(os.path.abspath(__file__))
+        third_party_path = os.path.join(submodule_dir, "third_party")
+        root_path = Path(third_party_path)
+
+        # check if third_party is empty
+        update_third_party = False
+        for dirpath in root_path.iterdir():
+            if dirpath.is_dir():
+                has_content = any(dirpath.iterdir())
+                if not has_content:
+                    update_third_party = True
+
+        if update_third_party:
+            os.chdir(submodule_dir)
+            subprocess.run(
+                "git submodule sync --recursive && git submodule update --init --recursive",
+                shell=True,
+                check=True,
+                text=True,
+            )
+        else:
+            print(
+                "\033[33m[===WARNING===]third_party directory already exists, skip clone and update.\033[0m",
+                flush=True,
+            )
+
+        # apply deep gemm patch
+        deep_gemm_dir = "third_party/DeepGEMM"
+        dst_path = os.path.join(submodule_dir, deep_gemm_dir)
+        patch = "0001-DeepGEMM-95e81b3.patch"
+        patch_source = os.path.join(submodule_dir, patch)
+        patch_destination = os.path.join(dst_path, patch)
+        if not os.path.exists(patch_destination):
+            shutil.copy(patch_source, patch_destination)
+            apply_cmd = ["git", "apply", patch]
+            os.chdir(dst_path)
+            subprocess.run(apply_cmd, check=True)
+        os.chdir(original_dir)
+    except subprocess.CalledProcessError:
+        raise Exception("Git submodule update and apply patch failed. Maybe network connection is poor.")
+
+
 ROOT_DIR = Path(__file__).parent.parent
 
 # cannot import envs directly because it depends on fastdeploy,
@@ -45,6 +91,8 @@ envs = load_module_from_path("envs", os.path.join(ROOT_DIR, "fastdeploy", "envs.
 
 archs = json.loads(envs.FD_BUILDING_ARCS)
 use_bf16 = envs.FD_CPU_USE_BF16 == "True"
+
+update_git_repo()
 
 
 def download_and_extract(url, destination_directory):
@@ -78,63 +126,18 @@ def download_and_extract(url, destination_directory):
         print(f"Error extracting file: {e}")
 
 
-def clone_git_repo(version, repo_url, destination_path):
-    """
-    Clone git repo to destination path.
-    """
-    try:
-        subprocess.run(
-            [
-                "git",
-                "clone",
-                "-b",
-                version,
-                "--single-branch",
-                repo_url,
-                destination_path,
-            ],
-            check=True,
-        )
-        return True
-    except subprocess.CalledProcessError:
-        return False
-
-
-def process_git_repo(cur_path, dst_path, commit_id=None, patch=None):
-    """
-    reset git repo to destination commit and apply patch.
-    """
-    if commit_id is not None:
-        reset_cmd = ["git", "reset", "--hard", commit_id]
-    if patch is not None:
-        patch_source = os.path.join(cur_path, patch)
-        patch_destination = os.path.join(dst_path, patch)
-        shutil.copy(patch_source, patch_destination)
-        apply_cmd = ["git", "apply", patch]
-
-    try:
-        os.chdir(dst_path)
-        if commit_id is not None:
-            subprocess.run(reset_cmd, check=True)
-        if patch is not None:
-            subprocess.run(apply_cmd, check=True)
-        os.chdir(cur_path)
-        return True
-    except subprocess.CalledProcessError:
-        return False
-
-
 def get_sm_version(archs):
     """
     Get sm version of paddle.
     """
     arch_set = set(archs)
-    try:
-        prop = paddle.device.cuda.get_device_properties()
-        cc = prop.major * 10 + prop.minor
-        arch_set.add(cc)
-    except ValueError:
-        pass
+    if len(arch_set) == 0:
+        try:
+            prop = paddle.device.cuda.get_device_properties()
+            cc = prop.major * 10 + prop.minor
+            arch_set.add(cc)
+        except ValueError:
+            pass
     return list(arch_set)
 
 
@@ -191,13 +194,6 @@ def find_end_files(directory, end_str):
 if paddle.is_compiled_with_rocm():
     # NOTE(@duanyanhui): paddle.is_compiled_with_cuda() returns True when paddle compiled with rocm.
     # so we need to check if paddle compiled with rocm at first.
-    json_dir = "third_party/nlohmann_json"
-    if not os.path.exists(json_dir) or not os.listdir(json_dir):
-        if not os.path.exists(json_dir):
-            os.makedirs(json_dir)
-        clone_git_repo("v3.11.3", "https://bgithub.xyz/nlohmann/json.git", json_dir)
-        if not os.listdir(json_dir):
-            raise ValueError("Git clone nlohmann_json failed!")
     sources = [
         "gpu_ops/save_with_output_msg.cc",
         "gpu_ops/get_output.cc",
@@ -213,6 +209,7 @@ if paddle.is_compiled_with_rocm():
         "gpu_ops/rebuild_padding.cu",
         "gpu_ops/step.cu",
         "gpu_ops/set_data_ipc.cu",
+        "gpu_ops/unset_data_ipc.cu",
         "gpu_ops/moe/tritonmoe_preprocess.cu",
         "gpu_ops/step_system_cache.cu",
         "gpu_ops/get_output_ep.cc",
@@ -255,6 +252,7 @@ if paddle.is_compiled_with_rocm():
     )
 elif paddle.is_compiled_with_cuda():
     sources = [
+        "gpu_ops/helper.cu",
         "gpu_ops/save_with_output_msg.cc",
         "gpu_ops/get_output.cc",
         "gpu_ops/get_output_msg_with_topk.cc",
@@ -283,6 +281,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/beam_search_softmax.cu",
         "gpu_ops/rebuild_padding.cu",
         "gpu_ops/set_data_ipc.cu",
+        "gpu_ops/unset_data_ipc.cu",
         "gpu_ops/read_data_ipc.cu",
         "gpu_ops/enforce_generation.cu",
         "gpu_ops/dequant_int8.cu",
@@ -293,7 +292,6 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/cpp_extensions.cc",
         "gpu_ops/share_external_data.cu",
         "gpu_ops/per_token_quant_fp8.cu",
-        "gpu_ops/extract_text_token_output.cu",
         "gpu_ops/update_split_fuse_input.cu",
         "gpu_ops/text_image_index_out.cu",
         "gpu_ops/text_image_gather_scatter.cu",
@@ -305,6 +303,9 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/noaux_tc.cu",
         "gpu_ops/custom_all_reduce/all_reduce.cu",
         "gpu_ops/merge_prefill_decode_output.cu",
+        "gpu_ops/limit_thinking_content_length_v1.cu",
+        "gpu_ops/limit_thinking_content_length_v2.cu",
+        "gpu_ops/update_attn_mask_offsets.cu",
     ]
 
     # pd_disaggregation
@@ -315,28 +316,6 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/get_data_ptr_ipc.cu",
         "gpu_ops/ipc_sent_key_value_cache_by_remote_ptr.cu",
     ]
-
-    cutlass_dir = "third_party/cutlass"
-    if not os.path.exists(cutlass_dir) or not os.listdir(cutlass_dir):
-        if not os.path.exists(cutlass_dir):
-            os.makedirs(cutlass_dir)
-        clone_git_repo("v3.8.0", "https://github.com/NVIDIA/cutlass.git", cutlass_dir)
-        if not os.listdir(cutlass_dir):
-            raise ValueError("Git clone cutlass failed!")
-
-    # deep gemm
-    deep_gemm_dir = "third_party/DeepGEMM"
-    if not os.path.exists(deep_gemm_dir) or not os.listdir(deep_gemm_dir):
-        if not os.path.exists(deep_gemm_dir):
-            os.makedirs(deep_gemm_dir)
-        clone_git_repo("main", "https://github.com/deepseek-ai/DeepGEMM.git", deep_gemm_dir)
-        if not os.listdir(deep_gemm_dir):
-            raise ValueError("Git clone DeepGEMM failed!")
-        cur_path = os.path.dirname(os.path.abspath(__file__))
-        dst_path = os.path.join(cur_path, deep_gemm_dir)
-        commit_id = "95e81b3dd6704e279e5f4757c5b94776ac988a8d"
-        patch = "0001-DeepGEMM-95e81b3.patch"
-        process_git_repo(cur_path, dst_path, commit_id, patch)
 
     dg_third_party_include_dirs = (
         "third_party/cutlass/include/cute",
@@ -365,14 +344,6 @@ elif paddle.is_compiled_with_cuda():
         except Exception as e:
             raise RuntimeError(f"Failed to copy from {src_dir} to {dst_dir}: {e}")
 
-    json_dir = "third_party/nlohmann_json"
-    if not os.path.exists(json_dir) or not os.listdir(json_dir):
-        if not os.path.exists(json_dir):
-            os.makedirs(json_dir)
-        clone_git_repo("v3.11.3", "https://github.com/nlohmann/json.git", json_dir)
-        if not os.listdir(json_dir):
-            raise ValueError("Git clone nlohmann_json failed!")
-
     cc_compile_args = []
     nvcc_compile_args = get_gencode_flags(archs)
     nvcc_compile_args += ["-DPADDLE_DEV"]
@@ -386,6 +357,8 @@ elif paddle.is_compiled_with_cuda():
         "-Igpu_ops",
         "-Ithird_party/nlohmann_json/include",
     ]
+    worker_threads = os.cpu_count()
+    nvcc_compile_args += ["-t", str(worker_threads)]
 
     nvcc_version = get_nvcc_version()
     print(f"nvcc_version = {nvcc_version}")
@@ -410,6 +383,9 @@ elif paddle.is_compiled_with_cuda():
 
     if cc >= 80:
         # append_attention
+        os.system(
+            "python utils/auto_gen_template_instantiation.py --config gpu_ops/append_attn/template_config.json --output gpu_ops/append_attn/template_instantiation/autogen"
+        )
         sources += ["gpu_ops/append_attention.cu"]
         sources += find_end_files("gpu_ops/append_attn", ".cu")
         # mla
@@ -422,6 +398,9 @@ elif paddle.is_compiled_with_cuda():
         nvcc_compile_args += ["-DENABLE_BF16"]
         # moe
         os.system("python gpu_ops/moe/moe_wna16_marlin_utils/generate_kernels.py")
+        os.system(
+            "python utils/auto_gen_template_instantiation.py --config gpu_ops/moe/template_config.json --output gpu_ops/moe/template_instantiation/autogen"
+        )
         sources += find_end_files("gpu_ops/cutlass_kernels/moe_gemm/", ".cu")
         sources += find_end_files("gpu_ops/cutlass_kernels/w4a8_moe/", ".cu")
         sources += find_end_files("gpu_ops/moe/", ".cu")
@@ -528,7 +507,7 @@ elif paddle.is_compiled_with_cuda():
             sources=sources,
             extra_compile_args={"cxx": cc_compile_args, "nvcc": nvcc_compile_args},
             libraries=["cublasLt"],
-            extra_link_args=["-lcuda"],
+            extra_link_args=["-lcuda", "-lnvidia-ml"],
         ),
         packages=find_packages(where="third_party/DeepGEMM"),
         package_dir={"": "third_party/DeepGEMM"},
@@ -542,7 +521,7 @@ elif paddle.is_compiled_with_cuda():
         include_package_data=True,
     )
 elif paddle.is_compiled_with_xpu():
-    assert False, "In XPU, we should use setup_ops.py in xpu_ops/src, not this."
+    assert False, "For XPU, please use setup_ops.py in the xpu_ops directory to compile custom ops."
 elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
     setup(
         name="fastdeploy_ops",
@@ -568,9 +547,14 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 "gpu_ops/token_penalty_multi_scores.cu",
                 "gpu_ops/sample_kernels/rejection_top_p_sampling.cu",
                 "gpu_ops/sample_kernels/top_k_renorm_probs.cu",
+                "gpu_ops/text_image_index_out.cu",
+                "gpu_ops/text_image_gather_scatter.cu",
+                "gpu_ops/set_data_ipc.cu",
                 "iluvatar_ops/moe_dispatch.cu",
                 "iluvatar_ops/moe_reduce.cu",
                 "iluvatar_ops/paged_attn.cu",
+                "iluvatar_ops/prefill_fused_attn.cu",
+                "iluvatar_ops/mixed_fused_attn.cu",
                 "iluvatar_ops/w8a16_group_gemm.cu",
                 "iluvatar_ops/runtime/iluvatar_context.cc",
             ],
@@ -593,13 +577,6 @@ elif paddle.is_compiled_with_custom_device("gcu"):
     )
 elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
     maca_path = os.getenv("MACA_PATH", "/opt/maca")
-    json_dir = "third_party/nlohmann_json"
-    if not os.path.exists(json_dir) or not os.listdir(json_dir):
-        if not os.path.exists(json_dir):
-            os.makedirs(json_dir)
-        clone_git_repo("v3.11.3", "https://gitee.com/learnlov/mirrors_nlohmann_json.git", json_dir)
-        if not os.listdir(json_dir):
-            raise ValueError("Git clone nlohmann_json failed!")
     sources = [
         "gpu_ops/update_inputs_v1.cu",
         "gpu_ops/save_with_output_msg.cc",
@@ -631,10 +608,20 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/read_data_ipc.cu",
         "gpu_ops/dequant_int8.cu",
         "gpu_ops/share_external_data.cu",
-        "gpu_ops/extract_text_token_output.cu",
+        "gpu_ops/recover_decode_task.cu",
+        "gpu_ops/noaux_tc.cu",
+        "gpu_ops/fused_rotary_position_encoding.cu",
+        "gpu_ops/text_image_gather_scatter.cu",
+        "gpu_ops/text_image_index_out.cu",
+        "gpu_ops/get_position_ids_and_mask_encoder_batch.cu",
+        "gpu_ops/append_attn/mla_cache_kernel.cu",
+        "gpu_ops/append_attn/get_block_shape_and_split_kv_block.cu",
         "gpu_ops/moe/tritonmoe_preprocess.cu",
         "gpu_ops/moe/moe_topk_select.cu",
-        "gpu_ops/recover_decode_task.cu",
+        "metax_ops/moe_dispatch.cu",
+        "metax_ops/moe_ffn.cu",
+        "metax_ops/moe_reduce.cu",
+        "metax_ops/fused_moe.cu",
     ]
 
     sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
@@ -655,7 +642,7 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
                 ],
             },
             library_dirs=[os.path.join(maca_path, "lib")],
-            extra_link_args=["-lruntime_cu"],
+            extra_link_args=["-lruntime_cu", "-lmctlassEx"],
             include_dirs=[
                 os.path.join(maca_path, "include"),
                 os.path.join(maca_path, "include/mcr"),
@@ -663,6 +650,8 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
             ],
         ),
     )
+elif paddle.is_compiled_with_custom_device("intel_hpu"):
+    pass
 else:
     use_bf16 = envs.FD_CPU_USE_BF16 == "True"
 

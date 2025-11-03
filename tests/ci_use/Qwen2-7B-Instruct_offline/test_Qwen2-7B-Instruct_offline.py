@@ -91,6 +91,7 @@ def llm(model_path):
             cache_queue_port=FD_CACHE_QUEUE_PORT,
             max_model_len=32768,
             quantization="wint8",
+            logits_processors=["LogitBiasLogitsProcessor"],
         )
 
         # Wait for the port to be open
@@ -193,6 +194,74 @@ def test_chat_completion(llm):
             pytest.fail(f"Chat case {i + 1} failed")
 
 
+def test_generate_prompts_stream(llm):
+    """
+    Test basic prompt generation stream outputs
+    """
+
+    prompts = [
+        "请介绍一下中国的四大发明。",
+    ]
+
+    sampling_params = SamplingParams(
+        temperature=0.8,
+        top_p=0.95,
+    )
+
+    try:
+        outputs = llm.generate(prompts, sampling_params, stream=True)
+
+        # Collect streaming output
+        output = []
+        for chunk in outputs:
+            if chunk[0] is not None:
+                output.append(chunk[0].outputs.text)
+        assert len(output) > 0
+
+    except Exception:
+        print("Failed during prompt generation.")
+        traceback.print_exc()
+        pytest.fail("Prompt generation test failed")
+
+
+def test_chat_completion_stream(llm):
+    """
+    Test chat completion stream outputs
+    """
+    chat_cases = [
+        [
+            {"role": "user", "content": "你好，请介绍一下你自己。"},
+        ],
+        [
+            {"role": "user", "content": "你知道地球到月球的距离是多少吗？"},
+            {"role": "assistant", "content": "大约是38万公里左右。"},
+            {"role": "user", "content": "那太阳到地球的距离是多少？"},
+        ],
+    ]
+
+    sampling_params = SamplingParams(
+        temperature=0.8,
+        top_p=0.95,
+    )
+
+    try:
+        outputs = llm.chat(chat_cases, sampling_params, stream=True)
+
+        # Collect streaming output
+        output = [[], []]
+        for chunks in outputs:
+            for req_idx, chunk in enumerate(chunks):
+                if chunk is not None:
+                    output[req_idx].append(chunk.outputs.text)
+        assert len(output[0]) > 0
+        assert len(output[1]) > 0
+
+    except Exception:
+        print("Failed during prompt chat.")
+        traceback.print_exc()
+        pytest.fail("Prompt chat test failed")
+
+
 def test_seed(llm):
     """
     Test chat completion with same seed
@@ -214,6 +283,45 @@ def test_seed(llm):
         print("Failed during prompt generation.")
         traceback.print_exc()
         pytest.fail("Prompt generation test failed")
+
+
+def test_logits_processors(llm):
+    """
+    Test LogitBiasLogitsProcessor: token with extremely large logit bias should always be greedy-sampled
+    """
+    messages = [{"role": "user", "content": "鲁迅是谁"}]
+    sampling_params = SamplingParams(
+        top_p=0.0,
+        max_tokens=128,
+    )
+    outputs = llm.chat(messages, sampling_params)
+    print("generated text:", outputs[0].outputs.text)
+    original_generated_text = outputs[0].outputs.text
+
+    # test request with logit bias
+    token_id_with_exlarge_bias = 123
+    messages = [{"role": "user", "content": "鲁迅是谁"}]
+    sampling_params = SamplingParams(
+        top_p=0.0,
+        max_tokens=128,
+        logits_processors_args={"logit_bias": {token_id_with_exlarge_bias: 100000}},
+    )
+    outputs = llm.chat(messages, sampling_params)
+    print("generated text:", outputs[0].outputs.text)
+    print("generated token ids:", outputs[0].outputs.token_ids)
+    print("expected token id:", token_id_with_exlarge_bias)
+    assert all(x == token_id_with_exlarge_bias for x in outputs[0].outputs.token_ids[:-1])
+
+    # test request without logit bias
+    messages = [{"role": "user", "content": "鲁迅是谁"}]
+    sampling_params = SamplingParams(
+        top_p=0.0,
+        max_tokens=128,
+    )
+    outputs = llm.chat(messages, sampling_params)
+    print("generated text:", outputs[0].outputs.text)
+    current_generated_text = outputs[0].outputs.text
+    assert current_generated_text == original_generated_text
 
 
 if __name__ == "__main__":
