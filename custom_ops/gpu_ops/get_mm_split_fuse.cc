@@ -15,6 +15,10 @@
 #include "paddle/extension.h"
 #include <map>
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
+
 std::vector<paddle::Tensor> GetMmSplitFuse(const paddle::Tensor& task_input_ids,
                             const paddle::Tensor& task_image_type_ids,
                             const paddle::Tensor& task_input_ids_image_token_count,
@@ -133,7 +137,7 @@ std::vector<paddle::Tensor> GetMmSplitFuse(const paddle::Tensor& task_input_ids,
     return {image_chunk_selections_out, split_fuse_cur_seq_lens_out};
 }
 
-PD_BUILD_OP(get_mm_split_fuse)
+PD_BUILD_STATIC_OP(get_mm_split_fuse)
     .Inputs({"task_input_ids", "task_image_type_ids", "task_input_ids_image_token_count", "grid_thw"})
     .Attrs({"image_token_id: int64_t", "img_total: int64_t", "batch_idx: int", "seq_lens_origin: int", "split_fuse_img_size: int", "split_fuse_text_size: int", "max_chunk_token_size: int"})
     .Outputs({"image_chunk_selections", "split_fuse_cur_seq_lens"})

@@ -27,7 +27,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Log directory.
     "FD_LOG_DIR": lambda: os.getenv("FD_LOG_DIR", "log"),
     # Whether to use debug mode, can set 0 or 1
-    "FD_DEBUG": lambda: os.getenv("FD_DEBUG", "0"),
+    "FD_DEBUG": lambda: int(os.getenv("FD_DEBUG", "0")),
     # Number of days to keep fastdeploy logs.
     "FD_LOG_BACKUP_COUNT": lambda: os.getenv("FD_LOG_BACKUP_COUNT", "7"),
     # Model download source, can set "AISTUDIO", "MODELSCOPE" or "HUGGINGFACE".
@@ -55,7 +55,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Set moe backend."cutlass","marlin" and "triton" can be set currently.
     "FD_MOE_BACKEND": lambda: os.getenv("FD_MOE_BACKEND", "cutlass"),
     # Whether to use Machete for wint4 dense gemm.
-    "FD_USE_MACHETE": lambda: os.getenv("FD_USE_MACHETE", "0"),
+    "FD_USE_MACHETE": lambda: os.getenv("FD_USE_MACHETE", "1"),
     # Set whether to disable recompute the request when the KV cache is full.
     "FD_DISABLED_RECOVER": lambda: os.getenv("FD_DISABLED_RECOVER", "0"),
     # Set triton kernel JIT compilation directory.
@@ -84,6 +84,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "ENABLE_V1_KVCACHE_SCHEDULER": lambda: int(os.getenv("ENABLE_V1_KVCACHE_SCHEDULER", "1")),
     # set prealloc block num for decoder
     "FD_ENC_DEC_BLOCK_NUM": lambda: int(os.getenv("FD_ENC_DEC_BLOCK_NUM", "2")),
+    # enbale max prefill of one execute step
+    "FD_ENABLE_MAX_PREFILL": lambda: int(os.getenv("FD_ENABLE_MAX_PREFILL", "0")),
     # Whether to use PLUGINS.
     "FD_PLUGINS": lambda: None if "FD_PLUGINS" not in os.environ else os.environ["FD_PLUGINS"].split(","),
     # set trace attribute job_id.
@@ -118,12 +120,39 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ENABLE_MODEL_LOAD_CACHE": lambda: bool(int(os.getenv("FD_ENABLE_MODEL_LOAD_CACHE", "0"))),
     # Whether to clear cpu cache when clearing model weights.
     "FD_ENABLE_SWAP_SPACE_CLEARING": lambda: int(os.getenv("FD_ENABLE_SWAP_SPACE_CLEARING", "0")),
-    # Used to truncate the string inserted during thinking when reasoning in a model. (</think> for ernie4_5_vl, \n</think>\n\n for ernie_x1)
+    # enable return text, used when FD_ENABLE_INTERNAL_ADAPTER=1
+    "FD_ENABLE_RETURN_TEXT": lambda: bool(int(os.getenv("FD_ENABLE_RETURN_TEXT", "0"))),
+    # Used to truncate the string inserted during thinking when reasoning in a model. (</think> for ernie-45-vl, \n</think>\n\n for ernie-x1)
     "FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR": lambda: os.getenv("FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR", "</think>"),
     # Timeout for cache_transfer_manager process exit
     "FD_CACHE_PROC_EXIT_TIMEOUT": lambda: int(os.getenv("FD_CACHE_PROC_EXIT_TIMEOUT", "600")),
     # Count for cache_transfer_manager process error
     "FD_CACHE_PROC_ERROR_COUNT": lambda: int(os.getenv("FD_CACHE_PROC_ERROR_COUNT", "10")),
+    # EPLB related
+    "FD_ENABLE_REDUNDANT_EXPERTS": lambda: int(os.getenv("FD_ENABLE_REDUNDANT_EXPERTS", "0")) == 1,
+    "FD_REDUNDANT_EXPERTS_NUM": lambda: int(os.getenv("FD_REDUNDANT_EXPERTS_NUM", "0")),
+    "FD_REDUNDANT_EXPERT_IP_SHM_SIZE": lambda: int(os.getenv("FD_REDUNDANT_EXPERT_IP_SHM_SIZE", "1024")),
+    "FD_REDUNDANT_EXPERT_META_DIR": lambda: os.getenv("FD_REDUNDANT_EXPERT_META_DIR", "/tmp/redundant_expert_meta"),
+    "FD_REDUNDANT_EXPERT_API_USER": lambda: os.getenv("FD_REDUNDANT_EXPERT_API_USER", ""),
+    "FD_REDUNDANT_EXPERT_API_PASSWORD": lambda: os.getenv("FD_REDUNDANT_EXPERT_API_PASSWORD", ""),
+    "FD_REDUNDANT_EXPERT_EPLB_STRATEGY": lambda: os.getenv("FD_REDUNDANT_EXPERT_EPLB_STRATEGY", ""),
+    "FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL": lambda: int(
+        os.getenv("FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL", "10")
+    ),
+    "FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB": lambda: int(
+        os.getenv("FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB", "0")
+    ),
+    "FD_REDUNDANT_EXPERT_ENABLE_SCHEDULE_CORDON": lambda: int(
+        os.getenv("FD_REDUNDANT_EXPERT_ENABLE_SCHEDULE_CORDON", "1")
+    )
+    == 1,
+    "FD_MODEL_USE_SAFETENSORS": lambda: int(os.getenv("FD_MODEL_USE_SAFETENSORS", "1")) == 1,
+    "FD_MODEL_USE_OFFLINE_QUANT": lambda: int(os.getenv("FD_MODEL_USE_OFFLINE_QUANT", "1")) == 1,
+    "FD_MOE_QUANT_TYPE": lambda: os.getenv("FD_MOE_QUANT_TYPE", "w4a8"),
+    "ENCODE_FEATURE_BOS_AK": lambda: os.getenv("ENCODE_FEATURE_BOS_AK"),
+    "ENCODE_FEATURE_BOS_SK": lambda: os.getenv("ENCODE_FEATURE_BOS_SK"),
+    # Enable offline perf test mode for PD disaggregation
+    "FD_OFFLINE_PERF_TEST_FOR_PD": lambda: int(os.getenv("FD_OFFLINE_PERF_TEST_FOR_PD", "0")),
 }
 
 

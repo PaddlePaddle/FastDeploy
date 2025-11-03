@@ -20,6 +20,8 @@ from dataclasses import dataclass
 import paddle
 import pynvml
 
+from fastdeploy.platforms import current_platform
+
 
 @dataclass
 class PaddleMemoryInfo:
@@ -46,8 +48,11 @@ class GPUMemoryChecker:
         self.device_id = device_id
         self.print_debug_info = print_debug_info
 
-        pynvml.nvmlInit()
-        self.gpu_memory_handle = pynvml.nvmlDeviceGetHandleByIndex(self.device_id)
+        if current_platform.is_iluvatar():
+            self.gpu_memory_handle = None
+        else:
+            pynvml.nvmlInit()
+            self.gpu_memory_handle = pynvml.nvmlDeviceGetHandleByIndex(self.device_id)
 
     def __del__(self):
         """ """

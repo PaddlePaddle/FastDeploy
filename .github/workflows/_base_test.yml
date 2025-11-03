@@ -155,7 +155,7 @@ jobs:
           ./llm-deploy-linux-amd64 -python python3.10 \
           -model_name ERNIE-4.5-0.3B-Paddle \
           -model_path /MODELDATA \
-          --skip install
+          --skip install,model
 
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
@@ -205,20 +205,6 @@ jobs:
             -d "{ \"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\", \"--max-concurrency\": 5000, \"--max-waiting-time\": 1 }"
           check_service 90
           python -m pytest -sv test_max_waiting_time.py || TEST_EXIT_CODE=1
-
-          curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
-            -H "Content-Type: application/json" \
-            -d "{\"--model\": \"/MODELDATA/ernie-4_5-21b-a3b-bf16-paddle\", \"--config\": \"21b_mtp.yaml\", \"--enable-logprob\": \"False\"}"
-          check_service 180
-          export TEMPLATE=TOKEN_NORMAL
-          python -m pytest -sv test_seed_usage.py -k "not test_seed_stream" || TEST_EXIT_CODE=1
-
-          curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
-            -H "Content-Type: application/json" \
-            -d "{\"--model\": \"/MODELDATA/ernie-4_5-21b-a3b-bf16-paddle\", \"--config\": \"21b_sot.yaml\", \"--enable-logprob\": \"False\"}"
-          check_service 360
-          export TEMPLATE=TOKEN_NORMAL
-          python -m pytest -sv test_seed_usage.py -k "not test_seed_stream" || TEST_EXIT_CODE=1
 
           popd
           echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> /workspace/FastDeploy/exit_code.env

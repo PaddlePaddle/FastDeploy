@@ -43,8 +43,8 @@ class DefaultModelLoaderV1(BaseModelLoader):
 
     def clean_memory_fragments(self) -> None:
         """clean_memory_fragments"""
-        if current_platform.is_cuda():
-            paddle.device.cuda.empty_cache()
+        if current_platform.is_cuda() or current_platform.is_maca():
+            paddle.device.empty_cache()
             paddle.device.synchronize()
 
     @save_model()
@@ -64,6 +64,11 @@ class DefaultModelLoaderV1(BaseModelLoader):
         if fd_config.load_config.dynamic_load_weight:
             # register rl model
             import fastdeploy.rl  # noqa
+
+            if fd_config.speculative_config.model_type != "mtp":
+                architectures = architectures.replace("Ernie5ForCausalLM", "Ernie5MoeForCausalLM")
+            else:
+                architectures = architectures.replace("Ernie5ForCausalLM", "Ernie5MTPForCausalLM")
 
             architectures = architectures + "RL"
 

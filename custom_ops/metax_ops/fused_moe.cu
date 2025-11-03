@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #pragma once
 
+#include "fused_moe_op.h"
 #include "helper.h"
 #include "mc_fused_moe_helper.h"
-#include "fused_moe_op.h"
 
 __global__ void compute_total_rows_before_expert_kernel(
     int* sorted_experts,
@@ -43,7 +42,10 @@ void compute_total_rows_before_expert(int* sorted_indices,
       sorted_indices, total_indices, num_experts, total_rows_before_expert);
 }
 
-template <paddle::DataType T, typename ElementA, typename ElementB, typename ElementC>
+template <paddle::DataType T,
+          typename ElementA,
+          typename ElementB,
+          typename ElementC>
 void FusedMoeKernel(const paddle::Tensor& input,
                     const paddle::Tensor& gate_weight,
                     const paddle::Tensor& ffn1_weight,
@@ -63,26 +65,25 @@ void FusedMoeKernel(const paddle::Tensor& input,
 
   auto* output_data = output->data<data_t>();
 
-  auto moe_compute = McMoeHelper<data_t, ElementA, ElementB, ElementC>(quant_method);
+  auto moe_compute =
+      McMoeHelper<data_t, ElementA, ElementB, ElementC>(quant_method);
 
-  moe_compute.computeFFN(
-    &input,
-    &gate_weight,
-    &ffn1_weight,
-    ffn1_scale ? ffn1_scale.get_ptr() : nullptr,
-    ffn1_bias ? ffn1_bias.get_ptr() : nullptr,
-    &ffn2_weight,
-    ffn2_scale ? ffn2_scale.get_ptr() : nullptr,
-    ffn2_bias ? ffn2_bias.get_ptr() : nullptr,
-    nullptr,
-    moe_topk,
-    group_moe,
-    norm_topk_prob,
-    1.0,  // ComputeFFN
-    "ffn",
-    output);
+  moe_compute.computeFFN(&input,
+                         &gate_weight,
+                         &ffn1_weight,
+                         ffn1_scale ? ffn1_scale.get_ptr() : nullptr,
+                         ffn1_bias ? ffn1_bias.get_ptr() : nullptr,
+                         &ffn2_weight,
+                         ffn2_scale ? ffn2_scale.get_ptr() : nullptr,
+                         ffn2_bias ? ffn2_bias.get_ptr() : nullptr,
+                         nullptr,
+                         moe_topk,
+                         group_moe,
+                         norm_topk_prob,
+                         1.0,  // ComputeFFN
+                         "ffn",
+                         output);
 }
-
 
 std::vector<paddle::Tensor> FusedExpertMoe(
     const paddle::Tensor& input,
@@ -100,21 +101,28 @@ std::vector<paddle::Tensor> FusedExpertMoe(
   const auto input_type = input.dtype();
   auto output = paddle::empty_like(input);
 
+  if (output.dims()[0] == 0) {
+    return {output};
+  }
+
   switch (input_type) {
     case paddle::DataType::BFLOAT16:
-      FusedMoeKernel<paddle::DataType::BFLOAT16, maca_bfloat16, int8_t, maca_bfloat16>(input,
-                                                 gate_weight,
-                                                 ffn1_weight,
-                                                 ffn1_scale,
-                                                 ffn1_bias,
-                                                 ffn2_weight,
-                                                 ffn2_scale,
-                                                 ffn2_bias,
-                                                 quant_method,
-                                                 moe_topk,
-                                                 group_moe,
-                                                 norm_topk_prob,
-                                                 &output);
+      FusedMoeKernel<paddle::DataType::BFLOAT16,
+                     maca_bfloat16,
+                     int8_t,
+                     maca_bfloat16>(input,
+                                    gate_weight,
+                                    ffn1_weight,
+                                    ffn1_scale,
+                                    ffn1_bias,
+                                    ffn2_weight,
+                                    ffn2_scale,
+                                    ffn2_bias,
+                                    quant_method,
+                                    moe_topk,
+                                    group_moe,
+                                    norm_topk_prob,
+                                    &output);
       break;
     // case paddle::DataType::FLOAT16:
     //   FusedMoeKernel<paddle::DataType::FLOAT16>(input,
@@ -160,7 +168,6 @@ std::vector<paddle::DataType> FusedExpertMoeInferDtype(
     const paddle::optional<paddle::DataType>& ffn2_scale_dtype) {
   return {input_dtype};
 }
-
 
 PD_BUILD_OP(fused_expert_moe)
     .Inputs({"input",

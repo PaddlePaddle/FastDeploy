@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstrict-aliasing"
 #pragma GCC diagnostic ignored "-Wunused-function"
@@ -23,7 +22,6 @@
 #pragma GCC diagnostic pop
 
 #include "helper.h"
-
 
 template <paddle::DataType T>
 void MoeDispatchKernel(const paddle::Tensor& input,
@@ -128,7 +126,6 @@ void MoeDispatchKernel(const paddle::Tensor& input,
               false,
               stream);
 
-
   initialize_moe_routing_kernelLauncher(
       input.data<data_t>(),
       permute_input->data<data_t>(),
@@ -140,15 +137,12 @@ void MoeDispatchKernel(const paddle::Tensor& input,
       moe_topk,
       stream);
 
-
-  compute_total_rows_before_expert(
-      permuted_experts_,
-      moe_topk * num_rows,
-      expert_num,
-      tokens_expert_prefix_sum->data<int32_t>(),
-      stream);
+  compute_total_rows_before_expert(permuted_experts_,
+                                   moe_topk * num_rows,
+                                   expert_num,
+                                   tokens_expert_prefix_sum->data<int32_t>(),
+                                   stream);
 }
-
 
 std::vector<paddle::Tensor> MoeExpertDispatch(
     const paddle::Tensor& input,
@@ -184,6 +178,13 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
   auto permute_indices_per_token =
       GetEmptyTensor({moe_topk, num_rows}, paddle::DataType::INT32, place);
 
+  if (token_rows == 0) {
+    return {permute_input,
+            tokens_expert_prefix_sum,
+            permute_indices_per_token,
+            top_k_weight,
+            top_k_indices};
+  }
 
   switch (input_type) {
     case paddle::DataType::BFLOAT16:
@@ -226,7 +227,6 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
           top_k_indices};
 }
 
-
 std::vector<std::vector<int64_t>> MoeExpertDispatchInferShape(
     const std::vector<int64_t>& input_shape,
     const std::vector<int64_t>& gating_output_shape,
@@ -259,7 +259,6 @@ std::vector<paddle::DataType> MoeExpertDispatchInferDtype(
           paddle::DataType::FLOAT32,
           paddle::DataType::INT32};
 }
-
 
 PD_BUILD_OP(moe_expert_dispatch)
     .Inputs({"input", "gating_output"})

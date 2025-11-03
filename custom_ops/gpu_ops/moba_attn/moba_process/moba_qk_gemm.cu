@@ -25,6 +25,10 @@
 #include "cutlass/cluster_launch.hpp"
 #include "cutlass/arch/reg_reconfig.h"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
+
 template <typename input_type, int kBlockM, int kBlockN, int kMobaBlockSize, int kMaxN, int kHeadDim, bool is_split_kv>
 __global__ void qk_gemm_kernel(
         const input_type *q_input,
@@ -446,7 +450,7 @@ std::vector<paddle::Tensor> MobaQKGemm(
     }
 }
 
-PD_BUILD_OP(moba_qk_gemm)
+PD_BUILD_STATIC_OP(moba_qk_gemm)
     .Inputs({
         "q_input",
         "k_block_means",
