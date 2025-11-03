@@ -1,6 +1,7 @@
 # Adapted from https://github.com/thinking-machines-lab/batch_invariant_ops/blob/main/batch_invariant_ops/batch_invariant_ops.py
 
 import contextlib
+import os
 from collections import namedtuple
 from collections.abc import Callable
 from typing import Any, Dict
@@ -8,21 +9,23 @@ from typing import Any, Dict
 import paddle
 import triton
 import triton.language as tl
-# paddle.compat.use_torch_proxy_guard()
 
-__all__ = ["set_batch_invariant_mode", "is_batch_invariant_mode_enabled", "disable_batch_invariant_mode", "enable_batch_invariant_mode"]
+paddle.compat.enable_torch_proxy()
+
+__all__ = [
+    "set_batch_invariant_mode",
+    "is_batch_invariant_mode_enabled",
+    "disable_batch_invariant_mode",
+    "enable_batch_invariant_mode",
+]
 
 
-def _matmul_launch_metadata(
-    grid: Callable[..., Any], kernel: Any, args: Dict[str, Any]
-) -> Dict[str, Any]:
+def _matmul_launch_metadata(grid: Callable[..., Any], kernel: Any, args: Dict[str, Any]) -> Dict[str, Any]:
     ret = {}
     m, n, k = args["M"], args["N"], args["K"]
     ret["name"] = f"{kernel.name} [M={m}, N={n}, K={k}]"
     if "tiles_per_update" in args:
-        ret["name"] = (
-            f"{kernel.name} [M={m}, N={n}, K={k}, tiles_per_update={args['tiles_per_update']:02}]"
-        )
+        ret["name"] = f"{kernel.name} [M={m}, N={n}, K={k}, tiles_per_update={args['tiles_per_update']:02}]"
     if "c_ptr" in args:
         bytes_per_elem = args["c_ptr"].element_size()
     else:
@@ -122,20 +125,24 @@ def matmul_kernel_persistent(
         c = accumulator.to(c_ptr.dtype.element_ty)
         tl.store(c_ptrs, c, mask=c_mask)
 
+
 def get_compute_units():
     """
     Returns the number of streaming multiprocessors (SMs) or equivalent compute units
     for the available accelerator. Assigns the value to NUM_SMS.
     """
     NUM_SMS = None
-    
+
     if paddle.is_compiled_with_cuda():
         try:
-            paddle.device.get_device()#Triton + Paddle may can't get the device
+            paddle.device.get_device()  # Triton + Paddle may can't get the device
             device_properties = paddle.cuda.get_device_properties(0)
             NUM_SMS = device_properties.multi_processor_count
         except Exception:
             print("Could not get CUDA device properties. Falling back to CPU threads.")
+            # TODO: Paddle lacks a torch.get_num_threads() equivalent for the *configured* thread count.
+            # Using os.cpu_count() (total logical cores) as a fallback, which may not be correct.
+            # Must check downstream logic to determine if this impacts correctness.
             NUM_SMS = os.cpu_count()
     else:
         print("No CUDA device available. Using CPU.")
@@ -149,10 +156,7 @@ def matmul_persistent(a: paddle.Tensor, b: paddle.Tensor, bias: paddle.Tensor | 
     # Check constraints.
     assert a.shape[1] == b.shape[0], "Incompatible dimensions"
     assert a.dtype == b.dtype, "Incompatible dtypes"
-    assert bias is None or bias.dim() == 1, (
-        "Currently assuming bias is 1D, let Horace know if you run into this"
-    )
-
+    assert bias is None or bias.dim() == 1, "Currently assuming bias is 1D, let Horace know if you run into this"
 
     NUM_SMS = get_compute_units()
     M, K = a.shape
@@ -164,11 +168,7 @@ def matmul_persistent(a: paddle.Tensor, b: paddle.Tensor, bias: paddle.Tensor | 
 
     # 1D launch kernel where each block gets its own program.
     def grid(META):
-        return (
-            min(
-                NUM_SMS, triton.cdiv(M, META["BLOCK_SIZE_M"]) * triton.cdiv(N, META["BLOCK_SIZE_N"])
-            ),
-        )
+        return (min(NUM_SMS, triton.cdiv(M, META["BLOCK_SIZE_M"]) * triton.cdiv(N, META["BLOCK_SIZE_N"])),)
 
     configs = {
         paddle.bfloat16: {
@@ -296,7 +296,7 @@ def log_softmax(input: paddle.Tensor, dim: int = -1) -> paddle.Tensor:
     Returns:
         Tensor with log_softmax applied along the specified dimension
     """
-    #TODO:use axis not dim in paddle
+    # TODO:use axis not dim in paddle
     if dim != -1 and dim != input.ndim - 1:
         raise ValueError("This implementation only supports log_softmax along the last dimension")
 
@@ -392,9 +392,7 @@ def mean_dim(
     """
     # Validate inputs
     assert input.is_cuda, "Input must be a CUDA tensor"
-    assert -input.ndim <= dim < input.ndim, (
-        f"Invalid dimension {dim} for tensor with {input.ndim} dimensions"
-    )
+    assert -input.ndim <= dim < input.ndim, f"Invalid dimension {dim} for tensor with {input.ndim} dimensions"
 
     # Handle negative dim
     if dim < 0:
@@ -474,13 +472,13 @@ def mm_batch_invariant(a, b, transpose_x=False, transpose_y=False):
 
 
 def addmm_batch_invariant(bias, a, b, alpha=1.0, beta=1.0):
-    #TODO:check API
+    # TODO:check API
     result = matmul_persistent(a, b, bias=bias)
     return result
 
 
 def _log_softmax_batch_invariant(input, dim, _half_to_float):
-    #TODO:use axis not dim in Paddle
+    # TODO:use axis not dim in Paddle
     assert not _half_to_float, "not implemented"
     return log_softmax(input, dim=dim)
 
@@ -490,21 +488,14 @@ def mean_batch_invariant(input, dim, keepdim=False, dtype: paddle.dtype | None =
     if len(dim) == 1:
         return mean_dim(input, dim[0], keepdim=keepdim)
     else:
-        assert input.dtype in {paddle.float16, paddle.bfloat16, paddle.float32}, (
-            "only float types supported for now"
-        )
+        assert input.dtype in {paddle.float16, paddle.bfloat16, paddle.float32}, "only float types supported for now"
         n_elems = 1
         for d in dim:
             n_elems *= input.shape[d]
         return paddle.sum(input, dim=dim, keepdim=keepdim, dtype=paddle.float32) / n_elems
 
 
-_original_ops = {
-    'mm': None,
-    'addmm': None,
-    '_log_softmax': None,
-    'mean_dim': None
-}
+_original_ops = {"mm": None, "addmm": None, "_log_softmax": None, "mean_dim": None}
 
 _batch_invariant_MODE = False
 
@@ -517,17 +508,17 @@ def enable_batch_invariant_mode():
     global _batch_invariant_MODE, _original_ops
     if _batch_invariant_MODE:
         return
-    
-    _original_ops['mm'] = paddle._C_ops.matmul
-    _original_ops['addmm'] = paddle._C_ops.addmm
-    _original_ops['log_softmax'] = paddle.nn.functional.log_softmax
-    _original_ops['mean'] = paddle.mean
-    
+
+    _original_ops["mm"] = paddle._C_ops.matmul
+    _original_ops["addmm"] = paddle._C_ops.addmm
+    _original_ops["log_softmax"] = paddle.nn.functional.log_softmax
+    _original_ops["mean"] = paddle.mean
+
     paddle._C_ops.matmul = mm_batch_invariant
     paddle._C_ops.addmm = addmm_batch_invariant
     paddle.nn.functional.log_softmax = _log_softmax_batch_invariant
     paddle.mean = mean_batch_invariant
-    
+
     _batch_invariant_MODE = True
 
 
@@ -535,16 +526,16 @@ def disable_batch_invariant_mode():
     global _batch_invariant_MODE, _original_ops
     if not _batch_invariant_MODE:
         return
-    
-    if _original_ops['mm']:
-        paddle._C_ops.matmul = _original_ops['mm']
-    if _original_ops['addmm']:
-        paddle._C_ops.addmm = _original_ops['addmm']
-    if _original_ops['log_softmax']:
-        paddle.nn.functional.log_softmax = _original_ops['log_softmax']
-    if _original_ops['mean']:
-        paddle.mean = _original_ops['mean']
-    
+
+    if _original_ops["mm"]:
+        paddle._C_ops.matmul = _original_ops["mm"]
+    if _original_ops["addmm"]:
+        paddle._C_ops.addmm = _original_ops["addmm"]
+    if _original_ops["log_softmax"]:
+        paddle.nn.functional.log_softmax = _original_ops["log_softmax"]
+    if _original_ops["mean"]:
+        paddle.mean = _original_ops["mean"]
+
     _batch_invariant_MODE = False
 
 
