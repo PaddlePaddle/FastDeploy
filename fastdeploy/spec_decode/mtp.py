@@ -77,7 +77,7 @@ class MTPProposer(Proposer):
         self.enable_logprob = self.model_config.enable_logprob
 
         # [mixed, prefill, decoder]
-        self.role = "mixed"
+        self.role = self.scheduler_config.splitwise_role
 
         self.sampler = MTPSampler(fd_config)
         self._init_model_inputs()
@@ -365,6 +365,7 @@ class MTPProposer(Proposer):
         )
         # self.model_inputs["caches"] = self.cache_kvs
         # Inherit generation hyperparameters from the main model for consistency
+        self.model_inputs["prompt_lens"] = self.target_model_inputs["prompt_lens"]
         self.model_inputs["top_p"] = self.target_model_inputs["top_p"]
         self.model_inputs["top_k"] = self.target_model_inputs["top_k"]
         self.model_inputs["temperature"] = self.target_model_inputs["temperature"]
@@ -501,9 +502,10 @@ class MTPProposer(Proposer):
                 self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.model_inputs["is_block_step"][idx : idx + 1] = False
                 continue
-        # if has_prefill_task or has_decode_task:
-        #     self.model_inputs["not_need_stop"][0] = True
-        self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
+
+        # TODO(liuzichang): Solve splitewise-p bug to restore
+        # self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
+        self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         """
@@ -704,11 +706,25 @@ class MTPProposer(Proposer):
             self.model_inputs["substep"],
         )
         if self.role == "prefill" and self.parallel_config.tensor_parallel_rank == 0:
+            skip_save = bool(int(envs.ENABLE_V1_KVCACHE_SCHEDULER))
             mtp_save_first_token(
                 self.model_inputs["base_model_draft_tokens"],
                 self.model_inputs["not_need_stop"],
+                self.model_inputs["seq_lens_decoder"],
+                self.model_inputs["prompt_lens"],
+                self.model_inputs["step_idx"],
                 self.local_rank,
                 self.parallel_config.use_ep,
+                skip_save,
+            )
+            # Ensure only save first token once.
+            paddle.assign(
+                paddle.where(
+                    self.model_inputs["stop_flags"],
+                    paddle.zeros_like(self.model_inputs["step_idx"]),
+                    self.model_inputs["step_idx"],
+                ),
+                self.model_inputs["step_idx"],
             )
 
     def _propose(self, step_use_cudagraph: bool = False):
