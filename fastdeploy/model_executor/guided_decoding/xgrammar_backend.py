@@ -86,6 +86,7 @@ class XGrammarProcessor(LogitsProcessorBase):
             terminate_without_stop_token=terminate_without_stop_token,
             override_stop_tokens=override_stop_tokens,
         )
+        self.is_terminated: bool = False
 
     def allocate_token_bitmask(self) -> torch.Tensor:
         """
@@ -162,16 +163,17 @@ class XGrammarProcessor(LogitsProcessorBase):
         Raises:
             AssertionError: If token is not allowed by the grammar
         """
-        assert self.matcher.accept_token(token), f"Failed to accept token {token}"
-
-    def is_terminated(self) -> bool:
-        """
-        Check if the grammar matching process has terminated.
-
-        Returns:
-            bool: True if matching has terminated, False otherwise
-        """
-        return self.matcher.is_terminated()
+        if self.is_terminated:
+            return True
+        if self.matcher.is_terminated():
+            self.is_terminated = True
+            return False
+        if not self.matcher.accept_token(token):
+            self.matcher.reset()
+            return False
+        if self.matcher.is_terminated():
+            self.is_terminated = True
+        return True
 
     def copy(self) -> "XGrammarProcessor":
         """
@@ -216,7 +218,13 @@ class XGrammarBackend(BackendBase):
 
         try:
             tokenizer_info = TokenizerInfo.from_huggingface(self.hf_tokenizer, vocab_size=self.vocab_size)
-            self.grammar_compiler = GrammarCompiler(tokenizer_info=tokenizer_info)
+            llm_logger.info(f"xgrammar_backend.py tokenzer_info={tokenizer_info.dump_metadata()}")
+            self.grammar_compiler = GrammarCompiler(
+                tokenizer_info=tokenizer_info,
+                max_threads=8,
+                cache_enabled=True,
+                cache_limit_bytes=4 * 1024 * 1024,
+            )  # TODO cfg
         except Exception as e:
             raise Exception(f"Failed to load XGrammar tokenizer: {e}")
 
