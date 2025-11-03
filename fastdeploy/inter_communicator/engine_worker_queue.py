@@ -29,7 +29,6 @@ from typing import Any, List, Tuple
 import numpy as np
 import paddle
 
-from fastdeploy import envs
 from fastdeploy.utils import llm_logger
 
 
@@ -305,16 +304,15 @@ class EngineWorkerQueue:
             tasks: List of tasks containing multimodal inputs.
         """
         try:
-            if envs.FD_ENABLE_MAX_PREFILL:
-                llm_logger.debug(f"Convert image to tensor, type: {type(tasks)}")
-                batch_tasks, _ = tasks
-                for task in batch_tasks:
-                    if not hasattr(task, "multimodal_inputs"):
-                        continue
-                    images = task.multimodal_inputs["images"]
-                    if isinstance(images, np.ndarray):
-                        llm_logger.debug(f"Convert image to tensor, shape: {images.shape}")
-                        task.multimodal_inputs["images"] = paddle.to_tensor(images)
+            llm_logger.debug(f"Convert image to tensor, type: {type(tasks)}")
+            batch_tasks, _ = tasks
+            for task in batch_tasks:
+                if not hasattr(task, "multimodal_inputs"):
+                    continue
+                images = task.multimodal_inputs["images"]
+                if isinstance(images, np.ndarray):
+                    llm_logger.debug(f"Convert image to tensor, shape: {images.shape}")
+                    task.multimodal_inputs["images"] = paddle.to_tensor(images)
         except Exception as e:
             llm_logger.warning(f"Failed to convert to tensor: {e}")
 
@@ -327,15 +325,14 @@ class EngineWorkerQueue:
             tasks: List of tasks containing multimodal inputs.
         """
         try:
-            if envs.FD_ENABLE_MAX_PREFILL:
-                for batch_tasks, _ in tasks:
-                    for task in batch_tasks:
-                        if not hasattr(task, "multimodal_inputs"):
-                            continue
-                        images = task.multimodal_inputs.get("images", None)
-                        if isinstance(images, paddle.Tensor):
-                            llm_logger.debug(f"Convert image to numpy, shape: {images.shape}")
-                            task.multimodal_inputs["images"] = images.numpy()
+            for batch_tasks, _ in tasks:
+                for task in batch_tasks:
+                    if not hasattr(task, "multimodal_inputs"):
+                        continue
+                    images = task.multimodal_inputs.get("images", None)
+                    if isinstance(images, paddle.Tensor):
+                        llm_logger.debug(f"Convert image to numpy, shape: {images.shape}")
+                        task.multimodal_inputs["images"] = images.numpy()
         except Exception as e:
             llm_logger.warning(f"Failed to convert to numpy: {e}")
 
