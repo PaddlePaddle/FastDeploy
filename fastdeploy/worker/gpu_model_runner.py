@@ -1707,7 +1707,7 @@ class GPUModelRunner(ModelRunnerBase):
             accept_all_drafts: Target model will accept all draft tokens
             reject_all_drafts: Target model will reject all draft tokens
         """
-
+        logger.info(f"capture_prefill: {capture_prefill}")
         input_length_list, max_dec_len_list, block_num = self.get_input_length_list(
             num_tokens=num_tokens,
             batch_size=batch_size,
@@ -1725,7 +1725,7 @@ class GPUModelRunner(ModelRunnerBase):
                 batch_size=batch_size,
                 expected_decode_len=expected_decode_len,
             )
-
+        logger.info("after _dummy_prefill_inputs")
         while True:
             # 1. Initialize forward meta and attention meta data
             self._prepare_inputs()
@@ -1734,6 +1734,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
             self.padding_cudagraph_inputs()
 
+            logger.info("dummy Run model")
             # 3. Run model
             if self.enable_mm:
                 model_output = self.model(
@@ -1746,9 +1747,10 @@ class GPUModelRunner(ModelRunnerBase):
                     ids_remove_padding=self.share_inputs["ids_remove_padding"],
                     forward_meta=self.forward_meta,
                 )
+            logger.info("dummy Run model done")
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
-
+            logger.info("rebuild padding start")
             hidden_states = rebuild_padding(
                 model_output,
                 self.share_inputs["cu_seqlens_q"],
@@ -1760,16 +1762,17 @@ class GPUModelRunner(ModelRunnerBase):
                 ),  # speculative decoding requires
                 self.model_config.max_model_len,
             )
-
+            logger.info("rebuild padding done")
             if self.is_pooling_model:
                 self._dummy_pooler_run(hidden_states)
                 break
             else:
                 self._dummy_sampler_run(hidden_states, model_output, accept_all_drafts, reject_all_drafts)
-
+            logger.info("sampler done")
             # 7. Updata 'infer_seed' and step_cuda()
             self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
             self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
+            logger.info("step cuda start")
             step_cuda(
                 self.share_inputs,
                 self.cache_config.block_size,
@@ -1777,6 +1780,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.speculative_config,
                 self.cache_config.enable_prefix_caching,
             )
+            logger.info("step cuda done")
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
                 break
 
@@ -2234,20 +2238,23 @@ class GPUModelRunner(ModelRunnerBase):
         # Initialize kv cache for profile run. After profile run kv cache will be reset.
         # TODO(gongshaotian): Optimize the management logic of kvcache
         self.num_gpu_blocks = self.cache_config.total_block_num
+        logger.info("Profile run")
         self.initialize_kv_cache(profile=True)
+        logger.info("initialize_kv_cache run done")
         if self.speculative_method in ["mtp"]:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
 
         # 1. Profile with multimodal encoder & encoder cache
-
+        logger.info("Profile multimodal encoder & encoder cache")
         # 2. Dummy run
         self._dummy_run(
             num_tokens=self.scheduler_config.max_num_batched_tokens,
             batch_size=self.scheduler_config.max_num_seqs,
         )
-
+        logger.info("_dummy_run run done")
         # 3. gc
         self.clear_cache()
+        logger.info("clear_cache run done")
         if self.speculative_method in ["mtp"]:
             self.proposer.clear_mtp_cache()
 

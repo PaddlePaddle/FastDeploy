@@ -134,20 +134,22 @@ class GpuWorker(WorkerBase):
 
         # 2. Profile run
         self.model_runner.profile_run()
+        logger.info("Profile run is done.")
         set_random_seed(self.fd_config.model_config.seed)
-
+        logger.info("set_random_seed is done.")
         # 3. Statistical memory information
         paddle_reserved_mem_after_run = paddle.device.cuda.max_memory_reserved(local_rank)
         paddle_allocated_mem_after_run = paddle.device.cuda.max_memory_allocated(local_rank)
-
+        logger.info("Paddle allocated memory after profile run is done.")
         model_block_memory_used = self.cal_theortical_kvcache()
+        logger.info("cal_theortical_kvcache is done.")
         paddle_peak_increase = paddle_allocated_mem_after_run - paddle_allocated_mem_before_run
 
         paddle.device.cuda.empty_cache()
-
+        logger.info("cuda empty cache is done.")
         after_run_meminfo = pynvml.nvmlDeviceGetMemoryInfo(handle)
         pynvml.nvmlShutdown()
-
+        logger.info("nvmlShutdown is done.")
         available_kv_cache_memory = (
             after_run_meminfo.total * self.cache_config.gpu_memory_utilization
             - after_run_meminfo.used
