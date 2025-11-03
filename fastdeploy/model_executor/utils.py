@@ -261,9 +261,9 @@ def v1_loader_support(fd_config):
     def _err_msg(msg: str) -> str:
         logger.info(msg + "; fallback to the v0 loader for model loading.")
 
-    if not current_platform.is_cuda():
-        _err_msg("v1loader currently does not support backends other than CUDA")
-        return False
+    # if not current_platform.is_cuda():
+    #     _err_msg("v1loader currently does not support backends other than CUDA")
+    #     return False
 
     if is_pre_sliced_weight(fd_config.model_config.model):
         _err_msg("v1 loader currently does not support pre-sliced weights")
