@@ -38,12 +38,19 @@ class Proposer(ABC):
         Init Speculative proposer
         """
         fd_config.parallel_config.tp_group = None
+        fd_config.parallel_config.ep_group = None
         self.fd_config = deepcopy(fd_config)
         fd_config.parallel_config.tp_group = dist.get_group(
             fd_config.parallel_config.data_parallel_rank + envs.FD_TP_GROUP_GID_OFFSET
         )
+        fd_config.parallel_config.ep_group = dist.get_group(
+            fd_config.parallel_config.data_parallel_size + envs.FD_TP_GROUP_GID_OFFSET
+        )
         self.fd_config.parallel_config.tp_group = dist.get_group(
             fd_config.parallel_config.data_parallel_rank + envs.FD_TP_GROUP_GID_OFFSET
+        )
+        self.fd_config.parallel_config.ep_group = dist.get_group(
+            fd_config.parallel_config.data_parallel_size + envs.FD_TP_GROUP_GID_OFFSET
         )
         self.parallel_config = self.fd_config.parallel_config
         self.model_config = self.fd_config.model_config
@@ -61,6 +68,8 @@ class Proposer(ABC):
 
         self.max_ngram_size = self.speculative_config.max_ngram_size
         self.min_ngram_size = self.speculative_config.min_ngram_size
+
+        self.enable_mm = self.model_config.enable_mm
 
         spec_logger.info(f"Speculate config: {self.speculative_config}")
 

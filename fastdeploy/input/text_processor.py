@@ -246,7 +246,7 @@ class DataProcessor(BaseDataProcessor):
                 if chat_template_kwargs:
                     if isinstance(chat_template_kwargs, dict):
                         for k, v in chat_template_kwargs.items():
-                            if k not in task:
+                            if k not in task or task[k] is None:
                                 task[k] = v
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
@@ -427,6 +427,8 @@ class DataProcessor(BaseDataProcessor):
                 )
                 response_dict["outputs"]["text"] = text
                 response_dict["outputs"]["reasoning_content"] = reasoning_content
+                reasoning_tokens = self.tokenizer.tokenize(reasoning_content)
+                response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
             if self.tool_parser_obj:
                 tool_parser = self.tool_parser_obj(self.tokenizer)
                 tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
@@ -469,6 +471,9 @@ class DataProcessor(BaseDataProcessor):
                 self.model_status_dict[req_id],
             )
             response_dict["outputs"]["delta_message"] = reasoning_delta_message
+            reasoning_content = reasoning_delta_message.reasoning_content if reasoning_delta_message else None
+            reasoning_tokens = self.tokenizer.tokenize(reasoning_content) if reasoning_content else []
+            response_dict["outputs"]["reasoning_token_num"] = len(reasoning_tokens)
         if self.tool_parser_obj:
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)

@@ -14,19 +14,22 @@
 
 // BUILD_MARK
 #pragma once
-#include "mc_fused_moe_helper.h"
 #include "helper.h"
+#include "mc_fused_moe_helper.h"
 
-template <paddle::DataType T, typename ElementA, typename ElementB, typename ElementC>
+template <paddle::DataType T,
+          typename ElementA,
+          typename ElementB,
+          typename ElementC>
 void McMoeFFNKernel(const paddle::Tensor& permute_input,
-                 const paddle::Tensor& tokens_expert_prefix_sum,
-                 const paddle::Tensor& ffn1_weight,
-                 const paddle::Tensor& ffn2_weight,
-                 const paddle::optional<paddle::Tensor>& ffn1_bias,
-                 const paddle::optional<paddle::Tensor>& ffn1_scale,
-                 const paddle::optional<paddle::Tensor>& ffn2_scale,
-                 const std::string& quant_method,
-                 paddle::Tensor ffn_out) {
+                    const paddle::Tensor& tokens_expert_prefix_sum,
+                    const paddle::Tensor& ffn1_weight,
+                    const paddle::Tensor& ffn2_weight,
+                    const paddle::optional<paddle::Tensor>& ffn1_bias,
+                    const paddle::optional<paddle::Tensor>& ffn1_scale,
+                    const paddle::optional<paddle::Tensor>& ffn2_scale,
+                    const std::string& quant_method,
+                    paddle::Tensor ffn_out) {
   typedef PDTraits<T> traits_;
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
@@ -37,61 +40,65 @@ void McMoeFFNKernel(const paddle::Tensor& permute_input,
   auto input_type = permute_input.dtype();
   auto stream = permute_input.stream();
 
-  const int expanded_active_expert_rows = permute_input.dims()[0]; // permute_input.dims(): m, k
-  const int num_experts = ffn1_weight.dims()[0]; // batchsize
-  const int hidden_size = ffn1_weight.dims()[2]; // n
-  int inter_dim = ffn1_weight.dims()[1]; // k
+  const int expanded_active_expert_rows =
+      permute_input.dims()[0];                    // permute_input.dims(): m, k
+  const int num_experts = ffn1_weight.dims()[0];  // batchsize
+  const int hidden_size = ffn1_weight.dims()[2];  // n
+  int inter_dim = ffn1_weight.dims()[1];          // k
 
-  const int64_t inter_size = inter_dim; // since weight_only_int_8
+  const int64_t inter_size = inter_dim;  // since weight_only_int_8
   paddle::Tensor fc1_out_tensor = GetEmptyTensor(
       {expanded_active_expert_rows, inter_size}, input_type, place);
   auto fc1_out_ptr = fc1_out_tensor.data<data_t>();
 
   mctlassExOrder_t row_major = mctlassExOrder_t::MCTLASS_EX_ORDER_ROW_MAJOR;
-  mctlassExOrder_t column_major = mctlassExOrder_t::MCTLASS_EX_ORDER_COLUMN_MAJOR;
+  mctlassExOrder_t column_major =
+      mctlassExOrder_t::MCTLASS_EX_ORDER_COLUMN_MAJOR;
 
   // ffn1
   auto fc1_expert_biases =
-    ffn1_bias
-        ? const_cast<paddle::Tensor*>(ffn1_bias.get_ptr())->data<data_t>()
-        : nullptr;
-  auto fc1_expert_scales = const_cast<paddle::Tensor*>(ffn1_scale.get_ptr())->data<data_t>();
+      ffn1_bias
+          ? const_cast<paddle::Tensor*>(ffn1_bias.get_ptr())->data<data_t>()
+          : nullptr;
+  auto fc1_expert_scales =
+      const_cast<paddle::Tensor*>(ffn1_scale.get_ptr())->data<data_t>();
   mc_grouped_gemm_basic_kernel<ElementA, ElementB, ElementC>(
-    reinterpret_cast<const ElementA *>(permuted_input_ptr),
-    row_major,
-    reinterpret_cast<const ElementB *>(ffn1_weight.data<ElementB>()),
-    column_major,
-    reinterpret_cast<const ElementA *>(fc1_expert_scales),
-    reinterpret_cast<const ElementA *>(fc1_expert_biases),
-    reinterpret_cast<ElementC *>(fc1_out_ptr),
-    row_major,
-    tokens_expert_prefix_sum.data<int>(),
-    num_experts,
-    expanded_active_expert_rows,
-    inter_dim,
-    hidden_size,
-    stream);
+      reinterpret_cast<const ElementA*>(permuted_input_ptr),
+      row_major,
+      reinterpret_cast<const ElementB*>(ffn1_weight.data<ElementB>()),
+      column_major,
+      reinterpret_cast<const ElementA*>(fc1_expert_scales),
+      reinterpret_cast<const ElementA*>(fc1_expert_biases),
+      reinterpret_cast<ElementC*>(fc1_out_ptr),
+      row_major,
+      tokens_expert_prefix_sum.data<int>(),
+      num_experts,
+      expanded_active_expert_rows,
+      inter_dim,
+      hidden_size,
+      stream);
 
   // swiglu
   auto act_out_tensor = paddle::experimental::swiglu(fc1_out_tensor, nullptr);
   auto act_out = act_out_tensor.data<data_t>();
 
-  auto fc2_expert_scales = const_cast<paddle::Tensor*>(ffn2_scale.get_ptr())->data<data_t>();
+  auto fc2_expert_scales =
+      const_cast<paddle::Tensor*>(ffn2_scale.get_ptr())->data<data_t>();
   mc_grouped_gemm_basic_kernel<ElementA, ElementB, ElementC>(
-    reinterpret_cast<const ElementA *>(act_out),
-    row_major,
-    reinterpret_cast<const ElementB *>(ffn2_weight.data<ElementB>()),
-    column_major,
-    reinterpret_cast<const ElementA *>(fc2_expert_scales),
-    nullptr,
-    reinterpret_cast<ElementC *>(ffn_out_ptr),
-    row_major,
-    tokens_expert_prefix_sum.data<int>(),
-    num_experts,
-    expanded_active_expert_rows,
-    hidden_size,
-    inter_dim / 2,
-    stream);
+      reinterpret_cast<const ElementA*>(act_out),
+      row_major,
+      reinterpret_cast<const ElementB*>(ffn2_weight.data<ElementB>()),
+      column_major,
+      reinterpret_cast<const ElementA*>(fc2_expert_scales),
+      nullptr,
+      reinterpret_cast<ElementC*>(ffn_out_ptr),
+      row_major,
+      tokens_expert_prefix_sum.data<int>(),
+      num_experts,
+      expanded_active_expert_rows,
+      hidden_size,
+      inter_dim / 2,
+      stream);
 }
 
 std::vector<paddle::Tensor> MoeExpertFFN(
@@ -109,15 +116,18 @@ std::vector<paddle::Tensor> MoeExpertFFN(
 
   switch (input_type) {
     case paddle::DataType::BFLOAT16:
-      McMoeFFNKernel<paddle::DataType::BFLOAT16, maca_bfloat16, int8_t, maca_bfloat16>(permute_input,
-                                               tokens_expert_prefix_sum,
-                                               ffn1_weight,
-                                               ffn2_weight,
-                                               ffn1_bias,
-                                               ffn1_scale,
-                                               ffn2_scale,
-                                               quant_method,
-                                               ffn_out);
+      McMoeFFNKernel<paddle::DataType::BFLOAT16,
+                     maca_bfloat16,
+                     int8_t,
+                     maca_bfloat16>(permute_input,
+                                    tokens_expert_prefix_sum,
+                                    ffn1_weight,
+                                    ffn2_weight,
+                                    ffn1_bias,
+                                    ffn1_scale,
+                                    ffn2_scale,
+                                    quant_method,
+                                    ffn_out);
       break;
     // case paddle::DataType::FLOAT16:
     //   MoeFFNKernel<paddle::DataType::FLOAT16>(permute_input,

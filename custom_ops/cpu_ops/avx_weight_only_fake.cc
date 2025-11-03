@@ -19,28 +19,28 @@ std::vector<paddle::Tensor> InvokeAvxWeightOnly(const paddle::Tensor &x,
                                                 const paddle::Tensor &w_bias,
                                                 const std::string &alog,
                                                 bool trans) {
-    auto out_shape = x.shape();
-    out_shape[out_shape.size() - 1] = weight.shape()[1];
-    auto out = paddle::empty(out_shape, x.dtype(), paddle::CPUPlace());
-    return {out};
+  auto out_shape = x.shape();
+  out_shape[out_shape.size() - 1] = weight.shape()[1];
+  auto out = paddle::empty(out_shape, x.dtype(), paddle::CPUPlace());
+  return {out};
 }
 
 std::vector<std::vector<int64_t>> AvxWeightOnlyInferShape(
     std::vector<int64_t> x_shape,
     std::vector<int64_t> weigh_shape,
     std::vector<int64_t> weigh_bias_shape) {
-    int m = 1;
-    for (int i = 0; i < x_shape.size() - 1; i++) {
-        m = m * x_shape[i];
-    }
-    return {std::vector<int64_t>{m, weigh_shape[1]}};
+  int m = 1;
+  for (int i = 0; i < x_shape.size() - 1; i++) {
+    m = m * x_shape[i];
+  }
+  return {std::vector<int64_t>{m, weigh_shape[1]}};
 }
 
 std::vector<paddle::DataType> AvxWeightOnlyInferDtype(
     paddle::DataType x_dtype,
     paddle::DataType weight_dtype,
     paddle::DataType weight_bias_dtype) {
-    return {x_dtype};
+  return {x_dtype};
 }
 
 PD_BUILD_STATIC_OP(avx_weight_only)

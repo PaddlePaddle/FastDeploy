@@ -34,6 +34,10 @@ from fastdeploy.model_executor.graph_optimization.utils import in_profile_run_mo
 from fastdeploy.model_executor.graph_optimization.utils import (
     in_sot_warmup_mode as in_warmup_mode,
 )
+from fastdeploy.utils import get_logger
+
+logger = get_logger("cudagrpah_piecewise_backend", "cudagraph_piecewise_backend.log")
+
 
 P = ParamSpec("P")
 T = TypeVar("T")
@@ -102,9 +106,12 @@ class GraphOptBackend:
 
     def __init__(self, runnable: Callable, fd_config: FDConfig):
         self.runnable = runnable
+        self.dy_runnable = self.runnable
         self.fd_config = fd_config
-
         self.max_captre_size = fd_config.graph_opt_config.cudagraph_capture_sizes[0]
+        self._debug_count_cudagraph_replay = 0
+        self._debug_count_total_step = 0
+
         if self.fd_config.graph_opt_config.graph_opt_level > 0:
             # 1. Prepare cuda graph input buffers (contain output of subgraphs)
 
@@ -118,7 +125,12 @@ class GraphOptBackend:
                 backend,
             ).__get__(self.runnable.__self__)
 
+        self.cudagraph_switch_threshold = (
+            1024 if self.fd_config.graph_opt_config.graph_opt_level > 0 else self.max_captre_size
+        )
+
     def __call__(self, **kwargs):
+        self._debug_count_total_step += 1
         if not self.fd_config.graph_opt_config.use_cudagraph:
             return self.runnable(**kwargs)
         if self.cudagraph_piecewise_backend is None:
@@ -129,9 +141,13 @@ class GraphOptBackend:
         assert kwargs["forward_meta"].ids_remove_padding is not None
         real_shape = kwargs["forward_meta"].ids_remove_padding.shape[0]
 
-        if (not kwargs["forward_meta"].step_use_cudagraph) or (real_shape > self.max_captre_size):
-            return self.runnable(**kwargs)
+        if (not kwargs["forward_meta"].step_use_cudagraph) or (real_shape > self.cudagraph_switch_threshold):
+            return self.dy_runnable(**kwargs)
         else:
+            self._debug_count_cudagraph_replay += 1
+            logger.debug(
+                f"[CUDA GRAPH][ID:{id(self.cudagraph_piecewise_backend)}] Total step count: {self._debug_count_total_step}, CUDAGraph replay count: {self._debug_count_cudagraph_replay}"
+            )
             return self.cudagraph_piecewise_backend.__call__(**kwargs)
 
     def clear_cudagraph_piecewise_backend(self):
