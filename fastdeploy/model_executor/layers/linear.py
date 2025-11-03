@@ -409,9 +409,9 @@ class ColumnParallelLinear(LinearBase):
             skip_quant (bool): Whether to skip quantization. Defaults to False.
         """
         self.fd_config = fd_config
-        self.tp_size = fd_config.parallel_config.tensor_parallel_size
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.input_size = input_size
-        self.output_size = divide(output_size, self.tp_size)  # Split the output_size using TP inference.
+        self.output_size = divide(output_size, self.nranks)  # Split the output_size using TP inference.
         self.hidden_size = fd_config.model_config.hidden_size
 
         super().__init__(
@@ -435,7 +435,7 @@ class ColumnParallelLinear(LinearBase):
             model_format=fd_config.model_config.model_format,
         )
 
-        if self.tp_size > 0:
+        if self.nranks > 0:
             if self.with_bias:
                 # col parallel
                 _set_var_distributed(self.bias, split_axis=1)
@@ -478,7 +478,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         """
         self.activation = activation
         self.hidden_size = fd_config.model_config.hidden_size
-        self.tp_size = fd_config.parallel_config.tensor_parallel_size
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.output_size = output_size
         self.local_rank = fd_config.parallel_config.tensor_parallel_rank
 
@@ -507,8 +507,8 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             # Loaded weight is already fused on disk.
             shard_offsets = [
                 # (shard_id, shard_offset, shard_size)
-                ("gate", 0, output_size * self.tp_size // 2),
-                ("up", output_size * self.tp_size // 2, output_size * self.tp_size // 2),
+                ("gate", 0, output_size * self.nranks // 2),
+                ("up", output_size * self.nranks // 2, output_size * self.nranks // 2),
             ]
             for shard_id, shard_offset, shard_size in shard_offsets:
                 loaded_weight_shard = slice_fn(
@@ -522,13 +522,13 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
                 loaded_weight = get_tensor(loaded_weight)
                 loaded_weight = loaded_weight.transpose([1, 0])
             # Tensor parallelism splits the weight along the output_dim
-            if self.tp_size != 1:
+            if self.nranks != 1:
                 dim = -1 if output_dim else 0
                 if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
                     size = loaded_weight.shape[dim]
                 else:
                     size = loaded_weight.get_shape()[dim]
-                block_size = size // self.tp_size
+                block_size = size // self.nranks
                 shard_offset = self.local_rank * block_size
                 shard_size = (self.local_rank + 1) * block_size
                 loaded_weight = slice_fn(loaded_weight, output_dim, start=shard_offset, end=shard_size)
@@ -604,15 +604,15 @@ class QKVParallelLinear(ColumnParallelLinear):
         self.kv_num_heads = fd_config.model_config.num_key_value_heads
         self.hidden_size = fd_config.model_config.hidden_size
         self.head_dim = fd_config.model_config.head_dim
-        self.tp_size = fd_config.parallel_config.tensor_parallel_size
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.local_rank = fd_config.parallel_config.tensor_parallel_rank
-        self.num_heads_per_rank = divide(self.num_heads, self.tp_size)
-        if self.kv_num_heads < self.tp_size and self.tp_size % self.kv_num_heads == 0:
+        self.num_heads_per_rank = divide(self.num_heads, self.nranks)
+        if self.kv_num_heads < self.nranks and self.nranks % self.kv_num_heads == 0:
             self.kv_num_heads_per_rank = 1
-            self.num_kv_head_replicas = divide(self.tp_size, self.kv_num_heads)
-            output_size = (self.num_heads + 2 * self.tp_size) * self.head_dim
+            self.num_kv_head_replicas = divide(self.nranks, self.kv_num_heads)
+            output_size = (self.num_heads + 2 * self.nranks) * self.head_dim
         else:
-            self.kv_num_heads_per_rank = divide(self.kv_num_heads, self.tp_size)
+            self.kv_num_heads_per_rank = divide(self.kv_num_heads, self.nranks)
             self.num_kv_head_replicas = 1
             output_size = (self.num_heads + 2 * self.kv_num_heads) * self.head_dim
         input_size = self.hidden_size
@@ -664,7 +664,7 @@ class QKVParallelLinear(ColumnParallelLinear):
                 loaded_weight = get_tensor(loaded_weight)
                 loaded_weight = loaded_weight.transpose([1, 0])
             # Tensor parallelism splits the weight along the output_dim
-            if self.tp_size != 1:
+            if self.nranks != 1:
                 block_size = self._get_shard_size_mapping(loaded_shard_id, head_dim)
                 shard_id = self.local_rank if loaded_shard_id == "q" else self.local_rank // self.num_kv_head_replicas
                 shard_offset = shard_id * block_size
@@ -719,10 +719,10 @@ class QKVParallelLinear(ColumnParallelLinear):
             k_tensor = get_tensor(state_dict.pop(k_weight_key))
             v_tensor = get_tensor(state_dict.pop(v_weight_key))
 
-            if self.kv_num_heads < self.tp_size:
+            if self.kv_num_heads < self.nranks:
                 sharedkv_index = (
                     self.fd_config.parallel_config.tensor_parallel_rank * self.kv_num_heads
-                ) // self.tp_size
+                ) // self.nranks
                 sharedkv_start = sharedkv_index * self.head_dim
                 sharedkv_end = sharedkv_start + self.head_dim
                 k_tensor = k_tensor[:, sharedkv_start:sharedkv_end]
@@ -815,14 +815,14 @@ class RowParallelLinear(LinearBase):
         """
         self.fd_config = fd_config
         self.skip_quant = False
-        self.tp_size = fd_config.parallel_config.tensor_parallel_size
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.tp_group = fd_config.parallel_config.tp_group
         self.hidden_size = fd_config.model_config.hidden_size
         self.head_dim = fd_config.model_config.head_dim
-        self.num_heads = fd_config.model_config.num_attention_heads // self.tp_size
+        self.num_heads = fd_config.model_config.num_attention_heads // self.nranks
 
         # Split input_size when using TP inference.
-        self.input_size = divide(input_size, self.tp_size)
+        self.input_size = divide(input_size, self.nranks)
         self.output_size = output_size
 
         super().__init__(
@@ -847,7 +847,7 @@ class RowParallelLinear(LinearBase):
             ),
             model_format=fd_config.model_config.model_format,
         )
-        if self.tp_size > 0:
+        if self.nranks > 0:
             if self.with_bias:
                 # col parallel
                 _set_var_distributed(self.bias, split_axis=0)
@@ -860,7 +860,7 @@ class RowParallelLinear(LinearBase):
         else:
             out = paddle.matmul(x, self.weight)
 
-        if self.reduce_results and self.tp_size > 1:
+        if self.reduce_results and self.nranks > 1:
             out = tensor_model_parallel_all_reduce(out, self.tp_group)
         if not self.fd_config.quant_config and self.add_bias:
             out = paddle.add(out, self.bias)
@@ -896,13 +896,13 @@ class KVBatchLinear(nn.Layer):
             skip_quant (bool): Whether to skip quantization. Defaults to False.
         """
         super().__init__()
-        self.tp_size = fd_config.parallel_config.tensor_parallel_size
+        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.kv_lora_rank = kv_lora_rank
         self.num_attention_heads = num_attention_heads
         self.qk_nope_head_dim = qk_nope_head_dim
         self.v_head_dim = v_head_dim
         # Split num_attention_heads when using TP inference.
-        self.num_heads_per_partition = divide(num_attention_heads, self.tp_size)
+        self.num_heads_per_partition = divide(num_attention_heads, self.nranks)
         self.local_rank = fd_config.parallel_config.tensor_parallel_rank
 
         self.kv_b_proj = kv_b_proj
