@@ -305,6 +305,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/merge_prefill_decode_output.cu",
         "gpu_ops/limit_thinking_content_length_v1.cu",
         "gpu_ops/limit_thinking_content_length_v2.cu",
+        "gpu_ops/update_attn_mask_offsets.cu",
     ]
 
     # pd_disaggregation
