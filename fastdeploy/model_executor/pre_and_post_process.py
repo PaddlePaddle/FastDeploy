@@ -406,7 +406,7 @@ def post_process_normal(
                 output = _build_stream_transfer_data(
                     sampler_output.sampled_token_ids,
                     logprobs=sampler_output.logprobs_tensors,
-                    prompt_logprobs=model_output.prompt_logprobs_list,
+                    prompt_logprobs_list=model_output.prompt_logprobs_list,
                 )
                 async_output_queue.put(output)
         else:
