@@ -122,6 +122,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ENABLE_METRIC_LABELS": lambda: bool(int(os.getenv("FD_ENABLE_METRIC_LABELS", "0"))),
     # Default label values in metrics.
     "FD_DEFAULT_METRIC_LABEL_VALUES": lambda: os.getenv("FD_DEFAULT_METRIC_LABEL_VALUES", "{}"),
+    # Enable offline perf test mode for PD disaggregation
+    "FD_OFFLINE_PERF_TEST_FOR_PD": lambda: int(os.getenv("FD_OFFLINE_PERF_TEST_FOR_PD", "0")),
 }
 
 
