@@ -761,7 +761,7 @@ class EngineArgs:
         cache_group.add_argument(
             "--write-policy",
             type=str,
-            choices=["write_through", "write_back"],
+            choices=["write_through"],
             default=EngineArgs.write_policy,
             help="KVCache write policy",
         )

@@ -38,7 +38,6 @@ void SwapCacheImpLayout(const std::vector<paddle::Tensor>& cache_gpu_tensors, //
     for(int layer_idx=0; layer_idx < cache_gpu_tensors.size(); layer_idx++){
         const paddle::Tensor& cache_gpu = cache_gpu_tensors[layer_idx];
         data_t* cache_gpu_ptr = const_cast<data_t*>(cache_gpu.data<data_t>());
-        // printf("current layer %d\n",layer_idx);
         auto stream = cache_gpu.stream();
         int cpu_block_id = 0;
         for(auto block_id: swap_block_ids_gpu){
@@ -52,12 +51,6 @@ void SwapCacheImpLayout(const std::vector<paddle::Tensor>& cache_gpu_tensors, //
                 copy_kind,
                 stream
             );
-            // cudaMemcpyAsync(cache_cpu_ptr_now, cache_gpu_ptr_now, cache_stride * sizeof(DataType_), copy_kind, stream);
-
-            // if (mode == 0) { // copy from device to host
-            //                 } else { // copy from host to device
-            //     cudaMemcpyAsync(cache_gpu_ptr_now, cache_cpu_ptr_now, cache_stride * sizeof(DataType_), copy_kind, stream);
-            // }
             cpu_block_id += 1;
         }
     }

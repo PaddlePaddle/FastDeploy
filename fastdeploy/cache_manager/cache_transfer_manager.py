@@ -114,6 +114,13 @@ def parse_args():
         choices=["mooncake"],
         help="The storage backend for kvcache storage.",
     )
+    parser.add_argument(
+        "--write-policy",
+        type=str,
+        choices=["write_through"],
+        default="write_through",
+        help="KVCache write policy",
+    )
 
     args = parser.parse_args()
     return args
@@ -141,6 +148,7 @@ class CacheTransferManager:
         self.swap_to_cpu_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.swap_to_gpu_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.swap_to_storage_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self.write_to_storage_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.transfer_task_queue = queue.Queue()  # 用来接收传输任务
         self.tansfer_done_queue = queue.Queue()  # 用来告知任务执行完毕
         self.n_ranks = args.mp_num
@@ -322,6 +330,7 @@ class CacheTransferManager:
             else:
                 break
         gpu_block_ids = gpu_block_ids[current_number:]
+        # TODO
         # timeout 系数 自行调节
         # timeout = 0.100 * len(gpu_block_ids)
         # 计算最小block 传输时间，应传尽传
