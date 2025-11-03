@@ -1155,6 +1155,7 @@ class CacheConfig:
         enc_dec_block_num (int): Number of encoder-decoder blocks.
         prealloc_dec_block_slot_num_threshold (int): Number of token slot threadshold to allocate next blocks for decoding.
         enable_prefix_caching (bool): Flag to enable prefix caching.
+        enable_cache_output (bool): Flag to enable kv cache output tokens, only works in V1 scheduler.
     """
 
     def __init__(self, args):
@@ -1195,6 +1196,7 @@ class CacheConfig:
         self.swap_space = None
         self.max_encoder_cache = None
         self.max_processor_cache = None
+        self.enable_output_caching = False
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
