@@ -403,14 +403,15 @@ class PaddleDisWorkerProc:
             self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
-            if tp_rank == 0 and self.task_queue.num_tasks() > 0:
-                if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
-                    self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
-                ):
-                    if self.nnode > 1 and tp_size > self.max_chips_per_node:
-                        self.task_queue.read_finish_flag.set(1)
-                    else:
-                        self.exist_task_signal.value[0] = ExistTaskStatus.EXIST
+            if tp_rank == 0:
+                if self.task_queue.num_tasks() > 0:
+                    if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
+                        self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
+                    ):
+                        if self.nnode > 1 and tp_size > self.max_chips_per_node:
+                            self.task_queue.read_finish_flag.set(1)
+                        else:
+                            self.exist_task_signal.value[0] = ExistTaskStatus.EXIST
 
             if tp_size > 1:
                 # Synchronize the signal for other workers
