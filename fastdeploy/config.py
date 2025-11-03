@@ -242,6 +242,9 @@ class ModelConfig:
 
         self.enable_mm = is_multimodal_model
 
+        if self.runner_type == "pooling":
+            os.environ["FD_USE_GET_SAVE_OUTPUT_V1"] = "1"
+
         if self.runner_type == "generate" and not is_generative_model:
             if is_multimodal_model:
                 pass
