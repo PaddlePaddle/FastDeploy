@@ -50,8 +50,12 @@ elif current_platform.is_dcu():
 elif current_platform.is_maca():
     from fastdeploy.model_executor.ops.gpu import (
         get_padding_offset,
+        limit_thinking_content_length_v1,
+        limit_thinking_content_length_v2,
         save_output,
         set_stop_value_multi_ends,
+        speculate_limit_thinking_content_length_v1,
+        speculate_limit_thinking_content_length_v2,
         step_paddle,
         update_inputs,
         update_inputs_v1,
@@ -810,7 +814,9 @@ def rebuild_padding(
             seq_lens_decoder,
             seq_lens_encoder,
             output_padding_offset,
+            first_token_out,
             max_input_length,
+            enable_logprob,
         )
     else:
         raise RuntimeError("Not supported platform")
