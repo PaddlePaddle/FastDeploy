@@ -256,14 +256,13 @@ def is_paddle_support_v1_loader():
 def v1_loader_support(fd_config):
     _v1_no_support_archs = [
         "Qwen2VLForConditionalGeneration",
-        "Qwen2_5_VLForConditionalGeneration",
     ]
 
     def _err_msg(msg: str) -> str:
         logger.info(msg + "; fallback to the v0 loader for model loading.")
 
-    if not current_platform.is_cuda():
-        _err_msg("v1loader currently does not support backends other than CUDA")
+    if not (current_platform.is_cuda() or current_platform.is_xpu()):
+        _err_msg("v1loader currently only support backends gpu and xpu")
         return False
 
     if is_pre_sliced_weight(fd_config.model_config.model):

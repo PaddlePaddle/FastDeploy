@@ -46,6 +46,7 @@ from fastdeploy.model_executor.ops.gpu import (
     share_external_data,
     speculate_get_logits,
     speculate_save_output_topk,
+    update_attn_mask_offsets,
 )
 from fastdeploy.model_executor.pre_and_post_process import pre_process, rebuild_padding
 
@@ -77,12 +78,13 @@ class MTPProposer(Proposer):
         self.enable_logprob = self.model_config.enable_logprob
 
         # [mixed, prefill, decoder]
-        self.role = "mixed"
+        self.role = self.scheduler_config.splitwise_role
 
         self.sampler = MTPSampler(fd_config)
         self._init_model_inputs()
 
         # CUDA Graph
+        self.draft_model_use_cudagraph = self.graph_opt_config.draft_model_use_cudagraph
         self.cudagraph_capture_sizes = list(reversed(self.graph_opt_config.cudagraph_capture_sizes))
         self.sot_warmup_sizes = self.graph_opt_config.sot_warmup_sizes
 
@@ -96,7 +98,8 @@ class MTPProposer(Proposer):
         """
         Update config for MTP from global config
         """
-        self.model_config.architectures[0] = "Ernie4_5_MTPForCausalLM"
+        self.forward_meta: ForwardMeta = None
+        self.model_config.architectures[0] = self.model_config.architectures[0].replace("Moe", "MTP")
         self.speculative_config.sharing_model = main_model
         self.model_config.num_hidden_layers = 1
         self.model_config.model = self.speculative_config.model
@@ -169,6 +172,9 @@ class MTPProposer(Proposer):
         kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
             max_num_blocks=self.num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
         )
+        if kv_cache_quant_type == "block_wise_fp8":
+            kv_cache_scale_shape = [kv_cache_shape[0], kv_cache_shape[1], kv_cache_shape[2]]
+        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
         if not profile and (
             self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed"
         ):
@@ -178,8 +184,8 @@ class MTPProposer(Proposer):
                 self.num_main_model_layers + self.model_config.num_hidden_layers,
             ):
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
-                key_cache_name = f"key_caches_{i}_rank{self.local_rank}.device{self.device_id}"
-                val_cache_name = f"value_caches_{i}_rank{self.local_rank}.device{self.device_id}"
+                key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
+                val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
                 key_cache = share_external_data(key_cache, key_cache_name, kv_cache_shape)
                 cache_kvs_list.append(key_cache)
                 value_cache = paddle.empty(shape=[], dtype=cache_type)
@@ -199,6 +205,17 @@ class MTPProposer(Proposer):
                     fill_value=0,
                     dtype=cache_type,
                 )
+                if kv_cache_quant_type == "block_wise_fp8":
+                    self.cache_kvs[f"key_cache_scales_{i}"] = paddle.full(
+                        shape=kv_cache_scale_shape,
+                        fill_value=0,
+                        dtype=paddle.get_default_dtype(),
+                    )
+                    self.cache_kvs[f"value_cache_scales_{i}"] = paddle.full(
+                        shape=kv_cache_scale_shape,
+                        fill_value=0,
+                        dtype=paddle.get_default_dtype(),
+                    )
             self.model_inputs["caches"] = list(self.cache_kvs.values())
             for value in self.cache_kvs.values():
                 del value
@@ -349,6 +366,7 @@ class MTPProposer(Proposer):
         )
         # self.model_inputs["caches"] = self.cache_kvs
         # Inherit generation hyperparameters from the main model for consistency
+        self.model_inputs["prompt_lens"] = self.target_model_inputs["prompt_lens"]
         self.model_inputs["top_p"] = self.target_model_inputs["top_p"]
         self.model_inputs["top_k"] = self.target_model_inputs["top_k"]
         self.model_inputs["temperature"] = self.target_model_inputs["temperature"]
@@ -424,17 +442,31 @@ class MTPProposer(Proposer):
         self.model_inputs["cu_next_token_offset"] = paddle.full(
             shape=[self.max_num_seqs + 1], fill_value=0, dtype="int32"
         )
+        self.model_inputs["mask_rollback"] = paddle.full([self.max_num_seqs, 1], 0, dtype="int32")
+        # attn_mask
+        if self.enable_mm:
+            self.model_inputs["attn_mask_offsets"] = paddle.full(
+                shape=[self.max_num_seqs * self.max_model_len], fill_value=-1, dtype="int32"
+            )
+            self.model_inputs["attn_mask_offsets_full"] = paddle.full(
+                [self.max_num_seqs, self.max_model_len], -1, dtype="int32"
+            )
+            self.model_inputs["attn_mask_offsets_decoder"] = paddle.full([self.max_num_seqs, 1], -1, dtype="int32")
+            self.model_inputs["decode_states"] = paddle.full(
+                [self.max_num_seqs, self.max_draft_token_num + 1],
+                -1,
+                dtype="int32",
+            )
 
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int):
 
         if "caches" not in self.model_inputs:
             self.initialize_kv_cache()
         req_len = len(req_dicts)
-        # has_prefill_task = False
-        # has_decode_task = False
+
         for i in range(req_len):
             request = req_dicts[i]
-            logger.info(f"{i}th request-{request.request_id}: {request}")
+            logger.debug(f"{i}th request-{request.request_id}: {request}")
             idx = request.idx
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
                 prefill_start_index = request.prefill_start_index
@@ -466,6 +498,16 @@ class MTPProposer(Proposer):
                 self.model_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
+                if self.enable_mm:
+                    inputs = request.multimodal_inputs
+                    self.model_inputs["attn_mask_offsets_full"][idx][0 : prefill_end_index - prefill_start_index] = (
+                        paddle.to_tensor(
+                            inputs["attention_mask_offset"][prefill_start_index:prefill_end_index], dtype="int32"
+                        )
+                    )
+                    self.model_inputs["attn_mask_offsets_decoder"][idx : idx + 1] = (
+                        inputs["attention_mask_offset"][prefill_end_index - 1] + 1
+                    )
 
                 # has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
@@ -486,9 +528,10 @@ class MTPProposer(Proposer):
                 self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.model_inputs["is_block_step"][idx : idx + 1] = False
                 continue
-        # if has_prefill_task or has_decode_task:
-        #     self.model_inputs["not_need_stop"][0] = True
-        self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
+
+        # TODO(liuzichang): Solve splitewise-p bug to restore
+        # self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer[:num_running_requests]
+        self.model_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         """
@@ -604,13 +647,14 @@ class MTPProposer(Proposer):
             kv_batch_ids=self.model_inputs["kv_batch_ids"],
             kv_tile_ids_per_batch=self.model_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.model_inputs["kv_num_blocks_x_cpu"],
+            attn_mask_offsets=self.model_inputs["attn_mask_offsets"] if self.enable_mm else None,
         )
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
-        self.forward_meta.step_use_cudagraph = step_use_cudagraph
+        self.forward_meta.step_use_cudagraph = step_use_cudagraph and self.draft_model_use_cudagraph
 
     def exist_prefill(self):
         """
@@ -688,12 +732,26 @@ class MTPProposer(Proposer):
             self.max_model_len,
             self.model_inputs["substep"],
         )
-        if self.role == "prefill":
+        if self.role == "prefill" and self.parallel_config.tensor_parallel_rank == 0:
+            skip_save = bool(int(envs.ENABLE_V1_KVCACHE_SCHEDULER))
             mtp_save_first_token(
                 self.model_inputs["base_model_draft_tokens"],
                 self.model_inputs["not_need_stop"],
+                self.model_inputs["seq_lens_decoder"],
+                self.model_inputs["prompt_lens"],
+                self.model_inputs["step_idx"],
                 self.local_rank,
                 self.parallel_config.use_ep,
+                skip_save,
+            )
+            # Ensure only save first token once.
+            paddle.assign(
+                paddle.where(
+                    self.model_inputs["stop_flags"],
+                    paddle.zeros_like(self.model_inputs["step_idx"]),
+                    self.model_inputs["step_idx"],
+                ),
+                self.model_inputs["step_idx"],
             )
 
     def _propose(self, step_use_cudagraph: bool = False):
@@ -723,6 +781,21 @@ class MTPProposer(Proposer):
                     self.model_inputs["seq_lens_decoder"],
                 )
 
+                if self.enable_mm:
+                    attn_mask_offsets = update_attn_mask_offsets(
+                        ids_remove_padding,
+                        getattr(self.model_inputs, "seq_lens_this_time", self.seq_lens_this_time_buffer),
+                        self.model_inputs["seq_lens_encoder"],
+                        self.model_inputs["seq_lens_decoder"],
+                        cu_seqlens_q,
+                        self.model_inputs["attn_mask_offsets_full"],
+                        self.model_inputs["attn_mask_offsets_decoder"],
+                        self.model_inputs["is_block_step"],
+                        self.model_inputs["decode_states"],
+                        self.model_inputs["mask_rollback"],
+                    )[0]
+                    self.model_inputs["attn_mask_offsets"].copy_(attn_mask_offsets, False)
+
                 # Initialize forward meta data
                 self.model_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
                 self.model_inputs["batch_id_per_token"][:] = -1
@@ -745,6 +818,7 @@ class MTPProposer(Proposer):
                     temperature=self.model_inputs["temperature"],
                     top_p=self.model_inputs["top_p"],
                     top_k=self.model_inputs["top_k"],
+                    seed=self.model_inputs["infer_seed"],
                     step_idx=self.model_inputs["step_idx"],
                     pre_token_ids=self.model_inputs["pre_ids"],
                     frequency_penalties=self.model_inputs["frequency_score"],
@@ -820,11 +894,18 @@ class MTPProposer(Proposer):
                     )
 
                 if self.parallel_config.tensor_parallel_size > 1:
-                    paddle.distributed.broadcast(sampled_token_ids, 0)
+                    paddle.distributed.broadcast(
+                        sampled_token_ids,
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
 
                 self._post_process(sampled_token_ids)
                 if substep != self.num_model_steps - 1:
                     self._get_self_hidden_states(hidden_states)
+            else:
+                if hasattr(self.model, "empty_input_forward"):
+                    self.model.empty_input_forward()
 
     def _get_self_hidden_states(self, hidden_states):
         target_hidden_states = eagle_get_self_hidden_states(
