@@ -20,7 +20,7 @@ def test_w4a8():
     service_http_port = "8188"  # 服务配置的
     client = openai.Client(base_url=f"http://{ip}:{service_http_port}/v1", api_key="EMPTY_API_KEY")
     base_response_110 = "你好！我是一个基于人工智能技术的助手，可以帮你解答问题、提供建议、聊天或者协助完成各种任务。无论是学习、工作还是生活中的疑问，我都可以尽力提供帮助。😊 你有什么想聊的吗？"
-    base_response_104 = "你好！我是一个人工智能助手，可以帮你解答问题、提供建议、聊天或者完成一些任务。无论是学习、工作还是生活中的疑问，我都很乐意帮忙。你有什么需要我协助的吗？😊"
+    base_response_104 = "你好！我是一个人工智能助手，可以帮你解答问题、提供建议、聊天或者完成一些任务。无论是学习、工作还是生活中的疑问，我都可以尽力帮忙哦～有什么需要我做的吗？😊"
     # 非流式对话
     response = client.chat.completions.create(
         model="default",
