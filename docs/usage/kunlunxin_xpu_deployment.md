@@ -111,7 +111,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
 --enable-mm \
 --mm-processor-kwargs '{"video_max_frames": 30}' \
 --limit-mm-per-prompt '{"image": 10, "video": 3}' \
---reasoning-parser ernie-45-vl
+--reasoning-parser ernie-45-vl \
+--load-choices "default"
 ```
 
 #### Send requests
