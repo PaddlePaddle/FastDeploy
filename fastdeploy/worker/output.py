@@ -237,6 +237,11 @@ class ModelOutputData:
     """
     prompt_lens: paddle.Tensor = None
 
+    """
+        step mask rollback in some cases
+    """
+    mask_rollback: paddle.Tensor = None
+
 
 @dataclass
 class ModelRunnerOutput:
