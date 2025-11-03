@@ -679,6 +679,7 @@ class GPUModelRunner(ModelRunnerBase):
             length = len(request.prompt_token_ids)
             assert length > 0, "The prompt requested must not be empty."
 
+            logits_info = None
             prefill_tokens = []
             if (
                 request.guided_json is not None
@@ -687,7 +688,6 @@ class GPUModelRunner(ModelRunnerBase):
                 or request.guided_grammar is not None
             ):
                 logits_info, schemata_key = self._init_logits_processor(request)
-                request.logits_processor = logits_info
                 request.schemata_key = schemata_key
 
             # Is Decode Node
@@ -857,7 +857,7 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
-            self.sampler.apply_logits_processor(idx, request.logits_processor, prefill_tokens)
+            self.sampler.apply_logits_processor(idx, logits_info, prefill_tokens)
 
         self.share_inputs["not_need_stop"][0] = True
 
