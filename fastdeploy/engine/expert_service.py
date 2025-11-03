@@ -27,6 +27,7 @@ import numpy as np
 
 from fastdeploy.engine.common_engine import EngineService
 from fastdeploy.inter_communicator import IPCSignal
+from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.utils import console_logger, envs, llm_logger
 
 
@@ -99,6 +100,10 @@ class ExpertService:
             self.engine.start_zmq_service(ipc_signal_suffix)
         else:
             ipc_signal_suffix = self.cfg.parallel_config.engine_worker_queue_port[0]
+            if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                self.internal_adapter = InternalAdapter(
+                    cfg=self.cfg, engine=self.engine, dp_rank=self.cfg.parallel_config.local_data_parallel_id
+                )
 
         llm_logger.info(f"start expert service {local_data_parallel_id}")
 

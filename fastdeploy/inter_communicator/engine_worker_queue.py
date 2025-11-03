@@ -80,34 +80,85 @@ class EngineWorkerQueue:
             self.client_read_flag_init: List[List[int]] = [
                 [1] * self.num_client for _ in range(self.local_data_parallel_size)
             ]
+
             self.lock_init: List[threading.Lock] = [threading.Lock() for _ in range(self.local_data_parallel_size)]
             self.read_finish_flag_init: List[Value] = [Value("i", 0) for _ in range(self.local_data_parallel_size)]
             self.connected_client_counter_init: List[Value] = [
                 Value("i", 0) for _ in range(self.local_data_parallel_size)
             ]
-            self.finished_req_queue = [Queue() for _ in range(self.local_data_parallel_size)]
-            self.finished_add_cache_task_queue = [Queue() for _ in range(self.local_data_parallel_size)]
+            self.finished_req_list = [list() for _ in range(self.local_data_parallel_size)]
+            self.finished_add_cache_task_list = [list() for _ in range(self.local_data_parallel_size)]
             self.cache_infos_init: List[List[Any]] = [list() for _ in range(self.local_data_parallel_size)]
             self.connect_rdma_tasks_list = [list() for _ in range(self.local_data_parallel_size)]
             self.connect_rdma_tasks_response_list = [list() for _ in range(self.local_data_parallel_size)]
             self.client_read_info_flag_init: List[List[int]] = [
-                [1] * self.num_client for _ in range(self.local_data_parallel_size)
+                [0] * self.num_client for _ in range(self.local_data_parallel_size)
             ]
             self.lock_info_init: List[threading.Lock] = [
                 threading.Lock() for _ in range(self.local_data_parallel_size)
             ]
+            # PD disaggregation
+            # Locks
             self.connect_task_lock_init: List[threading.Lock] = [
                 threading.Lock() for _ in range(self.local_data_parallel_size)
+            ]  # connect rdma task
+            self.connect_task_response_lock_init: List[threading.Lock] = [
+                threading.Lock() for _ in range(self.local_data_parallel_size)
+            ]  # connect rdma task response
+            self.finish_add_cache_task_lock_init: List[threading.Lock] = [
+                threading.Lock() for _ in range(self.local_data_parallel_size)
+            ]  # finish add cache task
+            self.finish_send_cache_lock_init: List[threading.Lock] = [
+                threading.Lock() for _ in range(self.local_data_parallel_size)
+            ]  # finish send cache
+
+            # sync read status for TPs
+            self.client_get_connect_task_flag_init: List[List[int]] = [
+                [0] * self.num_client for _ in range(self.local_data_parallel_size)
+            ]
+            self.client_get_connect_task_response_flag_init: List[List[int]] = [
+                [0] * self.num_client for _ in range(self.local_data_parallel_size)
+            ]
+            self.client_get_finished_add_cache_task_flag_init: List[List[int]] = [
+                [0] * self.num_client for _ in range(self.local_data_parallel_size)
+            ]
+            self.client_get_finish_send_cache_flag_init: List[List[int]] = [
+                [0] * self.num_client for _ in range(self.local_data_parallel_size)
+            ]
+            self.can_put_next_connect_task_response_flag_init: List[Value] = [
+                Value("i", 1) for _ in range(self.local_data_parallel_size)
+            ]
+            self.can_put_next_add_task_finished_flag_init: List[Value] = [
+                Value("i", 1) for _ in range(self.local_data_parallel_size)
+            ]
+            self.can_put_next_send_cache_finished_flag_init: List[Value] = [
+                Value("i", 1) for _ in range(self.local_data_parallel_size)
+            ]
+
+            # barrier
+            self.get_connect_task_barrier = [
+                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
+            ]
+            self.get_connect_task_response_barrier = [
+                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
+            ]
+            self.finish_add_cache_task_barrier = [
+                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
+            ]
+            self.begin_send_cache_barrier = [
+                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
+            ]
+            self.finish_send_cache_barrier = [
+                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
+            ]
+            self.get_cache_info_barrier = [
+                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
             ]
 
             self.finish_request_barrier = [
                 threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
             ]
             self.worker_process_tp_barrier = [
-                threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
-            ]
-
-            self.finish_add_cache_task_barrier = [
                 threading.Barrier(self.num_client) for _ in range(self.local_data_parallel_size)
             ]
 
@@ -123,6 +174,26 @@ class EngineWorkerQueue:
                 proxytype=ListProxy,
             )
             QueueManager.register(
+                "get_client_get_connect_task_flag",
+                callable=lambda idx: self.client_get_connect_task_flag_init[idx],
+                proxytype=ListProxy,
+            )
+            QueueManager.register(
+                "get_client_get_connect_task_response_flag",
+                callable=lambda idx: self.client_get_connect_task_response_flag_init[idx],
+                proxytype=ListProxy,
+            )
+            QueueManager.register(
+                "get_client_get_finished_add_cache_task_flag_init",
+                callable=lambda idx: self.client_get_finished_add_cache_task_flag_init[idx],
+                proxytype=ListProxy,
+            )
+            QueueManager.register(
+                "get_client_get_finish_send_cache_flag_init",
+                callable=lambda idx: self.client_get_finish_send_cache_flag_init[idx],
+                proxytype=ListProxy,
+            )
+            QueueManager.register(
                 "get_lock",
                 callable=lambda idx: self.lock_init[idx],
                 proxytype=AcquirerProxy,
@@ -133,10 +204,42 @@ class EngineWorkerQueue:
                 proxytype=ValueProxy,
             )
             QueueManager.register(
+                "get_can_put_next_connect_task_response_flag",
+                callable=lambda idx: self.can_put_next_connect_task_response_flag_init[idx],
+                proxytype=ValueProxy,
+            )
+            QueueManager.register(
+                "get_can_put_next_add_task_finished_flag",
+                callable=lambda idx: self.can_put_next_add_task_finished_flag_init[idx],
+                proxytype=ValueProxy,
+            )
+            QueueManager.register(
+                "get_can_put_next_send_cache_finished_flag",
+                callable=lambda idx: self.can_put_next_send_cache_finished_flag_init[idx],
+                proxytype=ValueProxy,
+            )
+            # PD disaggregation
+            QueueManager.register(
                 "get_connect_task_lock",
                 callable=lambda idx: self.connect_task_lock_init[idx],
                 proxytype=AcquirerProxy,
             )
+            QueueManager.register(
+                "get_connect_task_response_lock",
+                callable=lambda idx: self.connect_task_response_lock_init[idx],
+                proxytype=AcquirerProxy,
+            )
+            QueueManager.register(
+                "get_finish_add_cache_task_lock",
+                callable=lambda idx: self.finish_add_cache_task_lock_init[idx],
+                proxytype=AcquirerProxy,
+            )
+            QueueManager.register(
+                "get_finish_send_cache_lock",
+                callable=lambda idx: self.finish_send_cache_lock_init[idx],
+                proxytype=AcquirerProxy,
+            )
+
             QueueManager.register(
                 "get_connect_rdma_tasks", callable=lambda idx: self.connect_rdma_tasks_list[idx], proxytype=ListProxy
             )
@@ -152,13 +255,13 @@ class EngineWorkerQueue:
             )
 
             QueueManager.register(
-                "get_finish_request_queue",
-                callable=lambda idx: self.finished_req_queue[idx],
+                "get_finish_request_queue", callable=lambda idx: self.finished_req_list[idx], proxytype=ListProxy
             )
 
             QueueManager.register(
                 "get_finish_add_cache_task_queue",
-                callable=lambda idx: self.finished_add_cache_task_queue[idx],
+                callable=lambda idx: self.finished_add_cache_task_list[idx],
+                proxytype=ListProxy,
             )
 
             QueueManager.register(
@@ -193,6 +296,26 @@ class EngineWorkerQueue:
             QueueManager.register(
                 "get_finish_request_barrier",
                 callable=lambda idx: self.finish_request_barrier[idx],
+            )
+            QueueManager.register(
+                "get_connect_task_barrier",
+                callable=lambda idx: self.get_connect_task_barrier[idx],
+            )
+            QueueManager.register(
+                "get_connect_task_response_barrier",
+                callable=lambda idx: self.get_connect_task_response_barrier[idx],
+            )
+            QueueManager.register(
+                "get_begin_send_cache_barrier",
+                callable=lambda idx: self.begin_send_cache_barrier[idx],
+            )
+            QueueManager.register(
+                "get_finish_send_cache_barrier",
+                callable=lambda idx: self.finish_send_cache_barrier[idx],
+            )
+            QueueManager.register(
+                "get_cache_info_barrier",
+                callable=lambda idx: self.get_cache_info_barrier[idx],
             )
 
             QueueManager.register(
@@ -231,10 +354,25 @@ class EngineWorkerQueue:
             QueueManager.register("get_available_prefill_instances")
             QueueManager.register("get_finish_request_barrier")
             QueueManager.register("get_finish_add_cache_task_barrier")
+            QueueManager.register("get_connect_task_barrier")
+            QueueManager.register("get_connect_task_response_barrier")
+            QueueManager.register("get_finish_send_cache_barrier")
+            QueueManager.register("get_begin_send_cache_barrier")
+            QueueManager.register("get_cache_info_barrier")
             QueueManager.register("get_connect_rdma_tasks")
+            QueueManager.register("get_client_get_connect_task_flag")
+            QueueManager.register("get_client_get_connect_task_response_flag")
+            QueueManager.register("get_client_get_finished_add_cache_task_flag_init")
+            QueueManager.register("get_client_get_finish_send_cache_flag_init")
             QueueManager.register("get_connect_rdma_tasks_responses")
             QueueManager.register("get_connect_task_lock")
+            QueueManager.register("get_connect_task_response_lock")
+            QueueManager.register("get_finish_add_cache_task_lock")
+            QueueManager.register("get_finish_send_cache_lock")
             QueueManager.register("get_worker_process_tp_barrier")
+            QueueManager.register("get_can_put_next_connect_task_response_flag")
+            QueueManager.register("get_can_put_next_add_task_finished_flag")
+            QueueManager.register("get_can_put_next_send_cache_finished_flag")
             self.manager = QueueManager(address=self.address, authkey=self.authkey)
             self._connect_with_retry()
 
@@ -257,17 +395,50 @@ class EngineWorkerQueue:
             self.finish_add_cache_task_barrier = self.manager.get_finish_add_cache_task_barrier(
                 self.local_data_parallel_id
             )
+            self.connect_task_barrier = self.manager.get_connect_task_barrier(self.local_data_parallel_id)
+            self.connect_task_response_barrier = self.manager.get_connect_task_response_barrier(
+                self.local_data_parallel_id
+            )
+            self.finish_send_cache_barrier = self.manager.get_finish_send_cache_barrier(self.local_data_parallel_id)
+            self.cache_info_barrier = self.manager.get_cache_info_barrier(self.local_data_parallel_id)
+            self.begin_send_cache_barrier = self.manager.get_begin_send_cache_barrier(self.local_data_parallel_id)
             self.worker_process_tp_barrier = self.manager.get_worker_process_tp_barrier(self.local_data_parallel_id)
-            self.finished_req_queue = self.manager.get_finish_request_queue(self.local_data_parallel_id)
-            self.finished_add_cache_task_queue = self.manager.get_finish_add_cache_task_queue(
+            self.finished_send_cache_list = self.manager.get_finish_request_queue(self.local_data_parallel_id)
+            self.finished_add_cache_task_list = self.manager.get_finish_add_cache_task_queue(
                 self.local_data_parallel_id
             )
             # p/d互联
-            self.connect_rdma_task_queue = self.manager.get_connect_rdma_tasks(self.local_data_parallel_id)
-            self.connect_rdma_task_response_queue = self.manager.get_connect_rdma_tasks_responses(
+            self.connect_rdma_tasks = self.manager.get_connect_rdma_tasks(self.local_data_parallel_id)
+            self.client_get_connect_task_flag = self.manager.get_client_get_connect_task_flag(
+                self.local_data_parallel_id
+            )
+            self.client_get_connect_task_response_flag = self.manager.get_client_get_connect_task_response_flag(
+                self.local_data_parallel_id
+            )
+            self.client_get_finished_add_cache_task_flag = (
+                self.manager.get_client_get_finished_add_cache_task_flag_init(self.local_data_parallel_id)
+            )
+            self.client_get_finish_send_cache_flag = self.manager.get_client_get_finish_send_cache_flag_init(
+                self.local_data_parallel_id
+            )
+
+            self.connect_rdma_task_responses = self.manager.get_connect_rdma_tasks_responses(
                 self.local_data_parallel_id
             )
             self.connect_task_lock = self.manager.get_connect_task_lock(self.local_data_parallel_id)
+            self.connect_task_response_lock = self.manager.get_connect_task_response_lock(self.local_data_parallel_id)
+            self.finish_add_cache_task_lock = self.manager.get_finish_add_cache_task_lock(self.local_data_parallel_id)
+            self.finish_send_cache_lock = self.manager.get_finish_send_cache_lock(self.local_data_parallel_id)
+
+            self.can_put_next_add_task_finished_flag = self.manager.get_can_put_next_add_task_finished_flag(
+                self.local_data_parallel_id
+            )
+            self.can_put_next_connect_task_response_flag = self.manager.get_can_put_next_connect_task_response_flag(
+                self.local_data_parallel_id
+            )
+            self.can_put_next_send_cache_finished_flag = self.manager.get_can_put_next_send_cache_finished_flag(
+                self.local_data_parallel_id
+            )
 
             assert self.num_client == len(self.client_read_flag)
 
@@ -411,41 +582,61 @@ class EngineWorkerQueue:
 
     def put_connect_rdma_task(self, connect_rdma_task):
         self.connect_task_lock.acquire()
-        self.connect_rdma_task_queue.append(connect_rdma_task)
+        while sum(self.client_get_connect_task_flag) < self.num_client:
+            self.connect_task_lock.release()
+            time.sleep(0.001)
+            self.connect_task_lock.acquire()
+
+        self.connect_rdma_tasks[:] = list()
+        self.client_get_connect_task_flag[:] = [0] * self.num_client
+        self.connect_rdma_tasks.append(connect_rdma_task)
         self.connect_task_lock.release()
 
     def get_connect_rdma_task(self):
-        result = None
+        connect_rdma_task = None
         self.connect_task_lock.acquire()
-        if len(self.connect_rdma_task_queue) == 0:
-            self.connect_task_lock.release()
-            return result
-        try:
-            result = self.connect_rdma_task_queue.pop(0)
-        except Exception as e:
-            llm_logger.info(f"get_connect_rdma_task got exception: {e}")
-        finally:
-            self.connect_task_lock.release()
-            return result
+        if len(self.connect_rdma_tasks) > 0:
+            connect_rdma_task = self.connect_rdma_tasks[0]
+        self.client_get_connect_task_flag[self.client_id] = 1
+        all_client_read: bool = np.sum(self.client_get_connect_task_flag) == self.num_client
+        if all_client_read:
+            self.connect_rdma_tasks[:] = list()
+        self.connect_task_lock.release()
+        return connect_rdma_task, all_client_read
 
     def put_connect_rdma_task_response(self, connect_rdma_task_response):
-        self.connect_task_lock.acquire()
-        self.connect_rdma_task_response_queue.append(connect_rdma_task_response)
-        self.connect_task_lock.release()
+        self.connect_task_response_lock.acquire()
+        while not self.can_put_next_connect_task_response_flag.get():
+            self.connect_task_response_lock.release()
+            time.sleep(0.001)
+            self.connect_task_response_lock.acquire()
+        self.connect_rdma_task_responses.append(connect_rdma_task_response)
+        self.client_get_connect_task_response_flag[self.client_id] = 1
+        all_client_put: bool = np.sum(self.client_get_connect_task_response_flag) == self.num_client
+        if all_client_put:
+            self.can_put_next_connect_task_response_flag.set(0)
+        self.connect_task_response_lock.release()
+        return all_client_put
 
     def get_connect_rdma_task_response(self):
-        result = None
-        self.connect_task_lock.acquire()
-        if len(self.connect_rdma_task_response_queue) == 0:
-            self.connect_task_lock.release()
-            return result
-        try:
-            result = self.connect_rdma_task_response_queue.pop(0)
-        except Exception as e:
-            llm_logger.info(f"get_connect_rdma_task_response got exception: {e}")
-        finally:
-            self.connect_task_lock.release()
-            return result
+        task_response = None
+        self.connect_task_response_lock.acquire()
+        if len(self.connect_rdma_task_responses) == 0:
+            self.connect_task_response_lock.release()
+            return task_response
+        while sum(self.client_get_connect_task_response_flag) < self.num_client:
+            self.connect_task_response_lock.release()
+            time.sleep(0.001)
+            self.connect_task_response_lock.acquire()
+        if len(self.connect_rdma_task_responses) > 0:
+            task_response = self.connect_rdma_task_responses[0]
+        for tmp_task_response in self.connect_rdma_task_responses:
+            task_response["success"] = task_response["success"] and tmp_task_response["success"]
+        self.connect_rdma_task_responses[:] = list()
+        self.client_get_connect_task_response_flag[:] = [0] * self.num_client
+        self.can_put_next_connect_task_response_flag.set(1)
+        self.connect_task_response_lock.release()
+        return task_response
 
     def get_prefill_instances(self):
         """
@@ -508,14 +699,25 @@ class EngineWorkerQueue:
         self.lock_info.release()
         return total_num
 
-    def put_finished_req(self, req_ids) -> None:
+    def put_finished_req(self, send_cache_result) -> None:
         """
         Put finished request ID into the queue.
 
         Args:
             req_ids: Request ID to be added to the queue
         """
-        self.finished_req_queue.put(req_ids)
+        self.finish_send_cache_lock.acquire()
+        while not self.can_put_next_send_cache_finished_flag.get():
+            self.finish_send_cache_lock.release()
+            time.sleep(0.001)
+            self.finish_send_cache_lock.acquire()
+        self.finished_send_cache_list.append(send_cache_result[0])
+        self.client_get_finish_send_cache_flag[self.client_id] = 1
+        all_client_put: bool = np.sum(self.client_get_finish_send_cache_flag) == self.num_client
+        if all_client_put:
+            self.can_put_next_send_cache_finished_flag.set(0)
+        self.finish_send_cache_lock.release()
+        return all_client_put
 
     def get_finished_req(self) -> str:
         """
@@ -524,12 +726,27 @@ class EngineWorkerQueue:
         Returns:
             str: Finished request ID
         """
-        ans = []
-        if self.finished_req_queue.empty():
-            return ans
-        ans = self.finished_req_queue.get()
-        llm_logger.debug(f"get finished req: {ans}")
-        return ans
+        response = []
+        self.finish_send_cache_lock.acquire()
+        if len(self.finished_send_cache_list) == 0:
+            self.finish_send_cache_lock.release()
+            return response
+        while sum(self.client_get_finish_send_cache_flag) < self.num_client:
+            self.finish_send_cache_lock.release()
+            time.sleep(0.001)
+            self.finish_send_cache_lock.acquire()
+        if len(self.finished_send_cache_list) > 0:
+            response = self.finished_send_cache_list[0]
+        for tmp_response in self.finished_send_cache_list:
+            if "error" in tmp_response[1]:
+                response[1] = tmp_response[1]
+        if response:
+            response = [response]
+        self.finished_send_cache_list[:] = list()
+        self.client_get_finish_send_cache_flag[:] = [0] * self.num_client
+        self.can_put_next_send_cache_finished_flag.set(1)
+        self.finish_send_cache_lock.release()
+        return response
 
     def put_finished_add_cache_task_req(self, req_ids) -> None:
         """
@@ -538,7 +755,18 @@ class EngineWorkerQueue:
         Args:
             req_ids: Request ID to be added to the queue
         """
-        self.finished_add_cache_task_queue.put(req_ids)
+        self.finish_add_cache_task_lock.acquire()
+        while not self.can_put_next_add_task_finished_flag.get():
+            self.finish_add_cache_task_lock.release()
+            time.sleep(0.001)
+            self.finish_add_cache_task_lock.acquire()
+        self.finished_add_cache_task_list.append(req_ids)
+        self.client_get_finished_add_cache_task_flag[self.client_id] = 1
+        all_client_put: bool = np.sum(self.client_get_finished_add_cache_task_flag) == self.num_client
+        if all_client_put:
+            self.can_put_next_add_task_finished_flag.set(0)
+        self.finish_add_cache_task_lock.release()
+        return all_client_put
 
     def get_finished_add_cache_task_req(self) -> str:
         """
@@ -547,12 +775,24 @@ class EngineWorkerQueue:
         Returns:
             str: Finished request ID
         """
-        ans = []
-        if self.finished_add_cache_task_queue.empty():
-            return ans
-        ans = self.finished_add_cache_task_queue.get()
-        llm_logger.debug(f"get finished req: {ans}")
-        return ans
+        response = []
+        self.finish_add_cache_task_lock.acquire()
+        if len(self.finished_add_cache_task_list) == 0:
+            self.finish_add_cache_task_lock.release()
+            return response
+        while sum(self.client_get_finished_add_cache_task_flag) < self.num_client:
+            self.finish_add_cache_task_lock.release()
+            time.sleep(0.001)
+            self.finish_add_cache_task_lock.acquire()
+        if len(self.finished_add_cache_task_list) > 0:
+            response = self.finished_add_cache_task_list[0]
+        for tmp_response in self.finished_add_cache_task_list:
+            assert tmp_response == response
+        self.finished_add_cache_task_list[:] = list()
+        self.client_get_finished_add_cache_task_flag[:] = [0] * self.num_client
+        self.can_put_next_add_task_finished_flag.set(1)
+        self.finish_add_cache_task_lock.release()
+        return response
 
     def disaggregate_queue_empty(self):
         """

@@ -78,7 +78,7 @@ class InternalAdapter:
                 if task is None:
                     time.sleep(0.001)
                     continue
-                logger.info(f"Recieve control task: {task}")
+                logger.info(f"dprank {self.dp_rank} Recieve control task: {task}")
                 task_id_str = task["task_id"]
                 if task["cmd"] == "get_payload":
                     payload_info = self._get_current_server_info()

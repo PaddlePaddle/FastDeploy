@@ -275,6 +275,7 @@ class SplitwiseConnector:
                 decode_diagg = task.disaggregate_info["cache_info"]
                 task.disaggregate_info["cache_info"] = self.cfg.disaggregate_info["cache_info"]
                 task.disaggregate_info["cache_info"]["rdma"]["current_id"] = current_id
+                task.disaggregate_info["role"] = "decode"
                 self._send_message(addr, "prefill", [task])
                 task.disaggregate_info["cache_info"] = decode_diagg
             task.disaggregate_info["role"] = "prefill"
