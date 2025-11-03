@@ -53,9 +53,9 @@ def top_p_normalize_probs_paddle(
     return paddle.zeros_like(probs_sort).put_along_axis_(indices=probs_idx, values=probs_sort, axis=-1)
 
 
-class SamplerProcessor:
+class GuidedDecoding:
     """
-    SamplingProcessor for guided decoding.
+    processor for guided decoding.
     """
 
     def __init__(self):
@@ -75,7 +75,7 @@ class SamplerProcessor:
         future: Optional[Any] = None,
         prefill_tokens: List[int] = [],
     ):
-        """add logits processor to SamplerProcessor"""
+        """add logits processor to GuidedDecoding"""
         with self.logits_lock:
             if future is None:
                 if ids in self.logits_processor:
@@ -216,7 +216,7 @@ class Sampler(nn.Layer):
         else:
             raise NotImplementedError
 
-        self.processor = SamplerProcessor()
+        self.guided_decoding = GuidedDecoding()
         self.logprobs_mode = fd_config.model_config.logprobs_mode if fd_config is not None else logprobs_mode
         # Can only be created when fd_config.early_stopper_config.enable_early_stop = True
         if (
@@ -230,19 +230,19 @@ class Sampler(nn.Layer):
 
     def set_reasoning_parser(self, reasoning_parser: Optional[ReasoningParser] = None):
         """set reasoning parser"""
-        self.processor.apply_reasoning_parser(reasoning_parser)
+        self.guided_decoding.apply_reasoning_parser(reasoning_parser)
 
     def apply_logits_processor(self, ids: int, future: Optional[Any] = None, prefill_tokens: List[int] = []):
         """apply logits processor to sampler"""
-        self.processor.add_logits_processor(ids, future, prefill_tokens)
+        self.guided_decoding.add_logits_processor(ids, future, prefill_tokens)
 
     def pre_process(self, skip_idx_list: List[int] = []):
         """pre process before running"""
-        self.processor.pre_process(skip_idx_list)
+        self.guided_decoding.pre_process(skip_idx_list)
 
     def post_process(self, next_tokens: paddle.Tensor, skip_idx_list: List[int] = []):
         """post process after running"""
-        self.processor.update_output_tokens(next_tokens, skip_idx_list)
+        self.guided_decoding.update_output_tokens(next_tokens, skip_idx_list)
 
     def compute_logprobs(
         self,
@@ -332,7 +332,7 @@ class Sampler(nn.Layer):
         skip_idx_list: List[int] = [],
     ) -> SamplerOutput:
         """ """
-        logits = self.processor.apply_token_mask(logits, skip_idx_list)
+        logits = self.guided_decoding.apply_token_mask(logits, skip_idx_list)
 
         num_logprobs = sampling_metadata.max_num_logprobs
         if num_logprobs is not None:
@@ -340,6 +340,9 @@ class Sampler(nn.Layer):
                 raw_logprobs = self.compute_logprobs(logits, sampling_metadata)
             elif self.logprobs_mode == "raw_logits":
                 raw_logprobs = logits.clone()
+
+        for proc in sampling_metadata.logits_processors or []:
+            logits = proc.apply(logits)
 
         logits = apply_penalty_multi_scores(
             sampling_metadata.pre_token_ids,
@@ -477,7 +480,7 @@ class SpeculativeSampler(nn.Layer):
         share_inputs = sampling_metadata.share_inputs
         last_logits = logits
         real_bsz = share_inputs["seq_lens_this_time"].shape[0]
-        batch_token_num = share_inputs["batch_token_num"][:real_bsz]
+        batch_token_num = share_inputs["accept_num"][:real_bsz]
 
         temp_scaled_logprobs = sampling_metadata.temp_scaled_logprobs
         top_p_normalized_logprobs = sampling_metadata.top_p_normalized_logprobs
@@ -634,7 +637,7 @@ class SpeculativeSampler(nn.Layer):
             batch_token_num = paddle.where(
                 share_inputs["seq_lens_encoder"][:real_bsz] != 0,
                 paddle.ones_like(share_inputs["seq_lens_encoder"][:real_bsz]),
-                share_inputs["accept_num"][:real_bsz].unsqueeze(1),
+                share_inputs["seq_lens_this_time"],
             ).squeeze(1)
             share_inputs["batch_token_num"] = batch_token_num
             ori_cu_batch_token_offset = paddle.concat([paddle.to_tensor([0]), paddle.cumsum(batch_token_num)]).astype(
@@ -644,11 +647,11 @@ class SpeculativeSampler(nn.Layer):
                 [paddle.to_tensor([0]), paddle.cumsum(share_inputs["accept_num"][:real_bsz])]
             ).astype("int32")
             share_inputs["cu_batch_token_offset"] = cu_batch_token_offset
-            target_logtis = paddle.empty(
+            target_logits = paddle.empty(
                 [share_inputs["accept_num"][:real_bsz].sum(), logits.shape[1]], dtype=logits.dtype
             )
             speculate_get_target_logits(
-                target_logtis,
+                target_logits,
                 logits,
                 cu_batch_token_offset,
                 ori_cu_batch_token_offset,
@@ -657,25 +660,22 @@ class SpeculativeSampler(nn.Layer):
                 share_inputs["accept_num"],
             )
             if self.logprobs_mode == "raw_logprobs":
-                raw_logprobs = self.compute_logprobs(target_logtis, sampling_metadata)
+                raw_logprobs = self.compute_logprobs(target_logits, sampling_metadata)
             elif self.logprobs_mode == "raw_logits":
-                raw_logprobs = target_logtis.clone()
+                raw_logprobs = target_logits.clone()
 
         logprobs_tensors = None
         token_ids = share_inputs["accept_tokens"]
         if num_logprobs is not None:
             token_ids = paddle.concat(
-                [
-                    share_inputs["accept_tokens"][i, : share_inputs["accept_num"][i]]
-                    for i in range(share_inputs["accept_num"][:real_bsz].shape[0])
-                ]
+                [share_inputs["accept_tokens"][i, : share_inputs["accept_num"][i]] for i in range(real_bsz)]
             )
             logprobs_tensors = self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=token_ids)
 
         sampler_output = SamplerOutput(
             sampled_token_ids=token_ids,
             logprobs_tensors=logprobs_tensors,
-            token_num_per_batch=batch_token_num,
+            token_num_per_batch=share_inputs["accept_num"],
             cu_batch_token_offset=share_inputs["cu_batch_token_offset"],
         )
 

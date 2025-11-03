@@ -15,6 +15,7 @@
 
 import argparse
 import json
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -65,6 +66,10 @@ class UniversalTemplateInstantiator:
                 f"Configuration '{config.name}' has T or OutT in template_params but no data_types configured"
             )
 
+        # Skip validation for special handled functions
+        if config.name == "moe_fast_hardamard_impl":
+            return
+
         special_params = {"T", "OutT", "NUM_WARP_Q"}
         for param_name in config.template_params:
             if param_name not in special_params and param_name not in config.dispatch_params:
@@ -112,10 +117,20 @@ class UniversalTemplateInstantiator:
 
         return f"<{', '.join(template_args_parts)}>"
 
-    def _generate_function_signature(self, config: TemplateConfig, template_args: str) -> str:
+    def _generate_function_signature(
+        self, config: TemplateConfig, template_args: str, t_in: str = "", t_out: str = ""
+    ) -> str:
         """Generate function signature."""
         if config.function_signature:
-            return config.function_signature.format(function_name=config.function_name, template_args=template_args)
+            signature = config.function_signature.format(
+                function_name=config.function_name, template_args=template_args
+            )
+            # Replace T and OutT with actual types if provided
+            if t_in:
+                signature = signature.replace("const T *", f"const {t_in} *")
+            if t_out:
+                signature = signature.replace("OutT*", f"{t_out}*")
+            return signature
         else:
             raise ValueError(f"Function signature not found for {config.name}")
 
@@ -133,25 +148,73 @@ class UniversalTemplateInstantiator:
     ) -> str:
         """Generate template instantiation."""
         template_args = self._build_template_args(config, t_in, t_out, params)
-        return self._generate_function_signature(config, template_args)
+        return self._generate_function_signature(config, template_args, t_in, t_out)
+
+    def _clean_output_directory(self, output_dir: str):
+        """Clean output directory before generating new files."""
+        output_path = Path(output_dir)
+        if output_path.exists():
+            shutil.rmtree(output_path)
+        output_path.mkdir(parents=True, exist_ok=True)
 
     def generate_combinations_for_type(self, config: TemplateConfig, t_in: str, t_out: str) -> List[Dict[str, Any]]:
         """Generate parameter combinations for specific type."""
         combinations = []
 
-        def _generate_recursive(
-            params_dict: Dict[str, List[Any]], current_params: Dict[str, Any], param_names: List[str]
-        ):
-            if not param_names:
-                combinations.append(current_params.copy())
-                return
+        if config.name == "moe_fast_hardamard_impl":
+            combinations = self._generate_moe_hardamard_combinations(config, t_in, t_out)
+        else:
 
-            param_name = param_names[0]
-            for value in params_dict[param_name]:
-                current_params[param_name] = value
-                _generate_recursive(params_dict, current_params, param_names[1:])
+            def _generate_recursive(
+                params_dict: Dict[str, List[Any]], current_params: Dict[str, Any], param_names: List[str]
+            ):
+                if not param_names:
+                    combinations.append(current_params.copy())
+                    return
 
-        _generate_recursive(config.dispatch_params, {}, list(config.dispatch_params.keys()))
+                param_name = param_names[0]
+                for value in params_dict[param_name]:
+                    current_params[param_name] = value
+                    _generate_recursive(params_dict, current_params, param_names[1:])
+
+            _generate_recursive(config.dispatch_params, {}, list(config.dispatch_params.keys()))
+
+        return combinations
+
+    def _generate_moe_hardamard_combinations(
+        self, config: TemplateConfig, t_in: str, t_out: str
+    ) -> List[Dict[str, Any]]:
+        """Generate combinations for MoeFastHardamardImplWrapper based on code logic."""
+        combinations = []
+
+        for vec_size in [1, 2, 4, 8, 16]:
+            for log_n in [7, 8, 9, 10]:
+                combinations.append(
+                    {"kLogN": log_n, "VecSize": vec_size, "kNChunks": 1, "kThreads": 128, "UseDiagonalBlockMatrix": 1}
+                )
+
+        for log_n in [7, 8, 9, 10]:
+            vec_size = (1 << log_n) // 128
+            combinations.append(
+                {"kLogN": log_n, "VecSize": vec_size, "kNChunks": 28, "kThreads": 128, "UseDiagonalBlockMatrix": 0}
+            )
+            combinations.append(
+                {"kLogN": log_n, "VecSize": vec_size, "kNChunks": 36, "kThreads": 128, "UseDiagonalBlockMatrix": 0}
+            )
+
+        for log_n in [11, 12, 13, 14]:
+            vec_size = 8
+            n_chunks = (1 << log_n) // (128 * vec_size)
+            combinations.append(
+                {
+                    "kLogN": log_n,
+                    "VecSize": vec_size,
+                    "kNChunks": n_chunks,
+                    "kThreads": 128,
+                    "UseDiagonalBlockMatrix": 0,
+                }
+            )
+
         return combinations
 
     def split_combinations(self, combinations: List[Dict[str, Any]], max_per_file: int) -> List[List[Dict[str, Any]]]:
@@ -186,7 +249,7 @@ class UniversalTemplateInstantiator:
 
         config = self.configs[function_name]
         output_path = Path(output_dir)
-        output_path.mkdir(exist_ok=True)
+        output_path.mkdir(parents=True, exist_ok=True)
 
         if not config.data_types:
             data_types = [("", "", "")]
@@ -206,6 +269,7 @@ class UniversalTemplateInstantiator:
 
     def generate_all(self, output_dir: str):
         """Generate all configured function types."""
+        self._clean_output_directory(output_dir)
         for function_name in self.configs.keys():
             print(f"Generating template instantiations for {function_name}...")
             self.generate_for_function_type(function_name, output_dir)
@@ -219,14 +283,12 @@ def main():
         "--config",
         "-c",
         type=str,
-        default="gpu_ops/append_attn/template_config.json",
         help="Configuration file path (JSON format)",
     )
     parser.add_argument(
         "--output",
         "-o",
         type=str,
-        default="gpu_ops/append_attn/template_instantiation/autogen",
         help="Output directory",
     )
 
