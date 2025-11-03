@@ -24,7 +24,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --max-model-len 16384 \
     --max-num-batched-tokens 16384 \
     --gpu-memory-utilization 0.9 \
-    --max-num-seqs 64
+    --max-num-seqs 128
 ```
 
  **示例2：** 4090上单卡部署16K上下文的服务
@@ -37,7 +37,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --max-model-len 16384 \
     --max-num-batched-tokens 16384 \
     --gpu-memory-utilization 0.8 \
-    --max-num-seqs 128
+    --max-num-seqs 196
 ```
 
  **示例3：** A100上单卡部署16K上下文的服务
