@@ -106,12 +106,12 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
 def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
     """Initialize Paddle Fleet and get rank of worker"""
     # Global rank
-    num_ranks = dist.get_world_size()
+    ranks = dist.get_world_size()
     dist_strategy = fleet.DistributedStrategy()
-    if num_ranks > 0:
+    if ranks > 0:
         dist_strategy.hybrid_configs = {
             "dp_degree": 1,
-            "mp_degree": num_ranks,
+            "mp_degree": ranks,
             "pp_degree": 1,
             "sharding_degree": 1,
         }
@@ -124,7 +124,7 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
         local_rank = fleet.worker_index()
     else:
         local_rank = 0
-    return num_ranks, local_rank
+    return ranks, local_rank
 
 
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
@@ -349,8 +349,7 @@ class PaddleDisWorkerProc:
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
         req_ids = []
         num_running_requests = 0
-        tp_rank = self.local_rank % self.parallel_config.tensor_parallel_size
-        tp_size = self.parallel_config.tensor_parallel_size
+        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
             if self.eplb_config.enable_redundant_experts:
@@ -391,34 +390,34 @@ class PaddleDisWorkerProc:
                     if self.local_rank == 0:
                         rearrange_experts_status_array[0] = RearrangeExpertState.done.value
                     logger.info("redundant_expert: done")
-            if tp_rank == 0:
+            if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
                 if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
                     self.model_weights_signal[0] = self._broadcast_model_weights_signal(
                         src=0, group=self.parallel_config.ep_group
                     )
-            if self.fd_config.load_config.dynamic_load_weight and tp_size > 1:
+            if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.tensor_parallel_size > 1:
                 self.model_weights_signal[0] = self._broadcast_model_weights_signal(
                     src=0, group=self.parallel_config.tp_group
                 )
 
             self.insert_step = False
             req_dicts = None
-            self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
+            self.worker_healthy_live_signal.value[local_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
-            if tp_rank == 0:
+            if local_rank == 0:
                 if self.task_queue.num_tasks() > 0:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
                     ):
-                        if self.nnode > 1 and tp_size > self.max_chips_per_node:
+                        if self.nnode > 1 and self.parallel_config.tensor_parallel_size > self.max_chips_per_node:
                             self.task_queue.read_finish_flag.set(1)
                         else:
                             self.exist_task_signal.value[0] = ExistTaskStatus.EXIST
 
-            if tp_size > 1:
+            if self.parallel_config.tensor_parallel_size > 1:
                 # Synchronize the signal for other workers
                 self._tp_barrier_wait()
 
@@ -472,7 +471,7 @@ class PaddleDisWorkerProc:
                 self.worker.preprocess_new_task(req_dicts, num_running_requests)
 
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
-                if tp_size > 1:
+                if self.ranks > 1:
                     self._tp_barrier_wait()
 
                 time.sleep(0.001)
