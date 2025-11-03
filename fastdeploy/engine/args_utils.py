@@ -16,6 +16,7 @@
 
 import argparse
 import json
+import os
 from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional, Union
@@ -25,6 +26,7 @@ from fastdeploy.config import (
     CacheConfig,
     ConvertOption,
     EarlyStopConfig,
+    EPLBConfig,
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
@@ -52,6 +54,16 @@ def nullable_str(x: str) -> Optional[str]:
     Convert an empty string to None, preserving other string values.
     """
     return x if x else None
+
+
+def get_model_architecture(model: str, model_config_name: Optional[str] = "config.json") -> Optional[str]:
+    config_path = os.path.join(model, model_config_name)
+    if os.path.exists(config_path):
+        model_config = json.load(open(config_path, "r", encoding="utf-8"))
+        architecture = model_config["architectures"][0]
+        return architecture
+    else:
+        return model
 
 
 @dataclass
@@ -205,7 +217,7 @@ class EngineArgs:
     The amount of CPU memory to offload to.
     """
 
-    cache_queue_port: str = "8003"
+    cache_queue_port: str = "0"
     """
     Port for cache queue.
     """
@@ -225,7 +237,7 @@ class EngineArgs:
     Flag to enable the custom all-reduce kernel.
     """
 
-    engine_worker_queue_port: str = "8002"
+    engine_worker_queue_port: str = "0"
     """
     Port for worker queue communication.
     """
@@ -411,6 +423,16 @@ class EngineArgs:
     Flag to specify the dtype of lm_head as FP32. Default is False (Using model default dtype).
     """
 
+    logits_processors: Optional[List[str]] = None
+    """
+    A list of FQCNs (Fully Qualified Class Names) of logits processors supported by the service.
+    A fully qualified class name (FQCN) is a string that uniquely identifies a class within a Python module.
+
+    - To enable builtin logits processors, add builtin module paths and class names to the list. Currently support:
+        - fastdeploy.model_executor.logits_processor:LogitBiasLogitsProcessor
+    - To enable custom logits processors, add your dotted paths to module and class names to the list.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -431,14 +453,18 @@ class EngineArgs:
                 raise NotImplementedError("Only CUDA platform supports logprob.")
             if self.speculative_config is not None and self.logprobs_mode.startswith("processed"):
                 raise NotImplementedError("processed_logprobs not support in speculative.")
-        if self.speculative_config is not None:
-            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+
         if self.splitwise_role != "mixed" and self.cache_transfer_protocol != "rdma":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if not current_platform.is_cuda() and not current_platform.is_xpu():
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if self.guided_decoding_backend != "off":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+
+        if "PaddleOCR" in get_model_architecture(self.model, self.model_config_name):
+            envs.FD_ENABLE_MAX_PREFILL = 1
+            self.enable_prefix_caching = False
+            self.max_encoder_cache = 0
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
@@ -644,7 +670,7 @@ class EngineArgs:
         model_group.add_argument(
             "--logprobs-mode",
             type=str,
-            choices=["raw_logprobs", "processed_logprobs", "processed_logits"],
+            choices=["raw_logprobs", "raw_logits", "processed_logprobs", "processed_logits"],
             default=EngineArgs.logprobs_mode,
             help="Indicates the content returned in the logprobs.",
         )
@@ -671,6 +697,13 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.lm_head_fp32,
             help="Specify the dtype of lm_head weight as float32.",
+        )
+        model_group.add_argument(
+            "--logits-processors",
+            type=str,
+            nargs="+",
+            default=EngineArgs.logits_processors,
+            help="FQCNs (Fully Qualified Class Names) of logits processors supported by the service.",
         )
 
         # Parallel processing parameters group
@@ -1044,7 +1077,13 @@ class EngineArgs:
         Create and return a Config object based on the current settings.
         """
         all_dict = asdict(self)
+        eplb_cfg = EPLBConfig()
+        all_dict["enable_redundant_experts"] = eplb_cfg.enable_redundant_experts
         model_cfg = ModelConfig(all_dict)
+
+        # XPU currently disable prefix cache for VL model
+        if current_platform.is_xpu() and (self.enable_mm or model_cfg.enable_mm):
+            self.enable_prefix_caching = False
 
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size
@@ -1098,6 +1137,7 @@ class EngineArgs:
             load_config=load_cfg,
             parallel_config=parallel_cfg,
             speculative_config=speculative_cfg,
+            eplb_config=eplb_cfg,
             structured_outputs_config=structured_outputs_config,
             ips=self.ips,
             use_warmup=self.use_warmup,

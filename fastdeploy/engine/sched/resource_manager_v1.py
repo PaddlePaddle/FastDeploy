@@ -266,14 +266,11 @@ class ResourceManagerV1(ResourceManager):
                         del self.req_dict[preempted_req.request_id]
                     self._free_blocks(preempted_req)
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
-                    main_process_metrics.num_requests_running.dec(1)
                 else:
                     self._free_blocks(preempted_req)
                     preempted_req.cached_block_num = 0
                     self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
-                    main_process_metrics.num_requests_waiting.inc(1)
-                    main_process_metrics.num_requests_running.dec(1)
                 preempted_reqs.append(preempted_req)
                 scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
 
@@ -331,6 +328,26 @@ class ResourceManagerV1(ResourceManager):
             inputs["mm_positions"] = []
             inputs["mm_hashes"] = []
 
+    def _is_mm_request(self, request):
+        inputs = request.multimodal_inputs
+        if inputs is None or len(inputs) == 0:
+            return False
+
+        if (
+            (inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0)
+            or (inputs.get("image_feature_urls") is not None and len(inputs["image_feature_urls"]) > 0)
+            or (inputs.get("audio_feature_urls") is not None and len(inputs["audio_feature_urls"]) > 0)
+        ):
+            return True
+        elif (
+            inputs.get("images", None) is not None
+            and inputs.get("image_patch_id", None) is not None
+            and inputs.get("grid_thw", None) is not None
+        ):
+            return True
+
+        return False
+
     def _get_num_new_tokens(self, request, token_budget):
         # TODO: set condition to new _get_num_new_tokens
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
@@ -340,7 +357,6 @@ class ResourceManagerV1(ResourceManager):
         if not self.config.model_config.enable_mm:
             return num_new_tokens
 
-        request.with_image = False
         inputs = request.multimodal_inputs
         if inputs.get("patch_idx", None) is not None and inputs.get("patch_map", None) is not None:
             pre_end_idx = request.num_computed_tokens
@@ -464,6 +480,12 @@ class ResourceManagerV1(ResourceManager):
 
         # Compatible with scenarios without images and videos.
         return num_new_tokens
+
+    def exist_mm_prefill(self, scheduled_reqs):
+        for request in scheduled_reqs:
+            if request.task_type == RequestType.PREFILL and self._is_mm_request(request):
+                return True
+        return False
 
     def exist_prefill(self, scheduled_reqs):
         for request in scheduled_reqs:
@@ -610,12 +632,12 @@ class ResourceManagerV1(ResourceManager):
                 while self.waiting and token_budget > 0:
                     if len(self.running) == self.max_num_seqs:
                         break
-                    if not self.enable_max_prefill and (
-                        (self.config.model_config.enable_mm or paddle.is_compiled_with_xpu())
-                        and self.exist_prefill(scheduled_reqs)
+
+                    request = self.waiting[0]
+                    if (self._is_mm_request(request) and self.exist_mm_prefill(scheduled_reqs)) or (
+                        paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)
                     ):
                         break
-                    request = self.waiting[0]
                     if request.status == RequestStatus.WAITING:
                         self._update_mm_hashes(request)
                         # Enable prefix caching
@@ -652,8 +674,6 @@ class ResourceManagerV1(ResourceManager):
                                     request, self.config.cache_config.block_size, request.num_computed_tokens
                                 )
                             request.status = RequestStatus.RUNNING
-                            main_process_metrics.num_requests_waiting.dec(1)
-                            main_process_metrics.num_requests_running.inc(1)
                             if self.config.scheduler_config.splitwise_role == "mixed":
                                 allocated_position = self.get_available_position()
                                 request.idx = allocated_position
