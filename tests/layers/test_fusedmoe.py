@@ -447,6 +447,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
             ),
             quant_config=BlockWiseFP8Config(weight_block_size=[128, 128]),
             # quant_config=WINT8Config({}),
+            # quant_config=WINT4Config({}),
             scheduler_config=SchedulerConfig({}),
             cache_config=CacheConfig({}),
             graph_opt_config=GraphOptimizationConfig({}),
@@ -458,7 +459,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
         self.fd_config.parallel_config.expert_parallel_size = self.ep_size
         if self.ep_size > 1:
             self.fd_config.parallel_config.ep_group = fleet.get_hybrid_communicate_group().get_model_parallel_group()
-            self.fd_config.scheduler_config.splitwise_role = "decode"
+            self.fd_config.scheduler_config.splitwise_role = "mixed"
             self.fd_config.model_config.moe_phase.phase = "decode"
 
         weight_key_map = {
@@ -573,7 +574,11 @@ class TestFusedMoE(unittest.TestCase):
         # 这行代码必须保留，否则影响均匀性！
         paddle.seed(ep_rank + 100)
 
-        fused_moe = FuseMoEWrapper(self.model_config, tp_size, tp_rank, ep_size, ep_rank, nnodes=nnodes)
+        num_layers = 80
+        real_weight_layers = 20
+        fused_moe = [None] * real_weight_layers
+        for i in range(real_weight_layers):
+            fused_moe[i] = FuseMoEWrapper(self.model_config, tp_size, tp_rank, ep_size, ep_rank, nnodes=nnodes)
 
         moe_cuda_graphs = [None] * 100
         cache_hidden_states = [None] * 100
@@ -583,11 +588,9 @@ class TestFusedMoE(unittest.TestCase):
 
             cache_hidden_states[idx] = paddle.rand((num_tokens, self.model_config.hidden_size), dtype=paddle.bfloat16)
 
-            num_layers = 80
-
             def fake_model_run():
-                for _ in range(num_layers):
-                    out = fused_moe.fused_moe(cache_hidden_states[idx], gating)
+                for j in range(num_layers):
+                    out = fused_moe[j % real_weight_layers].fused_moe(cache_hidden_states[idx], gating)
 
                 return out
 
@@ -612,9 +615,20 @@ class TestFusedMoE(unittest.TestCase):
             times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
             print("num_token:", num_tokens)
             print(times[-5:])
-            GB = 1.0 * num_tokens * self.moe_k * self.hidden_size * 3.0 / (1e9)
+            rdma_GB = 3.0 * num_tokens * self.moe_k * self.hidden_size / (1e9)
             times_s = (times[-1] / num_layers) / (1e3)
-            print(times[-1], round(GB / times_s, 1))
+            print(times[-1], round(rdma_GB / times_s, 1))
+
+            tmp_layer = fused_moe[0].fused_moe
+            memory_GB = (
+                tmp_layer.num_local_experts
+                * tmp_layer.hidden_size
+                * tmp_layer.moe_intermediate_size
+                * 3
+                / (1e9)
+                * num_layers
+            )
+            print(round(memory_GB / times[-1], 1), "TB/s")
 
         shutil.rmtree(self.model_name_or_path)
 

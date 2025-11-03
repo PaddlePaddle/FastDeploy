@@ -32,6 +32,7 @@ def speculate_update_np(
     seq_lens_this_time,
     is_block_step,
     stop_nums,
+    mask_rollback,
 ):
     stop_sum = 0
     real_bsz = seq_lens_this_time.shape[0]
@@ -47,9 +48,13 @@ def speculate_update_np(
 
             if stop_flags[bid]:
                 stop_flag_now_int = 1
+                mask_rollback[bid] = 0
 
-            if seq_lens_encoder[bid] == 0:
+            elif seq_lens_encoder[bid] == 0:
                 seq_lens_decoder[bid] += accept_num[bid]
+                mask_rollback[bid] = seq_lens_this_time[bid] - accept_num[bid]
+            else:
+                mask_rollback[bid] = 0
 
             if (seq_lens_encoder[bid] == 0) and (seq_lens_this_time[bid] > 1):
                 cur_len = actual_draft_token_nums[bid]
@@ -103,6 +108,7 @@ def gen_inputs(
     stop_flags = rng.integers(0, 2, size=max_bsz, dtype=np.bool_)
     is_block_step = rng.integers(0, 2, size=max_bsz, dtype=np.bool_)
     stop_nums = np.array([5], dtype=np.int64)
+    mask_rollback = np.zeros([max_bsz], dtype=np.int32)
 
     seq_lens_this_time = rng.integers(1, max_draft_tokens, size=real_bsz, dtype=np.int32)
 
@@ -118,6 +124,7 @@ def gen_inputs(
         "seq_lens_this_time": seq_lens_this_time,
         "is_block_step": is_block_step,
         "stop_nums": stop_nums,
+        "mask_rollback": mask_rollback,
     }
 
 

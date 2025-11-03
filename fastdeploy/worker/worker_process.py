@@ -18,6 +18,7 @@ import argparse
 import json
 import os
 import time
+from multiprocessing import shared_memory
 from typing import Tuple
 
 import numpy as np
@@ -30,6 +31,7 @@ from fastdeploy.config import (
     CacheConfig,
     DeviceConfig,
     EarlyStopConfig,
+    EPLBConfig,
     ErnieArchitectures,
     FDConfig,
     GraphOptimizationConfig,
@@ -40,8 +42,21 @@ from fastdeploy.config import (
     SpeculativeConfig,
     StructuredOutputsConfig,
 )
+from fastdeploy.eplb.async_expert_loader import (
+    MODEL_MAIN_NAME,
+    REARRANGE_EXPERT_MAGIC_NUM,
+    create_mmap,
+    load_tensor_from_shm_mem,
+)
+from fastdeploy.eplb.experts_manager import RedundantExpertManager
+from fastdeploy.eplb.utils import RearrangeExpertState
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
-from fastdeploy.inter_communicator import ExistTaskStatus, IPCSignal, ModelWeightsStatus
+from fastdeploy.inter_communicator import (
+    ExistTaskStatus,
+    IPCSignal,
+    ModelWeightsStatus,
+    shared_memory_exists,
+)
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
@@ -142,6 +157,7 @@ class PaddleDisWorkerProc:
         self.parallel_config = fd_config.parallel_config
         self.cache_config = fd_config.cache_config
         self.scheduler_config = fd_config.scheduler_config
+        self.eplb_config = fd_config.eplb_config
 
         # TODO(gongshaotian): Use worker factory to get worker
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
@@ -161,7 +177,7 @@ class PaddleDisWorkerProc:
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         if self.parallel_config.data_parallel_size > 1 and not envs.FD_ENABLE_MULTI_API_SERVER:
             launched_expert_service_signal_data = np.zeros(
-                shape=[min(self.parallel_config.data_parallel_size, self.max_chips_per_node)], dtype=np.int32
+                shape=[self.parallel_config.data_parallel_size // self.fd_config.nnode], dtype=np.int32
             )
             self.launched_expert_service_signal = IPCSignal(
                 name="launched_expert_service_signal",
@@ -170,7 +186,12 @@ class PaddleDisWorkerProc:
                 suffix=self.parallel_config.engine_pid,
                 create=False,
             )
-            while self.launched_expert_service_signal.value[self.local_rank % self.max_chips_per_node] == 0:
+            while (
+                self.launched_expert_service_signal.value[
+                    self.parallel_config.local_data_parallel_id % self.max_chips_per_node
+                ]
+                == 0
+            ):
                 pass
 
         # init worker_ready_signal
@@ -240,6 +261,18 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
+    def update_weights_from_tensor(self, mmap_infos):
+        """
+        update_weights_from_tensor
+        """
+        state_dicts = load_tensor_from_shm_mem(self.experts_manager.tensor_infos, mmap_infos[MODEL_MAIN_NAME], logger)
+        rank_expert_list, logical_to_physical_map, expert_count = self.experts_manager.get_ep_rank_to_expert_id_list()
+        self.worker.get_model().redundant_table_manger.update_expert_rank_table(
+            rank_expert_list, logical_to_physical_map, expert_count
+        )
+        # TO BE FIXED
+        self.worker.get_model().update_state_dict(state_dicts)
+
     def _broadcast_model_weights_signal(self, src: int, group) -> int:
         model_weights_signal_tensor = paddle.full(shape=[1], fill_value=self.model_weights_signal[0], dtype="int32")
         paddle.distributed.broadcast(model_weights_signal_tensor, src=src, group=group)
@@ -255,7 +288,63 @@ class PaddleDisWorkerProc:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
+        if self.eplb_config.enable_redundant_experts:
+            self.last_dump_expert_workload_ts = 0
+            self.experts_manager = RedundantExpertManager(
+                rank=self.local_rank, ep_size=self.ranks, fd_config=self.fd_config
+            )
+            num_layers = self.fd_config.model_config.num_hidden_layers
+            num_experts = self.fd_config.model_config.moe_num_experts
+            expert_token_stats = np.zeros((num_layers, num_experts), dtype=np.int32)
+            shm_local_experts_token_stats = shared_memory.SharedMemory(
+                create=False,
+                size=expert_token_stats.nbytes,
+                name=f"{envs.get_unique_name('local_experts_token_stats_dprank' + self.local_rank)}",
+            )
+            expert_tokens_stats_array = np.ndarray(
+                expert_token_stats.shape, dtype=expert_token_stats.dtype, buffer=shm_local_experts_token_stats.buf
+            )
+            signal_clear_experts_token_stats = np.zeros([1], dtype=np.int32)
+            shm_signal_clear_experts_token_stats = shared_memory.SharedMemory(
+                create=False,
+                size=signal_clear_experts_token_stats.nbytes,
+                name=f"{envs.get_unique_name('signal_clear_experts_token_stats_dprank' + self.local_rank)}",
+            )
+            signal_clear_experts_token_stats_array = np.ndarray(
+                signal_clear_experts_token_stats.shape,
+                dtype=signal_clear_experts_token_stats.dtype,
+                buffer=shm_signal_clear_experts_token_stats.buf,
+            )
+            if self.local_rank == 0:
+                signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
+                shm_signal_update_weight_from_tensor = shared_memory.SharedMemory(
+                    create=False,
+                    size=signal_update_weight_from_tensor.nbytes,
+                    name=f"{envs.get_unique_name('signal_update_weight_from_tensor_dprank' + self.local_rank)}",
+                )
+                signal_update_weight_from_tensor_array = np.ndarray(
+                    signal_update_weight_from_tensor.shape,
+                    dtype=signal_update_weight_from_tensor.dtype,
+                    buffer=shm_signal_update_weight_from_tensor.buf,
+                )
 
+                rearrange_experts_status = np.zeros([1], dtype=np.int32)
+                shm_rearrange_experts_status = shared_memory.SharedMemory(
+                    create=False,
+                    size=rearrange_experts_status.nbytes,
+                    name=f"{envs.get_unique_name('rearrange_experts_status_dprank' + self.local_rank)}",
+                )
+
+                rearrange_experts_status_array = np.ndarray(
+                    rearrange_experts_status.shape,
+                    dtype=rearrange_experts_status.dtype,
+                    buffer=shm_rearrange_experts_status.buf,
+                )
+
+                expert_workload_dump_interval = envs.FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL
+                mmap_infos = create_mmap(
+                    [MODEL_MAIN_NAME], self.local_rank, self.ranks, shm_uuid=os.getenv("SHM_UUID", ""), logger=logger
+                )
         # Currently, only support single node
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
         req_ids = []
@@ -263,6 +352,44 @@ class PaddleDisWorkerProc:
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
+            if self.eplb_config.enable_redundant_experts:
+                rearrange_time = time.time()
+                # 获取专家负载
+                if expert_tokens_stats_array is not None and (
+                    int(rearrange_time) - self.last_dump_expert_workload_ts > expert_workload_dump_interval
+                ):
+                    self.last_dump_expert_workload_ts = int(rearrange_time)
+                    clear_stat = False
+                    if signal_clear_experts_token_stats_array[0] == 1:
+                        clear_stat = True
+                        signal_clear_experts_token_stats_array[0] = 0
+                    (
+                        new_stats_array,
+                        _,
+                        _,
+                        _,
+                    ) = self.worker.get_model().redundant_table_manger.get_expert_tokens_stats(clear_stat=clear_stat)
+                    expert_tokens_stats_array[:] = new_stats_array[:]
+                elif expert_tokens_stats_array is None:
+                    logger.warning("redundant_expert: expert_tokens_stats_array not init")
+
+                # 所有DP同步更新权重
+                broadcast_value = 0
+                if self.local_rank == 0 and signal_update_weight_from_tensor_array[0] == 1:
+                    logger.info("redundant_expert: update_weight_from_tensor broadcast signal")
+                    signal_update_weight_from_tensor_array[0] = 0
+                    broadcast_value = REARRANGE_EXPERT_MAGIC_NUM
+                data = paddle.to_tensor([broadcast_value])
+                paddle.distributed.broadcast(data, 0)
+                if data[0] == REARRANGE_EXPERT_MAGIC_NUM:
+                    self.update_weights_from_tensor(mmap_infos)
+                    logger.info(
+                        f"redundant_expert: update_weight_from_tensor success, cost {(time.time() - rearrange_time)*1000}ms"
+                    )
+                    paddle.distributed.barrier()
+                    if self.local_rank == 0:
+                        rearrange_experts_status_array[0] = RearrangeExpertState.done.value
+                    logger.info("redundant_expert: done")
             if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
                 if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
@@ -283,7 +410,6 @@ class PaddleDisWorkerProc:
             # The first worker detects whether there are tasks in the task queue
             if local_rank == 0:
                 if self.task_queue.num_tasks() > 0:
-                    # VL only support 1 batch to prefill
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
                     ):
@@ -427,7 +553,7 @@ class PaddleDisWorkerProc:
                 array=prefilled_step_idx_data,
                 dtype=np.int32,
                 suffix=gpu_id,
-                create=False,
+                create=not shared_memory_exists(prefilled_step_name),
             )
             step_shm_value.value[0] = -1
 
@@ -447,7 +573,7 @@ class PaddleDisWorkerProc:
             is_server=False,
             num_client=self.parallel_config.tensor_parallel_size,
             client_id=self.parallel_config.tensor_parallel_rank,
-            local_data_parallel_id=self.parallel_config.data_parallel_rank,
+            local_data_parallel_id=self.parallel_config.local_data_parallel_id,
         )
 
     def load_model(self) -> None:
@@ -750,6 +876,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     plas_attention_config = PlasAttentionConfig(args.plas_attention_config)
 
     early_stop_config = EarlyStopConfig(args.early_stop_config)
+    eplb_config = EPLBConfig()
 
     structured_outputs_config: StructuredOutputsConfig = StructuredOutputsConfig(args=vars(args))
 
@@ -815,6 +942,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         ips=args.ips,
         plas_attention_config=plas_attention_config,
         structured_outputs_config=structured_outputs_config,
+        eplb_config=eplb_config,
     )
     update_fd_config_for_mm(fd_config)
     if fd_config.load_config.load_choices == "default_v1" and not v1_loader_support(fd_config):
