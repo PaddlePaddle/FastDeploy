@@ -608,7 +608,7 @@ inline __device__ void apply_rotary_embedding(Vec<T, PackSize>& vec, Vec<float, 
     }
 }
 
-template <bool Is_even_MN=true, typename TiledCopy, typename Engine0, typename Layout0, typename Engine1, typename Layout1, typename Engine2, typename Layout2>
+template <bool Is_even_MN=true, bool Is_even_K=false, typename TiledCopy, typename Engine0, typename Layout0, typename Engine1, typename Layout1, typename Engine2, typename Layout2>
 __forceinline__ __device__ void copy(
         TiledCopy tiled_copy, Tensor<Engine0, Layout0> const &S,
         Tensor<Engine1, Layout1> &D,
@@ -626,6 +626,8 @@ __forceinline__ __device__ void copy(
             for (int k = 0; k < size<2>(S); ++k) {
                 cute::copy(tiled_copy, S(_, m, k), D(_, m, k));
             }
+        } else if constexpr (Is_even_K) {
+            clear(D(_, m, _));
         }
     }
 }

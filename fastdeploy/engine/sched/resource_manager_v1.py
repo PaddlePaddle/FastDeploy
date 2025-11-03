@@ -335,11 +335,11 @@ class ResourceManagerV1(ResourceManager):
 
         if os.environ["FD_ATTENTION_BACKEND"] == "DYNAMIC_QUANT_CACHE_ATTN":
             remain_tokens = request.need_prefill_tokens - request.prefill_end_index
-            if remain_tokens < self.config.max_num_batched_tokens:
+            if remain_tokens < self.config.scheduler_config.max_num_batched_tokens:
                 #  last chunk
                 return remain_tokens
             else:
-                return self.config.max_num_batched_tokens
+                return self.config.scheduler_config.max_num_batched_tokens
 
         num_new_tokens = min(num_new_tokens, token_budget)
         request.with_image = False

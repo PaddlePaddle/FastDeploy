@@ -4,7 +4,6 @@
  ******************************************************************************/
 
 #pragma once
-#include "cute/algorithm/copy.hpp"
 #include "cute/atom/mma_atom.hpp"
 #include "cutlass/gemm/collective/collective_builder.hpp"
 
