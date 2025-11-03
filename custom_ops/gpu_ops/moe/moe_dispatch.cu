@@ -353,7 +353,8 @@ std::vector<std::vector<int64_t>> MoeExpertDispatchInferShape(
           {moe_topk, num_rows},
           {num_rows, moe_topk},
           {num_rows, moe_topk},
-          {permuted_rows}};
+          {permuted_rows},
+          {num_rows}};
 }
 
 std::vector<paddle::DataType> MoeExpertDispatchInferDtype(
@@ -366,7 +367,8 @@ std::vector<paddle::DataType> MoeExpertDispatchInferDtype(
           paddle::DataType::INT32,
           paddle::DataType::FLOAT32,
           paddle::DataType::INT32,
-          paddle::DataType::INT32};
+          paddle::DataType::INT32,
+          paddle::DataType::FLOAT32};
 }
 
 /**
