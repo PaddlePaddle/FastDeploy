@@ -30,7 +30,6 @@ from fastdeploy.model_executor.ops.xpu import (
     xpu_moe_layer,
 )
 from fastdeploy.model_executor.utils import default_weight_loader, set_weight_attrs
-from fastdeploy.platforms import current_platform
 
 
 class XPUMoEMethod(MoEMethodBase):
@@ -64,22 +63,13 @@ class XPUMoEMethod(MoEMethodBase):
         create weight process.
         """
         if layer.fd_config.load_config.load_choices == "default_v1" and self.moe_quant_type in ["w16a16"]:
-            if current_platform.is_cuda():
-                self.up_gate_proj_weight_shape = [
-                    layer.num_local_experts,
-                    layer.hidden_size,
-                    layer.moe_intermediate_size * 2,
-                ]
-                self.down_proj_weight_shape = [layer.num_local_experts, layer.moe_intermediate_size, layer.hidden_size]
-                extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 1, "down": 0, "up": 1}}
-            else:
-                self.up_gate_proj_weight_shape = [
-                    layer.num_local_experts,
-                    layer.moe_intermediate_size * 2,
-                    layer.hidden_size,
-                ]
-                self.down_proj_weight_shape = [layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size]
-                extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}}
+            self.up_gate_proj_weight_shape = [
+                layer.num_local_experts,
+                layer.moe_intermediate_size * 2,
+                layer.hidden_size,
+            ]
+            self.down_proj_weight_shape = [layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size]
+            extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}}
 
             layer.up_gate_proj_weight = layer.create_parameter(
                 shape=self.up_gate_proj_weight_shape,
