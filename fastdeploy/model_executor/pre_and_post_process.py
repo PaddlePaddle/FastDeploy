@@ -398,7 +398,6 @@ def post_process_normal(
                 sampler_output.sampled_token_ids,
                 model_output.is_block_step,
             )
-    prompt_logprobs_list = model_output.prompt_logprobs_list
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
     if not skip_save_output:
@@ -407,7 +406,7 @@ def post_process_normal(
                 output = _build_stream_transfer_data(
                     sampler_output.sampled_token_ids,
                     logprobs=sampler_output.logprobs_tensors,
-                    prompt_logprobs=prompt_logprobs_list,
+                    prompt_logprobs=model_output.prompt_logprobs_list,
                 )
                 async_output_queue.put(output)
         else:
