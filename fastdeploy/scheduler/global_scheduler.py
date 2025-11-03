@@ -533,33 +533,32 @@ class GlobalScheduler:
                 continue
 
             request: ScheduledRequest = ScheduledRequest.unserialize(serialized_request)
-            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                required_input_blocks = self.calc_required_blocks(request.prompt_tokens_ids_len, block_size)
+            required_input_blocks = self.calc_required_blocks(request.prompt_tokens_ids_len, block_size)
 
-                current_prefill_tokens += request.prompt_tokens_ids_len
-                required_total_blocks += required_input_blocks + reserved_output_blocks
+            current_prefill_tokens += request.prompt_tokens_ids_len
+            required_total_blocks += required_input_blocks + reserved_output_blocks
 
-                if required_total_blocks > available_blocks:
-                    remaining_request.append((request_queue_name, serialized_request))
-                    continue
+            if required_total_blocks > available_blocks:
+                remaining_request.append((request_queue_name, serialized_request))
+                continue
 
-                if not envs.FD_ENABLE_MAX_PREFILL:
-                    if self.enable_chunked_prefill:
-                        if request.prompt_tokens_ids_len > self.long_prefill_token_threshold:
-                            long_partial_requests += 1
-                            if long_partial_requests > self.max_long_partial_prefills:
-                                remaining_request.append((request_queue_name, serialized_request))
-                                continue
-                        else:
-                            short_partial_requests += 1
-
-                        if short_partial_requests + long_partial_requests > self.max_num_partial_prefills:
+            if not envs.FD_ENABLE_MAX_PREFILL:
+                if self.enable_chunked_prefill:
+                    if request.prompt_tokens_ids_len > self.long_prefill_token_threshold:
+                        long_partial_requests += 1
+                        if long_partial_requests > self.max_long_partial_prefills:
                             remaining_request.append((request_queue_name, serialized_request))
                             continue
                     else:
-                        if current_prefill_tokens > max_num_batched_tokens:
-                            remaining_request.append((request_queue_name, serialized_request))
-                            continue
+                        short_partial_requests += 1
+
+                    if short_partial_requests + long_partial_requests > self.max_num_partial_prefills:
+                        remaining_request.append((request_queue_name, serialized_request))
+                        continue
+                else:
+                    if current_prefill_tokens > max_num_batched_tokens:
+                        remaining_request.append((request_queue_name, serialized_request))
+                        continue
 
             scheduled_requests.append(request)
 
