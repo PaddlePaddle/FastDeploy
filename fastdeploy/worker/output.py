@@ -272,6 +272,14 @@ class ModelOutputData:
     """
     prompt_lens: paddle.Tensor = None
 
+    """
+        step mask rollback in some cases
+    """
+    mask_rollback: paddle.Tensor = None
+
+    """
+        prompt_logprobs
+    """
     prompt_logprobs_list: Optional[LogprobsTensors] = None
 
 

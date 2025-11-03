@@ -64,7 +64,7 @@ class TestAsyncLLMEngine(unittest.TestCase):
 
         except Exception as e:
             print(f"Setting up AsyncLLMEngine failed: {e}")
-            raise unittest.SkipTest(f"AsyncLLMEngine initialization failed: {e}")
+            raise
 
     @classmethod
     def tearDownClass(cls):
