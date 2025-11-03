@@ -24,7 +24,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --max-model-len 16384 \
     --max-num-batched-tokens 16384 \
     --gpu-memory-utilization 0.9 \
-    --max-num-seqs 64
+    --max-num-seqs 128
 ```
 
 **Example 2:** Deploying a 16K Context Service on a Single RTX 4090 GPU
@@ -37,7 +37,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --max-model-len 16384 \
     --max-num-batched-tokens 16384 \
     --gpu-memory-utilization 0.8 \
-    --max-num-seqs 128
+    --max-num-seqs 196
 ```
 
 **Example 2:** Deploying a 16K Context Service on a Single A100 GPU
