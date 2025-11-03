@@ -13,6 +13,7 @@ source =
     */fastdeploy
 
 [report]
+ignore_errors = True
 omit =
     */site-packages/*/tests/*
     */site-packages/setuptools/*
