@@ -461,9 +461,11 @@ class EngineArgs:
                 raise NotImplementedError("processed_logprobs not support in speculative.")
             if self.speculative_config is not None and self.max_logprobs == -1:
                 raise NotImplementedError("max_logprobs=-1 not support in speculative.")
-            if envs.FD_USE_GET_SAVE_OUTPUT_V1 == 0:
+            if not envs.FD_USE_GET_SAVE_OUTPUT_V1:
                 self.max_logprobs = 20
                 console_logger.warning("Set max_logprobs=20 when FD_USE_GET_SAVE_OUTPUT_V1=0")
+            if self.max_logprobs == -1 and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                raise NotImplementedError("Only ENABLE_V1_KVCACHE_SCHEDULER=1 support max_logprobs=-1")
 
         if self.splitwise_role != "mixed" and self.cache_transfer_protocol != "rdma":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0

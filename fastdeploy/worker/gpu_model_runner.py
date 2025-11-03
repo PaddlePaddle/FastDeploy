@@ -116,8 +116,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
         self.is_pooling_model = self.fd_config.model_config.runner_type == "pooling"
         self.vocal_size = self.fd_config.model_config.vocab_size
-        self.running_reqs: list[Request] = self.scheduler_config.max_num_seqs * [None]
-        self.prompt_logprobs_reqs: list[Request] = []
+        self.prompt_logprobs_reqs: dict[str, Request] = {}
         self.in_progress_prompt_logprobs: dict[str, LogprobsTensors] = {}
 
         # VL model config:
@@ -557,12 +556,8 @@ class GPUModelRunner(ModelRunnerBase):
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
                 self.share_inputs["pre_ids"][idx : idx + 1] = -1
-                # self.running_reqs[idx] = request
-                prompt_logprobs = request.sampling_params.prompt_logprobs
-                if prompt_logprobs is not None:
-                    self.num_prompt_logprobs[request.request_id] = (
-                        self.vocal_size if prompt_logprobs == -1 else prompt_logprobs
-                    )
+                if request.sampling_params.prompt_logprobs is not None:
+                    self.prompt_logprobs_reqs[request.request_id] = request
                 has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
@@ -2014,24 +2009,8 @@ class GPUModelRunner(ModelRunnerBase):
         # 1. Prepare inputs of model and sampler.
         skip_idx_list = self._get_skip_idx(model_forward_batch)
         self._prepare_inputs()
-        # print(f'model_forward_batch = {model_forward_batch}')
-        # print(f'self.running_reqs = {self.running_reqs}')
-        # for bid, req in enumerate(self.running_reqs):
-        #     if req is None or self.share_inputs["stop_flags"][bid,0]:
-        #         self.running_reqs[bid] = None        # stop_flags = true
-        #         self.num_prompt_logprobs[bid] = None
-        #         continue
-        #     print(f'req: {req.to_dict()}')
-        #     if req.sampling_params.prompt_logprobs is not None:
-        #         self.num_prompt_logprobs[bid] = self.vocal_size if req.sampling_params.prompt_logprobs == -1 else req.sampling_params.prompt_logprobs
-        print(f"self.in_progress_prompt_logprobs = {self.in_progress_prompt_logprobs}")
-        # print(f'input_ids = {self.share_inputs["input_ids"]}')
+        # print(f"self.in_progress_prompt_logprobs = {self.in_progress_prompt_logprobs}")
         print(f'ids_remove_padding = {self.share_inputs["ids_remove_padding"]}')
-        print(f"batch_id_per_token = {self.forward_meta.batch_id_per_token}")
-        print(f'cu_seqlens_q = {self.share_inputs["cu_seqlens_q"]}')
-        print(f'seq_lens_encoder = {self.share_inputs["seq_lens_encoder"]}')
-        print(f'seq_lens_decoder = {self.share_inputs["seq_lens_decoder"]}')
-        print(f'seq_lens_this_time = {self.share_inputs["seq_lens_this_time"]}')
         self.sampler.pre_process(skip_idx_list)
 
         # 1.1 Update state of logits processor
@@ -2062,6 +2041,9 @@ class GPUModelRunner(ModelRunnerBase):
             )
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
+
+        prompt_logprobs_list = self._get_prompt_logprobs_dict(model_output)
+
         hidden_states = rebuild_padding(
             model_output,
             self.share_inputs["cu_seqlens_q"],
@@ -2071,29 +2053,6 @@ class GPUModelRunner(ModelRunnerBase):
             (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
             self.model_config.max_model_len,
         )
-        # 遍历需要计算prompt_logprobs的请求
-        completed_prefill_reqs = []
-        for idx, request in enumerate(self.prompt_logprobs_reqs):
-            # 1.判断当前请求是否已经计算完prompt_logprobs
-            num_prompt_logprobs = request.sampling_params.prompt_logprobs
-            if request.prompt_token_ids is None or num_prompt_logprobs is None:
-                continue
-            if num_prompt_logprobs == -1:
-                num_prompt_logprobs = self.vocal_size
-            num_prompt_tokens = len(request.prompt_token_ids)
-            logprobs_tensors = self.in_progress_prompt_logprobs.get(request.idx)
-            if not logprobs_tensors:
-                logprobs_tensors = LogprobsTensors.empty_cpu(num_prompt_tokens, num_prompt_logprobs + 1)
-                self.in_progress_prompt_logprobs[request.idx] = logprobs_tensors
-            # 2.如果已经计算完prompt_logprobs，记录到completed_prefill_reqs,跳过
-            # 3.判断需要chunked_prefill部分的prompt_logprobs
-
-            # if self.in_progress_prompt_logprobs[bid] is None:
-            #     self.in_progress_prompt_logprobs[bid] = self.share_inputs["input_ids"][:, :prompt_logprobs]
-
-        # 清除已经计算完prompt_logprobs的请求
-
-        # 将prompt_logprob组装成batch，通过zmq返回
 
         # 4. Compute logits, Sample
         logits = None
@@ -2181,6 +2140,7 @@ class GPUModelRunner(ModelRunnerBase):
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
             prompt_lens=self.share_inputs["prompt_lens"],
+            prompt_logprobs_list=prompt_logprobs_list,
         )
 
         if self.speculative_config.method in ["mtp"] and self.scheduler_config.splitwise_role == "prefill":
@@ -2618,8 +2578,63 @@ class GPUModelRunner(ModelRunnerBase):
     def _get_prompt_logprobs_dict(
         self,
         hidden_states: paddle.Tensor,
-        num_scheduled_tokens: dict[str, int],
-    ) -> dict[str, Optional[LogprobsTensors]]:
-        # in_progress_dict = self.in_progress_prompt_logprobs_cpu
-        # prompt_logprobs_dict: dict[str, Optional[LogprobsTensors]] = {}
-        pass
+    ) -> list[Optional[LogprobsTensors]]:
+        logprobs_mode = self.fd_config.model_config.logprobs_mode
+        prompt_logprobs_list: list[Optional[LogprobsTensors]] = self.scheduler_config.max_num_seqs * [None]
+        completed_prefill_reqs: list[Request] = []
+        for req_id, request in self.prompt_logprobs_reqs.items():
+            num_prompt_logprobs = request.sampling_params.prompt_logprobs
+            if request.prompt_token_ids is None or num_prompt_logprobs is None:
+                continue
+            if num_prompt_logprobs == -1:
+                num_prompt_logprobs = self.vocal_size
+
+            num_tokens = request.prefill_end_index - request.prefill_start_index
+            num_prompt_tokens = len(request.prompt_token_ids)
+
+            logprobs_tensors = self.in_progress_prompt_logprobs.get(req_id)
+            if not logprobs_tensors:
+                logprobs_tensors = LogprobsTensors.empty(num_prompt_tokens - 1, num_prompt_logprobs + 1)
+                self.in_progress_prompt_logprobs[req_id] = logprobs_tensors
+            start_idx = request.prefill_start_index
+            start_tok = start_idx + 1
+            num_remaining_tokens = num_prompt_tokens - start_tok
+            if num_tokens <= num_remaining_tokens:
+                # This is a chunk, more tokens remain.
+                # In the == case, there are no more prompt logprobs to produce
+                # but we want to defer returning them to the next step where we
+                # have new generated tokens to return.
+                num_logits = num_tokens
+            else:
+                # This is the last chunk of prompt tokens to return.
+                num_logits = num_remaining_tokens
+                completed_prefill_reqs.append(request)
+                prompt_logprobs_list[request.idx] = logprobs_tensors
+            if num_logits <= 0:
+                # This can happen for the final chunk if we prefilled exactly
+                # (num_prompt_tokens - 1) tokens for this request in the prior
+                # step. There are no more prompt logprobs to produce.
+                continue
+            offset = self.share_inputs["cu_seqlens_q"][request.idx]
+            prompt_hidden_states = hidden_states[offset : offset + num_logits]
+            logits = self.model.compute_logits(prompt_hidden_states)
+            prompt_token_ids = request.prompt_token_ids[start_tok : start_tok + num_logits]
+            if isinstance(prompt_token_ids, np.ndarray):
+                prompt_token_ids = prompt_token_ids.tolist()
+            prompt_token_ids_tensor = paddle.to_tensor(prompt_token_ids, dtype="int64")
+            if logprobs_mode == "raw_logprobs":
+                raw_logprobs = self.sampler.compute_logprobs(logits)
+            elif logprobs_mode == "raw_logits":
+                raw_logprobs = logits
+            token_ids, logprobs, ranks = self.sampler.gather_logprobs(
+                raw_logprobs, num_prompt_logprobs, prompt_token_ids_tensor
+            )
+            chunk_slice = slice(start_idx, start_idx + num_logits)
+            logprobs_tensors.logprob_token_ids[chunk_slice].copy_(token_ids, False)
+            logprobs_tensors.logprobs[chunk_slice].copy_(logprobs, False)
+            logprobs_tensors.selected_token_ranks[chunk_slice].copy_(ranks, False)
+
+        for req in completed_prefill_reqs:
+            del self.prompt_logprobs_reqs[req.request_id]
+            del self.in_progress_prompt_logprobs[req.request_id]
+        return prompt_logprobs_list

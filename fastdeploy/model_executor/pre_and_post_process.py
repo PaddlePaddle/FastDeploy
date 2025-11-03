@@ -86,7 +86,12 @@ else:
     )
 
 from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
-from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput, SamplerOutput
+from fastdeploy.worker.output import (
+    LogprobsTensors,
+    ModelOutputData,
+    ModelRunnerOutput,
+    SamplerOutput,
+)
 
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
 
@@ -240,8 +245,8 @@ def pre_process(
 
 def _build_stream_transfer_data(
     output_tokens: paddle.Tensor,
-    logprobs: paddle.Tensor = None,
-    prompt_logprobs: paddle.Tensor = None,
+    logprobs: Optional[LogprobsTensors] = None,
+    prompt_logprobs_list: Optional[LogprobsTensors] = None,
 ):
     """Split output_tokens and output"""
     output_tokens = output_tokens.reshape([-1]).numpy()
@@ -255,8 +260,8 @@ def _build_stream_transfer_data(
         if logprobs:
             logprobs = logprobs.tolists().slice_rows(bid, bid + 1)
             stream_transfer_data.logprobs = logprobs
-        if prompt_logprobs:
-            raise NotImplementedError("current dont spport prompt_logprobs")
+        if prompt_logprobs_list:
+            stream_transfer_data.prompt_logprobs = prompt_logprobs_list[bid]
         stream_transfer_datas.append(stream_transfer_data)
     return stream_transfer_datas
 
@@ -366,7 +371,7 @@ def post_process_normal(
                 sampler_output.sampled_token_ids,
                 model_output.is_block_step,
             )
-    prompt_logprobs_tensors = None
+    prompt_logprobs_list = model_output.prompt_logprobs_list
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
     if not skip_save_output:
@@ -375,7 +380,7 @@ def post_process_normal(
                 output = _build_stream_transfer_data(
                     sampler_output.sampled_token_ids,
                     logprobs=sampler_output.logprobs_tensors,
-                    prompt_logprobs=prompt_logprobs_tensors,
+                    prompt_logprobs=prompt_logprobs_list,
                 )
                 async_output_queue.put(output)
         else:
