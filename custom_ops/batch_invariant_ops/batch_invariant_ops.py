@@ -481,16 +481,24 @@ def _log_softmax_batch_invariant(input, axis):
     return log_softmax(input, axis=axis)
 
 
-def mean_batch_invariant(input, dim, keepdim=False, dtype: paddle.dtype | None = None):
+def mean_batch_invariant(input, axis, keepdim=False, dtype: paddle.dtype | None = None, out=None):
     assert dtype is None or dtype == paddle.float32, f"unsupported dtype: {dtype}"
-    if len(dim) == 1:
-        return mean_dim(input, dim[0], keepdim=keepdim)
+    if type(axis) is int:
+        result = mean_dim(input, axis, keepdim=keepdim)
+    elif len(axis) == 1:  # axis: int | Sequence[int]
+        result = mean_dim(input, axis[0], keepdim=keepdim)
     else:
         assert input.dtype in {paddle.float16, paddle.bfloat16, paddle.float32}, "only float types supported for now"
         n_elems = 1
-        for d in dim:
+        for d in axis:
             n_elems *= input.shape[d]
-        return paddle.sum(input, dim=dim, keepdim=keepdim, dtype=paddle.float32) / n_elems
+        result = paddle.sum(input, axis=axis, keepdim=keepdim, dtype=paddle.float32) / n_elems
+
+    # Handle out parameter if provided
+    if out is not None:
+        out.copy_(result)
+        return out
+    return result
 
 
 _original_ops = {"mm": None, "addmm": None, "_log_softmax": None, "mean_dim": None}
@@ -510,12 +518,12 @@ def enable_batch_invariant_mode():
     _original_ops["mm"] = paddle._C_ops.matmul
     _original_ops["addmm"] = paddle._C_ops.addmm
     _original_ops["log_softmax"] = paddle._C_ops.log_softmax
-    _original_ops["mean"] = paddle.mean
+    _original_ops["mean"] = paddle._C_ops.mean
 
     paddle._C_ops.matmul = mm_batch_invariant
     paddle._C_ops.addmm = addmm_batch_invariant
     paddle._C_ops.log_softmax = _log_softmax_batch_invariant
-    paddle.mean = mean_batch_invariant
+    paddle._C_ops.mean = mean_batch_invariant
 
     _batch_invariant_MODE = True
 
@@ -532,7 +540,7 @@ def disable_batch_invariant_mode():
     if _original_ops["log_softmax"]:
         paddle._C_ops.log_softmax = _original_ops["log_softmax"]
     if _original_ops["mean"]:
-        paddle.mean = _original_ops["mean"]
+        paddle._C_ops.mean = _original_ops["mean"]
 
     _batch_invariant_MODE = False
 
