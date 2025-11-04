@@ -585,6 +585,7 @@ class GraphOptimizationConfig:
         only to the layer where CUDA graph functionality is required.
         """
         self.cudagraph_splitting_ops: list[str] = []
+        self.cudagraph_only_prefill: bool = False
         """ Whether to use a full cuda graph for the entire forward pass rather than
         splitting certain operations such as attention into subgraphs.
         Thus this flag cannot be used together with splitting_ops."""
@@ -592,6 +593,9 @@ class GraphOptimizationConfig:
 
         """ Whether to use shared memory pool for multi capture_size """
         self.use_unique_memory_pool: bool = False
+
+        """ Whether to use cudagraph for draft model."""
+        self.draft_model_use_cudagraph: bool = False
 
         self.max_capture_size: int = None
         self.real_shape_to_captured_size: dict[int, int] = None
@@ -603,13 +607,13 @@ class GraphOptimizationConfig:
 
         self.check_legality_parameters()
 
-    def init_with_cudagrpah_size(self, max_num_seqs: int = 0) -> None:
+    def init_with_cudagrpah_size(self, max_capture_size: int = 0) -> None:
         """
         Initialize cuda graph capture sizes and
         pre-compute the mapping from batch size to padded graph size
         """
         # Regular capture sizes
-        self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size <= max_num_seqs]
+        self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size <= max_capture_size]
         dedup_sizes = list(set(self.cudagraph_capture_sizes))
         if len(dedup_sizes) < len(self.cudagraph_capture_sizes):
             logger.info(
@@ -633,7 +637,7 @@ class GraphOptimizationConfig:
                     self.real_shape_to_captured_size[bs] = end
         self.real_shape_to_captured_size[self.max_capture_size] = self.max_capture_size
 
-    def _set_cudagraph_sizes(self, max_num_seqs: int = 0):
+    def _set_cudagraph_sizes(self, max_capture_size: int = 0):
         """
         Calculate a series of candidate capture sizes,
         and then extract a portion of them as the capture list for the CUDA graph based on user input.
@@ -645,7 +649,7 @@ class GraphOptimizationConfig:
         # Shape [256, 288, ... 992, 1024]
         draft_capture_sizes += [32 * i for i in range(17, 33)]
 
-        draft_capture_sizes.append(max_num_seqs)
+        draft_capture_sizes.append(max_capture_size)
         self.cudagraph_capture_sizes = sorted(draft_capture_sizes)
 
     def to_json_string(self):
@@ -1135,6 +1139,8 @@ class FDConfig:
         early_stop_config: Optional[Dict[str, Any]] = None,
         tool_parser: str = None,
         test_mode=False,
+        enable_attention_dp_balance: bool = False,
+        attention_dp_time_out_iters: int = 0,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
@@ -1149,21 +1155,23 @@ class FDConfig:
         self.decoding_config: DecodingConfig = decoding_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
         self.moba_attention_config: Optional[MobaAttentionConfig] = moba_attention_config
+        self.enable_attention_dp_balance = enable_attention_dp_balance
+        self.attention_dp_time_out_iters = attention_dp_time_out_iters
         # Initialize cuda graph capture list
-        if self.graph_opt_config.cudagraph_capture_sizes is None:
-            self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.parallel_config.max_num_seqs)
-
+        max_capture_shape = self.parallel_config.max_num_seqs
         if self.speculative_config is not None and self.speculative_config.method == "mtp":
-            max_shape = self.parallel_config.max_num_seqs * (self.speculative_config.num_speculative_tokens + 1)
-            if max_shape % 2 == 1:
-                max_shape = max_shape + 1
-            self.graph_opt_config.init_with_cudagrpah_size(max_num_seqs=min(512, max_shape))
+            max_capture_shape = self.parallel_config.max_num_seqs * (
+                self.speculative_config.num_speculative_tokens + 1
+            )
+            assert max_capture_shape % 2 == 0, "CUDAGraph only supports capturing even token nums in MTP scenarios."
+        if self.graph_opt_config.cudagraph_only_prefill:
+            max_capture_shape = 512
         else:
-            self.graph_opt_config.init_with_cudagrpah_size(max_num_seqs=self.parallel_config.max_num_seqs)
+            max_capture_shape = min(512, max_capture_shape)
 
-        # TODO(wangmingkai02): change graph_opt_level=2 when using static mode with cinn
-        if self.graph_opt_config.graph_opt_level == 2:
-            self.graph_opt_config.graph_opt_level = 1
+        if self.graph_opt_config.cudagraph_capture_sizes is None:
+            self.graph_opt_config._set_cudagraph_sizes(max_capture_size=max_capture_shape)
+        self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=max_capture_shape)
 
         self.tokenizer = tokenizer
         self.max_num_batched_tokens = max_num_batched_tokens
@@ -1213,7 +1221,7 @@ class FDConfig:
         self.max_prefill_batch = 3
         if current_platform.is_xpu():
             self.max_prefill_batch = 1
-        if self.model_config is not None and self.model_config.enable_mm:
+        if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
 
         num_ranks = self.parallel_config.tensor_parallel_size * self.parallel_config.data_parallel_size

@@ -172,6 +172,22 @@ class GPUModelRunner(ModelRunnerBase):
         else:
             return 0
 
+    def exist_decode(self):
+        """
+        check whether decode stage exist
+        """
+        if paddle.any(self.share_inputs["seq_lens_decoder"].cast("int64") >= self.share_inputs["prompt_lens"]):
+            return 1
+        else:
+            return 0
+
+    def get_real_bsz(self):
+        real_bsz = 0
+        for i in range(self.share_inputs["stop_flags"].shape[0] - 1, -1, -1):
+            if not self.share_inputs["stop_flags"][i][0]:
+                return i + 1
+        return real_bsz
+
     def _init_speculative_proposer(self):
         """
         Init speculative proposer
@@ -223,6 +239,7 @@ class GPUModelRunner(ModelRunnerBase):
         has_prefill_task = False
         has_decode_task = False
         has_preempted_task = False
+        self.share_inputs["image_features"] = None
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
@@ -252,8 +269,6 @@ class GPUModelRunner(ModelRunnerBase):
                             inputs["grid_thw"][request.num_image_start : request.num_image_end], dtype="int64"
                         )
                         self.share_inputs["image_features"] = self.extract_vision_features(vision_inputs)
-                    else:
-                        self.share_inputs["image_features"] = None
 
                     if inputs["position_ids"] is not None:
                         position_ids = paddle.to_tensor(
@@ -848,6 +863,8 @@ class GPUModelRunner(ModelRunnerBase):
             )
             self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
+        self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+
     def _prepare_inputs(self) -> None:
         """Prepare the model inputs"""
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -1249,6 +1266,7 @@ class GPUModelRunner(ModelRunnerBase):
                 stop_token_ids=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
                 prompt_lens=self.share_inputs["prompt_lens"],
+                mask_rollback=self.share_inputs["mask_rollback"],
             )
 
             post_process(
@@ -1371,31 +1389,35 @@ class GPUModelRunner(ModelRunnerBase):
                         expected_decode_len=1,
                     )
                     logger.info(f"Warm up the Target model with the num_tokens:{batch_size}, expected_decode_len:{1}")
-            # Capture Draft Model without bsz 1
-            # NOTE(liujundong): expected_decode_len = 1, will affect mtp capture in cudagraph
-            for batch_size in sorted(capture_sizes, reverse=True):
-                if batch_size == 1:
-                    logger.info("Skip token_num = 1, when capture Draft model for mtp")
-                else:
-                    assert batch_size % 2 == 0
+
+            if self.graph_opt_config.draft_model_use_cudagraph:
+                # Capture Draft Model without bsz 1
+                # NOTE(liujundong): expected_decode_len = 1, will affect mtp capture in cudagraph
+                for batch_size in sorted(capture_sizes, reverse=True):
+                    if batch_size == 1:
+                        logger.info("Skip token_num = 1, when capture Draft model for mtp")
+                    else:
+                        assert batch_size % 2 == 0
+                        self._dummy_run(
+                            num_tokens=self.parallel_config.max_num_batched_tokens,
+                            batch_size=int(batch_size / 2),
+                            in_capturing=True,
+                            expected_decode_len=3,
+                            accept_all_drafts=True,
+                        )
+                        logger.info(
+                            f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}"
+                        )
+                # Capture Draft Model with bsz 1
+                if 1 in capture_sizes:
                     self._dummy_run(
                         num_tokens=self.parallel_config.max_num_batched_tokens,
-                        batch_size=int(batch_size / 2),
+                        batch_size=int(1),
                         in_capturing=True,
                         expected_decode_len=3,
-                        accept_all_drafts=True,
+                        accept_all_drafts=False,
                     )
                     logger.info(f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}")
-            # Capture Draft Model with bsz 1
-            if 1 in capture_sizes:
-                self._dummy_run(
-                    num_tokens=self.parallel_config.max_num_batched_tokens,
-                    batch_size=int(1),
-                    in_capturing=True,
-                    expected_decode_len=3,
-                    accept_all_drafts=False,
-                )
-                logger.info(f"Warm up the Draft model with the num_tokens:{batch_size}, expected_decode_len:{3}")
         else:
             for batch_size in sorted(capture_sizes, reverse=True):
                 self._dummy_run(
@@ -1591,6 +1613,7 @@ class GPUModelRunner(ModelRunnerBase):
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
             prompt_lens=self.share_inputs["prompt_lens"],
+            mask_rollback=self.share_inputs["mask_rollback"],
         )
 
         if self.speculative_config.method in ["mtp"] and self.parallel_config.splitwise_role == "prefill":
@@ -1652,6 +1675,8 @@ class GPUModelRunner(ModelRunnerBase):
                 self.speculative_config.num_speculative_tokens,
             )
 
+        if num_running_requests is None:
+            num_running_requests = self.get_real_bsz()
         self.seq_lens_this_time_buffer[:num_running_requests].copy_(
             self.share_inputs["seq_lens_this_time"][:num_running_requests], False
         )

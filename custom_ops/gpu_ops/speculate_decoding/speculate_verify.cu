@@ -69,6 +69,7 @@ __global__ void setup_kernel(curandState_t *state, const uint64_t seed,
 
 template <bool ENABLE_TOPP, bool USE_TOPK>
 __global__ void speculate_verify(
+    const int64_t *sampled_token_ids,
     int64_t *accept_tokens, int *accept_num, int64_t *step_idx,
     bool *stop_flags, const int *seq_lens_encoder, const int *seq_lens_decoder,
     const int64_t *draft_tokens, const int *actual_draft_token_nums,
@@ -79,7 +80,8 @@ __global__ void speculate_verify(
     const int *output_cum_offsets, const int *actual_candidate_len,
     const int real_bsz, const int max_draft_tokens, const int end_length,
     const int max_seq_len, const int max_candidate_len, const int verify_window,
-    const bool prefill_one_step_stop, const bool benchmark_mode, const bool accept_all_drafts) {
+    const bool prefill_one_step_stop, const bool benchmark_mode, const bool accept_all_drafts,
+    const bool use_target_sampling) {
   const int bid = threadIdx.x;
   // verify and set stop flags
   int accept_num_now = 1;
@@ -96,6 +98,7 @@ __global__ void speculate_verify(
           verify_tokens + start_token_id * max_candidate_len;
       auto *draft_tokens_now = draft_tokens + bid * max_draft_tokens;
       auto *actual_candidate_len_now = actual_candidate_len + start_token_id;
+      auto* sampled_token_id_now = sampled_token_ids + start_token_id;
 
       int i = 0;
       // printf("seq_lens_this_time[%d]-1: %d \n",bid,
@@ -125,7 +128,25 @@ __global__ void speculate_verify(
           }
           continue;
         }
-        if (USE_TOPK) {
+        if (use_target_sampling) {
+          if (sampled_token_id_now[i] == draft_tokens_now[i + 1]) {
+            step_idx[bid]++;
+            auto accept_token = draft_tokens_now[i + 1];
+            accept_tokens[bid * max_draft_tokens + i] = accept_token;
+            if (is_in_end(accept_token, end_tokens, end_length) ||
+                step_idx[bid] >= max_dec_len[bid]) {
+              stop_flags[bid] = true;
+              stop_flag_now_int = 1;
+              if (step_idx[bid] >= max_dec_len[bid])
+                  accept_tokens[bid * max_draft_tokens + i] = end_tokens[0];
+              break;
+            } else {
+              accept_num_now++;
+            }
+          } else {
+            break;
+          }
+        } else if (USE_TOPK) {
           if (verify_tokens_now[i * max_candidate_len] ==
               draft_tokens_now[i + 1]) {
             // accept_num_now++;
@@ -231,7 +252,9 @@ __global__ void speculate_verify(
         const float *verify_scores_now =
             verify_scores + start_token_id * max_candidate_len;
         step_idx[bid]++;
-        if (ENABLE_TOPP) {
+        if (use_target_sampling) {
+          accept_token = sampled_token_id_now[i];
+                  } else if (ENABLE_TOPP) {
           auto actual_candidate_len_value =
               actual_candidate_len_now[i] > max_candidate_len
                   ? max_candidate_len
@@ -262,6 +285,7 @@ __global__ void speculate_verify(
 }
 
 void SpeculateVerify(
+    const paddle::Tensor &sampled_token_ids,
     const paddle::Tensor &accept_tokens, const paddle::Tensor &accept_num,
     const paddle::Tensor &step_idx, const paddle::Tensor &stop_flags,
     const paddle::Tensor &seq_lens_encoder,
@@ -295,6 +319,11 @@ void SpeculateVerify(
   if (env_var) {
     use_topk = static_cast<bool>(std::stoi(env_var));
   }
+  bool use_target_sampling = false;
+  char *env_var_1 = getenv("SPECULATE_VERIFY_USE_TARGET_SAMPLING");
+  if (env_var_1) {
+    use_target_sampling = static_cast<bool>(std::stoi(env_var_1));
+  }
   bool prefill_one_step_stop = false;
   if (const char *env_p = std::getenv("PREFILL_NODE_ONE_STEP_STOP")) {
     if (env_p[0] == '1') {
@@ -304,6 +333,7 @@ void SpeculateVerify(
   if (use_topk) {
     if (enable_topp) {
       speculate_verify<true, true><<<1, BlockSize, 0, accept_tokens.stream()>>>(
+          sampled_token_ids.data<int64_t>(),
           const_cast<int64_t *>(accept_tokens.data<int64_t>()),
           const_cast<int *>(accept_num.data<int>()),
           const_cast<int64_t *>(step_idx.data<int64_t>()),
@@ -316,10 +346,12 @@ void SpeculateVerify(
           is_block_step.data<bool>(), output_cum_offsets.data<int>(),
           actual_candidate_len.data<int>(), real_bsz, max_draft_tokens,
           end_length, max_seq_len, max_candidate_len, verify_window,
-          prefill_one_step_stop, benchmark_mode, accept_all_drafts);
+          prefill_one_step_stop, benchmark_mode, accept_all_drafts,
+          use_target_sampling);
     } else {
       speculate_verify<false, true>
           <<<1, BlockSize, 0, accept_tokens.stream()>>>(
+              sampled_token_ids.data<int64_t>(),
               const_cast<int64_t *>(accept_tokens.data<int64_t>()),
               const_cast<int *>(accept_num.data<int>()),
               const_cast<int64_t *>(step_idx.data<int64_t>()),
@@ -332,12 +364,14 @@ void SpeculateVerify(
               end_tokens.data<int64_t>(), is_block_step.data<bool>(),
               output_cum_offsets.data<int>(), actual_candidate_len.data<int>(),
               real_bsz, max_draft_tokens, end_length, max_seq_len,
-              max_candidate_len, verify_window, prefill_one_step_stop, benchmark_mode, accept_all_drafts);
+              max_candidate_len, verify_window, prefill_one_step_stop, benchmark_mode, accept_all_drafts,
+              use_target_sampling);
     }
   } else {
     if (enable_topp) {
       speculate_verify<true, false>
           <<<1, BlockSize, 0, accept_tokens.stream()>>>(
+              sampled_token_ids.data<int64_t>(),
               const_cast<int64_t *>(accept_tokens.data<int64_t>()),
               const_cast<int *>(accept_num.data<int>()),
               const_cast<int64_t *>(step_idx.data<int64_t>()),
@@ -350,10 +384,12 @@ void SpeculateVerify(
               end_tokens.data<int64_t>(), is_block_step.data<bool>(),
               output_cum_offsets.data<int>(), actual_candidate_len.data<int>(),
               real_bsz, max_draft_tokens, end_length, max_seq_len,
-              max_candidate_len, verify_window, prefill_one_step_stop, benchmark_mode, accept_all_drafts);
+              max_candidate_len, verify_window, prefill_one_step_stop, benchmark_mode, accept_all_drafts,
+              use_target_sampling);
     } else {
       speculate_verify<false, false>
           <<<1, BlockSize, 0, accept_tokens.stream()>>>(
+              sampled_token_ids.data<int64_t>(),
               const_cast<int64_t *>(accept_tokens.data<int64_t>()),
               const_cast<int *>(accept_num.data<int>()),
               const_cast<int64_t *>(step_idx.data<int64_t>()),
@@ -366,7 +402,8 @@ void SpeculateVerify(
               end_tokens.data<int64_t>(), is_block_step.data<bool>(),
               output_cum_offsets.data<int>(), actual_candidate_len.data<int>(),
               real_bsz, max_draft_tokens, end_length, max_seq_len,
-              max_candidate_len, verify_window, prefill_one_step_stop, benchmark_mode, accept_all_drafts);
+              max_candidate_len, verify_window, prefill_one_step_stop, benchmark_mode, accept_all_drafts,
+              use_target_sampling);
     }
   }
 
@@ -374,7 +411,7 @@ void SpeculateVerify(
 }
 
 PD_BUILD_STATIC_OP(speculate_verify)
-    .Inputs({"accept_tokens", "accept_num", "step_idx", "seq_lens_encoder",
+    .Inputs({"sampled_token_ids", "accept_tokens", "accept_num", "step_idx", "seq_lens_encoder",
              "seq_lens_decoder", "stop_flags", "draft_tokens",
              "seq_lens_this_time", "verify_tokens", "verify_scores",
              "max_dec_len", "end_tokens", "is_block_step", "output_cum_offsets",
