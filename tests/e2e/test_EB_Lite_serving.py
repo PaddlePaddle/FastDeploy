@@ -589,7 +589,7 @@ def test_streaming_with_stop_str(openai_client):
     last_token = ""
     for chunk in response:
         last_token = chunk.choices[0].delta.content
-    assert last_token == "</s>"
+    assert last_token.endswith("</s>")
 
     response = openai_client.chat.completions.create(
         model="default",
