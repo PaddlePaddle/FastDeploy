@@ -114,6 +114,10 @@ std::vector<paddle::Tensor> MoeExpertFFN(
   const auto input_type = permute_input.dtype();
   auto ffn_out = paddle::empty_like(permute_input);
 
+  if (permute_input.numel() == 0) {
+    return {ffn_out};
+  }
+
   switch (input_type) {
     case paddle::DataType::BFLOAT16:
       McMoeFFNKernel<paddle::DataType::BFLOAT16,
