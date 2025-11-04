@@ -30,6 +30,7 @@ class TOYGPUModelRunner:
         self.pre_max_block_num = 16
         # Not the tensor in real sense, just for make ForwardMeta
         self.share_inputs = {}
+
         self.share_inputs["input_ids"] = paddle.full(
             [self.max_num_seqs, self.max_model_len],
             0,

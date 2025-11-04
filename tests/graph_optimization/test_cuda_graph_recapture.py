@@ -55,9 +55,7 @@ class TestModel1(paddle.nn.Layer):
         sublayer1_output = self.sublayer1(ids_remove_padding=ids_remove_padding, forward_meta=sub_meta1)
 
         # sublayer2 use cuda graph
-        sub_meta2 = ForwardMeta(
-            ids_remove_padding=sublayer1_output, step_use_cudagraph=True
-        )
+        sub_meta2 = ForwardMeta(ids_remove_padding=sublayer1_output, step_use_cudagraph=True)
         sublayer2_output = self.sublayer2(ids_remove_padding=sublayer1_output, forward_meta=sub_meta2)
 
         return sublayer2_output
