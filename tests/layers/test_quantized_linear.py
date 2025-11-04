@@ -33,16 +33,10 @@ from fastdeploy.model_executor.layers.linear import QKVParallelLinear, RowParall
 from fastdeploy.model_executor.layers.quantization.block_wise_fp8 import (
     BlockWiseFP8Config,
 )
-from fastdeploy.model_executor.layers.quantization.tensor_wise_fp8 import (
-    TensorWiseFP8Config,
-)
-from fastdeploy.model_executor.layers.quantization.w4afp8 import W4AFP8Config
-from fastdeploy.model_executor.layers.quantization.w8a8 import W8A8Config
 from fastdeploy.model_executor.layers.quantization.weight_only import (
     WINT4Config,
     WINT8Config,
 )
-from fastdeploy.model_executor.layers.quantization.wfp8wfp8 import WFP8WFP8Config
 from fastdeploy.scheduler import SchedulerConfig
 
 paddle.set_default_dtype("bfloat16")
@@ -52,10 +46,6 @@ QUANT_CONFIG_MAP = {
     "wint8": WINT8Config({}),
     "wint4": WINT4Config({}),
     "block_wise_fp8": BlockWiseFP8Config(weight_block_size=[128, 128]),
-    "tensor_wise_fp8": TensorWiseFP8Config(),
-    "w8a8": W8A8Config(),
-    "w4afp8": W4AFP8Config(),
-    "wfp8wfp8": WFP8WFP8Config(),
 }
 
 
