@@ -204,6 +204,26 @@ class TestQwenVLProcessor(unittest.TestCase):
             result["multimodal_inputs"]["image_type_ids"].shape[0], result["multimodal_inputs"]["grid_thw"][:, 0].sum()
         )
 
+    def test_process_request_dict_enable_thinking(self):
+        num_completion_token_ids = 10
+        request = {
+            "request_id": "12345",
+            "completion_token_ids": [1] * num_completion_token_ids,
+            "stop": ["stop", "eof"],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Hello"},
+                    ],
+                }
+            ],
+            "chat_template_kwargs": {"enable_thinking": True},
+        }
+
+        result = self.processor.process_request_dict(request, 100)
+        self.assertEqual(result.get("enable_thinking"), False)
+
     def test_prompt(self):
         """
         Test processing of prompt with image and video placeholders
