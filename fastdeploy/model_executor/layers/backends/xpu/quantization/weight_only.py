@@ -17,17 +17,18 @@
 import paddle
 from paddle import nn
 
-from fastdeploy.model_executor.layers.quantization.weight_only import (
-    WeightOnlyConfig,
-    WeightOnlyLinearMethod,
-)
-from fastdeploy.model_executor.ops.xpu import weight_quantize_xpu
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
     MergedReplicatedLinear,
     QKVParallelLinear,
 )
+from fastdeploy.model_executor.layers.quantization.weight_only import (
+    WeightOnlyConfig,
+    WeightOnlyLinearMethod,
+)
+from fastdeploy.model_executor.ops.xpu import weight_quantize_xpu
 from fastdeploy.model_executor.utils import TensorTracker, free_tensor, set_weight_attrs
+
 
 class XPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
     """
@@ -108,23 +109,17 @@ class XPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         layer.weight.set_value(paddle.transpose(quanted_weight_tensor, [1, 0]))
         layer.weight_scale.set_value(weight_scale_tensor)
 
-
     def process_weights_after_loading(self, layer) -> None:
         if not self.quant_config.is_checkpoint_bf16:
             return
 
-        quanted_weight_tensor, weight_scale_tensor = weight_quantize_xpu(
-            layer.weight,
-            self.quant_config.algo,
-            -1,
-            -1
-        )
+        quanted_weight_tensor, weight_scale_tensor = weight_quantize_xpu(layer.weight, self.quant_config.algo, -1, -1)
 
         free_tensor(layer.weight)
 
         layer.weight = layer.create_parameter(
             shape=quanted_weight_tensor.shape[::-1],
-            dtype="int8" ,
+            dtype="int8",
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
