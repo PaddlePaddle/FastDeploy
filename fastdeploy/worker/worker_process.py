@@ -381,7 +381,7 @@ class PaddleDisWorkerProc:
                     )
                     paddle.distributed.barrier()
                     if self.local_rank == 0:
-                        rearrange_experts_signal.value[0] = RearrangeExpertStatus.DONE
+                        rearrange_experts_signal.value[0] = RearrangeExpertStatus.DONE.value
                     logger.info("redundant_expert: done")
             if local_rank == 0:
                 if self.model_weights_status.value[0] != 0:

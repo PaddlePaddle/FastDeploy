@@ -70,10 +70,7 @@ def create_mmap(model_name: List, ep_rank: int, ep_size: int, shm_uuid: str, log
         shm_fd = os.open(expert_weight_file, os.O_RDWR)
         os.ftruncate(shm_fd, shm_size)
         if logger is not None:
-            logger.info(
-                f"redundant_expert: create_mmap file {expert_weight_file}, \
-                                            fd {shm_fd}, size {shm_size}"
-            )
+            logger.info(f"redundant_expert: create_mmap file {expert_weight_file}, fd {shm_fd}, size {shm_size}")
 
         shm_ptr = libc.mmap(0, ctypes.c_size_t(shm_size), prot, flags, shm_fd, 0)
         if shm_ptr == MAP_FAILED:
@@ -86,8 +83,8 @@ def create_mmap(model_name: List, ep_rank: int, ep_size: int, shm_uuid: str, log
         (ret,) = cudart.cudaHostRegister(addr, shm_size, 0)
         if ret != cudart.cudaError_t.cudaSuccess:
             raise RuntimeError(
-                f"cudaHostRegister failed: {cudart.cudaGetErrorString(ret)},"
-                + f" address {hex(addr)} size {shm_size}, ret: {ret}"
+                f"cudaHostRegister failed: {cudart.cudaGetErrorString(ret)}, "
+                f" address {hex(addr)} size {shm_size}, ret: {ret}"
             )
 
         mmap_infos[name] = shm_ptr
@@ -353,7 +350,7 @@ def load_model_weights_process(
 
     setproctitle(f"eplb::async_load_model_{rank}")
     faulthandler.enable()
-    from server.utils import get_logger
+    from fastdeploy.utils import get_logger
 
     logger = get_logger("eplb_async_loader", "eplb_{0}.log".format(rank))
     logger.info("redundant_expert: load_model_weights_process start")

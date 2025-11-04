@@ -15,10 +15,11 @@
 """
 
 from dataclasses import dataclass
+from enum import Enum
 
 
 @dataclass
-class RearrangeExpertStatus:
+class RearrangeExpertStatus(Enum):
     FREE = 0
     DOING = 1
     LOAD_SUCC = 2  # load weight from disk success

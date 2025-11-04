@@ -38,9 +38,9 @@ class RedundantExpertManager:
         self.eplb_config = fd_config.eplb_config
         self.api_user = self.eplb_config.redundant_expert_api_user
         self.api_passwd = self.eplb_config.redundant_expert_api_password
-        self.num_hidden_layers = self.eplb_config.model_config.num_layers
-        self.num_logical_experts = self.eplb_config.model_config.moe_num_experts
         self.num_redundant_experts = self.eplb_config.redundant_experts_num
+        self.num_hidden_layers = self.fd_config.model_config.num_hidden_layers
+        self.num_logical_experts = self.fd_config.model_config.moe_num_experts
         self.ipc_signal_suffix = ipc_signal_suffix
 
         self.num_replicas = self.num_logical_experts + self.num_redundant_experts
@@ -214,7 +214,7 @@ class RedundantExpertManager:
                     ).decode("utf-8")
                     self.logger.info(f"redundant_expert: all rank ips {address}")
                     rearrange_experts_ips_size_signal.value[0] = 0
-                    rearrange_experts_signal.value[0] = RearrangeExpertStatus.DOING
+                    rearrange_experts_signal.value[0] = RearrangeExpertStatus.DOING.value
 
                     self.dp_rank_address = address.strip().split(";")
                     if self.allreduce_experts_stat():
@@ -222,18 +222,18 @@ class RedundantExpertManager:
                         self.load_weight_begin_ts = now
                         self.logger.info("redundant_expert: all-reduce experts stats success")
                     else:
-                        rearrange_experts_signal.value[0] = RearrangeExpertStatus.FREE
+                        rearrange_experts_signal.value[0] = RearrangeExpertStatus.FREE.value
                         self.logger.warning("redundant_expert: all-reduce experts stats fail")
                 elif self.need_allgather_load_weight_result and self.allreduce_load_weight_result():
                     # step 3. all reduce the result of load weight from disk
                     self.need_allgather_load_weight_result = False
-                    rearrange_experts_signal.value[0] = RearrangeExpertStatus.LOAD_SUCC
+                    rearrange_experts_signal.value[0] = RearrangeExpertStatus.LOAD_SUCC.value
                     self.rearrange_end_ts = now
                 if rearrange_experts_signal.value[0] > 1 and (
                     now - self.rearrange_end_ts > self.rearrange_reset_interval
                 ):
                     # reset rearrange status
-                    rearrange_experts_signal.value[0] = RearrangeExpertStatus.FREE
+                    rearrange_experts_signal.value[0] = RearrangeExpertStatus.FREE.value
 
             if signal_update_weight_from_disk_array.value[0] == 1:
                 # step 2. async load weight: disk -> memory

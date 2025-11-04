@@ -126,33 +126,43 @@ class EngineClient:
         """
         Initialize eplb signals.
         """
-        rearrange_experts_status = np.zeros([1], dtype=np.int32)
-        self.rearrange_experts_signal = IPCSignal(
-            name="rearrange_experts_status",
-            array=rearrange_experts_status,
-            dtype=np.int32,
-            suffix=ipc_signal_suffix,
-            create=False,
-        )
+        if self.config.parallel_config.local_data_parallel_id == 0:
+            rearrange_experts_status = np.zeros([1], dtype=np.int32)
+            self.rearrange_experts_signal = IPCSignal(
+                name="rearrange_experts_status",
+                array=rearrange_experts_status,
+                dtype=np.int32,
+                suffix=ipc_signal_suffix,
+                create=False,
+            )
 
-        rearrange_experts_ips_size_array = np.zeros([1], dtype=np.int32)
-        self.rearrange_experts_ips_size_signal = IPCSignal(
-            name="rearrange_experts_ips_size",
-            array=rearrange_experts_ips_size_array,
-            dtype=np.int32,
-            suffix=ipc_signal_suffix,
-            create=False,
-        )
+            rearrange_experts_ips_size_array = np.zeros([1], dtype=np.int32)
+            self.rearrange_experts_ips_size_signal = IPCSignal(
+                name="rearrange_experts_ips_size",
+                array=rearrange_experts_ips_size_array,
+                dtype=np.int32,
+                suffix=ipc_signal_suffix,
+                create=False,
+            )
 
-        self.shm_rearrange_experts_ips_list = IPCSignal(
-            name="rearrange_experts_ips_list",
-            shm_size=envs.FD_REDUNDANT_EXPERT_IP_SHM_SIZE,
-            suffix=ipc_signal_suffix,
-            create=False,
-        )
+            self.shm_rearrange_experts_ips_list = IPCSignal(
+                name="rearrange_experts_ips_list",
+                shm_size=envs.FD_REDUNDANT_EXPERT_IP_SHM_SIZE,
+                suffix=ipc_signal_suffix,
+                create=False,
+            )
+
+            signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
+            self.signal_update_weight_from_tensor_array = IPCSignal(
+                name="signal_update_weight_from_tensor",
+                array=signal_update_weight_from_tensor,
+                dtype=np.int32,
+                suffix=ipc_signal_suffix,
+                create=False,
+            )
 
         experts_token_stats = np.zeros(
-            (self.model_config.num_hidden_layers, self.model_config.moe_num_experts),
+            (self.config.model_config.num_hidden_layers, self.config.model_config.moe_num_experts),
             dtype=np.int32,
         )
         self.expert_tokens_stats_array = IPCSignal(
@@ -174,15 +184,6 @@ class EngineClient:
         self.signal_update_weight_from_disk_array = IPCSignal(
             name="signal_update_weight_from_disk",
             array=signal_update_weight_from_disk,
-            dtype=np.int32,
-            suffix=ipc_signal_suffix,
-            create=False,
-        )
-
-        signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
-        self.signal_update_weight_from_tensor_array = IPCSignal(
-            name="signal_update_weight_from_tensor",
-            array=signal_update_weight_from_tensor,
             dtype=np.int32,
             suffix=ipc_signal_suffix,
             create=False,
@@ -517,10 +518,10 @@ class EngineClient:
                 }
                 status_code = HTTPStatus.BAD_REQUEST
 
-            if self.rearrange_experts_signal.value[0] != RearrangeExpertStatus.FREE:
+            if self.rearrange_experts_signal.value[0] != RearrangeExpertStatus.FREE.value:
                 content = {
                     "code": 1,
-                    "msg": f"rearrange is doing. actual status {self.rearrange_experts_signal.value[0]}, expect status {RearrangeExpertStatus.FREE}",
+                    "msg": f"rearrange is doing. actual status {self.rearrange_experts_signal.value[0]}, expect status {RearrangeExpertStatus.FREE.value}",
                 }
                 status_code = HTTPStatus.BAD_REQUEST
             if "ips" not in request_dict and content is None:
@@ -574,10 +575,10 @@ class EngineClient:
                     "msg": f"actual role {self.cfg.scheduler_config.splitwise_role}, expect role prefill",
                 }
                 status_code = HTTPStatus.BAD_REQUEST
-            if self.rearrange_experts_signal.value[0] != RearrangeExpertStatus.LOAD_SUCC and content is None:
+            if self.rearrange_experts_signal.value[0] != RearrangeExpertStatus.LOAD_SUCC.value and content is None:
                 content = {
                     "code": 1,
-                    "msg": f"actual status {self.rearrange_experts_signal.value[0]}, expect status {RearrangeExpertStatus.LOAD_SUCC}",
+                    "msg": f"actual status {self.rearrange_experts_signal.value[0]}, expect status {RearrangeExpertStatus.LOAD_SUCC.value}",
                 }
                 status_code = HTTPStatus.BAD_REQUEST
 
