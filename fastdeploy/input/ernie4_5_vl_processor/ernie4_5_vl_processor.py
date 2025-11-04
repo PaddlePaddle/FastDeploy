@@ -270,7 +270,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             request["reasoning_max_tokens"] = max(int(request["max_tokens"] * 0.8), 1)
         data_processor_logger.info(f"Processed request {request}")
 
-        if request.get("top_p") < _SAMPLING_EPS:
+        if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
             request["top_p"] = _SAMPLING_EPS
 
         return request

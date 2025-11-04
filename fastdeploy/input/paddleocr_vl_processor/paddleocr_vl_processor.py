@@ -253,7 +253,7 @@ class PaddleOCRVLProcessor(TextProcessor):
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))  # Ensure at least 1 token
 
-        if request.get("top_p") < _SAMPLING_EPS:
+        if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
             request["top_p"] = _SAMPLING_EPS
 
         return request
