@@ -285,19 +285,19 @@ def _log_softmax_kernel(
         tl.store(output_row_start_ptr + col_idx, output, mask=mask)
 
 
-def log_softmax(input: paddle.Tensor, dim: int = -1) -> paddle.Tensor:
+def log_softmax(input: paddle.Tensor, axis: int = -1) -> paddle.Tensor:
     """
     Compute log_softmax using Triton kernel.
 
     Args:
         input: Input tensor
-        dim: Dimension along which to compute log_softmax (only -1 or last dim supported)
+        axis: Dimension along which to compute log_softmax (only -1 or last dim supported)
     >> Stashed changes
     Returns:
         Tensor with log_softmax applied along the specified dimension
     """
-    # TODO:use axis not dim in paddle
-    if dim != -1 and dim != input.ndim - 1:
+    # print("You are using triton impl for log_softmax")
+    if axis != -1 and axis != input.ndim - 1:
         raise ValueError("This implementation only supports log_softmax along the last dimension")
 
     # Flatten all dimensions except the last one
@@ -477,10 +477,8 @@ def addmm_batch_invariant(bias, a, b, alpha=1.0, beta=1.0):
     return result
 
 
-def _log_softmax_batch_invariant(input, dim, _half_to_float):
-    # TODO:use axis not dim in Paddle
-    assert not _half_to_float, "not implemented"
-    return log_softmax(input, dim=dim)
+def _log_softmax_batch_invariant(input, axis):
+    return log_softmax(input, axis=axis)
 
 
 def mean_batch_invariant(input, dim, keepdim=False, dtype: paddle.dtype | None = None):
@@ -511,12 +509,12 @@ def enable_batch_invariant_mode():
 
     _original_ops["mm"] = paddle._C_ops.matmul
     _original_ops["addmm"] = paddle._C_ops.addmm
-    _original_ops["log_softmax"] = paddle.nn.functional.log_softmax
+    _original_ops["log_softmax"] = paddle._C_ops.log_softmax
     _original_ops["mean"] = paddle.mean
 
     paddle._C_ops.matmul = mm_batch_invariant
     paddle._C_ops.addmm = addmm_batch_invariant
-    paddle.nn.functional.log_softmax = _log_softmax_batch_invariant
+    paddle._C_ops.log_softmax = _log_softmax_batch_invariant
     paddle.mean = mean_batch_invariant
 
     _batch_invariant_MODE = True
@@ -532,7 +530,7 @@ def disable_batch_invariant_mode():
     if _original_ops["addmm"]:
         paddle._C_ops.addmm = _original_ops["addmm"]
     if _original_ops["log_softmax"]:
-        paddle.nn.functional.log_softmax = _original_ops["log_softmax"]
+        paddle._C_ops.log_softmax = _original_ops["log_softmax"]
     if _original_ops["mean"]:
         paddle.mean = _original_ops["mean"]
 
@@ -543,7 +541,6 @@ def disable_batch_invariant_mode():
 def set_batch_invariant_mode(enabled: bool = True):
     global _batch_invariant_MODE, _original_ops
     old_mode = _batch_invariant_MODE
-    # old_ops = _original_ops.copy()
     if enabled:
         enable_batch_invariant_mode()
     else:

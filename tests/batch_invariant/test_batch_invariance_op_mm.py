@@ -56,3 +56,13 @@ class TestBatchInvariantForMM(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+    """
+
+    Standard Paddle:
+    Batch Deterministic: False run-to-run max/min/diff 10.7294921875/10.7294921875/0.0 for paddle.float32 in 10 iterations
+    Batch Deterministic: True run-to-run max/min/diff 0.0/0.0/0.0 for paddle.bfloat16 in 10 iterations
+
+    Batch-Invariant Mode:
+    Batch Deterministic: True run-to-run max/min/diff 0.0/0.0/0.0 for paddle.float32 in 10 iterations
+    Batch Deterministic: True run-to-run max/min/diff 0.0/0.0/0.0 for paddle.bfloat16 in 10 iterations
+    """
