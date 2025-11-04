@@ -45,7 +45,7 @@ from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.layers.quantization import get_quantization_config
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import get_logger, parse_quantization
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
@@ -616,8 +616,8 @@ def parse_args():
 
     parser.add_argument(
         "--quantization",
-        type=str,
-        default="None",
+        type=json.loads,
+        default=None,
         help="Quantization name for the model, currentlly support "
         "'wint4', 'wint8',"
         "default is None. The priority of this configuration "
@@ -719,6 +719,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     Returns:
         FDConfig: Initialized FastDeploy configuration object
     """
+    # RL rollout
+    if args.quantization is not None and isinstance(args.quantization, str):
+        args.quantization = parse_quantization(args.quantization)
     paddle.set_default_dtype(args.dtype)
     model_config = ModelConfig(vars(args))
     device_config = DeviceConfig(vars(args))
@@ -789,10 +792,14 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     if quantization_config is not None:
         quant_config_name = quantization_config["quantization"]
-    elif args.quantization != "None":
+    elif args.quantization is not None:
         quantization_config = {}
-        quant_config_name = args.quantization
-        quantization_config["quantization"] = quant_config_name
+        try:
+            quantization_config.update(args.quantization)
+            quant_config_name = quantization_config["quantization"]
+        except:
+            quant_config_name = args.quantization["quantization"]
+            quantization_config["quantization"] = quant_config_name
         # Only v1 loader sets is_checkpoint_bf16=True during dynamic quantization.
         if load_config.load_choices == "default_v1":
             quantization_config["is_checkpoint_bf16"] = True
