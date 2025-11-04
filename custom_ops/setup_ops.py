@@ -131,12 +131,13 @@ def get_sm_version(archs):
     Get sm version of paddle.
     """
     arch_set = set(archs)
-    try:
-        prop = paddle.device.cuda.get_device_properties()
-        cc = prop.major * 10 + prop.minor
-        arch_set.add(cc)
-    except ValueError:
-        pass
+    if len(arch_set) == 0:
+        try:
+            prop = paddle.device.cuda.get_device_properties()
+            cc = prop.major * 10 + prop.minor
+            arch_set.add(cc)
+        except ValueError:
+            pass
     return list(arch_set)
 
 
