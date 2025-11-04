@@ -392,7 +392,7 @@ class PaddleDisWorkerProc:
                     if self.local_rank == 0:
                         rearrange_experts_status_array[0] = RearrangeExpertState.done.value
                     logger.info("redundant_expert: done")
-            if self.local_rank % tp_size == 0:
+            if tp_rank == 0:
                 if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
