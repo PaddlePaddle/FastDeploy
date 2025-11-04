@@ -138,7 +138,8 @@ __global__ void speculate_verify(
     const int max_candidate_len,  // scalar, 每个 verify token
                                   // 的最大候选数（用于验证或采样）
     const int verify_window,  // scalar, TopK 验证窗口（允许连续 top1 匹配次数）
-    const bool prefill_one_step_stop) {
+    const bool prefill_one_step_stop,
+    const bool benchmark_mode) {
   const int cid = core_id();
   const int64_t tid = cluster_id() * core_num() + core_id();
   const int64_t nthreads = cluster_num() * core_num();

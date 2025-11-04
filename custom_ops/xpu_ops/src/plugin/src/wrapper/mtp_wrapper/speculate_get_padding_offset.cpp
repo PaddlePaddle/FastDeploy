@@ -42,6 +42,16 @@ __attribute__((global)) void speculate_get_padding_offset(
     const int max_seq_len,
     int bsz);
 
+__attribute__((global)) void speculate_get_padding_offset_v2(
+    int* batch_id_per_token,
+    int* cum_offsets_out,
+    int* cu_seqlens_q,
+    int* cu_seqlens_k,
+    const int* cum_offsets,
+    const int* seq_lens,
+    const int max_seq_len,
+    int bsz);
+
 }  // namespace plugin
 }  // namespace xpu3
 

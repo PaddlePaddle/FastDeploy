@@ -5,7 +5,7 @@
 ## 一、环境准备
 ### 1.1 支持情况
 推荐硬件配置：
-- 显存：24GB显存及以上
+- 显存：12GB显存及以上
 - 共享内存：2G及以上
 
 ### 1.2 安装fastdeploy
@@ -14,7 +14,7 @@
 
 ## 二、如何使用
 ### 2.1 基础：启动服务
- **示例1：** 4090上单卡部署16K上下文的服务
+ **示例1：** 3060上单卡部署16K上下文的服务
 ```shell
 python -m fastdeploy.entrypoints.openai.api_server \
     --model PaddlePaddle/PaddleOCR-VL \
@@ -23,11 +23,11 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --engine-worker-queue-port 8182 \
     --max-model-len 16384 \
     --max-num-batched-tokens 16384 \
-    --gpu-memory-utilization 0.8 \
-    --max-num-seqs 128 \
+    --gpu-memory-utilization 0.9 \
+    --max-num-seqs 128
 ```
 
- **示例2：** A100上单卡部署16K上下文的服务
+ **示例2：** 4090上单卡部署16K上下文的服务
 ```shell
 python -m fastdeploy.entrypoints.openai.api_server \
     --model PaddlePaddle/PaddleOCR-VL \
@@ -37,7 +37,20 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --max-model-len 16384 \
     --max-num-batched-tokens 16384 \
     --gpu-memory-utilization 0.8 \
-    --max-num-seqs 256 \
+    --max-num-seqs 196
+```
+
+ **示例3：** A100上单卡部署16K上下文的服务
+```shell
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/PaddleOCR-VL \
+    --port 8180 \
+    --metrics-port 8181 \
+    --engine-worker-queue-port 8182 \
+    --max-model-len 16384 \
+    --max-num-batched-tokens 16384 \
+    --gpu-memory-utilization 0.8 \
+    --max-num-seqs 256
 ```
 
 示例是可以稳定运行的一组配置，同时也能得到比较好的性能。

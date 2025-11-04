@@ -264,7 +264,9 @@ void SpeculateVerify(const paddle::Tensor& accept_tokens,
                      const paddle::Tensor& topp,
                      int max_seq_len,
                      int verify_window,
-                     bool enable_topp);
+                     bool enable_topp,
+                     bool benchmark_mode,
+                     bool accept_all_drafts);
 
 void SpeculateClearAcceptNums(const paddle::Tensor& accept_num,
                               const paddle::Tensor& seq_lens_decoder);
@@ -414,6 +416,14 @@ std::vector<paddle::Tensor> SpeculateGetOutputPaddingOffset(
     const int max_seq_len);
 
 std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
+    const paddle::Tensor& input_ids,
+    const paddle::Tensor& draft_tokens,
+    const paddle::Tensor& cum_offsets,
+    const paddle::Tensor& token_num,
+    const paddle::Tensor& seq_len,
+    const paddle::Tensor& seq_lens_encoder);
+
+std::vector<paddle::Tensor> SpeculateGetPaddingOffsetV2(
     const paddle::Tensor& input_ids,
     const paddle::Tensor& draft_tokens,
     const paddle::Tensor& cum_offsets,
@@ -688,6 +698,34 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("max_draft_token"),
         py::arg("truncate_first_token"),
         py::arg("splitwise_prefill"),
+        "Preprocess data for draft model in speculative decoding");
+
+  m.def("draft_model_preprocess_v2",
+        &DraftModelPreprocessV2,
+        py::arg("draft_tokens"),
+        py::arg("input_ids"),
+        py::arg("stop_flags"),
+        py::arg("seq_lens_this_time"),
+        py::arg("seq_lens_encoder"),
+        py::arg("seq_lens_decoder"),
+        py::arg("step_idx"),
+        py::arg("not_need_stop"),
+        py::arg("is_block_step"),
+        py::arg("batch_drop"),
+        py::arg("pre_ids"),
+        py::arg("accept_tokens"),
+        py::arg("accept_num"),
+        py::arg("base_model_seq_lens_this_time"),
+        py::arg("base_model_seq_lens_encoder"),
+        py::arg("base_model_seq_lens_decoder"),
+        py::arg("base_model_step_idx"),
+        py::arg("base_model_stop_flags"),
+        py::arg("base_model_is_block_step"),
+        py::arg("base_model_draft_tokens"),
+        py::arg("num_model_step"),
+        py::arg("truncate_first_token"),
+        py::arg("splitwise_prefill"),
+        py::arg("kvcache_scheduler_v1"),
         "Preprocess data for draft model in speculative decoding");
 
   m.def("draft_model_postprocess",
@@ -1036,6 +1074,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("max_seq_len"),
         py::arg("verify_window"),
         py::arg("enable_topp"),
+        py::arg("benchmark_mode"),
+        py::arg("accept_all_drafts"),
         "Perform speculative verification for decoding");
 
   m.def("speculate_clear_accept_nums",
@@ -1073,6 +1113,16 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("seq_len"),
         py::arg("seq_lens_encoder"),
         "Get padding offset");
+
+  m.def("speculate_get_padding_offset_v2",
+        &SpeculateGetPaddingOffsetV2,
+        py::arg("input_ids"),
+        py::arg("draft_tokens"),
+        py::arg("cum_offsets"),
+        py::arg("token_num"),
+        py::arg("seq_len"),
+        py::arg("seq_lens_encoder"),
+        "Get padding offset v2");
 
   m.def("speculate_step_reschedule",
         &SpeculateStepSchedule,
@@ -1155,6 +1205,36 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("first_token_ids"),
         py::arg("block_size"),
         py::arg("encoder_decoder_block_num"),
+        "Step paddle function");
+
+  m.def("speculate_step_paddle",
+        &SpeculateStepPaddle,
+        py::arg("stop_flags"),
+        py::arg("seq_lens_this_time"),
+        py::arg("ori_seq_lens_encoder"),
+        py::arg("seq_lens_encoder"),
+        py::arg("seq_lens_decoder"),
+        py::arg("block_tables"),
+        py::arg("encoder_block_lens"),
+        py::arg("is_block_step"),
+        py::arg("step_block_list"),
+        py::arg("step_lens"),
+        py::arg("recover_block_list"),
+        py::arg("recover_lens"),
+        py::arg("need_block_list"),
+        py::arg("need_block_len"),
+        py::arg("used_list_len"),
+        py::arg("free_list"),
+        py::arg("free_list_len"),
+        py::arg("input_ids"),
+        py::arg("pre_ids"),
+        py::arg("step_idx"),
+        py::arg("next_tokens"),
+        py::arg("first_token_ids"),
+        py::arg("accept_num"),
+        py::arg("block_size"),
+        py::arg("encoder_decoder_block_num"),
+        py::arg("max_draft_tokens"),
         "Step paddle function");
 
   m.def("text_image_gather_scatter",

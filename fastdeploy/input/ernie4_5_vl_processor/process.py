@@ -147,6 +147,7 @@ class DataProcessor:
             "user": "User: ",
             "bot": "Assistant: ",
             "assistant": "Assistant: ",
+            "tool": "Tool: ",
         }
 
     def _build_token_type_mapping(self) -> Dict[Any, int]:
