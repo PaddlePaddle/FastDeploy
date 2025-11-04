@@ -13,7 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 from typing import Optional
+
 import paddle
 import triton
 
@@ -33,7 +35,7 @@ class _Attention(paddle.autograd.PyLayer):
         k = k.contiguous()
         v = v.contiguous()
         s = s.contiguous()
-        
+
         kv_history_compute = paddle.clone(kv_history_in)
 
         # Get input dimensions
@@ -55,9 +57,19 @@ class _Attention(paddle.autograd.PyLayer):
         # Step 1
         grid_diag = (b * h * NUM_BLOCK, NUM_CBLOCK_DIAG)
         _fwd_diag_kernel[grid_diag](
-            q, k, v, o, s,
-            b=b, h=h, n=n, d=d, e=e,
-            BLOCK=BLOCK, NUM_BLOCK=NUM_BLOCK, CBLOCK=CBLOCK_DIAG,
+            q,
+            k,
+            v,
+            o,
+            s,
+            b=b,
+            h=h,
+            n=n,
+            d=d,
+            e=e,
+            BLOCK=BLOCK,
+            NUM_BLOCK=NUM_BLOCK,
+            CBLOCK=CBLOCK_DIAG,
         )
 
         # Step 2
@@ -69,29 +81,58 @@ class _Attention(paddle.autograd.PyLayer):
         kv = paddle.empty(shape=[b, h, NUM_BLOCK, d, e], dtype="float32")
         grid_kv_parallel = (b * h, NUM_BLOCK)
         _fwd_kv_parallel[grid_kv_parallel](
-            k, v, k_decay, kv,
-            b=b, h=h, n=n, d=d, e=e,
-            BLOCK=BLOCK, NUM_BLOCK=NUM_BLOCK,
-            D_FBLOCK=D_FBLOCK, E_FBLOCK=E_FBLOCK, NUM_FBLOCK=NUM_FBLOCK,
-            CBLOCK=CBLOCK_KV_AND_NON_DIAG, NUM_CBLOCK=NUM_CBLOCK_KV_AND_NON_DIAG,
+            k,
+            v,
+            k_decay,
+            kv,
+            b=b,
+            h=h,
+            n=n,
+            d=d,
+            e=e,
+            BLOCK=BLOCK,
+            NUM_BLOCK=NUM_BLOCK,
+            D_FBLOCK=D_FBLOCK,
+            E_FBLOCK=E_FBLOCK,
+            NUM_FBLOCK=NUM_FBLOCK,
+            CBLOCK=CBLOCK_KV_AND_NON_DIAG,
+            NUM_CBLOCK=NUM_CBLOCK_KV_AND_NON_DIAG,
         )
 
         # Step 3
         grid_kv_reduce = (b * h, NUM_FBLOCK)
         _fwd_kv_reduce[grid_kv_reduce](
-            s, kv, kv_history_compute,  
-            b=b, h=h, n=n, d=d, e=e,
-            BLOCK=BLOCK, NUM_BLOCK=NUM_BLOCK,
-            D_FBLOCK=D_FBLOCK, E_FBLOCK=E_FBLOCK,
+            s,
+            kv,
+            kv_history_compute,
+            b=b,
+            h=h,
+            n=n,
+            d=d,
+            e=e,
+            BLOCK=BLOCK,
+            NUM_BLOCK=NUM_BLOCK,
+            D_FBLOCK=D_FBLOCK,
+            E_FBLOCK=E_FBLOCK,
         )
 
         # Step 4
         grid_none_diag = (b * h, NUM_BLOCK * NUM_CBLOCK_KV_AND_NON_DIAG)
         _fwd_none_diag_kernel[grid_none_diag](
-            q, o, s, kv,
-            b=b, h=h, n=n, d=d, e=e,
-            BLOCK=BLOCK, NUM_BLOCK=NUM_BLOCK, E_FBLOCK=E_FBLOCK,
-            CBLOCK=CBLOCK_KV_AND_NON_DIAG, NUM_CBLOCK=NUM_CBLOCK_KV_AND_NON_DIAG,
+            q,
+            o,
+            s,
+            kv,
+            b=b,
+            h=h,
+            n=n,
+            d=d,
+            e=e,
+            BLOCK=BLOCK,
+            NUM_BLOCK=NUM_BLOCK,
+            E_FBLOCK=E_FBLOCK,
+            CBLOCK=CBLOCK_KV_AND_NON_DIAG,
+            NUM_CBLOCK=NUM_CBLOCK_KV_AND_NON_DIAG,
         )
 
         return o, kv_history_compute
@@ -100,14 +141,15 @@ class _Attention(paddle.autograd.PyLayer):
     def backward(ctx, grad_output, grad_kv_history):
         raise NotImplementedError("Backward pass for lightning_attention is not implemented")
 
+
 def lightning_attention(
     q: paddle.Tensor,
     k: paddle.Tensor,
     v: paddle.Tensor,
     slope_rate: paddle.Tensor,
     kv_history: Optional[paddle.Tensor] = None,
-    is_profiling: bool = False, 
-    block_size: int = 256, 
+    is_profiling: bool = False,
+    block_size: int = 256,
 ) -> tuple[paddle.Tensor, paddle.Tensor]:
 
     d = q.shape[-1]
@@ -128,9 +170,7 @@ def lightning_attention(
     output = 0
 
     if kv_history is None:
-        kv_history_for_loop = paddle.zeros(
-            shape=[q.shape[0], q.shape[1], d, e], dtype="float32"
-        )
+        kv_history_for_loop = paddle.zeros(shape=[q.shape[0], q.shape[1], d, e], dtype="float32")
     else:
         kv_history_for_loop = paddle.clone(kv_history).contiguous()
 
@@ -162,16 +202,39 @@ def linear_decode_forward_triton(
     slot_idx: paddle.Tensor,
     BLOCK_SIZE: int = 32,
 ) -> paddle.Tensor:
-    B, H, _, D = q.shape
+    B, H, N, D = q.shape
     assert tuple(k.shape) == (B, H, 1, D), f"Shape of k is {k.shape}, expected {(B, H, 1, D)}"
     assert tuple(v.shape) == (B, H, 1, D), f"Shape of v is {v.shape}, expected {(B, H, 1, D)}"
-    from einops import rearrange
     output = paddle.empty_like(q)
     grid = (B, H, triton.cdiv(D, BLOCK_SIZE))
 
     qkv_b_stride, qkv_h_stride = q.strides[0], q.strides[1]
-    cache_b_stride, cache_h_stride, cache_d0_stride, cache_d1_stride = (kv_caches.strides[0], kv_caches.strides[1], kv_caches.strides[2], kv_caches.strides[3])
+    cache_b_stride, cache_h_stride, cache_d0_stride, cache_d1_stride = (
+        kv_caches.strides[0],
+        kv_caches.strides[1],
+        kv_caches.strides[2],
+        kv_caches.strides[3],
+    )
 
-    _linear_attn_decode_kernel[grid](q, k, v, kv_caches, slope_rate, slot_idx, output, D=D, qkv_b_stride=qkv_b_stride, qkv_h_stride=qkv_h_stride, cache_b_stride=cache_b_stride, cache_h_stride=cache_h_stride, cache_d0_stride=cache_d0_stride, cache_d1_stride=cache_d1_stride, BLOCK_SIZE=BLOCK_SIZE)
-    output = rearrange(output, "b h n d -> b n (h d)")
+    _linear_attn_decode_kernel[grid](
+        q,
+        k,
+        v,
+        kv_caches,
+        slope_rate,
+        slot_idx,
+        output,
+        D=D,
+        qkv_b_stride=qkv_b_stride,
+        qkv_h_stride=qkv_h_stride,
+        cache_b_stride=cache_b_stride,
+        cache_h_stride=cache_h_stride,
+        cache_d0_stride=cache_d0_stride,
+        cache_d1_stride=cache_d1_stride,
+        BLOCK_SIZE=BLOCK_SIZE,
+    )
+    # (B, H, N, D) -> (B, N, H, D)
+    output = paddle.transpose(output, perm=[0, 2, 1, 3])
+    # (B, N, H, D) -> (B, N, H * D)
+    output = output.reshape([B, N, -1])
     return output.squeeze(1).contiguous()
