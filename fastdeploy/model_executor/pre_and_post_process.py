@@ -97,6 +97,8 @@ def limit_thinking_content_length(
     max_think_lens: paddle.Tensor,
     step_idx: paddle.Tensor,
     limit_think_status: paddle.Tensor,
+    stop_flags: paddle.Tensor,
+    eos_token_ids: paddle.Tensor,
     think_end_id: int,
     line_break_id: int = None,
 ):
@@ -107,6 +109,8 @@ def limit_thinking_content_length(
             max_think_lens,
             step_idx,
             limit_think_status,
+            stop_flags,
+            eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
             think_end_id,
         )
     elif limit_strategy == "\n</think>\n\n":
@@ -117,6 +121,7 @@ def limit_thinking_content_length(
             max_think_lens,
             step_idx,
             limit_think_status,
+            stop_flags,
             think_end_id,
             line_break_id,
         )
@@ -132,6 +137,8 @@ def speculate_limit_thinking_content_length(
     limit_think_status: paddle.Tensor,
     accept_num: paddle.Tensor,
     seq_lens_decoder: paddle.Tensor,
+    stop_flags: paddle.Tensor,
+    eos_token_ids: paddle.Tensor,
     think_end_id: int,
     line_break_id: int = None,
 ):
@@ -144,6 +151,8 @@ def speculate_limit_thinking_content_length(
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
+            eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
             think_end_id,
         )
     elif limit_strategy == "\n</think>\n\n":
@@ -156,6 +165,7 @@ def speculate_limit_thinking_content_length(
             limit_think_status,
             accept_num,
             seq_lens_decoder,
+            stop_flags,
             think_end_id,
             line_break_id,
         )
@@ -271,6 +281,8 @@ def post_process_normal(
             max_think_lens=share_inputs["max_think_lens"],
             step_idx=share_inputs["step_idx"],
             limit_think_status=share_inputs["limit_think_status"],
+            stop_flags=share_inputs["stop_flags"],
+            eos_token_ids=share_inputs["eos_token_id"],
             think_end_id=think_end_id,
             line_break_id=line_break_id,
         )

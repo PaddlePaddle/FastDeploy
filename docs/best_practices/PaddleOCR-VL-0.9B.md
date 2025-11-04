@@ -5,7 +5,7 @@
 ## 1. Environment Preparation
 ### 1.1 Support Status
 Recommended Hardware Configuration:
-- GPU Memory: 24GB or more
+- GPU Memory: 12GB or more
 - Shared Memory: 2GB or more
 
 ### 1.2 Install Fastdeploy
@@ -14,7 +14,20 @@ Installation process reference documentation [FastDeploy GPU Install](../get_sta
 
 ## 2.How to Use
 ### 2.1 Basic: Launching the Service
-**Example 1:** Deploying a 16K Context Service on a Single RTX 4090 GPU
+**Example 1:** Deploying a 16K Context Service on a Single RTX 3060 GPU
+```shell
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/PaddleOCR-VL \
+    --port 8180 \
+    --metrics-port 8181 \
+    --engine-worker-queue-port 8182 \
+    --max-model-len 16384 \
+    --max-num-batched-tokens 16384 \
+    --gpu-memory-utilization 0.9 \
+    --max-num-seqs 128
+```
+
+**Example 2:** Deploying a 16K Context Service on a Single RTX 4090 GPU
 ```shell
 python -m fastdeploy.entrypoints.openai.api_server \
     --model PaddlePaddle/PaddleOCR-VL \
@@ -24,9 +37,10 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --max-model-len 16384 \
     --max-num-batched-tokens 16384 \
     --gpu-memory-utilization 0.8 \
-    --max-num-seqs 128
+    --max-num-seqs 196
 ```
-**Example 2:** Deploying a 16K Context Service on a Single A100 GPU
+
+**Example 3:** Deploying a 16K Context Service on a Single A100 GPU
 ```shell
 python -m fastdeploy.entrypoints.openai.api_server \
     --model PaddlePaddle/PaddleOCR-VL \
