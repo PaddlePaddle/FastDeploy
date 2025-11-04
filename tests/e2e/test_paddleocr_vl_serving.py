@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import os
 import shutil
 import signal
@@ -99,7 +98,6 @@ def setup_and_run_server():
         model_path = "./PaddleOCR-VL-0.9B"
 
     log_path = "server.log"
-    limit_mm_str = json.dumps({"image": 100, "video": 100})
 
     cmd = [
         sys.executable,
@@ -109,8 +107,6 @@ def setup_and_run_server():
         model_path,
         "--port",
         str(FD_API_PORT),
-        "--tensor-parallel-size",
-        "2",
         "--engine-worker-queue-port",
         str(FD_ENGINE_QUEUE_PORT),
         "--metrics-port",
@@ -119,18 +115,13 @@ def setup_and_run_server():
         str(FD_CACHE_QUEUE_PORT),
         "--enable-mm",
         "--max-model-len",
-        "32768",
+        "16384",
         "--max-num-batched-tokens",
-        "384",
+        "16384",
         "--max-num-seqs",
         "128",
-        "--limit-mm-per-prompt",
-        limit_mm_str,
-        "--enable-chunked-prefill",
-        "--kv-cache-ratio",
-        "0.71",
-        "--quantization",
-        "wint4",
+        "--gpu-memory-utilization",
+        "0.9",
         "--graph-optimization-config",
         '{"graph_opt_level":0, "use_cudagraph":true}',
     ]
