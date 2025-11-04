@@ -237,7 +237,7 @@ class QwenVLProcessor(TextProcessor):
             if chat_template_kwargs:
                 if isinstance(chat_template_kwargs, dict):
                     for k, v in chat_template_kwargs.items():
-                        if k not in request:
+                        if k not in request or request[k] is None:
                             request[k] = v
                 else:
                     raise ValueError("Invalid input: chat_template_kwargs must be a dict")
