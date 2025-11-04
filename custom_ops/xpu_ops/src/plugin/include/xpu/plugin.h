@@ -220,9 +220,12 @@ DLL_EXPORT int limit_thinking_content_length_kernel_v1(
     int64_t* next_tokens,
     const int* max_think_lens,
     const int64_t* step_idx,
+    const int64_t* eos_token_ids,
     int* limit_think_status,
+    bool* stop_flags,
     const int64_t think_end_id,
-    const int bs);
+    const int bs,
+    const int eos_token_id_len);
 
 DLL_EXPORT int limit_thinking_content_length_kernel_v2(
     api::Context* ctx,
@@ -230,6 +233,7 @@ DLL_EXPORT int limit_thinking_content_length_kernel_v2(
     const int* max_think_lens,
     const int64_t* step_idx,
     int* limit_think_status,
+    const bool* stop_flags,
     const int64_t think_end_id,
     const int64_t line_break_id,
     const int bs);

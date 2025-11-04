@@ -202,6 +202,8 @@ def xpu_post_process(
         max_think_lens = share_inputs["max_think_lens"]
         step_idx = share_inputs["step_idx"]
         limit_think_status = share_inputs["limit_think_status"]
+        stop_flags = share_inputs["stop_flags"]
+        eos_token_ids = share_inputs["eos_token_id"]
         if limit_strategy == "</think>":
             # for ernie-45-vl
             limit_thinking_content_length_v1(
@@ -209,6 +211,8 @@ def xpu_post_process(
                 max_think_lens,
                 step_idx,
                 limit_think_status,
+                stop_flags,
+                eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
                 think_end_id,
             )
         elif limit_strategy == "\n</think>\n\n":
@@ -219,6 +223,7 @@ def xpu_post_process(
                 max_think_lens,
                 step_idx,
                 limit_think_status,
+                stop_flags,
                 think_end_id,
                 line_break_id,
             )

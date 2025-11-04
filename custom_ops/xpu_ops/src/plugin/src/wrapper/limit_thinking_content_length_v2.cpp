@@ -25,6 +25,7 @@ __attribute__((global)) void limit_thinking_content_length_kernel_v2(
     const int* max_think_lens,
     const int64_t* step_idx,
     int* limit_think_status,
+    const bool* stop_flags,
     const int64_t think_end_id,
     const int64_t line_break_id,
     const int bs);
@@ -37,11 +38,60 @@ namespace xpu {
 namespace api {
 namespace plugin {
 
+static int cpu_wrapper(Context* ctx,
+                       int64_t* next_tokens,
+                       const int* max_think_lens,
+                       const int64_t* step_idx,
+                       int* limit_think_status,
+                       const bool* stop_flags,
+                       const int64_t think_end_id,
+                       const int64_t line_break_id,
+                       const int bs) {
+  for (int bid = 0; bid < bs; bid++) {
+    const int max_think_len = max_think_lens[bid];
+    if (max_think_len < 0) continue;
+    int current_limit_think_status = limit_think_status[bid];
+    if (current_limit_think_status == 3 && stop_flags[bid]) {
+      continue;
+    }
+
+    int64_t next_token = next_tokens[bid];
+    const int64_t step = step_idx[bid];
+
+    if (current_limit_think_status <= 1) {
+      if (step == max_think_len) {
+        next_token = line_break_id;
+        current_limit_think_status = 1;
+      } else if (step == max_think_len + 1) {
+        next_token = think_end_id;
+        current_limit_think_status = 1;
+      } else if (step == max_think_len + 2) {
+        next_token = line_break_id;
+        current_limit_think_status = 1;
+      } else if (step == max_think_len + 3) {
+        next_token = line_break_id;
+        current_limit_think_status = 2;
+      }
+    }
+    if (current_limit_think_status == 0) {
+      if (next_token == think_end_id) {
+        current_limit_think_status = 3;
+      }
+    }
+    if (current_limit_think_status == 2) {
+      current_limit_think_status = 3;
+    }
+    next_tokens[bid] = next_token;
+    limit_think_status[bid] = current_limit_think_status;
+  }
+  return api::SUCCESS;
+}
 static int xpu3_wrapper(Context* ctx,
                         int64_t* next_tokens,
                         const int* max_think_lens,
                         const int64_t* step_idx,
                         int* limit_think_status,
+                        const bool* stop_flags,
                         const int64_t think_end_id,
                         const int64_t line_break_id,
                         const int bs) {
@@ -53,6 +103,7 @@ static int xpu3_wrapper(Context* ctx,
       max_think_lens,
       reinterpret_cast<const XPU_INT64*>(step_idx),
       limit_think_status,
+      stop_flags,
       think_end_id,
       line_break_id,
       bs);
@@ -64,6 +115,7 @@ int limit_thinking_content_length_kernel_v2(Context* ctx,
                                             const int* max_think_lens,
                                             const int64_t* step_idx,
                                             int* limit_think_status,
+                                            const bool* stop_flags,
                                             const int64_t think_end_id,
                                             const int64_t line_break_id,
                                             const int bs) {
@@ -74,11 +126,19 @@ int limit_thinking_content_length_kernel_v2(Context* ctx,
                       max_think_lens,
                       step_idx,
                       limit_think_status,
-                      think_end_id);
-  WRAPPER_DUMP_PARAM2(ctx, line_break_id, bs);
+                      stop_flags);
+  WRAPPER_DUMP_PARAM3(ctx, think_end_id, line_break_id, bs);
   WRAPPER_DUMP(ctx);
   if (ctx->dev().type() == api::kCPU) {
-    assert(false);
+    return cpu_wrapper(ctx,
+                       next_tokens,
+                       max_think_lens,
+                       step_idx,
+                       limit_think_status,
+                       stop_flags,
+                       think_end_id,
+                       line_break_id,
+                       bs);
   }
   if (ctx->dev().type() == api::kXPU2 || ctx->dev().type() == api::kXPU3) {
     return xpu3_wrapper(ctx,
@@ -86,6 +146,7 @@ int limit_thinking_content_length_kernel_v2(Context* ctx,
                         max_think_lens,
                         step_idx,
                         limit_think_status,
+                        stop_flags,
                         think_end_id,
                         line_break_id,
                         bs);
