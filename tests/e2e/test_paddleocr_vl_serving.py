@@ -98,7 +98,6 @@ def setup_and_run_server():
         model_path = "./PaddleOCR-VL-0.9B"
 
     log_path = "server.log"
-    # limit_mm_str = json.dumps({"image": 100, "video": 100})
 
     cmd = [
         sys.executable,
