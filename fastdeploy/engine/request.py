@@ -399,7 +399,7 @@ class RequestMetrics:
     model_forward_time: Optional[float] = None
     model_execute_time: Optional[float] = None
     request_start_time: Optional[float] = None
-    llm_engine_recv_req_time_stamp: Optional[float] = None
+    llm_engine_recv_req_timestamp: Optional[float] = None
     llm_engine_send_req_to_engine_timestamp: Optional[float] = None
     llm_engine_recv_token_timestamp: Optional[float] = None
 
@@ -416,7 +416,7 @@ class RequestMetrics:
             "model_forward_time": self.model_forward_time,
             "model_execute_time": self.model_execute_time,
             "request_start_time": self.request_start_time,
-            "llm_engine_recv_req_time_stamp": self.llm_engine_recv_req_time_stamp,
+            "llm_engine_recv_req_timestamp": self.llm_engine_recv_req_timestamp,
             "llm_engine_send_req_to_engine_timestamp": self.llm_engine_send_req_to_engine_timestamp,
             "llm_engine_recv_token_timestamp": self.llm_engine_recv_token_timestamp,
         }

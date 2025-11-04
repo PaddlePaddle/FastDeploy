@@ -630,7 +630,7 @@ class TokenProcessor:
                     time_in_queue=task.schedule_start_time - task.preprocess_end_time,
                     preprocess_cost_time=task.preprocess_end_time - task.preprocess_start_time,
                     request_start_time=task.arrival_time,
-                    llm_engine_recv_req_time_stamp=task.llm_engine_recv_req_time_stamp,
+                    llm_engine_recv_req_timestamp=task.llm_engine_recv_req_timestamp,
                     llm_engine_send_req_to_engine_timestamp=task.inference_start_time,
                     llm_engine_recv_token_timestamp=time.time(),
                 )
@@ -641,7 +641,7 @@ class TokenProcessor:
                     arrival_time=time.time(),
                     request_start_time=task.arrival_time,
                     model_execute_time=time.time() - task.inference_start_time,
-                    llm_engine_recv_req_time_stamp=task.llm_engine_recv_req_time_stamp,
+                    llm_engine_recv_req_timestamp=task.llm_engine_recv_req_timestamp,
                     llm_engine_send_req_to_engine_timestamp=task.inference_start_time,
                     llm_engine_recv_token_timestamp=time.time(),
                 )
