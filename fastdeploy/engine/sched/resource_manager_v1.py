@@ -639,7 +639,7 @@ class ResourceManagerV1(ResourceManager):
                     ):
                         break
                     if request.status == RequestStatus.WAITING:
-                        self._update_mm_hashes(request)
+                        # self._update_mm_hashes(request)
                         # Enable prefix caching
                         if self.config.cache_config.enable_prefix_caching:
                             if (

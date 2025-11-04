@@ -19,6 +19,7 @@
 import copy
 import os
 import pickle
+import uuid as uuid_lib
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -286,15 +287,16 @@ class DataProcessor:
 
         images, videos = [], []
         image_uuid, video_uuid = [], []
-        for item in mm_items:
-            if item.get("type") == "image":
-                images.append(item["data"])
-                image_uuid.append(item["uuid"])
-            elif item.get("type") == "video":
-                videos.append(item["data"])
-                video_uuid.append(item["uuid"])
-            else:
-                raise ValueError(f"Unsupported multimodal type: {item.get('type')}")
+        if self.enable_processor_cache:
+            for item in mm_items:
+                if item.get("type") == "image":
+                    images.append(item["data"])
+                    image_uuid.append(item["uuid"])
+                elif item.get("type") == "video":
+                    videos.append(item["data"])
+                    video_uuid.append(item["uuid"])
+                else:
+                    raise ValueError(f"Unsupported multimodal type: {item.get('type')}")
 
         if self.tokenizer.chat_template is None:
             raise ValueError("This model does not support chat template.")
@@ -376,10 +378,11 @@ class DataProcessor:
             input_data_format=ChannelDimension.LAST,
         )
         outputs["images"].append(ret["pixel_values"])
-        if not uuid:
+        if False or not uuid:
             outputs["mm_hashes"].append(MultimodalHasher.hash_features(ret["pixel_values"]))
         else:
-            outputs["mm_hashes"].append(uuid)
+            # outputs["mm_hashes"].append(uuid)
+            outputs["mm_hashes"].append(uuid_lib.uuid4())
         outputs["grid_thw"].append(ret["image_grid_thw"])
         outputs["image_type_ids"].append(0)
 
@@ -422,10 +425,11 @@ class DataProcessor:
             input_data_format=ChannelDimension.LAST,
         )
         outputs["images"].append(ret["pixel_values_videos"])
-        if not uuid:
+        if False or not uuid:
             outputs["mm_hashes"].append(MultimodalHasher.hash_features(ret["pixel_values_videos"]))
         else:
-            outputs["mm_hashes"].append(uuid)
+            # outputs["mm_hashes"].append(uuid)
+            outputs["mm_hashes"].append(uuid_lib.uuid4())
         outputs["grid_thw"].append(ret["video_grid_thw"])
         outputs["image_type_ids"].extend([1] * num_frames)
 
