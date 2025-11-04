@@ -101,7 +101,6 @@ __global__ void speculate_get_padding_offset(int* padding_offset,
   }
 }
 
-
 __global__ void speculate_get_padding_offset_v2(int* batch_id_per_token,
                                                 int* cum_offsets_out,
                                                 int* cu_seqlens_q,
