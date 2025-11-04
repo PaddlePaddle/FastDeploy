@@ -66,13 +66,11 @@ class GuidedDecoding:
     """
 
     def __init__(self, fd_config: FDConfig):
-        self.async_step = None
         self.token_bitmask = None
         self._full_mask = None
-        # self.logits_processor: Dict[int, Optional[Any]] = dict()
         self.logits_processors: List[Any] = [None] * fd_config.scheduler_config.max_num_seqs
         self.reasoning_parser = None
-        self._prefill_done_idxs = []
+        self._prefill_done_idxs = [False] * fd_config.scheduler_config.max_num_seqs
 
     def apply_reasoning_parser(self, reasoning_parser: Optional[ReasoningParser] = None):
         self.reasoning_parser = reasoning_parser
@@ -85,8 +83,8 @@ class GuidedDecoding:
     ):
         """add logits processor to SamplerProcessor"""
         assert len(prefill_tokens) == 0
-        if idx in self._prefill_done_idxs:
-            self._prefill_done_idxs.remove(idx)
+        if self._prefill_done_idxs[idx]:
+            self._prefill_done_idxs[idx] = False
 
         if future is None:
             self.logits_processors[idx] = None
@@ -96,23 +94,32 @@ class GuidedDecoding:
         self.logits_processors[idx] = future
         return
 
+    def should_fill_bitmask(self, idx: int) -> bool:
+        if self.reasoning_parser is not None:
+            if self.logits_processors[idx].enable_reasoning:
+                return True
+            if self.logits_processors[idx].reasoning_ended:
+                return True
+            else:
+                return False
+        return True
+
     def update_vocab_mask(self):
         """update vocab mask. (cpu-heavy operation)"""
         for idx, processor in enumerate(self.logits_processors):
-            if processor is None or idx not in self._prefill_done_idxs:
+            if processor is None or not self._prefill_done_idxs[idx]:
                 continue
             assert not isinstance(processor, Future)
             if processor.is_terminated:
                 processor = None
-                if idx in self._prefill_done_idxs:
-                    self._prefill_done_idxs.remove(idx)
+                if self._prefill_done_idxs[idx]:
+                    self._prefill_done_idxs[idx] = False
                 continue
-            processor.fill_token_bitmask(self.token_bitmask, idx)
+            if self.should_fill_bitmask(idx):
+                processor.fill_token_bitmask(self.token_bitmask, idx)
 
     def apply_token_mask(self, logits: paddle.Tensor, prefill_done_idxs: List[int] = []):
         """apply token mask to logits"""
-        if len(self._prefill_done_idxs) == 0 and len(prefill_done_idxs) == 0:
-            return logits
 
         tidx = None
         for idx in prefill_done_idxs:
@@ -120,21 +127,26 @@ class GuidedDecoding:
                 continue
 
             assert self.logits_processors[idx] is not None
-            assert idx not in self._prefill_done_idxs
+            assert not self._prefill_done_idxs[idx]
             if isinstance(self.logits_processors[idx], Future):
                 self.logits_processors[idx] = self.logits_processors[idx].result()
 
             if self.token_bitmask is None:
                 self.token_bitmask = self.logits_processors[idx].allocate_token_bitmask()
 
-        self._prefill_done_idxs.extend(prefill_done_idxs)
+        for idx in prefill_done_idxs:
+            self._prefill_done_idxs[idx] = True
+
         for idx in self._prefill_done_idxs:
             if self.logits_processors[idx] is None:
+                continue
+            if not self._prefill_done_idxs[idx]:
                 continue
 
             assert self.logits_processors[idx] is not None
             tidx = idx
-            self.logits_processors[idx].fill_token_bitmask(self.token_bitmask, idx)
+            if self.should_fill_bitmask(idx):
+                self.logits_processors[idx].fill_token_bitmask(self.token_bitmask, idx)
 
         if tidx is None:
             return logits
@@ -146,29 +158,26 @@ class GuidedDecoding:
             if self.reasoning_parser is None or not processor.enable_reasoning or processor.reasoning_ended:
                 indices.append(idx)
 
-        res = self.logits_processors[tidx].apply_token_mask(logits, self.token_bitmask, indices=indices)
-        return res
+        if len(indices) == 0:
+            return logits
+        return self.logits_processors[tidx].apply_token_mask(logits, self.token_bitmask, indices=indices)
 
     def _accept_token(self, idx: int, token: int):
         """accept token"""
-        # if idx not in self.logits_processor:
-        #    raise ValueError(f"Invalid index, idx: {idx}, logit_processors.keys: {self.logits_processor.keys()}")
 
-        if (
-            self.reasoning_parser is not None
-            and self.logits_processors[idx].enable_reasoning
-            and not self.logits_processors[idx].reasoning_ended
-        ):
-            reasoning_ended = self.reasoning_parser.is_reasoning_end([token])
-            self.logits_processors[idx].reasoning_ended = reasoning_ended
-            return
+        if self.reasoning_parser is not None:
+            if not self.logits_processors[idx].enable_reasoning:
+                if not self.logits_processors[idx].reasoning_ended:
+                    reasoning_ended = self.reasoning_parser.is_reasoning_end([token])
+                    self.logits_processors[idx].reasoning_ended = reasoning_ended
+                    return
 
         self.logits_processors[idx].accept_token(token)
 
         if self.logits_processors[idx].is_terminated:
             self.logits_processors[idx] = None
-            if idx in self._prefill_done_idxs:
-                self._prefill_done_idxs.remove(idx)
+            if self._prefill_done_idxs[idx]:
+                self._prefill_done_idxs[idx] = False
             return
 
     def update_output_tokens(self, next_tokens: paddle.Tensor):
@@ -177,16 +186,15 @@ class GuidedDecoding:
             return
 
         token_ids = next_tokens.numpy().tolist()
-        if True:
-            for idx, processor in enumerate(self.logits_processors):
-                if idx not in self._prefill_done_idxs or processor is None:
-                    continue
-                if idx >= len(token_ids):
-                    continue
-                token = token_ids[idx][0]
-                if token < 0:
-                    continue
-                self._accept_token(idx, token)
+        for idx, processor in enumerate(self.logits_processors):
+            if not self._prefill_done_idxs[idx] or processor is None:
+                continue
+            if idx >= len(token_ids):
+                continue
+            token = token_ids[idx][0]
+            if token < 0:
+                continue
+            self._accept_token(idx, token)
 
     def pre_process(self):
         """pre process before running"""
@@ -332,10 +340,10 @@ class Sampler(nn.Layer):
         self,
         logits: paddle.Tensor,
         sampling_metadata: SamplingMetadata,
-        skip_idx_list: List[int] = [],
+        p_done_idxs: List[int] = [],
     ) -> SamplerOutput:
         """ """
-        logits = self.guided_decoding.apply_token_mask(logits, skip_idx_list)
+        logits = self.guided_decoding.apply_token_mask(logits, p_done_idxs)
 
         num_logprobs = sampling_metadata.max_num_logprobs
         if num_logprobs is not None:
