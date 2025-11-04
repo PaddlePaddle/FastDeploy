@@ -44,17 +44,16 @@ class TestFusedMoE(unittest.TestCase):
         test_cases = product(bszs, hidden_sizes)
         for bsz, hidden_size in test_cases:
             shape = [bsz, hidden_size]
-            x = paddle.rand(shape, dtype=paddle.bfloat16)
+            x = paddle.rand(shape, dtype=paddle.float16)
             residual_input = None
-            w = paddle.rand([hidden_size], dtype=paddle.bfloat16)
+            w = paddle.rand([hidden_size], dtype=paddle.float16)
             eps = 1e-05
             out = paddle.empty(x.shape, dtype=w.dtype)
             out_ref, residual_ref = self.run_native_rmsnorm(x, w, eps, residual_input)
             out_ref = out_ref.cast("float32")
             self.run_custom_rmsnorm(x, w, eps, None, out)
             out = out.cast("float32")
-            if not self.profile:
-                np.testing.assert_allclose(out_ref.numpy(), out.numpy(), rtol=1e-03, atol=1e-03)
+            np.testing.assert_allclose(out_ref.numpy(), out.numpy(), rtol=1e-03, atol=1e-03)
 
     def test_fused_add_rmsnorm(self):
         paddle.seed(100)
@@ -63,17 +62,16 @@ class TestFusedMoE(unittest.TestCase):
         test_cases = product(bszs, hidden_sizes)
         for bsz, hidden_size in test_cases:
             shape = [bsz, hidden_size]
-            x = paddle.rand(shape, dtype=paddle.bfloat16)
-            residual_input = paddle.rand(shape, dtype=paddle.bfloat16)
-            w = paddle.rand([hidden_size], dtype=paddle.bfloat16)
+            x = paddle.rand(shape, dtype=paddle.float16)
+            residual_input = paddle.rand(shape, dtype=paddle.float16)
+            w = paddle.rand([hidden_size], dtype=paddle.float16)
             eps = 1e-05
             out_ref, residual_ref = self.run_native_rmsnorm(x, w, eps, residual_input)
             out_ref = out_ref.cast("float32")
             self.run_custom_rmsnorm(x, w, eps, residual_input)
             out = x.cast("float32")
-            if not self.profile:
-                np.testing.assert_allclose(out_ref.numpy(), out.numpy(), rtol=1e-03, atol=1e-03)
-                np.testing.assert_allclose(residual_ref.numpy(), residual_input.numpy(), rtol=1e-03, atol=1e-03)
+            np.testing.assert_allclose(out_ref.numpy(), out.numpy(), rtol=1e-03, atol=1e-03)
+            np.testing.assert_allclose(residual_ref.numpy(), residual_input.numpy(), rtol=1e-03, atol=1e-03)
 
 
 if __name__ == "__main__":

@@ -244,7 +244,7 @@ class RMSNorm(nn.Layer):
                 fused_add_rmsnorm(x, residual=residual_input, weight=self.weight, eps=self.eps)
                 norm_out = (x, residual_input)
             elif x.shape[0] <= 256:
-                norm_out = rms_norm(x, self.weight, self.eps)
+                norm_out = rmsnorm(x, self.weight, self.eps)
                 norm_out = (norm_out, None)
             else:
                 norm_out = self.norm_func(
