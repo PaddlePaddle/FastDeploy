@@ -165,7 +165,7 @@ function install_from_precompiled_wheel() {
   echo -e "${BLUE}[info]${NONE} Detected CUDA version: ${GREEN}cu${CUDA_VERSION}${NONE}"
 
   GPU_ARCH_STR=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader \
-    | awk '{printf("%d\n",$1*10)}' | sort -u | awk '{printf("SM%s_",$1)}' | sed 's/_$//')
+    | awk '{printf("%d\n",$1*10)}' | sort -u | awk '{printf("SM_%s_",$1)}' | sed 's/_$//')
   echo -e "${BLUE}[info]${NONE} Detected GPU arch: ${GREEN}${GPU_ARCH_STR}${NONE}"
 
   local WHL_PATH="${PRE_WHEEL_DIR}/${WHL_NAME}"
