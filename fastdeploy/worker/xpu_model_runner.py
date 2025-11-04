@@ -89,7 +89,6 @@ def xpu_pre_process(
     share_inputs["cu_seqlens_k"] = cu_seqlens_k
 
     xpu_forward_meta = XPUForwardMeta(
-        input_ids=share_inputs["input_ids"],
         ids_remove_padding=share_inputs["ids_remove_padding"],
         rotary_embs=share_inputs["rope_emb"],
         attn_backend=None,
