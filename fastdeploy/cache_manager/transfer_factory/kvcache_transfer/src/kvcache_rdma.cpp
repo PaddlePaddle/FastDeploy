@@ -70,6 +70,9 @@ RDMACommunicator::RDMACommunicator(std::string& role,
 
     // Step 1: Initialize KV cache config
     KVCacheConfig::getInstance().displayConfiguration();
+    printf(
+        "====RyanDebugRDMA, Finish  #69 KVCacheConfig::getInstance(). ===== "
+        "\n");
 
     // Step 2: Initialize KV cache structure
     // Validate and set number of layers
@@ -77,11 +80,26 @@ RDMACommunicator::RDMACommunicator(std::string& role,
     if (layer_number <= 0) {
       throw std::runtime_error("Invalid layer number");
     }
+    printf("====RyanDebugRDMA, Finish  #77 layer. ===== \n");
 
+    if (local_cache_value_ptr_layer_head_.empty()) {
+      has_value_cache_ = false;
+      WARN(
+          "Value Cache is empty (Maybe MLA Model). RDMA will run in Key-Only "
+          "mode.");
+    } else {
+      has_value_cache_ = true;
+      if (local_cache_value_ptr_layer_head_.size() != layer_number) {
+        throw std::runtime_error("Key and Value cache layer number mismatch!");
+      }
+    }
+
+    printf("====RyanDebugRDMA, Finish  #91 layer. ===== \n");
     // Step 2: Setup cache vectors and pointers
     resize_vectors();
     assign_pointers();
 
+    printf("====RyanDebugRDMA, Finish  #97 layer. ===== \n");
     // Step 3:Initialize the event channel
     rdma_event_channel_epoll_fd = epoll_create1(EPOLL_CLOEXEC);
     if (rdma_event_channel_epoll_fd < 0) {
@@ -89,6 +107,7 @@ RDMACommunicator::RDMACommunicator(std::string& role,
                                std::string(strerror(errno)));
     }
 
+    printf("====RyanDebugRDMA, Finish  #105 layer. ===== \n");
     // Start the server thread (if in decode role)
     if (splitwise_role == "decode") {
       std::thread server_thread([this]() {
@@ -100,7 +119,7 @@ RDMACommunicator::RDMACommunicator(std::string& role,
       });
       server_thread.detach();
     }
-
+    printf("====RyanDebugRDMA, Finish  #117 layer. ===== \n");
     RDMACommunicator_status = 1;
     INFO("RDMA communicator initialized successfully");
   } catch (const std::exception& e) {
@@ -119,7 +138,9 @@ void RDMACommunicator::resize_vectors() {
   }
 
   local_cache_key_ptr_per_layer.resize(layer_number);
-  local_cache_value_ptr_per_layer.resize(layer_number);
+  if (has_value_cache_) {
+    local_cache_value_ptr_per_layer.resize(layer_number);
+  }
 }
 
 void RDMACommunicator::assign_pointers() {
@@ -131,15 +152,19 @@ void RDMACommunicator::assign_pointers() {
   // Assign pointers for each layer and block
   for (int layer_idx = 0; layer_idx < layer_number; ++layer_idx) {
     // Validate layer head pointers
-    if (local_cache_key_ptr_layer_head_[layer_idx] == 0 ||
-        local_cache_value_ptr_layer_head_[layer_idx] == 0) {
+    if (local_cache_key_ptr_layer_head_[layer_idx] == 0) {
       throw std::runtime_error("Invalid cache pointer for layer " +
                                std::to_string(layer_idx));
     }
-
-    // Resize block vectors for current layer
     local_cache_key_ptr_per_layer[layer_idx].resize(block_number);
-    local_cache_value_ptr_per_layer[layer_idx].resize(block_number);
+
+    if (has_value_cache_) {
+      if (local_cache_value_ptr_layer_head_[layer_idx] == 0) {
+        throw std::runtime_error("Invalid VALUE cache pointer for layer " +
+                                 std::to_string(layer_idx));
+      }
+      local_cache_value_ptr_per_layer[layer_idx].resize(block_number);
+    }
 
     // Calculate and assign block pointers
     for (int block_idx = 0; block_idx < block_number; ++block_idx) {
@@ -147,9 +172,12 @@ void RDMACommunicator::assign_pointers() {
           reinterpret_cast<void*>(local_cache_key_ptr_layer_head_[layer_idx] +
                                   block_idx * block_size_byte);
 
-      local_cache_value_ptr_per_layer[layer_idx][block_idx] =
-          reinterpret_cast<void*>(local_cache_value_ptr_layer_head_[layer_idx] +
-                                  block_idx * block_size_byte);
+      if (has_value_cache_) {
+        local_cache_value_ptr_per_layer[layer_idx][block_idx] =
+            reinterpret_cast<void*>(
+                local_cache_value_ptr_layer_head_[layer_idx] +
+                block_idx * block_size_byte);
+      }
     }
   }
 }
@@ -347,7 +375,7 @@ int RDMACommunicator::start_server(int sport, int sgid_idx, int gpu_index) {
           continue;
         }
 
-        server_exchange_mr(ctx);
+        server_exchange_mr(ctx, has_value_cache_);
       } else {
         auto ctx_iter = connectionContexts.find(event_fd);
         if (ctx_iter == connectionContexts.end()) {
@@ -435,18 +463,33 @@ bool RDMACommunicator::deregister_memory_regions(struct RdmaContext* ctx) {
     return false;
   }
 
-  for (int layer_idx = 0; layer_idx < layer_number; layer_idx++) {
-    if (!write_mr_key_list.empty() && !write_mr_value_list.empty()) {
-      if (ibv_dereg_mr(write_mr_key_list[layer_idx])) {
-        ERR("Failed to deregister memory region: write_mr_key_list, layer %d",
-            layer_idx);
-      }
-      if (ibv_dereg_mr(write_mr_value_list[layer_idx])) {
-        ERR("Failed to deregister memory region: write_mr_value_list, layer %d",
-            layer_idx);
+  if (!write_mr_key_list.empty()) {
+    for (int layer_idx = 0; layer_idx < layer_number; layer_idx++) {
+      if (write_mr_key_list[layer_idx]) {
+        if (ibv_dereg_mr(write_mr_key_list[layer_idx])) {
+          ERR("Failed to deregister memory region: write_mr_key_list, layer %d",
+              layer_idx);
+        }
+        write_mr_key_list[layer_idx] = nullptr;
       }
     }
+    write_mr_key_list.clear();
   }
+
+  if (!write_mr_value_list.empty()) {
+    for (int layer_idx = 0; layer_idx < layer_number; layer_idx++) {
+      if (write_mr_value_list[layer_idx]) {
+        if (ibv_dereg_mr(write_mr_value_list[layer_idx])) {
+          ERR("Failed to deregister memory region: write_mr_value_list, layer "
+              "%d",
+              layer_idx);
+        }
+        write_mr_value_list[layer_idx] = nullptr;
+      }
+    }
+    write_mr_value_list.clear();
+  }
+
   return true;
 }
 
@@ -735,15 +778,17 @@ bool RDMACommunicator::client_mr_register_per_layer(RdmaContext* ctx) {
   }
 
   std::lock_guard<std::mutex> lock(mutex_);
-
-  if (!write_mr_key_list.empty() || !write_mr_value_list.empty()) {
+  if (!write_mr_key_list.empty()) {
     WARN("Memory regions already registered");
     return true;
   }
 
   const size_t list_size = layer_number;
   write_mr_key_list.resize(list_size, nullptr);
-  write_mr_value_list.resize(list_size, nullptr);
+
+  if (has_value_cache_) {
+    write_mr_value_list.resize(list_size, nullptr);
+  }
 
   const uint32_t access_flags =
       IBV_ACCESS_LOCAL_WRITE |
@@ -753,8 +798,6 @@ bool RDMACommunicator::client_mr_register_per_layer(RdmaContext* ctx) {
 
   for (int i = 0; i < static_cast<int>(list_size); ++i) {
     void* key_ptr = reinterpret_cast<void*>(local_cache_key_ptr_layer_head_[i]);
-    void* val_ptr =
-        reinterpret_cast<void*>(local_cache_value_ptr_layer_head_[i]);
     size_t size = static_cast<size_t>(block_size_byte) * block_number;
 
     write_mr_key_list[i] =
@@ -765,13 +808,18 @@ bool RDMACommunicator::client_mr_register_per_layer(RdmaContext* ctx) {
                                access_flags);
     if (!write_mr_key_list[i]) goto fail;
 
-    write_mr_value_list[i] =
-        register_memory_region(ctx->pd,
-                               val_ptr,
-                               size,
-                               "client_value_" + std::to_string(i),
-                               access_flags);
-    if (!write_mr_value_list[i]) goto fail;
+    if (has_value_cache_) {
+      void* val_ptr =
+          reinterpret_cast<void*>(local_cache_value_ptr_layer_head_[i]);
+
+      write_mr_value_list[i] =
+          register_memory_region(ctx->pd,
+                                 val_ptr,
+                                 size,
+                                 "client_value_" + std::to_string(i),
+                                 access_flags);
+      if (!write_mr_value_list[i]) goto fail;
+    }
   }
 
   return true;
@@ -812,8 +860,6 @@ bool RDMACommunicator::server_mr_register_per_layer(RdmaContext* ctx) {
 
   for (int i = 0; i < layer_number; ++i) {
     void* key_ptr = reinterpret_cast<void*>(local_cache_key_ptr_layer_head_[i]);
-    void* val_ptr =
-        reinterpret_cast<void*>(local_cache_value_ptr_layer_head_[i]);
     size_t size = static_cast<size_t>(block_size_byte) * block_number;
 
     struct ibv_mr* key_mr = register_memory_region(
@@ -822,21 +868,29 @@ bool RDMACommunicator::server_mr_register_per_layer(RdmaContext* ctx) {
       ERR("Failed to register key MR at layer %d", i);
       goto fail;
     }
-
-    struct ibv_mr* value_mr = register_memory_region(
-        ctx->pd, val_ptr, size, "value_" + std::to_string(i), access_flags);
-    if (!value_mr) {
-      ERR("Failed to register value MR at layer %d", i);
-      ibv_dereg_mr(key_mr);
-      goto fail;
-    }
-
     write_cache_key_server_mr_list.push_back(key_mr);
-    write_cache_value_server_mr_list.push_back(value_mr);
+
+    if (has_value_cache_) {
+      void* val_ptr =
+          reinterpret_cast<void*>(local_cache_value_ptr_layer_head_[i]);
+      struct ibv_mr* value_mr = register_memory_region(
+          ctx->pd, val_ptr, size, "value_" + std::to_string(i), access_flags);
+      if (!value_mr) {
+        ERR("Failed to register value MR at layer %d", i);
+        ibv_dereg_mr(key_mr);
+        goto fail;
+      }
+      write_cache_value_server_mr_list.push_back(value_mr);
+    }
   }
 
+  // 【修复点】：无论是否有 Value Cache，都要赋值给 ctx->conn
+  // 如果没有 Value Cache，write_cache_value_server_mr_list
+  // 是空的，赋值过去也是空的，这是安全的。 如果不赋值，ctx->conn 里的 vector
+  // 可能是未定义的脏状态。
   ctx->conn.write_cache_key_server_mr_list = write_cache_key_server_mr_list;
   ctx->conn.write_cache_value_server_mr_list = write_cache_value_server_mr_list;
+
   return true;
 
 fail:
@@ -899,8 +953,12 @@ int RDMACommunicator::write_cache(const std::string& ip,
 
   uint32_t cache_key_rkey =
       ctx->conn.write_cache_key_remote_rkey_list[layer_idx];
-  uint32_t cache_value_rkey =
-      ctx->conn.write_cache_value_remote_rkey_list[layer_idx];
+
+  uint32_t cache_value_rkey = 0;
+  if (has_value_cache_) {
+    cache_value_rkey = ctx->conn.write_cache_value_remote_rkey_list[layer_idx];
+  }
+
   uint32_t crc_cache_key_rkey, crc_cache_value_rkey;
   bool pd_tp_size_is_same = prefill_tp_size == ctx->conn.decode_tp_size;
   uint64_t offset_in_block =
@@ -914,15 +972,19 @@ int RDMACommunicator::write_cache(const std::string& ip,
     cache_key_remote_addr[block_index] = (uint64_t(
         char_ptr + remote_block_ids[block_index] * total_block_size_byte +
         offset_in_block));
-    char_ptr = static_cast<char*>(
-        ctx->conn.write_cache_value_remote_ptr_list[layer_idx]);
-    cache_value_remote_addr[block_index] = (uint64_t(
-        char_ptr + remote_block_ids[block_index] * total_block_size_byte +
-        offset_in_block));
+    
+    if (has_value_cache_) {
+      char_ptr = static_cast<char*>(
+          ctx->conn.write_cache_value_remote_ptr_list[layer_idx]);
+      cache_value_remote_addr[block_index] = (uint64_t(
+          char_ptr + remote_block_ids[block_index] * total_block_size_byte +
+          offset_in_block));
+    }
   }
 
   ctx->conn.wc_target_count = 0;
-  for (int i = 0; i < 2; ++i) {
+  int loop_count = has_value_cache_ ? 2 : 1;
+  for (int i = 0; i < loop_count; ++i) {
     bool is_key = (i == 0);
     uint32_t rkey = (is_key ? cache_key_rkey : cache_value_rkey);
     std::vector<uint64_t>& remote_addr =
@@ -1038,6 +1100,10 @@ void RDMACommunicator::prepare_write_requests(
     bool is_key,
     std::vector<uint64_t>& remote_addr,
     uint32_t rkey) {
+  if (!is_key) {
+    assert(!write_mr_value_list.empty() &&
+           "Trying to process Value Cache but it is empty!");
+  }
   auto block_num = local_block_ids.size();
 
   for (size_t i = 0; i < block_num; ++i) {

@@ -307,6 +307,9 @@ class ModelConfig:
         if hasattr(self, "n_routed_experts") and getattr(self, "moe_num_experts") is None:
             self.moe_num_experts = self.n_routed_experts
 
+        if hasattr(self, "n_routed_experts") and getattr(self, "moe_num_experts") is None:
+            self.moe_num_experts = self.n_routed_experts
+
     def read_from_env(self):
         """
         Read configuration information from environment variables and update the object's attributes.

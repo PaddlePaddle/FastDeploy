@@ -159,16 +159,22 @@ class CacheMessager:
         cache_v = []
         self.messager = {}
         for layer_idx in range(self.num_layers):
+            # value cache
+            val_cache_key = f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"
+            if val_cache_key in self.gpu_cache_kvs:
+                val_cache = self.gpu_cache_kvs[val_cache_key]
+                cache_v.append(val_cache)
+                if paddle.is_compiled_with_xpu():
+                    cache_v_ptr_list.append(get_peer_mem_addr(val_cache.data_ptr()))
+                else:
+                    cache_v_ptr_list.append(val_cache.data_ptr())
+            # key cache
             key_cache = self.gpu_cache_kvs[f"key_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
-            val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
             cache_k.append(key_cache)
-            cache_v.append(val_cache)
             if paddle.is_compiled_with_xpu():
                 cache_k_ptr_list.append(get_peer_mem_addr(key_cache.data_ptr()))
-                cache_v_ptr_list.append(get_peer_mem_addr(val_cache.data_ptr()))
             else:
                 cache_k_ptr_list.append(key_cache.data_ptr())
-                cache_v_ptr_list.append(val_cache.data_ptr())
         cache_k_ptr_list = np.array(cache_k_ptr_list)
         cache_v_ptr_list = np.array(cache_v_ptr_list)
 
@@ -198,7 +204,7 @@ class CacheMessager:
 
             elif protocol == "rdma":
                 logger.info(f"splitwise_role rdma: {self.splitwise_role}, rank: {self.rank}, gpu_id: {gpu_id}")
-
+                logger.info(f"====RyanDebug, the cache_v_ptr_list is:{cache_v_ptr_list}")
                 self.messager[protocol] = RDMACommManager(
                     splitwise_role,
                     rank,
@@ -211,6 +217,7 @@ class CacheMessager:
                     nranks,
                     rank,
                 )
+                logger.info("===RyanDebug, #218 Finish RDMACommManager create!!!!!!!")
 
         self.gpu_id = gpu_id
         self.cache_info = dict()
@@ -460,16 +467,22 @@ class CacheMessagerV1:
         cache_v = []
         self.messager = {}
         for layer_idx in range(self.num_layers):
+            # value cache
+            val_cache_key = f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"
+            if val_cache_key in self.gpu_cache_kvs:
+                val_cache = self.gpu_cache_kvs[val_cache_key]
+                cache_v.append(val_cache)
+                if paddle.is_compiled_with_xpu():
+                    cache_v_ptr_list.append(get_peer_mem_addr(val_cache.data_ptr()))
+                else:
+                    cache_v_ptr_list.append(val_cache.data_ptr())
+            # key cache
             key_cache = self.gpu_cache_kvs[f"key_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
-            val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
             cache_k.append(key_cache)
-            cache_v.append(val_cache)
             if paddle.is_compiled_with_xpu():
                 cache_k_ptr_list.append(get_peer_mem_addr(key_cache.data_ptr()))
-                cache_v_ptr_list.append(get_peer_mem_addr(val_cache.data_ptr()))
             else:
                 cache_k_ptr_list.append(key_cache.data_ptr())
-                cache_v_ptr_list.append(val_cache.data_ptr())
         cache_k_ptr_list = np.array(cache_k_ptr_list)
         cache_v_ptr_list = np.array(cache_v_ptr_list)
 
@@ -812,6 +825,7 @@ def main():
     num_extra_layers = speculative_config.num_extra_cache_layer
     key_cache_shape_list = [int(i) for i in args.key_cache_shape.split(",")]
     value_cache_shape_list = []
+    print("===RyanDebug #786 of cache_messager,the args.value_cache_shape is:", args.value_cache_shape)
     if args.value_cache_shape:
         value_cache_shape_list = [int(i) for i in args.value_cache_shape.split(",")]
     total_gpu_blocks = key_cache_shape_list[0]

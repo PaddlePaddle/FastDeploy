@@ -44,7 +44,12 @@ class RDMACommManager:
                 "The installation of the RDMA library failed."
                 "Confirm whether your network card supports RDMA transmission."
             )
-            return
+            raise RuntimeError(
+                "The installation of the RDMA library failed."
+                "Confirm whether your network card supports RDMA transmission."
+            )
+        logger.info(f" # 499999999 init rdma messager {gpu_id} {rdma_port}")
+        logger.info(f" # == RyanDebug, Decode, the  cache_v_ptr_list is: {cache_v_ptr_list}")
         self.messager = rdma_comm.RDMACommunicator(
             splitwise_role,
             gpu_id,

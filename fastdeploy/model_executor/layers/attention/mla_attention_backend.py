@@ -205,7 +205,8 @@ class MLAAttentionBackend(AttentionBackend):
             self.group_size,
             self.block_size,
         )
-
+        print("===RyanDebug, after ini attn meta, the max_len_tensor_cpu[1] is:", forward_meta.max_len_tensor_cpu[1])
+        print("===RyanDebug, after ini attn meta, the max_len_tensor_cpu[2] is:", forward_meta.max_len_tensor_cpu[2])
         # MLA
         metadata.max_enc_len_this_time = forward_meta.max_len_tensor_cpu[1]
         metadata.max_dec_len_this_time = forward_meta.max_len_tensor_cpu[2]
@@ -279,6 +280,7 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.batch_id_per_token,
             forward_meta.cu_seqlens_q,
             metadata.block_tables,
+            metadata.kv_signal_data_list[layer.layer_id],
             "none",
             getattr(forward_meta, "max_input_length", -1),
         )
@@ -422,10 +424,14 @@ class MLAAttentionBackend(AttentionBackend):
                 forward_meta.batch_id_per_token,
                 forward_meta.cu_seqlens_q,
                 metadata.block_tables,
+                metadata.kv_signal_data_list[layer.layer_id],
                 "none",
                 self.max_seq_len,
             )
-
+            print(
+                "====After write cache, the metadata.kv_signal_data_list[layer.layer_id] is:",
+                metadata.kv_signal_data_list[layer.layer_id],
+            )
             # FA
             fmha_out = self.flash_attn_func(
                 q,
