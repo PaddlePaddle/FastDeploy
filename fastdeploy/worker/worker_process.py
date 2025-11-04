@@ -351,7 +351,7 @@ class PaddleDisWorkerProc:
         self.nnode = int((tp_size + 7) // 8)
         req_ids = []
         num_running_requests = 0
-        local_rank = self.local_rank % tp_size
+        tp_rank = self.local_rank % tp_size
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
             if self.eplb_config.enable_redundant_experts:
@@ -406,10 +406,10 @@ class PaddleDisWorkerProc:
 
             self.insert_step = False
             req_dicts = None
-            self.worker_healthy_live_signal.value[local_rank % self.max_chips_per_node] = int(time.time())
+            self.worker_healthy_live_signal.value[self.local_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
-            if local_rank == 0:
+            if tp_rank == 0:
                 if self.task_queue.num_tasks() > 0:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
