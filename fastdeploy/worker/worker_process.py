@@ -327,12 +327,12 @@ class PaddleDisWorkerProc:
                     create=False,
                 )
 
-                expert_workload_dump_interval = envs.FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL
                 mmap_infos = create_mmap(
                     [MODEL_MAIN_NAME],
                     self.local_rank,
                     self.ranks,
                     shm_uuid=self.parallel_config.engine_worker_queue_port,
+                    eplb_config=self.eplb_config,
                     logger=logger,
                 )
 
@@ -349,7 +349,8 @@ class PaddleDisWorkerProc:
                 rearrange_time = time.time()
                 # 获取专家负载
                 if local_experts_token_stats_array.value is not None and (
-                    int(rearrange_time) - self.last_dump_expert_workload_ts > expert_workload_dump_interval
+                    int(rearrange_time) - self.last_dump_expert_workload_ts
+                    > self.eplb_config.redundant_expert_dump_workload_interval
                 ):
                     self.last_dump_expert_workload_ts = int(rearrange_time)
                     clear_stat = False

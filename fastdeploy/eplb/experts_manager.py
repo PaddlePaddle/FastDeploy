@@ -126,6 +126,7 @@ class RedundantExpertManager:
                 self.fd_config.model_config.moe_layer_start_index,
                 self.eplb_config.moe_quant_type,
                 self.ipc_signal_suffix,
+                self.eplb_config,
                 child_data_conn,
                 child_mg_conn,
             ),
@@ -500,7 +501,7 @@ class RedundantExpertManager:
 #     )
 #     shm_rearrange_experts_ips_list = shared_memory.SharedMemory(
 #         create=True,
-#         size=envs.FD_REDUNDANT_EXPERT_IP_SHM_SIZE,
+#         size=self.config.eplb_config.redundant_expert_ip_shm_size,
 #         name=f"{envs.get_unique_name('rearrange_experts_ips_list_dprank' + rank)}",
 #     )
 #     # 记录专家重排状态

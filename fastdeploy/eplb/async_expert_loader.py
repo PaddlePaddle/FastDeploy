@@ -9,14 +9,13 @@ from typing import List, Tuple
 import numpy as np
 import paddle
 
-from fastdeploy import envs
+from fastdeploy.config import EPLBConfig
 
 REARRANGE_EXPERT_MAGIC_NUM = 147183647
 REARRANGE_ORIGINATOR_EP_RANK = 0
 CHECK_TIME_INTERNAL = 3
 HTTP_RETRY_NUM = 5
 CHECK_TIMEOUT = 120
-
 
 libc = ctypes.CDLL(None)
 
@@ -45,16 +44,16 @@ MAIN_MODEL_REDUNDANT_SHM_SIZE = 5
 MODEL_MAIN_NAME = "eplb_main"
 
 
-def create_mmap(model_name: List, ep_rank: int, ep_size: int, shm_uuid: str, logger=None):
+def create_mmap(model_name: List, ep_rank: int, ep_size: int, shm_uuid: str, eplb_config: EPLBConfig, logger=None):
     """create_mmap"""
     flags = MAP_SHARED
     prot = PROT_READ | PROT_WRITE
 
     main_size = 0
-    if envs.FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB == 0:
+    if eplb_config.redundant_expert_async_load_model_shmem_size_gb == 0:
         main_size = TOTAL_MODEL_SIZE // ep_size
     else:
-        main_size = envs.FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB
+        main_size = eplb_config.redundant_expert_async_load_model_shmem_size_gb
     main_size = main_size * G
 
     mmap_infos = {}
@@ -167,6 +166,7 @@ class AsyncEPLoader(object):
     def __init__(
         self,
         model_dir,
+        eplb_config,
         rank=8,
         expert_per_rank=8,
         moe_layer_start_index=3,
@@ -177,6 +177,7 @@ class AsyncEPLoader(object):
         __init__
         """
         self.model_path = model_dir
+        self.eplb_config = eplb_config
 
         self.expert_per_rank = expert_per_rank
         self.moe_layer_start_index = moe_layer_start_index
@@ -233,7 +234,7 @@ class AsyncEPLoader(object):
             succ = True
             message = ""
             if len(need_to_reload) > 0:
-                if envs.FD_MODEL_USE_SAFETENSORS:
+                if self.eplb_config.model_use_safetensors:
                     succ, message = self.load_safetensor_fp8_from_disk(need_to_reload)
                 else:
                     succ, message = self.load_weight_bf16_from_disk(need_to_reload)
@@ -345,6 +346,7 @@ def load_model_weights_process(
     moe_layer_start_index: int,
     moe_quant_type: str,
     shm_uuid: str,
+    eplb_config: EPLBConfig,
     data_conn,
     mg_conn,
 ):
@@ -370,6 +372,7 @@ def load_model_weights_process(
         moe_layer_start_index=moe_layer_start_index,
         moe_quant_type=moe_quant_type,
         logger=logger,
+        eplb_config=eplb_config,
     )
 
     while True:

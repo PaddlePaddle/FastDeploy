@@ -147,7 +147,7 @@ class EngineClient:
 
             self.shm_rearrange_experts_ips_list = IPCSignal(
                 name="rearrange_experts_ips_list",
-                shm_size=envs.FD_REDUNDANT_EXPERT_IP_SHM_SIZE,
+                shm_size=self.config.eplb_config.redundant_expert_ip_shm_size,
                 suffix=ipc_signal_suffix,
                 create=False,
             )

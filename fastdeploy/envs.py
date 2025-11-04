@@ -113,26 +113,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ENABLE_RETURN_TEXT": lambda: bool(int(os.getenv("FD_ENABLE_RETURN_TEXT", "0"))),
     "ENCODE_FEATURE_BOS_AK": lambda: os.getenv("ENCODE_FEATURE_BOS_AK"),
     "ENCODE_FEATURE_BOS_SK": lambda: os.getenv("ENCODE_FEATURE_BOS_SK"),
-    # EPLB related
-    "FD_REDUNDANT_EXPERTS_NUM": lambda: int(os.getenv("FD_REDUNDANT_EXPERTS_NUM", "0")),
-    "FD_REDUNDANT_EXPERT_IP_SHM_SIZE": lambda: int(os.getenv("FD_REDUNDANT_EXPERT_IP_SHM_SIZE", "1024")),
-    "FD_REDUNDANT_EXPERT_META_DIR": lambda: os.getenv("FD_REDUNDANT_EXPERT_META_DIR", "/tmp/redundant_expert_meta"),
-    "FD_REDUNDANT_EXPERT_API_USER": lambda: os.getenv("FD_REDUNDANT_EXPERT_API_USER", ""),
-    "FD_REDUNDANT_EXPERT_API_PASSWORD": lambda: os.getenv("FD_REDUNDANT_EXPERT_API_PASSWORD", ""),
-    "FD_REDUNDANT_EXPERT_EPLB_STRATEGY": lambda: os.getenv("FD_REDUNDANT_EXPERT_EPLB_STRATEGY", ""),
-    "FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL": lambda: int(
-        os.getenv("FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL", "10")
-    ),
-    "FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB": lambda: int(
-        os.getenv("FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB", "0")
-    ),
-    "FD_REDUNDANT_EXPERT_ENABLE_SCHEDULE_CORDON": lambda: int(
-        os.getenv("FD_REDUNDANT_EXPERT_ENABLE_SCHEDULE_CORDON", "1")
-    )
-    == 1,
-    "FD_MODEL_USE_SAFETENSORS": lambda: int(os.getenv("FD_MODEL_USE_SAFETENSORS", "1")) == 1,
-    "FD_MODEL_USE_OFFLINE_QUANT": lambda: int(os.getenv("FD_MODEL_USE_OFFLINE_QUANT", "1")) == 1,
-    "FD_MOE_QUANT_TYPE": lambda: os.getenv("FD_MOE_QUANT_TYPE", "w4a8"),
 }
 
 

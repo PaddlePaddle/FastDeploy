@@ -258,30 +258,28 @@ class EPLBConfig:
         # enable eplb
         self.enable_eplb: bool = False
         # redundant experts num
-        self.redundant_experts_num: int = envs.FD_REDUNDANT_EXPERTS_NUM
+        self.redundant_experts_num: int = 0
         # expert ip shm size
-        self.redundant_expert_ip_shm_size: int = envs.FD_REDUNDANT_EXPERT_IP_SHM_SIZE
+        self.redundant_expert_ip_shm_size: int = 1024
         # expert meta dir
-        self.redundant_expert_meta_dir: str = envs.FD_REDUNDANT_EXPERT_META_DIR
+        self.redundant_expert_meta_dir: str = "/tmp/redundant_expert_meta"
         # expert api user and password
-        self.redundant_expert_api_user: str = envs.FD_REDUNDANT_EXPERT_API_USER
-        self.redundant_expert_api_password: str = envs.FD_REDUNDANT_EXPERT_API_PASSWORD
+        self.redundant_expert_api_user: str = ""
+        self.redundant_expert_api_password: str = ""
         # expert eplb strategy
-        self.redundant_expert_eplb_strategy: str = envs.FD_REDUNDANT_EXPERT_EPLB_STRATEGY
+        self.redundant_expert_eplb_strategy: str = ""
         # expert dump workload interval
-        self.redundant_expert_dump_workload_interval: int = envs.FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL
+        self.redundant_expert_dump_workload_interval: int = 10
         # expert async load model shmem size gb
-        self.redundant_expert_async_load_model_shmem_size_gb: int = (
-            envs.FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB
-        )
+        self.redundant_expert_async_load_model_shmem_size_gb: int = 0
         # expert enable schedule cordon
-        self.redundant_expert_enable_schedule_cordon: bool = envs.FD_REDUNDANT_EXPERT_ENABLE_SCHEDULE_CORDON
+        self.redundant_expert_enable_schedule_cordon: bool = True
         # model use safetensors
-        self.model_use_safetensors: bool = envs.FD_MODEL_USE_SAFETENSORS
+        self.model_use_safetensors: bool = True
         # model use offline quant
-        self.model_use_offline_quant: bool = envs.FD_MODEL_USE_OFFLINE_QUANT
+        self.model_use_offline_quant: bool = True
         # moe quant type
-        self.moe_quant_type: str = envs.FD_MOE_QUANT_TYPE
+        self.moe_quant_type: str = "w4a8"
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
