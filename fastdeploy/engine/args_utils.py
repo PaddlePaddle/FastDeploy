@@ -466,6 +466,9 @@ class EngineArgs:
             self.enable_prefix_caching = False
             self.max_encoder_cache = 0
 
+        self.max_processor_cache = 0
+        self.max_encoder_cache = 0
+
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
         """
