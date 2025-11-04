@@ -46,6 +46,7 @@ class MockTask:
         self.disaggregate_info = None
         self.prefill_chunk_info = None
         self.prefill_chunk_num = 0
+        self.llm_engine_recv_req_timestamp = time.time()
 
     def get(self, key: str, default_value=None):
         if hasattr(self, key):
