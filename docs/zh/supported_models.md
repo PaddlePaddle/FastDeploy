@@ -39,6 +39,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 |⭐QWEN2.5|BF16/WINT8/FP8|Qwen/qwen2.5-72B;<br>Qwen/qwen2.5-32B;<br>Qwen/qwen2.5-14B;<br>Qwen/qwen2.5-7B;<br>Qwen/qwen2.5-3B;<br>Qwen/qwen2.5-1.5B;<br>Qwen/qwen2.5-0.5B, etc.|
 |⭐QWEN2|BF16/WINT8/FP8|Qwen/Qwen/qwen2-72B;<br>Qwen/Qwen/qwen2-7B;<br>Qwen/qwen2-1.5B;<br>Qwen/qwen2-0.5B;<br>Qwen/QwQ-32, etc.|
 |⭐DEEPSEEK|BF16/WINT4|unsloth/DeepSeek-V3.1-BF16;<br>unsloth/DeepSeek-V3-0324-BF16;<br>unsloth/DeepSeek-R1-BF16, etc.|
+|⭐GPT-OSS|BF16/WINT8|unsloth/gpt-oss-20b-BF16, etc.|
 
 ## 多模态语言模型列表
 
@@ -47,6 +48,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 |模型|DataType|模型案例|
 |-|-|-|
 | ERNIE-VL  |BF16/WINT4/WINT8| baidu/ERNIE-4.5-VL-424B-A47B-Paddle<br>&emsp;[快速部署](./get_started/ernie-4.5-vl.md) &emsp; [最佳实践](./best_practices/ERNIE-4.5-VL-424B-A47B-Paddle.md) ;<br>baidu/ERNIE-4.5-VL-28B-A3B-Paddle<br>&emsp;[快速部署](./get_started/quick_start_vl.md) &emsp; [最佳实践](./best_practices/ERNIE-4.5-VL-28B-A3B-Paddle.md) ;|
+| PaddleOCR-VL  |BF16/WINT4/WINT8| PaddlePaddle/PaddleOCR-VL<br>&emsp; [最佳实践](./best_practices/PaddleOCR-VL-0.9B.md) ;|
 | QWEN-VL  |BF16/WINT4/FP8| Qwen/Qwen2.5-VL-72B-Instruct;<br>Qwen/Qwen2.5-VL-32B-Instruct;<br>Qwen/Qwen2.5-VL-7B-Instruct;<br>Qwen/Qwen2.5-VL-3B-Instruct|
 
 更多模型同步支持中，你可以通过[Github Issues](https://github.com/PaddlePaddle/FastDeploy/issues)向我们提交新模型的支持需求。
