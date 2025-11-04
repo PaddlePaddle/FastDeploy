@@ -237,30 +237,25 @@ class RMSNorm(nn.Layer):
             return norm_out[0].astype(x_dtype)
 
     def foward_cuda(self, x, residual_input: Optional[paddle.Tensor] = None) -> paddle.Tensor:
-        if self.quant_scale is None:
-            begin_norm_axis = self.begin_norm_axis + len(x.shape) if self.begin_norm_axis < 0 else self.begin_norm_axis
-            flag_custom_shape = len(x.shape) == 2 or len(x.shape) == 3 or begin_norm_axis == len(x.shape) - 1
-            if flag_custom_shape:
-                if residual_input is not None:
-                    fused_add_rmsnorm(x, residual=residual_input, weight=self.weight, eps=self.eps)
-                    norm_out = (x, residual_input)
-                elif x.shape[0] <= 256:
-                    out = rmsnorm(x, self.weight, self.eps)
-                    norm_out = (out, None)
-                else:
-                    norm_out = self.norm_func(
-                        x,
-                        norm_weight=self.weight,
-                        norm_bias=None,
-                        epsilon=self.eps,
-                        begin_norm_axis=self.begin_norm_axis,
-                        bias=self.bias,
-                        residual=residual_input,
-                        quant_scale=(-1 if self.quant_scale is None else self.quant_scale),
-                        quant_round_type=self.quant_round_type,
-                        quant_max_bound=self.quant_max_bound,
-                        quant_min_bound=self.quant_min_bound,
-                    )
+        begin_norm_axis = self.begin_norm_axis + len(x.shape) if self.begin_norm_axis < 0 else self.begin_norm_axis
+        flag_custom_shape = (len(x.shape) == 2 or len(x.shape) == 3) and begin_norm_axis == len(x.shape) - 1
+        if self.quant_scale is None and flag_custom_shape:
+            if residual_input is not None:
+                fused_add_rmsnorm(x, residual=residual_input, weight=self.weight, eps=self.eps)
+                norm_out = (x, residual_input)
+            elif x.shape[0] <= 256:
+                norm_out = rms_norm(x, self.weight, self.eps)
+                norm_out = (norm_out, None)
+            else:
+                norm_out = self.norm_func(
+                    x,
+                    norm_weight=self.weight,
+                    norm_bias=None,
+                    epsilon=self.eps,
+                    begin_norm_axis=self.begin_norm_axis,
+                    bias=self.bias,
+                    residual=residual_input,
+                )
         else:
             norm_out = self.norm_func(
                 x,
