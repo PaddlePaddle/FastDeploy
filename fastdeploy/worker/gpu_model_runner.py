@@ -587,7 +587,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
-                self.num_prompt_logprobs.pop(request.request_id, None)
+                self.prompt_logprobs_reqs.pop(request.request_id, None)
                 self.in_progress_prompt_logprobs.pop(request.request_id, None)
                 continue
 
@@ -2094,7 +2094,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
 
-        prompt_logprobs_list = self._get_prompt_logprobs_dict(model_output)
+        prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
 
         if self.is_pooling_model:
             hidden_states = model_output
@@ -2706,10 +2706,13 @@ class GPUModelRunner(ModelRunnerBase):
         )
         return rope_emb_lst
 
-    def _get_prompt_logprobs_dict(
+    def _get_prompt_logprobs_list(
         self,
         hidden_states: paddle.Tensor,
     ) -> list[Optional[LogprobsTensors]]:
+        assert (
+            not self.fd_config.cache_config.enable_prefix_caching
+        ), "prompt_logprobs must disable prefix caching, --no-enable-prefix-caching."
         logprobs_mode = self.fd_config.model_config.logprobs_mode
         prompt_logprobs_list: list[Optional[LogprobsTensors]] = self.scheduler_config.max_num_seqs * [None]
         completed_prefill_reqs: list[Request] = []
