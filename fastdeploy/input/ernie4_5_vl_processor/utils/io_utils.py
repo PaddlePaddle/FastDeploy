@@ -107,3 +107,48 @@ def get_downloadable(
         retry_interval=retry_interval,
     )
     return downloaded_path
+
+
+def has_transparent_background(img):
+    """判断图片是否有背景"""
+    if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+        # Check for any pixel with alpha channel less than 255 (fully opaque)
+        alpha = img.convert("RGBA").split()[-1]
+        if alpha.getextrema()[0] < 255:
+            return True
+    return False
+
+
+def add_white_background(img):
+    """
+    给透明背景的图，加个白色背景
+    """
+    if img.mode != "RGBA":
+        img = img.convert("RGBA")
+    # 创建一个白色背景的图像，尺寸与原图一致
+    img_white_background = Image.new("RGBA", img.size, (255, 255, 255))
+
+    # 将原图粘贴到白色背景上
+    img_white_background.paste(img, (0, 0), img)
+
+    return img_white_background
+
+
+def change_I16_to_L(img):
+    """
+    将图片从I;16模式转换为L模式
+    """
+    # 由于I模式的point函数只支持加减乘，所以下面的* (1 / 256)不能改成除法
+    return img.point(lambda i: i * (1 / 256)).convert("L")
+
+
+def process_transparent_image(img):
+    try:
+        if img.mode == "I;16":
+            img = change_I16_to_L(img)
+        if has_transparent_background(img):
+            img = add_white_background(img)
+    except Exception:
+        pass
+
+    return img.convert("RGB")
