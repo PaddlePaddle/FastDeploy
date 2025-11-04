@@ -2496,6 +2496,9 @@ class GPUModelRunner(ModelRunnerBase):
     def clear_requests(self):
         """Dynamic model loader use to clear requests use for RL"""
         self.share_inputs["stop_flags"][:] = True
+        # prompt_logprobs
+        self.prompt_logprobs_reqs.clear()
+        self.in_progress_prompt_logprobs.clear()
 
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""
@@ -2710,9 +2713,10 @@ class GPUModelRunner(ModelRunnerBase):
         self,
         hidden_states: paddle.Tensor,
     ) -> list[Optional[LogprobsTensors]]:
-        assert (
-            not self.fd_config.cache_config.enable_prefix_caching
-        ), "prompt_logprobs must disable prefix caching, --no-enable-prefix-caching."
+        if len(self.prompt_logprobs_reqs) > 0:
+            assert (
+                not self.fd_config.cache_config.enable_prefix_caching
+            ), "prompt_logprobs must disable prefix caching, --no-enable-prefix-caching."
         logprobs_mode = self.fd_config.model_config.logprobs_mode
         prompt_logprobs_list: list[Optional[LogprobsTensors]] = self.scheduler_config.max_num_seqs * [None]
         completed_prefill_reqs: list[Request] = []
@@ -2753,8 +2757,6 @@ class GPUModelRunner(ModelRunnerBase):
             prompt_hidden_states = hidden_states[offset : offset + num_logits]
             logits = self.model.compute_logits(prompt_hidden_states)
             prompt_token_ids = request.prompt_token_ids[start_tok : start_tok + num_logits]
-            if isinstance(prompt_token_ids, np.ndarray):
-                prompt_token_ids = prompt_token_ids.tolist()
             prompt_token_ids_tensor = paddle.to_tensor(prompt_token_ids, dtype="int64")
             if logprobs_mode == "raw_logprobs":
                 raw_logprobs = self.sampler.compute_logprobs(logits)
