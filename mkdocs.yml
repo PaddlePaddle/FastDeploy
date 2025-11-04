@@ -77,6 +77,7 @@ plugins:
             ERNIE-4.5-300B-A47B: ERNIE-4.5-300B-A47B
             ERNIE-4.5-VL-28B-A3B: ERNIE-4.5-VL-28B-A3B
             ERNIE-4.5-VL-424B-A47B: ERNIE-4.5-VL-424B-A47B
+            PaddleOCR-VL-0.9B: PaddleOCR-VL-0.9B
             FAQ: 常见问题
             Quantization: 量化
             Overview: 概述
@@ -132,6 +133,7 @@ nav:
       - ERNIE-4.5-21B-A3B-Thinking: best_practices/ERNIE-4.5-21B-A3B-Thinking.md
       - ERNIE-4.5-VL-28B-A3B: best_practices/ERNIE-4.5-VL-28B-A3B-Paddle.md
       - ERNIE-4.5-VL-424B-A47B: best_practices/ERNIE-4.5-VL-424B-A47B-Paddle.md
+      - PaddleOCR-VL-0.9B: best_practices/PaddleOCR-VL-0.9B.md
       - FAQ: best_practices/FAQ.md
   - Quantization:
       - Overview: quantization/README.md
