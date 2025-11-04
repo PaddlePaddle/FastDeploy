@@ -263,7 +263,7 @@ class HPUForwardMeta(ForwardMeta):
     """
 
     #
-    input_ids: paddle.Tensor
+    input_ids: paddle.Tensor = None
 
     # attention meta
     forward_mode: ForwardMode = ForwardMode.MIXED
