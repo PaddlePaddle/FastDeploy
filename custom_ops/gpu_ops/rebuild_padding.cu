@@ -21,7 +21,6 @@ __global__ void RebuildPaddingKernel(T *output_data,
                                      const int *seq_len_this_time,
                                      const int *seq_len_decoder,
                                      const int *seq_len_encoder,
-                                     const int max_input_length,
                                      const int dim_embed,
                                      const int elem_nums) {
     using LoadT = AlignedVector<T, VecSize>;
@@ -170,7 +169,6 @@ std::vector<paddle::Tensor> rebuild_padding(
                 seq_len_this_time.data<int>(),
                 seq_lens_decoder.data<int>(),
                 seq_lens_encoder.data<int>(),
-                max_input_length,
                 dim_embed,
                 elem_nums);
     }
