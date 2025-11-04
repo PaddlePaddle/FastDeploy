@@ -125,10 +125,10 @@ def add_white_background(img):
     """
     if img.mode != "RGBA":
         img = img.convert("RGBA")
-    # 创建一个白色背景的图像，尺寸与原图一致
+    # Create an image with white background, which is the same size as the original image
     img_white_background = Image.new("RGBA", img.size, (255, 255, 255))
 
-    # 将原图粘贴到白色背景上
+    # Paste the original image to white background
     img_white_background.paste(img, (0, 0), img)
 
     return img_white_background
@@ -138,7 +138,7 @@ def change_I16_to_L(img):
     """
     将图片从I;16模式转换为L模式
     """
-    # 由于I模式的point函数只支持加减乘，所以下面的* (1 / 256)不能改成除法
+    # Only supports addition/subtraction/multiplication, * (1 / 256) cannot be replaced with division
     return img.point(lambda i: i * (1 / 256)).convert("L")
 
 
