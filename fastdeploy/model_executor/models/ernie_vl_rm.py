@@ -20,16 +20,20 @@ from typing import Optional
 
 import paddle
 from paddle import nn
+from paddle.distributed.fleet.layers.mpu.mp_layers import (
+    ColumnParallelLinear,
+    RowParallelLinear,
+)
+from paddle.nn import functional as F
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
-from fastdeploy.model_executor.layers.activation import SiluAndMul
-from fastdeploy.model_executor.layers.linear import (
-    MergedColumnParallelLinear,
-    RowParallelLinear,
-)
 from fastdeploy.model_executor.layers.pooler import DispatchPooler, Pooler
-from fastdeploy.model_executor.utils import process_weights_before_loading
+from fastdeploy.model_executor.utils import (
+    default_weight_loader,
+    process_weights_before_loading,
+    set_weight_attrs,
+)
 
 from .ernie4_5_vl.ernie4_5_vl_moe import (
     Ernie4_5_VLModel,
@@ -67,26 +71,41 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
         self.rm_head = nn.Sequential(
             (
                 "up_gate_proj",
-                MergedColumnParallelLinear(
-                    fd_config=fd_config,
-                    prefix="",
-                    input_size=fd_config.model_config.hidden_size,
-                    output_size=fd_config.model_config.hidden_size * 2,
-                    with_bias=False,
+                ColumnParallelLinear(
+                    self.fd_config.model_config.hidden_size,
+                    fd_config.model_config.hidden_size * 2,
+                    gather_output=False,
+                    has_bias=False,
+                    fuse_matmul_bias=False,
                 ),
             ),
-            ("act_fn", SiluAndMul(fd_config=fd_config, bias=None, act_method=fd_config.model_config.hidden_act)),
+            # ("act_fn", SiluAndMul(fd_config=fd_config, bias=None, act_method=fd_config.model_config.hidden_act)),
             (
                 "down_proj",
                 RowParallelLinear(
-                    fd_config=fd_config,
-                    input_size=fd_config.model_config.hidden_size,
-                    output_size=fd_config.model_config.num_labels,
-                    skip_quant=True,
-                    weight_dtype=self.head_dtype,
-                    with_bias=False,
+                    fd_config.model_config.hidden_size,
+                    fd_config.model_config.num_labels,
+                    input_is_parallel=True,
+                    has_bias=False,
+                    fuse_matmul_bias=False,
                 ),
             ),
+        )
+        set_weight_attrs(
+            self.rm_head.up_gate_proj.weight,
+            {
+                "weight_loader": default_weight_loader(fd_config),
+                "weight_need_transpose": fd_config.model_config.model_format == "torch",
+                "output_dim": True,
+            },
+        )
+        set_weight_attrs(
+            self.rm_head.down_proj.weight,
+            {
+                "weight_loader": default_weight_loader(fd_config),
+                "weight_need_transpose": fd_config.model_config.model_format == "torch",
+                "output_dim": False,
+            },
         )
 
     def get_input_embeddings(
@@ -116,15 +135,23 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
 
         self._input_embeddings.copy_(input_embeddings, False)
 
+        print("self._input_embeddings", self._input_embeddings)
         hidden_states = self.ernie(
             input_embeddings=self._input_embeddings,
             ids_remove_padding=ids_remove_padding,
             forward_meta=forward_meta,
             vl_moe_meta=vl_moe_meta,
         )
+
         hidden_states = hidden_states.to(self.head_dtype)
+        print(f"===={hidden_states}")
+        hidden_states, gate = self.rm_head.up_gate_proj(hidden_states).chunk(2, axis=-1)
         print("hidden_states", hidden_states)
-        logits = self.rm_head(hidden_states)
+        print("gate", gate)
+        hidden_states = F.silu(hidden_states) * gate
+        # hidden_states = self.rm_head.act_fn(hidden_states) * gate
+        print("act_fn后的hidden_states", hidden_states)
+        logits = self.rm_head.down_proj(hidden_states)
         print("logits", logits)
         return logits
 
@@ -164,4 +191,5 @@ class Ernie4_5_VLMoeForProcessRewardModel(Ernie4_5_VLMoeRewardBaseModel):
     @paddle.no_grad()
     def load_weights(self, weights_iterator):
         # Filter out lm_head weights of Ernie4_5_VLMoeForConditionalGeneration
+
         Ernie4_5_VLMoeForConditionalGeneration.load_weights(self, weights_iterator)

@@ -243,6 +243,8 @@ class EmbeddingPoolerHead(PoolerHead):
 
     def forward(self, pooled_data: Union[list[paddle.Tensor], paddle.Tensor], pooling_metadata: PoolingMetadata):
 
+        print(f"==EmbeddingPoolerHead start==>pooled_data:{pooled_data}, ===>{pooling_metadata}")
+
         if isinstance(pooled_data, list):
             pooled_data = paddle.stack(pooled_data)
         # pooled_data shape: [batchsize, hidden_dimension]
@@ -274,6 +276,8 @@ class EmbeddingPoolerHead(PoolerHead):
                 pooled_data = [vecs if d is None else vecs[..., :d] for vecs, d in zip(pooled_data, dimensions_list)]
         # for normalize
         flags = [p.normalize for p in pooling_params]
+        print("flags", flags)
+
         if len(set(flags)) == 1:
             if flags[0]:
                 pooled_data = self.activation(pooled_data)
@@ -281,6 +285,7 @@ class EmbeddingPoolerHead(PoolerHead):
             pooled_data = [self.activation(vecs) if f else vecs for vecs, f in zip(pooled_data, flags)]
 
         # pooled_data shape: [batchsize, embedding_dimension]
+        print(f"==EmbeddingPoolerHead end==>pooled_data:{pooled_data}, ===>{pooling_metadata}")
         return pooled_data
 
 
@@ -296,6 +301,7 @@ class RewardPoolerHead(PoolerHead):
         pooled_data: list[paddle.Tensor] | paddle.Tensor,
         pooling_metadata: PoolingMetadata,
     ):
+        print(f"==RewardPoolerHead start==>pooled_data:{pooled_data}, ===>{pooling_metadata}")
         if isinstance(pooled_data, list):
             pooled_data = [p.to(self.head_dtype) for p in pooled_data]
         else:
@@ -309,6 +315,7 @@ class RewardPoolerHead(PoolerHead):
         else:
             pooled_data = [self.activation(vecs) if f else vecs for vecs, f in zip(pooled_data, flags)]
 
+        print(f"==RewardPoolerHead end==>pooled_data:{pooled_data}, ===>{pooling_metadata}")
         return pooled_data
 
 
@@ -360,6 +367,7 @@ class LastPool(PoolingMethod):
         hidden_states: paddle.Tensor,
         pooling_cursor: PoolingCursor,
     ) -> Union[list[paddle.Tensor], paddle.Tensor]:
+        print(f"====>LastPool, {hidden_states}, ==pooling_cursor=>{pooling_cursor}")
         return hidden_states[pooling_cursor.last_token_indices_gpu]
 
 
@@ -487,6 +495,7 @@ class SimplePooler(Pooler):
         pooler_config: ResolvedPoolingConfig,
         model_config: Optional["ModelConfig"] = None,
     ) -> "SimplePooler":
+        print("pooler_config.task", pooler_config.task)
         pooling = PoolingMethod.from_pooling_type(pooler_config.pooling_type)
         if pooler_config.task == "embed":
             head = EmbeddingPoolerHead(model_config)
@@ -553,12 +562,16 @@ class DispatchPooler(Pooler):
 
         outputs = list[PoolingSequenceGroupOutput]()
         offset = 0
-        print("pooling_metadata", pooling_metadata)
+        print(
+            f"====hidden_states===>{hidden_states}, pooling_metadata:{pooling_metadata}",
+        )
+        print("poolers_by_task", poolers_by_task)
         for task, group in groupby(get_tasks(pooling_metadata)):
             if not (pooler := poolers_by_task.get(task)):
                 raise ValueError(f"Unsupported task: {task} " f"Supported tasks: {self.get_supported_tasks()}")
 
             num_items = len(list(group))
+            print("pooler", pooler)
             group_output: PoolerOutput = pooler(
                 hidden_states,
                 pooling_metadata[offset : offset + num_items],

@@ -545,6 +545,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(
                     input_ids[prefill_start_index:prefill_end_index]
                 )
+                print("self.share_inputs['input_ids']", self.share_inputs["input_ids"])
                 encoder_block_num = len(request.block_tables)
                 self.share_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
@@ -2084,6 +2085,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 3. Execute model
         if self.enable_mm:
+            print("ids_remove_padding", self.share_inputs["ids_remove_padding"])
             model_output = self.model(
                 self.share_inputs["ids_remove_padding"],
                 self.share_inputs["image_features"],
