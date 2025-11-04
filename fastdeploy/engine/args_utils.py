@@ -237,6 +237,11 @@ class EngineArgs:
     Flag to enable the custom all-reduce kernel.
     """
 
+    use_internode_ll_two_stage: bool = False
+    """
+    Flag to use the internode_ll_two_stage kernel.
+    """
+
     engine_worker_queue_port: str = "0"
     """
     Port for worker queue communication.
@@ -720,6 +725,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.disable_custom_all_reduce,
             help="Flag to disable custom all-reduce.",
+        )
+        parallel_group.add_argument(
+            "--use-internode-ll-two-stage",
+            action="store_true",
+            default=EngineArgs.use_internode_ll_two_stage,
+            help="Flag to use the internode_ll_two_stage kernel.",
         )
         parallel_group.add_argument(
             "--max-num-seqs",
