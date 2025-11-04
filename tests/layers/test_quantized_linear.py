@@ -30,17 +30,36 @@ from fastdeploy.config import (
     ParallelConfig,
 )
 from fastdeploy.model_executor.layers.linear import QKVParallelLinear, RowParallelLinear
+from fastdeploy.model_executor.layers.quantization.block_wise_fp8 import (
+    BlockWiseFP8Config,
+)
+from fastdeploy.model_executor.layers.quantization.tensor_wise_fp8 import (
+    TensorWiseFP8Config,
+)
+from fastdeploy.model_executor.layers.quantization.w4afp8 import W4AFP8Config
+from fastdeploy.model_executor.layers.quantization.w8a8 import W8A8Config
 from fastdeploy.model_executor.layers.quantization.weight_only import (
     WINT4Config,
     WINT8Config,
 )
+from fastdeploy.model_executor.layers.quantization.wfp8wfp8 import WFP8WFP8Config
 from fastdeploy.scheduler import SchedulerConfig
 
 paddle.set_default_dtype("bfloat16")
 paddle.seed(1024)
 
+QUANT_CONFIG_MAP = {
+    "wint8": WINT8Config({}),
+    "wint4": WINT4Config({}),
+    "block_wise_fp8": BlockWiseFP8Config(weight_block_size=[128, 128]),
+    "tensor_wise_fp8": TensorWiseFP8Config(),
+    "w8a8": W8A8Config(),
+    "w4afp8": W4AFP8Config(),
+    "wfp8wfp8": WFP8WFP8Config(),
+}
 
-class WeightOnlyLinearWrapper(paddle.nn.Layer):
+
+class QuantizedLinearWrapper(paddle.nn.Layer):
     def __init__(
         self,
         model_config: ModelConfig,
@@ -56,7 +75,7 @@ class WeightOnlyLinearWrapper(paddle.nn.Layer):
         self.fd_config = FDConfig(
             model_config=self.model_config,
             parallel_config=ParallelConfig({"tensor_parallel_size": self.tp_size}),
-            quant_config=WINT8Config({}) if quant_type == "wint8" else WINT4Config({}),
+            quant_config=QUANT_CONFIG_MAP[quant_type],
             load_config=LoadConfig({}),
             graph_opt_config=GraphOptimizationConfig({}),
             scheduler_config=SchedulerConfig({}),
@@ -103,7 +122,7 @@ class WeightOnlyLinearWrapper(paddle.nn.Layer):
         return x
 
 
-class TestWeightOnlyLinear(unittest.TestCase):
+class TestQuantizedLinear(unittest.TestCase):
     def setUp(self) -> None:
         self.model_name_or_path = None
         self.model_config = self.build_model_config()
@@ -138,8 +157,8 @@ class TestWeightOnlyLinear(unittest.TestCase):
         self.model_name_or_path = os.path.join(os.getcwd(), tmp_dir)
         return self.model_name_or_path
 
-    def run_wint_linear(self, type="qkv_proj", quant_type="wint4"):
-        weight_only_linear = WeightOnlyLinearWrapper(self.model_config, quant_type=quant_type)
+    def run_quantized_linear(self, type="qkv_proj", quant_type="wint4"):
+        weight_only_linear = QuantizedLinearWrapper(self.model_config, quant_type=quant_type)
         if type == "qkv_proj":
             input_size = weight_only_linear.qkv_proj.input_size
             mm = weight_only_linear.qkv_proj
@@ -150,7 +169,7 @@ class TestWeightOnlyLinear(unittest.TestCase):
             input_size = weight_only_linear.input_size
             mm = weight_only_linear
 
-        print(type, quant_type)
+        print(f"========Method: {type}, Quant Type: {quant_type}=========")
         print("{:<15} {:<40} {:<15}".format("Batch Size", "Last 5 Times (us)", "Last Time (us)"))
 
         linear_cuda_graphs = [None] * 100
@@ -190,23 +209,14 @@ class TestWeightOnlyLinear(unittest.TestCase):
             print("{:<15} {:<40} {:<15}".format(bsz, str(last_5_times), last_time))
         return output
 
-    def test_qkv_linear(self):
-        print("===============Test QKV Quantized Linear Layer================")
-        for use_machete in ["0", "1"]:
-            os.environ["FD_USE_MACHETE"] = use_machete
-            self.run_wint_linear("qkv_proj")
-
-    def test_out_linear(self):
-        print("================Test OUT Quantized Linear Layer================")
-        for use_machete in ["0", "1"]:
-            os.environ["FD_USE_MACHETE"] = use_machete
-            self.run_wint_linear("o_proj")
-
-    def test_both_linear(self):
-        print("===========Test both OUT and QKV Quantized Linear Layer=========")
-        for use_machete in ["0", "1"]:
-            os.environ["FD_USE_MACHETE"] = use_machete
-            self.run_wint_linear("out_proj+qkv_proj")
+    def test_quantized_linear(self):
+        print("===============Test Weight Only Quantized Linear Layer================")
+        for type in ["qkv_proj", "o_proj", "out_proj+qkv_proj"]:
+            for quant_type in ["wint4", "wint8"]:
+                for use_machete in ["0", "1"]:
+                    os.environ["FD_USE_MACHETE"] = use_machete
+                    self.run_quantized_linear(type, quant_type)
+            self.run_quantized_linear(type, "block_wise_fp8")
 
     def tearDown(self) -> None:
         if self.model_name_or_path:
