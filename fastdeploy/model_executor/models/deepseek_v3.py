@@ -327,7 +327,7 @@ class DeepseekV3MLAAttention(nn.Layer):
         return 0.1 * mscale * math.log(scale) + 1.0
 
     @paddle.jit.marker.capture_control_flow
-    def prefill_or_decode(
+    def run_prefill_or_decode_attention(
         self,
         forward_meta,
         max_enc_len_this_time,
@@ -338,10 +338,10 @@ class DeepseekV3MLAAttention(nn.Layer):
         key_pe,
         mask_encoder_batch,
         query_nope,
+        output,
     ):
-
         if max_enc_len_this_time:
-            key_value = self.kv_b_proj(compressed_kv)  # 这部分
+            key_value = self.kv_b_proj(compressed_kv)
             key_value = key_value.reshape(
                 [
                     -1,
@@ -366,25 +366,19 @@ class DeepseekV3MLAAttention(nn.Layer):
                 k_pe=key_pe,
                 forward_meta=forward_meta,
             )
+            fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
+            fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
         else:
-            fmha_out_prefill = paddle.zeros_like(query)
-
-        # TODO(drryanhuang): rm this redundant reshape when fmha_out_prefill is zero
-        fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
-        fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
-        fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
-        fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
+            fmha_out_prefill = paddle.zeros_like(output)
 
         if max_dec_len_this_time:
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
 
             q_input = paddle.concat([q_nope_out, query_pe], axis=-1)
-            q_input = q_input.reshape(
-                [
-                    -1,
-                    self.num_attention_heads_tp * (self.kv_lora_rank + self.qk_rope_head_dim),
-                ]
-            )
+            q_input = q_input.flatten(
+                start_axis=1
+            )  # [-1, self.num_attention_heads_tp * (self.kv_lora_rank + self.qk_rope_head_dim)]
+
             fmha_out_decode = self.mla_attn(
                 q=q_input,
                 k=None,
@@ -394,21 +388,16 @@ class DeepseekV3MLAAttention(nn.Layer):
                 k_pe=key_pe,
                 forward_meta=forward_meta,
             )
-
             fmha_out_decode = fmha_out_decode.reshape([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose(
                 [1, 0, 2]
             )
-
-            fmha_out_decode = (
-                self.kv_b_proj_bmm(fmha_out_decode, proj_type="v")
-                .transpose([1, 0, 2])
-                .reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
-            )
+            fmha_out_decode = self.kv_b_proj_bmm(fmha_out_decode, proj_type="v").transpose([1, 0, 2])
             fmha_out = fmha_out_prefill + fmha_out_decode
         else:
             fmha_out = fmha_out_prefill
 
-        return fmha_out
+        paddle.assign(fmha_out, output)
+        return output.flatten(1)
 
     def forward(
         self,
@@ -420,7 +409,6 @@ class DeepseekV3MLAAttention(nn.Layer):
         """ """
 
         # NOTE: (changwenbin) Bring out the public calculation in PD MIX to avoid repeated calculation.
-
         # NOTE: (changwenbin) qkv_a_proj horizontal fusion
         qkv_a_out = self.qkv_a_proj_with_mqa(hidden_states)
         query, compressed_kv, key_pe = qkv_a_out.split(
@@ -440,7 +428,9 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
 
-        fmha_out = self.prefill_or_decode(
+        bs = query.shape[0]
+        fmha_out = paddle.empty([bs, self.num_attention_heads_tp, self.v_head_dim], dtype=query.dtype)
+        fmha_out = self.run_prefill_or_decode_attention(
             forward_meta,
             forward_meta.max_len_tensor_cpu[1],  # max_enc_len_this_time
             forward_meta.max_len_tensor_cpu[2],  # max_dec_len_this_time
@@ -450,6 +440,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             key_pe,
             mask_encoder_batch,
             query_nope,
+            fmha_out,
         )
 
         output = self.o_proj(fmha_out)
@@ -653,7 +644,7 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
             [fd_config.scheduler_config.max_num_batched_tokens], dtype=paddle.int32
         )
         self.mask_encoder_batch_buffer = paddle.empty(
-            [fd_config.scheduler_config.max_num_batched_tokens, 1], dtype=paddle.int32
+            [fd_config.scheduler_config.max_num_batched_tokens, 1, 1], dtype=paddle.int32
         )
 
     @classmethod
