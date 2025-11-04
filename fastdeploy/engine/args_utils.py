@@ -26,6 +26,7 @@ from fastdeploy.config import (
     CacheConfig,
     ConvertOption,
     EarlyStopConfig,
+    EPLBConfig,
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
@@ -234,6 +235,11 @@ class EngineArgs:
     disable_custom_all_reduce: bool = False
     """
     Flag to enable the custom all-reduce kernel.
+    """
+
+    use_internode_ll_two_stage: bool = False
+    """
+    Flag to use the internode_ll_two_stage kernel.
     """
 
     engine_worker_queue_port: str = "0"
@@ -669,7 +675,7 @@ class EngineArgs:
         model_group.add_argument(
             "--logprobs-mode",
             type=str,
-            choices=["raw_logprobs", "processed_logprobs", "processed_logits"],
+            choices=["raw_logprobs", "raw_logits", "processed_logprobs", "processed_logits"],
             default=EngineArgs.logprobs_mode,
             help="Indicates the content returned in the logprobs.",
         )
@@ -719,6 +725,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.disable_custom_all_reduce,
             help="Flag to disable custom all-reduce.",
+        )
+        parallel_group.add_argument(
+            "--use-internode-ll-two-stage",
+            action="store_true",
+            default=EngineArgs.use_internode_ll_two_stage,
+            help="Flag to use the internode_ll_two_stage kernel.",
         )
         parallel_group.add_argument(
             "--max-num-seqs",
@@ -1076,7 +1088,13 @@ class EngineArgs:
         Create and return a Config object based on the current settings.
         """
         all_dict = asdict(self)
+        eplb_cfg = EPLBConfig()
+        all_dict["enable_redundant_experts"] = eplb_cfg.enable_redundant_experts
         model_cfg = ModelConfig(all_dict)
+
+        # XPU currently disable prefix cache for VL model
+        if current_platform.is_xpu() and (self.enable_mm or model_cfg.enable_mm):
+            self.enable_prefix_caching = False
 
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size
@@ -1130,6 +1148,7 @@ class EngineArgs:
             load_config=load_cfg,
             parallel_config=parallel_cfg,
             speculative_config=speculative_cfg,
+            eplb_config=eplb_cfg,
             structured_outputs_config=structured_outputs_config,
             ips=self.ips,
             use_warmup=self.use_warmup,

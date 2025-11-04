@@ -233,10 +233,18 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             if chat_template_kwargs:
                 if isinstance(chat_template_kwargs, dict):
                     for k, v in chat_template_kwargs.items():
-                        if k not in request:
+                        if k not in request or request[k] is None:
                             request[k] = v
                 else:
                     raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                options = chat_template_kwargs.get("options")
+                if options:
+                    thinking_mode = options.get("thinking_mode")
+                    if thinking_mode:
+                        if thinking_mode == "close" or thinking_mode == "false":
+                            request["enable_thinking"] = False
+                        else:
+                            request["enable_thinking"] = True
             request.setdefault("enable_thinking", True)
             outputs = self.ernie4_5_processor.request2ids(request)
         else:

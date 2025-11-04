@@ -1,4 +1,4 @@
-// Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "append_attn/multi_head_latent_attention_kernel.h"
+#include "append_attn/decoder_mla_attention_kernel.h"
 #include "helper.h"
 #include "mla_attn/batch_mla_with_paged_kv_cache.h"
 
@@ -66,10 +66,12 @@ std::vector<paddle::Tensor> MultiHeadLatentAttentionKernel(
   // int chunk_size = decoder_chunk_size_cpu.data<int>()[0];
   //
 
-  const bool mla_use_tensorcore = true; //get_mla_use_tensorcore();
+  const bool mla_use_tensorcore = true;  // get_mla_use_tensorcore();
   auto sm_version = GetSMVersion();
   if ((speculate_decoder || mla_use_tensorcore) && sm_version < 90) {
-    PD_THROW("Please use speculate_decoder=0 and FLAGS_mla_use_tensorcore=0 when sm < 90.");
+    PD_THROW(
+        "Please use speculate_decoder=0 and FLAGS_mla_use_tensorcore=0 when sm "
+        "< 90.");
   }
 
   auto main_stream = query.stream();

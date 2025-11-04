@@ -92,8 +92,18 @@ class MoEMethodBase(QuantMethodBase):
                 # for RL init model without deepep buff
                 return
             else:
-                self.ep_prefill_runner = self.EPPrefillRunner(**common_args)
-                self.ep_decoder_runner = self.EPDecoderRunner(**common_args)
+                if current_platform.is_cuda():
+                    self.ep_prefill_runner = self.EPPrefillRunner(
+                        **common_args,
+                        use_internode_ll_two_stage=layer.fd_config.parallel_config.use_internode_ll_two_stage,
+                    )
+                    self.ep_decoder_runner = self.EPDecoderRunner(
+                        **common_args,
+                        use_internode_ll_two_stage=layer.fd_config.parallel_config.use_internode_ll_two_stage,
+                    )
+                else:
+                    self.ep_prefill_runner = self.EPPrefillRunner(**common_args)
+                    self.ep_decoder_runner = self.EPDecoderRunner(**common_args)
             return
 
         # For non-mixed ep

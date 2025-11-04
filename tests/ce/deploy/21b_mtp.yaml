@@ -1,8 +1,0 @@
-max_model_len: 32768
-max_num_seqs: 128
-tensor_parallel_size: 1
-quantization: wint4
-speculative_config:
-  method: mtp
-  num_speculative_tokens: 1
-  model: /MODELDATA/ernie-4_5-21b-a3b-bf16-paddle/mtp/
