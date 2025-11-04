@@ -279,7 +279,7 @@ class PaddleDisWorkerProc:
         """Main event loop for Paddle Distrubuted Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
-        if self.eplb_config.enable_redundant_experts:
+        if self.eplb_config.enable_eplb:
             self.last_dump_expert_workload_ts = 0
             self.experts_manager = RedundantExpertManager(
                 rank=self.local_rank,
@@ -345,7 +345,7 @@ class PaddleDisWorkerProc:
         attention_dp_cached_prefill_tasks = []
         attention_dp_wait_prefill_iters = 0
         while True:
-            if self.eplb_config.enable_redundant_experts:
+            if self.eplb_config.enable_eplb:
                 rearrange_time = time.time()
                 # 获取专家负载
                 if local_experts_token_stats_array.value is not None and (

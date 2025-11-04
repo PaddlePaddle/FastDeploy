@@ -96,7 +96,7 @@ class EngineClient:
         else:
             self.is_master = False
 
-        if self.config.eplb_config.enable_redundant_experts:
+        if self.config.eplb_config.enable_eplb:
             self.init_eplb_signals(ipc_signal_suffix=port)
 
         array_size = min(max_chips_per_node, tensor_parallel_size)
@@ -493,7 +493,7 @@ class EngineClient:
         content, status_code = None, HTTPStatus.OK
         eplb_config = self.config.eplb_config
 
-        if not eplb_config.enable_redundant_experts:
+        if not eplb_config.enable_eplb:
             content = {"code": 1, "msg": "redundant expert is disabled"}
             status_code = HTTPStatus.BAD_REQUEST
             return content, status_code
@@ -603,7 +603,7 @@ class EngineClient:
         content, status_code = None, HTTPStatus.OK
         eplb_config = self.config.eplb_config
 
-        if not eplb_config.enable_redundant_experts:
+        if not eplb_config.enable_eplb:
             content = {"code": 1, "msg": "redundant expert is disabled"}
             status_code = HTTPStatus.BAD_REQUEST
             return content, status_code
@@ -634,7 +634,7 @@ class EngineClient:
         content, status_code = None, HTTPStatus.OK
         eplb_config = self.config.eplb_config
 
-        if not eplb_config.enable_redundant_experts:
+        if not eplb_config.enable_eplb:
             content = {"code": 1, "msg": "redundant expert is disabled"}
             status_code = HTTPStatus.BAD_REQUEST
             return content, status_code

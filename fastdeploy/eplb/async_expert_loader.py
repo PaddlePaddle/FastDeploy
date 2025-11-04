@@ -339,7 +339,14 @@ def load_ep_checkpoint(model_path):
 
 
 def load_model_weights_process(
-    rank: int, expert_per_rank: int, moe_layer_start_index: int, moe_quant_type: str, data_conn, mg_conn, shm_uuid
+    rank: int,
+    model_dir: str,
+    expert_per_rank: int,
+    moe_layer_start_index: int,
+    moe_quant_type: str,
+    shm_uuid: str,
+    data_conn,
+    mg_conn,
 ):
     """
     load_model_weights_process
@@ -357,6 +364,7 @@ def load_model_weights_process(
 
     paddle.set_device("cpu")
     ep_loader = AsyncEPLoader(
+        model_dir=model_dir,
         rank=rank,
         expert_per_rank=expert_per_rank,
         moe_layer_start_index=moe_layer_start_index,

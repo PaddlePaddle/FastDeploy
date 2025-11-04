@@ -124,7 +124,6 @@ class ModelConfig:
         self.max_model_len = 0
         self.dtype = ""
         self.enable_logprob = False
-        self.enable_redundant_experts = False
         self.redundant_experts_num = 0
         self.seed = 0
         self.quantization = None
@@ -254,20 +253,47 @@ class EPLBConfig:
 
     def __init__(
         self,
+        args,
     ):
-        self.enable_redundant_experts = envs.FD_ENABLE_REDUNDANT_EXPERTS
-        self.redundant_experts_num = envs.FD_REDUNDANT_EXPERTS_NUM
-        self.redundant_expert_ip_shm_size = envs.FD_REDUNDANT_EXPERT_IP_SHM_SIZE
-        self.redundant_expert_meta_dir = envs.FD_REDUNDANT_EXPERT_META_DIR
-        self.redundant_expert_api_user = envs.FD_REDUNDANT_EXPERT_API_USER
-        self.redundant_expert_api_password = envs.FD_REDUNDANT_EXPERT_API_PASSWORD
-        self.redundant_expert_eplb_strategy = envs.FD_REDUNDANT_EXPERT_EPLB_STRATEGY
-        self.redundant_expert_dump_workload_interval = envs.FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL
-        self.redundant_expert_async_load_model_shmem_size_gb = envs.FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB
-        self.redundant_expert_enable_schedule_cordon = envs.FD_REDUNDANT_EXPERT_ENABLE_SCHEDULE_CORDON
-        self.model_use_safetensors = envs.FD_MODEL_USE_SAFETENSORS
-        self.model_use_offline_quant = envs.FD_MODEL_USE_OFFLINE_QUANT
-        self.moe_quant_type = envs.FD_MOE_QUANT_TYPE
+        # enable eplb
+        self.enable_eplb: bool = False
+        # redundant experts num
+        self.redundant_experts_num: int = envs.FD_REDUNDANT_EXPERTS_NUM
+        # expert ip shm size
+        self.redundant_expert_ip_shm_size: int = envs.FD_REDUNDANT_EXPERT_IP_SHM_SIZE
+        # expert meta dir
+        self.redundant_expert_meta_dir: str = envs.FD_REDUNDANT_EXPERT_META_DIR
+        # expert api user and password
+        self.redundant_expert_api_user: str = envs.FD_REDUNDANT_EXPERT_API_USER
+        self.redundant_expert_api_password: str = envs.FD_REDUNDANT_EXPERT_API_PASSWORD
+        # expert eplb strategy
+        self.redundant_expert_eplb_strategy: str = envs.FD_REDUNDANT_EXPERT_EPLB_STRATEGY
+        # expert dump workload interval
+        self.redundant_expert_dump_workload_interval: int = envs.FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL
+        # expert async load model shmem size gb
+        self.redundant_expert_async_load_model_shmem_size_gb: int = (
+            envs.FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB
+        )
+        # expert enable schedule cordon
+        self.redundant_expert_enable_schedule_cordon: bool = envs.FD_REDUNDANT_EXPERT_ENABLE_SCHEDULE_CORDON
+        # model use safetensors
+        self.model_use_safetensors: bool = envs.FD_MODEL_USE_SAFETENSORS
+        # model use offline quant
+        self.model_use_offline_quant: bool = envs.FD_MODEL_USE_OFFLINE_QUANT
+        # moe quant type
+        self.moe_quant_type: str = envs.FD_MOE_QUANT_TYPE
+        for key, value in args.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+
+    def print(self):
+        """
+        Print all configuration information.
+        """
+        logger.info("EPLB Configuration Information :")
+        for k, v in self.__dict__.items():
+            logger.info("{:<20}:{:<6}{}".format(k, "", v))
+        logger.info("=============================================================")
 
 
 class ParallelConfig:
@@ -1402,6 +1428,7 @@ class FDConfig:
                 or k == "scheduler_config"
                 or k == "parallel_config"
                 or k == "commit_config"
+                or k == "eplb_config"
             ):
                 if v is not None:
                     v.print()

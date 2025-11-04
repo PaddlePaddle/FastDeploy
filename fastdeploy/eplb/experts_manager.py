@@ -121,12 +121,13 @@ class RedundantExpertManager:
             name=f"eplb::async_load_model_{rank}",
             args=(
                 self.rank,
+                self.fd_config.model_config.model,
                 self.expert_per_rank,
                 self.fd_config.model_config.moe_layer_start_index,
                 self.eplb_config.moe_quant_type,
+                self.ipc_signal_suffix,
                 child_data_conn,
                 child_mg_conn,
-                self.ipc_signal_suffix,
             ),
         ).start()
         child_data_conn.close()
