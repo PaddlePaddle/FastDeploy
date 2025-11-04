@@ -565,7 +565,8 @@ class GPUModelRunner(ModelRunnerBase):
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
                 self.share_inputs["pre_ids"][idx : idx + 1] = -1
-                if request.sampling_params.prompt_logprobs is not None:
+                # pooling model request.sampling_params is None
+                if request.sampling_params is not None and request.sampling_params.prompt_logprobs is not None:
                     self.prompt_logprobs_reqs[request.request_id] = request
                 has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
