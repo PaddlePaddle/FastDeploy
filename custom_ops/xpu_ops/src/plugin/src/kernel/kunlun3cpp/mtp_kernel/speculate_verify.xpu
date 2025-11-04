@@ -161,6 +161,9 @@ __global__ void speculate_verify(
       // printf("seq_lens_this_time[%d]-1: %d \n",bid,
       // seq_lens_this_time[bid]-1);
       for (; i < seq_lens_this_time[bid] - 1; i++) {
+        if (benchmark_mode) {
+          break;
+        }
         if (seq_lens_encoder[bid] != 0) {
           break;
         }
@@ -326,7 +329,8 @@ __global__ void speculate_verify(
       int max_seq_len,                                              \
       int max_candidate_len,                                        \
       int verify_window,                                            \
-      bool prefill_one_step_stop);
+      bool prefill_one_step_stop,                                   \
+      bool benchmark_mode);
 SPECULATE_VERIFY_INSTANTIATE(true, true)
 SPECULATE_VERIFY_INSTANTIATE(true, false)
 SPECULATE_VERIFY_INSTANTIATE(false, true)

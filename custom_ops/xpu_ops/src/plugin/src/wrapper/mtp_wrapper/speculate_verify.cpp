@@ -160,6 +160,9 @@ static int cpu_wrapper(Context *ctx,
         // printf("seq_lens_this_time[%d]-1: %d \n",bid,
         // seq_lens_this_time[bid]-1);
         for (; i < seq_lens_this_time[bid] - 1; i++) {
+          if (benchmark_mode) {
+            break;
+          }
           if (seq_lens_encoder[bid] != 0) {
             break;
           }
@@ -530,7 +533,8 @@ int speculate_verify(Context *ctx,
       int,                        /* max_seq_len */                 \
       int,                        /* max_candidate_len */           \
       int,                        /* verify_window */               \
-      bool);                      /* prefill_one_step_stop */
+      bool,                                                         \
+      bool); /* prefill_one_step_stop */
 
 INSTANTIATE_SPECULATE_VERIFY(false, false)
 INSTANTIATE_SPECULATE_VERIFY(false, true)
