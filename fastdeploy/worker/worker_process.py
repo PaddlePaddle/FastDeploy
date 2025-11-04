@@ -637,6 +637,11 @@ def parse_args():
         help="enable chunked prefill",
     )
     parser.add_argument(
+        "--use_internode_ll_two_stage",
+        action="store_true",
+        help="enable internode_ll_two_stage",
+    )
+    parser.add_argument(
         "--speculative_config",
         type=json.loads,
         default=None,
