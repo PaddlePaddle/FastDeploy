@@ -109,16 +109,15 @@ static int cpu_wrapper_get_padding_offset(Context* ctx,
   return api::SUCCESS;
 }
 
-
 static int cpu_wrapper_get_padding_offset_v2(Context* ctx,
-                                            int* batch_id_per_token,
-                                            int* cum_offsets_out,
-                                            int* cu_seqlens_q,
-                                            int* cu_seqlens_k,
-                                            const int* cum_offsets,
-                                            const int* seq_lens,
-                                            const int max_seq_len,
-                                            int bsz) {
+                                             int* batch_id_per_token,
+                                             int* cum_offsets_out,
+                                             int* cu_seqlens_q,
+                                             int* cu_seqlens_k,
+                                             const int* cum_offsets,
+                                             const int* seq_lens,
+                                             const int max_seq_len,
+                                             int bsz) {
   for (int bi = 0; bi < bsz; ++bi) {
     int cum_offset = bi == 0 ? 0 : cum_offsets[bi - 1];
     for (int i = 0; i < seq_lens[bi]; i++) {
@@ -184,14 +183,14 @@ static int xpu3_wrapper_get_padding_offset(Context* ctx,
 }
 
 static int xpu3_wrapper_get_padding_offset_v2(Context* ctx,
-                                           int* batch_id_per_token,
-                                           int* cum_offsets_out,
-                                           int* cu_seqlens_q,
-                                           int* cu_seqlens_k,
-                                           const int* cum_offsets,
-                                           const int* seq_lens,
-                                           const int max_seq_len,
-                                           int bsz) {
+                                              int* batch_id_per_token,
+                                              int* cum_offsets_out,
+                                              int* cu_seqlens_q,
+                                              int* cu_seqlens_k,
+                                              const int* cum_offsets,
+                                              const int* seq_lens,
+                                              const int max_seq_len,
+                                              int bsz) {
   xpu3::plugin::
       speculate_get_padding_offset_v2<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           batch_id_per_token,
@@ -204,7 +203,6 @@ static int xpu3_wrapper_get_padding_offset_v2(Context* ctx,
           bsz);
   return api::SUCCESS;
 }
-
 
 template <typename T>
 int speculate_remove_padding(Context* ctx,
@@ -360,25 +358,25 @@ int speculate_get_padding_offset_v2(Context* ctx,
 
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper_get_padding_offset_v2(ctx,
-                                          batch_id_per_token,
-                                          cum_offsets_out,
-                                          cu_seqlens_q,
-                                          cu_seqlens_k,
-                                          cum_offsets,
-                                          seq_lens,
-                                          max_seq_len,
-                                          bsz);
+                                             batch_id_per_token,
+                                             cum_offsets_out,
+                                             cu_seqlens_q,
+                                             cu_seqlens_k,
+                                             cum_offsets,
+                                             seq_lens,
+                                             max_seq_len,
+                                             bsz);
   }
   if (ctx->dev().type() == api::kXPU3) {
     return xpu3_wrapper_get_padding_offset_v2(ctx,
-                                           batch_id_per_token,
-                                           cum_offsets_out,
-                                           cu_seqlens_q,
-                                           cu_seqlens_k,
-                                           cum_offsets,
-                                           seq_lens,
-                                           max_seq_len,
-                                           bsz);
+                                              batch_id_per_token,
+                                              cum_offsets_out,
+                                              cu_seqlens_q,
+                                              cu_seqlens_k,
+                                              cum_offsets,
+                                              seq_lens,
+                                              max_seq_len,
+                                              bsz);
   }
 
   WRAPPER_UNIMPLEMENTED(ctx);

@@ -162,7 +162,7 @@ static int cpu_wrapper(Context *ctx,
         // printf("seq_lens_this_time[%d]-1: %d \n",bid,
         // seq_lens_this_time[bid]-1);
         for (; i < seq_lens_this_time[bid] - 1; i++) {
-          if(benchmark_mode){
+          if (benchmark_mode) {
             break;
           }
           if (seq_lens_encoder[bid] != 0) {
@@ -513,36 +513,36 @@ int speculate_verify(Context *ctx,
   WRAPPER_UNIMPLEMENTED(ctx);
 }
 
-#define INSTANTIATE_SPECULATE_VERIFY(ENABLE_TOPP, USE_TOPK)           \
-    template int                                                      \
-    baidu::xpu::api::plugin::speculate_verify<ENABLE_TOPP, USE_TOPK>( \
-        baidu::xpu::api::Context *, /* xpu_ctx */                     \
-        int64_t *,                  /* accept_tokens */               \
-        int *,                      /* accept_num */                  \
-        int64_t *,                  /* step_idx */                    \
-        bool *,                     /* stop_flags */                  \
-        const int *,                /* seq_lens_encoder */            \
-        const int *,                /* seq_lens_decoder */            \
-        const int64_t *,            /* draft_tokens */                \
-        const int *,                /* actual_draft_token_nums */     \
-        const float *,              /* dev_curand_states or topp */   \
-        const float *,              /* topp or nullptr */             \
-        const int *,                /* seq_lens_this_time */          \
-        const int64_t *,            /* verify_tokens */               \
-        const float *,              /* verify_scores */               \
-        const int64_t *,            /* max_dec_len */                 \
-        const int64_t *,            /* end_tokens */                  \
-        const bool *,               /* is_block_step */               \
-        const int *,                /* output_cum_offsets */          \
-        const int *,                /* actual_candidate_len */        \
-        int,                        /* real_bsz */                    \
-        int,                        /* max_draft_tokens */            \
-        int,                        /* end_length */                  \
-        int,                        /* max_seq_len */                 \
-        int,                        /* max_candidate_len */           \
-        int,                        /* verify_window */               \
-        bool,                                                         \
-        bool); /* prefill_one_step_stop */
+#define INSTANTIATE_SPECULATE_VERIFY(ENABLE_TOPP, USE_TOPK)         \
+  template int                                                      \
+  baidu::xpu::api::plugin::speculate_verify<ENABLE_TOPP, USE_TOPK>( \
+      baidu::xpu::api::Context *, /* xpu_ctx */                     \
+      int64_t *,                  /* accept_tokens */               \
+      int *,                      /* accept_num */                  \
+      int64_t *,                  /* step_idx */                    \
+      bool *,                     /* stop_flags */                  \
+      const int *,                /* seq_lens_encoder */            \
+      const int *,                /* seq_lens_decoder */            \
+      const int64_t *,            /* draft_tokens */                \
+      const int *,                /* actual_draft_token_nums */     \
+      const float *,              /* dev_curand_states or topp */   \
+      const float *,              /* topp or nullptr */             \
+      const int *,                /* seq_lens_this_time */          \
+      const int64_t *,            /* verify_tokens */               \
+      const float *,              /* verify_scores */               \
+      const int64_t *,            /* max_dec_len */                 \
+      const int64_t *,            /* end_tokens */                  \
+      const bool *,               /* is_block_step */               \
+      const int *,                /* output_cum_offsets */          \
+      const int *,                /* actual_candidate_len */        \
+      int,                        /* real_bsz */                    \
+      int,                        /* max_draft_tokens */            \
+      int,                        /* end_length */                  \
+      int,                        /* max_seq_len */                 \
+      int,                        /* max_candidate_len */           \
+      int,                        /* verify_window */               \
+      bool,                                                         \
+      bool); /* prefill_one_step_stop */
 
 INSTANTIATE_SPECULATE_VERIFY(false, false)
 INSTANTIATE_SPECULATE_VERIFY(false, true)
