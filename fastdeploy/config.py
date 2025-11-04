@@ -286,6 +286,12 @@ class EPLBConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
 
+    def to_json_string(self):
+        """
+        Convert eplb_config to json string.
+        """
+        return json.dumps({key: value for key, value in self.__dict__.items() if value is not None})
+
     def print(self):
         """
         Print all configuration information.

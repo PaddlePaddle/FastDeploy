@@ -822,6 +822,13 @@ def parse_args():
         help="max waiting steps to sync all dp for prefill tasks available",
     )
 
+    parser.add_argument(
+        "--eplb_config",
+        type=json.loads,
+        default=None,
+        help="EPLB Configuration.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -877,7 +884,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     early_stop_config = EarlyStopConfig(args.early_stop_config)
 
-    eplb_config = EPLBConfig()
+    eplb_config = EPLBConfig(args.eplb_config)
 
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
