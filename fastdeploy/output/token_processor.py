@@ -630,8 +630,10 @@ class TokenProcessor:
                     time_in_queue=task.schedule_start_time - task.preprocess_end_time,
                     preprocess_cost_time=task.preprocess_end_time - task.preprocess_start_time,
                     request_start_time=task.arrival_time,
+                    llm_engine_recv_req_timestamp=task.llm_engine_recv_req_timestamp,
+                    llm_engine_send_req_to_engine_timestamp=task.inference_start_time,
+                    llm_engine_recv_token_timestamp=time.time(),
                 )
-
                 self._record_first_token_metrics(task, current_time)
 
             else:
@@ -639,6 +641,9 @@ class TokenProcessor:
                     arrival_time=time.time(),
                     request_start_time=task.arrival_time,
                     model_execute_time=time.time() - task.inference_start_time,
+                    llm_engine_recv_req_timestamp=task.llm_engine_recv_req_timestamp,
+                    llm_engine_send_req_to_engine_timestamp=task.inference_start_time,
+                    llm_engine_recv_token_timestamp=time.time(),
                 )
             self.number_of_output_tokens += len(token_ids)
             self._record_metrics(task, current_time, token_ids)

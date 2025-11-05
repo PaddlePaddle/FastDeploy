@@ -402,6 +402,7 @@ class AsyncLLMEngine:
 
         try:
             request = Request.from_dict(prompt)
+            request.llm_engine_recv_req_timestamp = time.time()
 
             # Check if already preprocessed by AsyncEngineClient
             is_preprocessed = prompt.get("_preprocessed", False)
@@ -830,6 +831,7 @@ class AsyncLLMEngine:
             f" --convert {self.cfg.model_config.convert}"
             f" --override-pooler-config {self.cfg.model_config.override_pooler_config}"
             f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
+            f" --max_logprobs {self.cfg.model_config.max_logprobs}"
         )
 
         worker_store_true_flag = {

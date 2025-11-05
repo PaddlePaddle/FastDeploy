@@ -183,6 +183,7 @@ class ModelConfig:
         self.max_model_len = 0
         self.dtype = "bfloat16"
         self.enable_logprob = False
+        self.max_logprobs = 20
         self.logprobs_mode = "raw_logprobs"
         self.enable_redundant_experts = False
         self.redundant_experts_num = 0
@@ -227,6 +228,8 @@ class ModelConfig:
         self.think_end_id = args.get("think_end_id", -1)
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
+        if self.max_logprobs == -1 and hasattr(self, "vocab_size"):
+            self.max_logprobs = self.vocab_size
 
         self._post_init()
 

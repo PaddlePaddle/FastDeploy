@@ -737,6 +737,12 @@ def parse_args():
         help="Enable output of token-level log probabilities.",
     )
     parser.add_argument(
+        "--max_logprobs",
+        type=int,
+        default=20,
+        help="Maximum number of log probabilities.",
+    )
+    parser.add_argument(
         "--logprobs_mode",
         type=str,
         default="raw_logprobs",
