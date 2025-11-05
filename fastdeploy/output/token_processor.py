@@ -163,8 +163,8 @@ class TokenProcessor:
         """reschedule when real batch size is smaller than the insert position of preemted_task"""
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             need_to_be_reschedule_req_ids = list(self.resource_manager.to_be_rescheduled_request_id_set)
+            batch_id_set = set()
             if len(need_to_be_reschedule_req_ids) > 0:
-                batch_id_set = set()
                 for data in datas:
                     batch_id_set.add(data.batch_id)
                 llm_logger.debug(f"_reschedule_preempt_task_use_zmq batch_id_set {batch_id_set}")
@@ -241,6 +241,11 @@ class TokenProcessor:
 
             task_id = task.request_id
             token_ids = stream_data.tokens  # numpy.array
+            if token_ids[-1] <= 0:
+                if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                    if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                        self.resource_manager.reschedule_preempt_task(task_id)
+                continue
 
             current_time = time.time()
             if self.tokens_counter[task_id] == 0:
