@@ -66,7 +66,7 @@ class ZmqClientBase(ABC):
         Send a Pickle-serializable object over the socket.
         """
         self._ensure_socket()
-        self.socket.send(ForkingPickler.dumps(data))
+        self.socket.send(ForkingPickler.dumps(data), copy=False)
 
     def recv_pyobj(self):
         """
