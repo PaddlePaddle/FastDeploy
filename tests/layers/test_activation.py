@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import paddle
 
-from fastdeploy.model_executor.layers.activation import SiluAndMul, get_act_fn
+from fastdeploy.model_executor.layers.activation import SiluAndMul
 
 
 class DummyQuantConfig:
