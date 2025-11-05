@@ -25,6 +25,7 @@ from paddleformers.utils.log import logger
 from fastdeploy import envs
 from fastdeploy.flashinfer import has_flashinfer
 from fastdeploy.model_executor.layers.moe import FusedMoE
+from fastdeploy.model_executor.utils import free_tensor, set_weight_attrs
 
 from .quant_base import QuantConfigBase, QuantMethodBase
 
@@ -213,27 +214,40 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         layer,
         **extra_weight_attrs,
     ):
-        if not self.quant_config.is_checkpoint_nvfp4_serialized:
-            raise ValueError("NVFP4 quantization was selected, " " dynamic quantization is not supported.")
 
-        input_size = layer.weight_shape[0]
-        output_size = layer.weight_shape[1]
-        if input_size % 16 != 0:
-            raise ValueError("Unsupported model when in features size is not multiple of 16")
+        # if not self.quant_config.is_checkpoint_nvfp4_serialized:
+        #     raise ValueError("NVFP4 quantization was selected, " " dynamic quantization is not supported.")
+
+        # input_size = layer.weight_shape[0]
+        # output_size = layer.weight_shape[1]
+        # if input_size % 16 != 0:
+        #     raise ValueError("Unsupported model when in features size is not multiple of 16")
         # Weight
         # 2 fp4 items are packed in the input dimension
-        print("====aaaaaa======= [output_size, input_size // 2]", [output_size, input_size // 2])
+        # weight_scale_shape = [layer.weight_shape[1]]
+        # layer.weight_shape.reverse()
+        dim = -1 if extra_weight_attrs["output_dim"] else 0
+        extra_weight_attrs["output_dim"] = not extra_weight_attrs["output_dim"]
+        weight_shape = layer.weight_shape[::-1]
+        weight_shape[dim] = weight_shape[dim] // 2
+        layer.weight_dtype = "uint8"
+        input_scale_shape = [1]
+        weight_scale_shape = [layer.weight_shape[::-1][0], layer.weight_shape[::-1][1] // self.quant_config.group_size]
+        weight_scale_2_shape = [1]
         layer.weight = layer.create_parameter(
-            shape=[output_size, input_size // 2],
-            dtype=paddle.uint8,
+            shape=weight_shape,
+            dtype=layer.weight_dtype,
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
-        extra_weight_attrs["weight_need_transpose"] = extra_weight_attrs.get("model_format") == "torch"
 
+        set_weight_attrs(
+            layer.weight,
+            extra_weight_attrs,
+        )
         # Input Weight Scale
         layer.input_scale = layer.create_parameter(
-            shape=[],  # output_size
+            shape=input_scale_shape,  # output_size
             dtype=paddle.float32,
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
@@ -241,7 +255,7 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
 
         # Global Weight Scale
         layer.weight_scale_2 = layer.create_parameter(
-            shape=[],  # output_size
+            shape=weight_scale_2_shape,  # output_size
             dtype=paddle.float32,
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
@@ -249,14 +263,85 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
 
         # Per Block Weight Scale
         layer.weight_scale = layer.create_parameter(
-            shape=[output_size, input_size // self.quant_config.group_size],
+            shape=weight_scale_shape,
             dtype=paddle.float8_e4m3fn,
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
+        set_weight_attrs(
+            layer.weight_scale,
+            extra_weight_attrs,
+        )
 
     def process_weights_after_loading(self, layer) -> None:
-        raise ValueError("eeeeeeee")
+        # if
+        def _process_scale_interleaved(scales):
+            scale_dim = len(scales.shape)
+            if scale_dim == 2:
+                scales = scales.unsqueeze(0)
+            assert len(scales.shape) == 3
+            B, M, K = scales.shape
+            round_up_multiple = lambda x, m: (x + m - 1) // m * m
+            M_padded = round_up_multiple(M, 128)
+            K_padded = round_up_multiple(K, 4)
+            padded_scales = paddle.empty([B, M_padded, K_padded], dtype=scales.dtype)
+            padded_scales[:B, :M, :K].copy_(scales)
+            batches, rows, cols = padded_scales.shape
+            assert rows % 128 == 0
+            assert cols % 4 == 0
+            padded_scales = padded_scales.reshape(batches, rows // 128, 4, 32, cols // 4, 4)
+            padded_scales = padded_scales.transpose([0, 1, 4, 3, 2, 5])
+            padded_scales = padded_scales.contiguous().to(paddle.device.get_device())
+            padded_scales = (
+                padded_scales.reshape(M_padded, K_padded)
+                if scale_dim == 2
+                else padded_scales.reshape(B, M_padded, K_padded)
+            )
+            return padded_scales
+
+        input_scale_2 = layer.input_scale.max().to(paddle.float32)
+        weight_scale_2 = layer.weight_scale_2.max().to(paddle.float32)
+        alpha = input_scale_2 * weight_scale_2
+        input_scale_inv = (1 / input_scale_2).to(paddle.float32)
+        weight_scale_interleaved = _process_scale_interleaved(layer.weight_scale)
+        free_tensor(layer.input_scale)
+        free_tensor(layer.weight_scale_2)
+
+        layer.weight_scale_2 = layer.create_parameter(
+            shape=weight_scale_2.shape,  # output_size
+            dtype=weight_scale_2.dtype,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        layer.input_scale = layer.create_parameter(
+            shape=input_scale_2.shape,  # output_size
+            dtype=input_scale_2.dtype,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        layer.alpha = layer.create_parameter(
+            shape=alpha.shape,  # output_size
+            dtype=alpha.dtype,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        layer.input_scale_inv = layer.create_parameter(
+            shape=input_scale_inv.shape,  # output_size
+            dtype=input_scale_inv.dtype,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        layer.weight_scale_interleaved = layer.create_parameter(
+            shape=weight_scale_interleaved.shape,
+            dtype=weight_scale_interleaved.dtype,
+            is_bias=False,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        layer.weight_scale_2.copy_(weight_scale_2, False)
+        layer.input_scale.copy_(input_scale_2, False)
+        layer.alpha.copy_(alpha, False)
+        layer.input_scale_inv.copy_(input_scale_inv, False)
+        layer.weight_scale_interleaved.copy_(weight_scale_interleaved, False)
 
     def apply(
         self,
