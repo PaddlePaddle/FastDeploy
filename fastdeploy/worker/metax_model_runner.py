@@ -38,9 +38,7 @@ from fastdeploy.model_executor.graph_optimization.utils import (
     profile_run_guard,
     sot_warmup_guard,
 )
-from fastdeploy.model_executor.guided_decoding import (
-    get_guided_backend,
-)
+from fastdeploy.model_executor.guided_decoding import get_guided_backend
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,

@@ -171,6 +171,11 @@ class GuidedDecoding:
             if wait:
                 logger.debug(f"[{idx} join async compile xgrammar, time_cost:{time.time() - ts}]")
 
+            # Possible optimization: Extract 'think' content validation from logits_processors,
+            # allowing join operations to complete immediately after 'think' terminates.
+            # Furthermore, the current idx could be skipped, with compilation overhead
+            # estimated at only a few milliseconds.
+
             # check idx for fill_token_mask
             if not self.should_fill_bitmask(idx):
                 continue
