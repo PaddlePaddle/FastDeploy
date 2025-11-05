@@ -1,8 +1,10 @@
 ## FastDeploy 服务化性能压测工具（PaddleOCR-VL）
 
+本文档主要介绍如何对 [PaddleOCR-VL](https://www.paddleocr.ai/latest/version3.x/pipeline_usage/PaddleOCR-VL.html) 进行性能测试。
+
 ### 数据集：
 
-下载到本地用于性能测试：
+下载数据集到本地用于性能测试：
 
 <table>
   <thead>
@@ -28,10 +30,27 @@
     pip install -U paddlex
     ```
 
-2. 启动测试脚本：
+2. 启动 FastDeploy 服务，下面为 A100-80G 测试时使用的参数，可以根据实际情况进行调整：
 
     ```shell
-    python benchmark.py ./OmniDocBenchv1 -b 512 --paddlex_config_path ./PaddleOCR-VL.yaml --gpu_ids 0
+    python -m fastdeploy.entrypoints.openai.api_server \
+            --model PaddlePaddle/PaddleOCR-VL \
+            --port 8118 \
+            --metrics-port 8471 \
+            --engine-worker-queue-port 8472 \
+            --cache-queue-port 55660 \
+            --max-model-len 16384 \
+            --max-num-batched-tokens 16384 \
+            --gpu-memory-utilization 0.7 \
+            --max-num-seqs 256 \
+            --workers 2 \
+            --graph-optimization-config '{"graph_opt_level":0, "use_cudagraph":true}'
+    ```
+
+3. 在同一环境启动测试脚本：
+
+    ```shell
+    python benchmark.py ./test_data -b 512 --paddlex_config_path ./PaddleOCR-VL.yaml --gpu_ids 0
     ```
 
     测试脚本参数说明：
@@ -46,7 +65,7 @@
         <tbody>
             <tr>
                 <td><code>input_dirs</code></td>
-                <td>输入的目录路径。可以提供一个或多个。</td>
+                <td>输入的目录路径，可以提供一个或多个。</td>
             </tr>
             <tr>
                 <td><code>-b, --batch_size</code></td>
@@ -92,7 +111,7 @@
         </thead>
         <tr>
             <td>Throughput (file)</td>
-            <td>每秒处理的文件数量/td>
+            <td>每秒处理的文件数量</td>
         </tr>
         <tr>
             <td>Average latency (batch)</td>
