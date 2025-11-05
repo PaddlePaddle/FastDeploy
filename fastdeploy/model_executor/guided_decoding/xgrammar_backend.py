@@ -29,6 +29,7 @@ from fastdeploy.model_executor.guided_decoding import (
     BaseChecker,
     LogitsProcessorBase,
 )
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import llm_logger
 
 try:
@@ -458,29 +459,30 @@ def apply_token_mask(
         paddle.Tensor: The modified logits tensor
     """
 
-    dlpack = paddle.utils.dlpack.to_dlpack(logits)
-    t_logits = torch.from_dlpack(dlpack)
-    apply_token_bitmask_inplace(
-        logits=t_logits,
-        bitmask=token_bitmask.to(t_logits.device, non_blocking=True),
-        indices=indices,
-    )
-    dlpack2 = torch.utils.dlpack.to_dlpack(t_logits)
-    return paddle.utils.dlpack.from_dlpack(dlpack2)
+    if current_platform.is_cuda():
+        dlpack = paddle.utils.dlpack.to_dlpack(logits)
+        t_logits = torch.from_dlpack(dlpack)
+        apply_token_bitmask_inplace(
+            logits=t_logits,
+            bitmask=token_bitmask.to(t_logits.device, non_blocking=True),
+            indices=indices,
+        )
+        dlpack2 = torch.utils.dlpack.to_dlpack(t_logits)
+        return paddle.utils.dlpack.from_dlpack(dlpack2)
+    else:
+        origin_place = logits.place
+        origin_dtype = logits.dtype
+        logits = torch.from_numpy(logits.numpy())
 
-    origin_place = logits.place
-    origin_dtype = logits.dtype
-    logits = torch.from_numpy(logits.numpy())
+        logits = logits.float()  # cpu
+        apply_token_bitmask_inplace(
+            logits=logits,
+            bitmask=token_bitmask.to(logits.device, non_blocking=True),
+            indices=indices,
+        )
 
-    logits = logits.float()  # cpu
-    apply_token_bitmask_inplace(
-        logits=logits,
-        bitmask=token_bitmask.to(logits.device, non_blocking=True),
-        indices=indices,
-    )
-
-    return paddle.to_tensor(
-        logits.numpy(),
-        dtype=origin_dtype,
-        place=origin_place,
-    )
+        return paddle.to_tensor(
+            logits.numpy(),
+            dtype=origin_dtype,
+            place=origin_place,
+        )
