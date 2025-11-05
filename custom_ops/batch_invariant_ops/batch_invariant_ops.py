@@ -471,28 +471,31 @@ def mm_batch_invariant(a, b, transpose_x=False, transpose_y=False):
     return matmul_persistent(a, b)
 
 
-def addmm_batch_invariant(bias, a, b, alpha=1.0, beta=1.0):
-    # TODO:check API
-    result = matmul_persistent(a, b, bias=bias)
+def addmm_batch_invariant(
+    input: paddle.Tensor, x: paddle.Tensor, y: paddle.Tensor, beta: float = 1.0, alpha: float = 1.0
+) -> paddle.Tensor:
+    result = matmul_persistent(a=x, b=y, bias=input)
     return result
 
 
-def _log_softmax_batch_invariant(input, axis):
-    return log_softmax(input, axis=axis)
+def _log_softmax_batch_invariant(x: paddle.Tensor, axis: int = -1) -> paddle.Tensor:
+    return log_softmax(input=x, axis=axis)
 
 
-def mean_batch_invariant(input, axis, keepdim=False, dtype: paddle.dtype | None = None, out=None):
+def mean_batch_invariant(
+    x: paddle.Tensor, axis: list[int] = [], keepdim: bool = False, dtype: paddle.dtype | None = None, out=None
+) -> paddle.Tensor:
     assert dtype is None or dtype == paddle.float32, f"unsupported dtype: {dtype}"
     if type(axis) is int:
-        result = mean_dim(input, axis, keepdim=keepdim)
+        result = mean_dim(x, axis, keepdim=keepdim)
     elif len(axis) == 1:  # axis: int | Sequence[int]
-        result = mean_dim(input, axis[0], keepdim=keepdim)
+        result = mean_dim(x, axis[0], keepdim=keepdim)
     else:
-        assert input.dtype in {paddle.float16, paddle.bfloat16, paddle.float32}, "only float types supported for now"
+        assert x.dtype in {paddle.float16, paddle.bfloat16, paddle.float32}, "only float types supported for now"
         n_elems = 1
         for d in axis:
-            n_elems *= input.shape[d]
-        result = paddle.sum(input, axis=axis, keepdim=keepdim, dtype=paddle.float32) / n_elems
+            n_elems *= x.shape[d]
+        result = paddle.sum(x, axis=axis, keepdim=keepdim, dtype=paddle.float32) / n_elems
 
     # Handle out parameter if provided
     if out is not None:
