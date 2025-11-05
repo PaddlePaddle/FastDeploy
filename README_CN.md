@@ -26,11 +26,12 @@
 # FastDeploy ：基于飞桨的大语言模型与视觉语言模型推理部署工具包
 
 ## 最新活动
-**[2025-09] 🔥 FastDeploy v2.2 全新发布**: HuggingFace生态模型兼容，性能进一步优化，更新增对[baidu/ERNIE-21B-A3B-Thinking](https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-Thinking)支持!
+
+**[2025-11]** 🔥FastDeploy v2.3-rc0 PaddleOCR-VL 0.9B推理性能专项优化发布，**相比vLLM吞吐提升35%**！[部署指南](docs/best_practices/PaddleOCR-VL-0.9B.md)
+
+**[2025-09] FastDeploy v2.2 全新发布**: HuggingFace生态模型兼容，性能进一步优化，更新增对[baidu/ERNIE-21B-A3B-Thinking](https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-Thinking)支持!
 
 **[2025-08] FastDeploy v2.1 发布**:全新的KV Cache调度策略，更多模型支持PD分离和CUDA Graph，昆仑、海光等更多硬件支持增强，全方面优化服务和推理引擎的性能。
-
-**[2025-07] 《FastDeploy2.0推理部署实测》专题活动已上线!** 完成文心4.5系列开源模型的推理部署等任务，即可获得骨瓷马克杯等FastDeploy2.0官方周边及丰富奖金！🎁 欢迎大家体验反馈～ 📌[报名地址](https://www.wjx.top/vm/meSsp3L.aspx#)   📌[活动详情](https://github.com/PaddlePaddle/FastDeploy/discussions/2728)
 
 ## 关于
 
