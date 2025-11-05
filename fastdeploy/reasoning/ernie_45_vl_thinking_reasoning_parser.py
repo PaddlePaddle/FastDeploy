@@ -21,10 +21,10 @@ from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest, DeltaM
 from fastdeploy.reasoning import ReasoningParser, ReasoningParserManager
 
 
-@ReasoningParserManager.register_module("erine-45-vl-thinking")
+@ReasoningParserManager.register_module("ernie-45-vl-thinking")
 class Ernie45VLThinkingReasoningParser(ReasoningParser):
     """
-    Reasoning parser for ernir_vl model.
+    Reasoning parser for ernie_vl model.
 
     The ernie_vl model uses ...</think>... tokens to denote reasoning text
     within its output. The model provides a strict switch to disable reasoning
