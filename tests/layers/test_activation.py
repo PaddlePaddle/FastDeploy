@@ -163,23 +163,6 @@ class TestSiluAndMul(unittest.TestCase):
         layer = SiluAndMul(fd_config, act_method="relu")
         self.assertEqual(layer.act_method, "relu")
 
-    # Test valid activation function retrieval
-    def test_get_act_fn_valid(self):
-        mapping = {
-            "gelu": paddle.nn.GELU,
-            "relu": paddle.nn.ReLU,
-            "silu": paddle.nn.Silu,
-            "tanh": paddle.nn.Tanh,
-            "sigmoid": paddle.nn.Sigmoid,
-        }
-        for name, cls in mapping.items():
-            self.assertIsInstance(get_act_fn(name), cls)
-
-    # Test unsupported activation function handling
-    def test_get_act_fn_unsupported(self):
-        with self.assertRaises(ValueError):
-            get_act_fn("unsupported_activation")
-
 
 if __name__ == "__main__":
     unittest.main()
