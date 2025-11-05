@@ -1277,7 +1277,8 @@ class PrefixCacheManager:
                     f"req_id {request.request_id} revert nodes error, revert_tokens: {revert_tokens}, nodes: {last_block_id}, "
                     f"match_gpu_block_ids: {match_gpu_block_ids}, match_cpu_block_ids: {match_cpu_block_ids}"
                 )
-        return gpu_match_token_num, cpu_match_token_num, matche_nodes[-1]
+        current_node = self.radix_tree_root if len(matche_nodes) == 0 else matche_nodes[-1]
+        return gpu_match_token_num, cpu_match_token_num, current_node
 
     def mm_match_block(self, request, block_size):
         """

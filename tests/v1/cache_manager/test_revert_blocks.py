@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+import unittest
 from dataclasses import asdict
 from types import SimpleNamespace
 
@@ -50,57 +50,251 @@ def make_prefix_cache_manager(max_num_seqs, enable_mm=False, num_gpu_blocks_over
     return PrefixCacheManager(config=fd_config, tensor_parallel_size=8, splitwise_role="mixed")
 
 
-def test_revert_match_blocks():
-    block_size = 64
-    cache_manager = make_prefix_cache_manager(max_num_seqs=3, enable_mm=True, num_gpu_blocks_override=100)
+class TestIsChunkedMMInput(unittest.TestCase):
+    def setUp(self):
+        self.cache_manager = make_prefix_cache_manager(max_num_seqs=3, enable_mm=True, num_gpu_blocks_override=100)
 
-    multimodal_inputs = {
-        "mm_positions": [ImagePosition(offset=120, length=1200)],
-        "mm_hashes": ["image1"],
-    }
-    req1_dict = {
-        "request_id": "req1",
-        "prompt_token_ids": [1] * 120 + [-1] * 1200 + [2] * 120,
-        "prompt_token_ids_len": 1440,
-        "multimodal_inputs": multimodal_inputs,
-    }
-    request_1 = Request.from_dict(req1_dict)
-    matched_token_num = 20 * 64
-    match_node_ids = []
-    matche_nodes = []
-    match_gpu_block_ids = []
-    match_cpu_block_ids = []
-    for idx in range(20):
-        node_id = idx + 10
-        block = BlockNode(node_id, [], 0, 0, idx, 0, None, None, None)
-        match_node_ids.append(node_id)
-        matche_nodes.append(block)
-        match_gpu_block_ids.append(idx)
-    match_cpu_block_ids.append(match_gpu_block_ids.pop())
-    match_cpu_block_ids.append(match_gpu_block_ids.pop())
-    gpu_match_token_num = len(match_gpu_block_ids) * block_size
-    cpu_match_token_num = len(match_cpu_block_ids) * block_size
+    def test_is_chunked_mm_input_none_input(self):
+        result, idx = self.cache_manager.is_chunked_mm_input(None, 10)
+        self.assertFalse(result)
+        self.assertEqual(idx, 0)
 
-    (
-        gpu_match_token_num,
-        cpu_match_token_num,
-        current_match_node,
-    ) = cache_manager._revert_match_blocks(
-        request=request_1,
-        matched_token_num=matched_token_num,
-        block_size=block_size,
-        chunk_idx=0,
-        match_node_ids=match_node_ids,
-        matche_nodes=matche_nodes,
-        match_gpu_block_ids=match_gpu_block_ids,
-        match_cpu_block_ids=match_cpu_block_ids,
-        gpu_match_token_num=gpu_match_token_num,
-        cpu_match_token_num=cpu_match_token_num,
-        swap_node_ids=[],
-    )
+    def test_is_chunked_mm_input_no_mm_positions(self):
+        mm_inputs = {"other_field": "value"}
+        result, idx = self.cache_manager.is_chunked_mm_input(mm_inputs, 10)
+        self.assertFalse(result)
+        self.assertEqual(idx, 0)
 
-    assert match_gpu_block_ids == [0, 1]
-    assert match_cpu_block_ids == []
-    assert gpu_match_token_num == 120
-    assert cpu_match_token_num == 0
-    assert match_node_ids == [10, 11]
+    def test_is_chunked_mm_input_empty_positions(self):
+        mm_inputs = {"mm_positions": []}
+        result, idx = self.cache_manager.is_chunked_mm_input(mm_inputs, 10)
+        self.assertFalse(result)
+        self.assertEqual(idx, 0)
+
+    def test_is_chunked_mm_input_matched_in_chunk(self):
+        mm_inputs = {
+            "mm_positions": [
+                ImagePosition(offset=5, length=10),
+                ImagePosition(offset=20, length=10),
+            ]
+        }
+        result, idx = self.cache_manager.is_chunked_mm_input(mm_inputs, 8)
+        self.assertTrue(result)
+        self.assertEqual(idx, 0)
+
+    def test_is_chunked_mm_input_matched_in_second_chunk(self):
+        mm_inputs = {
+            "mm_positions": [
+                ImagePosition(offset=5, length=10),
+                ImagePosition(offset=20, length=10),
+            ]
+        }
+        result, idx = self.cache_manager.is_chunked_mm_input(mm_inputs, 25)
+        self.assertTrue(result)
+        self.assertEqual(idx, 1)
+
+    def test_is_chunked_mm_input_before_first_chunk(self):
+        mm_inputs = {
+            "mm_positions": [
+                ImagePosition(offset=5, length=10),
+                ImagePosition(offset=20, length=10),
+            ]
+        }
+        result, idx = self.cache_manager.is_chunked_mm_input(mm_inputs, 3)
+        self.assertFalse(result)
+        self.assertEqual(idx, 0)
+
+    def test_is_chunked_mm_input_after_last_chunk(self):
+        mm_inputs = {
+            "mm_positions": [
+                ImagePosition(offset=5, length=10),
+                ImagePosition(offset=20, length=10),
+            ]
+        }
+        result, idx = self.cache_manager.is_chunked_mm_input(mm_inputs, 35)
+        self.assertFalse(result)
+        self.assertEqual(idx, 0)
+
+
+class TestRevertMatchBlocks(unittest.TestCase):
+    def setUp(self):
+        self.block_size = 64
+        self.cache_manager = make_prefix_cache_manager(max_num_seqs=3, enable_mm=True, num_gpu_blocks_override=100)
+
+    def make_match_blocks(self, gpu_block_num, cpu_block_num):
+        block_num = gpu_block_num + cpu_block_num
+        matched_token_num = block_num * self.block_size
+        match_node_ids = []
+        matche_nodes = []
+        match_gpu_block_ids = []
+        match_cpu_block_ids = []
+        for idx in range(block_num):
+            node_id = idx + 10
+            block = BlockNode(node_id, [], 0, 0, idx, 0, None, None, None)
+            match_node_ids.append(node_id)
+            matche_nodes.append(block)
+            match_gpu_block_ids.append(idx)
+
+        for _ in range(cpu_block_num):
+            match_cpu_block_ids.append(match_gpu_block_ids.pop())
+
+        gpu_match_token_num = len(match_gpu_block_ids) * self.block_size
+        cpu_match_token_num = len(match_cpu_block_ids) * self.block_size
+        return (
+            matched_token_num,
+            match_node_ids,
+            matche_nodes,
+            match_gpu_block_ids,
+            match_cpu_block_ids,
+            gpu_match_token_num,
+            cpu_match_token_num,
+        )
+
+    def test_revert_full_blocks(self):
+        # Setup test data
+        multimodal_inputs = {
+            "mm_positions": [ImagePosition(offset=0, length=1200)],
+            "mm_hashes": ["image1"],
+        }
+        req_dict = {
+            "request_id": "req1",
+            "prompt_token_ids": [-1] * 1200 + [2] * 120,
+            "prompt_token_ids_len": 1320,
+            "multimodal_inputs": multimodal_inputs,
+        }
+
+        (
+            matched_token_num,
+            match_node_ids,
+            matche_nodes,
+            match_gpu_block_ids,
+            match_cpu_block_ids,
+            gpu_match_token_num,
+            cpu_match_token_num,
+        ) = self.make_match_blocks(gpu_block_num=2, cpu_block_num=0)
+
+        # Call method
+        (
+            gpu_match_token_num,
+            cpu_match_token_num,
+            current_match_node,
+        ) = self.cache_manager._revert_match_blocks(
+            request=Request.from_dict(req_dict),
+            matched_token_num=matched_token_num,
+            block_size=self.block_size,
+            chunk_idx=0,
+            match_node_ids=match_node_ids,
+            matche_nodes=matche_nodes,
+            match_gpu_block_ids=match_gpu_block_ids,
+            match_cpu_block_ids=match_cpu_block_ids,
+            gpu_match_token_num=gpu_match_token_num,
+            cpu_match_token_num=cpu_match_token_num,
+            swap_node_ids=[],
+        )
+
+        # Assertions
+        self.assertEqual(gpu_match_token_num, 0)
+        self.assertEqual(cpu_match_token_num, 0)
+        self.assertEqual(len(match_node_ids), 0)
+        self.assertEqual(len(match_gpu_block_ids), 0)
+
+    def test_revert_partial_block(self):
+        # Setup test data
+        multimodal_inputs = {
+            "mm_positions": [ImagePosition(offset=120, length=1200)],
+            "mm_hashes": ["image1"],
+        }
+        req_dict = {
+            "request_id": "req1",
+            "prompt_token_ids": [1] * 120 + [-1] * 1200 + [2] * 120,
+            "prompt_token_ids_len": 1440,
+            "multimodal_inputs": multimodal_inputs,
+        }
+
+        (
+            matched_token_num,
+            match_node_ids,
+            matche_nodes,
+            match_gpu_block_ids,
+            match_cpu_block_ids,
+            gpu_match_token_num,
+            cpu_match_token_num,
+        ) = self.make_match_blocks(gpu_block_num=20, cpu_block_num=0)
+
+        # Call method
+        (
+            gpu_match_token_num,
+            cpu_match_token_num,
+            current_match_node,
+        ) = self.cache_manager._revert_match_blocks(
+            request=Request.from_dict(req_dict),
+            matched_token_num=matched_token_num,
+            block_size=self.block_size,
+            chunk_idx=0,
+            match_node_ids=match_node_ids,
+            matche_nodes=matche_nodes,
+            match_gpu_block_ids=match_gpu_block_ids,
+            match_cpu_block_ids=match_cpu_block_ids,
+            gpu_match_token_num=gpu_match_token_num,
+            cpu_match_token_num=cpu_match_token_num,
+            swap_node_ids=[],
+        )
+
+        # Assertions
+        self.assertEqual(gpu_match_token_num, 120)
+        self.assertEqual(cpu_match_token_num, 0)
+        self.assertEqual(len(match_node_ids), 2)
+        self.assertEqual(len(match_gpu_block_ids), 2)
+
+    def test_revert_with_cpu_blocks(self):
+        # Setup test data
+        multimodal_inputs = {
+            "mm_positions": [ImagePosition(offset=120, length=1200), ImagePosition(offset=1440, length=420)],
+            "mm_hashes": ["image1", "image2"],
+        }
+        req_dict = {
+            "request_id": "req1",
+            "prompt_token_ids": [1] * 120 + [-1] * 1200 + [2] * 120 + [-1] * 420,
+            "prompt_token_ids_len": 1860,
+            "multimodal_inputs": multimodal_inputs,
+        }
+
+        (
+            matched_token_num,
+            match_node_ids,
+            matche_nodes,
+            match_gpu_block_ids,
+            match_cpu_block_ids,
+            gpu_match_token_num,
+            cpu_match_token_num,
+        ) = self.make_match_blocks(gpu_block_num=22, cpu_block_num=6)
+
+        # Call method
+        (
+            gpu_match_token_num,
+            cpu_match_token_num,
+            current_match_node,
+        ) = self.cache_manager._revert_match_blocks(
+            request=Request.from_dict(req_dict),
+            matched_token_num=matched_token_num,
+            block_size=self.block_size,
+            chunk_idx=1,
+            match_node_ids=match_node_ids,
+            matche_nodes=matche_nodes,
+            match_gpu_block_ids=match_gpu_block_ids,
+            match_cpu_block_ids=match_cpu_block_ids,
+            gpu_match_token_num=gpu_match_token_num,
+            cpu_match_token_num=cpu_match_token_num,
+            swap_node_ids=[],
+        )
+
+        # Assertions
+        self.assertEqual(gpu_match_token_num, 22 * self.block_size)
+        self.assertEqual(cpu_match_token_num, 32)
+        self.assertEqual(len(match_node_ids), 23)
+        self.assertEqual(len(match_gpu_block_ids), 22)
+        self.assertEqual(len(match_cpu_block_ids), 1)
+
+
+if __name__ == "__main__":
+    unittest.main()
