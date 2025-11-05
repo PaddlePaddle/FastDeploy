@@ -108,10 +108,22 @@ class MoEMethodBase(QuantMethodBase):
 
         # For non-mixed ep
         phase = config.model_config.moe_phase.phase
-        if phase == "prefill":
-            self.ep_prefill_runner = self.EPPrefillRunner(**common_args)
+        if current_platform.is_cuda():
+            if phase == "prefill":
+                self.ep_prefill_runner = self.EPPrefillRunner(
+                    **common_args,
+                    use_internode_ll_two_stage=layer.fd_config.parallel_config.use_internode_ll_two_stage,
+                )
+            else:
+                self.ep_decoder_runner = self.EPDecoderRunner(
+                    **common_args,
+                    use_internode_ll_two_stage=layer.fd_config.parallel_config.use_internode_ll_two_stage,
+                )
         else:
-            self.ep_decoder_runner = self.EPDecoderRunner(**common_args)
+            if phase == "prefill":
+                self.ep_prefill_runner = self.EPPrefillRunner(**common_args)
+            else:
+                self.ep_decoder_runner = self.EPDecoderRunner(**common_args)
 
     def process_loaded_weights(self, layer, weights) -> None:
         """
