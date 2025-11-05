@@ -2099,7 +2099,7 @@ class GPUModelRunner(ModelRunnerBase):
         p = Thread(target=haha)
         p.start()
         p.join()
-        # haha()
+        haha()
 
         model_output = model_output[0]
         if self.use_cudagraph:
