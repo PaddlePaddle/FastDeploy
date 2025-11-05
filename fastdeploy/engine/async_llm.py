@@ -402,6 +402,7 @@ class AsyncLLMEngine:
 
         try:
             request = Request.from_dict(prompt)
+            request.llm_engine_recv_req_timestamp = time.time()
 
             # Check if already preprocessed by AsyncEngineClient
             is_preprocessed = prompt.get("_preprocessed", False)
