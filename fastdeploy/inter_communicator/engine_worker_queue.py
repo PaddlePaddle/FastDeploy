@@ -490,7 +490,7 @@ class EngineWorkerQueue:
         Args:
             tasks (tuple): ([request], bsz)
         """
-        if (not envs.FD_ENABLE_MAX_PREFILL) or (not envs.FD_ENABLE_E2W_TENSOR_CONVERT):
+        if (not envs.FD_ENABLE_MAX_PREFILL) and (not envs.FD_ENABLE_E2W_TENSOR_CONVERT):
             return
         try:
             batch_tasks, _ = tasks
