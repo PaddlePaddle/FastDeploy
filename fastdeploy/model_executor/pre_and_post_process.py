@@ -91,7 +91,12 @@ else:
 
 from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
 from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
-from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput, SamplerOutput
+from fastdeploy.worker.output import (
+    LogprobsTensors,
+    ModelOutputData,
+    ModelRunnerOutput,
+    SamplerOutput,
+)
 
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
 
@@ -253,7 +258,12 @@ def pre_process(
     )
 
 
-def _build_stream_transfer_data(output_tokens: np.ndarray, pooler_outputs: List[PoolingSequenceGroupOutput] = None):
+def _build_stream_transfer_data(
+    output_tokens: paddle.Tensor,
+    pooler_outputs: List[PoolingSequenceGroupOutput] = None,
+    logprobs: Optional[LogprobsTensors] = None,
+    prompt_logprobs_list: Optional[LogprobsTensors] = None,
+):
     """Split output_tokens and output"""
 
     stream_transfer_datas = []
@@ -266,6 +276,11 @@ def _build_stream_transfer_data(output_tokens: np.ndarray, pooler_outputs: List[
             stream_transfer_data = StreamTransferData(
                 decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
             )
+            if logprobs:
+                logprobs = logprobs.slice_rows(bid, bid + 1)
+                stream_transfer_data.logprobs = logprobs
+            if prompt_logprobs_list:
+                stream_transfer_data.prompt_logprobs = prompt_logprobs_list[bid]
             stream_transfer_datas.append(stream_transfer_data)
     elif pooler_outputs is not None:
         for bid, pooler_output in enumerate(pooler_outputs):
@@ -390,27 +405,31 @@ def post_process_normal(
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
     if not skip_save_output:
-        if sampler_output.logprobs_tensors is None:
-            if envs.FD_USE_GET_SAVE_OUTPUT_V1:
-                if save_each_rank or model_output.mp_rank == 0:
-                    output = _build_stream_transfer_data(sampler_output.sampled_token_ids)
-                    async_output_queue.put(output)
-            else:
+        if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+            if save_each_rank or model_output.mp_rank == 0:
+                output = _build_stream_transfer_data(
+                    sampler_output.sampled_token_ids,
+                    logprobs=sampler_output.logprobs_tensors,
+                    prompt_logprobs_list=model_output.prompt_logprobs_list,
+                )
+                async_output_queue.put(output)
+        else:
+            if sampler_output.logprobs_tensors is None:
                 save_output(
                     sampler_output.sampled_token_ids,
                     model_output.not_need_stop,
                     model_output.mp_rank,
                     save_each_rank,
                 )
-        else:
-            save_output_topk(
-                sampler_output.sampled_token_ids,
-                sampler_output.logprobs_tensors.logprob_token_ids,
-                sampler_output.logprobs_tensors.logprobs,
-                sampler_output.logprobs_tensors.selected_token_ranks,
-                model_output.not_need_stop,
-                model_output.mp_rank,
-            )
+            else:
+                save_output_topk(
+                    sampler_output.sampled_token_ids,
+                    sampler_output.logprobs_tensors.logprob_token_ids,
+                    sampler_output.logprobs_tensors.logprobs,
+                    sampler_output.logprobs_tensors.selected_token_ranks,
+                    model_output.not_need_stop,
+                    model_output.mp_rank,
+                )
 
 
 def post_process_specualate(
