@@ -455,9 +455,25 @@ class SpeculativeSampler(nn.Layer):
         """ """
         super().__init__()
         if current_platform.is_cuda():
+            from fastdeploy.model_executor.ops.gpu import (
+                speculate_verify,
+                top_p_candidates,
+            )
+        elif current_platform.is_xpu():
+            from fastdeploy.model_executor.ops.xpu import (
+                speculate_verify,
+                top_p_candidates,
+            )
+        else:
+            raise NotImplementedError
+
+        if current_platform.is_cuda() or current_platform.is_xpu():
             self.forward = self.forward_cuda
         else:
             raise NotImplementedError
+
+        self.top_p_candidates = top_p_candidates
+        self.speculate_verify = speculate_verify
         self.logprobs_mode = fd_config.model_config.logprobs_mode
         self.speculative_verify_window = fd_config.speculative_config.verify_window
         self.speculative_max_candidate_len = fd_config.speculative_config.max_candidate_len
@@ -582,8 +598,6 @@ class SpeculativeSampler(nn.Layer):
     ) -> paddle.Tensor:
         """ """
 
-        from fastdeploy.model_executor.ops.gpu import speculate_verify, top_p_candidates
-
         logits = apply_speculative_penalty_multi_scores(
             sampling_metadata.pre_token_ids,
             logits,
@@ -603,50 +617,79 @@ class SpeculativeSampler(nn.Layer):
 
         probs = F.softmax(logits)
 
-        top_p, top_k = padding_sampling_params(
-            sampling_metadata.top_p,
-            sampling_metadata.top_k,
-            share_inputs["seq_lens_this_time"],
-            share_inputs["seq_lens_encoder"],
-        )
-        _, sampled_token_ids = top_k_top_p_sampling(probs, top_p=top_p, top_k=top_k, seed=sampling_metadata.seed[0, 0])
+        if not current_platform.is_xpu():
+            top_p, top_k = padding_sampling_params(
+                sampling_metadata.top_p,
+                sampling_metadata.top_k,
+                share_inputs["seq_lens_this_time"],
+                share_inputs["seq_lens_encoder"],
+            )
+            _, sampled_token_ids = top_k_top_p_sampling(
+                probs, top_p=top_p, top_k=top_k, seed=sampling_metadata.seed[0, 0]
+            )
 
-        verify_scores, verify_tokens, actual_candidate_len = top_p_candidates(
+        verify_scores, verify_tokens, actual_candidate_len = self.top_p_candidates(
             probs,
             sampling_metadata.top_p,
             share_inputs["output_padding_offset"],
             self.speculative_max_candidate_len,
             max_model_len,
         )
-
-        speculate_verify(
-            sampled_token_ids,
-            share_inputs["accept_tokens"],
-            share_inputs["accept_num"],
-            share_inputs["step_idx"],
-            share_inputs["stop_flags"],
-            share_inputs["seq_lens_encoder"],
-            share_inputs["seq_lens_decoder"],
-            share_inputs[
-                "draft_tokens"
-            ],  # Both input and output, need to write the last 1 token accepted to position 0.
-            share_inputs["seq_lens_this_time"],
-            verify_tokens,
-            verify_scores,
-            share_inputs["max_dec_len"],
-            sampling_metadata.eos_token_ids,
-            share_inputs["is_block_step"],
-            share_inputs["output_cum_offsets"],
-            actual_candidate_len,
-            share_inputs["actual_draft_token_num"],
-            sampling_metadata.top_p,
-            max_model_len,
-            self.speculative_verify_window,
-            True,  # enable_topp
-            (self.speculative_benchmark_mode or reject_all_drafts),
-            accept_all_drafts,
-        )
-
+        if not current_platform.is_xpu():
+            self.speculate_verify(
+                sampled_token_ids,
+                share_inputs["accept_tokens"],
+                share_inputs["accept_num"],
+                share_inputs["step_idx"],
+                share_inputs["stop_flags"],
+                share_inputs["seq_lens_encoder"],
+                share_inputs["seq_lens_decoder"],
+                share_inputs[
+                    "draft_tokens"
+                ],  # Both input and output, need to write the last 1 token accepted to position 0.
+                share_inputs["seq_lens_this_time"],
+                verify_tokens,
+                verify_scores,
+                share_inputs["max_dec_len"],
+                sampling_metadata.eos_token_ids,
+                share_inputs["is_block_step"],
+                share_inputs["output_cum_offsets"],
+                actual_candidate_len,
+                share_inputs["actual_draft_token_num"],
+                sampling_metadata.top_p,
+                max_model_len,
+                self.speculative_verify_window,
+                True,  # enable_topp
+                (self.speculative_benchmark_mode or reject_all_drafts),
+                accept_all_drafts,
+            )
+        else:
+            self.speculate_verify(
+                share_inputs["accept_tokens"],
+                share_inputs["accept_num"],
+                share_inputs["step_idx"],
+                share_inputs["stop_flags"],
+                share_inputs["seq_lens_encoder"],
+                share_inputs["seq_lens_decoder"],
+                share_inputs[
+                    "draft_tokens"
+                ],  # Both input and output, need to write the last 1 token accepted to position 0.
+                share_inputs["seq_lens_this_time"],
+                verify_tokens,
+                verify_scores,
+                share_inputs["max_dec_len"],
+                sampling_metadata.eos_token_ids,
+                share_inputs["is_block_step"],
+                share_inputs["output_cum_offsets"],
+                actual_candidate_len,
+                share_inputs["actual_draft_token_num"],
+                sampling_metadata.top_p,
+                max_model_len,
+                self.speculative_verify_window,
+                True,  # enable_topp
+                (self.speculative_benchmark_mode or reject_all_drafts),
+                accept_all_drafts,
+            )
         num_logprobs = sampling_metadata.max_num_logprobs
         batch_token_num = None
         if num_logprobs is not None:
@@ -705,7 +748,7 @@ class MTPSampler(nn.Layer):
     def __init__(self, fd_config: FDConfig):
         """ """
         super().__init__()
-        if current_platform.is_cuda():
+        if current_platform.is_cuda() or current_platform.is_xpu():
             self.forward = self.forward_cuda
         else:
             raise NotImplementedError
@@ -866,14 +909,18 @@ class MTPSampler(nn.Layer):
         )
         probs = F.softmax(logits)
 
-        top_p, top_k = padding_sampling_params(
-            sampling_metadata.top_p,
-            sampling_metadata.top_k,
-            share_inputs["seq_lens_this_time"],
-            share_inputs["seq_lens_encoder"],
-        )
-        _, next_tokens = top_k_top_p_sampling(probs, top_p=top_p, top_k=top_k, seed=sampling_metadata.seed[0, 0])
-
+        if not current_platform.is_xpu():
+            top_p, top_k = padding_sampling_params(
+                sampling_metadata.top_p,
+                sampling_metadata.top_k,
+                share_inputs["seq_lens_this_time"],
+                share_inputs["seq_lens_encoder"],
+            )
+            _, next_tokens = top_k_top_p_sampling(probs, top_p=top_p, top_k=top_k, seed=sampling_metadata.seed[0, 0])
+        else:
+            _, next_tokens = top_k_top_p_sampling(
+                probs, sampling_metadata.top_p, sampling_metadata.top_k, sampling_metadata.top_k_list
+            )
         token_ids = None
         logprobs_tensors = None
         if num_logprobs is not None and share_inputs["substep"] == 0:

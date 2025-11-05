@@ -16,7 +16,7 @@
 
 import random
 import time
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 import numpy as np
 import paddle
@@ -27,7 +27,7 @@ from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.inter_communicator import IPCSignal
-from fastdeploy.model_executor.forward_meta import ForwardMeta, XPUForwardMeta
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.utils import (
     profile_run_guard,
     sot_warmup_guard,
@@ -38,15 +38,22 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 )
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope, get_rope_3d
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
-from fastdeploy.model_executor.layers.sample.sampler import Sampler
+from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
-from fastdeploy.model_executor.pre_and_post_process import step_paddle, xpu_process_output, xpu_pre_process, xpu_post_process_normal
 from fastdeploy.model_executor.ops.xpu import (
     recover_decode_task,
     set_data_ipc,
     share_external_data,
 )
+from fastdeploy.model_executor.pre_and_post_process import (
+    step_xpu,
+    xpu_post_process_normal,
+    xpu_post_process_specualate,
+    xpu_pre_process,
+    xpu_process_output,
+)
+from fastdeploy.spec_decode import MTPProposer
 from fastdeploy.utils import get_logger
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
@@ -107,7 +114,6 @@ class XPUModelRunner(ModelRunnerBase):
             self.sampler = Sampler(fd_config)
         else:
             self.sampler = SpeculativeSampler(fd_config)
-
 
         # Lazy initialize kv cache after model loading
         # self.kv_caches: list[paddle.Tensor] = []
@@ -343,7 +349,7 @@ class XPUModelRunner(ModelRunnerBase):
 
         if self.speculative_method in ["mtp"]:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
-            
+
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         """Process inputs for prefill tasks and update share_inputs buffer"""
         req_len = len(req_dicts)
@@ -544,6 +550,14 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["system_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["system_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int32")
 
+        self.share_inputs["ids_remove_padding"] = paddle.full(
+            [max_num_seqs * self.model_config.max_model_len],
+            0,
+            dtype="int64",
+        )
+        self.share_inputs["batch_id_per_token"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         # Initialize thinking related buffers
         self.share_inputs["max_think_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
         self.share_inputs["limit_think_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
@@ -731,6 +745,7 @@ class XPUModelRunner(ModelRunnerBase):
 
         # 3. Load drafter model(for speculative decoding)
         self._init_speculative_proposer()
+
     def get_model(self) -> nn.Layer:
         """Get current model"""
         return self.model
@@ -844,7 +859,9 @@ class XPUModelRunner(ModelRunnerBase):
                 self.model_config.max_model_len / self.fd_config.cache_config.block_size
             )
             self.share_inputs["decoder_batch_ids"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
-            self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
+            self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full(
+                [int(decode_max_tile_size)], 0, dtype="int32"
+            )
             self.share_inputs["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
             # NOTE: (changwenbin) MLA kernel only needs decoder_num_blocks_device in place of GPU tensor,
             # adapted to cudagraph.
@@ -853,7 +870,9 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["max_len_tensor_cpu"] = paddle.full([8], 0, dtype="int32").cpu()
 
             self.share_inputs["encoder_batch_ids"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
-            self.share_inputs["encoder_tile_ids_per_batch"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
+            self.share_inputs["encoder_tile_ids_per_batch"] = paddle.full(
+                [int(encode_max_tile_size)], 0, dtype="int32"
+            )
             self.share_inputs["encoder_num_blocks_x_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
 
             self.share_inputs["kv_batch_ids"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
@@ -941,7 +960,6 @@ class XPUModelRunner(ModelRunnerBase):
             # self.proposer = NgramProposer(self.fd_config)
             self.proposer = None
         elif self.speculative_method == "mtp":
-            self.share_inputs["seq_lens_this_time"] = self.seq_lens_this_time_buffer
             self.proposer = MTPProposer(
                 self.fd_config,
                 self.get_model(),
@@ -951,7 +969,6 @@ class XPUModelRunner(ModelRunnerBase):
             )
         else:
             self.proposer = None
-
 
     def _set_debug_level(
         self, debug_level: int = 0x1, model_forward_batch: Optional[List[Request]] = None, is_dummy_run: bool = False
@@ -1025,7 +1042,9 @@ class XPUModelRunner(ModelRunnerBase):
                 forward_meta=self.forward_meta,
             )
 
-        hidden_states = xpu_process_output(model_output, self.share_inputs["cum_offsets"], self.forward_meta, self.share_inputs)
+        hidden_states = xpu_process_output(
+            model_output, self.share_inputs["cum_offsets"], self.forward_meta, self.share_inputs
+        )
 
         # 4. Compute logits, Sample
         logits = self.model.compute_logits(hidden_states)
@@ -1073,7 +1092,7 @@ class XPUModelRunner(ModelRunnerBase):
         )
 
         if self.speculative_decoding:
-            # base model post process 
+            # base model post process
             xpu_post_process_specualate(model_output_data, False, is_dummy_run)
             # draft model propose
             if self.speculative_method == "mtp":
@@ -1092,12 +1111,12 @@ class XPUModelRunner(ModelRunnerBase):
         # 7. Updata 'infer_seed' and step_paddle()
         self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
         self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
-        step_paddle(
+        step_xpu(
             self.share_inputs,
             self.cache_config.block_size,
             self.cache_config.enc_dec_block_num,
             self.speculative_decoding,
-            self.speculative_config.num_speculative_tokens, 
+            self.speculative_config.num_speculative_tokens,
         )
 
         return None
@@ -1108,6 +1127,8 @@ class XPUModelRunner(ModelRunnerBase):
 
         self.num_gpu_blocks = self.cache_config.total_block_num
         self.initialize_kv_cache(profile=True)
+        if self.speculative_method in ["mtp"]:
+            self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
 
         self._dummy_run(
             num_tokens=int(self.scheduler_config.max_num_batched_tokens),

@@ -22,8 +22,8 @@ import paddle
 
 from fastdeploy import envs
 from fastdeploy.config import SpeculativeConfig
+from fastdeploy.model_executor.forward_meta import XPUForwardMeta
 from fastdeploy.platforms import current_platform
-from fastdeploy.model_executor.forward_meta import ForwardMeta, XPUForwardMeta
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
@@ -66,19 +66,27 @@ elif current_platform.is_intel_hpu():
 elif current_platform.is_xpu():
     from fastdeploy.model_executor.ops.xpu import (
         adjust_batch,
+        gather_next_token,
         get_infer_param,
         get_padding_offset,
         limit_thinking_content_length_v1,
         limit_thinking_content_length_v2,
-        recover_decode_task,
-        set_data_ipc,
-        share_external_data,
-        update_inputs_v1,
-        speculate_update_v3,
-        speculate_save_output,
+        save_output,
+        set_stop_value_multi_ends,
         speculate_clear_accept_nums,
+        speculate_get_output_padding_offset,
+        speculate_get_padding_offset_v2,
+        speculate_get_seq_lens_output,
+        speculate_save_output,
         speculate_set_value_by_flags_and_idx,
+        speculate_step_paddle,
+        speculate_update_v3,
+        step_paddle,
+        update_inputs,
+        update_inputs_v1,
     )
+
+    speculate_get_padding_offset = speculate_get_padding_offset_v2
 else:
     from fastdeploy.model_executor.ops.gpu import (
         get_padding_offset,
@@ -896,8 +904,6 @@ def post_process_pooling(
             async_output_queue.put(output)
 
 
-
-
 def xpu_pre_process(
     input_ids: paddle.Tensor,
     seq_lens_this_time: int,
@@ -907,7 +913,7 @@ def xpu_pre_process(
     draft_tokens: Optional[paddle.Tensor] = None,
     seq_lens_encoder: Optional[paddle.Tensor] = None,
     seq_lens_decoder: Optional[paddle.Tensor] = None,
-    forward_meta = None,
+    forward_meta=None,
 ) -> XPUForwardMeta:
     """ """
     max_len = input_ids.shape[1]
@@ -946,7 +952,7 @@ def xpu_pre_process(
         )
         share_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
         share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
-        
+
     else:
         (
             ids_remove_padding,
@@ -1043,7 +1049,6 @@ def xpu_process_output(
     share_inputs,
 ) -> paddle.Tensor:
     """ """
-    from fastdeploy.model_executor.ops.xpu import gather_next_token
     output_padding_offset = share_inputs.get("output_padding_offset", None)
 
     hiddden_states = gather_next_token(
@@ -1057,7 +1062,7 @@ def xpu_process_output(
         xpu_forward_meta.decoder_batch_map_cpu,
         xpu_forward_meta.enc_batch,
         xpu_forward_meta.dec_batch,
-        None,  # output_padding_offset
+        output_padding_offset,  # output_padding_offset
         -1,  # max_input_length
     )
     return hiddden_states
@@ -1073,11 +1078,6 @@ def xpu_post_process_normal(
     line_break_id: int = None,
 ) -> None:
     """ """
-    from fastdeploy.model_executor.ops.xpu import (
-        save_output,
-        set_stop_value_multi_ends,
-        update_inputs,
-    )
 
     if think_end_id > 0:
         limit_strategy = envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR
@@ -1171,6 +1171,7 @@ def xpu_post_process_normal(
             False,  # use_ep
         )
 
+
 def xpu_post_process_specualate(
     model_output: ModelOutputData, save_each_rank: bool = False, skip_save_output: bool = False
 ):
@@ -1194,7 +1195,7 @@ def xpu_post_process_specualate(
             model_output.accept_num,
             model_output.not_need_stop,
             model_output.mp_rank,
-            save_each_rank, # False
+            save_each_rank,  # False
         )
 
     speculate_clear_accept_nums(model_output.accept_num, model_output.seq_lens_decoder)
@@ -1212,7 +1213,7 @@ def xpu_post_process_specualate(
     )
 
 
-def step_paddle(
+def step_xpu(
     share_inputs: Dict[str, paddle.Tensor],
     block_size: int,
     enc_dec_block_num: int,
@@ -1222,8 +1223,7 @@ def step_paddle(
     """
     TODO(gongshaotian): normalization name
     """
-    from fastdeploy.model_executor.ops.xpu import step_paddle, speculate_step_paddle
-    
+    # TODO(chenhuan09): fix speculate_step_paddle
     if speculative_decoding:
         speculate_step_paddle(
             share_inputs["stop_flags"],

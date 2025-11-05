@@ -35,6 +35,7 @@ std::vector<paddle::Tensor> GatherNextToken(
       typename XPUTypeTrait<bfloat16>::Type;  // only support bfloat16
   typedef paddle::bfloat16 data_t;
   const int dim = tmp_out.dims()[1];
+  const int token_num = tmp_out.shape()[0];
   const int bsz = cum_offsets.shape()[0];
   int enc_batch = enc_batch_tensor.data<int32_t>()[0];
   int dec_batch = dec_batch_tensor.data<int32_t>()[0];
@@ -52,16 +53,43 @@ std::vector<paddle::Tensor> GatherNextToken(
       dec_batch,
       const_cast<int32_t *>(decoder_batch_map.data<int32_t>())};
 
-  auto out = paddle::full({bsz, dim}, -2, tmp_out.type(), tmp_out.place());
+  // auto out = paddle::full({bsz, dim}, -2, tmp_out.type(), tmp_out.place());
+  paddle::Tensor out;
+  std::vector<int> encode_iota_lod_cpu(enc_batch);
+  if (output_padding_offset) {
+    int need_delete_token_num = 0;
+    if (enc_batch > 0) {
+      need_delete_token_num =
+          encoder_seq_lod_cpu.data<int32_t>()[enc_batch] - enc_batch;
+      std::iota(encode_iota_lod_cpu.begin(), encode_iota_lod_cpu.end(), 0);
+      encoder_batch_map_vp.cpu =
+          const_cast<const int32_t *>(encode_iota_lod_cpu.data());
+      encoder_batch_map_vp.len = enc_batch;
+      encoder_batch_map_vp.xpu = nullptr;
+    }
+    out = paddle::empty({token_num - need_delete_token_num, dim},
+                        tmp_out.type(),
+                        tmp_out.place());
+  } else {
+    out = paddle::empty({bsz, dim}, tmp_out.type(), tmp_out.place());
+  }
+  if (tmp_out.shape()[0] == 0) {
+    return {out};
+  }
 
-  int r = baidu::xpu::api::plugin::eb_gather_next_token<XPUType, XPUType>(
-      xpu_ctx->x_context(),
-      reinterpret_cast<const XPUType *>(tmp_out.data<data_t>()),
-      reinterpret_cast<XPUType *>(out.data<data_t>()),
-      encoder_seqs_lods_vp,
-      encoder_batch_map_vp,
-      decoder_batch_map_vp,
-      dim);
+  if (output_padding_offset && enc_batch <= 0) {
+    out = tmp_out.copy_to(tmp_out.place(), false);
+  } else {
+    int r = baidu::xpu::api::plugin::eb_gather_next_token<XPUType, XPUType>(
+        xpu_ctx->x_context(),
+        reinterpret_cast<const XPUType *>(tmp_out.data<data_t>()),
+        reinterpret_cast<XPUType *>(out.data<data_t>()),
+        encoder_seqs_lods_vp,
+        encoder_batch_map_vp,
+        decoder_batch_map_vp,
+        dim);
+    PD_CHECK(r == 0, "xpu::plugin::gather_next_token failed.");
+  }
   return {out};
 }
 
