@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import hashlib
 import json
 import logging
@@ -9,12 +25,10 @@ from typing import Any, List, Optional
 import numpy as np
 import paddle
 
-from fastdeploy.cache_manager.transfer_factory.kvcache_storage import KVCacheStorage
+from fastdeploy.cache_manager.transfer_factory.kvcache_storage import KVCacheStorage, logger
 
 DEFAULT_GLOBAL_SEGMENT_SIZE = 4 * 1024 * 1024 * 1024  # 4 GiB
 DEFAULT_LOCAL_BUFFER_SIZE = 128 * 1024 * 1024  # 128 MB
-
-logger = logging.getLogger(__name__)
 
 
 def get_hash_str_mooncake(token_ids: List, prefix_block_key: str):
@@ -135,9 +149,9 @@ class MooncakeStore(KVCacheStorage):
             raise
 
     def warmup(self):
-        warmup_key = "sglang_mooncake_store_warmup_key" + str(uuid.uuid4())
-        # 10 MB
-        warmup_value = bytes(10 * 1024 * 1024)
+        warmup_key = "fastdeploy_mooncake_store_warmup_key" + str(uuid.uuid4())
+        # 1 MB
+        warmup_value = bytes(1 * 1024 * 1024)
         self.store.put(warmup_key, warmup_value)
         assert self.store.is_exist(warmup_key) == 1
         self.store.get(warmup_key)
