@@ -709,7 +709,9 @@ class LLMEngine:
             for i in range(self.cfg.parallel_config.data_parallel_size):
                 request_queues_for_dp_ipc.append(multiprocessing.Queue())
             self.engine.scheduler.start(
-                self.cfg.node_rank * self.cfg.worker_num_per_node, request_queues_for_dp_ipc, result_queue_for_dp_ipc
+                self.cfg.node_rank * self.cfg.worker_num_per_node % self.cfg.worker_num_per_node,
+                request_queues_for_dp_ipc,
+                result_queue_for_dp_ipc,
             )
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
