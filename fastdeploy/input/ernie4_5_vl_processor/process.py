@@ -287,16 +287,15 @@ class DataProcessor:
 
         images, videos = [], []
         image_uuid, video_uuid = [], []
-        if self.enable_processor_cache:
-            for item in mm_items:
-                if item.get("type") == "image":
-                    images.append(item["data"])
-                    image_uuid.append(item["uuid"])
-                elif item.get("type") == "video":
-                    videos.append(item["data"])
-                    video_uuid.append(item["uuid"])
-                else:
-                    raise ValueError(f"Unsupported multimodal type: {item.get('type')}")
+        for item in mm_items:
+            if item.get("type") == "image":
+                images.append(item["data"])
+                image_uuid.append(item["uuid"])
+            elif item.get("type") == "video":
+                videos.append(item["data"])
+                video_uuid.append(item["uuid"])
+            else:
+                raise ValueError(f"Unsupported multimodal type: {item.get('type')}")
 
         if self.tokenizer.chat_template is None:
             raise ValueError("This model does not support chat template.")
