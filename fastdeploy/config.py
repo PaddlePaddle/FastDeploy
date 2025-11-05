@@ -298,6 +298,9 @@ class ParallelConfig:
         self.use_internode_ll_two_stage: bool = False
 
         self.max_num_batched_tokens: int = 2048
+
+        # Max chunk len in infer. Must be overrided
+        self.max_chunk_len: int = 0
         # splitwise role
         self.splitwise_role: str = "mixed"
         # guided decoding backend
@@ -363,6 +366,10 @@ class ParallelConfig:
             f"data_parallel_size: {self.data_parallel_size}, tensor_parallel_size: {self.tensor_parallel_size}, expert_parallel_size: {self.expert_parallel_size}, data_parallel_rank: {self.data_parallel_rank}, tensor_parallel_rank: {self.tensor_parallel_rank}, expert_parallel_rank: {self.expert_parallel_rank}, tp_group: {self.tp_group}."
         )
         dist.collective._set_custom_gid(None)
+
+    def postprocess(self):
+        # 2048 is extra buffer for decoding.
+        self.max_chunk_len = int(envs.MM_MAX_CHUNK_LEN) + self.max_num_batched_tokens + 2048
 
     def print(self):
         """
@@ -1275,6 +1282,8 @@ class FDConfig:
 
         self.cache_config.postprocess(self.max_num_batched_tokens, self.max_num_seqs)
         self.cache_config.max_block_num_per_seq = int(self.max_model_len // self.cache_config.block_size)
+
+        self.parallel_config.postprocess()
 
         if self.guided_decoding_backend == "auto":
             if self.model_config.enable_mm:

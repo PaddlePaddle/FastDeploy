@@ -329,7 +329,7 @@ class MTPProposer(Proposer):
             self.target_model_inputs["decoder_tile_ids_per_batch"]
         )
         self.model_inputs["target_hidden_states"] = paddle.full(
-            [self.max_model_len * self.fd_config.max_prefill_batch, self.model_config.hidden_size], 0, dtype="bfloat16"
+            [self.parallel_config.max_chunk_len, self.model_config.hidden_size], 0, dtype="bfloat16"
         )
 
         tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
