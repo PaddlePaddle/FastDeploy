@@ -368,8 +368,8 @@ class ParallelConfig:
         dist.collective._set_custom_gid(None)
 
     def postprocess(self):
-        # 2048 is extra buffer for decoding.
-        self.max_chunk_len = int(envs.MM_MAX_CHUNK_LEN) + self.max_num_batched_tokens + 2048
+        # 2048 is extra buffer for decoding. It should be more accurate in future
+        self.max_chunk_len = int(envs.FD_MAX_EXTRA_NUM_BATCHED_TOKENS) + self.max_num_batched_tokens + 2048
 
     def print(self):
         """
