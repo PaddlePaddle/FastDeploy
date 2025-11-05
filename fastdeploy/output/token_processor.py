@@ -314,7 +314,8 @@ class TokenProcessor:
                 ) or (rank_id == 0):
                     receive_datas = self.zmq_server.recv_pyobj()
                     assert isinstance(receive_datas, list)
-                    llm_logger.info(f"token_processor receive_data {receive_datas}")
+                    if envs.FD_DEBUG:
+                        llm_logger.debug(f"token_processor receive_data {receive_datas}")
 
                     self._reschedule_preempt_task_use_zmq(receive_datas)
 
