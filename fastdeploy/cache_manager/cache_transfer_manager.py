@@ -142,7 +142,7 @@ class CacheTransferManager:
         self.rank = rank
         self.device = device
         self.engine_pid = args.engine_pid
-        self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
+        self.mla_cache = envs.FD_ATTENTION_BACKEND == "mla_cache"
 
         address = (args.pod_ip, args.cache_queue_port)
         self.cache_task_queue = EngineCacheQueue(
@@ -236,13 +236,13 @@ class CacheTransferManager:
                 logger.info(f"[rank {self.rank}/{self.n_ranks}] ..attaching kv cache for layer {i}: {cache_shape}")
                 key_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
                 key_cache = share_external_data_(key_cache, key_name, cache_shape, True)
-                if not self.mla_attn:
+                if not self.mla_cache:
                     val_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
                     val_cache = share_external_data_(val_cache, val_name, cache_shape, True)
 
             self.gpu_cache_kvs[key_name] = key_cache
             self.gpu_cache_k_tensors.append(self.gpu_cache_kvs[key_name])
-            if not self.mla_attn:
+            if not self.mla_cache:
                 self.gpu_cache_kvs[val_name] = val_cache
                 self.gpu_cache_v_tensors.append(self.gpu_cache_kvs[val_name])
 
@@ -266,7 +266,7 @@ class CacheTransferManager:
         self.v_dst_ptrs = []
         for i in range(args.num_layers + self.num_extra_layers):
             key_name = f"key_caches_{i}_rank{self.rank}"
-            if not self.mla_attn:
+            if not self.mla_cache:
                 val_name = f"value_caches_{i}_rank{self.rank}"
             need_to_allocate_bytes = args.num_cpu_blocks * args.bytes_per_layer_per_block
             logger.info(
@@ -274,7 +274,7 @@ class CacheTransferManager:
             )
             self.cpu_cache_kvs[key_name] = cuda_host_alloc(need_to_allocate_bytes)
             self.k_dst_ptrs.append(self.cpu_cache_kvs[key_name])
-            if not self.mla_attn:
+            if not self.mla_cache:
                 self.cpu_cache_kvs[val_name] = cuda_host_alloc(need_to_allocate_bytes)
                 self.v_dst_ptrs.append(self.cpu_cache_kvs[val_name])
         logger.info(f"[rank {self.rank}/{self.n_ranks}] ✅ swap space (cpu cache) is ready!")
