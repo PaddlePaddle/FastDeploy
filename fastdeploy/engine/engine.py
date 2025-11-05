@@ -249,6 +249,7 @@ class LLMEngine:
         if sampling_params is not None:
             task.update(asdict(sampling_params))
         request = Request.from_dict(task)
+        request.llm_engine_recv_req_timestamp = time.time()
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
             request.sampling_params = sampling_params
@@ -551,6 +552,7 @@ class LLMEngine:
             f" --convert {self.cfg.model_config.convert}"
             f" --override-pooler-config {self.cfg.model_config.override_pooler_config}"
             f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
+            f" --max_logprobs {self.cfg.model_config.max_logprobs}"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
@@ -563,6 +565,7 @@ class LLMEngine:
             "dynamic_load_weight": self.cfg.load_config.dynamic_load_weight,
             "disable_any_whitespace": self.cfg.structured_outputs_config.disable_any_whitespace,
             "disable_custom_all_reduce": self.cfg.parallel_config.disable_custom_all_reduce,
+            "use_internode_ll_two_stage": self.cfg.parallel_config.use_internode_ll_two_stage,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
         }
