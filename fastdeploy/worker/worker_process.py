@@ -41,12 +41,7 @@ from fastdeploy.config import (
     StructuredOutputsConfig,
 )
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
-from fastdeploy.inter_communicator import (
-    ExistTaskStatus,
-    IPCSignal,
-    ModelWeightsStatus,
-    shared_memory_exists,
-)
+from fastdeploy.inter_communicator import ExistTaskStatus, IPCSignal, ModelWeightsStatus
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
@@ -423,16 +418,12 @@ class PaddleDisWorkerProc:
     def graph_optimize_and_warm_up_model(self) -> None:
         self.worker.graph_optimize_and_warm_up_model()
         # reset cache_messager prefilled_step signal
-        if self.scheduler_config.splitwise_role == "prefill":
+        if not envs.ENABLE_V1_KVCACHE_SCHEDULER and self.scheduler_config.splitwise_role == "prefill":
             gpu_id = self.worker.model_runner.device_id
             prefilled_step_name = f"splitwise_complete_prefilled_step_{self.local_rank}"
             prefilled_step_idx_data = np.zeros(shape=[1], dtype=np.int32)
             step_shm_value = IPCSignal(
-                name=prefilled_step_name,
-                array=prefilled_step_idx_data,
-                dtype=np.int32,
-                suffix=gpu_id,
-                create=not shared_memory_exists(prefilled_step_name),
+                name=prefilled_step_name, array=prefilled_step_idx_data, dtype=np.int32, suffix=gpu_id, create=False
             )
             step_shm_value.value[0] = -1
 
