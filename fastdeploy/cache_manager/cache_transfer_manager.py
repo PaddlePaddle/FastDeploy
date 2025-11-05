@@ -29,7 +29,7 @@ import paddle
 from fastdeploy import envs
 from fastdeploy.cache_manager.cache_data import CacheStatus
 
-from fastdeploy.cache_manager.transfer_factory.mooncake_store.mooncake_store import MooncakeStore
+from fastdeploy.cache_manager.transfer_factory import MooncakeStore
 
 from fastdeploy.cache_manager.ops import (
     cuda_host_alloc,
@@ -474,7 +474,7 @@ class CacheTransferManager:
         )
         self.cache_task_queue.swap_storage_to_gpu_barrier.wait()
         if self.rank == 0:
-            logger.info(f"[rank {self.rank}/{self.n_ranks}] {current_number} data found in storage for task {task_id}, skipping...")
+            logger.info(f"[rank {self.rank}/{self.n_ranks}] {current_number} data found in storage for task {task_id}, finish loading.")
             self.cache_task_queue.swap_storage_to_gpu_barrier.reset()
             self.cache_task_queue.put_transfer_done_signal(result)
 
@@ -489,14 +489,12 @@ class CacheTransferManager:
         writeback kv cache to storage
         """
         target_location = []
-        logger.info(f"write_through {keys} {gpu_block_ids}  {transfer_task_id}")
+        logger.debug(f"write cache to storage {keys} {gpu_block_ids}  {transfer_task_id}")
         if gpu_block_ids is None:
             raise ValueError("gpu_block_ids cannot be None")
         
         keys_k = [f"{key}_key_{self.rank}" for key in keys]
-        logger.info(f"write_through {keys_k}")
         result  = self.storage_backend.exists(keys_k)
-        logger.info(f"write_through {result}")
         uncached_keys_k = []
         uncached_keys_v = []
         uncached_block_ids = []
@@ -507,8 +505,6 @@ class CacheTransferManager:
                 uncached_keys_v.append(f"{keys[current_id]}_value_{self.rank}")
                 uncached_block_ids.append(gpu_block_ids[current_id])
             current_id += 1
-        
-        logger.info(f"write_through {uncached_keys_k}")
 
         if len(uncached_keys_k) > 0:
             swap_cache_layout(
@@ -526,20 +522,18 @@ class CacheTransferManager:
                1 # gpu ==> cpu
             )
 
-            logger.info(f"write_through {uncached_keys_k}")
             target_location_k = [self.key_register_buffer + i * self.cache_stride for i in range(len(uncached_block_ids))]
             target_location_v = [self.val_register_buffer + i * self.cache_stride for i in range(len(uncached_block_ids))]
 
             target_sizes = [self.cache_stride] * len(uncached_block_ids) * 2
 
             target_location = target_location_k + target_location_v
-            logger.info(f"write_through {uncached_keys_k + uncached_keys_v} {target_location} {target_sizes}")
+            logger.info(f"write cache to storage {uncached_keys_k + uncached_keys_v} {target_location} {target_sizes}")
             self.storage_backend.set(
                 uncached_keys_k + uncached_keys_v,
                 target_location=target_location,
                 target_sizes=target_sizes
             )
-
 
         result = (
             keys,

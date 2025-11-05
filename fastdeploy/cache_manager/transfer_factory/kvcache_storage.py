@@ -1,9 +1,29 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import hashlib
 import logging
 import os
 from abc import ABC, abstractmethod
 from typing import Any, List, Optional
 import paddle
+
+from fastdeploy.utils import get_logger
+
+logger = get_logger("kvcache_storage", "kvcache_storage.log")
 
 def get_hash_str(token_ids: List[int], prefix_block_key: str) -> str:
     """
@@ -14,13 +34,8 @@ def get_hash_str(token_ids: List[int], prefix_block_key: str) -> str:
 
 class KVCacheStorage(ABC):
     """
-    HiCacheStorage is a class that provides a generic key-value interface for storing and retrieving KV cache.
-    It abstracts the underlying storage mechanism, allowing different implementations to be used.
+    KVCacheStorage is a class that provides a generic key-value interface for storing and retrieving KV cache.
     """
-
-    # todo, translate tensor object access for different TP ranks
-    # potentially pass model and TP configs into storage backend
-    # todo, the page size of storage backend does not have to be the same as the same as host memory pool
 
     @abstractmethod
     def get(

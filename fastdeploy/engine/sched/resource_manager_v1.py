@@ -635,7 +635,6 @@ class ResourceManagerV1(ResourceManager):
                             break
                     extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(num_new_block)
                     if self.config.cache_config.enable_prefix_caching:
-                        llm_logger.info(f"req {request.request_id} at batch id {request.idx} with prefix_hash_str {prefix_hash_str}")
                         storage_block_ids = self.get_storage_cached_blocks(request, extra_gpu_block_ids)
                         num_new_tokens -= len(storage_block_ids) * self.config.cache_config.block_size
                     request.block_tables.extend(extra_gpu_block_ids)
@@ -687,7 +686,7 @@ class ResourceManagerV1(ResourceManager):
                                     // self.config.cache_config.block_size
                                 ):  # to prevent block allocation for matching in hierarchical cache and cause dead lock
                                     break
-                            success, prefix_hash_str = self.get_prefix_cached_blocks(request)
+                            success = self.get_prefix_cached_blocks(request)
                             if not success:
                                 self._free_blocks(request)
                                 break
@@ -893,11 +892,11 @@ class ResourceManagerV1(ResourceManager):
         """
         try:
             cache_prepare_time = time.time()
-            llm_logger.info(f"req {request.request_id} at batch id {request.idx}")
+            llm_logger.info(f"req {request.request_id}")
             matched_block_ids = self.cache_manager.request_match_storage_blocks(
                 request, extra_gpu_block_ids
             )
-            llm_logger.info(f"matched block ids: {matched_block_ids}")
+            llm_logger.info(f"storage backend: {self.config.cache_config.kvcache_storage_backend} matched block ids: {matched_block_ids}")
 
             matched_token_num = len(matched_block_ids) * self.config.cache_config.block_size
 
@@ -923,7 +922,7 @@ class ResourceManagerV1(ResourceManager):
         """
         try:
             cache_prepare_time = time.time()
-            (common_block_ids, matched_token_num, hit_info, prefix_hash_str) = self.cache_manager.request_match_blocks(
+            (common_block_ids, matched_token_num, hit_info) = self.cache_manager.request_match_blocks(
                 request, self.config.cache_config.block_size
             )
 
@@ -951,10 +950,10 @@ class ResourceManagerV1(ResourceManager):
             else:
                 request.num_computed_tokens = matched_token_num
             request.cache_prepare_time = time.time() - cache_prepare_time
-            return True, prefix_hash_str
+            return True
         except Exception as e:
             llm_logger.error(f"prefix match blocks error: {e}, {str(traceback.format_exc())} waiting reschedule...")
-            return False, ""
+            return False
 
     def add_request(self, request: Request) -> None:
         with self.lock:
@@ -1003,7 +1002,7 @@ class ResourceManagerV1(ResourceManager):
                         need_prealloc_prefill_blocks
                     ):  # to prevent block allocation for matching in hierarchical cache and cause dead lock
                         return False
-                success, prefix_hash_str = self.get_prefix_cached_blocks(request)
+                success = self.get_prefix_cached_blocks(request)
                 if not success:
                     self._free_blocks(request)
                     return False
@@ -1011,7 +1010,8 @@ class ResourceManagerV1(ResourceManager):
                 need_extra_prefill_blocks = need_prealloc_prefill_blocks - request.cache_info[0]
                 if self.cache_manager.can_allocate_gpu_blocks(need_extra_prefill_blocks):
                     extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(need_extra_prefill_blocks)
-                    self.get_storage_cached_blocks(request, extra_gpu_block_ids)
+                    if self.config.cache_config.enable_prefix_caching:
+                        self.get_storage_cached_blocks(request, extra_gpu_block_ids)
                     request.block_tables.extend(extra_gpu_block_ids)
                     allocated_position = self.get_available_position()
                     request.idx = allocated_position

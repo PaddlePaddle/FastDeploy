@@ -320,9 +320,9 @@ class PrefixCacheManager:
             )
 
         # Start additional threads
-        # if cache_config.enable_hierarchical_cache and self.num_cpu_blocks > 0:
-        logger.info("Enable hierarchical cache.")
-        threading.Thread(target=self.recv_data_transfer_result).start()
+        if cache_config.enable_hierarchical_cache:
+            logger.info("Enable hierarchical cache.")
+            threading.Thread(target=self.recv_data_transfer_result).start()
         if cache_config.enable_prefix_caching:
             threading.Thread(target=self.clear_prefix_cache, daemon=True).start()
 
@@ -593,10 +593,8 @@ class PrefixCacheManager:
         if task_id in self.cache_info:
             last_node, num_cached_tokens = self.cache_info[task_id]
             prefix_block_key = last_node.hash_value
-        logger.info(f"matched block num: {num_cached_tokens} {extra_gpu_block_ids} {input_ids}")
+
         block_size = self.cache_config.block_size
-
-
         if self.storage_backend is not None:
             keys = []
             current_tokens = num_cached_tokens
@@ -625,8 +623,7 @@ class PrefixCacheManager:
         expected_block_num,
         match_gpu_block_ids,
         match_cpu_block_ids,
-        match_node_ids,
-        prefix_block_key
+        match_node_ids
     ):
         """
         prepare cache for request
@@ -647,19 +644,24 @@ class PrefixCacheManager:
         gpu_extra_block_num = expected_block_num - matched_block_num
         if gpu_extra_block_num > 0:
             gpu_extra_block_ids = self.allocate_gpu_blocks(gpu_extra_block_num)
+
+    
         
-        do_prefetch = False
         storage_block_ids = []
         if self.storage_backend is not None:
             keys = []
-            current_tokens = matched_block_num * block_size
-            task_id = uuid.uuid4().hex
-            while current_tokens < self.cache_config.max_cache_size:
+            prefix_block_key = ""
+            num_cached_tokens = 0
+            if req_id in self.cache_info:
+                last_node, num_cached_tokens = self.cache_info[req_id]
+                prefix_block_key = last_node.hash_value
+            current_tokens = num_cached_tokens
+            while current_tokens < len(input_ids):
                 keys.append(get_hash_str_mooncake(input_ids[current_tokens:current_tokens + block_size], prefix_block_key))
                 current_tokens += block_size
             
             self.prefetch_kv_cache(
-                task_id,
+                req_id,
                 keys,
                 gpu_extra_block_ids,
                 is_sync=False
@@ -866,8 +868,7 @@ class PrefixCacheManager:
                     swap_node_ids,
                     match_block_node,
                     gpu_match_token_num,
-                    cpu_match_token_num,
-                    prefix_hash_key
+                    cpu_match_token_num
                 ) = self.match_block(req_id, input_ids, block_size)
                 match_gpu_blocks_num = len(match_gpu_block_ids)
                 matched_token_num_in_cpu_and_gpu = gpu_match_token_num + cpu_match_token_num
@@ -959,7 +960,6 @@ class PrefixCacheManager:
                 req_id = task.request_id
                 keys = []
                 leaf_node = self.req_leaf_map.pop(req_id)
-                # logger.info(f"release_block_ids: req_id {req_id} ")
                 if leaf_node in self.leaf_req_map:
                     self.leaf_req_map[leaf_node].remove(req_id)
                     if not (self.leaf_req_map[leaf_node]):

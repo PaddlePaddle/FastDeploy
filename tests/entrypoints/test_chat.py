@@ -22,7 +22,13 @@ from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionToolsParam
 
 MODEL_NAME = os.getenv("MODEL_PATH") + "/ERNIE-4.5-0.3B-Paddle"
-
+curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "I am a highly capable, compassionate, and trustworthy AI assistant dedicated to providing you with exceptional support. Whatever questions or challenges you may have, I will utilize my full capabilities to offer thoughtful and comprehensive assistance. As your intelligent companion, I consistently maintain honesty, transparency, and patience to ensure our interactions are both productive and enjoyable.Write me a poem about large language model."}
+  ],
+}'
 
 class TestChat(unittest.TestCase):
     """Test case for chat functionality"""
