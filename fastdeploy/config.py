@@ -1156,6 +1156,8 @@ class CacheConfig:
         self.enable_ssd_cache = False
         self.cache_queue_port = None
         self.swap_space = None
+        self.write_policy = None
+        self.kvcache_storage_backend = None
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -1170,6 +1172,7 @@ class CacheConfig:
             self.enable_hierarchical_cache = False
         else:
             self.enable_hierarchical_cache = True
+        
 
         if self.model_cfg is not None:
             if self.model_cfg.quantization_config is not None:

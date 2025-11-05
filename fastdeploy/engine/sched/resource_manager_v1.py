@@ -521,17 +521,20 @@ class ResourceManagerV1(ResourceManager):
                     num_new_tokens = self._get_num_new_tokens(request, token_budget)
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
                     # Allocate blocks to prefill
-                    if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
-                        request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
-                        # Prepare prefill task
-                        scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
-                    else:  # Not enough blocks to allocate, trigger preemption
+                    if not self.cache_manager.can_allocate_gpu_blocks(num_new_block):
+                        # Not enough blocks to allocate, trigger preemption
                         can_schedule = self._trigger_preempt(request, num_new_block, preempted_reqs, scheduled_reqs)
                         if not can_schedule:
                             break
-                        request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(num_new_block))
-                        # Prepare prefill task
-                        scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
+                    extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(num_new_block)
+                    if self.config.cache_config.enable_prefix_caching:
+                        llm_logger.info(f"req {request.request_id} at batch id {request.idx} with prefix_hash_str {prefix_hash_str}")
+                        storage_block_ids = self.get_storage_cached_blocks(request, extra_gpu_block_ids)
+                        num_new_tokens -= len(storage_block_ids) * self.config.cache_config.block_size
+                    request.block_tables.extend(extra_gpu_block_ids)
+                    # Prepare prefill task
+                    scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
+
                     token_budget -= num_new_tokens
                     request.num_computed_tokens += num_new_tokens
                     if self.config.cache_config.enable_prefix_caching:
@@ -573,7 +576,7 @@ class ResourceManagerV1(ResourceManager):
                             if not request.get("skip_allocate", False):
                                 extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(num_new_block)
                                 if self.config.cache_config.enable_prefix_caching:
-                                    storage_block_ids = self.get_storage_cached_blocks(request, extra_gpu_block_ids, prefix_hash_str)
+                                    storage_block_ids = self.get_storage_cached_blocks(request, extra_gpu_block_ids)
                                     num_new_tokens -= len(storage_block_ids) * self.config.cache_config.block_size
                                 request.block_tables.extend(extra_gpu_block_ids)
                             
@@ -626,7 +629,7 @@ class ResourceManagerV1(ResourceManager):
                             if not request.get("skip_allocate", False):
                                 extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(num_new_block)
                                 if self.config.cache_config.enable_prefix_caching:
-                                    storage_block_ids = self.get_storage_cached_blocks(request, extra_gpu_block_ids, prefix_hash_str)
+                                    storage_block_ids = self.get_storage_cached_blocks(request, extra_gpu_block_ids)
                                     num_new_tokens -= len(storage_block_ids) * self.config.cache_config.block_size
                                 request.block_tables.extend(extra_gpu_block_ids)
                             self.waiting.popleft()
@@ -681,14 +684,20 @@ class ResourceManagerV1(ResourceManager):
         """
         try:
             cache_prepare_time = time.time()
+            llm_logger.info(f"req {request.request_id} at batch id {request.idx}")
             matched_block_ids = self.cache_manager.request_match_storage_blocks(
                 request, extra_gpu_block_ids
             )
+            llm_logger.info(f"matched block ids: {matched_block_ids}")
+
             matched_token_num = len(matched_block_ids) * self.config.cache_config.block_size
 
             request.num_cached_tokens += matched_token_num
-            request.cache_info[0] += len(matched_block_ids)
-            request.cache_info[1] -= len(matched_block_ids)
+            match_block_num, no_cache_block_num = request.cache_info
+            match_block_num += len(matched_block_ids)
+            no_cache_block_num -= len(matched_block_ids)
+
+            request.cache_info = (match_block_num, no_cache_block_num)
 
             # Report the number of cached tokens to Prometheus metrics
             main_process_metrics.prefix_cache_token_num.inc(matched_token_num)
@@ -792,7 +801,7 @@ class ResourceManagerV1(ResourceManager):
                 need_extra_prefill_blocks = need_prealloc_prefill_blocks - request.cache_info[0]
                 if self.cache_manager.can_allocate_gpu_blocks(need_extra_prefill_blocks):
                     extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(need_extra_prefill_blocks)
-                    self.get_storage_cached_blocks(request, extra_gpu_block_ids, prefix_hash_str)
+                    self.get_storage_cached_blocks(request, extra_gpu_block_ids)
                     request.block_tables.extend(extra_gpu_block_ids)
                     allocated_position = self.get_available_position()
                     request.idx = allocated_position
