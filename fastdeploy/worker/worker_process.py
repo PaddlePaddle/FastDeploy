@@ -347,6 +347,7 @@ class PaddleDisWorkerProc:
         req_ids = []
         num_running_requests = 0
         tp_rank = self.local_rank % tp_size
+
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
             if self.eplb_config.enable_redundant_experts:
@@ -401,6 +402,7 @@ class PaddleDisWorkerProc:
 
             self.insert_step = False
             req_dicts = None
+            local_rank = self.local_rank % tp_size
             self.worker_healthy_live_signal.value[local_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
