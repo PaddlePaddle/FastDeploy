@@ -26,9 +26,6 @@ from PIL import Image
 from fastdeploy.engine.request import ImagePosition
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.ernie4_5_vl_processor import read_video_decord
-from fastdeploy.input.ernie4_5_vl_processor.utils.io_utils import (
-    process_transparent_image,
-)
 from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import data_processor_logger
@@ -349,8 +346,7 @@ class DataProcessor:
             - Adds image token IDs and type markers
             - Generates appropriate position embeddings
         """
-        img = process_transparent_image(img)
-        ret = self.image_processor.preprocess(images=[img])
+        ret = self.image_processor.preprocess(images=[img.convert("RGB")])
         num_tokens = ret["grid_thw"].prod() // self.image_processor.merge_size**2
         grid_thw = ret["grid_thw"].tolist()
 

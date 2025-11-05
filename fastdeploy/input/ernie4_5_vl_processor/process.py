@@ -36,7 +36,6 @@ from fastdeploy.utils import data_processor_logger
 
 from .image_preprocessor.image_preprocessor_adaptive import AdaptiveImageProcessor
 from .process_video import read_frames_decord, read_video_decord
-from .utils.io_utils import process_transparent_image
 from .utils.render_timestamp import render_frame_timestamp
 
 
@@ -350,7 +349,6 @@ class DataProcessor:
         outputs["cur_position"] += len(tokens)
 
     def _add_image(self, img, outputs: Dict, uuid: Optional[str]) -> None:
-        img = process_transparent_image(img)
         patches_h, patches_w = self.image_preprocessor.get_smarted_resize(
             img.height,
             img.width,
