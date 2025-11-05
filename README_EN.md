@@ -27,7 +27,7 @@ English | [简体中文](README_CN.md)
 
 ## News
 
-**[2025-11] 🔥 FastDeploy v2.3-rc0: The specialized optimization release for PaddleOCR-VL 0.9B inference performance has been launched, achieving a 35% increase in throughput compared to vLLM! [Deployment Guide](docs/best_practices/PaddleOCR-VL-0.9B.md)
+**[2025-11]** 🔥 FastDeploy v2.3-rc0: The specialized optimization release for PaddleOCR-VL 0.9B inference performance has been launched, achieving a 35% increase in throughput compared to vLLM! [Deployment Guide](docs/best_practices/PaddleOCR-VL-0.9B.md)
 
 **[2025-09] FastDeploy v2.2 is newly released!** It now offers compatibility with models in the HuggingFace ecosystem, has further optimized performance, and newly adds support for [baidu/ERNIE-21B-A3B-Thinking](https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-Thinking)!
 
