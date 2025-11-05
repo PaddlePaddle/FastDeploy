@@ -206,6 +206,8 @@ class MLAAttentionBackend(AttentionBackend):
             self.block_size,
             self.speculate_max_draft_token_num + 1,
         )
+        forward_meta.needs_prefill = forward_meta.max_len_tensor_cpu[1] > 0
+        forward_meta.needs_decode = forward_meta.max_len_tensor_cpu[2] > 0
 
         # MLA
         metadata.max_enc_len_this_time = forward_meta.max_len_tensor_cpu[1]

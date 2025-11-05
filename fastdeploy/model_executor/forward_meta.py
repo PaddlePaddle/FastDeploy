@@ -143,6 +143,10 @@ class ForwardMeta:
     # KV caches
     caches: Optional[list[paddle.Tensor]] = None
 
+    # Prefill and decode flag
+    needs_prefill: Optional[paddle.Tensor] = None
+    needs_decode: Optional[paddle.Tensor] = None
+
     def clear_caches(self):
         """Safely clean up the caches"""
         if self.caches:

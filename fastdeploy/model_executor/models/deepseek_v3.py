@@ -330,8 +330,8 @@ class DeepseekV3MLAAttention(nn.Layer):
     def run_prefill_or_decode_attention(
         self,
         forward_meta,
-        max_enc_len_this_time,
-        max_dec_len_this_time,
+        need_prefill,
+        need_decode,
         compressed_kv,
         query,
         query_pe,
@@ -340,7 +340,7 @@ class DeepseekV3MLAAttention(nn.Layer):
         query_nope,
         output,
     ):
-        if max_enc_len_this_time:
+        if need_prefill:
             key_value = self.kv_b_proj(compressed_kv)
             key_value = key_value.reshape(
                 [
@@ -371,7 +371,7 @@ class DeepseekV3MLAAttention(nn.Layer):
         else:
             fmha_out_prefill = paddle.zeros_like(output)
 
-        if max_dec_len_this_time:
+        if need_decode:
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
 
             q_input = paddle.concat([q_nope_out, query_pe], axis=-1)
@@ -434,8 +434,8 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         fmha_out = self.run_prefill_or_decode_attention(
             forward_meta,
-            forward_meta.max_len_tensor_cpu[1],  # max_enc_len_this_time
-            forward_meta.max_len_tensor_cpu[2],  # max_dec_len_this_time
+            forward_meta.needs_prefill,
+            forward_meta.needs_decode,
             compressed_kv,
             query,
             query_pe,
