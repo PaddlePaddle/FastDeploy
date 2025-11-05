@@ -532,7 +532,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         mock_processor_instance.process_response_chat = mock_process_response_chat
         mock_processor_instance.enable_multimodal_content = Mock(return_value=False)
-        mock_processor_instance.reasoning_parser = Mock(__class__.__name__ == "ErineTestReasoningParser")
+        mock_processor_instance.reasoning_parser = Mock(__class__.__name__ == "Ernie45VLThinkingReasoningParser")
         mock_processor_instance.data_processor = Mock(
             process_response_dict=lambda resp, stream, enable_thinking, include_stop_str_in_output: resp
         )
