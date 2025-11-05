@@ -46,7 +46,7 @@
     # 安装依赖
     pip install -U paddlex
     # 启动测试脚本
-    python benchmark.py ./test_data -b 512 --paddlex_config_path ./PaddleOCR-VL.yaml --gpu_ids 0
+    python benchmark.py ./test_data -b 512 -o ./benchmark.json --paddlex_config_path ./PaddleOCR-VL.yaml --gpu_ids 0
     ```
 
     测试脚本参数说明：
@@ -61,7 +61,7 @@
         <tbody>
             <tr>
                 <td><code>input_dirs</code></td>
-                <td>输入的目录路径，可以提供一个或多个。</td>
+                <td>输入的目录路径，会自动识别到目录下的 pdf 或图片。可以提供一个或多个。</td>
             </tr>
             <tr>
                 <td><code>-b, --batch_size</code></td>
