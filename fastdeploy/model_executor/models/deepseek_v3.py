@@ -392,11 +392,12 @@ class DeepseekV3MLAAttention(nn.Layer):
                 [1, 0, 2]
             )
             fmha_out_decode = self.kv_b_proj_bmm(fmha_out_decode, proj_type="v").transpose([1, 0, 2])
-            fmha_out = fmha_out_prefill + fmha_out_decode
+            # NOTE: Although paddle.assign is an inplace operation, you must still assign its result to 'output',
+            # otherwise the dependency relations in the computation graph may be incorrect.
+            output = paddle.assign(fmha_out_prefill + fmha_out_decode, output)
         else:
-            fmha_out = fmha_out_prefill
+            output = paddle.assign(fmha_out_prefill, output)
 
-        paddle.assign(fmha_out, output)
         return output.flatten(1)
 
     def forward(
@@ -430,6 +431,7 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         bs = query.shape[0]
         fmha_out = paddle.empty([bs, self.num_attention_heads_tp, self.v_head_dim], dtype=query.dtype)
+
         fmha_out = self.run_prefill_or_decode_attention(
             forward_meta,
             forward_meta.max_len_tensor_cpu[1],  # max_enc_len_this_time
