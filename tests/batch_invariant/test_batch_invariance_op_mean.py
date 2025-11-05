@@ -4,7 +4,9 @@ import unittest
 
 import paddle
 
-from custom_ops.batch_invariant_ops import set_batch_invariant_mode
+from fastdeploy.model_executor.layers.batch_invariant_ops import (
+    set_batch_invariant_mode,
+)
 
 
 class TestBatchInvariantForMean(unittest.TestCase):

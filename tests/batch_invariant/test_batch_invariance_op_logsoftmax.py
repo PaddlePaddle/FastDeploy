@@ -5,7 +5,9 @@ import unittest
 
 import paddle
 
-from custom_ops.batch_invariant_ops import set_batch_invariant_mode
+from fastdeploy.model_executor.layers.batch_invariant_ops import (
+    set_batch_invariant_mode,
+)
 
 
 class TestBatchInvariantForLogsoftmax(unittest.TestCase):
@@ -94,6 +96,20 @@ if __name__ == "__main__":
     unittest.main()
     """
     Even in Standard Paddle, we can achieve deterministic results, so maybe the standard implementation is already batch-invariant?
+
+    After reviewing the four implementations called by the dispatcher function `SoftmaxForwardCUDAKernelDriverImpl` (dispatched by 'D')
+    in `paddle/phi/kernels/gpudnn/softmax_gpudnn.h`:
+
+    1. SwitchWarpSoftmaxForward (one Warp processes 1-2 rows)
+    2. LaunchKeMatrixSoftmaxForwardKernel (one Block processes one row)
+    3. LaunchSoftmaxForwardCudnnKernel (the Cudnn implementation)
+    4. LaunchNormalSoftmaxForward (in one Block, threads with the same threadIdx.x [a "thread column"] cooperate to process one row)
+
+    Excluding the Cudnn implementation, the other three custom implementations are almost certainly batch-invariant.(Need someone check again)
+    The determinism of the Cudnn implementation is uncertain.
+
+    However, in practice, this testcase (D=4096) is dispatched to the Cudnn implementation,
+    while Qwen-3 8B is dispatched to the LaunchKeMatrixSoftmaxForwardKernel implementation.
 
     Result:
 
