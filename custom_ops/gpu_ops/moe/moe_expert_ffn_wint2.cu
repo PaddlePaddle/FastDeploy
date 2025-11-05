@@ -17,6 +17,7 @@
 #include "cutlass/numeric_conversion.h"
 #include "group_swiglu_with_masked.h"
 #include "helper.h"
+#include "moe/fast_hardmard/fast_hardamard_kernel.h"
 #include "moe/fused_moe_helper.h"
 
 template <typename DataT,
