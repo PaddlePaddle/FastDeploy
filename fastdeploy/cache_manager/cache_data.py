@@ -22,6 +22,7 @@ logger = get_logger("prefix_cache_manager", "prefix_cache_manager.log")
 
 DISABLE_PREFIX_CACHE_MM_MODEL: set[str] = {
     "Ernie5ForCausalLM",
+    "Ernie5MoeForCausalLM",
 }
 
 
