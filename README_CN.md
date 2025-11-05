@@ -1,4 +1,4 @@
-[English](README.md) | 简体中文
+[English](README_EN.md) | 简体中文
 <p align="center">
   <a href="https://github.com/PaddlePaddle/FastDeploy/releases"><img src="https://github.com/user-attachments/assets/42b0039f-39e3-4279-afda-6d1865dfbffb" width="500"></a>
 </p>
