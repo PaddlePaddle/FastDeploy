@@ -14,12 +14,14 @@
 # limitations under the License.
 """
 
+import time
 from concurrent.futures import Future
 from typing import Any, List, Optional
 
 import paddle
 import paddle.nn.functional as F
 from paddle import nn
+from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.guided_decoding import LogitsProcessorBase
@@ -67,7 +69,6 @@ class GuidedDecoding:
 
     def __init__(self, fd_config: FDConfig):
         self.token_bitmask = None
-        self._full_mask = None
         self.logits_processors: List[Any] = [None] * fd_config.scheduler_config.max_num_seqs
         self.reasoning_parser = None
         self._prefill_done_idxs = [False] * fd_config.scheduler_config.max_num_seqs
@@ -83,84 +84,111 @@ class GuidedDecoding:
     ):
         """add logits processor to SamplerProcessor"""
         assert len(prefill_tokens) == 0
-        if self._prefill_done_idxs[idx]:
-            self._prefill_done_idxs[idx] = False
+        self._prefill_done_idxs[idx] = False
 
         if future is None:
+            # normal request without guided_backend
             self.logits_processors[idx] = None
-        elif future.done():
+            return
+
+        if future.done():
             # cached xgrammar
             self.logits_processors[idx] = future.result()
-        self.logits_processors[idx] = future
-        return
+        else:
+            # async
+            self.logits_processors[idx] = future
 
     def should_fill_bitmask(self, idx: int) -> bool:
+        """
+        Determines whether to fill a bitmask for the logits processor at the given index.
+
+        Args:
+            idx (int): The index of the logits processor to check
+
+        Returns:
+            bool: True if the idx requst bitmask should be filled
+
+        """
         if self.reasoning_parser is not None:
-            if self.logits_processors[idx].enable_reasoning:
+            if self.logits_processors[idx].enable_reasoning:  # <think> guided
                 return True
-            if self.logits_processors[idx].reasoning_ended:
-                return True
-            else:
+            if not self.logits_processors[idx].reasoning_ended:
                 return False
         return True
 
-    def update_vocab_mask(self):
+    def reset_processor(self, idx: int):
+        """reset idx"""
+        self._prefill_done_idxs[idx] = False
+        self.logits_processors[idx] = None
+
+    def update_vocab_mask(self, prefill_done_idxs: List[int] = []):
         """update vocab mask. (cpu-heavy operation)"""
+        for idx in prefill_done_idxs:
+            if self.logits_processors[idx] is None:
+                continue
+
+            assert not self._prefill_done_idxs[idx]
+            self._prefill_done_idxs[idx] = True
+            if isinstance(self.logits_processors[idx], Future):
+                continue
+
         for idx, processor in enumerate(self.logits_processors):
             if processor is None or not self._prefill_done_idxs[idx]:
                 continue
-            assert not isinstance(processor, Future)
-            if processor.is_terminated:
-                processor = None
-                if self._prefill_done_idxs[idx]:
-                    self._prefill_done_idxs[idx] = False
+            # skip, join at apply_token_mask
+            if isinstance(processor, Future):
                 continue
+            if processor.is_terminated:
+                self.reset_processor(idx)
+                continue
+
+            if self.token_bitmask is None:
+                self.token_bitmask = self.logits_processors[idx].allocate_token_bitmask()
+
             if self.should_fill_bitmask(idx):
                 processor.fill_token_bitmask(self.token_bitmask, idx)
 
     def apply_token_mask(self, logits: paddle.Tensor, prefill_done_idxs: List[int] = []):
         """apply token mask to logits"""
 
-        tidx = None
-        for idx in prefill_done_idxs:
-            if self.logits_processors[idx] is None:
+        indices = []
+        for idx, processor in enumerate(self.logits_processors):
+            if processor is None or not self._prefill_done_idxs[idx]:
                 continue
 
-            assert self.logits_processors[idx] is not None
-            assert not self._prefill_done_idxs[idx]
-            if isinstance(self.logits_processors[idx], Future):
-                self.logits_processors[idx] = self.logits_processors[idx].result()
+            # compiled done, check idx should fill,  fill_token_bitmask done in preprocess
+            if not isinstance(processor, Future):
+                if self.should_fill_bitmask(idx):
+                    indices.append(idx)
+                continue
+
+            # is Future, processor async compiled not ready, need join and wait
+            ts = time.time()
+            wait = False
+            if not processor.done():
+                wait = True
+            self.logits_processors[idx] = processor.result()
+            if wait:
+                logger.debug(f"[{idx} join async compile xgrammar, time_cost:{time.time() - ts}]")
+
+            # check idx for fill_token_mask
+            if not self.should_fill_bitmask(idx):
+                continue
+
+            indices.append(idx)
 
             if self.token_bitmask is None:
                 self.token_bitmask = self.logits_processors[idx].allocate_token_bitmask()
 
-        for idx in prefill_done_idxs:
-            self._prefill_done_idxs[idx] = True
-
-        for idx in self._prefill_done_idxs:
-            if self.logits_processors[idx] is None:
-                continue
-            if not self._prefill_done_idxs[idx]:
-                continue
-
-            assert self.logits_processors[idx] is not None
-            tidx = idx
-            if self.should_fill_bitmask(idx):
-                self.logits_processors[idx].fill_token_bitmask(self.token_bitmask, idx)
-
-        if tidx is None:
-            return logits
-
-        indices = []
-        for idx, processor in enumerate(self.logits_processors):
-            if processor is None:
-                continue
-            if self.reasoning_parser is None or not processor.enable_reasoning or processor.reasoning_ended:
-                indices.append(idx)
+            self.logits_processors[idx].fill_token_bitmask(self.token_bitmask, idx)
 
         if len(indices) == 0:
             return logits
-        return self.logits_processors[tidx].apply_token_mask(logits, self.token_bitmask, indices=indices)
+        from fastdeploy.model_executor.guided_decoding.xgrammar_backend import (
+            apply_token_mask,
+        )
+
+        return apply_token_mask(logits, self.token_bitmask, indices=indices)
 
     def _accept_token(self, idx: int, token: int):
         """accept token"""
@@ -172,13 +200,8 @@ class GuidedDecoding:
                     self.logits_processors[idx].reasoning_ended = reasoning_ended
                     return
 
-        self.logits_processors[idx].accept_token(token)
-
-        if self.logits_processors[idx].is_terminated:
-            self.logits_processors[idx] = None
-            if self._prefill_done_idxs[idx]:
-                self._prefill_done_idxs[idx] = False
-            return
+        if not self.logits_processors[idx].accept_token(token) or self.logits_processors[idx].is_terminated:
+            self.reset_processor(idx)
 
     def update_output_tokens(self, next_tokens: paddle.Tensor):
         """update output tokens"""
@@ -193,14 +216,13 @@ class GuidedDecoding:
                 continue
             token = token_ids[idx][0]
             if token < 0:
+                self.reset_processor(idx)
                 continue
             self._accept_token(idx, token)
 
-    def pre_process(self):
+    def pre_process(self, prefill_done_idxs: List[int] = []):
         """pre process before running"""
-        # create async operation for guided decoding
-        # TODO: support async
-        self.update_vocab_mask()
+        self.update_vocab_mask(prefill_done_idxs)
 
 
 class Sampler(nn.Layer):
@@ -247,9 +269,9 @@ class Sampler(nn.Layer):
         """apply logits processor to sampler"""
         self.guided_decoding.add_logits_processor(ids, future, prefill_tokens)
 
-    def pre_process(self):
+    def pre_process(self, prefill_done_idxs: List[int] = []):
         """pre process before running"""
-        self.guided_decoding.pre_process()
+        self.guided_decoding.pre_process(prefill_done_idxs)
 
     def post_process(self, next_tokens: paddle.Tensor):
         """post process after running"""
@@ -343,7 +365,9 @@ class Sampler(nn.Layer):
         p_done_idxs: List[int] = [],
     ) -> SamplerOutput:
         """ """
+        # ts = time.time()
         logits = self.guided_decoding.apply_token_mask(logits, p_done_idxs)
+        # logger.info(f"apply_token_mask time_cost={time.time() - ts}")
 
         num_logprobs = sampling_metadata.max_num_logprobs
         if num_logprobs is not None:

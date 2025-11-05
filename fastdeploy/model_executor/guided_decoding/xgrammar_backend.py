@@ -86,6 +86,7 @@ class XGrammarProcessor(LogitsProcessorBase):
             terminate_without_stop_token=terminate_without_stop_token,
             override_stop_tokens=override_stop_tokens,
         )
+        # when matcher accept eos_token_id, is_terminated = True
         self.is_terminated: bool = False
 
     def allocate_token_bitmask(self) -> torch.Tensor:
@@ -110,40 +111,6 @@ class XGrammarProcessor(LogitsProcessorBase):
         """
         self.matcher.fill_next_token_bitmask(token_bitmask, idx)
 
-    def apply_token_mask(
-        self,
-        logits: paddle.Tensor,
-        token_bitmask: torch.Tensor,
-        indices: Optional[List[int]] = None,
-    ) -> paddle.Tensor:
-        """
-        Apply the token mask to the logits, modifying probabilities of invalid tokens.
-
-        Args:
-            logits (paddle.Tensor): The logits tensor to modify
-            token_bitmask (torch.Tensor): The token bitmask indicating allowed tokens
-            indices (Optional[List[int]]): Optional list of batch indices to apply mask to
-
-        Returns:
-            paddle.Tensor: The modified logits tensor
-        """
-        origin_place = logits.place
-        origin_dtype = logits.dtype
-        logits = torch.from_numpy(logits.numpy())
-
-        logits = logits.float()  # cpu
-        apply_token_bitmask_inplace(
-            logits=logits,
-            bitmask=token_bitmask.to(logits.device, non_blocking=True),
-            indices=indices,
-        )
-
-        return paddle.to_tensor(
-            logits.numpy(),
-            dtype=origin_dtype,
-            place=origin_place,
-        )
-
     def reset(self) -> None:
         """
         Reset the grammar matcher state to initial conditions.
@@ -156,16 +123,13 @@ class XGrammarProcessor(LogitsProcessorBase):
     def accept_token(self, token: int) -> None:
         """
         Validate and accept a generated token against the grammar constraints.
+        when accept eos_token, is_terminated = True
 
         Args:
             token (int): The token ID to validate
 
-        Raises:
-            AssertionError: If token is not allowed by the grammar
         """
-        if self.is_terminated:
-            return True
-        if self.matcher.is_terminated():
+        if self.is_terminated or self.matcher.is_terminated():
             self.is_terminated = True
             return False
         if not self.matcher.accept_token(token):
@@ -475,3 +439,48 @@ class XGrammarChecker(BaseChecker):
         else:
             # regex is not format
             return request, None
+
+
+def apply_token_mask(
+    logits: paddle.Tensor,
+    token_bitmask: torch.Tensor,
+    indices: Optional[List[int]] = None,
+) -> paddle.Tensor:
+    """
+    Apply the token mask to the logits, modifying probabilities of invalid tokens.
+
+    Args:
+        logits (paddle.Tensor): The logits tensor to modify
+        token_bitmask (torch.Tensor): The token bitmask indicating allowed tokens
+        indices (Optional[List[int]]): Optional list of batch indices to apply mask to
+
+    Returns:
+        paddle.Tensor: The modified logits tensor
+    """
+
+    dlpack = paddle.utils.dlpack.to_dlpack(logits)
+    t_logits = torch.from_dlpack(dlpack)
+    apply_token_bitmask_inplace(
+        logits=t_logits,
+        bitmask=token_bitmask.to(t_logits.device, non_blocking=True),
+        indices=indices,
+    )
+    dlpack2 = torch.utils.dlpack.to_dlpack(t_logits)
+    return paddle.utils.dlpack.from_dlpack(dlpack2)
+
+    origin_place = logits.place
+    origin_dtype = logits.dtype
+    logits = torch.from_numpy(logits.numpy())
+
+    logits = logits.float()  # cpu
+    apply_token_bitmask_inplace(
+        logits=logits,
+        bitmask=token_bitmask.to(logits.device, non_blocking=True),
+        indices=indices,
+    )
+
+    return paddle.to_tensor(
+        logits.numpy(),
+        dtype=origin_dtype,
+        place=origin_place,
+    )

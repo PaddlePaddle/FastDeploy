@@ -2010,7 +2010,7 @@ class GPUModelRunner(ModelRunnerBase):
             logger.info(f"SOT warmup the model with the batch size:{batch_size}")
         logger.info(f"SOT warmup took {time.perf_counter() - start_time} seconds")
 
-    def _get_p_done_idxs_gd(self, num_running_requests: int):
+    def _get_p_done_idxs_gd(self, model_forward_batch: Optional[List[Request]], num_running_requests: int):
         """
         idx for guided decoding
         when Prefill is done, async compiled logits_processor must be joined
@@ -2022,6 +2022,23 @@ class GPUModelRunner(ModelRunnerBase):
         for idx in range(0, num_running_requests):
             if self.share_inputs["step_idx"][idx] == 0:
                 prefill_done_idxs.append(idx)
+
+        if self.cache_config.enable_chunked_prefill:
+            if model_forward_batch is not None:
+                for task in model_forward_batch:
+                    # new Request with ChunkPrefill, unfinshed, store
+                    if task.chunk_idx < len(task.prefill_chunk_info):
+                        if task.request_id not in self.restore_chunked_prefill_request:
+                            self.restore_chunked_prefill_request[task.request_id] = task
+
+            for id, task in list(self.restore_chunked_prefill_request.items()):
+                # unfinished, remove
+                if task.chunk_idx < len(task.prefill_chunk_info) and task.idx in prefill_done_idxs:
+                    prefill_done_idxs.remove(task.idx)
+                # finished, add
+                if task.chunk_idx == len(task.prefill_chunk_info) and task.idx not in prefill_done_idxs:
+                    prefill_done_idxs.append(task.idx)
+
         return prefill_done_idxs
 
     def execute_model(
@@ -2038,8 +2055,10 @@ class GPUModelRunner(ModelRunnerBase):
             intermediate_tensors:
             num_running_requests: batch_size
         """
+        p_done_idxs = self._get_p_done_idxs_gd(model_forward_batch, num_running_requests)
+
         self._prepare_inputs()
-        self.sampler.pre_process()
+        self.sampler.pre_process(p_done_idxs)
 
         # 1.1 Update state of logits processor
         for proc in self.sampling_metadata.logits_processors:
@@ -2132,8 +2151,6 @@ class GPUModelRunner(ModelRunnerBase):
 
             # 4. Compute logits, Sample
             logits = self.model.compute_logits(hidden_states)
-
-            p_done_idxs = self._get_p_done_idxs_gd(num_running_requests)
 
             if not self.speculative_decoding:
                 set_value_by_flags_and_idx(
