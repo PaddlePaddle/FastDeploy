@@ -334,7 +334,9 @@ class Sampler(nn.Layer):
         else:
             indices = token_ids
             top_logprobs = token_logprobs
-
+        indices = indices.cpu()
+        top_logprobs = top_logprobs.cpu()
+        token_ranks = token_ranks.cpu()
         return LogprobsTensors(indices, top_logprobs, token_ranks)
 
     def forward_cuda(
