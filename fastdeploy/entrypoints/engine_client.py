@@ -96,7 +96,7 @@ class EngineClient:
         else:
             self.is_master = False
 
-        if self.config.eplb_config.enable_eplb:
+        if self.config.eplb_config.enable_eplb and self.config.parallel_config.local_data_parallel_id == 0:
             self.init_eplb_signals(ipc_signal_suffix=port)
 
         array_size = min(max_chips_per_node, tensor_parallel_size)
@@ -126,86 +126,101 @@ class EngineClient:
         """
         Initialize eplb signals.
         """
-        if self.config.parallel_config.local_data_parallel_id == 0:
-            rearrange_experts_status = np.zeros([1], dtype=np.int32)
-            self.rearrange_experts_signal = IPCSignal(
-                name="rearrange_experts_status",
-                array=rearrange_experts_status,
+        self.signal_clear_experts_token_stats_list = []
+        self.local_experts_token_stats_array_list = []
+        self.expert_tokens_stats_array_list = []
+        self.signal_update_weight_from_disk_array_list = []
+        self.update_weight_from_disk_result_list = []
+        rearrange_experts_status = np.zeros([1], dtype=np.int32)
+        self.rearrange_experts_signal = IPCSignal(
+            name="rearrange_experts_status",
+            array=rearrange_experts_status,
+            dtype=np.int32,
+            suffix=ipc_signal_suffix,
+            create=False,
+        )
+
+        rearrange_experts_ips_size_array = np.zeros([1], dtype=np.int32)
+        self.rearrange_experts_ips_size_signal = IPCSignal(
+            name="rearrange_experts_ips_size",
+            array=rearrange_experts_ips_size_array,
+            dtype=np.int32,
+            suffix=ipc_signal_suffix,
+            create=False,
+        )
+
+        self.shm_rearrange_experts_ips_list = IPCSignal(
+            name="rearrange_experts_ips_list",
+            shm_size=self.config.eplb_config.redundant_expert_ip_shm_size,
+            suffix=ipc_signal_suffix,
+            create=False,
+        )
+
+        signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
+        self.signal_update_weight_from_tensor_array = IPCSignal(
+            name="signal_update_weight_from_tensor",
+            array=signal_update_weight_from_tensor,
+            dtype=np.int32,
+            suffix=ipc_signal_suffix,
+            create=False,
+        )
+
+        for suffix_port in self.config.parallel_config.engine_worker_queue_port:
+            signal_clear_experts_token_stats = np.zeros([1], dtype=np.int32)
+            self.signal_clear_experts_token_stats_list.append(
+                IPCSignal(
+                    name="signal_clear_experts_token_stats",
+                    array=signal_clear_experts_token_stats,
+                    dtype=np.int32,
+                    suffix=suffix_port,
+                    create=False,
+                )
+            )
+
+            signal_update_weight_from_disk = np.zeros([1], dtype=np.int32)
+            self.signal_update_weight_from_disk_array_list.append(
+                IPCSignal(
+                    name="signal_update_weight_from_disk",
+                    array=signal_update_weight_from_disk,
+                    dtype=np.int32,
+                    suffix=suffix_port,
+                    create=False,
+                )
+            )
+
+            result_update_weight_from_disk = np.zeros([1], dtype=np.int32)
+            self.update_weight_from_disk_result_list.append(
+                IPCSignal(
+                    name="result_update_weight_from_disk",
+                    array=result_update_weight_from_disk,
+                    dtype=np.int32,
+                    suffix=suffix_port,
+                    create=False,
+                )
+            )
+
+            experts_token_stats = np.zeros(
+                (self.config.model_config.num_hidden_layers, self.config.model_config.moe_num_experts),
                 dtype=np.int32,
-                suffix=ipc_signal_suffix,
-                create=False,
             )
-
-            rearrange_experts_ips_size_array = np.zeros([1], dtype=np.int32)
-            self.rearrange_experts_ips_size_signal = IPCSignal(
-                name="rearrange_experts_ips_size",
-                array=rearrange_experts_ips_size_array,
-                dtype=np.int32,
-                suffix=ipc_signal_suffix,
-                create=False,
+            self.expert_tokens_stats_array_list.append(
+                IPCSignal(
+                    name="all_experts_token_stats",
+                    array=experts_token_stats,
+                    dtype=np.int32,
+                    suffix=suffix_port,
+                    create=False,
+                )
             )
-
-            self.shm_rearrange_experts_ips_list = IPCSignal(
-                name="rearrange_experts_ips_list",
-                shm_size=self.config.eplb_config.redundant_expert_ip_shm_size,
-                suffix=ipc_signal_suffix,
-                create=False,
+            self.local_experts_token_stats_array_list.append(
+                IPCSignal(
+                    name="local_experts_token_stats",
+                    array=experts_token_stats,
+                    dtype=np.int32,
+                    suffix=suffix_port,
+                    create=False,
+                )
             )
-
-            signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
-            self.signal_update_weight_from_tensor_array = IPCSignal(
-                name="signal_update_weight_from_tensor",
-                array=signal_update_weight_from_tensor,
-                dtype=np.int32,
-                suffix=ipc_signal_suffix,
-                create=False,
-            )
-
-        experts_token_stats = np.zeros(
-            (self.config.model_config.num_hidden_layers, self.config.model_config.moe_num_experts),
-            dtype=np.int32,
-        )
-        self.expert_tokens_stats_array = IPCSignal(
-            name="all_experts_token_stats",
-            array=experts_token_stats,
-            dtype=np.int32,
-            suffix=ipc_signal_suffix,
-            create=False,
-        )
-        self.local_experts_token_stats_array = IPCSignal(
-            name="local_experts_token_stats",
-            array=experts_token_stats,
-            dtype=np.int32,
-            suffix=ipc_signal_suffix,
-            create=False,
-        )
-
-        signal_update_weight_from_disk = np.zeros([1], dtype=np.int32)
-        self.signal_update_weight_from_disk_array = IPCSignal(
-            name="signal_update_weight_from_disk",
-            array=signal_update_weight_from_disk,
-            dtype=np.int32,
-            suffix=ipc_signal_suffix,
-            create=False,
-        )
-
-        signal_clear_experts_token_stats = np.zeros([1], dtype=np.int32)
-        self.signal_clear_experts_token_stats = IPCSignal(
-            name="signal_clear_experts_token_stats",
-            array=signal_clear_experts_token_stats,
-            dtype=np.int32,
-            suffix=ipc_signal_suffix,
-            create=False,
-        )
-
-        result_update_weight_from_disk = np.zeros([1], dtype=np.int32)
-        self.update_weight_from_disk_result = IPCSignal(
-            name="result_update_weight_from_disk",
-            array=result_update_weight_from_disk,
-            dtype=np.int32,
-            suffix=ipc_signal_suffix,
-            create=False,
-        )
 
     def create_zmq_client(self, model, mode):
         """
@@ -554,20 +569,24 @@ class EngineClient:
         elif action == "recv_expert_weight":
             # action: receive global expert workload, and begin update weight from disk
             # params: {'user': 'xxx', 'passwd': 'xxx', 'weight': (layers, experts)}
-            if "data" not in request_dict:
-                content = {"code": 1, "msg": "data in request is None"}
+            if "data" not in request_dict or not isinstance(request_dict["data"], list):
+                content = {"code": 1, "msg": "data not in request or data is not a list"}
                 status_code = HTTPStatus.BAD_REQUEST
             else:
-                weight = np.array(request_dict["data"], dtype=np.int32)
-                self.expert_tokens_stats_array.value[:] = weight[:]
-                self.signal_update_weight_from_disk_array.value[0] = 1
+                for idx, weight_data in enumerate(request_dict["data"]):
+                    weight = np.array(weight_data, dtype=np.int32)
+                    self.expert_tokens_stats_array_list[idx].value[:] = weight[:]
+                    self.signal_update_weight_from_disk_array[idx].value[0] = 1
 
                 content = {"code": 0, "msg": "ok"}
                 status_code = HTTPStatus.OK
             return content, status_code
         elif action == "update_weight_from_tensor":
-            if self.config.node_rank != 0:
-                content = {"code": 1, "msg": f"actual rank {self.config.node_rank}, expect rank 0"}
+            if self.config.parallel_config.local_data_parallel_id != 0:
+                content = {
+                    "code": 1,
+                    "msg": f"actual rank {self.config.parallel_config.local_data_parallel_id}, expect rank 0",
+                }
                 status_code = HTTPStatus.BAD_REQUEST
             if self.cfg.scheduler_config.splitwise_role != "prefill" and content is None:
                 content = {
@@ -595,6 +614,7 @@ class EngineClient:
     async def get_per_expert_tokens_stats(self, request_dict: dict):
         """
         get per expert tokens stats
+
         Args:
             request_dict (dict): request body
         Returns:
@@ -617,9 +637,13 @@ class EngineClient:
             return content, status_code
 
         if "clear_stat" in request_dict and request_dict["clear_stat"]:
-            self.signal_clear_experts_token_stats.value[0] = 1
+            for clear_experts_token_stats in self.signal_clear_experts_token_stats_list:
+                clear_experts_token_stats.value[0] = 1
 
-        content = {"code": 0, "msg": "ok", "data": self.local_experts_token_stats_array.value.tolist()}
+        local_experts_list = []
+        for local_experts_token_stats in self.local_experts_token_stats_array_list:
+            local_experts_list.extend(local_experts_token_stats.value.tolist())
+        content = {"code": 0, "msg": "ok", "data": local_experts_list}
         status_code = HTTPStatus.OK
         return content, status_code
 
@@ -649,8 +673,11 @@ class EngineClient:
 
         action = request_dict.get("action", "")
         if action == "":
-            if self.config.node_rank != 0:
-                content = {"code": 1, "msg": f"actual rank {self.config.node_rank}, expect rank 0"}
+            if self.config.parallel_config.local_data_parallel_id != 0:
+                content = {
+                    "code": 1,
+                    "msg": f"actual rank {self.config.parallel_config.local_data_parallel_id}, expect rank 0",
+                }
                 status_code = HTTPStatus.BAD_REQUEST
                 return content, status_code
 
@@ -665,6 +692,9 @@ class EngineClient:
                 content["data"], content["msg"] = RedundantExpertWorkload(eplb_config.redundant_expert_meta_dir).load()
             status_code = HTTPStatus.OK
         elif action == "check_load_weight_result":
-            content = {"code": 0, "msg": "ok", "data": self.update_weight_from_disk_result.value[0].tolist()}
+            update_weight_from_disk_list = []
+            for update_weight_result in self.update_weight_from_disk_result_list:
+                update_weight_from_disk_list.extend(update_weight_result.value[0].tolist())
+            content = {"code": 0, "msg": "ok", "data": update_weight_from_disk_list}
             status_code = HTTPStatus.OK
         return content, status_code
