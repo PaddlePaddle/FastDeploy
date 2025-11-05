@@ -765,7 +765,7 @@ class Ernie4_5_MoePretrainedModel(PretrainedModel):
         """
         get_tensor_parallel_mappings
         """
-        logger.info("erine inference model _get_tensor_parallel_mappings")
+        logger.info("ernie inference model _get_tensor_parallel_mappings")
         from fastdeploy.model_executor.models.tp_utils import (
             build_expanded_keys,
             has_prefix,
