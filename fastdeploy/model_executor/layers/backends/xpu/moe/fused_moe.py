@@ -311,14 +311,9 @@ class XPUMoEMethod(MoEMethodBase):
         apply tp
         """
         if self.moe_quant_type in ["w16a16"]:
-            using_ep_moe_algo = False
-        else:
-            using_ep_moe_algo = True
-
-        if using_ep_moe_algo:
-            fused_moe_out = self.apply_tp_scatter_op(layer, x, gate)
-        else:
             fused_moe_out = self.apply_tp_fused_op(layer, x, gate)
+        else:
+            fused_moe_out = self.apply_tp_scatter_op(layer, x, gate)
 
         return fused_moe_out
 

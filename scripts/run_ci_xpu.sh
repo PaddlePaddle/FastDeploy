@@ -6,10 +6,14 @@ echo "$DIR"
 apt install -y lsof
 
 #先kill一遍
-ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-lsof -t -i :8188 | xargs kill -9 || true
+function stop_processes() {
+    ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+    ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+    ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+    lsof -t -i :8188 | xargs kill -9 || true
+}
+stop_processes
+
 #设置模型路径
 export model_path=${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle
 
@@ -37,6 +41,8 @@ python -m pip install pytest-timeout
 unset http_proxy
 unset https_proxy
 unset no_proxy
+
+stop_processes
 
 # 起服务
 rm -rf log/*
@@ -71,7 +77,10 @@ while true; do
     # 超时判断
     if [ $ELAPSED -ge $TIMEOUT ]; then
         echo -e "\n服务启动超时：经过 $((TIMEOUT/60)) 分钟服务仍未启动！"
+        stop_processes
+        echo "server.log"
         cat server.log
+        echo "log/workerlog.0"
         cat log/workerlog.0
         exit 1
     fi
@@ -93,10 +102,7 @@ python -m pytest tests/ci_use/XPU_45T/run_45T.py
 kv_block_test_exit_code=$?
 echo kv_block_test_exit_code is ${kv_block_test_exit_code}
 
-ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-lsof -t -i :8188 | xargs kill -9 || true
+stop_processes
 
 if [ ${kv_block_test_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
@@ -139,7 +145,10 @@ while true; do
     # 超时判断
     if [ $ELAPSED -ge $TIMEOUT ]; then
         echo -e "\n服务启动超时：经过 $((TIMEOUT/60)) 分钟服务仍未启动！"
+        stop_processes
+        echo "server.log"
         cat server.log
+        echo "log/workerlog.0"
         cat log/workerlog.0
         exit 1
     fi
@@ -161,10 +170,7 @@ python -m pytest tests/ci_use/XPU_45T/run_w4a8.py
 w4a8_test_exit_code=$?
 echo w4a8_test_exit_code is ${w4a8_test_exit_code}
 
-ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-lsof -t -i :8188 | xargs kill -9 || true
+stop_processes
 
 if [ ${w4a8_test_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
@@ -210,7 +216,10 @@ while true; do
     # 超时判断
     if [ $ELAPSED -ge $TIMEOUT ]; then
         echo -e "\n服务启动超时：经过 $((TIMEOUT/60)) 分钟服务仍未启动！"
+        stop_processes
+        echo "server.log"
         cat server.log
+        echo "log/workerlog.0"
         cat log/workerlog.0
         exit 1
     fi
@@ -232,10 +241,7 @@ python -m pytest tests/ci_use/XPU_45T/run_45vl.py
 vl_test_exit_code=$?
 echo vl_test_exit_code is ${vl_test_exit_code}
 
-ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-lsof -t -i :8188 | xargs kill -9 || true
+stop_processes
 
 if [ ${vl_test_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
@@ -245,12 +251,13 @@ if [ ${vl_test_exit_code} -ne 0 ]; then
 fi
 
 
-echo "============================开始EP并行测试!============================"
+echo "============================开始 EP4TP1 测试!============================"
 sleep 5
 rm -rf log/*
 rm -f core*
+ipcrm --all=msg
 xpu-smi
-export XPU_VISIBLE_DEVICES="0,1,2,3"
+export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 export BKCL_ENABLE_XDR=1
 export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
 export BKCL_TRACE_TOPO=1
@@ -265,6 +272,9 @@ cd xDeepEP
 bash build.sh
 cd -
 
+export enable_expert_parallel=1
+export enable_tensor_parallel=0
+
 python -m pytest -s --timeout=600 tests/ci_use/XPU_45T/run_ep.py
 ep_exit_code=$?
 
@@ -275,14 +285,49 @@ unset BKCL_PCIE_RING
 unset XSHMEM_MODE
 unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
-ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-lsof -t -i :8188 | xargs kill -9 || true
+stop_processes
 
 if [ ${ep_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
     cat log/workerlog.0
-    echo "EP并行 相关测试失败，请检查pr代码"
+    echo "EP4TP1 相关测试失败，请检查pr代码"
+    exit 1
+fi
+
+
+echo "============================开始 EP4TP4 测试!============================"
+sleep 5
+rm -rf log/*
+rm -f core*
+ipcrm --all=msg
+xpu-smi
+export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+export BKCL_ENABLE_XDR=1
+export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
+export BKCL_TRACE_TOPO=1
+export BKCL_PCIE_RING=1
+export XSHMEM_MODE=1
+export XSHMEM_QP_NUM_PER_RANK=32
+export BKCL_RDMA_VERBS=1
+
+export enable_expert_parallel=1
+export enable_tensor_parallel=1
+
+python -m pytest -s --timeout=600 tests/ci_use/XPU_45T/run_ep.py
+ep_exit_code=$?
+
+unset BKCL_ENABLE_XDR
+unset BKCL_RDMA_NICS
+unset BKCL_TRACE_TOPO
+unset BKCL_PCIE_RING
+unset XSHMEM_MODE
+unset XSHMEM_QP_NUM_PER_RANK
+unset BKCL_RDMA_VERBS
+stop_processes
+
+if [ ${ep_exit_code} -ne 0 ]; then
+    echo "log/workerlog.0"
+    cat log/workerlog.0
+    echo "EP4TP4 相关测试失败，请检查pr代码"
     exit 1
 fi
