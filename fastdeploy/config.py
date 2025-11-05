@@ -183,6 +183,7 @@ class ModelConfig:
         self.max_model_len = 0
         self.dtype = "bfloat16"
         self.enable_logprob = False
+        self.max_logprobs = 20
         self.logprobs_mode = "raw_logprobs"
         self.enable_redundant_experts = False
         self.redundant_experts_num = 0
@@ -227,6 +228,8 @@ class ModelConfig:
         self.think_end_id = args.get("think_end_id", -1)
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
+        if self.max_logprobs == -1 and hasattr(self, "vocab_size"):
+            self.max_logprobs = self.vocab_size
 
         self._post_init()
 
@@ -241,6 +244,9 @@ class ModelConfig:
         self.is_reasoning_model = registry.is_reasoning_model(self.architectures, self)
 
         self.enable_mm = is_multimodal_model
+
+        if self.runner_type == "pooling":
+            os.environ["FD_USE_GET_SAVE_OUTPUT_V1"] = "1"
 
         if self.runner_type == "generate" and not is_generative_model:
             if is_multimodal_model:
@@ -538,6 +544,8 @@ class ParallelConfig:
         self.engine_pid: Optional[int] = None
         # Do profile or not
         self.do_profile: bool = False
+        # Use internode_ll_two_stage or not
+        self.use_internode_ll_two_stage: bool = False
 
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
@@ -823,6 +831,8 @@ class GraphOptimizationConfig:
         self.real_shape_to_captured_size: dict[int, int] = None
         """ Whether to use shared memory pool for multi capture_size """
         self.use_unique_memory_pool: bool = True
+        """ Whether to use cudagraph for draft model."""
+        self.draft_model_use_cudagraph: bool = False
 
         # CINN Config ...
         if args is not None:
@@ -862,7 +872,7 @@ class GraphOptimizationConfig:
                     self.real_shape_to_captured_size[bs] = end
         self.real_shape_to_captured_size[self.max_capture_size] = self.max_capture_size
 
-    def _set_cudagraph_sizes(self, max_num_seqs: int = 0):
+    def _set_cudagraph_sizes(self, max_capture_size: int = 0):
         """
         Calculate a series of candidate capture sizes,
         and then extract a portion of them as the capture list for the CUDA graph based on user input.
@@ -874,7 +884,7 @@ class GraphOptimizationConfig:
         # Shape [256, 288, ... 992, 1024]
         draft_capture_sizes += [32 * i for i in range(9, 33)]
 
-        draft_capture_sizes.append(max_num_seqs)
+        draft_capture_sizes.append(max_capture_size)
         self.cudagraph_capture_sizes = sorted(draft_capture_sizes)
 
     def to_json_string(self):
@@ -969,6 +979,9 @@ class PlasAttentionConfig:
         Convert plas_attention_config to json string.
         """
         return json.dumps({key: value for key, value in self.__dict__.items() if value is not None})
+
+    def __str__(self) -> str:
+        return json.dumps({key: value for key, value in self.__dict__.items()})
 
 
 class EarlyStopConfig:
@@ -1071,6 +1084,9 @@ class LoadConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
 
+    def __str__(self) -> str:
+        return json.dumps({key: value for key, value in self.__dict__.items()})
+
 
 class PoolerConfig:
     """Controls the behavior of output pooling in pooling models."""
@@ -1105,6 +1121,29 @@ class PoolerConfig:
     the original max_model_len validation logic.
     Defaults to None (i.e. set to max_model_len).
     """
+
+
+class EPLBConfig:
+    """
+    Configuration for EPLB manager.
+    """
+
+    def __init__(
+        self,
+    ):
+        self.enable_redundant_experts = envs.FD_ENABLE_REDUNDANT_EXPERTS
+        self.redundant_experts_num = envs.FD_REDUNDANT_EXPERTS_NUM
+        self.redundant_expert_ip_shm_size = envs.FD_REDUNDANT_EXPERT_IP_SHM_SIZE
+        self.redundant_expert_meta_dir = envs.FD_REDUNDANT_EXPERT_META_DIR
+        self.redundant_expert_api_user = envs.FD_REDUNDANT_EXPERT_API_USER
+        self.redundant_expert_api_password = envs.FD_REDUNDANT_EXPERT_API_PASSWORD
+        self.redundant_expert_eplb_strategy = envs.FD_REDUNDANT_EXPERT_EPLB_STRATEGY
+        self.redundant_expert_dump_workload_interval = envs.FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL
+        self.redundant_expert_async_load_model_shmem_size_gb = envs.FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB
+        self.redundant_expert_enable_schedule_cordon = envs.FD_REDUNDANT_EXPERT_ENABLE_SCHEDULE_CORDON
+        self.model_use_safetensors = envs.FD_MODEL_USE_SAFETENSORS
+        self.model_use_offline_quant = envs.FD_MODEL_USE_OFFLINE_QUANT
+        self.moe_quant_type = envs.FD_MOE_QUANT_TYPE
 
 
 class CacheConfig:
@@ -1339,10 +1378,14 @@ class StructuredOutputsConfig:
         self.guided_decoding_backend: Optional[str] = None
         # disable any whitespace for guided decoding
         self.disable_any_whitespace: bool = True
+        self.logits_processors: Optional[list[str]] = None
 
         for key, value in args.items():
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
+
+    def __str__(self) -> str:
+        return json.dumps({key: value for key, value in self.__dict__.items()})
 
 
 class FDConfig:
@@ -1364,6 +1407,7 @@ class FDConfig:
         graph_opt_config: GraphOptimizationConfig = None,
         plas_attention_config: PlasAttentionConfig = None,
         speculative_config: SpeculativeConfig = None,
+        eplb_config: EPLBConfig = None,
         structured_outputs_config: StructuredOutputsConfig = None,
         tokenizer: str = None,
         ips: str = None,
@@ -1383,6 +1427,7 @@ class FDConfig:
         self.scheduler_config: SchedulerConfig = scheduler_config  # type: ignore
         self.parallel_config = parallel_config  # type: ignore
         self.speculative_config: SpeculativeConfig = speculative_config
+        self.eplb_config: Optional[EPLBConfig] = eplb_config
         self.device_config: DeviceConfig = device_config  # type: ignore
         self.load_config: LoadConfig = load_config
         self.quant_config: Optional[QuantConfigBase] = quant_config
@@ -1391,19 +1436,22 @@ class FDConfig:
         self.cache_config: CacheConfig = cache_config  # type: ignore
         self.plas_attention_config: Optional[PlasAttentionConfig] = plas_attention_config
         self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
-        # Initialize cuda graph capture list
-        if self.graph_opt_config.cudagraph_capture_sizes is None:
-            self.graph_opt_config._set_cudagraph_sizes(max_num_seqs=self.scheduler_config.max_num_seqs)
 
+        # Initialize cuda graph capture list
+        max_capture_shape = self.scheduler_config.max_num_seqs
+        if self.speculative_config is not None and self.speculative_config.method == "mtp":
+            max_capture_shape = self.scheduler_config.max_num_seqs * (
+                self.speculative_config.num_speculative_tokens + 1
+            )
+            assert max_capture_shape % 2 == 0, "CUDAGraph only supports capturing even token nums in MTP scenarios."
         if self.graph_opt_config.cudagraph_only_prefill:
-            self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=512)
-        elif self.speculative_config is not None and self.speculative_config.method == "mtp":
-            max_shape = self.scheduler_config.max_num_seqs * (self.speculative_config.num_speculative_tokens + 1)
-            if max_shape % 2 == 1:
-                max_shape = max_shape + 1
-            self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=min(512, max_shape))
+            max_capture_shape = 512
         else:
-            self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=self.scheduler_config.max_num_seqs)
+            max_capture_shape = min(512, max_capture_shape)
+
+        if self.graph_opt_config.cudagraph_capture_sizes is None:
+            self.graph_opt_config._set_cudagraph_sizes(max_capture_size=max_capture_shape)
+        self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=max_capture_shape)
 
         self.tokenizer = tokenizer
         self.ips = ips
@@ -1532,6 +1580,8 @@ class FDConfig:
             self.cache_config.max_encoder_cache = 0
 
         # Adjustment GraphOptConfig
+        if self.scheduler_config is not None and self.scheduler_config.splitwise_role == "prefill":
+            self.graph_opt_config.use_cudagraph = self.graph_opt_config.cudagraph_only_prefill
         if self.load_config is not None and self.load_config.dynamic_load_weight is True:
             self.graph_opt_config.graph_opt_level = 0
             logger.info(
@@ -1540,6 +1590,10 @@ class FDConfig:
         if self.device_config is not None and self.device_config.device_type != "cuda":
             self.graph_opt_config.use_cudagraph = False
             logger.info(f"CUDAGraph only support on GPU, current device type is {self.device_config.device_type}!")
+
+        if self.model_config.enable_mm and self.graph_opt_config.use_cudagraph:
+            self.cache_config.enable_prefix_caching = False
+            logger.info("Multi-modal models do not support prefix caching when using CUDAGraph!")
 
         if self.scheduler_config.splitwise_role == "mixed":
             self.model_config.moe_phase = MoEPhase(phase="prefill")
@@ -1588,10 +1642,6 @@ class FDConfig:
             f"be less than or equal to max_num_partial_prefills: {self.max_num_partial_prefills}"
         )
         assert self.scheduler_config.splitwise_role in ["mixed", "prefill", "decode"]
-        # TODO(@wufeisheng): TP and EP need to be supported simultaneously.
-        assert (self.parallel_config.tensor_parallel_size == 1 and self.parallel_config.expert_parallel_size >= 1) or (
-            self.parallel_config.tensor_parallel_size >= 1 and self.parallel_config.expert_parallel_size == 1
-        ), "TP and EP cannot be enabled at the same time"
 
         if not self.cache_config.enable_chunked_prefill:
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:

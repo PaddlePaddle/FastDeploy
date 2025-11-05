@@ -101,6 +101,25 @@ class LLMEngine:
         Initializes the engine and starts its sub-services.
         If `api_server_pid` is defined, will launch a thread
         to keep getting request from zmq_server.
+
+        NOTE: To clarify the launch order of the components of the LLM engine:
+        1. First, launch splitwise scheduler (if necessary) and expert services (if necessary).
+        2. Then, launch common engine, which includes some background threads that inserts tasks and receives ouptuts.
+        3. Most importantly, launch workers and cache services. The launch order of them are listed as follows.
+
+            | Profile | Mixed | PrefixCache | Cache -> Worker | Worker -> Cache |
+            |---------|-------|-------------|-----------------|-----------------|
+            | 1       | 1     | 1           | 0               | 1               |
+            | 1       | 1     | 0           | 0               | 0               |
+            | 1       | 0     | 1           | 0               | 1               |
+            | 1       | 0     | 0           | 0               | 1               |
+            | 0       | 1     | 1           | 0               | 1               |
+            | 0       | 1     | 0           | 0               | 0               |
+            | 0       | 0     | 1           | 1               | 0               |
+            | 0       | 0     | 0           | 1               | 0               |
+
+        4. Finally, inform user the engine has successfully started.
+
         """
         assert not self.is_started, "The engine is already started."
         start_time = time.time()
@@ -109,7 +128,6 @@ class LLMEngine:
         self.ipc_signal_suffix = self.cfg.parallel_config.engine_worker_queue_port[0]
         self._init_worker_signals()
 
-        # Launch components: scheduler, cache_manager, expert_service et.al.
         self.launch_components()
 
         self.engine.start()
@@ -151,7 +169,7 @@ class LLMEngine:
         # and then start the cache manager
         if self.do_profile:
             self._stop_profile()
-        elif self.cfg.cache_config.enable_prefix_caching:
+        elif self.cfg.scheduler_config.splitwise_role == "mixed" and self.cfg.cache_config.enable_prefix_caching:
             device_ids = self.cfg.parallel_config.device_ids.split(",")
             self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
@@ -231,6 +249,7 @@ class LLMEngine:
         if sampling_params is not None:
             task.update(asdict(sampling_params))
         request = Request.from_dict(task)
+        request.llm_engine_recv_req_timestamp = time.time()
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
             request.sampling_params = sampling_params
@@ -503,7 +522,6 @@ class LLMEngine:
             f" --tensor_parallel_size {self.cfg.parallel_config.tensor_parallel_size}"
             f" --engine_worker_queue_port {ports}"
             f" --pod_ip {self.cfg.master_ip}"
-            f" --total_block_num {self.cfg.cache_config.total_block_num}"
             f" --block_size {self.cfg.cache_config.block_size}"
             f" --enc_dec_block_num {self.cfg.cache_config.enc_dec_block_num}"
             f" --eos_tokens_lens {self.engine.data_processor.eos_token_id_len}"
@@ -534,9 +552,12 @@ class LLMEngine:
             f" --convert {self.cfg.model_config.convert}"
             f" --override-pooler-config {self.cfg.model_config.override_pooler_config}"
             f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
+            f" --max_logprobs {self.cfg.model_config.max_logprobs}"
         )
+        if self.cfg.structured_outputs_config.logits_processors is not None:
+            arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
 
-        worker_append_flag = {
+        worker_store_true_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,
             "enable_prefix_caching": self.cfg.cache_config.enable_prefix_caching,
             "enable_chunked_prefill": self.cfg.cache_config.enable_chunked_prefill,
@@ -544,12 +565,21 @@ class LLMEngine:
             "dynamic_load_weight": self.cfg.load_config.dynamic_load_weight,
             "disable_any_whitespace": self.cfg.structured_outputs_config.disable_any_whitespace,
             "disable_custom_all_reduce": self.cfg.parallel_config.disable_custom_all_reduce,
+            "use_internode_ll_two_stage": self.cfg.parallel_config.use_internode_ll_two_stage,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
         }
-        for worker_flag, value in worker_append_flag.items():
+        for worker_flag, value in worker_store_true_flag.items():
             if value:
                 arguments = arguments + f" --{worker_flag}"
+
+        worker_default_none_flag = {
+            "num_gpu_blocks_override": self.cfg.cache_config.num_gpu_blocks_override,
+        }
+        for worker_flag, value in worker_default_none_flag.items():
+            if value:
+                arguments = arguments + f" --{worker_flag} {value}"
+
         if self.cfg.nnode > 1:
             pd_cmd = pd_cmd + f" --ips {ips} --nnodes {len(self.cfg.ips)}"
         pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"

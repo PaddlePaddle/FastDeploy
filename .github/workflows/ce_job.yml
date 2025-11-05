@@ -191,20 +191,31 @@ jobs:
 
           commit_id=${{ github.sha }}
           branch_name=${{ github.ref_name }}
-          target_path=paddle-qa/paddle-pipeline/FastDeploy_ActionCE/SM${COMPILE_ARCH//,/_}/${branch_name}/${commit_id}
 
-          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+          wget -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
           push_file=$(realpath bos_tools.py)
           python -m pip install bce-python-sdk==0.9.29
-          ls
-          python ${push_file} ${filename} ${target_path}
-          target_path_stripped="${target_path#paddle-qa/}"
-          WHEEL_PATH=https://paddle-qa.bj.bcebos.com/${target_path_stripped}/${filename}
 
-          target_path_latest=paddle-qa/paddle-pipeline/FastDeploy_ActionCE/SM${COMPILE_ARCH//,/_}/${branch_name}/latest
-          python ${push_file} ${filename} ${target_path_latest}
-          target_path_stripped_latest="${target_path_latest#paddle-qa/}"
-          WHEEL_PATH_LATEST=https://paddle-qa.bj.bcebos.com/${target_path_stripped_latest}/${filename}
+          target_paths=(
+            "paddle-qa/paddle-pipeline/FastDeploy_ActionCE/SM${COMPILE_ARCH//,/_}/${branch_name}/${commit_id}"
+            "paddle-qa/paddle-pipeline/FastDeploy_ActionCE/cu126/SM_80/${branch_name}/${commit_id}"
+            "paddle-qa/paddle-pipeline/FastDeploy_ActionCE/cu126/SM_90/${branch_name}/${commit_id}"
+            "paddle-qa/paddle-pipeline/FastDeploy_ActionCE/SM${COMPILE_ARCH//,/_}/${branch_name}/latest"
+            "paddle-qa/paddle-pipeline/FastDeploy_ActionCE/cu126/SM_80/${branch_name}/latest"
+            "paddle-qa/paddle-pipeline/FastDeploy_ActionCE/cu126/SM_90/${branch_name}/latest"
+          )
+
+          for target_path in "${target_paths[@]}"; do
+            echo "Uploading ${filename} to ${target_path}"
+            python "${push_file}" "${filename}" "${target_path}"
+          done
+
+          base_prefix="paddle-qa/"
+          commit_path_stripped="${target_paths[0]#${base_prefix}}"
+          latest_path_stripped="${target_paths[3]#${base_prefix}}"
+          WHEEL_PATH="https://paddle-qa.bj.bcebos.com/${commit_path_stripped}/${filename}"
+          WHEEL_PATH_LATEST="https://paddle-qa.bj.bcebos.com/${latest_path_stripped}/${filename}"
+
           echo "commit wheel url is ${WHEEL_PATH}"
           echo "latest wheel url is ${WHEEL_PATH_LATEST}"
 
@@ -230,19 +241,30 @@ jobs:
 
           commit_id=${{ github.sha }}
           branch_name=${{ github.ref_name }}
-          target_path=paddle-qa/paddle-pipeline/FastDeploy_ActionCE/SM${COMPILE_ARCH//,/_}/${branch_name}/${commit_id}
 
-          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+          wget -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
           push_file=$(realpath bos_tools.py)
           python -m pip install bce-python-sdk==0.9.29
-          ls
-          python ${push_file} ${filename} ${target_path}
-          target_path_stripped="${target_path#paddle-qa/}"
-          WHEEL_PATH=https://paddle-qa.bj.bcebos.com/${target_path_stripped}/${filename}
 
-          target_path_latest=paddle-qa/paddle-pipeline/FastDeploy_ActionCE/SM${COMPILE_ARCH//,/_}/${branch_name}/latest
-          python ${push_file} ${filename} ${target_path_latest}
-          target_path_stripped_latest="${target_path_latest#paddle-qa/}"
-          WHEEL_PATH_LATEST=https://paddle-qa.bj.bcebos.com/${target_path_stripped_latest}/${filename}
+          target_paths=(
+            "paddle-qa/paddle-pipeline/FastDeploy_ActionCE/SM${COMPILE_ARCH//,/_}/${branch_name}/${commit_id}"
+            "paddle-qa/paddle-pipeline/FastDeploy_ActionCE/cu126/SM_86/${branch_name}/${commit_id}"
+            "paddle-qa/paddle-pipeline/FastDeploy_ActionCE/cu126/SM_89/${branch_name}/${commit_id}"
+            "paddle-qa/paddle-pipeline/FastDeploy_ActionCE/SM${COMPILE_ARCH//,/_}/${branch_name}/latest"
+            "paddle-qa/paddle-pipeline/FastDeploy_ActionCE/cu126/SM_86/${branch_name}/latest"
+            "paddle-qa/paddle-pipeline/FastDeploy_ActionCE/cu126/SM_89/${branch_name}/latest"
+          )
+
+          for target_path in "${target_paths[@]}"; do
+            echo "Uploading ${filename} to ${target_path}"
+            python "${push_file}" "${filename}" "${target_path}"
+          done
+
+          base_prefix="paddle-qa/"
+          commit_path_stripped="${target_paths[0]#${base_prefix}}"
+          latest_path_stripped="${target_paths[3]#${base_prefix}}"
+          WHEEL_PATH="https://paddle-qa.bj.bcebos.com/${commit_path_stripped}/${filename}"
+          WHEEL_PATH_LATEST="https://paddle-qa.bj.bcebos.com/${latest_path_stripped}/${filename}"
+
           echo "commit wheel url is ${WHEEL_PATH}"
           echo "latest wheel url is ${WHEEL_PATH_LATEST}"

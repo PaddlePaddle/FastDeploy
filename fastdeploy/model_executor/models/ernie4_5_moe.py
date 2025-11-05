@@ -111,14 +111,6 @@ class Ernie4_5_MoE(nn.Layer):
         if hasattr(fd_config.quant_config, "moe_quant_type"):
             moe_quant_type = fd_config.quant_config.moe_quant_type
 
-        self.expert_parallel_size = fd_config.parallel_config.expert_parallel_size
-        self.tensor_parallel_size = fd_config.parallel_config.tensor_parallel_size
-        self.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
-        self.tp_group = fd_config.parallel_config.tp_group
-
-        self.use_ep = self.expert_parallel_size > 1
-        self.use_tp = self.tensor_parallel_size > 1
-
         if moe_quant_type == "w4a8" or moe_quant_type == "w4afp8":
             weight_key_map = {
                 "gate_weight_key": f"{prefix}.gate.weight",
@@ -221,30 +213,8 @@ class Ernie4_5_MoE(nn.Layer):
     def update_state_dict(self, state_dict):
         self.fused_moe.load_state_dict(state_dict, True)
 
-    def split_allgather_out(self, hidden_states: paddle.Tensor, token_num: int):
-        token_num_per_rank = (token_num + self.tensor_parallel_size - 1) // self.tensor_parallel_size
-        # AllGather will hang when the data shapes on multi-ranks are different!
-        part_hidden_states = paddle.zeros(
-            shape=[token_num_per_rank, hidden_states.shape[1]], dtype=hidden_states.dtype
-        )
-        start_offset = self.tensor_parallel_rank * token_num_per_rank
-        end_offset = (self.tensor_parallel_rank + 1) * token_num_per_rank
-        if end_offset > token_num:
-            end_offset = token_num
-        part_hidden_states[: (end_offset - start_offset), :] = hidden_states[start_offset:end_offset, :]
-        out = self.experts(part_hidden_states, self.gate)
-        multi_outs = []
-        paddle.distributed.all_gather(multi_outs, out, self.tp_group)
-        out = paddle.concat(multi_outs, axis=0)
-        out = out[:token_num, :]
-        return out
-
     def forward(self, hidden_states: paddle.Tensor):
-        token_num = hidden_states.shape[0]
-        if self.use_ep and self.use_tp and token_num >= self.tensor_parallel_size:
-            out = self.split_allgather_out(hidden_states, token_num)
-        else:
-            out = self.experts(hidden_states, self.gate)
+        out = self.experts(hidden_states, self.gate)
         if self.num_shared_experts > 0:
             s_x = self.shared_experts(hidden_states)
             out = out + s_x
@@ -795,7 +765,7 @@ class Ernie4_5_MoePretrainedModel(PretrainedModel):
         """
         get_tensor_parallel_mappings
         """
-        logger.info("erine inference model _get_tensor_parallel_mappings")
+        logger.info("ernie inference model _get_tensor_parallel_mappings")
         from fastdeploy.model_executor.models.tp_utils import (
             build_expanded_keys,
             has_prefix,
