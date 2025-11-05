@@ -22,9 +22,7 @@ from fastdeploy.model_executor.ops.gpu import get_padding_offset
 
 class TestGetPaddingOffset(unittest.TestCase):
     def test_get_padding_offset(self):
-        max_len = 10
         seq_lens = np.array([4, 3, 6], "int32").reshape(-1, 1)
-        cum_offset = np.cumsum((max_len - seq_lens).flatten(), -1, "int32")
         token_num = np.sum(seq_lens)
         input_ids = np.array(
             [[8, 7, 8, 2, 0, 0, 0, 0, 0, 0], [4, 5, 5, 0, 0, 0, 0, 0, 0, 0], [7, 6, 1, 7, 2, 6, 0, 0, 0, 0]], "int64"
@@ -36,7 +34,6 @@ class TestGetPaddingOffset(unittest.TestCase):
             cu_seqlens_k,
         ) = get_padding_offset(
             paddle.to_tensor(input_ids),
-            paddle.to_tensor(cum_offset),
             paddle.to_tensor(token_num),
             paddle.to_tensor(seq_lens),
         )

@@ -384,7 +384,6 @@ void GetBlockShapeAndSplitKVBlock(
     const int decoder_step_token_num);
 
 std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor& input_ids,
-                                             const paddle::Tensor& cum_offsets,
                                              const paddle::Tensor& token_num,
                                              const paddle::Tensor& seq_len);
 
