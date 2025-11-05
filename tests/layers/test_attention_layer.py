@@ -320,7 +320,6 @@ class TestAttentionPerformance(unittest.TestCase):
         ) = pre_process(input_ids, seq_lens_this_time, False, None, seq_lens_encoder, seq_lens_decoder)
 
         meta = ForwardMeta(
-            input_ids=input_ids,
             ids_remove_padding=ids_remove_padding,
             seq_lens_encoder=seq_lens_encoder,
             seq_lens_decoder=seq_lens_decoder,
