@@ -289,6 +289,9 @@ class TokenProcessor:
                     if task.messages is not None:
                         result.prompt = task.messages
                     result.num_cached_tokens = task.num_cached_tokens
+                    if task.get("multimodal_inputs", None):
+                        result.num_input_image_tokens = task.multimodal_inputs.get("num_input_image_tokens", 0)
+                        result.num_input_video_tokens = task.multimodal_inputs.get("num_input_video_tokens", 0)
 
                 is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
                 result = self._process_per_token(task, i, token_ids, result, is_prefill)
@@ -627,8 +630,10 @@ class TokenProcessor:
                     time_in_queue=task.schedule_start_time - task.preprocess_end_time,
                     preprocess_cost_time=task.preprocess_end_time - task.preprocess_start_time,
                     request_start_time=task.arrival_time,
+                    llm_engine_recv_req_timestamp=task.llm_engine_recv_req_timestamp,
+                    llm_engine_send_req_to_engine_timestamp=task.inference_start_time,
+                    llm_engine_recv_token_timestamp=time.time(),
                 )
-
                 self._record_first_token_metrics(task, current_time)
 
             else:
@@ -636,6 +641,9 @@ class TokenProcessor:
                     arrival_time=time.time(),
                     request_start_time=task.arrival_time,
                     model_execute_time=time.time() - task.inference_start_time,
+                    llm_engine_recv_req_timestamp=task.llm_engine_recv_req_timestamp,
+                    llm_engine_send_req_to_engine_timestamp=task.inference_start_time,
+                    llm_engine_recv_token_timestamp=time.time(),
                 )
             self.number_of_output_tokens += len(token_ids)
             self._record_metrics(task, current_time, token_ids)
@@ -655,6 +663,9 @@ class TokenProcessor:
                 if task.messages is not None:
                     result.prompt = task.messages
             result.num_cached_tokens = task.num_cached_tokens
+            if task.get("multimodal_inputs", None):
+                result.num_input_image_tokens = task.multimodal_inputs.get("num_input_image_tokens", 0)
+                result.num_input_video_tokens = task.multimodal_inputs.get("num_input_video_tokens", 0)
 
             is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
 

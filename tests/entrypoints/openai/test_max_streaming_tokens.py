@@ -387,10 +387,10 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                         "text": "Normal AI response",
                         "reasoning_content": "Normal reasoning",
                         "tool_call": None,
-                        "num_cached_tokens": 3,
                         "num_image_tokens": 2,
                         "raw_prediction": "raw_answer_0",
                     },
+                    "num_cached_tokens": 3,
                     "finished": True,
                     "previous_num_tokens": 2,
                 },
@@ -412,19 +412,19 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 "test_data": {
                     "request_id": "test_1",
                     "outputs": {
-                        "token_ids": [789],
+                        "token_ids": [123, 456, 789],
                         "text": "Edge case response",
                         "reasoning_content": None,
                         "tool_call": None,
-                        "num_cached_tokens": 0,
                         "num_image_tokens": 0,
                         "raw_prediction": None,
                     },
+                    "num_cached_tokens": 0,
                     "finished": True,
                     "previous_num_tokens": 1,
                 },
                 "mock_request": ChatCompletionRequest(
-                    model="test", messages=[], return_token_ids=True, max_tokens=5, n=2
+                    model="test", messages=[], return_token_ids=True, max_tokens=1, n=2
                 ),
                 "expected": {
                     "index": 1,
@@ -434,7 +434,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "raw_prediction": None,
                     "num_cached_tokens": 0,
                     "num_image_tokens": 0,
-                    "finish_reason": "stop",
+                    "finish_reason": "length",
                 },
             },
         ]
@@ -446,18 +446,21 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         mock_response_processor.enable_multimodal_content.return_value = False
         completion_token_ids = [[], []]
         num_cached_tokens = [0, 0]
+        num_input_image_tokens = [0, 0]
+        num_input_video_tokens = [0, 0]
         num_image_tokens = [0, 0]
 
         for idx, case in enumerate(test_cases):
             actual_choice = await self.chat_serving._create_chat_completion_choice(
-                output=case["test_data"]["outputs"],
-                index=idx,
+                data=case["test_data"],
                 request=case["mock_request"],
-                previous_num_tokens=case["test_data"]["previous_num_tokens"],
                 prompt_token_ids=prompt_token_ids,
                 prompt_tokens=prompt_tokens,
                 completion_token_ids=completion_token_ids[idx],
+                previous_num_tokens=case["test_data"]["previous_num_tokens"],
                 num_cached_tokens=num_cached_tokens,
+                num_input_image_tokens=num_input_image_tokens,
+                num_input_video_tokens=num_input_video_tokens,
                 num_image_tokens=num_image_tokens,
                 logprob_contents=logprob_contents,
                 response_processor=mock_response_processor,
@@ -529,7 +532,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         mock_processor_instance.process_response_chat = mock_process_response_chat
         mock_processor_instance.enable_multimodal_content = Mock(return_value=False)
-        mock_processor_instance.reasoning_parser = Mock(__class__.__name__ == "ErineTestReasoningParser")
+        mock_processor_instance.reasoning_parser = Mock(__class__.__name__ == "Ernie45VLThinkingReasoningParser")
         mock_processor_instance.data_processor = Mock(
             process_response_dict=lambda resp, stream, enable_thinking, include_stop_str_in_output: resp
         )

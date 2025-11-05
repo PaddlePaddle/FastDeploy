@@ -442,7 +442,7 @@ class HPUModelRunner(ModelRunnerBase):
                 or request.guided_grammar is not None
             ):
                 logits_info, schemata_key = self._init_logits_processor(request)
-                request.logits_processor, request.logits_cached = logits_info
+                request.logits_processor = logits_info
                 request.schemata_key = schemata_key
 
             # Is Decode Node
@@ -1179,30 +1179,6 @@ class HPUModelRunner(ModelRunnerBase):
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
 
-    def _get_skip_idx(self, model_forward_batch):
-        """
-        Get the index of the request that needs to be skipped during execution.
-        Args:
-            model_forward_batch: A list of requests to be executed by this runner.
-        Returns:
-            A list of indices corresponding to the requests that need to be skipped.
-        """
-        skip_idx_list = []
-        if not self.parallel_config.enable_chunked_prefill or self.guided_backend is None:
-            return skip_idx_list
-
-        for task in model_forward_batch:
-            if task.get("prefill_chunk_info", None) is None or task.chunk_idx >= len(task.prefill_chunk_info):
-                continue
-            skip_idx_list.append(task.idx)
-
-        for task in self.restore_chunked_prefill_request.values():
-            if task.idx in skip_idx_list or task.chunk_idx >= len(task.prefill_chunk_info):
-                continue
-            skip_idx_list.append(task.idx)
-
-        return skip_idx_list
-
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
@@ -1332,29 +1308,10 @@ class HPUModelRunner(ModelRunnerBase):
         execution_time = (end_time - start_time) * 1000
         hpu_model_runner_profile_logger.info(f"StepPaddle execution time(ms): {execution_time}, BT={real_bs}")
         self._update_chunked_prefill(model_forward_batch)
-        self._add_cache(model_forward_batch)
 
         if int(os.environ.get("HABANA_PROFILE", 0)) == 1:
             self.prof.step()
         return None
-
-    def _add_cache(self, model_forward_batch) -> None:
-        """
-        Add cache for guided decoding.
-        """
-        if self.guided_backend is None:
-            return
-
-        for request in model_forward_batch:
-            logits_cached = request.get("logits_cached", None)
-            if logits_cached is None or logits_cached:
-                continue
-
-            request.logits_cached = True
-            if isinstance(request.logits_processor, LogitsProcessorBase):
-                self.guided_backend.add_cache(request.schemata_key, request.logits_processor)
-            else:
-                self.guided_backend.add_cache(request.schemata_key, request.logits_processor.result())
 
     def _execute_empty_input(self) -> None:
         """

@@ -26,6 +26,7 @@ from fastdeploy.config import (
     CacheConfig,
     ConvertOption,
     EarlyStopConfig,
+    EPLBConfig,
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
@@ -43,6 +44,7 @@ from fastdeploy.scheduler.config import SchedulerConfig
 from fastdeploy.utils import (
     DeprecatedOptionWarning,
     FlexibleArgumentParser,
+    console_logger,
     is_port_available,
     parse_quantization,
 )
@@ -236,6 +238,11 @@ class EngineArgs:
     Flag to enable the custom all-reduce kernel.
     """
 
+    use_internode_ll_two_stage: bool = False
+    """
+    Flag to use the internode_ll_two_stage kernel.
+    """
+
     engine_worker_queue_port: str = "0"
     """
     Port for worker queue communication.
@@ -386,6 +393,12 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
+    max_logprobs: int = 20
+    """
+    Maximum number of log probabilities to return when `enable_logprob` is True. The default value comes the default for the
+    OpenAI Chat Completions API. -1 means no cap, i.e. all (output_length * vocab_size) logprobs are allowed to be returned and it may cause OOM.
+    """
+
     logprobs_mode: str = "raw_logprobs"
     """
     Indicates the content returned in the logprobs.
@@ -452,6 +465,13 @@ class EngineArgs:
                 raise NotImplementedError("Only CUDA platform supports logprob.")
             if self.speculative_config is not None and self.logprobs_mode.startswith("processed"):
                 raise NotImplementedError("processed_logprobs not support in speculative.")
+            if self.speculative_config is not None and self.max_logprobs == -1:
+                raise NotImplementedError("max_logprobs=-1 not support in speculative.")
+            if not envs.FD_USE_GET_SAVE_OUTPUT_V1:
+                self.max_logprobs = 20
+                console_logger.warning("Set max_logprobs=20 when FD_USE_GET_SAVE_OUTPUT_V1=0")
+            if self.max_logprobs == -1 and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                raise NotImplementedError("Only ENABLE_V1_KVCACHE_SCHEDULER=1 support max_logprobs=-1")
 
         if self.splitwise_role != "mixed" and self.cache_transfer_protocol != "rdma":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
@@ -667,9 +687,15 @@ class EngineArgs:
             help="Enable output of token-level log probabilities.",
         )
         model_group.add_argument(
+            "--max-logprobs",
+            type=int,
+            default=EngineArgs.max_logprobs,
+            help="Maximum number of log probabilities.",
+        )
+        model_group.add_argument(
             "--logprobs-mode",
             type=str,
-            choices=["raw_logprobs", "processed_logprobs", "processed_logits"],
+            choices=["raw_logprobs", "raw_logits", "processed_logprobs", "processed_logits"],
             default=EngineArgs.logprobs_mode,
             help="Indicates the content returned in the logprobs.",
         )
@@ -719,6 +745,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.disable_custom_all_reduce,
             help="Flag to disable custom all-reduce.",
+        )
+        parallel_group.add_argument(
+            "--use-internode-ll-two-stage",
+            action="store_true",
+            default=EngineArgs.use_internode_ll_two_stage,
+            help="Flag to use the internode_ll_two_stage kernel.",
         )
         parallel_group.add_argument(
             "--max-num-seqs",
@@ -1076,7 +1108,13 @@ class EngineArgs:
         Create and return a Config object based on the current settings.
         """
         all_dict = asdict(self)
+        eplb_cfg = EPLBConfig()
+        all_dict["enable_redundant_experts"] = eplb_cfg.enable_redundant_experts
         model_cfg = ModelConfig(all_dict)
+
+        # XPU currently disable prefix cache for VL model
+        if current_platform.is_xpu() and (self.enable_mm or model_cfg.enable_mm):
+            self.enable_prefix_caching = False
 
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size
@@ -1130,6 +1168,7 @@ class EngineArgs:
             load_config=load_cfg,
             parallel_config=parallel_cfg,
             speculative_config=speculative_cfg,
+            eplb_config=eplb_cfg,
             structured_outputs_config=structured_outputs_config,
             ips=self.ips,
             use_warmup=self.use_warmup,
