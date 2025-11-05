@@ -115,6 +115,7 @@ class ImageMediaIO(MediaIO[Image.Image]):
         """
         image = Image.open(requests.get(request, stream=True).raw)
         image.load()
+        image = process_transparency(image)
         return image.convert(self.image_mode)
 
     def encode_base64(
