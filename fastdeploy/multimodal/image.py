@@ -22,6 +22,7 @@ import requests
 from PIL import Image
 
 from .base import MediaIO
+from .utils import process_transparency
 
 
 class ImageMediaIO(MediaIO[Image.Image]):
@@ -59,6 +60,7 @@ class ImageMediaIO(MediaIO[Image.Image]):
         """
         image = Image.open(BytesIO(data))
         image.load()
+        image = process_transparency(image)
         return image.convert(self.image_mode)
 
     def load_base64(self, media_type: str, data: str) -> Image.Image:
@@ -93,6 +95,7 @@ class ImageMediaIO(MediaIO[Image.Image]):
         """
         image = Image.open(filepath)
         image.load()
+        image = process_transparency(image)
         return image.convert(self.image_mode)
 
     def load_file_request(self, request: Any) -> Image.Image:
@@ -112,6 +115,7 @@ class ImageMediaIO(MediaIO[Image.Image]):
         """
         image = Image.open(requests.get(request, stream=True).raw)
         image.load()
+        image = process_transparency(image)
         return image.convert(self.image_mode)
 
     def encode_base64(
