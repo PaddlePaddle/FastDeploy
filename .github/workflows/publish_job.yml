@@ -287,7 +287,7 @@ jobs:
         shell: bash
         env:
           docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
-          fd_archive_url: ${FASTDEPLOY_ARCHIVE_URL}
+          fd_archive_url: ${{ env.FASTDEPLOY_ARCHIVE_URL }}
         run: |
           set -x
           FULL_REPO="${{ github.repository }}"
