@@ -70,6 +70,7 @@ class XPUMoEMethod(MoEMethodBase):
         if layer.fd_config.load_config.load_choices == "default_v1" and self.moe_quant_type in [
             "w16a16",
             "weight_only_int8",
+            "weight_only_int4",
         ]:
             self.up_gate_proj_weight_shape = [
                 layer.num_local_experts,
@@ -137,7 +138,7 @@ class XPUMoEMethod(MoEMethodBase):
                         "model_format": extra_weight_attrs.get("model_format", ""),
                     },
                 )
-            if self.moe_quant_type in ["weight_only_int8"]:
+            if self.moe_quant_type in ["weight_only_int8", "weight_only_int4"]:
                 self.up_gate_proj_scale_shape = [
                     layer.num_local_experts,
                     layer.moe_intermediate_size * 2,
@@ -588,6 +589,8 @@ class XPUWeightOnlyMoEMethod(XPUMoEMethod):
         # scale
         scale_name = self.added_scale_attrs[weight_id_map[weight_type]]
         scale_shape = self.up_gate_proj_scale_shape if weight_type == "gate_up" else self.down_proj_scale_shape
+        if self.moe_quant_type in ["weight_only_int4"]:
+            weight_shape[-1] //= 2
         scale_dtype = "float32"
 
         # 2.crate tmp tensor
