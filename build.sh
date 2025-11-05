@@ -23,9 +23,9 @@ FD_CPU_USE_BF16=${3:-"false"}
 # These will be translated to 90a / 100a in setup_ops.py for specific features.
 FD_BUILDING_ARCS=${4:-""}
 # FD_USE_PRECOMPILED: Specify whether to use precompiled custom ops.
-# 1 = use precompiled ops (default)
-# 0 = build ops from source
-FD_USE_PRECOMPILED=${5:-1}
+# 0 = build ops from source (default)
+# 1 = use precompiled ops
+FD_USE_PRECOMPILED=${5:-0}
 # FD_COMMIT_ID: Specify the commit ID for locating precompiled wheel packages.
 # If not provided, the current git commit ID will be used automatically.
 FD_COMMIT_ID=${6:-""}
