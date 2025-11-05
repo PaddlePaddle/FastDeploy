@@ -327,7 +327,7 @@ class DeepseekV3MLAAttention(nn.Layer):
         return 0.1 * mscale * math.log(scale) + 1.0
 
     @paddle.jit.marker.capture_control_flow
-    def run_prefill_or_decode_attention(
+    def mla_attention(
         self,
         forward_meta,
         need_prefill,
@@ -432,7 +432,7 @@ class DeepseekV3MLAAttention(nn.Layer):
         bs = query.shape[0]
         fmha_out = paddle.empty([bs, self.num_attention_heads_tp, self.v_head_dim], dtype=query.dtype)
 
-        fmha_out = self.run_prefill_or_decode_attention(
+        fmha_out = self.mla_attention(
             forward_meta,
             forward_meta.needs_prefill,
             forward_meta.needs_decode,
