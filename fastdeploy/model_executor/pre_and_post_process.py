@@ -837,6 +837,7 @@ def post_process_pooling(
                 paddle.ones_like(model_output.stop_flags, dtype="bool"),
                 model_output.stop_flags,
             )
+
             update_inputs_v1(
                 model_output.stop_flags,
                 model_output.not_need_stop,

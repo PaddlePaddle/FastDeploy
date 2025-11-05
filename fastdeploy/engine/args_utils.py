@@ -21,6 +21,8 @@ from dataclasses import asdict, dataclass
 from dataclasses import fields as dataclass_fields
 from typing import Any, Dict, List, Optional, Union
 
+from paddleformers.utils.log import logger
+
 from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
@@ -464,6 +466,13 @@ class EngineArgs:
             envs.FD_ENABLE_MAX_PREFILL = 1
             self.enable_prefix_caching = False
             self.max_encoder_cache = 0
+
+        if self.runner == "pooling" and self.enable_prefix_caching:
+            logger.info(
+                "Detected pooling/embedding mode with prefix caching enabled. "
+                "Automatically disabling prefix caching as it's not beneficial for pooling tasks."
+            )
+            self.enable_prefix_caching = False
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:

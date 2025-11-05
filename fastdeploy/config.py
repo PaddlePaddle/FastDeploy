@@ -1515,6 +1515,9 @@ class FDConfig:
 
         self._str_to_list("innode_prefill_ports", int)
 
+        if self.model_config.runner == "pooling":
+            self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
+
         if envs.FD_FOR_TORCH_MODEL_FORMAT:
             self.model_config.model_format = "torch"
 

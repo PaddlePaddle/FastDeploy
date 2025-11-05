@@ -545,7 +545,6 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(
                     input_ids[prefill_start_index:prefill_end_index]
                 )
-                print("self.share_inputs['input_ids']", self.share_inputs["input_ids"])
                 encoder_block_num = len(request.block_tables)
                 self.share_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
@@ -937,13 +936,10 @@ class GPUModelRunner(ModelRunnerBase):
 
     def get_supported_pooling_tasks(self) -> list[PoolingTask]:
         model = self.get_model()
-        print("self.get_model", self.get_model())
         if not self.is_pooling_model:
             return []
 
         supported_tasks = list(model.pooler.get_supported_tasks())
-        print("model.pooler", model.pooler)
-        print("supported_tasks", supported_tasks)
 
         if self.cache_config.enable_chunked_prefill and "encode" in supported_tasks:
             supported_tasks.remove("encode")
@@ -1038,6 +1034,7 @@ class GPUModelRunner(ModelRunnerBase):
             [max_num_seqs, 1], self.model_config.max_model_len, dtype="int64"
         )
         self.seq_lens_this_time_buffer = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+
         if self.fd_config.parallel_config.enable_expert_parallel:
             self.share_inputs["seq_lens_this_time"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -1565,7 +1562,6 @@ class GPUModelRunner(ModelRunnerBase):
         dummy_metadata.build_pooling_cursor(num_scheduled_tokens_list, device=hidden_states.place)
 
         try:
-            print("model_pooer的pooling_metadata", dummy_metadata)
             return model.pooler(hidden_states=hidden_states, pooling_metadata=dummy_metadata)
         except RuntimeError as e:
             if "out of memory" in str(e):
@@ -1586,15 +1582,12 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Find the task that has the largest output for subsequent steps
         supported_pooling_tasks = self.get_supported_pooling_tasks()
-        print("supported_pooling_tasks", supported_pooling_tasks)
 
         output_size = dict[PoolingTask, float]()
 
-        for task in self.get_supported_pooling_tasks():
-            print("task", task)
+        for task in supported_pooling_tasks:
             output = self._dummy_pooler_run_task(hidden_states, task)
             output_size[task] = sum(o.numel() * o.element_size() if hasattr(o, "numel") else 0 for o in output)
-            print("output_size", output_size[task])
 
         max_task = max(output_size.items(), key=lambda x: x[1])[0]
         pooler_output = self._dummy_pooler_run_task(hidden_states, max_task)
@@ -1802,13 +1795,10 @@ class GPUModelRunner(ModelRunnerBase):
                     self.forward_meta,
                 )
             else:
-                print("ids_remove_padding", self.share_inputs["ids_remove_padding"])
-                print("forward_meta", self.forward_meta)
                 model_output = self.model(
                     ids_remove_padding=self.share_inputs["ids_remove_padding"],
                     forward_meta=self.forward_meta,
                 )
-                print("model_output", model_output)
 
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
@@ -2085,7 +2075,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 3. Execute model
         if self.enable_mm:
-            print("ids_remove_padding", self.share_inputs["ids_remove_padding"])
             model_output = self.model(
                 self.share_inputs["ids_remove_padding"],
                 self.share_inputs["image_features"],
@@ -2306,9 +2295,11 @@ class GPUModelRunner(ModelRunnerBase):
                     self.speculative_config.num_speculative_tokens,
                 )
 
+            # self.seq_lens_this_time_buffer[:num_running_requests] = self.share_inputs["seq_lens_this_time"][:num_running_requests]
             self.seq_lens_this_time_buffer[:num_running_requests].copy_(
                 self.share_inputs["seq_lens_this_time"][:num_running_requests], False
             )
+            print("execute_model的seq_lens_this_time", self.share_inputs["seq_lens_this_time"])
             return None
 
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
@@ -2332,9 +2323,10 @@ class GPUModelRunner(ModelRunnerBase):
         pooling_metadata.build_pooling_cursor(num_scheduled_tokens_list, device=device_str)
 
         raw_pooler_output = self.model.pooler(hidden_states=hidden_states, pooling_metadata=pooling_metadata)
-        print("raw_pooler_output", raw_pooler_output)
+
         seq_lens_cpu = self.share_inputs["seq_lens_this_time"][:num_running_requests]
         pooler_output: list[Optional[paddle.Tensor]] = []
+
         for raw_output, seq_len, prompt_len in zip(raw_pooler_output, seq_lens_cpu, pooling_metadata.prompt_lens):
             output = raw_output.data if int(seq_len) == int(prompt_len) else None
             pooler_output.append(output)

@@ -136,6 +136,7 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
         self._input_embeddings.copy_(input_embeddings, False)
 
         print("self._input_embeddings", self._input_embeddings)
+        print("ids_remove_padding", ids_remove_padding)
         hidden_states = self.ernie(
             input_embeddings=self._input_embeddings,
             ids_remove_padding=ids_remove_padding,
@@ -144,6 +145,10 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
         )
 
         hidden_states = hidden_states.to(self.head_dtype)
+        # import numpy as np
+        # hidden_states = hidden_states.cast(paddle.float32)
+        # np.save("hidden_states-pooling",hidden_states)
+
         print(f"===={hidden_states}")
         hidden_states, gate = self.rm_head.up_gate_proj(hidden_states).chunk(2, axis=-1)
         print("hidden_states", hidden_states)
