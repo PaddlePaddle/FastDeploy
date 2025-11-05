@@ -41,7 +41,6 @@ def test_set_stop_value_multi_ends_with_stop_seq():
     stop_token_ids_len = paddle.zeros([2], dtype="int32")
 
     min_tokens = paddle.to_tensor([[0], [0]], dtype="int64")
-    max_tokens = paddle.to_tensor([[100], [100]], dtype="int64")
 
     set_stop_value_multi_ends(
         sampled_token_ids,
@@ -56,7 +55,6 @@ def test_set_stop_value_multi_ends_with_stop_seq():
         stop_token_ids,
         stop_token_ids_len,
         min_tokens,
-        max_tokens,
         False,
     )
 
@@ -82,7 +80,6 @@ def test_stop_token_ids():
     stop_token_ids_len = paddle.to_tensor([3, 0], dtype="int32")
 
     min_tokens = paddle.to_tensor([[0], [0]], dtype="int64")
-    max_tokens = paddle.to_tensor([[100], [100]], dtype="int64")
 
     set_stop_value_multi_ends(
         sampled_token_ids,
@@ -97,7 +94,6 @@ def test_stop_token_ids():
         stop_token_ids,
         stop_token_ids_len,
         min_tokens,
-        max_tokens,
         False,
     )
 
@@ -106,8 +102,8 @@ def test_stop_token_ids():
     assert next_tokens[0, 0] == 2
 
 
-def test_min_max_tokens():
-    """Test min_tokens and max_tokens functionality"""
+def test_min_tokens():
+    """Test min_tokens  functionality"""
     sampled_token_ids = paddle.to_tensor([[2], [100], [200]], dtype="int64")
     stop_flags = paddle.to_tensor([[False], [False], [False]], dtype="bool")
     seq_lens_this_time = paddle.to_tensor([[1], [1], [1]], dtype="int32")
@@ -122,11 +118,7 @@ def test_min_max_tokens():
     stop_token_ids = paddle.full([3, 10], -1, dtype="int64")
     stop_token_ids_len = paddle.zeros([3], dtype="int32")
 
-    # Sample 0: step=5 < min_tokens=10, should not stop even if EOS is encountered
-    # Sample 1: step=50 >= max_tokens=50, should stop
-    # Sample 2: step=10, min=5, max=100, normal generation
     min_tokens = paddle.to_tensor([[10], [0], [5]], dtype="int64")
-    max_tokens = paddle.to_tensor([[100], [50], [100]], dtype="int64")
 
     set_stop_value_multi_ends(
         sampled_token_ids,
@@ -141,32 +133,16 @@ def test_min_max_tokens():
         stop_token_ids,
         stop_token_ids_len,
         min_tokens,
-        max_tokens,
         False,
     )
 
     # Sample 0: step < min_tokens, should not stop even with EOS
     assert bool(stop_flags[0, 0]) is False
 
-    # Sample 1: step >= max_tokens, should stop
-    assert bool(stop_flags[1, 0]) is True
-    assert sampled_token_ids[1, 0] == 2
-
-    # Sample 2: normal generation
-    assert bool(stop_flags[2, 0]) is False
-
 
 if __name__ == "__main__":
     test_set_stop_value_multi_ends_with_stop_seq()
 
     test_stop_token_ids()
 
-    test_min_max_tokens()
-
-
-if __name__ == "__main__":
-    test_set_stop_value_multi_ends_with_stop_seq()
-
-    test_stop_token_ids()
-
-    test_min_max_tokens()
+    test_min_tokens()

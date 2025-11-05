@@ -251,10 +251,6 @@ class ModelOutputData:
     """
         the minimum tokens that will be generated
     """
-    max_tokens: paddle.Tensor = None
-    """
-        the maximum tokens that will be generated
-    """
     """
         step mask rollback in some cases
     """

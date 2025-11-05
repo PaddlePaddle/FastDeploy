@@ -311,6 +311,12 @@ def post_process_normal(
         model_output.step_idx,
     )
 
+    length_cond = paddle.greater_equal(model_output.step_idx, model_output.max_dec_len)
+    paddle.assign(
+        paddle.logical_or(model_output.stop_flags, length_cond),
+        model_output.stop_flags,
+    )
+
     if current_platform.is_cuda() or current_platform.is_iluvatar() or current_platform.is_dcu():
         set_stop_value_multi_ends(
             sampler_output.sampled_token_ids,
@@ -325,7 +331,6 @@ def post_process_normal(
             model_output.stop_token_ids,
             model_output.stop_token_ids_len,
             model_output.min_tokens,
-            model_output.max_tokens,
             False,
         )  # multi ends
     elif current_platform.is_maca():
@@ -342,7 +347,6 @@ def post_process_normal(
             model_output.stop_token_ids,
             model_output.stop_token_ids_len,
             model_output.min_tokens,
-            model_output.max_tokens,
             False,
         )  # multi ends
     else:

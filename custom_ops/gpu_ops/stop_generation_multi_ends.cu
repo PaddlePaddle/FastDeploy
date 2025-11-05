@@ -149,20 +149,19 @@ __global__ void set_value_by_flags(bool *stop_flags,
   }
 }
 
-void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
-                       const paddle::Tensor &stop_flags,
-                       const paddle::Tensor &seq_lens,
-                       const paddle::Tensor &end_ids,
-                       const paddle::Tensor &next_tokens,
-                       const paddle::Tensor &pre_ids,
-                       const paddle::Tensor &step_idx,
-                       const paddle::Tensor &stop_seqs,
-                       const paddle::Tensor &stop_seqs_len,
-                       const paddle::Tensor &stop_token_ids,
-                       const paddle::Tensor &stop_token_ids_len,
-                       const paddle::Tensor &min_tokens,
-                       const paddle::Tensor &max_tokens,
-                       const bool beam_search) {
+void GetStopFlagsMulti(
+    const paddle::Tensor &topk_ids,
+    const paddle::Tensor &stop_flags,
+    const paddle::Tensor &seq_lens,
+    const paddle::Tensor &end_ids,
+    const paddle::Tensor &next_tokens,
+    const paddle::Tensor &pre_ids,
+    const paddle::Tensor &step_idx,
+    const paddle::Tensor &stop_seqs,
+    const paddle::Tensor &stop_seqs_len,
+    const paddle::Tensor &stop_token_ids,
+    const paddle::Tensor &stop_token_ids_len,
+    const paddle::Tensor &min_tokens const bool beam_search) {
   PD_CHECK(topk_ids.dtype() == paddle::DataType::INT64);
   PD_CHECK(stop_flags.dtype() == paddle::DataType::BOOL);
   bool prefill_one_step_stop = false;
@@ -215,7 +214,6 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
       stop_token_ids_len_ptr,
       stop_token_ids_max_len,
       min_tokens.data<int64_t>(),
-      max_tokens.data<int64_t>(),
       beam_search,
       prefill_one_step_stop);
 }
@@ -232,8 +230,7 @@ PD_BUILD_STATIC_OP(set_stop_value_multi_ends)
              "stop_seqs_len",
              "stop_token_ids",
              "stop_token_ids_len",
-             "min_tokens",
-             "max_tokens"})
+             "min_tokens"})
     .Attrs({"beam_search: bool"})
     .Outputs({"topk_ids_out", "stop_flags_out", "next_tokens_out"})
     .SetInplaceMap({{"topk_ids", "topk_ids_out"},
