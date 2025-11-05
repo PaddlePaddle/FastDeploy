@@ -23,14 +23,7 @@
 
 ### 使用方式
 
-1. 安装依赖：
-
-    ```shell
-    python -m pip install paddlepaddle-gpu==3.2.1 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
-    pip install -U paddlex
-    ```
-
-2. 启动 FastDeploy 服务，下面为 A100-80G 测试时使用的参数，可以根据实际情况进行调整：
+1. 启动 FastDeploy 服务，下面为 A100-80G 测试时使用的参数，可以根据实际情况进行调整：
 
     ```shell
     python -m fastdeploy.entrypoints.openai.api_server \
@@ -47,9 +40,12 @@
             --graph-optimization-config '{"graph_opt_level":0, "use_cudagraph":true}'
     ```
 
-3. 在同一环境启动测试脚本：
+2. 在同一环境安装依赖后启动测试脚本：
 
     ```shell
+    # 安装依赖
+    pip install -U paddlex
+    # 启动测试脚本
     python benchmark.py ./test_data -b 512 --paddlex_config_path ./PaddleOCR-VL.yaml --gpu_ids 0
     ```
 
@@ -89,15 +85,14 @@
 3. 测试结束后，会输出类似于下面的结果：
 
     ```text
-    Throughput (file): 1.3477 files per second
-    Average latency (batch): 363.7301 seconds
+    Throughput (file): 1.3961 files per second
+    Average latency (batch): 351.0812 seconds
     Processed pages: 981
-    Throughput (page): 1.3477 pages per second
-    Generated tokens: 1507157
-    Throughput (token): 2070.5 tokens per second
-    GPU utilization (%): 100.0, 0.0, 69.2
-    GPU memory usage (MB): 81500.8, 58808.8, 77409.0
-    Config and results saved to benchmark.json
+    Throughput (page): 1.3961 pages per second
+    Generated tokens: 1510337
+    Throughput (token): 2149.5 tokens per second
+    GPU utilization (%): 100.0, 0.0, 68.1
+    GPU memory usage (MB): 77664.8, 58802.8, 74402.7
     ```
 
     输出结果说明：
