@@ -21,7 +21,9 @@ import weakref
 from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionToolsParam
 
-MODEL_NAME = os.getenv("MODEL_PATH") + "/ERNIE-4.5-0.3B-Paddle"
+# MODEL_NAME = os.getenv("MODEL_PATH") + "/ERNIE-4.5-0.3B-Paddle"
+os.environ["FD_ATTENTION_BACKEND"] = os.getenv("FD_ATTENTION_BACKEND", "MLA_ATTN")
+os.environ["FLAGS_flash_attn_version"] = os.getenv("FLAGS_flash_attn_version", "3")
 
 
 class TestChat(unittest.TestCase):
@@ -40,11 +42,11 @@ class TestChat(unittest.TestCase):
     def setUpClass(cls):
         try:
             llm = LLM(
-                model=MODEL_NAME,
+                model="/ssd2/DeepSeek-V3.1-Terminus-BF16_5layers",
                 max_num_batched_tokens=4096,
-                tensor_parallel_size=1,
-                engine_worker_queue_port=int(os.getenv("FD_ENGINE_QUEUE_PORT")),
-                cache_queue_port=int(os.getenv("FD_CACHE_QUEUE_PORT")),
+                tensor_parallel_size=8,
+                engine_worker_queue_port=8083,  # =int(os.getenv("FD_ENGINE_QUEUE_PORT")),
+                cache_queue_port=8084,  # int(os.getenv("FD_CACHE_QUEUE_PORT")),
             )
             cls.llm = weakref.proxy(llm)
         except Exception as e:
