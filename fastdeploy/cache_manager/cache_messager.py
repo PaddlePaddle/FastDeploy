@@ -53,6 +53,13 @@ def parse_args():
     parser.add_argument("--device_id", type=int, default=0, help="device id")
     parser.add_argument("--num_layers", type=int, default=1, help="model num layers")
     parser.add_argument("--head_dim", type=int, default=1, help="model head dim")
+    parser.add_argument("--kv_lora_rank", type=int, default=1, help="model kv lora rank")
+    parser.add_argument(
+        "--qk_rope_head_dim",
+        type=int,
+        default=1,
+        help="model qk rope head dim",
+    )
     parser.add_argument("--kv_num_head", type=int, default=1, help="model kv num head")
     parser.add_argument("--rdma_port", type=str, default="", help="rmda port")
     parser.add_argument("--mp_num", type=int, default=1, help="number of model parallel")
@@ -146,20 +153,24 @@ class CacheMessager:
 
         # 1. initialize the cache_k_ptr_list and cache_v_ptr_list
         self.num_layers = num_layers
+        self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
         cache_k_ptr_list = []
-        cache_v_ptr_list = []
         cache_k = []
-        cache_v = []
+        if not self.mla_cache:
+            cache_v_ptr_list = []
+            cache_v = []
         self.messager = {}
         for layer_idx in range(self.num_layers):
             key_cache = self.gpu_cache_kvs[f"key_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
-            val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
             cache_k.append(key_cache)
-            cache_v.append(val_cache)
             cache_k_ptr_list.append(key_cache.data_ptr())
-            cache_v_ptr_list.append(val_cache.data_ptr())
+            if not self.mla_cache:
+                val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
+                cache_v.append(val_cache)
+                cache_v_ptr_list.append(val_cache.data_ptr())
         cache_k_ptr_list = np.array(cache_k_ptr_list)
-        cache_v_ptr_list = np.array(cache_v_ptr_list)
+        if not self.mla_cache:
+            cache_v_ptr_list = np.array(cache_v_ptr_list)
 
         # 2. initialize the block_bytes
         cache_shape = key_cache.shape
@@ -180,7 +191,7 @@ class CacheMessager:
                     self.rank,
                     gpu_id,
                     cache_k,
-                    cache_v,
+                    cache_v if not self.mla_cache else [],
                 )
                 local_device_id = int(str(cache_k[0].place)[-2])
                 logger.info(f"done create ipc_comm with local_device_id:{local_device_id}, ")
@@ -193,7 +204,7 @@ class CacheMessager:
                     rank,
                     gpu_id,
                     cache_k_ptr_list,
-                    cache_v_ptr_list,
+                    cache_v_ptr_list if not self.mla_cache else [],
                     max_block_num,
                     block_bytes,
                     rdma_port,
@@ -435,20 +446,25 @@ class CacheMessagerV1:
 
         # 1. initialize the cache_k_ptr_list and cache_v_ptr_list
         self.num_layers = num_layers
+        self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
+
         cache_k_ptr_list = []
-        cache_v_ptr_list = []
         cache_k = []
-        cache_v = []
+        if not self.mla_cache:
+            cache_v_ptr_list = []
+            cache_v = []
         self.messager = {}
         for layer_idx in range(self.num_layers):
             key_cache = self.gpu_cache_kvs[f"key_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
-            val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
             cache_k.append(key_cache)
-            cache_v.append(val_cache)
             cache_k_ptr_list.append(key_cache.data_ptr())
-            cache_v_ptr_list.append(val_cache.data_ptr())
+            if not self.mla_cache:
+                val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
+                cache_v.append(val_cache)
+                cache_v_ptr_list.append(val_cache.data_ptr())
         cache_k_ptr_list = np.array(cache_k_ptr_list)
-        cache_v_ptr_list = np.array(cache_v_ptr_list)
+        if not self.mla_cache:
+            cache_v_ptr_list = np.array(cache_v_ptr_list)
 
         # 2. initialize the block_bytes
         cache_shape = key_cache.shape
@@ -469,7 +485,7 @@ class CacheMessagerV1:
                     self.rank,
                     gpu_id,
                     cache_k,
-                    cache_v,
+                    cache_v if not self.mla_cache else [],
                 )
                 local_device_id = int(str(cache_k[0].place)[-2])
                 logger.info(f"done create ipc_comm with local_device_id:{local_device_id}, ")
@@ -482,7 +498,7 @@ class CacheMessagerV1:
                     rank,
                     gpu_id,
                     cache_k_ptr_list,
-                    cache_v_ptr_list,
+                    cache_v_ptr_list if not self.mla_cache else [],
                     max_block_num,
                     block_bytes,
                     rdma_port,
@@ -759,11 +775,15 @@ def main():
     gpu_cache_kvs = {}
     gpu_cache_k_tensors = []
     gpu_cache_v_tensors = []
+    mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
 
     logger.info(f"[rank {rank}/{args.mp_num}] Initializing kv cache for all layers.")
     for i in range(args.num_layers + num_extra_layers):
         num_gpu_blocks = args.num_gpu_blocks if i < args.num_layers else num_extra_layer_gpu_blocks
         cache_shape = [num_gpu_blocks, args.kv_num_head, args.block_size, args.head_dim]
+        if mla_cache:
+            cache_shape = [num_gpu_blocks, 1, args.block_size, args.kv_lora_rank + args.qk_rope_head_dim]
+
         logger.info(f"[rank {rank}/{args.mp_num}] ..creating kv cache for layer {i}: {cache_shape}")
 
         gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"] = paddle.full(
@@ -772,21 +792,23 @@ def main():
             dtype=cache_type,
         )
         gpu_cache_k_tensors.append(gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"])
-        gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"] = paddle.full(
-            shape=cache_shape,
-            fill_value=0,
-            dtype=cache_type,
-        )
-        gpu_cache_v_tensors.append(gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"])
+        if not mla_cache:
+            gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"] = paddle.full(
+                shape=cache_shape,
+                fill_value=0,
+                dtype=cache_type,
+            )
+            gpu_cache_v_tensors.append(gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"])
 
         set_data_ipc(
             gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"],
             f"key_caches_{i}_rank{rank}.device{device}",
         )
-        set_data_ipc(
-            gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"],
-            f"value_caches_{i}_rank{rank}.device{device}",
-        )
+        if not mla_cache:
+            set_data_ipc(
+                gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"],
+                f"value_caches_{i}_rank{rank}.device{device}",
+            )
     cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in gpu_cache_kvs.items()])
     logger.info(f"device :{device}")
     logger.info(f"cache_kv_size_byte : {cache_kv_size_byte}")

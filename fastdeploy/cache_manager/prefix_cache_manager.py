@@ -314,6 +314,8 @@ class PrefixCacheManager:
                 + f" --splitwise_role {self.splitwise_role}"
                 + f" --num_layers {cache_config.model_cfg.num_hidden_layers}"
                 + f" --head_dim {cache_config.model_cfg.head_dim}"
+                + f" --kv_lora_rank {cache_config.model_cfg.kv_lora_rank}"
+                + f" --qk_rope_head_dim {cache_config.model_cfg.qk_rope_head_dim}"
                 + f" --kv_num_head {kv_num_head}"
                 + f" --mp_num {tensor_parallel_size}"
                 + f" --cache_dtype {cache_config.cache_dtype}"
