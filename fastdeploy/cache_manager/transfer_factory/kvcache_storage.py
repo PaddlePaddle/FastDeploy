@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Any, List, Optional
 import paddle
 
-def get_hash_str(token_ids: List[int]) -> str:
+def get_hash_str(token_ids: List[int], prefix_block_key: str) -> str:
     """
     calculate hash value of a block
     """

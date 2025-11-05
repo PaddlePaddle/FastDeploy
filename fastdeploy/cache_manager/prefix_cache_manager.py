@@ -98,7 +98,7 @@ class PrefixCacheManager:
         ]:
             raise ValueError(f"Invalid write policy: {self.write_policy}")
         
-        self.storage_backend = self.cache_config.storage_backend
+        self.storage_backend = self.cache_config.kvcache_storage_backend
         self.task_write_back_event = {}
         if self.storage_backend == "mooncake":
             self.cal_block_hash = get_hash_str_mooncake
@@ -320,9 +320,9 @@ class PrefixCacheManager:
             )
 
         # Start additional threads
-        if cache_config.enable_hierarchical_cache and self.num_cpu_blocks > 0:
-            logger.info("Enable hierarchical cache.")
-            threading.Thread(target=self.recv_data_transfer_result).start()
+        # if cache_config.enable_hierarchical_cache and self.num_cpu_blocks > 0:
+        logger.info("Enable hierarchical cache.")
+        threading.Thread(target=self.recv_data_transfer_result).start()
         if cache_config.enable_prefix_caching:
             threading.Thread(target=self.clear_prefix_cache, daemon=True).start()
 
@@ -584,15 +584,23 @@ class PrefixCacheManager:
             True,
         )
 
-    def request_match_storage_blocks(self, request, extra_gpu_block_ids, prefix_block_key):
-        input_ids = request.prompt_token_ids
-        matched_block_num = request.cache_info[0]
-        block_size = self.cache_config.block_size
+    def request_match_storage_blocks(self, request, extra_gpu_block_ids):
         storage_block_ids = []
+        task_id = request.request_id
+        input_ids = request.prompt_token_ids
+        prefix_block_key = ""
+        num_cached_tokens = 0
+        if task_id in self.cache_info:
+            last_node, num_cached_tokens = self.cache_info[task_id]
+            prefix_block_key = last_node.hash_value
+        logger.info(f"matched block num: {num_cached_tokens} {extra_gpu_block_ids} {input_ids}")
+        block_size = self.cache_config.block_size
+
+
         if self.storage_backend is not None:
             keys = []
-            current_tokens = matched_block_num * block_size
-            task_id = uuid.uuid4().hex
+            current_tokens = num_cached_tokens
+
             while current_tokens < len(input_ids):
                 keys.append(get_hash_str_mooncake(input_ids[current_tokens:current_tokens + block_size], prefix_block_key))
                 current_tokens += block_size
@@ -903,8 +911,7 @@ class PrefixCacheManager:
                     gpu_build_path_block_ids,
                     block_size,
                     match_block_node,
-                    dec_block_num,
-                    prefix_hash_key
+                    dec_block_num
                 )
                 self.req_leaf_map[req_id] = leaf_node
                 self.leaf_req_map[leaf_node].add(req_id)
@@ -952,6 +959,7 @@ class PrefixCacheManager:
                 req_id = task.request_id
                 keys = []
                 leaf_node = self.req_leaf_map.pop(req_id)
+                # logger.info(f"release_block_ids: req_id {req_id} ")
                 if leaf_node in self.leaf_req_map:
                     self.leaf_req_map[leaf_node].remove(req_id)
                     if not (self.leaf_req_map[leaf_node]):
@@ -964,9 +972,10 @@ class PrefixCacheManager:
                     keys.append(node.hash_value)
                     node = node.parent
                 
-                # To-DO, 异步写入
-                if self.write_policy == "write_back":
-                    self.write_back_storage(req_id, keys, gpu_block_ids=task.block_tables, is_sync=True)
+                # To-DO, 异步写入 + output 写入
+                if self.write_policy == "write_through" and keys:
+                    logger.info(f"write_through {req_id} {keys} {task.block_tables[:len(keys)]}")
+                    self.write_back_storage(task_id=req_id, hash_keys=keys, gpu_block_ids=task.block_tables[:len(keys)], is_sync=True)
 
                 if req_id in self.cache_info:
                     del self.cache_info[req_id]
@@ -1011,6 +1020,7 @@ class PrefixCacheManager:
                 task_id,
             )
         )  # 发起数据传输任务
+
         if is_sync:
             self.sync_write_back_task(task_id)
         return
@@ -1774,7 +1784,6 @@ class PrefixCacheManager:
         block_size,
         last_node,
         reverved_dec_block_num,
-        prefix_hash_key
     ):
         """
         Build path for blocks beyond the common prefix
@@ -1805,7 +1814,7 @@ class PrefixCacheManager:
         new_last_node = last_node
         has_unfilled_block = False
 
-        prefix_block_key = prefix_hash_key
+        prefix_block_key = last_node.hash_value
 
         for i in range(0, token_num, block_size):
             current_block = left_input_ids[i : i + block_size]
@@ -1918,7 +1927,8 @@ class PrefixCacheManager:
                 length = len(task_gpu_block_id)
 
                 if event_type.value == CacheStatus.STORAGE2GPU.value:
-                    self.task_prefetch_blocks_ids = task_gpu_block_id
+                    logger.info(f"{data}")
+                    self.task_prefetch_blocks_ids[transfer_task_id] = task_gpu_block_id
                     if transfer_task_id in self.task_prefetch_event:
                         self.task_prefetch_event[transfer_task_id].set()
                     logger.info(

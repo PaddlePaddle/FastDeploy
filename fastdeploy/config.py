@@ -1271,6 +1271,8 @@ class CacheConfig:
         self.max_processor_cache = None
         self.enable_output_caching = False
         self.disable_chunked_mm_input = False
+        self.write_policy = None
+        self.kvcache_storage_backend = None
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -1285,6 +1287,7 @@ class CacheConfig:
             self.enable_hierarchical_cache = False
         else:
             self.enable_hierarchical_cache = True
+        
 
         if self.model_cfg is not None:
             if self.model_cfg.quantization is not None and isinstance(self.model_cfg.quantization, dict):
