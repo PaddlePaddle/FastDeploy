@@ -839,6 +839,7 @@ class EngineService:
                     err_msg = None
                     try:
                         request = Request.from_dict(data)
+                        request.llm_engine_recv_req_timestamp = time.time()
                         start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
                         main_process_metrics.requests_number.inc()
                         self.llm_logger.debug(f"Receive request: {request}")
