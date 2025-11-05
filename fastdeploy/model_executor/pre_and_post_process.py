@@ -206,10 +206,26 @@ def pre_process(
         cu_seqlens_q:
         cu_seqlens_k:
     """
+    token_num = paddle.sum(seq_lens_this_time)
+
+    if current_platform.is_cuda() and not speculative_decoding:
+        # Note(ZKK): This case's code is very simple!
+        ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
+            input_ids, token_num, seq_lens_this_time
+        )
+
+        return (
+            ids_remove_padding,
+            batch_id_per_token,
+            cu_seqlens_q,
+            cu_seqlens_k,
+            None,
+            None,
+        )
+
     # Remove padding
     max_len = input_ids.shape[1]
     cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
-    token_num = paddle.sum(seq_lens_this_time)
     output_padding_offset = None
     output_cum_offsets = None
     if speculative_decoding:
