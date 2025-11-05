@@ -2096,10 +2096,10 @@ class GPUModelRunner(ModelRunnerBase):
                     forward_meta=self.forward_meta,
                 )
 
-        # p = Thread(target=haha, args=())
-        # p.start()
-        # p.join()
-        haha()
+        p = Thread(target=haha, args=())
+        p.start()
+        p.join()
+        # haha()
 
         model_output = model_output[0]
         if self.use_cudagraph:
