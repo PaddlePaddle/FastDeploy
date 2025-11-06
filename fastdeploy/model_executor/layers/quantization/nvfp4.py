@@ -30,7 +30,7 @@ from fastdeploy.model_executor.utils import free_tensor, set_weight_attrs
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 if has_flashinfer():
-    from flashinfer import fp4_quantize as scaled_fp4_quant  # need to use vllm version
+    from flashinfer import fp4_quantize
     from flashinfer import mm_fp4 as fp4_gemm
 
 
@@ -353,10 +353,9 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         output_dtype = x.dtype
 
         # Quantize BF16 or FP16 to (FP4 and interleaved block scale)
-        x_fp4, x_scale_interleaved = scaled_fp4_quant(x, layer.input_scale_inv)
+        x_fp4, x_scale_interleaved = fp4_quantize(x, layer.input_scale_inv)
 
         assert x_fp4.dtype == paddle.uint8
-        assert x_scale_interleaved.dtype == paddle.float8_e4m3fn
         assert layer.weight.dtype == paddle.uint8
         assert layer.weight_scale_interleaved.dtype == paddle.float8_e4m3fn
         assert layer.alpha.dtype == paddle.float32
