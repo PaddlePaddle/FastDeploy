@@ -49,6 +49,7 @@ plugins:
             Installation: 安装
             Nvidia GPU: 英伟达 GPU
             KunlunXin XPU: 昆仑芯 XPU
+            Intel Gaudi: 英特尔 Gaudi
             HYGON DCU: 海光 DCU
             Enflame S60: 燧原 S60
             Iluvatar CoreX: 天数 CoreX
@@ -111,6 +112,7 @@ nav:
       - Installation:
           - Nvidia GPU: get_started/installation/nvidia_gpu.md
           - KunlunXin XPU: get_started/installation/kunlunxin_xpu.md
+          - Intel Gaudi: get_started/installation/intel_gaudi.md
           - HYGON DCU: get_started/installation/hygon_dcu.md
           - Enflame S60: get_started/installation/Enflame_gcu.md
           - Iluvatar CoreX: get_started/installation/iluvatar_gpu.md
