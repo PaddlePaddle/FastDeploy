@@ -2096,9 +2096,9 @@ class GPUModelRunner(ModelRunnerBase):
                     forward_meta=self.forward_meta,
                 )
 
-        p = Thread(target=haha)
-        p.start()
-        p.join()
+        # p = Thread(target=haha)
+        # p.start()
+        # p.join()
         haha()
 
         model_output = model_output[0]
