@@ -30,7 +30,7 @@ from fastdeploy.engine.request import Request, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.metrics.metrics import main_process_metrics
-from fastdeploy.utils import llm_logger
+from fastdeploy.utils import download_from_bos, init_bos_client, llm_logger
 
 
 @dataclass
@@ -80,6 +80,7 @@ class ResourceManagerV1(ResourceManager):
         self.lock = threading.Lock()
         self.to_be_rescheduled_request_id_set = set()
         main_process_metrics.max_batch_size.set(max_num_seqs)
+        self.bos_client = None
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
@@ -310,6 +311,7 @@ class ResourceManagerV1(ResourceManager):
         with self.lock:
             scheduled_reqs: list[Request] = []
             preempted_reqs: list[Request] = []
+            error_reqs: list[str, str] = []
             token_budget = self.config.max_num_batched_tokens
 
             # First, schedule the RUNNING requests.
@@ -376,17 +378,28 @@ class ResourceManagerV1(ResourceManager):
                 req_index += 1
             # schedule the WAITING requests.
             if not preempted_reqs:
-                while self.waiting and token_budget > 0:
+                waiting_idx = 0
+                while len(self.waiting) > waiting_idx and token_budget > 0:
                     if len(self.running) == self.max_num_seqs:
                         break
 
-                    request = self.waiting[0]
+                    request = self.waiting[waiting_idx]
                     if (self._is_mm_request(request) and self.exist_mm_prefill(scheduled_reqs)) or (
                         paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)
                     ):
                         break
 
                     if request.status == RequestStatus.WAITING:
+                        result = self._waiting_async_process(request)
+                        if result is None:
+                            error_reqs.append((request.request_id, request.error_message))
+                            self.waiting.popleft()
+                            continue
+                        elif result is True:
+                            # skip current request, try next request
+                            waiting_idx += 1
+                            continue
+
                         # Enable prefix caching
                         if self.config.cache_config.enable_prefix_caching:
                             if (
@@ -482,7 +495,7 @@ class ResourceManagerV1(ResourceManager):
             main_process_metrics.num_requests_running.set(len(self.running))
             main_process_metrics.num_requests_waiting.set(num_tasks - len(self.running))
 
-            return scheduled_reqs
+            return scheduled_reqs, error_reqs
 
     def get_available_position(self) -> int:
         position = 0
@@ -538,8 +551,86 @@ class ResourceManagerV1(ResourceManager):
             llm_logger.error(f"prefix match blocks error: {e}, {str(traceback.format_exc())} waiting reschedule...")
             return False
 
+    def _waiting_async_process(self, request: Request) -> None:
+        for future in request.async_process_futures:
+            if future.done():
+                if request.get("error_message") is not None:
+                    return None
+            else:
+                return True
+        return False
+
+    def _apply_async_preprocess(self, request: Request) -> None:
+        request.async_process_futures.append(self.async_preprocess_pool.submit(self._download_features, request))
+
+    def _has_features_info(self, task):
+        inputs = task.multimodal_inputs
+        if inputs is None or len(inputs) == 0:
+            return False
+
+        if (
+            (inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0)
+            or (inputs.get("image_feature_urls") is not None and len(inputs["image_feature_urls"]) > 0)
+            or (inputs.get("audio_feature_urls") is not None and len(inputs["audio_feature_urls"]) > 0)
+        ):
+            return True
+        return False
+
+    def _download_features(self, request: Request) -> None:
+        """
+        download multimodal features from bos
+        Note:
+            1. this function will be add features for request.multimodal_inputs
+            2. this function maybe update request.error_message and request.error_code
+
+        Args:
+            request (Request): request object
+        """
+
+        def download_bos_features(bos_client, features_urls):
+            result_list = []
+            for status, feature in download_from_bos(self.bos_client, features_urls):
+                if status:
+                    llm_logger.info(f"request {request.request_id} async download feature: {feature.shape}")
+                    result_list.append(feature)
+                else:
+                    error_msg = f"request {request.request_id} download features error: {feature}"
+                    llm_logger.error(error_msg)
+                    return error_msg
+            return result_list
+
+        if not self.config.parallel_config.enable_async_download_features or not self._has_features_info(request):
+            return None
+
+        if self.bos_client is None:
+            self.bos_client = init_bos_client()
+
+        inputs = request.multimodal_inputs
+        if inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0:
+            result = download_bos_features(self.bos_client, inputs["video_feature_urls"])
+            if isinstance(result, str):  # download error
+                request.error_message = result
+                request.error_code = 530
+                return None
+            inputs["video_features"] = result
+        if inputs.get("image_feature_urls") is not None and len(inputs["image_feature_urls"]) > 0:
+            result = download_bos_features(self.bos_client, inputs["image_feature_urls"])
+            if isinstance(result, str):  # download error
+                request.error_message = result
+                request.error_code = 530
+                return None
+            inputs["image_features"] = result
+        if inputs.get("audio_feature_urls") is not None and len(inputs["audio_feature_urls"]) > 0:
+            result = download_bos_features(self.bos_client, inputs["audio_feature_urls"])
+            if isinstance(result, str):  # download error
+                request.error_message = result
+                request.error_code = 530
+                return None
+            inputs["audio_features"] = result
+
     def add_request(self, request: Request) -> None:
         with self.lock:
+            self._apply_async_preprocess(request)
             self.waiting.append(request)
             self.requests[request.request_id] = request
 

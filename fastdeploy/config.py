@@ -296,6 +296,8 @@ class ParallelConfig:
         self.do_profile: bool = False
         # Use internode_ll_two_stage or not
         self.use_internode_ll_two_stage: bool = False
+        # enable async download features
+        self.enable_async_download_features: bool = False
 
         self.max_num_batched_tokens: int = 2048
         # splitwise role

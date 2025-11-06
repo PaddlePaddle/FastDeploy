@@ -47,13 +47,7 @@ from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.output.token_processor import TokenProcessor
 from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
-from fastdeploy.utils import (
-    EngineError,
-    check_download_links,
-    envs,
-    init_bos_client,
-    llm_logger,
-)
+from fastdeploy.utils import EngineError, envs, llm_logger
 
 
 class EngineSevice:
@@ -580,12 +574,20 @@ class EngineSevice:
                 ):
                     get_request_pool.submit(_fetch_request)
                 # 2. Schedule requests
-                tasks = self.resource_manager.schedule()
+                tasks, error_tasks = self.resource_manager.schedule()
                 # 3. Send to engine
                 if tasks:
                     self.resource_manager.get_real_bsz()
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
-                else:
+                # 4. Response error tasks
+                if error_tasks:
+                    for request_id, failed in error_tasks:
+                        if failed is None:
+                            llm_logger.warning(f"Request {request_id} has no error, skip sending error response.")
+                            continue
+                        self._send_error_response(request_id, failed)
+
+                if not tasks and not error_tasks:
                     time.sleep(0.005)
 
             except Exception as e:
@@ -650,24 +652,6 @@ class EngineSevice:
                             llm_logger.error(f"Receive request error: {err_msg}")
                             results.append((request.request_id, err_msg))
 
-                    if self._has_features_info(request) and err_msg is None:
-                        if self.bos_client is None:
-                            self.bos_client = init_bos_client()
-
-                        download_urls = []
-                        inputs = request.multimodal_inputs
-                        if inputs.get("video_feature_urls") is not None:
-                            download_urls.extend(inputs.get("video_feature_urls"))
-                        if inputs.get("image_feature_urls") is not None:
-                            download_urls.extend(inputs.get("image_feature_urls"))
-                        if inputs.get("audio_feature_urls") is not None:
-                            download_urls.extend(inputs.get("audio_feature_urls"))
-
-                        err_msg = check_download_links(self.bos_client, download_urls)
-                        if err_msg:
-                            llm_logger.error(f"Receive request {request.request_id} download error: {err_msg}")
-                            results.append((request.request_id, err_msg))
-
                     if err_msg is None:
                         insert_task.append(request)
 
@@ -689,15 +673,7 @@ class EngineSevice:
                         main_process_metrics.num_requests_waiting.inc(1)
                         continue
 
-                    error_result = RequestOutput(
-                        request_id=request_id,
-                        finished=True,
-                        error_code=500,
-                        error_msg=failed,
-                    )
-                    # Since the request is not in scheduler
-                    # Send result by zmq directly
-                    self.send_response_server.send_response(request_id, [error_result])
+                    self._send_error_response(request_id, failed)
             except Exception as e:
                 llm_logger.error(
                     f"Error happend while receving new request from zmq, details={e}, "
@@ -718,18 +694,17 @@ class EngineSevice:
                 del self.data_processor.decode_status[req_id]
         return delta_text, token_ids
 
-    def _has_features_info(self, task):
-        inputs = task.multimodal_inputs
-        if inputs is None or len(inputs) == 0:
-            return False
-
-        if (
-            (inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0)
-            or (inputs.get("image_feature_urls") is not None and len(inputs["image_feature_urls"]) > 0)
-            or (inputs.get("audio_feature_urls") is not None and len(inputs["audio_feature_urls"]) > 0)
-        ):
-            return True
-        return False
+    def _send_error_response(self, request_id, error_msg):
+        llm_logger.error(f"Send error response to client, request_id: {request_id}, error_msg: {error_msg}")
+        error_result = RequestOutput(
+            request_id=request_id,
+            finished=True,
+            error_code=500,
+            error_msg=error_msg,
+        )
+        # Since the request is not in scheduler
+        # Send result by zmq directly
+        self.send_response_server.send_response(request_id, [error_result])
 
     def _zmq_send_generated_tokens(self):
         """

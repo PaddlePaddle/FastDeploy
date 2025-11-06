@@ -21,6 +21,7 @@ import importlib
 import json
 import logging
 import os
+import pickle
 import random
 import re
 import socket
@@ -803,6 +804,27 @@ def init_bos_client():
         credentials=BceCredentials(envs.ENCODE_FEATURE_BOS_AK, envs.ENCODE_FEATURE_BOS_SK), endpoint="bj.bcebos.com"
     )
     return BosClient(cfg)
+
+
+def download_from_bos(bos_client, bos_links, timeout=1):
+    """
+    download from bos
+    """
+    if not isinstance(bos_links, list):
+        bos_links = [bos_links]
+
+    for link in bos_links:
+        try:
+            if link.startswith("bos://"):
+                link = link.replace("bos://", "")
+
+            bucket_name = "/".join(link.split("/")[1:-1])
+            object_key = link.split("/")[-1]
+
+            response = bos_client.get_object_as_string(bucket_name, object_key)
+            yield True, pickle.loads(response)
+        except Exception as e:
+            return False, f"link {link} download error: {str(e)}"
 
 
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")
