@@ -305,7 +305,9 @@ class Ernie4_5Processor(BaseDataProcessor):
         if is_end:
             full_text = previous_texts + delta_text
             if self.reasoning_parser and (
-                enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
+                enable_thinking
+                or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
+                or self.reasoning_parser.__class__.__name__ == "Ernie45VLThinkingReasoningParser"
             ):
                 reasoning_content, text = self.reasoning_parser.extract_reasoning_content(full_text, response_dict)
                 response_dict["outputs"]["text"] = text
@@ -346,7 +348,9 @@ class Ernie4_5Processor(BaseDataProcessor):
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
         response_dict["outputs"]["completion_tokens"] = delta_text
         if self.reasoning_parser and (
-            enable_thinking or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
+            enable_thinking
+            or self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser"
+            or self.reasoning_parser.__class__.__name__ == "Ernie45VLThinkingReasoningParser"
         ):
             reasoning_delta_message = self.reasoning_parser.extract_reasoning_content_streaming(
                 previous_texts,
