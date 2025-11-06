@@ -21,6 +21,8 @@ import sys
 # suppress warning log from paddlepaddle
 os.environ["GLOG_minloglevel"] = "2"
 # suppress log from aistudio
+
+print("abc)
 os.environ["AISTUDIO_LOG"] = "critical"
 import typing
 
