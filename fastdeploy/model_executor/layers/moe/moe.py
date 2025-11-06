@@ -199,7 +199,12 @@ class FusedMoE(nn.Layer):
         else:
             self.gate_correction_bias = None
         self.quant_method.create_weights(
-            self, weight_loader=self.weight_loader, model_format=fd_config.model_config.model_format
+            self,
+            weight_loader=self.weight_loader,
+            model_format=fd_config.model_config.model_format,
+            num_experts=self.num_local_experts if self.ep_size > 1 else self.num_experts,
+            hidden_size=self.hidden_size,
+            moe_intermediate_size=self.moe_intermediate_size,
         )
 
         logger.info(
@@ -214,45 +219,52 @@ class FusedMoE(nn.Layer):
             # MoE experts has been fused in disk
             self._load_fused_experts_weight(param, loaded_weight)
             return
-        if hasattr(param, "SHARD_ID_TO_SHARDED_DIM"):
-            SHARD_ID_TO_SHARDED_DIM = param.SHARD_ID_TO_SHARDED_DIM
-        elif current_platform.is_cuda():
-            SHARD_ID_TO_SHARDED_DIM = {"gate": 1, "down": 0, "up": 1}
-        else:
-            SHARD_ID_TO_SHARDED_DIM = {"gate": 0, "down": 1, "up": 0}
 
-        if not param._is_initialized():
-            param.initialize()
+        if expert_id - self.expert_id_offset >= 0 and expert_id - self.expert_id_offset < self.num_local_experts:
+            if hasattr(param, "SHARD_ID_TO_SHARDED_DIM"):
+                SHARD_ID_TO_SHARDED_DIM = param.SHARD_ID_TO_SHARDED_DIM
+            elif current_platform.is_cuda():
+                SHARD_ID_TO_SHARDED_DIM = {"gate": 1, "down": 0, "up": 1}
+            else:
+                SHARD_ID_TO_SHARDED_DIM = {"gate": 0, "down": 1, "up": 0}
 
-        if shard_id is None:
-            # 1.gate up fused in disk
-            weight_need_transpose = getattr(param, "weight_need_transpose", False)
-            output_size = param[expert_id - self.expert_id_offset].shape[SHARD_ID_TO_SHARDED_DIM["gate"]]
-            per_rank = output_size // 2
-            start = self.tp_rank * per_rank
-            loaded_weight_shard_gate = slice_fn(
-                loaded_weight, weight_need_transpose ^ SHARD_ID_TO_SHARDED_DIM["gate"], start, start + per_rank
-            )
-            self._load_gate_up_weight(
-                param, expert_id, loaded_weight_shard_gate, "gate", SHARD_ID_TO_SHARDED_DIM["gate"], is_sharded=True
-            )
-            start_up = output_size // 2 * self.tp_size + self.tp_rank * per_rank
-            loaded_weight_shard_up = slice_fn(
-                loaded_weight, weight_need_transpose ^ SHARD_ID_TO_SHARDED_DIM["up"], start_up, start_up + per_rank
-            )
-            self._load_gate_up_weight(
-                param, expert_id, loaded_weight_shard_up, "up", SHARD_ID_TO_SHARDED_DIM["up"], is_sharded=True
-            )
-        else:
-            # 2.gate up splited in disk
-            assert shard_id in ["gate", "down", "up"]
-            self._load_expert_weight(
-                param=param,
-                expert_id=expert_id,
-                loaded_weight=loaded_weight,
-                shard_id=shard_id,
-                shard_dim=SHARD_ID_TO_SHARDED_DIM[shard_id],
-            )
+            if not param._is_initialized():
+                param.initialize()
+
+            if shard_id is None:
+                # 1.gate up fused in disk
+                weight_need_transpose = getattr(param, "weight_need_transpose", False)
+                output_size = param[expert_id - self.expert_id_offset].shape[SHARD_ID_TO_SHARDED_DIM["gate"]]
+                per_rank = output_size // 2
+                start = self.tp_rank * per_rank
+                loaded_weight_shard_gate = slice_fn(
+                    loaded_weight, weight_need_transpose ^ SHARD_ID_TO_SHARDED_DIM["gate"], start, start + per_rank
+                )
+                self._load_gate_up_weight(
+                    param,
+                    expert_id,
+                    loaded_weight_shard_gate,
+                    "gate",
+                    SHARD_ID_TO_SHARDED_DIM["gate"],
+                    is_sharded=True,
+                )
+                start_up = output_size // 2 * self.tp_size + self.tp_rank * per_rank
+                loaded_weight_shard_up = slice_fn(
+                    loaded_weight, weight_need_transpose ^ SHARD_ID_TO_SHARDED_DIM["up"], start_up, start_up + per_rank
+                )
+                self._load_gate_up_weight(
+                    param, expert_id, loaded_weight_shard_up, "up", SHARD_ID_TO_SHARDED_DIM["up"], is_sharded=True
+                )
+            else:
+                # 2.gate up splited in disk
+                assert shard_id in ["gate", "down", "up"]
+                self._load_expert_weight(
+                    param=param,
+                    expert_id=expert_id,
+                    loaded_weight=loaded_weight,
+                    shard_id=shard_id,
+                    shard_dim=SHARD_ID_TO_SHARDED_DIM[shard_id],
+                )
 
     def _load_gate_up_weight(self, param, expert_id, loaded_weight, shard_id, shard_dim=None, is_sharded=False):
         weight_need_transpose = getattr(param, "weight_need_transpose", False)

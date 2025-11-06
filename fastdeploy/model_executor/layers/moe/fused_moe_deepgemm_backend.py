@@ -198,11 +198,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             layer,
             weight_name,
             layer.create_parameter(
-                shape=[
-                    layer.num_local_experts,
-                    ceil_div(layer.moe_intermediate_size * 2, self.quant_config.weight_block_size[0]),
-                    ceil_div(layer.hidden_size, self.quant_config.weight_block_size[1]),
-                ],
+                shape=weight.shape,
                 dtype=weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
@@ -212,11 +208,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             layer,
             scale_name,
             layer.create_parameter(
-                shape=[
-                    layer.num_local_experts,
-                    ceil_div(layer.hidden_size, self.quant_config.weight_block_size[0]),
-                    ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]),
-                ],
+                shape=scale.shape,
                 dtype=scale_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),

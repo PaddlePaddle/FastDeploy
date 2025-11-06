@@ -145,6 +145,8 @@ def process_weights_after_loading(sublayers_dict: dict):
             quant_method = getattr(model_sublayer, "quant_method", None)
             if not hasattr(quant_method, "process_weights_after_loading"):
                 return
+            if param is not None and hasattr(param, "tensor_track") and param.tensor_track is None:
+                return
             if param is not None and hasattr(param, "tensor_track") and not param.tensor_track.is_fully_copied():
                 return
             quant_method.process_weights_after_loading(model_sublayer)
@@ -267,10 +269,6 @@ def v1_loader_support(fd_config):
 
     if is_pre_sliced_weight(fd_config.model_config.model):
         _err_msg("v1 loader currently does not support pre-sliced weights")
-        return False
-
-    if fd_config.parallel_config.use_ep:
-        _err_msg("v1 loader currently does not support expert parallelism")
         return False
 
     if envs.FD_MOE_BACKEND.lower() == "marlin":

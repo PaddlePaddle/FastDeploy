@@ -420,6 +420,20 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
 
         return logits
 
+    def empty_input_forward(self):
+        """
+        empty_input_forward
+        """
+        fake_hidden_states = paddle.empty(
+            shape=[1, self.fd_config.model_config.hidden_size],
+            dtype=paddle.get_default_dtype(),
+        )
+        for i in range(
+            self.fd_config.model_config.moe_layer_start_index,
+            self.fd_config.model_config.num_hidden_layers,
+        ):
+            self.model.layers[i].mlp.experts(fake_hidden_states, self.model.layers[i].mlp.gate)
+
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
