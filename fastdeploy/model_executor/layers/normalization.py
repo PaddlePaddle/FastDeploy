@@ -247,9 +247,6 @@ class RMSNorm(nn.Layer):
         if self.allgather_out:
             out = self.allgather(out, forward_meta.ids_remove_padding.shape[0])
 
-        # if residual_input is None:
-        #     return out
-        # else:
         return out, residual_out
 
 
