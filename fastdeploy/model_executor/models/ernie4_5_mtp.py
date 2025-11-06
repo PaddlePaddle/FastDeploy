@@ -63,7 +63,7 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
         """
         get_tensor_parallel_mappings
         """
-        logger.info("erine inference model _get_tensor_parallel_mappings")
+        logger.info("ernie inference model _get_tensor_parallel_mappings")
 
         from paddleformers.transformers.conversion_utils import split_or_merge_func
 
