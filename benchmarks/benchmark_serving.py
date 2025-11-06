@@ -352,7 +352,7 @@ async def benchmark(
         ignore_eos=ignore_eos,
         debug=debug,
         extra_body=extra_body,
-        response_format=response_format
+        response_format=response_format,
     )
 
     print("test_input:", test_input)
@@ -384,7 +384,7 @@ async def benchmark(
             logprobs=logprobs,
             ignore_eos=ignore_eos,
             extra_body=extra_body,
-            response_format=response_format
+            response_format=response_format,
         )
         profile_output = await request_func(request_func_input=profile_input)
         if profile_output.success:
@@ -444,7 +444,7 @@ async def benchmark(
             debug=debug,
             ignore_eos=ignore_eos,
             extra_body=extra_body,
-            response_format=response_format
+            response_format=response_format,
         )
         tasks.append(asyncio.create_task(limited_request_func(request_func_input=request_func_input, pbar=pbar)))
     outputs: list[RequestFuncOutput] = await asyncio.gather(*tasks)
@@ -460,7 +460,7 @@ async def benchmark(
             api_url=base_url + "/stop_profile",
             output_len=test_output_len,
             logprobs=logprobs,
-            response_format=response_format
+            response_format=response_format,
         )
         profile_output = await request_func(request_func_input=profile_input)
         if profile_output.success:
@@ -487,6 +487,9 @@ async def benchmark(
             benchmark_duration = benchmark_outputs[-1].end_timestamp - benchmark_outputs[0].end_timestamp
         else:
             benchmark_duration = 0.0
+            print(f"丢弃前数量: {n}")
+            print(f"丢弃后数量: {len(benchmark_outputs)}, 返回结果异常")
+            exit(8)
 
         print(f"丢弃前数量: {n}")
         print(f"丢弃后数量: {len(benchmark_outputs)}")

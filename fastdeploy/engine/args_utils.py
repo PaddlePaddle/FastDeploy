@@ -26,6 +26,7 @@ from fastdeploy.config import (
     CacheConfig,
     ConvertOption,
     EarlyStopConfig,
+    EPLBConfig,
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
@@ -33,6 +34,7 @@ from fastdeploy.config import (
     ParallelConfig,
     PlasAttentionConfig,
     PoolerConfig,
+    RouterConfig,
     RunnerOption,
     SpeculativeConfig,
     StructuredOutputsConfig,
@@ -43,6 +45,7 @@ from fastdeploy.scheduler.config import SchedulerConfig
 from fastdeploy.utils import (
     DeprecatedOptionWarning,
     FlexibleArgumentParser,
+    console_logger,
     is_port_available,
     parse_quantization,
 )
@@ -71,6 +74,10 @@ class EngineArgs:
     model: str = "baidu/ernie-45-turbo"
     """
     The name or path of the model to be used.
+    """
+    port: Optional[str] = None
+    """
+    Port for api server.
     """
     served_model_name: Optional[str] = None
     """
@@ -236,6 +243,11 @@ class EngineArgs:
     Flag to enable the custom all-reduce kernel.
     """
 
+    use_internode_ll_two_stage: bool = False
+    """
+    Flag to use the internode_ll_two_stage kernel.
+    """
+
     engine_worker_queue_port: str = "0"
     """
     Port for worker queue communication.
@@ -301,6 +313,10 @@ class EngineArgs:
     static_decode_blocks: int = 2
     """
     additional decode block num
+    """
+    disable_chunked_mm_input: bool = False
+    """
+    Disable chunked_mm_input for multi-model inference.
     """
 
     scheduler_name: str = "local"
@@ -386,6 +402,12 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
+    max_logprobs: int = 20
+    """
+    Maximum number of log probabilities to return when `enable_logprob` is True. The default value comes the default for the
+    OpenAI Chat Completions API. -1 means no cap, i.e. all (output_length * vocab_size) logprobs are allowed to be returned and it may cause OOM.
+    """
+
     logprobs_mode: str = "raw_logprobs"
     """
     Indicates the content returned in the logprobs.
@@ -432,6 +454,11 @@ class EngineArgs:
     - To enable custom logits processors, add your dotted paths to module and class names to the list.
     """
 
+    router: Optional[str] = None
+    """
+    Url for router server, such as `0.0.0.0:30000`.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -452,6 +479,13 @@ class EngineArgs:
                 raise NotImplementedError("Only CUDA platform supports logprob.")
             if self.speculative_config is not None and self.logprobs_mode.startswith("processed"):
                 raise NotImplementedError("processed_logprobs not support in speculative.")
+            if self.speculative_config is not None and self.max_logprobs == -1:
+                raise NotImplementedError("max_logprobs=-1 not support in speculative.")
+            if not envs.FD_USE_GET_SAVE_OUTPUT_V1:
+                self.max_logprobs = 20
+                console_logger.warning("Set max_logprobs=20 when FD_USE_GET_SAVE_OUTPUT_V1=0")
+            if self.max_logprobs == -1 and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                raise NotImplementedError("Only ENABLE_V1_KVCACHE_SCHEDULER=1 support max_logprobs=-1")
 
         if self.splitwise_role != "mixed" and self.cache_transfer_protocol != "rdma":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
@@ -667,6 +701,12 @@ class EngineArgs:
             help="Enable output of token-level log probabilities.",
         )
         model_group.add_argument(
+            "--max-logprobs",
+            type=int,
+            default=EngineArgs.max_logprobs,
+            help="Maximum number of log probabilities.",
+        )
+        model_group.add_argument(
             "--logprobs-mode",
             type=str,
             choices=["raw_logprobs", "raw_logits", "processed_logprobs", "processed_logits"],
@@ -719,6 +759,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.disable_custom_all_reduce,
             help="Flag to disable custom all-reduce.",
+        )
+        parallel_group.add_argument(
+            "--use-internode-ll-two-stage",
+            action="store_true",
+            default=EngineArgs.use_internode_ll_two_stage,
+            help="Flag to use the internode_ll_two_stage kernel.",
         )
         parallel_group.add_argument(
             "--max-num-seqs",
@@ -828,21 +874,6 @@ class EngineArgs:
         )
 
         perf_group.add_argument(
-            "--splitwise-role",
-            type=str,
-            default=EngineArgs.splitwise_role,
-            help="Role of splitwise. Default is \
-            'mixed'. (prefill, decode, mixed)",
-        )
-
-        perf_group.add_argument(
-            "--innode-prefill-ports",
-            type=lambda s: s.split(",") if s else None,
-            default=EngineArgs.innode_prefill_ports,
-            help="port for innode prefill",
-        )
-
-        perf_group.add_argument(
             "--enable-chunked-prefill",
             action="store_true",
             default=EngineArgs.enable_chunked_prefill,
@@ -871,25 +902,58 @@ class EngineArgs:
             help=("For chunked prefill, the threshold number of" " tokens for a prompt to be considered long."),
         )
 
-        perf_group.add_argument(
+        # Splitwise deployment parameters group
+        splitwise_group = parser.add_argument_group("Splitwise Deployment")
+        splitwise_group.add_argument(
+            "--splitwise-role",
+            type=str,
+            default=EngineArgs.splitwise_role,
+            help="Role of splitwise. Default is \
+            'mixed'. (prefill, decode, mixed)",
+        )
+
+        splitwise_group.add_argument(
+            "--innode-prefill-ports",
+            type=lambda s: s.split(",") if s else None,
+            default=EngineArgs.innode_prefill_ports,
+            help="port for innode prefill, only used in single machine splitwise deployment",
+        )
+
+        splitwise_group.add_argument(
             "--cache-transfer-protocol",
             type=str,
             default=EngineArgs.cache_transfer_protocol,
-            help="support protocol list, comma separated, default is ipc",
+            help="support protocol list (ipc or rdma), comma separated, default is ipc",
         )
 
-        perf_group.add_argument(
+        splitwise_group.add_argument(
             "--pd-comm-port",
             type=lambda s: s.split(",") if s else None,
             default=EngineArgs.pd_comm_port,
             help="port for splitwise communication.",
         )
 
-        perf_group.add_argument(
+        splitwise_group.add_argument(
             "--rdma-comm-ports",
             type=lambda s: s.split(",") if s else None,
             default=EngineArgs.rdma_comm_ports,
             help="ports for rdma communication.",
+        )
+
+        perf_group.add_argument(
+            "--disable-chunked-mm-input",
+            action="store_true",
+            default=EngineArgs.disable_chunked_mm_input,
+            help="Disable chunked mm input.",
+        )
+
+        # Router parameters group
+        router_group = parser.add_argument_group("Router")
+        router_group.add_argument(
+            "--router",
+            type=str,
+            default=EngineArgs.router,
+            help="url for router server.",
         )
 
         # Scheduler parameters group
@@ -1012,7 +1076,11 @@ class EngineArgs:
         """
         Create an instance of EngineArgs from command line arguments.
         """
-        return cls(**{field.name: getattr(args, field.name) for field in dataclass_fields(cls)})
+        args_dict = {}
+        for field in dataclass_fields(cls):
+            if hasattr(args, field.name):
+                args_dict[field.name] = getattr(args, field.name)
+        return cls(**args_dict)
 
     def create_speculative_config(self) -> SpeculativeConfig:
         """ """
@@ -1031,6 +1099,7 @@ class EngineArgs:
         prefix_len = len(prefix)
 
         all = asdict(self)
+        all.pop("port")  # port and scheduler_port are not the same
         params = dict()
         for k, v in all.items():
             if k[:prefix_len] == prefix:
@@ -1076,6 +1145,8 @@ class EngineArgs:
         Create and return a Config object based on the current settings.
         """
         all_dict = asdict(self)
+        eplb_cfg = EPLBConfig()
+        all_dict["enable_redundant_experts"] = eplb_cfg.enable_redundant_experts
         model_cfg = ModelConfig(all_dict)
 
         # XPU currently disable prefix cache for VL model
@@ -1117,6 +1188,7 @@ class EngineArgs:
         scheduler_cfg = self.create_scheduler_config()
         graph_opt_cfg = self.create_graph_optimization_config()
         plas_attention_config = self.create_plas_attention_config()
+        router_config = RouterConfig(all_dict)
 
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
@@ -1134,7 +1206,9 @@ class EngineArgs:
             load_config=load_cfg,
             parallel_config=parallel_cfg,
             speculative_config=speculative_cfg,
+            eplb_config=eplb_cfg,
             structured_outputs_config=structured_outputs_config,
+            router_config=router_config,
             ips=self.ips,
             use_warmup=self.use_warmup,
             limit_mm_per_prompt=self.limit_mm_per_prompt,

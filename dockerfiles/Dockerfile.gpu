@@ -1,6 +1,6 @@
-FROM ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:2.2.1
-ARG PADDLE_VERSION=3.2.0
-ARG FD_VERSION=2.2.1
+FROM ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:tag-base
+ARG PADDLE_VERSION=3.2.1
+ARG FD_VERSION=2.3.0-rc0
 
 ENV DEBIAN_FRONTEND=noninteractive
 
