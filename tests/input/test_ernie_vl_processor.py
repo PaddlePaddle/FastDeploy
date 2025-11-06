@@ -111,6 +111,16 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(request_dict["enable_thinking"], True)
 
+        self.mock_reasoning_parser = MagicMock()
+        self.mock_reasoning_parser.__class__.__name__ = "Ernie45VLThinkingReasoningParser"
+        self.processor.reasoning_parser = self.mock_reasoning_parser
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "prompt_token_ids": [1, 1, 1],
+        }
+        self.processor.process_request_dict(request_dict, 100)
+        self.assertEqual(request_dict["enable_thinking"], True)
+
 
 if __name__ == "__main__":
     unittest.main()
