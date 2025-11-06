@@ -287,6 +287,15 @@ class EngineService:
                 self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id] = (
                     str(self.engine_worker_queue_server.get_server_port())
                 )
+                address = (
+                    self.cfg.master_ip,
+                    int(
+                        self.cfg.parallel_config.engine_worker_queue_port[
+                            self.cfg.parallel_config.local_data_parallel_id
+                        ]
+                    ),
+                )
+
             if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
                 self.cache_task_queue = EngineCacheQueue(
                     address=(
