@@ -2079,27 +2079,29 @@ class GPUModelRunner(ModelRunnerBase):
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
 
-        model_output = [None]
+        model_output = None
 
         def haha():
 
             # 3. Run model
             if self.enable_mm:
-                model_output[0] = self.model(
+                model_output = self.model(
                     self.share_inputs["ids_remove_padding"],
                     self.share_inputs["image_features"],
                     self.forward_meta,
                 )
             else:
-                model_output[0] = self.model(
+                model_output = self.model(
                     ids_remove_padding=self.share_inputs["ids_remove_padding"],
                     forward_meta=self.forward_meta,
                 )
 
+            return model_output
+
         # p = Thread(target=haha)
         # p.start()
         # p.join()
-        haha()
+        model_output = haha()
 
         model_output = model_output[0]
         if self.use_cudagraph:
