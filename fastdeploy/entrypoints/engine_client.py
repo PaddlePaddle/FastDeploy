@@ -96,7 +96,7 @@ class EngineClient:
         else:
             self.is_master = False
 
-        if self.config.eplb_config.enable_eplb and self.config.parallel_config.local_data_parallel_id == 0:
+        if self.config.eplb_config.enable_eplb and self.config.parallel_config.expert_parallel_rank == 0:
             self.init_eplb_signals(ipc_signal_suffix=port)
 
         array_size = min(max_chips_per_node, tensor_parallel_size)
@@ -165,7 +165,16 @@ class EngineClient:
             create=False,
         )
 
-        for suffix_port in self.config.parallel_config.engine_worker_queue_port:
+        if envs.FD_ENABLE_MULTI_API_SERVER:
+            engine_worker_suffix = [
+                self.config.parallel_config.engine_worker_queue_port[
+                    self.config.parallel_config.local_data_parallel_id
+                ]
+            ]
+        else:
+            engine_worker_suffix = self.config.parallel_config.engine_worker_queue_port
+
+        for suffix_port in engine_worker_suffix:
             signal_clear_experts_token_stats = np.zeros([1], dtype=np.int32)
             self.signal_clear_experts_token_stats_list.append(
                 IPCSignal(
@@ -521,18 +530,19 @@ class EngineClient:
             status_code = HTTPStatus.UNAUTHORIZED
             return content, status_code
 
+        if self.config.parallel_config.expert_parallel_rank != 0:
+            content = {
+                "code": 1,
+                "msg": f"actual rank {self.config.parallel_config.expert_parallel_rank}, expect rank 0",
+            }
+            status_code = HTTPStatus.BAD_REQUEST
+            return content, status_code
+
         action = request_dict.get("action", "")
         api_server_logger.info(f"redundant_expert: rearrange_experts recv request, action {action}")
         if action == "":
             # action: start rearrange experts
             # params: {'user': 'xxx', 'passwd': 'xxx', 'ips': ['10.54.99.77:8000', '10.54.99.77:8300']}
-            if self.config.parallel_config.local_data_parallel_id != 0:
-                content = {
-                    "code": 1,
-                    "msg": f"actual rank {self.config.parallel_config.local_data_parallel_id}, expect rank 0",
-                }
-                status_code = HTTPStatus.BAD_REQUEST
-
             if self.rearrange_experts_signal.value[0] != RearrangeExpertStatus.FREE.value:
                 content = {
                     "code": 1,
@@ -541,12 +551,6 @@ class EngineClient:
                 status_code = HTTPStatus.BAD_REQUEST
             if "ips" not in request_dict and content is None:
                 content = {"code": 1, "msg": "ips in request is None"}
-                status_code = HTTPStatus.BAD_REQUEST
-            if len(request_dict["ips"]) < self.config.parallel_config.data_parallel_size and content is None:
-                content = {
-                    "code": 1,
-                    "msg": f"actual ip num {len(request_dict['ips'])}, expect num greater than {self.config.parallel_config.data_parallel_size}",
-                }
                 status_code = HTTPStatus.BAD_REQUEST
 
             if content is not None:
@@ -572,22 +576,23 @@ class EngineClient:
             if "data" not in request_dict or not isinstance(request_dict["data"], list):
                 content = {"code": 1, "msg": "data not in request or data is not a list"}
                 status_code = HTTPStatus.BAD_REQUEST
+
+            elif len(request_dict["data"]) != len(self.expert_tokens_stats_array_list):
+                content = {
+                    "code": 1,
+                    "msg": f"actual data length {len(request_dict['data'])}, expect length {len(self.expert_tokens_stats_array_list)}",
+                }
+                status_code = HTTPStatus.BAD_REQUEST
             else:
-                for idx, weight_data in enumerate(request_dict["data"]):
-                    weight = np.array(weight_data, dtype=np.int32)
+                weight = np.array(request_dict["data"], dtype=np.int32)
+                for idx in range(len(self.expert_tokens_stats_array_list)):
                     self.expert_tokens_stats_array_list[idx].value[:] = weight[:]
-                    self.signal_update_weight_from_disk_array[idx].value[0] = 1
+                    self.signal_update_weight_from_disk_array_list[idx].value[0] = 1
 
                 content = {"code": 0, "msg": "ok"}
                 status_code = HTTPStatus.OK
             return content, status_code
         elif action == "update_weight_from_tensor":
-            if self.config.parallel_config.local_data_parallel_id != 0:
-                content = {
-                    "code": 1,
-                    "msg": f"actual rank {self.config.parallel_config.local_data_parallel_id}, expect rank 0",
-                }
-                status_code = HTTPStatus.BAD_REQUEST
             if self.cfg.scheduler_config.splitwise_role != "prefill" and content is None:
                 content = {
                     "code": 1,
@@ -636,13 +641,21 @@ class EngineClient:
             status_code = HTTPStatus.UNAUTHORIZED
             return content, status_code
 
+        if self.config.parallel_config.expert_parallel_rank != 0:
+            content = {
+                "code": 1,
+                "msg": f"actual rank {self.config.parallel_config.expert_parallel_rank}, expect rank 0",
+            }
+            status_code = HTTPStatus.BAD_REQUEST
+            return content, status_code
+
         if "clear_stat" in request_dict and request_dict["clear_stat"]:
             for clear_experts_token_stats in self.signal_clear_experts_token_stats_list:
                 clear_experts_token_stats.value[0] = 1
 
         local_experts_list = []
         for local_experts_token_stats in self.local_experts_token_stats_array_list:
-            local_experts_list.extend(local_experts_token_stats.value.tolist())
+            local_experts_list.append(local_experts_token_stats.value.tolist())
         content = {"code": 0, "msg": "ok", "data": local_experts_list}
         status_code = HTTPStatus.OK
         return content, status_code
@@ -671,16 +684,16 @@ class EngineClient:
             status_code = HTTPStatus.UNAUTHORIZED
             return content, status_code
 
+        if self.config.parallel_config.expert_parallel_rank != 0:
+            content = {
+                "code": 1,
+                "msg": f"actual rank {self.config.parallel_config.expert_parallel_rank}, expect rank 0",
+            }
+            status_code = HTTPStatus.BAD_REQUEST
+            return content, status_code
+
         action = request_dict.get("action", "")
         if action == "":
-            if self.config.parallel_config.local_data_parallel_id != 0:
-                content = {
-                    "code": 1,
-                    "msg": f"actual rank {self.config.parallel_config.local_data_parallel_id}, expect rank 0",
-                }
-                status_code = HTTPStatus.BAD_REQUEST
-                return content, status_code
-
             status = "unknown"
             try:
                 status = RearrangeExpertStatus(self.rearrange_experts_signal.value[0]).name
@@ -694,7 +707,7 @@ class EngineClient:
         elif action == "check_load_weight_result":
             update_weight_from_disk_list = []
             for update_weight_result in self.update_weight_from_disk_result_list:
-                update_weight_from_disk_list.extend(update_weight_result.value[0].tolist())
+                update_weight_from_disk_list.append(update_weight_result.value[0].tolist())
             content = {"code": 0, "msg": "ok", "data": update_weight_from_disk_list}
             status_code = HTTPStatus.OK
         return content, status_code

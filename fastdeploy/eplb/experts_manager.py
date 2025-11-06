@@ -332,8 +332,8 @@ class RedundantExpertManager:
         """
         allgather_expert_token_stats
         """
-        success_count = 0
         expert_token_stats = np.zeros((self.num_hidden_layers, self.num_logical_experts), dtype=np.int32)
+        success_count = 0
         for addr in self.dp_rank_address:
             try:
                 # TODO: 请求失败重试
@@ -349,8 +349,10 @@ class RedundantExpertManager:
                         + f"addr {addr}, res {res.status_code} {res.json()}"
                     )
                     break
+
+                for meta_data in res.json()["data"]:
+                    expert_token_stats += np.array(meta_data, dtype=np.int32)
                 success_count += 1
-                expert_token_stats += np.array(res.json()["data"], dtype=np.int32)
             except Exception as e:
                 self.logger.error(f"redundant_expert: allgather_expert_token_stats fail. addr {addr}, error {e}")
         if success_count == len(self.dp_rank_address):
@@ -462,28 +464,30 @@ class RedundantExpertManager:
                         + f"addr {addr}, res {res.status_code} {res.json()}"
                     )
                     break
-                result = res.json()["data"]
+                result_list = res.json()["data"]
                 self.logger.info(
-                    f"redundant_expert: allgather_load_weight_result success. addr {addr}, result {result}"
+                    f"redundant_expert: allgather_load_weight_result success. addr {addr}, result_list {result_list}"
                 )
-                if result == 1:
-                    success_count += 1
-                elif result == -1:
-                    fail_count += 1
-                    self.logger.error(
-                        f"redundant_expert: allgather_load_weight_result fail. addr {addr}, result {result}"
-                    )
-                    exist_fail = True
+                for result in result_list:
+                    if result == 1:
+                        success_count += 1
+                    elif result == -1:
+                        fail_count += 1
+                        self.logger.error(
+                            f"redundant_expert: allgather_load_weight_result fail. addr {addr}, result {result}"
+                        )
+                        exist_fail = True
             except Exception as e:
                 self.logger.error(f"redundant_expert: allgather_load_weight_result error. addr {addr}, error {e}")
-        if success_count == len(self.dp_rank_address):
-            self.logger.info("redundant_expert: allgather_load_weight_result all success")
-            all_success = True
-        else:
+
+        if fail_count > 0:
             self.logger.info(
                 "redundant_expert: allgather_load_weight_result not all ready, "
                 + f"succ {success_count} fail {fail_count} total {len(self.dp_rank_address)}"
             )
+        else:
+            self.logger.info("redundant_expert: allgather_load_weight_result all success")
+            all_success = True
         return all_success, exist_fail
 
 

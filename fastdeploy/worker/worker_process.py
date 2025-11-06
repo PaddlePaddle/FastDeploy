@@ -327,14 +327,14 @@ class PaddleDisWorkerProc:
                     create=False,
                 )
 
-                mmap_infos = create_mmap(
-                    [MODEL_MAIN_NAME],
-                    self.local_rank,
-                    self.ranks,
-                    shm_uuid=self.parallel_config.engine_worker_queue_port,
-                    eplb_config=self.eplb_config,
-                    logger=logger,
-                )
+            mmap_infos = create_mmap(
+                [MODEL_MAIN_NAME],
+                self.local_rank,
+                self.ranks,
+                shm_uuid=self.parallel_config.engine_worker_queue_port,
+                eplb_config=self.eplb_config,
+                logger=logger,
+            )
 
         # Currently, only support single node
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
