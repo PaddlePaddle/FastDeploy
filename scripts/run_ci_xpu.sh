@@ -14,8 +14,7 @@ function stop_processes() {
 }
 stop_processes
 
-#设置模型路径
-export model_path=${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle
+
 
 echo "pip requirements"
 python -m pip install -r requirements.txt
@@ -51,11 +50,19 @@ rm -f core*
 #清空消息队列
 ipcrm --all=msg
 echo "============================开始V1模式测试!============================"
-export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
+export port_num=$((8188 + GPU_ID * 100))
 python -m fastdeploy.entrypoints.openai.api_server \
-    --model ${model_path} \
-    --port 8188 \
-    --tensor-parallel-size 8 \
+    --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle \
+    --port $port_num \
+    --engine-worker-queue-port $((port_num + 1)) \
+    --metrics-port $((port_num + 2)) \
+    --cache-queue-port $((port_num + 47873)) \
+    --tensor-parallel-size 4 \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
     --max-num-seqs 128 \
@@ -119,10 +126,18 @@ rm -f core*
 #清空消息队列
 ipcrm --all=msg
 echo "============================开始W4A8测试!============================"
-export XPU_VISIBLE_DEVICES="0,1,2,3"
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
+export port_num=$((8188 + GPU_ID * 100))
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle \
-    --port 8188 \
+    --port $port_num \
+    --engine-worker-queue-port $((port_num + 1)) \
+    --metrics-port $((port_num + 2)) \
+    --cache-queue-port $((port_num + 47873)) \
     --tensor-parallel-size 4 \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
@@ -187,10 +202,18 @@ rm -f core*
 #清空消息队列
 ipcrm --all=msg
 echo "============================开始vl模型测试!============================"
-export XPU_VISIBLE_DEVICES="0,1,2,3"
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
+export port_num=$((8188 + GPU_ID * 100))
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_PATH}/ERNIE-4.5-VL-28B-A3B-Paddle \
-    --port 8188 \
+    --port $port_num \
+    --engine-worker-queue-port $((port_num + 1)) \
+    --metrics-port $((port_num + 2)) \
+    --cache-queue-port $((port_num + 47873)) \
     --tensor-parallel-size 4 \
     --max-model-len 32768 \
     --max-num-seqs 10 \
@@ -257,7 +280,13 @@ rm -rf log/*
 rm -f core*
 ipcrm --all=msg
 xpu-smi
-export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
+export port_num=$((8188 + GPU_ID * 100))
+
 export BKCL_ENABLE_XDR=1
 export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
 export BKCL_TRACE_TOPO=1
