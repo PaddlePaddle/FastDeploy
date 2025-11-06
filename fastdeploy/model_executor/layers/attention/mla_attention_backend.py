@@ -166,11 +166,13 @@ class MLAAttentionBackend(AttentionBackend):
                     "The current platform does not support Flash Attention V3, so Flash Attention V2 will be used instead."
                 )
 
-        if not fd_config.graph_opt_config.use_cudagraph:
-            return
-        if fd_config.graph_opt_config.full_cuda_graph:
-            raise RuntimeError("CUDAGraph full graph capture is not supported due to the presence of control flow.")
-        else:
+        if fd_config.graph_opt_config.use_cudagraph:
+            if fd_config.graph_opt_config.full_cuda_graph:
+                print(
+                    "[Warning] Full graph capture with CUDAGraph is not supported in the presence of control flow; "
+                    "`full_cuda_graph` has been automatically set to False."
+                )
+
             flag = "FLAGS_cuda_graph_blacklist"
             paddle.set_flags({flag: ",".join(list(set(paddle.get_flags(flag)[flag].split(",") + ["pd_op.if"])))})
 
