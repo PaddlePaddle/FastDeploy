@@ -212,7 +212,6 @@ class ModelConfig:
         # set attribute from pretrained_config
         for key, value in pretrained_config.items():
             setattr(self, key, value)
-
         # we need set default value when not exist
         for key, value in PRETRAINED_INIT_CONFIGURATION.items():
             if not hasattr(self, key):
@@ -299,6 +298,9 @@ class ModelConfig:
 
         if not hasattr(self, "mla_use_absorb"):
             self.mla_use_absorb = False
+
+        if hasattr(self, "num_experts") and getattr(self, "moe_num_experts") is None:
+            self.moe_num_experts = self.num_experts
 
     def read_from_env(self):
         """
