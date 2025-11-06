@@ -23,6 +23,24 @@ from paddle.incubate.nn.functional import fused_bias_act, swiglu
 from fastdeploy.config import FDConfig
 from fastdeploy.platforms import current_platform
 
+from .utils import is_arch_support_pdl
+
+
+def gelu_tanh(
+    input: paddle.Tensor,
+    out: Optional[paddle.Tensor] = None,
+    enable_pdl: Optional[bool] = None,
+):
+    """GeLU Tanh operation."""
+    from fastdeploy.model_executor.ops.gpu import gelu_tanh
+
+    if out is None:
+        out = out = paddle.empty_like(input)
+    if enable_pdl is None:
+        enable_pdl = is_arch_support_pdl()
+    gelu_tanh(out, input, enable_pdl)
+    return out
+
 
 class SiluAndMul(nn.Layer):
     """

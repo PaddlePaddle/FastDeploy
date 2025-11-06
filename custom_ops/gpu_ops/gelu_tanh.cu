@@ -21,7 +21,7 @@ __global__ void gelu_tanh_kernel(T* __restrict__ out,
   const int64_t token_idx = blockIdx.x;
   const int64_t thread_idx = threadIdx.x;
   const int64_t stride = blockDim.x;
-  const int64_t offset = token_idx * 2 * d;
+  const int64_t offset = token_idx * d;
   using vec_t = AlignedVector<T, kVecSize>;
 #if (__CUDACC_VER_MAJOR__ >= 12 && defined(__CUDA_ARCH__) && \
      (__CUDA_ARCH__ >= 900))
@@ -30,25 +30,22 @@ __global__ void gelu_tanh_kernel(T* __restrict__ out,
 
 #pragma unroll 1
   for (uint32_t idx = thread_idx; idx < d / kVecSize; idx += stride) {
-    vec_t x_vec, y_vec, out_vec;
+    vec_t x_vec;
     Load(input + offset + idx * kVecSize, &x_vec);
-    Load(input + offset + d + idx * kVecSize, &y_vec);
 #pragma unroll
     for (uint32_t i = 0; i < kVecSize; ++i) {
-      out_vec[i] = static_cast<T>(gelu_tanh_func(static_cast<float>(x_vec[i])) *
-                                  static_cast<float>(y_vec[i]));
+      x_vec[i] = static_cast<T>(gelu_tanh_func(static_cast<float>(x_vec[i])));
     }
-    Store(out_vec, out + token_idx * d + idx * kVecSize);
+    Store(x_vec, out + token_idx * d + idx * kVecSize);
   }
 
   const int64_t remaining_offset = d - d % (stride * kVecSize);
   // process the remaining elements
 #pragma unroll 1
   for (int64_t idx = thread_idx; idx < d % (stride * kVecSize); idx += stride) {
-    float x = input[offset + remaining_offset + idx],
-          y = input[offset + remaining_offset + d + idx];
+    float x = input[offset + remaining_offset + idx];
     out[token_idx * d + remaining_offset + idx] =
-        static_cast<T>(gelu_tanh_func(x) * y);
+        static_cast<T>(gelu_tanh_func(x));
   }
 
 #if (__CUDACC_VER_MAJOR__ >= 12 && defined(__CUDA_ARCH__) && \
@@ -58,7 +55,7 @@ __global__ void gelu_tanh_kernel(T* __restrict__ out,
 }
 
 void gelu_tanh(paddle::Tensor& output, paddle::Tensor& input, bool enable_pdl) {
-  int d = input.dims()[1] / 2;
+  int d = input.dims()[1];
   int64_t num_tokens = input.dims()[0];
   cudaStream_t stream = input.stream();
 
