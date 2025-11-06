@@ -22,6 +22,9 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
+from fastdeploy.model_executor.layers.backends.gcu.moe.fused_moe_method_gcu_backend import (
+    GCUWeightOnlyMoEMethod,
+)
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import slice_fn
 from fastdeploy.platforms import current_platform
@@ -198,9 +201,10 @@ class FusedMoE(nn.Layer):
             self.gate_correction_bias = gate_correction_bias
         else:
             self.gate_correction_bias = None
-        self.quant_method.create_weights(
-            self, weight_loader=self.weight_loader, model_format=fd_config.model_config.model_format
-        )
+        if not isinstance(self.quant_method, GCUWeightOnlyMoEMethod):
+            self.quant_method.create_weights(
+                self, weight_loader=self.weight_loader, model_format=fd_config.model_config.model_format
+            )
 
         logger.info(
             f"{moe_tag}MoE config is {num_experts=}[{expert_id_offset}, {expert_id_offset + self.num_local_experts}), \
@@ -557,11 +561,17 @@ class FusedMoE(nn.Layer):
         load_state_dict function.
         """
         if self.fd_config.model_config.is_quantized:
+            if isinstance(self.quant_method, GCUWeightOnlyMoEMethod):
+                self.quant_method.process_prequanted_weights(self, state_dict)
+                return
             if getattr(self.fd_config.quant_config, "is_permuted", True):
                 self.quant_method.process_prequanted_weights(self, state_dict, is_rearrange)
             else:
                 self.quant_method.process_loaded_weights(self, state_dict)
         else:
+            if isinstance(self.quant_method, GCUWeightOnlyMoEMethod):
+                self.quant_method.create_weights(self, state_dict)
+                return
             self.quant_method.process_loaded_weights(self, state_dict)
 
     def forward_split_allgather(self, x: paddle.Tensor, gate: nn.Layer):

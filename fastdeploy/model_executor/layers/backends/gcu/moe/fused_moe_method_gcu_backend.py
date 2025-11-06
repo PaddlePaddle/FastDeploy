@@ -299,6 +299,7 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
         """
         Paddle cutlass create weight process.
         """
+        print(f"__{layer.moe_intermediate_size=}______{layer.hidden_size=}")
         up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
         self.check(layer, up_gate_proj_weights, down_proj_weights)
 
@@ -382,6 +383,9 @@ class GCUWeightOnlyMoEMethod(GCUFusedMoeMethod):
 
             quanted_weight_zeros = quanted_weight_scale * 8
             create_and_set_parameter(layer, zeros_name, quanted_weight_zeros)
+            print(f"________{weight_name=}____{quanted_weight.dtype=}_________{quanted_weight.shape=}")
+            print(f"________{scale_name=}_____{quanted_weight_scale.dtype=}________{quanted_weight_scale.shape=}")
+            print(f"________{zeros_name=}_____{quanted_weight_zeros.dtype=}________{quanted_weight_zeros.shape=}")
 
     def apply(
         self,
