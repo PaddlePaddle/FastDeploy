@@ -1,5 +1,3 @@
-[English](../../best_practices/README.md)
-
 # 最佳实践
 
 - [ERNIE-4.5-0.3B-Paddle.md](ERNIE-4.5-0.3B-Paddle.md)

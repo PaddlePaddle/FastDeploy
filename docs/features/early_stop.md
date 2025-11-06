@@ -1,5 +1,3 @@
-[简体中文](../zh/features/early_stop.md)
-
 # Early Stopping
 
 The early stopping is used to prematurely terminate the token generation of the model. Specifically, the early stopping uses different strategies to determine whether the currently generated token sequence meets the early stopping criteria. If so, token generation is terminated prematurely. FastDeploy currently supports the repetition strategy and stop sequence.

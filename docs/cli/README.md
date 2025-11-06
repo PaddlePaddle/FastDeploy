@@ -1,5 +1,4 @@
 # FastDeploy CLI User Guide
-
 ## Introduction
 
 **FastDeploy CLI** is a command-line tool provided by the FastDeploy inference framework, designed for **running, deploying, and testing AI model inference tasks**. It allows developers to quickly perform model loading, API calls, service deployment, performance benchmarking, and environment information collection directly from the command line.

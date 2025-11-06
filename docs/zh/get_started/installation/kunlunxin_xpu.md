@@ -1,5 +1,3 @@
-[English](../../../get_started/installation/kunlunxin_xpu.md)
-
 # 昆仑芯 XPU
 
 ## 要求

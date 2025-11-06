@@ -1,5 +1,3 @@
-[简体中文](../zh/usage/kunlunxin_xpu_deployment.md)
-
 ## Supported Models
 |Model Name|Context Length|Quantization|XPUs Required|Deployment Commands|Applicable Version|
 |-|-|-|-|-|-|

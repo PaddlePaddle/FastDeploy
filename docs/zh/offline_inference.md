@@ -1,5 +1,3 @@
-[English](../offline_inference.md)
-
 # 离线推理
 
 ## 1. 使用方式

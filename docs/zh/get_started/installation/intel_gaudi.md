@@ -1,5 +1,3 @@
-[English](../../../get_started/installation/intel_gaudi.md)
-
 # 使用 Intel Gaudi 运行ERNIE 4.5 系列模型
 
 在环境满足如下条件前提下

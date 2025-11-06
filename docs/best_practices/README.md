@@ -1,5 +1,3 @@
-[简体中文](../zh/best_practices/README.md)
-
 # Optimal Deployment
 
 - [ERNIE-4.5-0.3B-Paddle.md](ERNIE-4.5-0.3B-Paddle.md)

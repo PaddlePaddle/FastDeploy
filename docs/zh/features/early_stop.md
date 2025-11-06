@@ -1,5 +1,3 @@
-[English](../../features/early_stop.md)
-
 # 早停功能
 
 早停功能用于提前结束模型生成token的过程，具体来说早停功能会采取不同的策略，判断当前生成的token序列是否满足早停条件，如果满足则提前结束token生成。FastDeploy目前支持`Repetition`策略和`Stop Sequence`策略。

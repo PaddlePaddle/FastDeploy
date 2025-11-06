@@ -1,5 +1,3 @@
-[简体中文](../zh/online_serving/metrics.md)
-
 # Monitoring Metrics
 
 After FastDeploy is launched, it supports continuous monitoring of the FastDeploy service status through Metrics. When starting FastDeploy, you can specify the port for the Metrics service by configuring the `metrics-port` parameter.

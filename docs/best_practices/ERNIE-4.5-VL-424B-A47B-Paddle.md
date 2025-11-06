@@ -1,5 +1,3 @@
-[简体中文](../zh/best_practices/ERNIE-4.5-VL-424B-A47B-Paddle.md)
-
 # ERNIE-4.5-VL-424B-A47B-Paddle
 
 ## 1. Environment Preparation

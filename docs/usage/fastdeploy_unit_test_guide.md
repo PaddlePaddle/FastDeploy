@@ -1,5 +1,3 @@
-[简体中文](../zh/usage/fastdeploy_unit_test_guide.md)
-
 # FastDeploy Unit Test Specification
 1. Test Naming Conventions
    - Test files must start with test_.

@@ -1,5 +1,4 @@
 # chat: Conversational Generation
-
 `fastdeploy chat` interacts with a running API server to generate chat responses.
 
 ## Parameters

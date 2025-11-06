@@ -1,5 +1,3 @@
-[简体中文](../zh/best_practices/PaddleOCR-VL-0.9B.md)
-
 # PaddleOCR-VL-0.9B
 
 ## 1. Environment Preparation

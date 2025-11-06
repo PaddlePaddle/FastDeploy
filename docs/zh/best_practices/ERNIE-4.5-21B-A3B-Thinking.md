@@ -1,5 +1,3 @@
-[English](../../best_practices/ERNIE-4.5-21B-A3B-Thinking.md)
-
 # ERNIE-4.5-21B-A3B-Thinking
 ## 一、环境准备
 ### 1.1 支持情况

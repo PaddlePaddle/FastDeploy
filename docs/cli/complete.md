@@ -1,5 +1,4 @@
 # complete: Text Completion Generation
-
 `fastdeploy complete` generates text completions based on a given prompt.
 
 ## Parameters

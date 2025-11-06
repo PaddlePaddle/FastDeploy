@@ -1,6 +1,5 @@
 # serve：API 服务化
 `fastdeploy serve` 提供与 OpenAI 协议兼容的服务化部署。
-
 ## 参数
 以下是根据您的说明生成的表格：
 

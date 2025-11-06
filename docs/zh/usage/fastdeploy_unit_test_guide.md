@@ -1,5 +1,3 @@
-[English](../../usage/fastdeploy_unit_test_guide.md)
-
 # Fastdeploy 单测规范
 1. 测试命名规范
    - 测试文件以 test_ 开头；

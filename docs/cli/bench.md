@@ -1,5 +1,4 @@
 # bench: Benchmark Testing
-
 ## 1. bench latency: Offline Latency Test
 
 ### Parameters

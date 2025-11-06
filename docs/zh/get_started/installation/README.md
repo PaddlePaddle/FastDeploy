@@ -1,5 +1,3 @@
-[English](../../../get_started/installation/README.md)
-
 # FastDeploy 安装
 
 FastDeploy支持如下硬件平台:

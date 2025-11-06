@@ -1,6 +1,5 @@
 # complete：补全式生成
 `fastdeploy complete` 根据给定提示词生成文本完成。
-
 ## 参数
 |参数|说明|默认值|
 |-|-|-|

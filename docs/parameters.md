@@ -1,5 +1,3 @@
-[简体中文](zh/parameters.md)
-
 # FastDeploy Parameter Documentation
 
 ## Parameter Description

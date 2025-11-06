@@ -1,5 +1,3 @@
-[English](../../../get_started/installation/iluvatar_gpu.md)
-
 # 如何在天数机器上运行 ERNIE-4.5-300B-A47B-BF16 & ERNIE-4.5-21B-A3B
 
 ## 准备机器

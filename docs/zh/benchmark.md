@@ -1,5 +1,3 @@
-[English](../benchmark.md)
-
 # Benchmark
 
 FastDeploy基于[vLLM benchmark](https://github.com/vllm-project/vllm/blob/main/benchmarks/)脚本，增加了部分统计信息，可用于benchmark FastDeploy更详细的性能指标。

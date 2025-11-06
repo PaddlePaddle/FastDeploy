@@ -1,5 +1,4 @@
 # tokenizer
-
 ## Description
 
 The **Tokenizer** subcommand provides encoding and decoding functionality between text and token sequences. It also allows viewing or exporting model vocabulary information. Both text and multimodal models are supported.

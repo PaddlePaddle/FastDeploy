@@ -1,5 +1,4 @@
 # Logits Processors
-
 ## Overview
 
 A **Logits Processor (LP)** sits between *model output logits* and the *sampler* (top-k/top-p/temperature…). It applies pluggable transformations to logits **before** sampling (e.g., weighting, masking, penalties, biases).

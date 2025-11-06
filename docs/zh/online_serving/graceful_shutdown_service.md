@@ -1,5 +1,3 @@
-[English](../../online_serving/graceful_shutdown_service.md)
-
 # 服务节点优雅关闭方案
 
 ## 1. 核心目标

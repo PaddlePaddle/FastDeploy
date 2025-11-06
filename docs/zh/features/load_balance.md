@@ -1,5 +1,3 @@
-[English](../../features/load_balance.md)
-
 # 全局调度器: 多实例负载均衡
 
 ## 设计方案

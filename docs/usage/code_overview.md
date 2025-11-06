@@ -1,5 +1,3 @@
-[简体中文](../zh/usage/code_overview.md)
-
 # Code Overview
 
 Below is an overview of the FastDeploy code structure and functionality organized by directory.

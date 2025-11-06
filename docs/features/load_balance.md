@@ -1,5 +1,3 @@
-[简体中文](../zh/features/load_balance.md)
-
 # Global Scheduler: Multi-Instance Load Balancing
 
 ## Design Overview

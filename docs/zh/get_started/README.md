@@ -1,5 +1,3 @@
-[English](../../get_started/README.md)
-
 # 快速入门
 
 - [Deploy ERNIE-4.5-0.3B-Paddle in 10 Minutes](quick_start.md)
