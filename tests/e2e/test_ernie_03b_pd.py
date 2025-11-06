@@ -45,18 +45,24 @@ def setup_and_run_server():
     clean_ports()
 
     print("log dir clean ")
-    if os.path.exists("log") and os.path.isdir("log"):
-        shutil.rmtree("log")
+    if os.path.exists("log_prefill") and os.path.isdir("log_prefill"):
+        shutil.rmtree("log_prefill")
+    if os.path.exists("log_decode") and os.path.isdir("log_decode"):
+        shutil.rmtree("log_decode")
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
         model_path = os.path.join(base_path, "ERNIE-4.5-0.3B-Paddle")
     else:
-        model_path = "./ERNIE-4.5-0.3B-Paddle"
+        model_path = "baidu/ERNIE-4.5-0.3B-Paddle"
+    print(f"model_path: {model_path}")
 
     # prefill实例
+    print("start prefill...")
     env_prefill = os.environ.copy()
     env_prefill["CUDA_VISIBLE_DEVICES"] = "0"
+    env_prefill["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
+    env_prefill["FD_LOG_DIR"] = "log_prefill"
     env_prefill["INFERENCE_MSG_QUEUE_ID"] = str(FD_API_PORT)
     prefill_log_path = "server.log"
     prefill_cmd = [
@@ -94,12 +100,15 @@ def setup_and_run_server():
             start_new_session=True,  # Enables killing full group via os.killpg
             env=env_prefill,
         )
+    time.sleep(3)
 
     # decode实例
+    print("start decode...")
     env_decode = os.environ.copy()
     env_decode["CUDA_VISIBLE_DEVICES"] = "1"
+    env_prefill["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
     env_decode["INFERENCE_MSG_QUEUE_ID"] = str(FD_API_PORT + 1)
-    env_decode["FD_LOG_DIR"] = "decode_log"
+    env_decode["FD_LOG_DIR"] = "log_decode"
     decode_log_path = "decode_server.log"
     decode_cmd = [
         sys.executable,
@@ -125,6 +134,8 @@ def setup_and_run_server():
         "wint8",
         "--splitwise-role",
         "decode",
+        "--innode-prefill-ports",
+        str(FD_ENGINE_QUEUE_PORT),
     ]
 
     # Start subprocess in new process group
@@ -260,18 +271,7 @@ def test_chat_usage_stream(api_url):
         "stream_options": {"include_usage": True, "continuous_usage_stats": True},
         "metadata": {"min_tokens": 10},
     }
-    p_url, d_url = api_url
-
-    response = send_request(url=p_url, payload=payload)
-    chunks = get_stream_chunks(response)
-    result = "".join([x["choices"][0]["delta"]["content"] for x in chunks[:-1]])
-    print("Prefill Response:", result)
-    assert result != "", "结果为空"
-    usage = chunks[-1]["usage"]
-    total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
-    assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
-    assert payload["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
-    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
+    _, d_url = api_url  # Only the decode server receives the request
 
     response = send_request(url=d_url, payload=payload)
     chunks = get_stream_chunks(response)
@@ -302,16 +302,7 @@ def test_chat_usage_non_stream(api_url):
         "stream": False,
         "metadata": {"min_tokens": 10},
     }
-    p_url, d_url = api_url
-
-    response = send_request(url=p_url, payload=payload).json()
-    usage = response["usage"]
-    result = response["choices"][0]["message"]["content"]
-    assert result != "", "结果为空"
-    total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
-    assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
-    assert payload["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
-    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
+    _, d_url = api_url
 
     response = send_request(url=d_url, payload=payload).json()
     usage = response["usage"]
@@ -336,25 +327,13 @@ def test_non_chat_usage_stream(api_url):
         "stream_options": {"include_usage": True, "continuous_usage_stats": True},
         "metadata": {"min_tokens": 10},
     }
-    p_url, d_url = api_url
-    p_url = p_url.replace("chat/completions", "completions")
+    _, d_url = api_url
     d_url = d_url.replace("chat/completions", "completions")
-
-    response = send_request(url=p_url, payload=payload)
-    chunks = get_stream_chunks(response)
-    result = "".join([x["choices"][0]["text"] for x in chunks[:-1]])
-    # print("Prefill Response:", result)
-    assert result != "", "结果为空"
-    usage = chunks[-1]["usage"]
-    total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
-    assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
-    assert payload["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
-    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
 
     response = send_request(url=d_url, payload=payload)
     chunks = get_stream_chunks(response)
     result = "".join([x["choices"][0]["text"] for x in chunks[:-1]])
-    # print("Decode Response:", result)
+    print("Decode Response:", result)
     assert result != "", "结果为空"
     usage = chunks[-1]["usage"]
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
@@ -375,23 +354,13 @@ def test_non_chat_usage_non_stream(api_url):
         "stream": False,
         "metadata": {"min_tokens": 10},
     }
-    p_url, d_url = api_url
-    p_url = p_url.replace("chat/completions", "completions")
+    _, d_url = api_url
     d_url = d_url.replace("chat/completions", "completions")
-
-    response = send_request(url=p_url, payload=payload).json()
-    usage = response["usage"]
-    result = response["choices"][0]["text"]
-    # print("Prefill Response:", result)
-    assert result != "", "结果为空"
-    total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
-    assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
-    assert payload["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
-    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
 
     response = send_request(url=d_url, payload=payload).json()
     usage = response["usage"]
     result = response["choices"][0]["text"]
+    print("Decode Response:", result)
     assert result != "", "结果为空"
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
     assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
