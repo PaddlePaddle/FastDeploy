@@ -193,7 +193,9 @@ class Qwen3DecoderLayer(nn.Layer):
         residual: paddle.Tensor = None,
     ):
         """ """
-        hidden_states, residual = self.input_layernorm(hidden_states, residual=residual, forward_meta=forward_meta)
+        hidden_states, residual = self.input_layernorm(
+            hidden_states, residual_input=residual, forward_meta=forward_meta
+        )
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,

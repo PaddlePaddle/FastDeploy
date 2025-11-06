@@ -379,7 +379,9 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
         residual: paddle.Tensor = None,
         vl_moe_meta: VLMoEMeta = None,
     ):
-        hidden_states, residual = self.input_layernorm(hidden_states, residual=residual, forward_meta=forward_meta)
+        hidden_states, residual = self.input_layernorm(
+            hidden_states, residual_input=residual, forward_meta=forward_meta
+        )
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
