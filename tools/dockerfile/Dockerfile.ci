@@ -1,5 +1,5 @@
 FROM ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310-cibase
-RUN apt update && apt install -y jq
+RUN apt update && apt install -y jq psmisc
 COPY ../../requirements.txt ./requirements.txt
 RUN python -m pip install --no-cache-dir -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 COPY ./unittest_requirement.txt ./unittest_requirement.txt
