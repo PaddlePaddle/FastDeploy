@@ -214,7 +214,7 @@ class Ernie4_5_MoE(nn.Layer):
             self.shared_experts.load_state_dict(state_dict)
 
     def update_state_dict(self, state_dict):
-        self.fused_moe.load_state_dict(state_dict, True)
+        self.experts.load_state_dict(state_dict, True)
 
     def split_allgather_out(self, hidden_states: paddle.Tensor, token_num: int):
         token_num_per_rank = (token_num + self.tensor_parallel_size - 1) // self.tensor_parallel_size
