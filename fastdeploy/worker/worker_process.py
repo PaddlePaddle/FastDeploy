@@ -266,6 +266,8 @@ class PaddleDisWorkerProc:
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         attention_dp_cached_prefill_tasks = []
         attention_dp_wait_prefill_iters = 0
+        is_first_chunk_dict = {}
+
         while True:
             if local_rank == 0:
                 if self.model_weights_status.value[0] != 0:
@@ -350,6 +352,15 @@ class PaddleDisWorkerProc:
                     for request in req_dicts:
                         if request.task_type.value == RequestType.PREFILL.value:
                             tmp_need_cached_prefills.append(request)
+                            if request.request_id not in is_first_chunk_dict:
+                                is_first_chunk_dict[request.request_id] = True
+                                request.is_first_chunk = True
+                            else:
+                                is_first_chunk_dict[request.request_id] = False
+                                request.is_first_chunk = False
+                        else:
+                            is_first_chunk_dict[request.request_id] = False
+                            request.is_first_chunk = False
                 if tmp_need_cached_prefills:
                     attention_dp_cached_prefill_tasks.append(tmp_need_cached_prefills)
                 for request in tmp_need_cached_prefills:
@@ -366,12 +377,20 @@ class PaddleDisWorkerProc:
                         req_dicts.extend(attention_dp_cached_prefill_tasks.pop(0))
                     attention_dp_wait_prefill_iters = 0
                 else:
-                    # wait until all ranks have prefill tasks or reached timeout
-                    attention_dp_wait_prefill_iters += 1
-                    if attention_dp_wait_prefill_iters > self.fd_config.attention_dp_time_out_iters:
-                        if len(attention_dp_cached_prefill_tasks) > 0:
-                            req_dicts.extend(attention_dp_cached_prefill_tasks.pop(0))
+                    if len(attention_dp_cached_prefill_tasks) > 0:
+                        for task in attention_dp_cached_prefill_tasks[0]:
+                            if not task.is_first_chunk:
+                                exist_non_first_chunk = True
+                    if exist_non_first_chunk:
+                        req_dicts.extend(attention_dp_cached_prefill_tasks.pop(0))
                         attention_dp_wait_prefill_iters = 0
+                    else:
+                        # wait until all ranks have prefill tasks or reached timeout
+                        attention_dp_wait_prefill_iters += 1
+                        if attention_dp_wait_prefill_iters > self.fd_config.attention_dp_time_out_iters:
+                            if len(attention_dp_cached_prefill_tasks) > 0:
+                                req_dicts.extend(attention_dp_cached_prefill_tasks.pop(0))
+                            attention_dp_wait_prefill_iters = 0
 
             if len(req_dicts) > 0:
                 req_ids = [req.request_id for req in req_dicts]
