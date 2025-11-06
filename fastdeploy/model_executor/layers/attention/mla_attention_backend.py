@@ -166,6 +166,12 @@ class MLAAttentionBackend(AttentionBackend):
                     "The current platform does not support Flash Attention V3, so Flash Attention V2 will be used instead."
                 )
 
+        if fd_config.graph_opt_config.full_cuda_graph:
+            raise RuntimeError("CUDAGraph full graph capture is not supported due to the presence of control flow.")
+        else:
+            flag = "FLAGS_cuda_graph_blacklist"
+            paddle.set_flags({flag: ",".join(list(set(paddle.get_flags(flag)[flag].split(",") + ["pd_op.if"])))})
+
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attention metadata hence all layers in the forward pass can reuse it."""
         metadata = MLAAttentionMetadata()
