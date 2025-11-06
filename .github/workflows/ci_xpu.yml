@@ -60,14 +60,11 @@ jobs:
           runner_name="${{ runner.name }}"
           last_char="${runner_name: -1}"
 
-          if [[ "$last_char" =~ [0-3] ]]; then
-            gpu_id="$last_char"
+          if [[ "$last_char" == "1" ]]; then
+            gpu_id="4"
           else
             gpu_id="0"
           fi
-          FD_API_PORT=$((9180 + gpu_id * 100))
-          FD_ENGINE_QUEUE_PORT=$((9150 + gpu_id * 100))
-          FD_METRICS_PORT=$((9170 + gpu_id * 100))
           PARENT_DIR=$(dirname "$WORKSPACE")
           echo "PARENT_DIR:$PARENT_DIR"
           docker run --rm --net=host --cap-add=SYS_PTRACE --privileged --shm-size=64G  \
@@ -77,9 +74,7 @@ jobs:
           -e "http_proxy=$(git config --global --get http.proxy)" \
           -e "https_proxy=$(git config --global --get https.proxy)" \
           -e "no_proxy=bcebos.com,mirrors.tuna.tsinghua.edu.cn,127.0.0.1,localhost" \
-          -e "FD_API_PORT=${FD_API_PORT}" \
-          -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
-          -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
+          -e "GPU_ID=${gpu_id}" \
            ${docker_image} /bin/bash -c "
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
