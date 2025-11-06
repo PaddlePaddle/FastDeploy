@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import openai
-
+import os
 
 def test_w4a8():
     ip = "0.0.0.0"
