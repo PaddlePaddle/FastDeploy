@@ -15,13 +15,12 @@
 """
 
 from collections.abc import Iterable
-from typing import Optional, TypeVar
+from typing import TypeVar
 
 import paddle
 import paddle.nn as nn
 
 from fastdeploy.config import ModelConfig
-from fastdeploy.model_executor.layers.activation import get_act_fn
 from fastdeploy.transformer_utils.config import get_hf_file_to_dict
 
 _T = TypeVar("_T", bound=type[nn.Layer])
@@ -76,46 +75,6 @@ def _load_dense_weights(linear: nn.Linear, folder: str, model_config: "ModelConf
         print(f"Failed to load :{e}")
         return False
     return False
-
-
-def _load_st_projector(model_config: "ModelConfig") -> Optional[nn.Layer]:
-    try:
-        modules = get_hf_file_to_dict("modules.json", model_config.model, model_config.revision)
-        if not modules:
-            return None
-
-        if isinstance(modules, dict):
-            modules = modules.get("modules", [])
-
-        dense_modules = [m for m in modules if m.get("type") == "sentence_transformers.models.Dense"]
-        if not dense_modules:
-            return None
-
-        layers = []
-        for module in dense_modules:
-            folder = module.get("path", "")
-            config_path = f"{folder}/config.json" if folder else "config.json"
-            layer_config = get_hf_file_to_dict(config_path, model_config.model, model_config.revision)
-            if not layer_config:
-                continue
-            linear = nn.Linear(
-                layer_config.get("in_features", 768),
-                layer_config.get("out_features", 768),
-                bias=layer_config.get("bias", True),
-            )
-            linear = linear.astype(paddle.float32)
-
-            if not _load_dense_weights(linear, folder, model_config):
-                continue
-
-            layers.append(linear)
-            if act_name := layer_config.get("activation_function"):
-                layers.append(get_act_fn(act_name))
-        return nn.Sequential(*layers).astype(paddle.float32)
-    except Exception as e:
-        print(f"ST projector loading failed:{e}")
-
-    return None
 
 
 def _create_pooling_model_cls(orig_cls: _T) -> _T:
