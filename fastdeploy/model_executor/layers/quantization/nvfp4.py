@@ -226,10 +226,9 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         # 2 fp4 items are packed in the input dimension
         # weight_scale_shape = [layer.weight_shape[1]]
         # layer.weight_shape.reverse()
-        dim = -1 if extra_weight_attrs["output_dim"] else 0
         extra_weight_attrs["output_dim"] = not extra_weight_attrs["output_dim"]
         weight_shape = layer.weight_shape[::-1]
-        weight_shape[dim] = weight_shape[dim] // 2
+        weight_shape[1] = weight_shape[1] // 2
         layer.weight_dtype = "uint8"
         input_scale_shape = [1]
         weight_scale_shape = [layer.weight_shape[::-1][0], layer.weight_shape[::-1][1] // self.quant_config.group_size]
