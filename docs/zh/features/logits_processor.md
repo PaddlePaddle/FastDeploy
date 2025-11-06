@@ -1,4 +1,5 @@
 # Logits Processors
+
 ## 概述
 
 Logits Processor（LP）位于“模型输出 logits → 采样器（top-k/top-p/temperature…）” 之间，用于在采样前对 logits 做可插拔的变换（加权、屏蔽、惩罚、偏置等）。

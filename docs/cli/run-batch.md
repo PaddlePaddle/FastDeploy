@@ -1,4 +1,5 @@
 # run-batch: Batch Inference
+
 ## Description
 
 Run inference tasks in batch mode. Supports reading input requests from local files or remote URLs, and outputs results to a file or uploads them to a remote destination.

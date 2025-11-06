@@ -1,5 +1,6 @@
 # collect-env：环境信息收集
 `collect-env` 用于收集系统、GPU、深度学习框架及 FastDeploy 的相关环境信息。子命令没有额外参数，直接执行即可。
+
 ## 使用方式
 ```
 fastdeploy collect-env

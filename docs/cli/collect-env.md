@@ -1,4 +1,5 @@
 # collect-env: Environment Information Collector
+
 `collect-env` is used to gather information about the system, GPU, deep learning frameworks, and FastDeploy environment.
 This subcommand requires no additional arguments — simply run it directly.
 

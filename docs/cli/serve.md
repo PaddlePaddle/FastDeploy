@@ -1,4 +1,5 @@
 # serve: API Service Deployment
+
 `fastdeploy serve` provides service deployment compatible with the OpenAI API protocol.
 
 ## Parameters
