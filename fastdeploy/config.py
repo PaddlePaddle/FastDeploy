@@ -577,6 +577,15 @@ class ParallelConfig:
         else:
             self.pd_disaggregation_mode = "None"
 
+        # ep+tp strategy: "all_reduce" or "all_to_all"
+        # all_reduce: qkv_linear + attn + out_linear + allreduce
+        # all_to_all: allgather + qkv_linear + attn + all2all + out_linear
+        self.ep_tp_strategy = envs.FD_EP_TP_STRATEGY
+        assert self.ep_tp_strategy in [
+            "all_reduce",
+            "all_to_all",
+        ], f"FD_EP_TP_STRATEGY: '{self.ep_tp_strategy}' is not supported, only supports 'all_reduce' or 'all_to_all'."
+
     def set_communicate_group(self):
         # different tp group id
         # prevent different tp_groups using the same group_id
