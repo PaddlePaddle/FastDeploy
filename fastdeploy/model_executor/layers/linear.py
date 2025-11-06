@@ -799,6 +799,7 @@ class RowParallelLinear(LinearBase):
         reduce_results: bool = True,
         skip_quant: bool = False,
         weight_dtype="",
+        layer_id: int = -1,
     ):
         """
         Initialize a linear layer with additional parameters for inference and quantization.
@@ -815,14 +816,25 @@ class RowParallelLinear(LinearBase):
         """
         self.fd_config = fd_config
         self.skip_quant = False
+        self.ep_size = fd_config.parallel_config.expert_parallel_size
+        self.tp_size = fd_config.parallel_config.tensor_parallel_size
         self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.tp_group = fd_config.parallel_config.tp_group
         self.hidden_size = fd_config.model_config.hidden_size
         self.head_dim = fd_config.model_config.head_dim
-        self.num_heads = fd_config.model_config.num_attention_heads // self.nranks
+        self.split_token = (
+            self.ep_size > 1
+            and self.tp_size > 1
+            and fd_config.parallel_config.ep_tp_strategy == "all_to_all"
+            and layer_id >= fd_config.model_config.moe_layer_start_index
+            and layer_id < fd_config.model_config.num_hidden_layers
+        )
 
         # Split input_size when using TP inference.
-        self.input_size = divide(input_size, self.nranks)
+        if self.split_token:
+            self.input_size = input_size
+        else:
+            self.input_size = divide(input_size, self.nranks)
         self.output_size = output_size
 
         super().__init__(
@@ -854,13 +866,30 @@ class RowParallelLinear(LinearBase):
 
         self.reduce_results = reduce_results
 
+    def all2all_transpose(self, x: paddle.Tensor) -> paddle.Tensor:
+        token_num = x.shape[0]
+        token_num_pad = (token_num + self.tp_size - 1) // self.tp_size * self.tp_size
+        if token_num_pad > token_num:
+            x_new = paddle.zeros([token_num_pad, x.shape[1]], x.dtype)
+            x_new[:token_num, :] = x
+            x = x_new
+        out = paddle.zeros_like(x)
+        paddle.distributed.alltoall(out, x, group=self.tp_group)
+        out.reshape_([self.tp_size, -1, x.shape[1]])
+        out = paddle.transpose(out, [1, 0, 2])
+        out.reshape_([x.shape[0] // self.tp_size, self.hidden_size])
+        return out
+
     def forward_cuda(self, x: paddle.Tensor) -> paddle.Tensor:
+        if self.split_token:
+            x = self.all2all_transpose(x)
+
         if self.fd_config.quant_config:
             out = self.quant_method.apply(self, x)
         else:
             out = paddle.matmul(x, self.weight)
 
-        if self.reduce_results and self.nranks > 1:
+        if self.reduce_results and self.nranks > 1 and not self.split_token:
             out = tensor_model_parallel_all_reduce(out, self.tp_group)
         if not self.fd_config.quant_config and self.add_bias:
             out = paddle.add(out, self.bias)

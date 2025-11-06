@@ -28,6 +28,7 @@ else:
     from paddle.incubate.nn.functional import fused_layer_norm, fused_rms_norm
 
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 from .utils import get_tensor
 
@@ -47,6 +48,7 @@ class RMSNorm(nn.Layer):
         quant_scale: float = None,
         begin_norm_axis: int = 1,
         dtype: str = None,
+        layer_id: int = -1,
     ) -> None:
         """
         Initializes the RMSNormalization layer.
@@ -97,6 +99,30 @@ class RMSNorm(nn.Layer):
         self.quant_min_bound: int = self.fd_config.quant_config.quant_min_bound if fd_config.quant_config else 0
         self.begin_norm_axis: int = begin_norm_axis
 
+        self.layer_id = layer_id
+        parallel_config = self.fd_config.parallel_config
+        self.ep_size = parallel_config.expert_parallel_size
+        self.tp_size = parallel_config.tensor_parallel_size
+        self.tp_rank = parallel_config.tensor_parallel_rank
+        self.tp_group = parallel_config.tp_group
+        self.ep_tp_strategy = parallel_config.ep_tp_strategy
+        self.moe_layer_start_index = self.fd_config.model_config.moe_layer_start_index
+        is_input_norm = prefix.endswith(".input_layernorm")
+        is_last_norm = prefix.endswith(".norm")
+        self.split_x = (
+            self.ep_size > 1
+            and self.tp_size > 1
+            and self.ep_tp_strategy == "all_to_all"
+            and self.layer_id == self.moe_layer_start_index
+            and is_input_norm
+        )
+        self.allgather_out = (
+            self.ep_size > 1
+            and self.tp_size > 1
+            and self.ep_tp_strategy == "all_to_all"
+            and ((self.layer_id > self.moe_layer_start_index and is_input_norm) or is_last_norm)
+        )
+
         self.init_weight()
 
     def init_weight(self):
@@ -124,7 +150,50 @@ class RMSNorm(nn.Layer):
         weight_tensor = get_tensor(state_dict.pop(self.weight_key))
         self.weight.set_value(weight_tensor.astype(self._norm_weight_dtype))
 
-    def forward(self, x, residual_input: Optional[paddle.Tensor] = None) -> paddle.Tensor:
+    def split(self, x):
+        """
+        Split the input tensor across tensor parallel dimension.
+
+        Args:
+            x (paddle.Tensor): Input tensor to be split.
+
+        Returns:
+            paddle.Tensor: Splitted tensor.
+        """
+        token_num = x.shape[0]
+        token_num_per_rank = (token_num + self.tp_size - 1) // self.tp_size
+        # AllGather will hang when the data shapes on multi-ranks are different!
+        start_offset = self.tp_rank * token_num_per_rank
+        end_offset = (self.tp_rank + 1) * token_num_per_rank
+        if start_offset >= token_num:
+            start_offset = token_num
+        if end_offset > token_num:
+            end_offset = token_num
+        part_x = paddle.zeros(shape=[token_num_per_rank, x.shape[1]], dtype=x.dtype)
+        part_x[: (end_offset - start_offset), :] = x[start_offset:end_offset, :]
+        return part_x
+
+    def allgather(self, out, token_num):
+        """
+        Gather the output tensor from each tensor parallel rank.
+
+        Args:
+            out (paddle.Tensor): Output tensor to be gathered.
+
+        Returns:
+            paddle.Tensor: Gathered tensor.
+        """
+        token_num_per_rank = out.shape[0]
+        multi_outs = paddle.zeros([token_num_per_rank * self.tp_size, out.shape[1]], dtype=out.dtype)
+        paddle.distributed.all_gather(multi_outs, out, self.tp_group)
+        return multi_outs[:token_num, :]
+
+    def forward(
+        self,
+        x,
+        residual_input: Optional[paddle.Tensor] = None,
+        forward_meta: Optional[ForwardMeta] = None,
+    ) -> paddle.Tensor:
         """
         Defines the forward computation of the layer.
 
@@ -165,10 +234,18 @@ class RMSNorm(nn.Layer):
                 quant_max_bound=self.quant_max_bound,
                 quant_min_bound=self.quant_min_bound,
             )
-        if residual_input is not None:
-            return norm_out[0].astype(x_dtype), norm_out[1].astype(residual_input_dtype)
+        out = norm_out[0].astype(x_dtype)
+        residual_out = norm_out[1].astype(residual_input_dtype) if residual_input is not None else None
+
+        if self.split_x:
+            residual_out = self.split(residual_out)
+        if self.allgather_out:
+            out = self.allgather(out, forward_meta.ids_remove_padding.shape[0])
+
+        if residual_input is None:
+            return out
         else:
-            return norm_out[0].astype(x_dtype)
+            return out, residual_out
 
 
 class LayerNorm(nn.Layer):
