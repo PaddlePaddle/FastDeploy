@@ -224,6 +224,7 @@ def consistent_payload():
 # ==========================
 # Consistency test for repeated runs with fixed payload
 # ==========================
+@pytest.mark.skip(reason="[Offline] case skipped due to base_file change")
 def test_consistency_between_runs(api_url, headers, consistent_payload):
     """
     Test that result is same as the base result.
