@@ -2098,8 +2098,9 @@ class GPUModelRunner(ModelRunnerBase):
 
             return model_output
 
-        p = Thread(target=haha)
-        print(p)
+        if not hasattr(self, "p"):
+            p = Thread(target=haha)
+            print(p)
         # p.start()
         # p.join()
         model_output = haha()
