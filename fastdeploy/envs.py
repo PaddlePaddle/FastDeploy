@@ -35,9 +35,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Model download cache directory.
     "FD_MODEL_CACHE": lambda: os.getenv("FD_MODEL_CACHE", None),
     # Maximum number of stop sequences.
-    "FD_MAX_STOP_SEQS_NUM": lambda: os.getenv("FD_MAX_STOP_SEQS_NUM", "5"),
+    "FD_MAX_STOP_SEQS_NUM": lambda: int(os.getenv("FD_MAX_STOP_SEQS_NUM", "5")),
     # Maximum length of stop sequences.
-    "FD_STOP_SEQS_MAX_LEN": lambda: os.getenv("FD_STOP_SEQS_MAX_LEN", "8"),
+    "FD_STOP_SEQS_MAX_LEN": lambda: int(os.getenv("FD_STOP_SEQS_MAX_LEN", "8")),
     # GPU devices that will be used. This is a string that
     # splited by comma, such as 0,1,2.
     "CUDA_VISIBLE_DEVICES": lambda: os.getenv("CUDA_VISIBLE_DEVICES", None),

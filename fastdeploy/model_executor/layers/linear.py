@@ -853,7 +853,7 @@ class RowParallelLinear(LinearBase):
         self.quant_method.create_weights(
             self,
             split_axis=0,
-            output_dim=False,
+            output_dim=None if self.split_token else False,
             weight_loader=(
                 self.weight_loader if hasattr(self, "weight_loader") else default_weight_loader(self.fd_config)
             ),
@@ -877,7 +877,7 @@ class RowParallelLinear(LinearBase):
         paddle.distributed.alltoall(out, x, group=self.tp_group)
         out.reshape_([self.tp_size, -1, x.shape[1]])
         out = paddle.transpose(out, [1, 0, 2])
-        out.reshape_([x.shape[0] // self.tp_size, self.hidden_size])
+        out.reshape_([x.shape[0] // self.tp_size, self.input_size])
         return out
 
     def forward_cuda(self, x: paddle.Tensor) -> paddle.Tensor:

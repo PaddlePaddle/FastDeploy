@@ -125,7 +125,7 @@ class PaddleOCRVLModel(nn.Layer):
 
         hidden_states = hidden_states + residual
 
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states)[0]
 
         return out
 

@@ -329,18 +329,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         hidden_states: paddle.Tensor,
         residual: paddle.Tensor = None,
     ):
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(
-                hidden_states,
-                forward_meta=forward_meta,
-            )
-        else:
-            hidden_states, residual = self.input_layernorm(
-                hidden_states,
-                residual,
-                forward_meta=forward_meta,
-            )
+        hidden_states, residual = self.input_layernorm(hidden_states, residual=residual, forward_meta=forward_meta)
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
@@ -350,7 +339,6 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         hidden_states, residual = self.post_attention_layernorm(
             hidden_states,
             residual,
-            forward_meta=forward_meta,
         )
 
         hidden_states = self.mlp(hidden_states)
@@ -457,7 +445,7 @@ class Ernie4_5_Model(nn.Layer):
 
         hidden_states = hidden_states + residual
 
-        out = self.norm(hidden_states, forward_meta=forward_meta)
+        out = self.norm(hidden_states, forward_meta=forward_meta)[0]
 
         if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
             out = forward_meta.attn_backend.reverse_transpose(out)

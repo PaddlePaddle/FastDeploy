@@ -318,7 +318,7 @@ class Ernie4_5_MTPModel(nn.Layer):
         """
         inputs_embedding = self.embed_tokens(ids_remove_padding=ids_remove_padding)
         inputs_embedding = paddle.concat(
-            [self.enorm(inputs_embedding), self.hnorm(previous_hidden_states)],
+            [self.enorm(inputs_embedding)[0], self.hnorm(previous_hidden_states)[0]],
             axis=-1,
         )
         hidden_states = self.eh_proj(inputs_embedding)
@@ -328,7 +328,7 @@ class Ernie4_5_MTPModel(nn.Layer):
 
         hidden_states = hidden_states + residual
 
-        hidden_states = self.norm(hidden_states)
+        hidden_states = self.norm(hidden_states)[0]
 
         return hidden_states
 

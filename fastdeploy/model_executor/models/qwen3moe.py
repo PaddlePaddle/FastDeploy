@@ -167,14 +167,15 @@ class Qwen3DecoderLayer(nn.Layer):
         self.input_layernorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-6,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
+            layer_id=layer_id,
         )
 
         self.post_attention_layernorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-6,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
         )
 
@@ -192,11 +193,7 @@ class Qwen3DecoderLayer(nn.Layer):
         residual: paddle.Tensor = None,
     ):
         """ """
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
-        else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        hidden_states, residual = self.input_layernorm(hidden_states, residual=residual, forward_meta=forward_meta)
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
@@ -251,7 +248,7 @@ class Qwen3MoeModel(nn.Layer):
         self.norm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-6,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
@@ -275,7 +272,6 @@ class Qwen3MoeModel(nn.Layer):
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        """ """
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
         residual = None
@@ -284,7 +280,7 @@ class Qwen3MoeModel(nn.Layer):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
         hidden_states = hidden_states + residual
 
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, forward_meta=forward_meta)[0]
 
         return out
 

@@ -120,7 +120,7 @@ class RMSNorm(nn.Layer):
             self.ep_size > 1
             and self.tp_size > 1
             and self.ep_tp_strategy == "all_to_all"
-            and ((self.layer_id > self.moe_layer_start_index and is_input_norm) or is_last_norm)
+            and ((self.layer_id >= self.moe_layer_start_index and is_input_norm) or is_last_norm)
         )
 
         self.init_weight()
@@ -215,6 +215,10 @@ class RMSNorm(nn.Layer):
         if residual_input is not None:
             residual_input_dtype = residual_input.dtype
             residual_input = residual_input.astype(self.weight.dtype)
+
+        if self.split_x and residual_input is None:
+            x = self.split(x)
+
         if current_platform.is_gcu():
             if residual_input is None:
                 norm_out = rms_norm(x, self.weight, self.eps)
@@ -235,17 +239,18 @@ class RMSNorm(nn.Layer):
                 quant_min_bound=self.quant_min_bound,
             )
         out = norm_out[0].astype(x_dtype)
-        residual_out = norm_out[1].astype(residual_input_dtype) if residual_input is not None else None
+        residual_out = norm_out[1].astype(residual_input_dtype) if residual_input is not None else x
 
-        if self.split_x:
+        if self.split_x and residual_input is not None:
+            assert residual_out is not None
             residual_out = self.split(residual_out)
         if self.allgather_out:
             out = self.allgather(out, forward_meta.ids_remove_padding.shape[0])
 
-        if residual_input is None:
-            return out
-        else:
-            return out, residual_out
+        # if residual_input is None:
+        #     return out
+        # else:
+        return out, residual_out
 
 
 class LayerNorm(nn.Layer):

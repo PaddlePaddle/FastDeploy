@@ -229,8 +229,8 @@ class Glm4MoeAttention(nn.Layer):
 
         if self.use_qk_norm:
             q, k, v = qkv_out.split([self.q_size, self.kv_size, self.kv_size], axis=-1)
-            q = self.q_norm(q.reshape([-1, self.num_heads, self.head_dim])).reshape(q.shape)
-            k = self.k_norm(k.reshape([-1, self.num_kv_heads, self.head_dim])).reshape(k.shape)
+            q = self.q_norm(q.reshape([-1, self.num_heads, self.head_dim]))[0].reshape(q.shape)
+            k = self.k_norm(k.reshape([-1, self.num_kv_heads, self.head_dim]))[0].reshape(k.shape)
             qkv_out = paddle.concat([q, k, v], axis=-1)
 
         atten_out = self.attn(
@@ -291,11 +291,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
         residual: paddle.Tensor = None,
     ):
         """ """
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
-        else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        hidden_states, residual = self.input_layernorm(hidden_states, residual=residual, forward_meta=forward_meta)
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
@@ -368,7 +364,7 @@ class Glm4MoeModel(nn.Layer):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
         hidden_states = hidden_states + residual
 
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states)[0]
 
         return out
 

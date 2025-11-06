@@ -307,8 +307,8 @@ class ModelConfig:
         Read configuration information from environment variables and update the object's attributes.
         If an attribute is not present or is an empty string in the environment variables, use the default value.
         """
-        self.max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
-        self.stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
+        self.max_stop_seqs_num = envs.FD_MAX_STOP_SEQS_NUM
+        self.stop_seqs_max_len = envs.FD_STOP_SEQS_MAX_LEN
 
         def reset_config_value(key, value):
             if not hasattr(self, key.lower()):
