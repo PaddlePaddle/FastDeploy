@@ -344,6 +344,8 @@ class CacheMessager:
                             )
                     item["layer_idx"] = current_layer_idx
                     if item["layer_idx"] == self.num_layers:
+                        if "error" not in item["status"]:
+                            item["status"] = "finished"
                         if item["transfer_protocol"] == "ipc":
                             self.messager["ipc"].write_block_by_sync(target_id)
                         logger.info(f"finish write cache {item['request_id']}")
@@ -359,7 +361,7 @@ class CacheMessager:
     def _handle_connect_task(self):
         while True:
             try:
-                task = self.engine_worker_queue.get_connect_rdma_task()
+                task, _ = self.engine_worker_queue.get_connect_rdma_task()
                 if task is None:
                     time.sleep(0.001)
                     continue
@@ -376,7 +378,8 @@ class CacheMessager:
                 self.engine_worker_queue.connect_task_response_barrier.wait()
                 self.engine_worker_queue.put_connect_rdma_task_response(response)
             except Exception as e:
-                logger.error(f"handle_connect_task has exception: {e}")
+                time.sleep(0.001)
+                logger.error(f"handle_connect_task has exception: {e}, {str(traceback.format_exc())}")
 
 
 class CacheMessagerV1:
