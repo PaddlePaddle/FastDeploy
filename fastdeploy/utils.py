@@ -982,6 +982,7 @@ api_server_logger = get_logger("api_server", "api_server.log")
 console_logger = get_logger("console", "console.log", print_to_console=True)
 spec_logger = get_logger("speculate", "speculate.log")
 zmq_client_logger = get_logger("zmq_client", "zmq_client.log")
+router_logger = get_logger("router", "router.log")
 
 
 def parse_type(return_type: Callable[[str], T]) -> Callable[[str], T]:

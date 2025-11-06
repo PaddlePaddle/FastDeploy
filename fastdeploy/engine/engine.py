@@ -694,8 +694,6 @@ class LLMEngine:
             self.splitwise_receive_thread.daemon = True
             self.splitwise_receive_thread.start()
 
-        self.cfg.init_cache_info()
-
         role = self.cfg.scheduler_config.splitwise_role
         host_ip = self.cfg.host_ip
         disaggregate = self.cfg.disaggregate_info

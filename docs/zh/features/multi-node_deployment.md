@@ -26,7 +26,7 @@
 4. 确保所有节点能够解析彼此的主机名
 
 * 在线推理启动示例：
-  
+
     ```shell
     python -m fastdeploy.entrypoints.openai.api_server \
     --model baidu/ERNIE-4.5-300B-A47B-Paddle \
@@ -40,7 +40,7 @@
     ```
 
 * 离线启动示例：
-  
+
     ```python
     from fastdeploy.engine.sampling_params import SamplingParams
     from fastdeploy.entrypoints.llm import LLM

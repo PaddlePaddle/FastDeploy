@@ -527,6 +527,8 @@ class RequestOutput:
             f"num_input_image_tokens={self.num_input_image_tokens}, "
             f"num_input_video_tokens={self.num_input_video_tokens}, "
             f"metrics={self.metrics}, "
+            f"error_code={self.error_code}, "
+            f"error_msg={self.error_msg},"
         )
 
     @classmethod
