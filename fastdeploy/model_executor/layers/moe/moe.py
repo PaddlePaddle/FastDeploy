@@ -461,7 +461,7 @@ class FusedMoE(nn.Layer):
             )
         ]
         ep_rank_to_expert_id_list = [i for i in range(self.num_experts)]
-        if self.redundant_table_manger is not None:
+        if self.redundant_table_manger is not None and is_rearrange is True:
             (
                 ep_rank_to_expert_id_list,
                 expert_id_to_ep_rank_array,
