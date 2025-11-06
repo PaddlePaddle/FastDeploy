@@ -267,7 +267,7 @@ class PaddleDisWorkerProc:
         attention_dp_cached_prefill_tasks = []
         attention_dp_wait_prefill_iters = 0
         is_first_chunk_dict = {}
-
+        idx_request_id_dict = {}
         while True:
             if local_rank == 0:
                 if self.model_weights_status.value[0] != 0:
@@ -350,6 +350,15 @@ class PaddleDisWorkerProc:
                 tmp_need_cached_prefills = []
                 if len(req_dicts) > 0:
                     for request in req_dicts:
+                        if request.idx not in idx_request_id_dict:
+                            idx_request_id_dict[request.idx] = request.request_id
+                        else:
+                            if (
+                                idx_request_id_dict[request.idx] != request.request_id
+                            ):  # next request in this slot, delete data to prevent memory leak
+                                if idx_request_id_dict[request.idx] in is_first_chunk_dict:
+                                    del is_first_chunk_dict[idx_request_id_dict[request.idx]]
+                                idx_request_id_dict[request.idx] = request.request_id
                         if request.task_type.value == RequestType.PREFILL.value:
                             tmp_need_cached_prefills.append(request)
                             if request.request_id not in is_first_chunk_dict:
@@ -371,6 +380,7 @@ class PaddleDisWorkerProc:
                 only_prefill_batch_list = []
                 paddle.distributed.all_gather_object(only_prefill_batch_list, exist_prefill)
                 if_only_prefill = all(only_prefill_batch_list)
+                exist_non_first_chunk = False
                 if if_only_prefill:  # all ranks have prefill tasks
                     # add a prefill task to current step
                     if len(attention_dp_cached_prefill_tasks) > 0:
