@@ -42,3 +42,5 @@ opentelemetry-instrumentation-fastapi
 partial_json_parser
 msgspec
 einops
+setproctitle
+aistudio_sdk
