@@ -1211,6 +1211,7 @@ class CacheConfig:
         self.swap_space = None
         self.max_encoder_cache = None
         self.max_processor_cache = None
+        self.disable_chunked_mm_input = False
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)

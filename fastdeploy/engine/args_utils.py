@@ -314,6 +314,10 @@ class EngineArgs:
     """
     additional decode block num
     """
+    disable_chunked_mm_input: bool = False
+    """
+    Disable chunked_mm_input for multi-model inference.
+    """
 
     scheduler_name: str = "local"
     """
@@ -934,6 +938,13 @@ class EngineArgs:
             type=lambda s: s.split(",") if s else None,
             default=EngineArgs.rdma_comm_ports,
             help="ports for rdma communication.",
+        )
+
+        perf_group.add_argument(
+            "--disable-chunked-mm-input",
+            action="store_true",
+            default=EngineArgs.disable_chunked_mm_input,
+            help="Disable chunked mm input.",
         )
 
         # Router parameters group
