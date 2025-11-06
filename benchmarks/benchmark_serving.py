@@ -487,6 +487,9 @@ async def benchmark(
             benchmark_duration = benchmark_outputs[-1].end_timestamp - benchmark_outputs[0].end_timestamp
         else:
             benchmark_duration = 0.0
+            print(f"丢弃前数量: {n}")
+            print(f"丢弃后数量: {len(benchmark_outputs)}, 返回结果异常")
+            exit(8)
 
         print(f"丢弃前数量: {n}")
         print(f"丢弃后数量: {len(benchmark_outputs)}")

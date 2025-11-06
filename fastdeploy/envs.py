@@ -155,6 +155,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "ENCODE_FEATURE_BOS_SK": lambda: os.getenv("ENCODE_FEATURE_BOS_SK"),
     # Enable offline perf test mode for PD disaggregation
     "FD_OFFLINE_PERF_TEST_FOR_PD": lambda: int(os.getenv("FD_OFFLINE_PERF_TEST_FOR_PD", "0")),
+    # ep+tp strategy: "all_reduce" or "all_to_all"
+    # all_reduce: qkv_linear + attn + out_linear + allreduce
+    # all_to_all: allgather + qkv_linear + attn + all2all + out_linear
+    "FD_EP_TP_STRATEGY": lambda: os.getenv("FD_EP_TP_STRATEGY", "all_reduce"),
 }
 
 
