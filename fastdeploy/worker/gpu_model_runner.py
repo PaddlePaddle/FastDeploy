@@ -2098,9 +2098,9 @@ class GPUModelRunner(ModelRunnerBase):
 
             return model_output
 
-        # p = Thread(target=haha)
-        # p.start()
-        # p.join()
+        p = Thread(target=haha)
+        p.start()
+        p.join()
         model_output = haha()
 
         model_output = model_output[0]
