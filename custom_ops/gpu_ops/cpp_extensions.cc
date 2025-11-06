@@ -1047,6 +1047,7 @@ void SpeculateGetTargetLogits(const paddle::Tensor& target_logits,
                               const paddle::Tensor& seq_lens_encoder,
                               const paddle::Tensor& accept_num);
 
+<<<<<<< HEAD
 std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
     const paddle::Tensor& ids_remove_padding,
     const paddle::Tensor& seq_lens_this_time,  // only on cpu
@@ -1058,6 +1059,16 @@ std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
     const paddle::Tensor& is_block_step,
     const paddle::Tensor& decode_states,
     const paddle::Tensor& mask_rollback);
+=======
+std::vector<paddle::Tensor> FusedNeoxRopeEmbedding(
+    const paddle::Tensor& qkv,
+    const paddle::Tensor& cos_emb,
+    const paddle::Tensor& sin_emb,
+    const int num_heads,
+    const int head_dim);
+
+std::vector<paddle::Tensor> GeluTanh(paddle::Tensor& input);
+>>>>>>> b62d0f81 ([Feature] Optim PaddleOCR-VL)
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_expert_token_num",
@@ -1648,4 +1659,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("update_attn_mask_offsets",
         &UpdateAttnMaskOffsets,
         "update attention mask");
+        
+  m.def("fused_neox_rope_embedding",
+        &FusedNeoxRopeEmbedding,
+        "fused_neox_rope_embedding function");
+
+  m.def("gelu_tanh", &GeluTanh, "gelu_tanh function");
 }
