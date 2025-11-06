@@ -187,11 +187,11 @@ rm -f core*
 #清空消息队列
 ipcrm --all=msg
 echo "============================开始vl模型测试!============================"
-export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+export XPU_VISIBLE_DEVICES="0,1,2,3"
 python -m fastdeploy.entrypoints.openai.api_server \
-    --model ${MODEL_PATH}/ERNIE-4.5-VL-424B-A47B-Paddle \
+    --model ${MODEL_PATH}/ERNIE-4.5-VL-28B-A3B-Paddle \
     --port 8188 \
-    --tensor-parallel-size 8 \
+    --tensor-parallel-size 4 \
     --max-model-len 32768 \
     --max-num-seqs 10 \
     --quantization wint8 \

@@ -68,7 +68,6 @@ jobs:
           FD_API_PORT=$((9180 + gpu_id * 100))
           FD_ENGINE_QUEUE_PORT=$((9150 + gpu_id * 100))
           FD_METRICS_PORT=$((9170 + gpu_id * 100))
-
           PARENT_DIR=$(dirname "$WORKSPACE")
           echo "PARENT_DIR:$PARENT_DIR"
           docker run --rm --net=host --cap-add=SYS_PTRACE --privileged --shm-size=64G  \
