@@ -116,6 +116,7 @@ class DeepSeekV3MoE(nn.Layer):
         super().__init__()
 
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
+        self.norm_topk_prob = fd_config.model_config.norm_topk_prob
 
         weight_key_map = {
             "gate_correction_bias_key": f"{prefix}.gate.e_score_correction_bias",
@@ -145,6 +146,7 @@ class DeepSeekV3MoE(nn.Layer):
         self.experts = FusedMoE(
             fd_config=fd_config,
             reduce_results=False,
+            renormalize=self.norm_topk_prob,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
             num_experts=fd_config.model_config.n_routed_experts,
             top_k=fd_config.model_config.num_experts_per_tok,
@@ -180,7 +182,7 @@ class DeepSeekV3MoE(nn.Layer):
         moe_out = moe_out + shared_experts_out
         # We do to TP all reduce after the sum of experts.
         if self.tp_size > 1:
-            tensor_model_parallel_all_reduce(moe_out)
+            moe_out = tensor_model_parallel_all_reduce(moe_out)
         return moe_out
 
 

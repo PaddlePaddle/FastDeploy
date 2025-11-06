@@ -55,8 +55,18 @@ void EncoderWriteCacheWithRopeKernel(
   auto kv_num_heads = meta_data.kv_num_heads;
   auto head_dim = meta_data.head_dims;
   bool is_scale_channel_wise = false;
+  int rotary_dim = head_dim;
   if (cache_k_scale && cache_k_scale.get().dims()[0] == head_dim * kv_num_heads) {
     is_scale_channel_wise = true;
+  }
+  if (rotary_embs){
+    rotary_dim = rotary_embs.get().dims()[rotary_embs.get().dims().size()-1] * 2;
+    if(rotary_dim < head_dim){
+      if (!use_neox_style || q_norm_weight || k_norm_weight || num_heads == kv_num_heads || is_scale_channel_wise){
+        PADDLE_THROW(phi::errors::Fatal(
+          "partial_rotary_factor < 1.0 only supports use_neox_rotary_style=True, q_norm_weight/k_norm_weight) is None, GQA and is_scale_channel_wise=false."));
+      }
+    }
   }
 
   if (q_norm_weight && k_norm_weight) {
@@ -125,6 +135,7 @@ void EncoderWriteCacheWithRopeKernel(
           max_seq_len,
           rope_3d ? rotary_embs.get().dims()[3] : rotary_embs.get().dims()[2],
           head_dim,
+          rotary_dim,
           stream,
           use_neox_style,
           rope_3d);

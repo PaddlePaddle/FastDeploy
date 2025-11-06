@@ -27,11 +27,8 @@ from ..utils import get_tensor
 from .fused_moe_backend_base import UnquantizedFusedMoEMethod
 
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import (
-        moe_expert_dispatch,
-        moe_expert_reduce,
-        noaux_tc,
-    )
+    from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
+    from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch, moe_expert_reduce
 
     try:
         from fastdeploy.model_executor.ops.gpu import w4afp8_gemm_scale_permute
@@ -44,31 +41,6 @@ elif current_platform.is_iluvatar():
     )
 
 from fastdeploy.model_executor.utils import TensorTracker, free_tensor, set_weight_attrs
-
-
-# used for deepseek_v3
-def get_moe_scores(
-    gating_output: paddle.Tensor,
-    n_group,
-    topk_group,
-    top_k,
-    routed_scaling_factor,
-    e_score_correction_bias,
-) -> paddle.Tensor:
-    """
-    compute moe scores using e_score_correction_bias.
-    """
-    scores = paddle.nn.functional.sigmoid(gating_output)
-    scores_with_bias = scores + e_score_correction_bias
-    scores, topk_values, topk_idx = noaux_tc(
-        scores,
-        scores_with_bias,
-        n_group,
-        topk_group,
-        top_k,
-        routed_scaling_factor,
-    )
-    return scores, topk_values, topk_idx
 
 
 class CutlassMoEMethod(UnquantizedFusedMoEMethod):
@@ -255,13 +227,14 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         """
         gate_out = gate(x.cast("float32"))
         if layer.topk_method == "noaux_tc":
-            gate_out, _, _ = get_moe_scores(
+            gate_out, topk_weights, topk_idx = get_moe_scores(
                 gate_out,
                 layer.n_group,
                 layer.topk_group,
                 layer.top_k,
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
+                getattr(layer, "renormalize", True),
             )
 
             (
@@ -325,7 +298,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         )
 
         if layer.reduce_results and layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(fused_moe_out)
+            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out, layer.fd_config.parallel_config.tp_group)
 
         return fused_moe_out
 

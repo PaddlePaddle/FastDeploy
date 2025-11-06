@@ -248,9 +248,12 @@ class TokenProcessor:
                 self.resource_manager.tasks_list[index] = None
                 self.resource_manager._recycle_block_tables(task)
 
-        task_used_block_num = sum([len(task.block_tables) if task else 0 for task in self.resource_manager.tasks_list])
+        # Update block metrics
+        num_blocks_used_by_tasks = sum(
+            [len(task.block_tables) if task else 0 for task in self.resource_manager.tasks_list]
+        )
         main_process_metrics.available_gpu_block_num.set(
-            self.resource_manager.total_block_number() - task_used_block_num
+            self.resource_manager.total_block_number() - num_blocks_used_by_tasks
         )
         main_process_metrics.batch_size.set(
             self.resource_manager.max_num_seqs - self.resource_manager.available_batch()
@@ -463,6 +466,31 @@ class TokenProcessor:
         main_process_metrics.infer_latency.set(current_time - task.inference_start_time)
         main_process_metrics.request_inference_time.observe(current_time - task.inference_start_time)
         main_process_metrics.request_generation_tokens.observe(self.tokens_counter[task.request_id])
+
+    def clear_data(self):
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            self.resource_manager.clear_data()
+        for i in range(self.cfg.max_num_seqs):
+            if self.resource_manager.stop_flags[i]:
+                continue
+            task = self.resource_manager.tasks_list[i]
+            result = RequestOutput(
+                request_id=task.request_id,
+                outputs=CompletionOutput(
+                    index=i,
+                    send_idx=self.tokens_counter[task.request_id],
+                    token_ids=task.eos_token_ids,
+                    draft_token_ids=[],
+                ),
+                finished=True,
+                metrics=RequestMetrics(
+                    arrival_time=time.time(),
+                    request_start_time=task.arrival_time,
+                ),
+            )
+            is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
+            self._recycle_resources(task.request_id, i, task, result, is_prefill)
+            llm_logger.warning(f"clear data for task {task.request_id}")
 
     def _record_speculative_decoding_mertics(self, accept_num):
         """Record metrics of speculative decoding"""

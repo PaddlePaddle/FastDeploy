@@ -15,6 +15,7 @@ class TestMoeRouting(unittest.TestCase):
         self.topk_group = 4
         self.top_k = 8
         self.routed_scaling_factor = 1.5
+        self.renormalize = True
 
     def node_limit_routing(self, gate_probs):
         """将所有专家分组, 只在topk_group个group内选择专家"""
@@ -64,6 +65,7 @@ class TestMoeRouting(unittest.TestCase):
             self.topk_group,
             self.top_k,
             self.routed_scaling_factor,
+            self.renormalize,
         )
 
         ref_topk_values, ref_topk_idx = self.ref_moe_routing()

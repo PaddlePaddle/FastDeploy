@@ -59,6 +59,7 @@ else:
         recover_decode_task,
         set_value_by_flags_and_idx,
         share_external_data,
+        set_data_ipc,
     )
 
 from fastdeploy.model_executor.pre_and_post_process import (
@@ -73,6 +74,7 @@ if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
 
 from fastdeploy import envs
 from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
+from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
@@ -263,14 +265,20 @@ class GPUModelRunner(ModelRunnerBase):
                     else:
                         position_ids = None
 
-                    enable_thinking = request.get("enable_thinking", True)
-                    enable_thinking = enable_thinking if enable_thinking is not None else True
-                    self.share_inputs["enable_thinking"][:] = enable_thinking
-                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
-                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)
                     self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
                         position_ids, request.get("max_tokens", 2048)
                     )
+
+                if request.get("enable_thinking", False) and request.get("reasoning_max_tokens") is not None:
+                    # Enable thinking
+                    self.share_inputs["enable_thinking"][:] = True
+                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 1
+                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
+                else:
+                    # Disable thinking
+                    self.share_inputs["enable_thinking"][:] = False
+                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 0
+                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = 0
 
                 if isinstance(request.prompt_token_ids, np.ndarray):
                     prompt_token_ids = request.prompt_token_ids.tolist()
@@ -493,15 +501,21 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["prompt_lens"][idx : idx + 1] = length
 
                 if self.enable_mm:
-                    enable_thinking = request.get("enable_thinking", True)
-                    enable_thinking = enable_thinking if enable_thinking is not None else True
-                    self.share_inputs["enable_thinking"][:] = enable_thinking
-                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 1 if enable_thinking else 0
-                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens", 2048)
                     self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
                         position_ids, request.get("max_tokens", 2048)
                     )
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
+
+                if request.get("enable_thinking", False) and request.get("reasoning_max_tokens") is not None:
+                    # Enable thinking
+                    self.share_inputs["enable_thinking"][:] = True
+                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 1
+                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
+                else:
+                    # Disable thinking
+                    self.share_inputs["enable_thinking"][:] = False
+                    self.share_inputs["need_think_end"][idx : idx + 1, :] = 0
+                    self.share_inputs["reasoning_index"][idx : idx + 1, :] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
                 res = request.get(attr, default_value)
@@ -733,6 +747,11 @@ class GPUModelRunner(ModelRunnerBase):
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(self.parallel_config.max_model_len).reshape((1, -1))
 
+        # Initialize thinking related buffers
+        self.share_inputs["need_think_end"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+        self.share_inputs["enable_thinking"] = paddle.full(shape=[1], fill_value=False, dtype="bool")
+        self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+
         # TODO(gongshaotian): move to models
         if not self.enable_mm:
             self.share_inputs["rope_emb"] = get_rope(
@@ -740,6 +759,7 @@ class GPUModelRunner(ModelRunnerBase):
                 position_ids=tmp_position_ids,
                 base=self.model_config.rope_theta,
                 model_config=self.model_config,
+                partial_rotary_factor=self.model_config.partial_rotary_factor,
             )
 
         # Set block tables
@@ -824,11 +844,6 @@ class GPUModelRunner(ModelRunnerBase):
                 dtype="float32",
             )
             self.share_inputs["image_features"] = None
-            self.share_inputs["need_think_end"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-            self.share_inputs["enable_thinking"] = paddle.full(
-                shape=[1], fill_value=("ernie" in self.model_config.model_type), dtype="bool"
-            )
-            self.share_inputs["reasoning_index"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
     def _prepare_inputs(self) -> None:
         """Prepare the model inputs"""
@@ -977,7 +992,7 @@ class GPUModelRunner(ModelRunnerBase):
         """
         Initialize kv cache
         """
-        cache_kvs = {}
+        # cache_kvs = {}
         max_block_num = self.num_gpu_blocks
 
         # Get kv cache dtype
@@ -998,34 +1013,50 @@ class GPUModelRunner(ModelRunnerBase):
         )
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-        if not profile and (self.cache_config.enable_prefix_caching or self.parallel_config.splitwise_role != "mixed"):
-            cache_kvs_list = []
-            for i in range(self.model_config.num_hidden_layers):
-                key_cache = paddle.empty(shape=[], dtype=cache_type)
-                key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
-                val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
-                key_cache = share_external_data(key_cache, key_cache_name, kv_cache_shape)
-                cache_kvs_list.append(key_cache)
-                value_cache = paddle.empty(shape=[], dtype=cache_type)
-                value_cache = share_external_data(value_cache, val_cache_name, kv_cache_shape)
-                cache_kvs_list.append(value_cache)
+        cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
+        cache_ready_signal = IPCSignal(
+            name="cache_ready_signal",
+            array=cache_ready_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.engine_worker_queue_port,
+            create=False,
+        )
 
-            self.share_inputs["caches"] = cache_kvs_list
-        else:
-            for i in range(self.model_config.num_hidden_layers):
-                cache_kvs[f"key_caches_{i}"] = paddle.full(
-                    shape=kv_cache_shape,
-                    fill_value=0,
-                    dtype=cache_type,
-                )
-                cache_kvs[f"value_caches_{i}"] = paddle.full(
-                    shape=kv_cache_shape,
-                    fill_value=0,
-                    dtype=cache_type,
-                )
-            self.share_inputs["caches"] = list(cache_kvs.values())
-            for value in cache_kvs.values():
-                del value
+        # Check if gpu runner needs to create kv cache
+        # 1. During profiling, it creates its own kv cache.
+        # 2. GPU runner creates kv cache tensor unless p/d disaggregation is enabled.
+        create_cache_tensor = profile or self.parallel_config.splitwise_role == "mixed"
+
+        if not create_cache_tensor:
+            logger.info(f"Waiting for cache managers to create kv cache.. {cache_ready_signal.value}")
+            while cache_ready_signal.value[self.local_rank] != 1:
+                time.sleep(1)
+            logger.info(f"OK! Stop waiting. {cache_ready_signal.value}")
+
+        logger.info(f"Initializing kv cache for all layers. {cache_ready_signal.value}")
+        cache_kvs_list = []
+        for i in range(self.model_config.num_hidden_layers):
+            key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
+            val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
+            if create_cache_tensor:
+                logger.info(f"..creating kv cache for layer {i}: {kv_cache_shape}")
+                key_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
+                val_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
+                set_data_ipc(key_cache, key_cache_name)
+                set_data_ipc(val_cache, val_cache_name)
+            else:
+                logger.info(f"..attaching kv cache for layer {i}: {kv_cache_shape}")
+                key_cache = paddle.empty(shape=[], dtype=cache_type)
+                val_cache = paddle.empty(shape=[], dtype=cache_type)
+                key_cache = share_external_data(key_cache, key_cache_name, kv_cache_shape)
+                val_cache = share_external_data(val_cache, val_cache_name, kv_cache_shape)
+            cache_kvs_list.extend([key_cache, val_cache])
+        self.share_inputs["caches"] = cache_kvs_list
+
+        if not profile and create_cache_tensor:
+            cache_ready_signal.value[self.local_rank] = 1
+            logger.info(f"✅ kv cache is ready! {cache_ready_signal.value}")
+
         paddle.device.cuda.empty_cache()
 
     def initialize_attn_backend(self) -> None:
@@ -1201,10 +1232,10 @@ class GPUModelRunner(ModelRunnerBase):
                 ),
                 accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
                 accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
-                enable_thinking=(self.share_inputs["enable_thinking"] if self.enable_mm else None),
-                think_end_id=(getattr(self.model_config, "think_end_id", -1) if self.enable_mm else -1),
-                need_think_end=(self.share_inputs["need_think_end"] if self.enable_mm else None),
-                reasoning_index=(self.share_inputs["reasoning_index"] if self.enable_mm else None),
+                enable_thinking=self.share_inputs["enable_thinking"],
+                think_end_id=self.model_config.think_end_id,
+                need_think_end=self.share_inputs["need_think_end"],
+                reasoning_index=self.share_inputs["reasoning_index"],
                 stop_token_ids=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
             )
@@ -1496,10 +1527,10 @@ class GPUModelRunner(ModelRunnerBase):
             ),
             accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
-            enable_thinking=(self.share_inputs["enable_thinking"] if self.enable_mm else None),
-            think_end_id=(getattr(self.model_config, "think_end_id", -1) if self.enable_mm else -1),
-            need_think_end=(self.share_inputs["need_think_end"][:num_running_requests] if self.enable_mm else None),
-            reasoning_index=(self.share_inputs["reasoning_index"][:num_running_requests] if self.enable_mm else None),
+            enable_thinking=self.share_inputs["enable_thinking"],
+            think_end_id=self.model_config.think_end_id,
+            need_think_end=self.share_inputs["need_think_end"][:num_running_requests],
+            reasoning_index=self.share_inputs["reasoning_index"][:num_running_requests],
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
@@ -1589,7 +1620,7 @@ class GPUModelRunner(ModelRunnerBase):
         # 2. Dummy run
         self._dummy_run(
             num_tokens=self.parallel_config.max_num_batched_tokens,
-            batch_size=min(self.parallel_config.max_num_seqs, 3),
+            batch_size=self.parallel_config.max_num_seqs,
         )
 
         # 3. gc
@@ -1671,27 +1702,34 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs.pop("caches", None)
         if self.forward_meta is not None:
             self.forward_meta.clear_caches()
+        paddle.device.cuda.empty_cache()
+
+    def clear_requests(self):
+        """Dynamic model loader use to clear requests use for RL"""
+        self.share_inputs["stop_flags"][:] = True
 
     def clear_parameters(self, pid):
-        """ " Dynamic model loader use to clear parameters use for RL"""
+        """Dynamic model loader use to clear parameters use for RL"""
+        # Clear CUDAGraph
+        if self.use_cudagraph:
+            self.model.clear_grpah_opt_backend()
+        # Clear parameters and Send single
         self.dynamic_weight_manager.clear_parameters(pid)
         self.clear_cache()
         paddle.device.cuda.empty_cache()
 
-        # Clear CudaGraph
-        if self.use_cudagraph:
-            self.model.clear_grpah_opt_backend()
-
         self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
 
     def update_parameters(self, pid):
-        """ " Dynamic model loader use to update parameters use for RL"""
+        """Dynamic model loader use to update parameters use for RL"""
+        # Update parameters
         self.dynamic_weight_manager.update_parameters(pid)
         self.initialize_kv_cache()
-
-        # Recapture CudaGraph
+        # Recapture CUDAGraph
         if self.use_cudagraph:
             self.capture_model()
+        # Send single
+        self.dynamic_weight_manager.finalize_update(pid)
 
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 

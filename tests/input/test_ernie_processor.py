@@ -17,12 +17,26 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.decode_status = {}
         self.processor.reasoning_end_dict = {}
         self.processor.tool_parser_dict = {}
+        self.processor.generation_config = MagicMock()
+        self.processor.eos_token_ids = [1]
 
         # 模拟 ids2tokens 方法
         def mock_ids2tokens(token_ids, task_id):
             return "delta_text", [2, 3], "previous_texts"
 
         self.processor.ids2tokens = mock_ids2tokens
+
+        def mock_messages2ids(request, **kwargs):
+            if "chat_template" in kwargs:
+                return [1]
+            else:
+                return [0]
+
+        def mock_apply_default_parameters(request):
+            return request
+
+        self.processor.messages2ids = mock_messages2ids
+        self.processor._apply_default_parameters = mock_apply_default_parameters
 
         # 模拟推理解析器
         self.mock_reasoning_parser = MagicMock()
@@ -48,6 +62,17 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
 
         # 验证结果
         self.assertEqual(result["outputs"]["raw_prediction"], "delta_text")
+
+    def test_process_request_dict(self):
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello!"}],
+            "chat_template_kwargs": {"chat_template": "Hello!"},
+            "eos_token_ids": [1],
+            "temperature": 1,
+            "top_p": 1,
+        }
+        result = self.processor.process_request_dict(request_dict, 100)
+        self.assertEqual(result["prompt_token_ids"], [1])
 
 
 if __name__ == "__main__":

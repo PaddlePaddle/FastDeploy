@@ -170,6 +170,8 @@ async def lifespan(app: FastAPI):
         enable_logprob=args.enable_logprob,
         workers=args.workers,
         tool_parser=args.tool_call_parser,
+        enable_prefix_caching=args.enable_prefix_caching,
+        splitwise_role=args.splitwise_role,
     )
     await engine_client.connection_manager.initialize()
     app.state.dynamic_load_weight = args.dynamic_load_weight
@@ -478,6 +480,7 @@ def reset_scheduler():
 
     if llm_engine is None:
         return Response("Engine not loaded", status_code=500)
+    llm_engine.engine.clear_data()
     llm_engine.engine.scheduler.reset()
     return Response("Scheduler Reset Successfully", status_code=200)
 
@@ -496,6 +499,7 @@ def control_scheduler(request: ControlSchedulerRequest):
         return JSONResponse(content=content.model_dump(), status_code=500)
 
     if request.reset:
+        llm_engine.engine.clear_data()
         llm_engine.engine.scheduler.reset()
 
     if request.load_shards_num or request.reallocate_shard:

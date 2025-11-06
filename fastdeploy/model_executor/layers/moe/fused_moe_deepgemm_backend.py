@@ -481,7 +481,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         gate_out = gate(x.cast("float32"))
 
         if layer.topk_method == "noaux_tc":
-            from .ep import get_moe_scores
+            from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 
             _, topk_weights, topk_ids = get_moe_scores(
                 gate_out,
@@ -490,6 +490,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 layer.top_k,
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
+                getattr(layer, "renormalize", True),
             )
         else:
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
@@ -571,6 +572,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             1.0,
         )[0]
         if layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(tmp_ffn_out)
+            tmp_ffn_out = tensor_model_parallel_all_reduce(tmp_ffn_out)
 
         return tmp_ffn_out

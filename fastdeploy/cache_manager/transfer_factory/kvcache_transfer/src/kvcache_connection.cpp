@@ -169,8 +169,12 @@ int parse_port_ib_info() {
             dev_info.maxQp = dev_attr.max_qp;
             strncpy(dev_info.devName, dev_name, MAXNAMESIZE);
 
-            INFO("Adding device %s port %d (%s)", dev_name, port_num,
-                 port_attr.link_layer == IBV_LINK_LAYER_INFINIBAND ? "IB" : "RoCE");
+            if (port_attr.link_layer == IBV_LINK_LAYER_INFINIBAND) {
+                INFO("Adding IB device %s port %d (LID:0x%x Rate:%dGbps)",
+                    dev_name, port_num, port_attr.lid, port_attr.active_speed/10);
+            } else {
+                INFO("Adding RoCE device %s port %d", dev_name, port_num);
+            }
 
             g_ib_all_devs.push_back(dev_info);
             ++g_kvcache_ib_dev_nums;
@@ -304,14 +308,24 @@ QpStatus modify_qp_to_rts(
     attr.max_dest_rd_atomic = 1;
     attr.min_rnr_timer = 12;
 
-    attr.ah_attr.is_global = 1;
-    attr.ah_attr.grh.hop_limit = 255;
-    attr.ah_attr.grh.flow_label = 0;
-    attr.ah_attr.grh.traffic_class = 0;
-    attr.ah_attr.grh.dgid.global.subnet_prefix = (dest->gid.global.subnet_prefix);
-    attr.ah_attr.grh.dgid.global.interface_id = (dest->gid.global.interface_id);
-    attr.ah_attr.grh.sgid_index = sgid_id;
+bool use_grh = (port_attr.link_layer == IBV_LINK_LAYER_ETHERNET);
 
+    if (use_grh) {
+        attr.ah_attr.is_global = 1;
+        attr.ah_attr.grh.hop_limit = 255;
+        attr.ah_attr.grh.flow_label = 0;
+        attr.ah_attr.grh.traffic_class = 0;
+        attr.ah_attr.grh.dgid.global.subnet_prefix = (dest->gid.global.subnet_prefix);
+        attr.ah_attr.grh.dgid.global.interface_id = (dest->gid.global.interface_id);
+        attr.ah_attr.grh.sgid_index = sgid_id;
+    } else {
+        attr.ah_attr.is_global = 0;
+        attr.ah_attr.dlid = dest->lid;
+        attr.ah_attr.sl = KVCacheConfig::getInstance().get_ib_service_level(); // 从配置获取服务级别
+        if (port_attr.link_layer == IBV_LINK_LAYER_INFINIBAND) {
+            attr.ah_attr.src_path_bits = KVCacheConfig::getInstance().get_ib_src_path_bits(); // IB特定路径位
+        }
+    }
 
     attr.ah_attr.src_path_bits = 0;
     attr.ah_attr.port_num = port;
@@ -602,11 +616,17 @@ bool client_exchange_destinations(
 
     my_dest.lid = ctx->portinfo.lid;
     my_dest.mtu = ctx->portinfo.active_mtu;
+    my_dest.sl = KVCacheConfig::getInstance().get_ib_service_level();
+    my_dest.path_bits = KVCacheConfig::getInstance().get_ib_src_path_bits();
 
     // Validate LID for InfiniBand
-    if (ctx->portinfo.link_layer != IBV_LINK_LAYER_ETHERNET && !my_dest.lid) {
-        ERR("Invalid LID 0x%04x for non-Ethernet link layer", my_dest.lid);
-        return false;
+    if (ctx->portinfo.link_layer != IBV_LINK_LAYER_ETHERNET) {
+        if (!my_dest.lid) {
+            ERR("Invalid LID 0x%04x for IB network", my_dest.lid);
+            return false;
+        }
+        LOGD("IB network detected - LID:0x%04x SL:%d PathBits:%d",
+            my_dest.lid, my_dest.sl, my_dest.path_bits);
     }
 
     // Get GID if specified

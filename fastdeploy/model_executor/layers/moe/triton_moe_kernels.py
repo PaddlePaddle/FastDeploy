@@ -59,6 +59,7 @@ def fused_moe_kernel_paddle(
     compute_type_enum: tl.constexpr,
     use_fp8_w8a8: tl.constexpr,
     use_int8_w8a16: tl.constexpr,
+    per_channel_quant: tl.constexpr,
     even_Ks: tl.constexpr,
 ):
     """
@@ -121,6 +122,13 @@ def fused_moe_kernel_paddle(
             a_scale_ptrs = a_scale_ptr + (offs_token // top_k) * stride_asm
             offs_bsn = offs_bn // group_n
             b_scale_ptrs = b_scale_ptr + off_experts * stride_bse + offs_bsn * stride_bsn
+        # channel-wise
+        elif per_channel_quant:
+            b_scale_ptrs = b_scale_ptr + off_experts * stride_bse + offs_bn[None, :] * stride_bsn
+            b_scale = tl.load(b_scale_ptrs)
+            # Load per-token scale for activations
+            a_scale_ptrs = a_scale_ptr + (offs_token // top_k) * stride_asm
+            a_scale = tl.load(a_scale_ptrs, mask=token_mask, other=0.0)[:, None]
         else:
             # (Zkk): every expert has one activation scale and weight scale.
             a_scale = tl.load(a_scale_ptr + off_experts)

@@ -88,7 +88,6 @@ class Ernie4_5Processor(BaseDataProcessor):
             str: error message
         """
         data_processor_logger.info(f"Start processing request: {request}")
-        request.chat_template = kwargs.get("chat_template")
         request = self._apply_default_parameters(request)
         if request.get("eos_token_ids") is None or len(request.eos_token_ids) == 0:
             request.eos_token_ids = self.eos_token_ids
@@ -127,7 +126,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                     )
             elif request.messages is not None:
                 task = request.to_dict()
-                chat_template_kwargs = kwargs.get("chat_template_kwargs")
+                chat_template_kwargs = kwargs.get("chat_template_kwargs", {})
                 if chat_template_kwargs:
                     if isinstance(chat_template_kwargs, dict):
                         for k, v in chat_template_kwargs.items():
@@ -135,7 +134,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                                 task[k] = v
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-                request.prompt_token_ids = self.messages2ids(task)
+                request.prompt_token_ids = self.messages2ids(task, **chat_template_kwargs)
             else:
                 raise ValueError(f"The request should have `prompt_token_ids`, `prompt` or `messages`: {request}.")
 
@@ -205,7 +204,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                     req_id = request.get("request_id", None)
                     data_processor_logger.info(f"req_id:{req_id}, tokens:{tokens}, token_ids: {token_ids}")
             elif request.get("messages"):
-                chat_template_kwargs = request.get("chat_template_kwargs")
+                chat_template_kwargs = request.get("chat_template_kwargs", {})
                 if chat_template_kwargs:
                     if isinstance(chat_template_kwargs, dict):
                         for k, v in chat_template_kwargs.items():
@@ -213,7 +212,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                                 request[k] = v
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-                request["prompt_token_ids"] = self.messages2ids(request)
+                request["prompt_token_ids"] = self.messages2ids(request, **chat_template_kwargs)
             else:
                 raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")
 
@@ -379,7 +378,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                 del self.tool_parser_dict[req_id]
         return response_dict
 
-    def messages2ids(self, request_or_messages):
+    def messages2ids(self, request_or_messages, **kwargs):
         """
         Convert multi-turn messages into ID sequences.
 
@@ -397,7 +396,7 @@ class Ernie4_5Processor(BaseDataProcessor):
             tokenize=False,
             split_special_tokens=False,
             add_special_tokens=False,
-            chat_template=request_or_messages.get("chat_template", None),
+            **kwargs,
         )
         request_or_messages["text_after_process"] = spliced_message
         req_id = None

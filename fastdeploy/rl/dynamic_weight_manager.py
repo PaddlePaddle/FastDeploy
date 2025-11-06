@@ -25,6 +25,7 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
+from fastdeploy.inter_communicator import ModelWeightsStatus
 
 
 class DynamicWeightManager:
@@ -44,6 +45,7 @@ class DynamicWeightManager:
         self.model: nn.Layer = model
         self._capture_model_state()
         self.update_parameters()
+        self.finalize_update()
 
         logger.info(
             f"✅ DynamicLoad model built successfully by {self.load_config.load_strategy}, "
@@ -59,10 +61,12 @@ class DynamicWeightManager:
 
     def update_parameters(self, pid: int = 0) -> None:
         """Core method to update model parameters based on strategy."""
+        logger.info(f"start update paramaters: suffix={pid} rank={self.rank}")
         start_time = time.perf_counter()
         paddle.device.cuda.empty_cache()
 
         if not self.first_load:
+            paddle.distributed.restart_process_group()
             paddle.distributed.restart_process_group(self.parallel_config.tp_group)
             if self.parallel_config.enable_expert_parallel:
                 paddle.distributed.restart_process_group(self.parallel_config.ep_group)
@@ -78,8 +82,6 @@ class DynamicWeightManager:
             raise ValueError(f"Unsupported strategy: {self.load_config.load_strategy}")
 
         logger.info(f"Update parameters in {time.perf_counter()-start_time:.2f}s")
-
-        self._finalize_update(pid)
 
     def _update_ipc_snapshot(self):
         """Update using IPC snapshot strategy for elastic recovery."""
@@ -106,7 +108,7 @@ class DynamicWeightManager:
 
     def clear_parameters(self, pid: int = 0) -> None:
         """Clear all model parameters and free memory."""
-        logger.info("start clear paramaters")
+        logger.info(f"start clear paramaters: suffix={pid} rank={self.rank}")
         paddle.device.cuda.empty_cache()
         for param in self.model.state_dict().values():
             param._clear_data()
@@ -114,12 +116,12 @@ class DynamicWeightManager:
         self._verify_parameters("clearance")
         if self.parallel_config.tensor_parallel_size > 1:
             paddle.distributed.barrier(self.parallel_config.tp_group)
-        paddle.distributed.shutdown_process_group(self.parallel_config.tp_group)
+            paddle.distributed.shutdown_process_group(self.parallel_config.tp_group)
         if self.parallel_config.enable_expert_parallel:
             paddle.distributed.barrier(self.parallel_config.ep_group)
             paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
         paddle.distributed.shutdown_process_group()
-        self._update_shared_status(pid, -2)
+        self._update_shared_status(pid, ModelWeightsStatus.CLEARED)
 
     def _update_model_from_state(self, state_dict: Dict[str, paddle.Tensor], src_type: str):
         """Update model parameters from given state dictionary."""
@@ -144,13 +146,13 @@ class DynamicWeightManager:
         if src.shape != dst.shape:
             raise ValueError(f"Shape mismatch for {name}: {src.shape} vs {dst.shape}")
 
-    def _finalize_update(self, pid: int):
+    def finalize_update(self, pid: int = 0):
         """Finalize update process with verification."""
         self._verify_parameters("update")
         if self.parallel_config.tensor_parallel_size > 1:
             paddle.distributed.barrier(self.parallel_config.tp_group)
         if not self.first_load:
-            self._update_shared_status(pid, 0)
+            self._update_shared_status(pid, ModelWeightsStatus.NORMAL)
         self.first_load = False
 
     def _get_gpu_id(self) -> int:
@@ -217,24 +219,20 @@ class DynamicWeightManager:
         """
         check model weights status
         """
-        is_stop = 0
-        while model_weights_status.value[0] != 0:
-            if model_weights_status.value[0] == 1:
+        logger.info(f"dynamic weight manager is check model weights status! {model_weights_status.value[0]}")
+        while model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
+            if model_weights_status.value[0] == ModelWeightsStatus.UPDATING:
                 logger.info("infer engine stopped! start to load new checkpoint...")
+                model_runner.clear_requests()
                 model_runner.update_parameters(pid)
-            elif model_weights_status.value[0] == -1:
+                while model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
+                    time.sleep(0.01)
+                logger.info("finished loading new checkpoint")
+            elif model_weights_status.value[0] == ModelWeightsStatus.CLEARING:
                 logger.info("infer engine stopped! start to clear checkpoint...")
+                model_runner.clear_requests()
                 model_runner.clear_parameters(pid)
-
-            while True:
-                if model_weights_status.value[0] == 0:
-                    logger.info("finished loading new checkpoint")
-                    break
-                elif is_stop == 1 or (model_weights_status.value[0] == -2 and is_stop == 0):
-                    if is_stop == 0:
-                        logger.info("finished clearing checkpoint")
-                        is_stop = 1
-                    time.sleep(0.001)
-                    break
-                else:
-                    time.sleep(0.001)
+                while model_weights_status.value[0] != ModelWeightsStatus.CLEARED:
+                    time.sleep(0.01)
+                logger.info("finished clearing checkpoint")
+            time.sleep(0.01)

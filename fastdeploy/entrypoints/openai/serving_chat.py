@@ -210,6 +210,8 @@ class OpenAIServingChat:
                 decoder_base_url=self.tokenizer_base_url,
             )
             while num_choices > 0:
+                if self.engine_client.check_model_weight_status():
+                    raise ValueError("Engine is clearing model weight")
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0
@@ -425,6 +427,8 @@ class OpenAIServingChat:
                 decoder_base_url=self.tokenizer_base_url,
             )
             while True:
+                if self.engine_client.check_model_weight_status():
+                    raise ValueError("Engine is clearing model weight")
                 try:
                     response = await asyncio.wait_for(response_queue.get(), timeout=10)
                     current_waiting_time = 0

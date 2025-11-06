@@ -156,6 +156,8 @@ private:
     const char* error_file_path_;
     bool relax_ordering_enabled_;
     int ib_timeout_;
+    int ib_service_level_;
+    int ib_src_path_bits_;
     const char* rdma_nics_;
 
     // Private constructor for singleton pattern
@@ -213,6 +215,18 @@ private:
             "KVCACHE_IB_TIMEOUT"
         );
 
+        ib_service_level_ = parse_int_value(
+            std::getenv("KVCACHE_IB_SERVICE_LEVEL"),
+            0,
+            "KVCACHE_IB_SERVICE_LEVEL"
+        );
+
+        ib_src_path_bits_ = parse_int_value(
+            std::getenv("KVCACHE_IB_SRC_PATH_BITS"),
+            0,
+            "KVCACHE_IB_SRC_PATH_BITS"
+        );
+
         rdma_nics_ = std::getenv("KVCACHE_RDMA_NICS");
     }
 
@@ -255,6 +269,8 @@ public:
     }
 
     int get_ib_timeout() const { return ib_timeout_; }
+    int get_ib_service_level() const { return ib_service_level_; }
+    int get_ib_src_path_bits() const { return ib_src_path_bits_; }
 
     // Configuration retrieval methods
     int get_rdma_gid_index() const { return rdma_gid_index_; }

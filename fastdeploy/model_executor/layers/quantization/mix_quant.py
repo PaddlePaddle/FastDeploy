@@ -76,13 +76,13 @@ class MixQuantConfig(QuantConfigBase):
             if layer.moe_tag == "Image":
                 return (
                     get_quantization_config(self.image_moe_quant_type)
-                    .from_config({"is_permuted": self.is_permuted, "self.is_checkpoint_bf16": self.is_checkpoint_bf16})
+                    .from_config({"is_permuted": self.is_permuted, "is_checkpoint_bf16": self.is_checkpoint_bf16})
                     .get_quant_method(layer)
                 )
             else:
                 return (
                     get_quantization_config(self.moe_quant_type)
-                    .from_config({"is_permuted": self.is_permuted, "self.is_checkpoint_bf16": self.is_checkpoint_bf16})
+                    .from_config({"is_permuted": self.is_permuted, "is_checkpoint_bf16": self.is_checkpoint_bf16})
                     .get_quant_method(layer)
                 )
         elif isinstance(layer, Attention):
@@ -97,6 +97,6 @@ class MixQuantConfig(QuantConfigBase):
         else:
             return (
                 get_quantization_config(self.dense_quant_type)
-                .from_config({"self.is_checkpoint_bf16": self.is_checkpoint_bf16})
+                .from_config({"is_checkpoint_bf16": self.is_checkpoint_bf16})
                 .get_quant_method(layer)
             )

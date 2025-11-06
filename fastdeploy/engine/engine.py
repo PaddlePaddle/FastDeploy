@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import json
 import multiprocessing
 import os
 import re
@@ -122,12 +123,12 @@ class LLMEngine:
             llm_logger.info(f"Start zmq server, api_server_pid: {api_server_pid}")
             self.engine.start_zmq_service(api_server_pid)
 
-        if self.do_profile == 0 and (
-            self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed"
-        ):
+        # If block numer is specified and model is deployed in mixed mode, start cache manager first
+        if not self.do_profile and self.cfg.splitwise_role != "mixed":
             device_ids = self.cfg.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
+            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix, True)
 
+        # Start workers
         self.worker_proc = self._start_worker_service()
         console_logger.info("Waiting worker processes ready...")
         time.sleep(5)
@@ -153,11 +154,17 @@ class LLMEngine:
                 return False
             time.sleep(1)
 
+        # If block number is not specified, let workers do profiling to determine the block number,
+        # and then start the cache manager
         if self.do_profile:
             self._stop_profile()
+        elif self.cfg.cache_config.enable_prefix_caching:
+            device_ids = self.cfg.device_ids.split(",")
+            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix, False)
+
         # Launch components: scheduler, cache_manager, expert_service et.al.
         self.launch_components()
-        if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
+        if self.cfg.splitwise_role != "mixed":
             self.launched_cache_manager_signal.value[0] = 1
 
         # Worker launched
@@ -167,6 +174,23 @@ class LLMEngine:
             return False
 
         console_logger.info(f"Worker processes are launched with {time.time() - start_time} seconds.")
+
+        # Print blocks number & max running requests to console
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            block_size = self.cfg.cache_config.block_size
+            num_gpu_blocks = self.cfg.cache_config.num_gpu_blocks_override or self.cfg.cache_config.total_block_num
+            num_cpu_blocks = self.cfg.cache_config.num_cpu_blocks
+            max_running_requests = min(
+                (num_gpu_blocks + num_cpu_blocks) * block_size // self.cfg.max_model_len, self.cfg.max_num_seqs
+            )
+            console_logger.info(
+                f"Detected {num_gpu_blocks} gpu blocks and {num_cpu_blocks} cpu blocks in cache (block size: {block_size})."
+            )
+            console_logger.info(
+                f"FastDeploy will be serving {max_running_requests} running requests "
+                f"if each sequence reaches its maximum length: {self.cfg.max_model_len}"
+            )
+
         return True
 
     def _get_generated_result(self):
@@ -198,7 +222,9 @@ class LLMEngine:
         if sampling_params is not None:
             request.sampling_params = sampling_params
         request.preprocess_start_time = time.time()
-
+        chat_template_kwargs = kwargs.get("chat_template_kwargs") or {}
+        chat_template_kwargs["chat_template"] = kwargs.get("chat_template")
+        kwargs["chat_template_kwargs"] = chat_template_kwargs
         request = self.data_processor.process_request(request, self.cfg.max_model_len, **kwargs)
         request.prompt_token_ids_len = len(request.prompt_token_ids)
         request.need_prefill_tokens = request.prompt_token_ids_len
@@ -210,9 +236,6 @@ class LLMEngine:
                 request.get("max_tokens"),
             ),
         )
-        if request.get("reasoning_max_tokens") is None:
-            default_reasoning_max_tokens = max(int(request.get("max_tokens") * 0.8), 1)
-            request.set("reasoning_max_tokens", default_reasoning_max_tokens)
         min_tokens = request.get("min_tokens")
         if input_ids_len + min_tokens >= self.cfg.max_model_len:
             error_msg = (
@@ -463,7 +486,7 @@ class LLMEngine:
             f" --kv_cache_ratio {self.cfg.cache_config.kv_cache_ratio}"
             f" --expert_parallel_size {self.cfg.parallel_config.expert_parallel_size}"
             f" --data_parallel_size {self.cfg.parallel_config.data_parallel_size}"
-            f" --quantization {self.cfg.model_config.quantization}"
+            f" --quantization '{json.dumps(self.cfg.model_config.quantization)}'"
             f" --ori_vocab_size {ori_vocab_size}"
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
             f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
@@ -579,7 +602,9 @@ class LLMEngine:
         self.engine.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.splitwise_role != "mixed":
             device_ids = self.cfg.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
+            self.cache_manager_processes = self.engine.start_cache_service(
+                device_ids, self.ipc_signal_suffix, self.cfg.splitwise_role != "mixed"
+            )
 
     def check_health(self, time_interval_threashold=30):
         """

@@ -73,6 +73,30 @@ class ErnieRotaryEmbedding:
             return rot_emb
 
 
+class GlmRotaryEmbedding:
+    def __init__(self, rotary_dim, base, partial_rotary_factor):
+        """
+        Pre-calculate rotary position embedding for position_ids.
+        """
+        self.rotary_dim = rotary_dim
+        self.base = base
+        if partial_rotary_factor < 1.0:
+            self.rotary_dim = int(self.rotary_dim * partial_rotary_factor)
+
+    def __call__(self, position_ids):
+        bsz, max_seq_len = position_ids.shape[:2]
+        inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
+        freqs = paddle.einsum("ij,k->ijk", position_ids.cast("float32"), inv_freq)
+        # shape: [B, S, D/2]
+        rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim // 2), dtype="float32")
+        emb = paddle.stack([freqs], axis=-1).reshape((bsz, max_seq_len, self.rotary_dim // 2))
+        # shape: [B, S, 1, D]
+        emb = paddle.unsqueeze(emb, 2)
+        rot_emb[0] = paddle.cos(emb)
+        rot_emb[1] = paddle.sin(emb)
+        return rot_emb
+
+
 class QwenRotaryEmbedding:
     def __init__(self, rotary_dim, base, partial_rotary_factor):
         """
@@ -245,6 +269,9 @@ def get_rope_impl(
     architecture = model_config.architectures[0]
     if model_config is None or architecture.startswith("Qwen"):
         rotary_emb_layer = QwenRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
+        rotary_emb = rotary_emb_layer(position_ids)
+    elif architecture.startswith("Glm"):
+        rotary_emb_layer = GlmRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
         rotary_emb = rotary_emb_layer(position_ids)
     else:
         rotary_emb_layer = ErnieRotaryEmbedding(rotary_dim, base, partial_rotary_factor)

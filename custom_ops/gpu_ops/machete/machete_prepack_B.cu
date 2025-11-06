@@ -51,6 +51,8 @@ std::vector<paddle::Tensor> MachetePrepackBKernel(
 
   if (b_type_str == "uint4b8") {
     b_type_id = machete::kU4B8.id();
+  } else if (b_type_str == "uint8b128") {
+    b_type_id = machete::kU8B128.id();
   } else {
     PADDLE_ENFORCE(false, "b_type_str not supported!");
   }

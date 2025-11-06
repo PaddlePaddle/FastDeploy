@@ -174,10 +174,46 @@ class EngineSevice:
             create=True,
         )
 
+        cache_ready_signal_data = np.zeros(shape=[self.cfg.parallel_config.tensor_parallel_size], dtype=np.int32)
+        self.cache_ready_signal = IPCSignal(
+            name="cache_ready_signal",
+            array=cache_ready_signal_data,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
+        swap_space_ready_signal_data = np.zeros(shape=[self.cfg.parallel_config.tensor_parallel_size], dtype=np.int32)
+        self.swap_space_ready_signal = IPCSignal(
+            name="swap_space_ready_signal",
+            array=swap_space_ready_signal_data,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
         model_weights_status = np.zeros([1], dtype=np.int32)
         self.model_weights_status_signal = IPCSignal(
             name="model_weights_status",
             array=model_weights_status,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
+        prefix_tree_status = np.zeros([1], dtype=np.int32)
+        self.prefix_tree_status_signal = IPCSignal(
+            name="prefix_tree_status",
+            array=prefix_tree_status,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
+        kv_cache_status = np.zeros([1], dtype=np.int32)
+        self.kv_cache_status_signal = IPCSignal(
+            name="kv_cache_status",
+            array=kv_cache_status,
             dtype=np.int32,
             suffix=current_suffix,
             create=True,
@@ -749,7 +785,7 @@ class EngineSevice:
 
         threading.Thread(target=receiver_loop, daemon=True).start()
 
-    def start_cache_service(self, device_ids, ipc_signal_suffix):
+    def start_cache_service(self, device_ids, ipc_signal_suffix, create_cache_tensor):
         return self.resource_manager.cache_manager.launch_cache_manager(
             cache_config=self.cfg.cache_config,
             tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,
@@ -759,10 +795,24 @@ class EngineSevice:
                 self.cfg.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
             ),
             pid_suffix=ipc_signal_suffix,
+            create_cache_tensor=create_cache_tensor,
         )
 
     def check_and_free_block_tables(self):
         self.resource_manager.check_and_free_block_tables()
+
+    def clear_data(self):
+        try:
+            llm_logger.info("Clear Data: Start")
+            self.token_processor.clear_data()
+            self.engine_worker_queue.clear_data()
+            self.send_response_server.req_dict.clear()
+            self.recv_request_server.req_dict.clear()
+            llm_logger.info("Clear Data: Successfully")
+            return True
+        except Exception as e:
+            llm_logger.error(f"Clear data error: {e}")
+            return False
 
     def _exit_sub_services(self):
         """
@@ -773,8 +823,12 @@ class EngineSevice:
         self.exist_task_signal.clear()
         self.exist_swapped_task_signal.clear()
         self.worker_healthy_live_signal.clear()
+        self.cache_ready_signal.clear()
+        self.swap_space_ready_signal.clear()
         self.exist_prefill_task_signal.clear()
         self.model_weights_status_signal.clear()
+        self.prefix_tree_status_signal.clear()
+        self.kv_cache_status_signal.clear()
         if hasattr(self, "send_response_server") and self.send_response_server is not None:
             self.send_response_server.close()
         if hasattr(self, "recv_request_server") and self.recv_request_server is not None:
