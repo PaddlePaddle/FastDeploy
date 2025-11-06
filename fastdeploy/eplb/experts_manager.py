@@ -1,5 +1,17 @@
 """
-redundant expert manger
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """
 
 import threading
@@ -489,119 +501,3 @@ class RedundantExpertManager:
             self.logger.info("redundant_expert: allgather_load_weight_result all success")
             all_success = True
         return all_success, exist_fail
-
-
-# def init_shared_memory_for_eplb_rank0(rank):
-#     rearrange_experts_ips_size = np.zeros([1], dtype=np.int32)
-#     shm_rearrange_experts_ips_size = shared_memory.SharedMemory(
-#         create=True,
-#         size=rearrange_experts_ips_size.nbytes,
-#         name=f"{envs.get_unique_name('rearrange_experts_ips_size_dprank' + rank)}",
-#     )
-#     rearrange_experts_ips_size_array = np.ndarray(
-#         rearrange_experts_ips_size.shape,
-#         dtype=rearrange_experts_ips_size.dtype,
-#         buffer=shm_rearrange_experts_ips_size.buf,
-#     )
-#     shm_rearrange_experts_ips_list = shared_memory.SharedMemory(
-#         create=True,
-#         size=self.config.eplb_config.redundant_expert_ip_shm_size,
-#         name=f"{envs.get_unique_name('rearrange_experts_ips_list_dprank' + rank)}",
-#     )
-#     # 记录专家重排状态
-#     rearrange_experts_status = np.zeros([1], dtype=np.int32)
-#     shm_rearrange_experts_status = shared_memory.SharedMemory(
-#         create=True,
-#         size=rearrange_experts_status.nbytes,
-#         name=f"{envs.get_unique_name('rearrange_experts_status_dprank' + rank)}",
-#     )
-#     rearrange_experts_status_array = np.ndarray(
-#         rearrange_experts_status.shape, dtype=rearrange_experts_status.dtype, buffer=shm_rearrange_experts_status.buf
-#     )
-#     # 接收更新权重的信号
-#     signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
-#     shm_signal_update_weight_from_tensor = shared_memory.SharedMemory(
-#         create=True,
-#         size=signal_update_weight_from_tensor.nbytes,
-#         name=f"{envs.get_unique_name('signal_update_weight_from_tensor_dprank' + rank) }",
-#     )
-#     signal_update_weight_from_tensor_array = np.ndarray(
-#         signal_update_weight_from_tensor.shape,
-#         dtype=signal_update_weight_from_tensor.dtype,
-#         buffer=shm_signal_update_weight_from_tensor.buf,
-#     )
-#     return (
-#         rearrange_experts_ips_size_array,
-#         shm_rearrange_experts_ips_list,
-#         rearrange_experts_status_array,
-#         signal_update_weight_from_tensor_array,
-#     )
-
-
-# def init_shared_memory_for_eplb_each_rank(fd_config, rank, ipc_signal_suffix):
-#     # 记录专家负载
-#     experts_token_stats = np.zeros(
-#         (fd_config.model_config.num_hidden_layers, fd_config.model_config.moe_num_experts),
-#         dtype=np.int32,
-#     )
-
-#     shm_local_experts_token_stats = shared_memory.SharedMemory(
-#         create=True,
-#         size=experts_token_stats.nbytes,
-#         name=f"{envs.get_unique_name('local_experts_token_stats_dprank' + rank)}",
-#     )
-#     local_experts_token_stats_array = np.ndarray(
-#         experts_token_stats.shape, dtype=experts_token_stats.dtype, buffer=shm_local_experts_token_stats.buf
-#     )
-#     # TODO: 全局专家负载状态是一样的，节点上的所有DP可以共用一份，但需要避免多个DP同时更新
-#     shm_all_experts_token_stats = shared_memory.SharedMemory(
-#         create=True,
-#         size=experts_token_stats.nbytes,
-#         name=f"{envs.get_unique_name('all_experts_token_stats_dprank' + rank)}",
-#     )
-#     expert_tokens_stats_array = np.ndarray(
-#         experts_token_stats.shape, dtype=experts_token_stats.dtype, buffer=shm_all_experts_token_stats.buf
-#     )
-#     # 接收加载权重的信号
-#     signal_update_weight_from_disk = np.zeros([1], dtype=np.int32)
-#     shm_signal_update_weight_from_disk = shared_memory.SharedMemory(
-#         create=True,
-#         size=signal_update_weight_from_disk.nbytes,
-#         name=f"{envs.get_unique_name('signal_update_weight_from_disk_dprank' + rank)}",
-#     )
-#     signal_update_weight_from_disk_array = np.ndarray(
-#         signal_update_weight_from_disk.shape,
-#         dtype=signal_update_weight_from_disk.dtype,
-#         buffer=shm_signal_update_weight_from_disk.buf,
-#     )
-#     # 记录加载权重的结果
-#     result_update_weight_from_disk = np.zeros([1], dtype=np.int32)
-#     shm_result_update_weight_from_disk = shared_memory.SharedMemory(
-#         create=True,
-#         size=result_update_weight_from_disk.nbytes,
-#         name=f"{envs.get_unique_name('result_update_weight_from_disk_dprank' + rank)}",
-#     )
-#     result_update_weight_from_disk_array = np.ndarray(
-#         result_update_weight_from_disk.shape,
-#         dtype=result_update_weight_from_disk.dtype,
-#         buffer=shm_result_update_weight_from_disk.buf,
-#     )
-#     # 接收清零专家负载的信号
-#     signal_clear_experts_token_stats = np.zeros([1], dtype=np.int32)
-#     shm_signal_clear_experts_token_stats = shared_memory.SharedMemory(
-#         create=True,
-#         size=signal_clear_experts_token_stats.nbytes,
-#         name=f"{envs.get_unique_name('signal_clear_experts_token_stats_dprank' + rank)}",
-#     )
-#     signal_clear_experts_token_stats_array = np.ndarray(
-#         signal_clear_experts_token_stats.shape,
-#         dtype=signal_clear_experts_token_stats.dtype,
-#         buffer=shm_signal_clear_experts_token_stats.buf,
-#     )
-#     return (
-#         local_experts_token_stats_array,
-#         expert_tokens_stats_array,
-#         signal_update_weight_from_disk_array,
-#         result_update_weight_from_disk_array,
-#         signal_clear_experts_token_stats_array,
-#     )
