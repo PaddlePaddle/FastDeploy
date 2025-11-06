@@ -344,7 +344,8 @@ class CacheMessager:
                             )
                     item["layer_idx"] = current_layer_idx
                     if item["layer_idx"] == self.num_layers:
-                        item["status"] = "finished"
+                        if "error" not in item["status"]:
+                            item["status"] = "finished"
                         if item["transfer_protocol"] == "ipc":
                             self.messager["ipc"].write_block_by_sync(target_id)
                         logger.info(f"finish write cache {item['request_id']}")
