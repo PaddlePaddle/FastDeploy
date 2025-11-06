@@ -88,4 +88,5 @@ export FD_SAMPLING_CLASS=rejection
 ```
 
 ## FAQ
+
 If you encounter any problems during use, you can refer to [FAQ](./FAQ.md).
