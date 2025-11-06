@@ -402,7 +402,6 @@ class PaddleDisWorkerProc:
 
             self.insert_step = False
             req_dicts = None
-            # local_rank = self.local_rank % tp_size
             self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
