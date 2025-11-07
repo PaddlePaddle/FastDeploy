@@ -100,6 +100,8 @@ class Request:
         prefill_start_index: int = 0,
         prefill_end_index: int = 0,
         num_computed_tokens: int = 0,
+        inference_start_time: float = 0,
+        llm_engine_recv_req_timestamp: float = 0,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -217,6 +219,8 @@ class Request:
             video_end=d.get("video_end", 0),
             audio_end=d.get("audio_end", 0),
             dp_rank=d.get("dp_rank", None),
+            inference_start_time=d.get("inference_start_time"),
+            llm_engine_recv_req_timestamp=d.get("llm_engine_recv_req_timestamp"),
         )
 
     @property

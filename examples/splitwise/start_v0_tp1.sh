@@ -2,9 +2,9 @@
 set -e
 
 # Test splitwise deployment
-# v0 requires prefill and decode in one node and it uses local scheduler
-# v1 supports prefill and decode in multi node and it uses splitwise scheduler
-# v2 supports prefill and decode in multi node and it uses router and local scheduler
+# There are two methods for splitwise deployment:
+# v0: using splitwise_scheduler or dp_scheduler
+# v1: using local_scheduler + router
 
 wait_for_health() {
        local server_port=$1
@@ -19,20 +19,39 @@ wait_for_health() {
        done
 }
 
+# prepare environment
 MODEL_NAME="PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
-# MODEL_NAME="baidu/ERNIE-4.5-21B-A3B-Paddle"
-aistudio download --model ${MODEL_NAME}
+
+export FD_DEBUG=1
+export ENABLE_V1_KVCACHE_SCHEDULER=1
+export KVCACHE_GDRCOPY_FLUSH_ENABLE=1
+
+SCRIPT_PATH=$(readlink -f "$0")
+SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
+export $(bash ${SCRIPT_DIR}/../../scripts/get_rdma_nics.sh gpu)
+echo "KVCACHE_RDMA_NICS:${KVCACHE_RDMA_NICS}"
+if [ -z "${KVCACHE_RDMA_NICS}" ]; then
+  echo "KVCACHE_RDMA_NICS is empty, please check the output of get_rdma_nics.sh"
+  exit 1
+fi
 
 unset http_proxy && unset https_proxy
 rm -rf log_*
 
+# start redis
+if ! redis-cli ping &>/dev/null; then
+    echo "Redis is not running. Starting redis-server..."
+    redis-server --daemonize yes
+    sleep 1
+else
+    echo "Redis is already running."
+fi
+sleep 1
+
 # start prefill
+export CUDA_VISIBLE_DEVICES=0
 export FD_LOG_DIR="log_prefill"
 mkdir -p ${FD_LOG_DIR}
-
-export CUDA_VISIBLE_DEVICES=0
-export FD_DEBUG=1
-export ENABLE_V1_KVCACHE_SCHEDULER=0
 
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
@@ -41,17 +60,22 @@ nohup python -m fastdeploy.entrypoints.openai.api_server \
        --engine-worker-queue-port 8102 \
        --cache-queue-port 8103 \
        --max-model-len 32768 \
+       --num-gpu-blocks-override 1000 \
        --splitwise-role "prefill" \
+       --cache-transfer-protocol "rdma" \
+       --rdma-comm-ports 8104 \
+       --pd-comm-port 8105 \
+       --scheduler-name "splitwise" \
+       --scheduler-host "127.0.0.1" \
+       --scheduler-port 6379 \
+       --scheduler-ttl 9000 \
        2>&1 >${FD_LOG_DIR}/nohup &
-wait_for_health 8100
+# wait_for_health 8100
 
 # start decode
+export CUDA_VISIBLE_DEVICES=1
 export FD_LOG_DIR="log_decode"
 mkdir -p ${FD_LOG_DIR}
-
-export CUDA_VISIBLE_DEVICES=1
-export FD_DEBUG=1
-export ENABLE_V1_KVCACHE_SCHEDULER=0
 
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
@@ -61,6 +85,26 @@ nohup python -m fastdeploy.entrypoints.openai.api_server \
        --cache-queue-port 9003 \
        --max-model-len 32768 \
        --splitwise-role "decode" \
-       --innode-prefill-ports 8102 \
+       --cache-transfer-protocol "rdma" \
+       --rdma-comm-ports 9004 \
+       --pd-comm-port 9005 \
+       --scheduler-name "splitwise" \
+       --scheduler-host "127.0.0.1" \
+       --scheduler-port 6379 \
+       --scheduler-ttl 9000 \
        2>&1 >${FD_LOG_DIR}/nohup &
 wait_for_health 9000
+
+
+# send request
+sleep 10  # make sure server is registered to router
+port=9000
+curl -X POST "http://0.0.0.0:${port}/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "hello"}
+  ],
+  "max_tokens": 20,
+  "stream": true
+}'

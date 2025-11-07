@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Test splitwise deployment which uses splitwise_scheduler,
+# and ENABLE_V1_KVCACHE_SCHEDULER is 0
+
 import json
 import os
 import shutil
@@ -124,6 +127,25 @@ def clean_ports():
             kill_process_on_port(port)
             time.sleep(1)
 
+# Read ports from environment variables; use default values if not set
+FD_CONNECTOR_PORT = int(os.getenv("FD_CONNECTOR_PORT", 8433))
+FD_REDIS_PORT = int(os.getenv("FD_REDIS_PORT", 8533))
+
+# List of ports to clean before and after tests
+PORTS_TO_CLEAN = [
+    FD_API_PORT,
+    FD_ENGINE_QUEUE_PORT,
+    FD_METRICS_PORT,
+    FD_CACHE_QUEUE_PORT,
+    FD_CONNECTOR_PORT,
+    FD_API_PORT + 1,
+    FD_ENGINE_QUEUE_PORT + 1,
+    FD_METRICS_PORT + 1,
+    FD_CACHE_QUEUE_PORT + 1,
+    FD_CONNECTOR_PORT + 1,
+    FD_REDIS_PORT,
+]
+
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_and_run_server():
@@ -135,9 +157,11 @@ def setup_and_run_server():
     - Tears down server after all tests finish
     """
     print("Pre-test port cleanup...")
-    clean_ports()
+    clean_ports(PORTS_TO_CLEAN)
 
     print("log dir clean ")
+    if os.path.exists("log_redis") and os.path.isdir("log_redis"):
+        shutil.rmtree("log_redis")
     if os.path.exists("log_prefill") and os.path.isdir("log_prefill"):
         shutil.rmtree("log_prefill")
     if os.path.exists("log_decode") and os.path.isdir("log_decode"):
@@ -150,13 +174,34 @@ def setup_and_run_server():
         model_path = "baidu/ERNIE-4.5-0.3B-Paddle"
     print(f"model_path: {model_path}")
 
+    # redis-server
+    print("start redis...")
+    env_copy = os.environ.copy()
+    log_path = "router.log"
+
+    cmd = [
+        "redis-server",
+        "--port",
+        str(FD_REDIS_PORT),
+        "--daemonize",
+        "yes",
+    ]
+
+    with open(log_path, "w") as logfile:
+        process_redis = subprocess.Popen(
+            cmd,
+            stdout=logfile,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,  # Enables killing full group via os.killpg
+            env=env_copy,
+        )
+
     # prefill实例
     print("start prefill...")
     env_prefill = os.environ.copy()
     env_prefill["CUDA_VISIBLE_DEVICES"] = "0"
     env_prefill["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
     env_prefill["FD_LOG_DIR"] = "log_prefill"
-    env_prefill["INFERENCE_MSG_QUEUE_ID"] = str(FD_API_PORT)
     prefill_log_path = "server.log"
     prefill_cmd = [
         sys.executable,
@@ -182,6 +227,16 @@ def setup_and_run_server():
         "wint8",
         "--splitwise-role",
         "prefill",
+        "--cache-transfer-protocol",
+        "ipc",
+        "--pd-comm-port",
+        str(FD_CONNECTOR_PORT),
+        "--scheduler-name",
+        "splitwise",
+        "--scheduler-host",
+        "127.0.0.1",
+        "--scheduler-port",
+        str(FD_REDIS_PORT),
     ]
 
     # Start subprocess in new process group
@@ -193,14 +248,13 @@ def setup_and_run_server():
             start_new_session=True,  # Enables killing full group via os.killpg
             env=env_prefill,
         )
-    time.sleep(3)
+    time.sleep(1)
 
     # decode实例
     print("start decode...")
     env_decode = os.environ.copy()
     env_decode["CUDA_VISIBLE_DEVICES"] = "1"
-    env_prefill["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
-    env_decode["INFERENCE_MSG_QUEUE_ID"] = str(FD_API_PORT + 1)
+    env_decode["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
     env_decode["FD_LOG_DIR"] = "log_decode"
     decode_log_path = "decode_server.log"
     decode_cmd = [
@@ -227,8 +281,16 @@ def setup_and_run_server():
         "wint8",
         "--splitwise-role",
         "decode",
-        "--innode-prefill-ports",
-        str(FD_ENGINE_QUEUE_PORT),
+        "--cache-transfer-protocol",
+        "ipc",
+        "--pd-comm-port",
+        str(FD_CONNECTOR_PORT + 1),
+        "--scheduler-name",
+        "splitwise",
+        "--scheduler-host",
+        "127.0.0.1",
+        "--scheduler-port",
+        str(FD_REDIS_PORT),
     ]
 
     # Start subprocess in new process group
@@ -242,19 +304,18 @@ def setup_and_run_server():
         )
 
     # Wait up to 300 seconds for API server to be ready
-    for _ in range(300):
-        if is_port_open("127.0.0.1", FD_API_PORT):
-            if is_port_open("127.0.0.1", FD_API_PORT + 1):
-                print(f"Prefill server is up on port {FD_API_PORT}")
-                print(f"Decode server is up on port {FD_API_PORT + 1}")
-                break
-        time.sleep(1)
+    for _ in range(60):
+        if is_port_open("127.0.0.1", FD_API_PORT) and is_port_open("127.0.0.1", FD_API_PORT + 1):
+            print(f"Prefill server is up on port {FD_API_PORT}")
+            print(f"Decode server is up on port {FD_API_PORT + 1}")
+            break
+        time.sleep(5)
     else:
         print("[TIMEOUT] API server failed to start in 5 minutes. Cleaning up...")
         try:
             os.killpg(process_prefill.pid, signal.SIGTERM)
             os.killpg(process_decode.pid, signal.SIGTERM)
-            clean_ports()
+            clean_ports(PORTS_TO_CLEAN)
         except Exception as e:
             print(f"Failed to kill process group: {e}")
         raise RuntimeError(f"API server did not start on port {FD_API_PORT}")
@@ -263,9 +324,10 @@ def setup_and_run_server():
 
     print("\n===== Post-test server cleanup... =====")
     try:
+        os.killpg(process_redis.pid, signal.SIGTERM)
         os.killpg(process_prefill.pid, signal.SIGTERM)
         os.killpg(process_decode.pid, signal.SIGTERM)
-        clean_ports()
+        clean_ports(PORTS_TO_CLEAN)
         print(f"Prefill server (pid={process_prefill.pid}) terminated")
         print(f"Decode server (pid={process_decode.pid}) terminated")
     except Exception as e:
@@ -277,7 +339,7 @@ def api_url(request):
     """
     Returns the API endpoint URL for chat completions.
     """
-    return f"http://0.0.0.0:{FD_API_PORT}/v1/chat/completions", f"http://0.0.0.0:{FD_API_PORT + 1}/v1/chat/completions"
+    return f"http://0.0.0.0:{FD_API_PORT}/v1/chat/completions", f"http://0.0.0.0:{FD_API_PORT+1}/v1/chat/completions"
 
 
 @pytest.fixture(scope="session")
@@ -364,15 +426,12 @@ def test_chat_usage_stream(api_url):
         "stream_options": {"include_usage": True, "continuous_usage_stats": True},
         "metadata": {"min_tokens": 10},
     }
-    _, d_url = api_url  # Only the decode server receives the request
-
-    response = send_request(url=d_url, payload=payload)
+    p_url, d_url = api_url
+    response = send_request(url=p_url, payload=payload)
     chunks = get_stream_chunks(response)
     result = "".join([x["choices"][0]["delta"]["content"] for x in chunks[:-1]])
     print("Decode Response:", result)
     assert result != "", "结果为空"
-    # for idx, chunk in enumerate(chunks):
-    #     print(f"\nchunk[{idx}]:\n{json.dumps(chunk, indent=2, ensure_ascii=False)}")
     usage = chunks[-1]["usage"]
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
     assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
@@ -395,9 +454,9 @@ def test_chat_usage_non_stream(api_url):
         "stream": False,
         "metadata": {"min_tokens": 10},
     }
-    _, d_url = api_url
 
-    response = send_request(url=d_url, payload=payload).json()
+    p_url, d_url = api_url
+    response = send_request(url=p_url, payload=payload).json()
     usage = response["usage"]
     result = response["choices"][0]["message"]["content"]
     assert result != "", "结果为空"
@@ -420,13 +479,13 @@ def test_non_chat_usage_stream(api_url):
         "stream_options": {"include_usage": True, "continuous_usage_stats": True},
         "metadata": {"min_tokens": 10},
     }
-    _, d_url = api_url
-    d_url = d_url.replace("chat/completions", "completions")
+    p_url, d_url = api_url
+    p_url = p_url.replace("chat/completions", "completions")
 
-    response = send_request(url=d_url, payload=payload)
+    response = send_request(url=p_url, payload=payload)
     chunks = get_stream_chunks(response)
     result = "".join([x["choices"][0]["text"] for x in chunks[:-1]])
-    print("Decode Response:", result)
+    # print("Decode Response:", result)
     assert result != "", "结果为空"
     usage = chunks[-1]["usage"]
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
@@ -447,13 +506,13 @@ def test_non_chat_usage_non_stream(api_url):
         "stream": False,
         "metadata": {"min_tokens": 10},
     }
-    _, d_url = api_url
-    d_url = d_url.replace("chat/completions", "completions")
+    p_url, d_url = api_url
+    p_url = p_url.replace("chat/completions", "completions")
 
-    response = send_request(url=d_url, payload=payload).json()
+    response = send_request(url=p_url, payload=payload).json()
     usage = response["usage"]
     result = response["choices"][0]["text"]
-    print("Decode Response:", result)
+    # print("Decode Response:", result)
     assert result != "", "结果为空"
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
     assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"

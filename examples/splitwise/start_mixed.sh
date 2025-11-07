@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+# Test mixed server + router
+
 wait_for_health() {
        local server_port=$1
        while true; do
@@ -16,7 +18,6 @@ wait_for_health() {
 
 # prepare environment
 MODEL_NAME="PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
-# MODEL_NAME="baidu/ERNIE-4.5-21B-A3B-Paddle"
 
 export FD_DEBUG=1
 export ENABLE_V1_KVCACHE_SCHEDULER=0
@@ -51,7 +52,7 @@ nohup python -m fastdeploy.entrypoints.openai.api_server \
        2>&1 >${FD_LOG_DIR}/nohup &
 sleep 1
 
-wait_for_health 8100
+# wait_for_health 8100
 
 # start modelserver 1
 export CUDA_VISIBLE_DEVICES=1
@@ -69,3 +70,17 @@ nohup python -m fastdeploy.entrypoints.openai.api_server \
        2>&1 >${FD_LOG_DIR}/nohup &
 
 wait_for_health 8200
+
+
+# send request
+sleep 10  # make sure server is registered to router
+port=9000
+curl -X POST "http://0.0.0.0:${port}/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "hello"}
+  ],
+  "max_tokens": 20,
+  "stream": true
+}'
