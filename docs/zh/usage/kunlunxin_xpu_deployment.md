@@ -197,7 +197,7 @@ curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
 -d '{
   "messages": [
     {"role": "user", "content": [
-              {"type": "image_url", "image_url": {"url": "https://paddle-model-ecology.bj.bcebos.com/PPOCRVL/dataset/ocr_v5_eval/handwrite_ch_rec_val/中文手写古籍_000054_crop_32.jpg"}},
+              {"type": "image_url", "image_url": {"url": "https://paddle-model-ecology.bj.bcebos.com/paddlex/imgs/demo_image/ocr_demo.jpg"}},
               {"type": "text", "text": "OCR:"}
             ]}
     ],
@@ -216,7 +216,7 @@ response = client.chat.completions.create(
     model="default",
     messages=[
         {"role": "user", "content": [
-              {"type": "image_url", "image_url": {"url": "https://paddle-model-ecology.bj.bcebos.com/PPOCRVL/dataset/ocr_v5_eval/handwrite_ch_rec_val/中文手写古籍_000054_crop_32.jpg"}},
+              {"type": "image_url", "image_url": {"url": "https://paddle-model-ecology.bj.bcebos.com/paddlex/imgs/demo_image/ocr_demo.jpg"}},
               {"type": "text", "text": "OCR:"}
             ]
         },

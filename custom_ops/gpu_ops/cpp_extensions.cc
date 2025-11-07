@@ -1046,6 +1046,15 @@ void SpeculateGetTargetLogits(const paddle::Tensor& target_logits,
                               const paddle::Tensor& seq_lens_encoder,
                               const paddle::Tensor& accept_num);
 
+std::vector<paddle::Tensor> FusedNeoxRopeEmbedding(
+    const paddle::Tensor& qkv,
+    const paddle::Tensor& cos_emb,
+    const paddle::Tensor& sin_emb,
+    const int num_heads,
+    const int head_dim);
+
+std::vector<paddle::Tensor> GeluTanh(paddle::Tensor& input);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_expert_token_num",
         &GetExpertTokenNum,
@@ -1631,4 +1640,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_get_target_logits",
         &SpeculateGetTargetLogits,
         "speculate_get_target_logits function");
+
+  m.def("fused_neox_rope_embedding",
+        &FusedNeoxRopeEmbedding,
+        "fused_neox_rope_embedding function");
+
+  m.def("gelu_tanh", &GeluTanh, "gelu_tanh function");
 }
