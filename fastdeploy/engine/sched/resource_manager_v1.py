@@ -559,6 +559,7 @@ class ResourceManagerV1(ResourceManager):
                     return None
             else:
                 return True
+        request.async_process_futures = []
         return False
 
     def _apply_async_preprocess(self, request: Request) -> None:
