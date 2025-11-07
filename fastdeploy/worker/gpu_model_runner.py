@@ -2728,7 +2728,7 @@ class GPUModelRunner(ModelRunnerBase):
             if request.prompt_token_ids is None or num_prompt_logprobs is None:
                 continue
             if num_prompt_logprobs == -1:
-                num_prompt_logprobs = self.max_logprobs
+                num_prompt_logprobs = self.ori_vocab_size
 
             num_tokens = request.prefill_end_index - request.prefill_start_index
             num_prompt_tokens = len(request.prompt_token_ids)
