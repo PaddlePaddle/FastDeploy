@@ -112,7 +112,11 @@ class GPUModelRunner(ModelRunnerBase):
         self.speculative_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.speculative_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
-        self.max_logprobs = fd_config.model_config.max_logprobs
+        self.max_logprobs = (
+            fd_config.model_config.max_logprobs
+            if fd_config.model_config.max_logprobs != -1
+            else self.fd_config.model_config.ori_vocab_size
+        )
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
         self.is_pooling_model = self.fd_config.model_config.runner_type == "pooling"
         self.vocal_size = self.fd_config.model_config.vocab_size
