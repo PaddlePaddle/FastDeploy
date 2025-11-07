@@ -203,7 +203,8 @@ def pre_process(
     """
     token_num = paddle.sum(seq_lens_this_time)
 
-    if (current_platform.is_cuda() or current_platform.is_iluvatar()) and not speculative_decoding:
+    specific_platform = current_platform.is_cuda() or current_platform.is_maca() or current_platform.is_iluvatar()
+    if specific_platform and not speculative_decoding:
         # Note(ZKK): This case's code is very simple!
         ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
             input_ids, token_num, seq_lens_this_time
