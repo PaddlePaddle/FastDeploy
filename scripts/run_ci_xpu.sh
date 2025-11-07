@@ -9,8 +9,8 @@ apt install -y lsof
 function stop_processes() {
     ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
     ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-    ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-    lsof -t -i :8188 | xargs kill -9 || true
+    ps -efww | grep -E "$((8188 + GPU_ID * 100))" | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+    lsof -t -i :$((8188 + GPU_ID * 100)) | xargs kill -9 || true
 }
 stop_processes
 
@@ -20,6 +20,14 @@ if [[ "$GPU_ID" == "0" ]]; then
 else
     export XPU_VISIBLE_DEVICES="4,5,6,7"
 fi
+
+mkdir -p /workspace/deps
+cd /workspace/deps 
+wget -q https://klx-sdk-release-public.su.bcebos.com/xre/kl3-release/5.0.21.21/xre-Linux-x86_64-5.0.21.21.tar.gz
+tar -zxf xre-Linux-x86_64-5.0.21.21.tar.gz && mv xre-Linux-x86_64-5.0.21.21 xre
+cd -
+export PATH=/workspace/deps/xre/bin:$PATH
+
 xpu-smi -r -i $XPU_VISIBLE_DEVICES
 xpu-smi
 
