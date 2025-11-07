@@ -194,7 +194,7 @@ def speculate_step_paddle_execution(test_data):
     max_draft_tokens = test_data["max_draft_tokens"]
 
     # 可选：打印执行前关键信息（如需调试可开启）
-    if os.environ.get("ATTN_MASK_TEST_DEBUG", "0") == "1":
+    if os.environ.get("STEP_TEST_DEBUG", "0") == "1":
         print("-" * 50 + "before step op" + "-" * 50)
         print("stop_flags: ", stop_flags)
         print("seq_lens_this_time: ", seq_lens_this_time)
@@ -247,7 +247,7 @@ def speculate_step_paddle_execution(test_data):
         max_draft_tokens,
     )
 
-    if os.environ.get("ATTN_MASK_TEST_DEBUG", "0") == "1":
+    if os.environ.get("STEP_TEST_DEBUG", "0") == "1":
         # 可选：打印执行后关键信息（如需调试可开启）
         print("-" * 50 + "before step op" + "-" * 50)
         print("stop_flags: ", stop_flags)
