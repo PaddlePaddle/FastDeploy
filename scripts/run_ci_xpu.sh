@@ -22,7 +22,7 @@ else
 fi
 
 mkdir -p /workspace/deps
-cd /workspace/deps 
+cd /workspace/deps
 wget -q https://klx-sdk-release-public.su.bcebos.com/xre/kl3-release/5.0.21.21/xre-Linux-x86_64-5.0.21.21.tar.gz
 tar -zxf xre-Linux-x86_64-5.0.21.21.tar.gz && mv xre-Linux-x86_64-5.0.21.21 xre
 cd -
