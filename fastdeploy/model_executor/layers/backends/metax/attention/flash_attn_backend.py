@@ -121,6 +121,7 @@ class FlashAttentionBackend(AttentionBackend):
             fd_config.parallel_config.expert_parallel_rank = 0
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
+        self.enable_mm = fd_config.model_config.enable_mm
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
@@ -253,6 +254,19 @@ class FlashAttentionBackend(AttentionBackend):
         out = paddle.add(paddle.multiply(qk, cos), paddle.multiply(rotate_half, sin))
         return paddle.cast(out, qk.dtype)
 
+    def apply_rope_dec(self, q, k, forward_meta: ForwardMeta):
+        batch_ids = self.batch_ids_decode
+        bs = batch_ids.shape[0]
+        index = paddle.concat([batch_ids.view([-1, 1]), self.seq_lens_dec.to("int64").view([-1, 1])], axis=1)
+        rot_cos = paddle.gather_nd(forward_meta.rotary_embs[:, 0, 0, :, 0, :], index).view([bs, 1, 1, -1])
+        rot_sin = paddle.gather_nd(forward_meta.rotary_embs[:, 1, 0, :, 0, :], index).view([bs, 1, 1, -1])
+        rot_cos = paddle.repeat_interleave(rot_cos, repeats=2, axis=-1)
+        rot_sin = paddle.repeat_interleave(rot_sin, repeats=2, axis=-1)
+        q = self.apply_rope(q, rot_cos, rot_sin)
+        k = self.apply_rope(k, rot_cos, rot_sin)
+
+        return q, k
+
     def get_splited_qkv(
         self,
         qkv: paddle.Tensor,
@@ -271,14 +285,30 @@ class FlashAttentionBackend(AttentionBackend):
             cached_kv_len = forward_meta.seq_lens_decoder[batch_idx][0]
             cu_seq_start_q = cu_seqlens_q[idx]
             cu_seq_end_q = cu_seqlens_q[idx + 1]
-            # forward_meta.rotary_embs is [2, 1, S, 1, D // 2]
+
             if forward_meta.rotary_embs is not None:
-                cos = paddle.repeat_interleave(
-                    forward_meta.rotary_embs[0, 0, cached_kv_len : cached_kv_len + seq_len_i, :, :], repeats=2, axis=-1
-                )  # [Si, D]
-                sin = paddle.repeat_interleave(
-                    forward_meta.rotary_embs[1, 0, cached_kv_len : cached_kv_len + seq_len_i, :, :], repeats=2, axis=-1
-                )  # [Si, D]
+                if self.enable_mm:  # vl: forward_meta.rotary_embs is [2, 1, S, 1, D // 2]
+                    cos = paddle.repeat_interleave(
+                        forward_meta.rotary_embs[batch_idx, 0, 0, cached_kv_len : cached_kv_len + seq_len_i, :, :],
+                        repeats=2,
+                        axis=-1,
+                    )  # [Si, D]
+                    sin = paddle.repeat_interleave(
+                        forward_meta.rotary_embs[batch_idx, 1, 0, cached_kv_len : cached_kv_len + seq_len_i, :, :],
+                        repeats=2,
+                        axis=-1,
+                    )  # [Si, D]
+                else:  # text: forward_meta.rotary_embs is [2, 1, S, 1, D // 2]
+                    cos = paddle.repeat_interleave(
+                        forward_meta.rotary_embs[0, 0, cached_kv_len : cached_kv_len + seq_len_i, :, :],
+                        repeats=2,
+                        axis=-1,
+                    )  # [Si, D]
+                    sin = paddle.repeat_interleave(
+                        forward_meta.rotary_embs[1, 0, cached_kv_len : cached_kv_len + seq_len_i, :, :],
+                        repeats=2,
+                        axis=-1,
+                    )  # [Si, D]
                 q[cu_seq_start_q:cu_seq_end_q] = self.apply_rope(q[cu_seq_start_q:cu_seq_end_q], cos, sin)
                 k[cu_seq_start_q:cu_seq_end_q] = self.apply_rope(k[cu_seq_start_q:cu_seq_end_q], cos, sin)
 
@@ -386,6 +416,14 @@ class FlashAttentionBackend(AttentionBackend):
         qkv = decode_qkv.view([-1, 1, self.num_heads + self.kv_num_heads * 2, self.head_dim])
         q, k, v = qkv.split(num_or_sections=[self.num_heads, self.kv_num_heads, self.kv_num_heads], axis=-2)
 
+        if self.enable_mm:  # vl
+            q, k = self.apply_rope_dec(q, k, forward_meta)
+            rot_cos = None
+            rot_sin = None
+        else:  # text
+            rot_cos = forward_meta.rotary_embs[0, 0, :, 0, :].astype(q.dtype)
+            rot_sin = forward_meta.rotary_embs[1, 0, :, 0, :].astype(q.dtype)
+
         decode_out = flash_attn_kvcache_func(
             q,
             forward_meta.caches[k_cache_id],
@@ -394,8 +432,8 @@ class FlashAttentionBackend(AttentionBackend):
             self.block_table_dec,
             k,
             v,
-            rotary_cos=forward_meta.rotary_embs[0, 0, :, 0, :].astype("bfloat16"),
-            rotary_sin=forward_meta.rotary_embs[1, 0, :, 0, :].astype("bfloat16"),
+            rotary_cos=rot_cos,
+            rotary_sin=rot_sin,
             causal=self.causal,
             is_rotary_interleaved=True,
         )[0].squeeze(1)
