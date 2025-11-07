@@ -34,9 +34,7 @@ def test_45t():
     )
     print(response.choices[0].message.content)
     # print(base_response)
-    assert (
-        "人工智能" in response.choices[0].message.content
-    )
+    assert "人工智能" in response.choices[0].message.content
 
 
 if __name__ == "__main__":
