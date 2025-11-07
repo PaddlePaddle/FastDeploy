@@ -187,11 +187,11 @@ rm -f core*
 #清空消息队列
 ipcrm --all=msg
 echo "============================开始vl模型测试!============================"
-export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+export XPU_VISIBLE_DEVICES="0,1,2,3"
 python -m fastdeploy.entrypoints.openai.api_server \
-    --model ${MODEL_PATH}/ERNIE-4.5-VL-424B-A47B-Paddle \
+    --model ${MODEL_PATH}/ERNIE-4.5-VL-28B-A3B-Paddle \
     --port 8188 \
-    --tensor-parallel-size 8 \
+    --tensor-parallel-size 4 \
     --max-model-len 32768 \
     --max-num-seqs 10 \
     --quantization wint8 \
@@ -251,7 +251,7 @@ if [ ${vl_test_exit_code} -ne 0 ]; then
 fi
 
 
-echo "============================开始 EP4TP1 测试!============================"
+echo "============================开始 EP8TP1 测试!============================"
 sleep 5
 rm -rf log/*
 rm -f core*
@@ -290,12 +290,12 @@ stop_processes
 if [ ${ep_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
     cat log/workerlog.0
-    echo "EP4TP1 相关测试失败，请检查pr代码"
+    echo "EP8TP1 相关测试失败，请检查pr代码"
     exit 1
 fi
 
 
-echo "============================开始 EP4TP4 测试!============================"
+echo "============================开始 EP8TP8 allreduce 测试!============================"
 sleep 5
 rm -rf log/*
 rm -f core*
@@ -323,11 +323,55 @@ unset BKCL_PCIE_RING
 unset XSHMEM_MODE
 unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
+unset enable_expert_parallel
+unset enable_tensor_parallel
 stop_processes
 
 if [ ${ep_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
     cat log/workerlog.0
-    echo "EP4TP4 相关测试失败，请检查pr代码"
+    echo "EP8TP8 allreduce 相关测试失败，请检查pr代码"
+    exit 1
+fi
+
+
+echo "============================开始 EP8TP8 all2all 测试!============================"
+sleep 5
+rm -rf log/*
+rm -f core*
+ipcrm --all=msg
+xpu-smi
+export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+export BKCL_ENABLE_XDR=1
+export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
+export BKCL_TRACE_TOPO=1
+export BKCL_PCIE_RING=1
+export XSHMEM_MODE=1
+export XSHMEM_QP_NUM_PER_RANK=32
+export BKCL_RDMA_VERBS=1
+
+export enable_expert_parallel=1
+export enable_tensor_parallel=1
+export EP_TP_SPLIT_MODE=1
+
+python -m pytest -s --timeout=600 tests/ci_use/XPU_45T/run_ep.py
+ep_exit_code=$?
+
+unset BKCL_ENABLE_XDR
+unset BKCL_RDMA_NICS
+unset BKCL_TRACE_TOPO
+unset BKCL_PCIE_RING
+unset XSHMEM_MODE
+unset XSHMEM_QP_NUM_PER_RANK
+unset BKCL_RDMA_VERBS
+unset enable_expert_parallel
+unset enable_tensor_parallel
+unset EP_TP_SPLIT_MODE
+stop_processes
+
+if [ ${ep_exit_code} -ne 0 ]; then
+    echo "log/workerlog.0"
+    cat log/workerlog.0
+    echo "EP8TP8 all2all 相关测试失败，请检查pr代码"
     exit 1
 fi

@@ -34,6 +34,7 @@ from fastdeploy.config import (
     ParallelConfig,
     PlasAttentionConfig,
     PoolerConfig,
+    RouterConfig,
     RunnerOption,
     SpeculativeConfig,
     StructuredOutputsConfig,
@@ -73,6 +74,10 @@ class EngineArgs:
     model: str = "baidu/ernie-45-turbo"
     """
     The name or path of the model to be used.
+    """
+    port: Optional[str] = None
+    """
+    Port for api server.
     """
     served_model_name: Optional[str] = None
     """
@@ -309,6 +314,10 @@ class EngineArgs:
     """
     additional decode block num
     """
+    disable_chunked_mm_input: bool = False
+    """
+    Disable chunked_mm_input for multi-model inference.
+    """
 
     scheduler_name: str = "local"
     """
@@ -443,6 +452,11 @@ class EngineArgs:
     - To enable builtin logits processors, add builtin module paths and class names to the list. Currently support:
         - fastdeploy.model_executor.logits_processor:LogitBiasLogitsProcessor
     - To enable custom logits processors, add your dotted paths to module and class names to the list.
+    """
+
+    router: Optional[str] = None
+    """
+    Url for router server, such as `0.0.0.0:30000`.
     """
 
     def __post_init__(self):
@@ -860,21 +874,6 @@ class EngineArgs:
         )
 
         perf_group.add_argument(
-            "--splitwise-role",
-            type=str,
-            default=EngineArgs.splitwise_role,
-            help="Role of splitwise. Default is \
-            'mixed'. (prefill, decode, mixed)",
-        )
-
-        perf_group.add_argument(
-            "--innode-prefill-ports",
-            type=lambda s: s.split(",") if s else None,
-            default=EngineArgs.innode_prefill_ports,
-            help="port for innode prefill",
-        )
-
-        perf_group.add_argument(
             "--enable-chunked-prefill",
             action="store_true",
             default=EngineArgs.enable_chunked_prefill,
@@ -903,25 +902,58 @@ class EngineArgs:
             help=("For chunked prefill, the threshold number of" " tokens for a prompt to be considered long."),
         )
 
-        perf_group.add_argument(
+        # Splitwise deployment parameters group
+        splitwise_group = parser.add_argument_group("Splitwise Deployment")
+        splitwise_group.add_argument(
+            "--splitwise-role",
+            type=str,
+            default=EngineArgs.splitwise_role,
+            help="Role of splitwise. Default is \
+            'mixed'. (prefill, decode, mixed)",
+        )
+
+        splitwise_group.add_argument(
+            "--innode-prefill-ports",
+            type=lambda s: s.split(",") if s else None,
+            default=EngineArgs.innode_prefill_ports,
+            help="port for innode prefill, only used in single machine splitwise deployment",
+        )
+
+        splitwise_group.add_argument(
             "--cache-transfer-protocol",
             type=str,
             default=EngineArgs.cache_transfer_protocol,
-            help="support protocol list, comma separated, default is ipc",
+            help="support protocol list (ipc or rdma), comma separated, default is ipc",
         )
 
-        perf_group.add_argument(
+        splitwise_group.add_argument(
             "--pd-comm-port",
             type=lambda s: s.split(",") if s else None,
             default=EngineArgs.pd_comm_port,
             help="port for splitwise communication.",
         )
 
-        perf_group.add_argument(
+        splitwise_group.add_argument(
             "--rdma-comm-ports",
             type=lambda s: s.split(",") if s else None,
             default=EngineArgs.rdma_comm_ports,
             help="ports for rdma communication.",
+        )
+
+        perf_group.add_argument(
+            "--disable-chunked-mm-input",
+            action="store_true",
+            default=EngineArgs.disable_chunked_mm_input,
+            help="Disable chunked mm input.",
+        )
+
+        # Router parameters group
+        router_group = parser.add_argument_group("Router")
+        router_group.add_argument(
+            "--router",
+            type=str,
+            default=EngineArgs.router,
+            help="url for router server.",
         )
 
         # Scheduler parameters group
@@ -1044,7 +1076,11 @@ class EngineArgs:
         """
         Create an instance of EngineArgs from command line arguments.
         """
-        return cls(**{field.name: getattr(args, field.name) for field in dataclass_fields(cls)})
+        args_dict = {}
+        for field in dataclass_fields(cls):
+            if hasattr(args, field.name):
+                args_dict[field.name] = getattr(args, field.name)
+        return cls(**args_dict)
 
     def create_speculative_config(self) -> SpeculativeConfig:
         """ """
@@ -1063,6 +1099,7 @@ class EngineArgs:
         prefix_len = len(prefix)
 
         all = asdict(self)
+        all.pop("port")  # port and scheduler_port are not the same
         params = dict()
         for k, v in all.items():
             if k[:prefix_len] == prefix:
@@ -1151,6 +1188,7 @@ class EngineArgs:
         scheduler_cfg = self.create_scheduler_config()
         graph_opt_cfg = self.create_graph_optimization_config()
         plas_attention_config = self.create_plas_attention_config()
+        router_config = RouterConfig(all_dict)
 
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
@@ -1170,6 +1208,7 @@ class EngineArgs:
             speculative_config=speculative_cfg,
             eplb_config=eplb_cfg,
             structured_outputs_config=structured_outputs_config,
+            router_config=router_config,
             ips=self.ips,
             use_warmup=self.use_warmup,
             limit_mm_per_prompt=self.limit_mm_per_prompt,
