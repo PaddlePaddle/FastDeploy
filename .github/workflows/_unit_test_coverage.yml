@@ -43,7 +43,6 @@ jobs:
     runs-on: [self-hosted, GPU-h1z1-2Cards]
     timeout-minutes: 90
     needs: check_cov_skip
-    if: needs.check_cov_skip.outputs.can-skip != 'true'
     outputs:
       diff_cov_file_url: ${{ steps.cov_upload.outputs.diff_cov_file_url }}
       unittest_failed_url: ${{ steps.cov_upload.outputs.unittest_failed_url }}
@@ -320,7 +319,7 @@ jobs:
           echo "All tests passed"
 
       - name: Verify Code Coverage Threshold (80%)
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' && (needs.check_cov_skip.outputs['can-skip'] != 'true') }}
         shell: bash
         run: |
           cd FastDeploy
