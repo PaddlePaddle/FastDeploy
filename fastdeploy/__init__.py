@@ -23,6 +23,7 @@ os.environ["GLOG_minloglevel"] = "2"
 # suppress log from aistudio
 os.environ["AISTUDIO_LOG"] = "critical"
 import typing
+print("test)
 
 from paddleformers.utils.log import logger as pf_logger
 
