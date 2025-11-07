@@ -142,7 +142,7 @@ class CacheTransferManager:
         self.rank = rank
         self.device = device
         self.engine_pid = args.engine_pid
-        self.mla_cache = envs.FD_ATTENTION_BACKEND == "mla_cache"
+        self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
 
         address = (args.pod_ip, args.cache_queue_port)
         self.cache_task_queue = EngineCacheQueue(
