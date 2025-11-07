@@ -474,7 +474,7 @@ export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
 export XSHMEM_QP_NUM_PER_RANK=32
 export BKCL_RDMA_VERBS=1
-export EP_TP_SPLIT_MODE=1
+export FD_EP_TP_STRATEGY=all_to_all
 
 # 启动服务
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -532,7 +532,7 @@ unset BKCL_PCIE_RING
 unset XSHMEM_MODE
 unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
-unset EP_TP_SPLIT_MODE
+unset FD_EP_TP_STRATEGY
 stop_processes
 
 if [ ${ep_online_exit_code} -ne 0 ]; then
