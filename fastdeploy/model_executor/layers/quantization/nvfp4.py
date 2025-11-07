@@ -25,6 +25,7 @@ from paddleformers.utils.log import logger
 from fastdeploy import envs
 from fastdeploy.flashinfer import has_flashinfer
 from fastdeploy.model_executor.layers.moe import FusedMoE
+from fastdeploy.model_executor.ops.gpu import moe_topk_select
 from fastdeploy.model_executor.utils import free_tensor, set_weight_attrs
 
 from .quant_base import QuantConfigBase, QuantMethodBase
@@ -32,6 +33,7 @@ from .quant_base import QuantConfigBase, QuantMethodBase
 if has_flashinfer():
     from flashinfer import fp4_quantize
     from flashinfer import mm_fp4 as fp4_gemm
+    from flashinfer.fused_moe import cutlass_fused_moe as flashinfer_cutlass_fused_moe
 
 
 def swizzle_blockscale(scale: paddle.Tensor) -> paddle.Tensor:
@@ -75,6 +77,10 @@ def swizzle_blockscale(scale: paddle.Tensor) -> paddle.Tensor:
     if scale_ndim == 2:
         return swizzled.reshape(M_padded, K_padded)
     return swizzled.reshape(B, M_padded, K_padded)
+
+
+def next_power_of_2(n: int):
+    return 1 << (n - 1).bit_length() if n > 0 else 1
 
 
 class ModelOptNvFp4Config(QuantConfigBase):
@@ -378,7 +384,7 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         return out.view(*output_shape)
 
 
-class ModelOptNvFp4FusedMoE:
+class ModelOptNvFp4FusedMoE(QuantMethodBase):
     """Fused MoE method for Model Optimizer NVFP4.
     Supports loading NVFP4 checkpoints with the following structure:
 
@@ -392,5 +398,52 @@ class ModelOptNvFp4FusedMoE:
     layer: The linear layer.
     """
 
-    def __init__(self):
+    def __init__(self, quant_config: ModelOptNvFp4Config):
+        self.quant_config = quant_config
+
+    def create_weights(self, layer):
         pass
+
+    def apply(self, layer, x, gate):
+        """
+        flashinfer nvfp4 fusedmoe for Model Optimizer
+        """
+        gate_out = gate(x.cast("float32"))
+        topk_ids, topk_weights = moe_topk_select(
+            gate_out,
+            layer.gate_correction_bias,
+            layer.top_k,
+            True,  # apply_norm_weight,
+            False,
+        )
+
+        output_dtype = x.dtype
+        x_sf = None
+
+        output = paddle.empty_like(x)
+        # flashinfer cutlass
+        _ = flashinfer_cutlass_fused_moe(
+            input=x,
+            token_selected_experts=topk_ids.to(paddle.int),
+            token_final_scales=topk_weights,
+            fc1_expert_weights=layer.w13_weight.view(paddle.long),
+            fc2_expert_weights=layer.w2_weight.view(paddle.long),
+            output_dtype=output_dtype,
+            input_sf=x_sf,
+            quant_scales=[
+                layer.w13_input_scale_quant,
+                layer.w13_blockscale_swizzled.view(paddle.int32),
+                layer.g1_alphas,
+                layer.w2_input_scale_quant,
+                layer.w2_blockscale_swizzled.view(paddle.int32),
+                layer.g2_alphas,
+            ],
+            ep_size=layer.ep_size,
+            ep_rank=layer.ep_rank,
+            tp_size=layer.tp_size,
+            tp_rank=layer.tp_rank,
+            tune_max_num_tokens=next_power_of_2(x.shape[0]),
+            output=output,
+        )
+
+        return output
