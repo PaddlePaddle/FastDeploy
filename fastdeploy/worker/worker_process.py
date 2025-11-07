@@ -54,7 +54,6 @@ from fastdeploy.inter_communicator import (
     IPCSignal,
     ModelWeightsStatus,
     RearrangeExpertStatus,
-    shared_memory_exists,
 )
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.utils import v1_loader_support
@@ -176,7 +175,7 @@ class PaddleDisWorkerProc:
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         if self.parallel_config.data_parallel_size > 1 and not envs.FD_ENABLE_MULTI_API_SERVER:
             launched_expert_service_signal_data = np.zeros(
-                shape=[min(self.parallel_config.data_parallel_size, self.max_chips_per_node)], dtype=np.int32
+                shape=[self.parallel_config.data_parallel_size // self.fd_config.nnode], dtype=np.int32
             )
             self.launched_expert_service_signal = IPCSignal(
                 name="launched_expert_service_signal",
@@ -185,7 +184,12 @@ class PaddleDisWorkerProc:
                 suffix=self.parallel_config.engine_pid,
                 create=False,
             )
-            while self.launched_expert_service_signal.value[self.local_rank % self.max_chips_per_node] == 0:
+            while (
+                self.launched_expert_service_signal.value[
+                    self.parallel_config.local_data_parallel_id % self.max_chips_per_node
+                ]
+                == 0
+            ):
                 pass
 
         # init worker_ready_signal
@@ -474,8 +478,10 @@ class PaddleDisWorkerProc:
 
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
+            start_execute_time = time.time()
             self.worker.execute_model(req_dicts, num_running_requests)
             self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
+            logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many
@@ -538,16 +544,12 @@ class PaddleDisWorkerProc:
     def graph_optimize_and_warm_up_model(self) -> None:
         self.worker.graph_optimize_and_warm_up_model()
         # reset cache_messager prefilled_step signal
-        if self.scheduler_config.splitwise_role == "prefill":
+        if not envs.ENABLE_V1_KVCACHE_SCHEDULER and self.scheduler_config.splitwise_role == "prefill":
             gpu_id = self.worker.model_runner.device_id
             prefilled_step_name = f"splitwise_complete_prefilled_step_{self.local_rank}"
             prefilled_step_idx_data = np.zeros(shape=[1], dtype=np.int32)
             step_shm_value = IPCSignal(
-                name=prefilled_step_name,
-                array=prefilled_step_idx_data,
-                dtype=np.int32,
-                suffix=gpu_id,
-                create=not shared_memory_exists(prefilled_step_name),
+                name=prefilled_step_name, array=prefilled_step_idx_data, dtype=np.int32, suffix=gpu_id, create=False
             )
             step_shm_value.value[0] = -1
 
@@ -567,7 +569,7 @@ class PaddleDisWorkerProc:
             is_server=False,
             num_client=self.parallel_config.tensor_parallel_size,
             client_id=self.parallel_config.tensor_parallel_rank,
-            local_data_parallel_id=self.parallel_config.data_parallel_rank,
+            local_data_parallel_id=self.parallel_config.local_data_parallel_id,
         )
 
     def load_model(self) -> None:
@@ -629,6 +631,11 @@ def parse_args():
         "--enable_chunked_prefill",
         action="store_true",
         help="enable chunked prefill",
+    )
+    parser.add_argument(
+        "--use_internode_ll_two_stage",
+        action="store_true",
+        help="enable internode_ll_two_stage",
     )
     parser.add_argument(
         "--speculative_config",
@@ -733,6 +740,12 @@ def parse_args():
         "--enable_logprob",
         action="store_true",
         help="Enable output of token-level log probabilities.",
+    )
+    parser.add_argument(
+        "--max_logprobs",
+        type=int,
+        default=20,
+        help="Maximum number of log probabilities.",
     )
     parser.add_argument(
         "--logprobs_mode",
@@ -845,7 +858,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
             num_experts = model_config.moe_num_experts[0]
         else:
             num_experts = model_config.moe_num_experts
-
         num_experts_per_rank = num_experts // parallel_config.expert_parallel_size
         num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8

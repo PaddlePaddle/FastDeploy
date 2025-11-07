@@ -456,6 +456,7 @@ class TokenProcessor:
         recycle resources
         """
         if is_prefill:
+            start_time = time.time()
             while True:
                 finished_task_ids = self.engine_worker_queue.get_finished_req()
                 if len(finished_task_ids) > 0:
@@ -474,6 +475,9 @@ class TokenProcessor:
                     if self.prefill_result_status[task_id] != "finished":
                         result.error_code = 400
                         result.error_message = f"{task_id} failed to {self.prefill_result_status[task_id]}"
+                    llm_logger.info(
+                        f"wait for sending cache, request_id: {task_id}, cost seconds: {time.time()-start_time:.5f}"
+                    )
                     self.split_connector.send_first_token(task.disaggregate_info, [result])
                     break
                 else:
@@ -630,8 +634,10 @@ class TokenProcessor:
                     time_in_queue=task.schedule_start_time - task.preprocess_end_time,
                     preprocess_cost_time=task.preprocess_end_time - task.preprocess_start_time,
                     request_start_time=task.arrival_time,
+                    llm_engine_recv_req_timestamp=task.llm_engine_recv_req_timestamp,
+                    llm_engine_send_req_to_engine_timestamp=task.inference_start_time,
+                    llm_engine_recv_token_timestamp=time.time(),
                 )
-
                 self._record_first_token_metrics(task, current_time)
 
             else:
@@ -639,6 +645,9 @@ class TokenProcessor:
                     arrival_time=time.time(),
                     request_start_time=task.arrival_time,
                     model_execute_time=time.time() - task.inference_start_time,
+                    llm_engine_recv_req_timestamp=task.llm_engine_recv_req_timestamp,
+                    llm_engine_send_req_to_engine_timestamp=task.inference_start_time,
+                    llm_engine_recv_token_timestamp=time.time(),
                 )
             self.number_of_output_tokens += len(token_ids)
             self._record_metrics(task, current_time, token_ids)
@@ -726,11 +735,10 @@ class TokenProcessor:
                         self._record_completion_metrics(task, current_time)
                     self._recycle_resources(task_id, i, task, result, is_prefill)
                     break
-            if (
-                not is_prefill
-                or self.cfg.scheduler_config.name == "splitwise"
-                or self.cfg.scheduler_config.name == "dp"
-            ):
+
+            if not (is_prefill and self.cfg.splitwise_version == "v0"):
+                # NOTE: prefill instance in v0 version does not return result to scheduler
+                llm_logger.debug(f"get response from infer: {result}")
                 batch_result.append(result)
 
         self.postprocess(batch_result, mtype)
