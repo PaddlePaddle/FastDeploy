@@ -252,11 +252,9 @@ class LLM:
                 validated_tools = self._validate_tools(tools)
             except ValueError as e:
                 raise RuntimeError(f"Failed to validate 'tools' parameter in chat method: {e}") from e
-        messages_len = len(messages)
-        for i in range(messages_len):
-            messages[i] = {"messages": messages[i]}
+
         req_ids = self._add_request(
-            prompts=messages,
+            prompts=[{"messages": msg} for msg in messages],
             sampling_params=sampling_params,
             chat_template_kwargs=chat_template_kwargs,
             chat_template=chat_template,
