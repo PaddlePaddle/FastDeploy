@@ -81,6 +81,7 @@ class ResourceManagerV1(ResourceManager):
         self.to_be_rescheduled_request_id_set = set()
         main_process_metrics.max_batch_size.set(max_num_seqs)
         self.bos_client = None
+        self.async_preprocess_pool = ThreadPoolExecutor(max_workers=4)
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
