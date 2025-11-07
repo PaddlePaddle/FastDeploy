@@ -1059,6 +1059,8 @@ std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
     const paddle::Tensor& decode_states,
     const paddle::Tensor& mask_rollback);
 
+void gelu_tanh(paddle::Tensor& output, paddle::Tensor& input, bool enable_pdl);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_expert_token_num",
         &GetExpertTokenNum,
@@ -1648,4 +1650,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("update_attn_mask_offsets",
         &UpdateAttnMaskOffsets,
         "update attention mask");
+
+  m.def("gelu_tanh", &gelu_tanh, "gelu_tanh function");
 }
