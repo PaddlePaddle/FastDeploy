@@ -304,7 +304,6 @@ paddle::Tensor MoeExpertFFNFunc(
     const paddle::Tensor& tokens_expert_prefix_sum,
     const paddle::Tensor& up_gate_proj_weight,
     const paddle::Tensor& down_proj_weight,
-    const paddle::optional<paddle::Tensor>& up_proj_in_scale,
     const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
     const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_scale,
@@ -1060,6 +1059,15 @@ std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
     const paddle::Tensor& decode_states,
     const paddle::Tensor& mask_rollback);
 
+std::vector<paddle::Tensor> FusedNeoxRopeEmbedding(
+    const paddle::Tensor& qkv,
+    const paddle::Tensor& cos_emb,
+    const paddle::Tensor& sin_emb,
+    const int num_heads,
+    const int head_dim);
+
+std::vector<paddle::Tensor> GeluTanh(paddle::Tensor& input);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_expert_token_num",
         &GetExpertTokenNum,
@@ -1649,4 +1657,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("update_attn_mask_offsets",
         &UpdateAttnMaskOffsets,
         "update attention mask");
+
+  m.def("fused_neox_rope_embedding",
+        &FusedNeoxRopeEmbedding,
+        "fused_neox_rope_embedding function");
+
+  m.def("gelu_tanh", &GeluTanh, "gelu_tanh function");
 }

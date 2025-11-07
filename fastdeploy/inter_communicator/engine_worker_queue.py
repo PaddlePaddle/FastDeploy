@@ -662,7 +662,10 @@ class EngineWorkerQueue:
         self.client_read_info_flag[:] = [0] * self.num_client
 
         self.cache_infos.extend(cache_info)
-        llm_logger.debug(f"cache_infos: {self.cache_infos}  local_data_parallel_id:{self.local_data_parallel_id}")
+        llm_logger.debug(
+            f"put cache_infos to engine worker queue: {self.cache_infos}, "
+            f"local_data_parallel_id:{self.local_data_parallel_id}"
+        )
         self.lock_info.release()
 
     def get_cache_info(self) -> List[Any]:
@@ -684,7 +687,10 @@ class EngineWorkerQueue:
             self.cache_infos[:] = list()
         self.lock_info.release()
         if len(cache_infos) != 0:
-            llm_logger.debug(f"get cache infos: {cache_infos}  local_data_parallel_id:{self.local_data_parallel_id}")
+            llm_logger.debug(
+                f"get cache infos from engine worker queue: {cache_infos}, "
+                f"local_data_parallel_id:{self.local_data_parallel_id}"
+            )
         return cache_infos
 
     def num_cache_infos(self) -> int:

@@ -18,30 +18,30 @@
 #include <vector>
 #include "helper.h"
 
+
+
 std::vector<paddle::Tensor> W4AFp8Gemm(
-    const paddle::Tensor& input,
-    const paddle::Tensor& weight,
-    const paddle::Tensor&
-        tokens,  // If tokenpadding=0, this tensor represents the prefix sum of
-                 // tensors, otherwise it represents the number of tokens in
-                 // each group
-    const paddle::Tensor& weight_scale,
-    const paddle::optional<paddle::Tensor>& input_dequant_scale,
-    const int64_t token_padding_size,
-    const int64_t max_tokens,
-    const bool is_bfloat16);
+        const paddle::Tensor& input,
+        const paddle::Tensor& weight,
+        const paddle::Tensor& tokens, // If tokenpadding=0, this tensor represents the prefix sum of tensors, otherwise it represents the number of tokens in each group
+        const paddle::Tensor& input_row_sum,
+        const paddle::Tensor& weight_scale,
+        const int64_t token_padding_size,
+        const int64_t max_tokens,
+        const bool is_bfloat16);
 
 template <typename InputType, typename OutputType>
-void DisPatchW4AFp8GemmWrapper(const InputType* input,
-                               const InputType* weight,
-                               const int64_t* tokens,
-                               const float* input_dequant_scale,
-                               const float* weight_scale,
-                               OutputType* out,
-                               const int64_t token_padding_size,
-                               const int64_t max_tokens,
-                               const int num_experts,
-                               const int64_t M,
-                               const int64_t K,
-                               const int WeightScaleGroup,
-                               cudaStream_t stream);
+void DisPatchW4AFp8GemmWrapper(
+        const InputType* input,
+        const InputType* weight,
+        const int64_t * tokens,
+        const float * input_row_sum,
+        const float * row_scale,
+        const float * weight_scale,
+        OutputType * out,
+        const int64_t token_padding_size,
+        const int64_t max_tokens,
+        const int num_experts,
+        const int64_t M,
+        const int64_t K,
+        cudaStream_t stream);

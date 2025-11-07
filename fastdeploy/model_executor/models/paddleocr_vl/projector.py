@@ -110,15 +110,3 @@ class Projector(nn.Layer):
             else:
                 loaded_weight = loaded_weight.cast(param.dtype)
         param.copy_(loaded_weight, False)
-
-    def load_state_dict(self, state_dict):
-        params_dict = dict(self.named_parameters())
-        for param_name, param in params_dict.items():
-            state_dict_key = f"{self.prefix_name}.{param_name}"
-            if state_dict_key not in state_dict:
-                raise ValueError(f"The key {state_dict_key} does not exist in state_dict. ")
-            tensor = get_tensor(state_dict.pop(state_dict_key))
-            if param.shape != tensor.shape:
-                raise ValueError(f"{state_dict_key} param.shape={param.shape} tensor.shape={tensor.shape}")
-            else:
-                param.copy_(tensor, False)
