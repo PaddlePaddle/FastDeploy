@@ -231,6 +231,11 @@ __global__ void speculate_free_and_dispatch_block(
                     sizeof(int));
         LM2GM_ASYNC(
             &value_zero, seq_lens_decoder + max_used_list_len_id, sizeof(int));
+        // Note(@wufeisheng): when step, accept num will not be 0 so
+        // that next step even if this batch member is stepped, save
+        // output still stream output, so accept num should be set to 0
+        LM2GM_ASYNC(
+            &accept_num, accept_num + max_used_list_len_id, sizeof(int));
         mfence();
       }
     }

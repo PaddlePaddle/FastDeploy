@@ -77,8 +77,11 @@ static int cpu_wrapper(Context *ctx,
                        const int max_draft_tokens) {
   for (int i = 0; i < bsz; i++) {
     int *block_table_now = block_tables + i * block_num_per_seq;
+    int max_possible_block_idx =
+        (seq_lens_decoder[i] + max_draft_tokens + 1) / block_size;
     if (stop_flags[i] && !is_block_step[i]) {
       // 回收block块
+      first_token_ids[i] = -1;
       const int encoder_block_len = encoder_block_lens[i];
       const int decoder_used_len = used_list_len[i];
       if (decoder_used_len > 0) {
@@ -92,7 +95,10 @@ static int cpu_wrapper(Context *ctx,
         encoder_block_lens[i] = 0;
         used_list_len[i] = 0;
       }
-    } else if (block_table_now[seq_lens_decoder[i] / block_size] == -1) {
+    } else if (seq_lens_this_time[i] != 0 &&
+               max_possible_block_idx < block_num_per_seq &&
+               block_table_now[(seq_lens_decoder[i] + max_draft_tokens + 1) /
+                               block_size] == -1) {
       // 统计需要分配block的位置和总数
       const int ori_need_block_len = need_block_len[0];
       need_block_len[0] += 1;
@@ -126,6 +132,7 @@ static int cpu_wrapper(Context *ctx,
     is_block_step[max_used_list_len_id] = true;
     seq_lens_this_time[max_used_list_len_id] = 0;
     seq_lens_decoder[max_used_list_len_id] = 0;
+    accept_num[max_used_list_len_id] = 0;
   }
 
   // 为需要block的位置分配block，每个位置分配一个block
@@ -138,8 +145,9 @@ static int cpu_wrapper(Context *ctx,
         const int ori_free_list_len = free_list_len[0];
         free_list_len[0]--;
         int *block_table_now = block_tables + need_block_id * block_num_per_seq;
-        block_table_now[seq_lens_decoder[need_block_id] / block_size] =
-            free_list[ori_free_list_len - 1];
+        block_table_now[(seq_lens_decoder[need_block_id] + max_draft_tokens +
+                         1) /
+                        block_size] = free_list[ori_free_list_len - 1];
       }
       need_block_list[i] = -1;
     }
@@ -154,7 +162,7 @@ static int cpu_wrapper(Context *ctx,
     // 比之前调度时多分配一个block，防止马上恢复刚调度的query(比如回收的seq_id在need_block_list中）
     int used_len =
         tmp_used_len < max_decoder_block_num ? tmp_used_len + 1 : tmp_used_len;
-    while (ori_step_len > 0 && ori_free_list_len >= used_len) {
+    if (ori_step_len > 0 && ori_free_list_len >= used_len) {
       recover_block_list[recover_len[0]] = ori_step_block_id;
       is_block_step[ori_step_block_id] = false;
       used_list_len[ori_step_block_id] = used_len;

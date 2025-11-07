@@ -48,10 +48,14 @@ void SpeculateStepPaddle(
     const int block_size,
     const int encoder_decoder_block_num,
     const int max_draft_tokens) {
+  namespace api = baidu::xpu::api;
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
   auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
   auto xpu_ctx = static_cast<const phi::XPUContext *>(dev_ctx);
-
+  api::Context *ctx = xpu_ctx->x_context();
+  if (seq_lens_this_time.is_cpu()) {
+    ctx = new api::Context(api::kCPU);
+  }
   const int bsz = seq_lens_this_time.shape()[0];
   PADDLE_ENFORCE_LE(
       bsz,
@@ -63,7 +67,7 @@ void SpeculateStepPaddle(
   const int pre_id_length = pre_ids.shape()[1];
   const int max_decoder_block_num = pre_id_length / block_size;
   int r = baidu::xpu::api::plugin::speculate_free_and_dispatch_block(
-      xpu_ctx->x_context(),
+      ctx,
       const_cast<bool *>(stop_flags.data<bool>()),
       const_cast<int *>(seq_lens_this_time.data<int>()),
       const_cast<int *>(seq_lens_decoder.data<int>()),
@@ -91,7 +95,7 @@ void SpeculateStepPaddle(
   int recover_lens_cpu_data = recover_lens_cpu.data<int>()[0];
   if (recover_lens_cpu_data > 0) {
     r = baidu::xpu::api::plugin::speculate_recover_block(
-        xpu_ctx->x_context(),
+        ctx,
         const_cast<int *>(recover_block_list.data<int>()),
         const_cast<int *>(recover_lens.data<int>()),
         const_cast<bool *>(stop_flags.data<bool>()),
