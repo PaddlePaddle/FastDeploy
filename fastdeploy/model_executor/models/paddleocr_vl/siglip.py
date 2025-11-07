@@ -736,35 +736,3 @@ class SiglipVisionModel(PretrainedModel):
             use_rope=use_rope,
             window_size=window_size,
         )
-
-    def load_state_dict(self, state_dict):
-        params_dict = dict(self.named_parameters())
-        for param_name, param in params_dict.items():
-            state_dict_key = f"{self.prefix_name}.{param_name}"
-            if state_dict_key not in state_dict:
-                if "self_attn.qkv_proj.weight" in state_dict_key:
-                    q_weight_key = state_dict_key.replace("qkv_proj", "q_proj")
-                    k_weight_key = state_dict_key.replace("qkv_proj", "k_proj")
-                    v_weight_key = state_dict_key.replace("qkv_proj", "v_proj")
-                    q_tensor = get_tensor(state_dict.pop(q_weight_key))
-                    k_tensor = get_tensor(state_dict.pop(k_weight_key))
-                    v_tensor = get_tensor(state_dict.pop(v_weight_key))
-                    weight_tensor = paddle.concat([q_tensor, k_tensor, v_tensor], axis=-1).transpose([1, 0])
-                    tensor = paddle.transpose(weight_tensor, perm=[1, 0])
-                elif "self_attn.qkv_proj.bias" in state_dict_key:
-                    q_bias_key = state_dict_key.replace("qkv_proj", "q_proj")
-                    k_bias_key = state_dict_key.replace("qkv_proj", "k_proj")
-                    v_bias_key = state_dict_key.replace("qkv_proj", "v_proj")
-                    q_bias = get_tensor(state_dict.pop(q_bias_key))
-                    k_bias = get_tensor(state_dict.pop(k_bias_key))
-                    v_bias = get_tensor(state_dict.pop(v_bias_key))
-                    qkv_bias = paddle.concat([q_bias, k_bias, v_bias], axis=-1)
-                    tensor = qkv_bias
-                else:
-                    raise ValueError(f"The key {state_dict_key} does not exist in state_dict. ")
-            else:
-                tensor = get_tensor(state_dict.pop(state_dict_key))
-            if param.shape != tensor.shape:
-                raise ValueError(f"{state_dict_key} param.shape={param.shape} tensor.shape={tensor.shape}")
-            else:
-                param.copy_(tensor, False)
