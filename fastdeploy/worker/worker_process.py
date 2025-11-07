@@ -262,13 +262,21 @@ class PaddleDisWorkerProc:
         """
         update_weights_from_tensor
         """
+        import time
+
+        while True:
+            if self.experts_manager.tensor_infos is None:
+                time.sleep(0.1)
+            else:
+                break
         state_dicts = load_tensor_from_shm_mem(self.experts_manager.tensor_infos, mmap_infos[MODEL_MAIN_NAME], logger)
         rank_expert_list, logical_to_physical_map, expert_count = self.experts_manager.get_ep_rank_to_expert_id_list()
-        self.worker.get_model().redundant_table_manger.update_expert_rank_table(
+        self.worker.get_model().ernie.redundant_table_manger.update_expert_rank_table(
             rank_expert_list, logical_to_physical_map, expert_count
         )
         # TO BE FIXED
-        self.worker.get_model().update_state_dict(state_dicts)
+        self.worker.get_model().ernie.update_state_dict(state_dicts)
+        self.experts_manager.tensor_infos = None
 
     def _broadcast_model_weights_signal(self, src: int, group) -> int:
         model_weights_signal_tensor = paddle.full(shape=[1], fill_value=self.model_weights_signal[0], dtype="int32")
@@ -362,7 +370,9 @@ class PaddleDisWorkerProc:
                         _,
                         _,
                         _,
-                    ) = self.worker.get_model().redundant_table_manger.get_expert_tokens_stats(clear_stat=clear_stat)
+                    ) = self.worker.get_model().ernie.redundant_table_manger.get_expert_tokens_stats(
+                        clear_stat=clear_stat
+                    )
                     local_experts_token_stats_array.value[:] = new_stats_array[:]
                 elif local_experts_token_stats_array.value is None:
                     logger.warning("redundant_expert: local_experts_token_stats not init")

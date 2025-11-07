@@ -122,7 +122,7 @@ class RedundantExpertManager:
         self.http_timeout = 1
         # 重置重排状态: 'done' -> 'free'
         self.rearrange_end_ts = 0
-        self.rearrange_reset_interval = 300
+        self.rearrange_reset_interval = 30
 
         self.tensor_infos = None
 
@@ -437,6 +437,7 @@ class RedundantExpertManager:
             # prefill需要等待调度屏蔽
             if (
                 self.fd_config.splitwise_role == "decode"
+                or self.fd_config.splitwise_role == "mixed"
                 or not self.eplb_config.redundant_expert_enable_schedule_cordon
             ):
                 self.logger.info("redundant_expert: allreduce_load_weight_result success, notify infer.py")
