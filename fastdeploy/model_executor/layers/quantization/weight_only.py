@@ -389,7 +389,9 @@ class GPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             arch=self.quant_config.weight_only_linear_arch,
         )
         if current_platform.is_maca():
-            quanted_weight_tensor = paddle.transpose(quanted_weight_tensor, [1, 0])
+            if self.quant_config.algo != "weight_only_int4":
+                quanted_weight_tensor = paddle.transpose(quanted_weight_tensor, [1, 0])
+
         layer.weight.set_value(quanted_weight_tensor)
         layer.weight_scale.set_value(weight_scale_tensor.astype(paddle.get_default_dtype()))
 

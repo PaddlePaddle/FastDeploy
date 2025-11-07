@@ -14,8 +14,10 @@
 """
 quantization module
 """
+import os
 from typing import Dict, List, Type
 
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import parse_quantization
 
 from .quant_base import QuantConfigBase
@@ -78,6 +80,13 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
             quantization_config["moe_quant_type"] = "wint4"
             quantization_config["quantization"] = "mix_quant"
             quant_config_name = "mix_quant"
+
+            if current_platform.is_maca():
+                metax_dense_quant_type = os.getenv("FD_METAX_DENSE_QUANT_TYPE")
+                quantization_config["dense_quant_type"] = (
+                    metax_dense_quant_type if metax_dense_quant_type is not None else "wint8"
+                )
+
     else:
         quant_config_name = None
     if quant_config_name is None:
