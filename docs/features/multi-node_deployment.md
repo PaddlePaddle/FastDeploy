@@ -26,7 +26,7 @@ We recommend using mpirun for one-command startup without manually starting each
 4. Ensure all nodes can resolve each other's hostnames
 
 * Online inference startup example:
-  
+
     ```shell
     python -m fastdeploy.entrypoints.openai.api_server \
     --model baidu/ERNIE-4.5-300B-A47B-Paddle \
@@ -40,7 +40,7 @@ We recommend using mpirun for one-command startup without manually starting each
     ```
 
 * Offline startup example:
-  
+
     ```python
     from fastdeploy.engine.sampling_params import SamplingParams
     from fastdeploy.entrypoints.llm import LLM

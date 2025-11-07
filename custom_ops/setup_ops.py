@@ -306,6 +306,8 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/limit_thinking_content_length_v1.cu",
         "gpu_ops/limit_thinking_content_length_v2.cu",
         "gpu_ops/update_attn_mask_offsets.cu",
+        "gpu_ops/fused_neox_rope_embedding.cu",
+        "gpu_ops/gelu_tanh.cu",
     ]
 
     # pd_disaggregation
