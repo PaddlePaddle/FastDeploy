@@ -41,7 +41,6 @@ __global__ void set_value_by_flags(bool *stop_flags,
                                    const int *stop_token_ids_len,
                                    const int stop_token_ids_max_len,
                                    const int64_t *min_tokens,
-                                   const int64_t *max_tokens,
                                    bool beam_search,
                                    bool prefill_one_step_stop) {
   int tid = threadIdx.x;
@@ -69,16 +68,7 @@ __global__ void set_value_by_flags(bool *stop_flags,
         }
       }
 
-      // check max_tokens
       const int64_t current_step = step_idx[bid];
-      const int64_t max_token_limit = max_tokens[bid];
-      if (current_step >= max_token_limit) {
-        stop_flags[bid] = true;
-        next_tokens[bid] = end_ids[0];
-        topk_ids[bid] = end_ids[0];
-        return;
-      }
-
       // check min_tokens
       const int64_t min_token_limit = min_tokens[bid];
       const bool below_min_tokens = current_step < min_token_limit;
@@ -149,19 +139,19 @@ __global__ void set_value_by_flags(bool *stop_flags,
   }
 }
 
-void GetStopFlagsMulti(
-    const paddle::Tensor &topk_ids,
-    const paddle::Tensor &stop_flags,
-    const paddle::Tensor &seq_lens,
-    const paddle::Tensor &end_ids,
-    const paddle::Tensor &next_tokens,
-    const paddle::Tensor &pre_ids,
-    const paddle::Tensor &step_idx,
-    const paddle::Tensor &stop_seqs,
-    const paddle::Tensor &stop_seqs_len,
-    const paddle::Tensor &stop_token_ids,
-    const paddle::Tensor &stop_token_ids_len,
-    const paddle::Tensor &min_tokens const bool beam_search) {
+void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
+                       const paddle::Tensor &stop_flags,
+                       const paddle::Tensor &seq_lens,
+                       const paddle::Tensor &end_ids,
+                       const paddle::Tensor &next_tokens,
+                       const paddle::Tensor &pre_ids,
+                       const paddle::Tensor &step_idx,
+                       const paddle::Tensor &stop_seqs,
+                       const paddle::Tensor &stop_seqs_len,
+                       const paddle::Tensor &stop_token_ids,
+                       const paddle::Tensor &stop_token_ids_len,
+                       const paddle::Tensor &min_tokens,
+                       const bool beam_search) {
   PD_CHECK(topk_ids.dtype() == paddle::DataType::INT64);
   PD_CHECK(stop_flags.dtype() == paddle::DataType::BOOL);
   bool prefill_one_step_stop = false;
