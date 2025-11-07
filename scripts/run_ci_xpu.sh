@@ -14,7 +14,14 @@ function stop_processes() {
 }
 stop_processes
 
-
+# 由于机器原因，需重启使用的卡，以保障没有问题
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
+xpu-smi -r -i $XPU_VISIBLE_DEVICES
+xpu-smi
 
 echo "pip requirements"
 python -m pip install -r requirements.txt
