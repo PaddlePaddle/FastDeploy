@@ -165,7 +165,7 @@ class VariableResolutionResamplerModel(nn.Layer):
         self.temporal_dim = self.in_dim * self.spatial_conv_size * self.spatial_conv_size * self.temporal_conv_size
 
         with paddle.utils.unique_name.guard("mm_resampler_"):
-
+            use_fuse_matmul_bias = False if current_platform.is_maca() or current_platform.is_iluvatar() else True
             self.spatial_linear = nn.Sequential(
                 (
                     RowSequenceParallelLinear(
@@ -173,7 +173,7 @@ class VariableResolutionResamplerModel(nn.Layer):
                         self.spatial_dim,
                         input_is_parallel=True,
                         has_bias=True,
-                        fuse_matmul_bias=False if current_platform.is_iluvatar() else True,
+                        fuse_matmul_bias=use_fuse_matmul_bias,
                     )
                     if self.tensor_parallel_degree > 1
                     else nn.Linear(self.spatial_dim, self.spatial_dim)
