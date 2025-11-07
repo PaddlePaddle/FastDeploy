@@ -2106,7 +2106,7 @@ class GPUModelRunner(ModelRunnerBase):
         # p.join()
         model_output = haha()
 
-        model_output = model_output[0]
+        # model_output = model_output[0]
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
 
