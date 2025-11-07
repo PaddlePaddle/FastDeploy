@@ -286,10 +286,11 @@ if [ ${vl_test_exit_code} -ne 0 ]; then
 fi
 
 
-echo "============================开始 EP8TP1 测试!============================"
+echo "============================开始 EP8TP8 在线服务测试!============================"
 sleep 5
 rm -rf log/*
 rm -f core*
+# pkill -9 python #流水线不执行这个
 ipcrm --all=msg
 xpu-smi
 if [[ "$GPU_ID" == "0" ]]; then
@@ -312,11 +313,54 @@ cd xDeepEP
 bash build.sh
 cd -
 
-export enable_expert_parallel=1
-export enable_tensor_parallel=0
+# 启动服务
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 8 \
+    --enable-expert-parallel \
+    --data-parallel-size 1 \
+    --max-model-len 32768 \
+    --max-num-seqs 64 \
+    --quantization "wint4" \
+    --engine-worker-queue-port "8023,8033,8043,8053,8063,8073,8083,8093" \
+    --gpu-memory-utilization 0.9 \
+    --load-choices "default" > server.log 2>&1 &
 
-python -m pytest -s --timeout=600 tests/ci_use/XPU_45T/run_ep.py
-ep_exit_code=$?
+sleep 60
+# 探活
+TIMEOUT=$((15 * 60))
+INTERVAL=10
+ENDPOINT="http://0.0.0.0:8188/health"
+START_TIME=$(date +%s)
+echo "开始服务健康检查，最长等待时间：${TIMEOUT}秒"
+while true; do
+    CURRENT_TIME=$(date +%s)
+    ELAPSED=$((CURRENT_TIME - START_TIME))
+    if [ $ELAPSED -ge $TIMEOUT ]; then
+        echo -e "\n服务启动超时：经过 $((TIMEOUT/60)) 分钟服务仍未启动！"
+        stop_processes
+        cat server.log
+        echo "log/workerlog.0"
+        cat log/workerlog.0
+        exit 1
+    fi
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 2 "$ENDPOINT" || true)
+    echo -e "\r服务健康检查中... 已等待 ${ELAPSED} 秒，当前状态码：${HTTP_CODE}"
+    if [ "$HTTP_CODE" = "200" ]; then
+        echo -e "\n服务启动成功！耗时 ${ELAPSED} 秒"
+        break
+    else
+        sleep $INTERVAL
+    fi
+done
+
+cat server.log
+
+# 执行在线推理验证脚本
+python tests/ci_use/XPU_45T/run_ep_online.py
+ep_online_exit_code=$?
+echo ep_online_exit_code is ${ep_online_exit_code}
 
 unset BKCL_ENABLE_XDR
 unset BKCL_RDMA_NICS
@@ -327,13 +371,85 @@ unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
 stop_processes
 
-if [ ${ep_exit_code} -ne 0 ]; then
-    echo "log/workerlog.0"
+if [ ${ep_online_exit_code} -ne 0 ]; then
     cat log/workerlog.0
-    echo "EP8TP1 相关测试失败，请检查pr代码"
+    echo "EP8TP8 在线服务相关测试失败，请检查pr代码"
     exit 1
 fi
 
+echo "============================开始 EP8TP1 在线服务测试!============================"
+sleep 5
+rm -rf log/*
+rm -f core*
+# pkill -9 python #流水线不执行这个
+ipcrm --all=msg
+xpu-smi
+export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+export BKCL_ENABLE_XDR=1
+export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
+export BKCL_TRACE_TOPO=1
+export BKCL_PCIE_RING=1
+export XSHMEM_MODE=1
+export XSHMEM_QP_NUM_PER_RANK=32
+export BKCL_RDMA_VERBS=1
+
+# 启动服务
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --enable-expert-parallel \
+    --data-parallel-size 8 \
+    --max-model-len 32768 \
+    --max-num-seqs 64 \
+    --quantization "wint4" \
+    --engine-worker-queue-port "8023,8033,8043,8053,8063,8073,8083,8093" \
+    --gpu-memory-utilization 0.9 \
+    --load-choices "default" > server.log 2>&1 &
+
+sleep 60
+# 探活（同上）
+START_TIME=$(date +%s)
+while true; do
+    CURRENT_TIME=$(date +%s)
+    ELAPSED=$((CURRENT_TIME - START_TIME))
+    if [ $ELAPSED -ge $TIMEOUT ]; then
+        echo -e "\n服务启动超时：经过 $((TIMEOUT/60)) 分钟服务仍未启动！"
+        stop_processes
+        cat server.log
+        cat log/workerlog.0
+        exit 1
+    fi
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 2 "$ENDPOINT" || true)
+    if [ "$HTTP_CODE" = "200" ]; then
+        echo -e "\n服务启动成功！耗时 ${ELAPSED} 秒"
+        break
+    else
+        sleep $INTERVAL
+    fi
+done
+
+cat server.log
+
+# 执行在线推理验证脚本
+python tests/ci_use/XPU_45T/run_ep_online.py
+ep_online_exit_code=$?
+echo ep_online_exit_code is ${ep_online_exit_code}
+
+unset BKCL_ENABLE_XDR
+unset BKCL_RDMA_NICS
+unset BKCL_TRACE_TOPO
+unset BKCL_PCIE_RING
+unset XSHMEM_MODE
+unset XSHMEM_QP_NUM_PER_RANK
+unset BKCL_RDMA_VERBS
+stop_processes
+
+if [ ${ep_online_exit_code} -ne 0 ]; then
+    cat log/workerlog.0
+    echo "EP8TP1 在线服务相关测试失败，请检查pr代码"
+    exit 1
+fi
 
 echo "============================开始 EP8TP8 allreduce 测试!============================"
 sleep 5
