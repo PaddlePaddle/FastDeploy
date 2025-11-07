@@ -32,7 +32,6 @@ from fastdeploy.model_executor.layers.pool.metadata import (
     PoolingCursor,
     PoolingMetadata,
 )
-from fastdeploy.model_executor.models.adapters import _load_st_projector
 from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
 from fastdeploy.utils import get_logger
 
@@ -240,7 +239,7 @@ class EmbeddingPoolerHead(PoolerHead):
     def __init__(self, model_config: Optional["ModelConfig"] = None) -> None:
         super().__init__(activation=PoolerNormalize())
 
-        self.projector = _load_st_projector(model_config)
+        self.projector = None
 
     def forward(self, pooled_data: Union[list[paddle.Tensor], paddle.Tensor], pooling_metadata: PoolingMetadata):
 

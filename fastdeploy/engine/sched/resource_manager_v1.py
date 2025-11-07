@@ -771,8 +771,8 @@ class ResourceManagerV1(ResourceManager):
             )
 
             request.num_cached_tokens = matched_token_num
-            request.gpu_cache_token_num = hit_info["gpu_cache_blocks"] * self.config.cache_config.block_size
-            request.cpu_cache_token_num = hit_info["cpu_cache_blocks"] * self.config.cache_config.block_size
+            request.gpu_cache_token_num = hit_info["gpu_match_token_num"]
+            request.cpu_cache_token_num = hit_info["cpu_match_token_num"]
             request.cache_info = (matched_block_num, no_cache_block_num)
             request.block_tables = common_block_ids
             request.skip_allocate = False
