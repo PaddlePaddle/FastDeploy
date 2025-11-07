@@ -64,7 +64,7 @@ class RolloutModelConfig:
         num_nextn_predict_layers: int = 0,
         enable_attention_dp_balance: bool = False,
         attention_dp_time_out_iters: int = 0,
-        eplb_config: str = None,
+        eplb_config: str = {},
     ):
         # Required parameters
         self.model = model_name_or_path
