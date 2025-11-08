@@ -95,9 +95,7 @@ class LLM:
         # Create the Engine
         self.llm_engine = LLMEngine.from_engine_args(engine_args=engine_args)
 
-        self.default_sampling_params = SamplingParams(
-            max_tokens=self.llm_engine.cfg.model_config.max_model_len, temperature=1e-06
-        )
+        self.default_sampling_params = SamplingParams(max_tokens=self.llm_engine.cfg.model_config.max_model_len)
 
         self.llm_engine.start()
 
