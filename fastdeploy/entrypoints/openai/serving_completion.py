@@ -84,8 +84,6 @@ class OpenAIServingCompletion:
                 return ErrorResponse(
                     error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
                 )
-        if request.temperature is not None and request.temperature == 0:
-            request.temperature = 1e-06
         created_time = int(time.time())
         if request.user is not None:
             request_id = f"cmpl-{request.user}-{uuid.uuid4()}"

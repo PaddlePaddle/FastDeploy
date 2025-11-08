@@ -124,38 +124,6 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         result = llm.chat(["hello"], sampling_params=SamplingParams(1), chat_template="hello")
         self.assertEqual("hello", result)
 
-    @patch("fastdeploy.entrypoints.llm.LLM.__init__")
-    def test_temperature(self, mock_class):
-        mock_class.return_value = None
-        llm = LLM()
-        llm.llm_engine = MagicMock()
-        llm.default_sampling_params = MagicMock()
-
-        def mock_run_engine(req_ids, **kwargs):
-            return req_ids
-
-        def mock_add_request(**kwargs):
-            return kwargs.get("sampling_params")
-
-        llm._run_engine = mock_run_engine
-        llm._add_request = mock_add_request
-        result = llm.chat(["hello"], sampling_params=SamplingParams(temperature=0), chat_template="hello")
-        self.assertEqual(1e-06, result.temperature)
-
-        result = llm.chat(
-            ["hello", "hi"],
-            sampling_params=[SamplingParams(temperature=0), SamplingParams(temperature=0)],
-            chat_template="hello",
-        )
-        for params in result:
-            self.assertEqual(1e-06, params.temperature)
-
-        result = llm.generate(
-            ["hello", "hi"], sampling_params=[SamplingParams(temperature=0), SamplingParams(temperature=0)]
-        )
-        for params in result:
-            self.assertEqual(1e-06, params.temperature)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -106,8 +106,6 @@ class OpenAIServingChat:
                 return ErrorResponse(
                     error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
                 )
-        if request.temperature is not None and request.temperature == 0:
-            request.temperature = 1e-06
 
         try:
             if self.max_waiting_time < 0:
