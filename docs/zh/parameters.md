@@ -85,7 +85,7 @@ FastDeploy在推理过程中，显存被```模型权重```、```预分配KVCache
 
 启动参数多值配置方式， 优先级高于环境变量中配置。
 ```bash
-  --api-key "key1" 
+  --api-key "key1"
   --api-key "key2"
 ```
 环境变量多值配置方式，使用逗号分隔

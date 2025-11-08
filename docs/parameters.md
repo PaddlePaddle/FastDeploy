@@ -60,7 +60,6 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```max_processor_cache```  | `int` | Maximum number of bytes(in GiB) in the processor cache (use 0 to disable). |
 | ```api_key```  |`dict[str]`| Validate API keys in the service request headers, supporting multiple key inputs|
 
-
 ## 1. Relationship between KVCache allocation, ```num_gpu_blocks_override``` and ```block_size```?
 
 During FastDeploy inference, GPU memory is occupied by ```model weights```, ```preallocated KVCache blocks``` and ```model computation intermediate activation values```. The preallocated KVCache blocks are determined by ```num_gpu_blocks_override```, with ```block_size``` (default: 64) as its unit, meaning one block can store KVCache for 64 Tokens.
@@ -85,12 +84,11 @@ When `enable_chunked_prefill` is enabled, the service processes long input seque
 
 To optimize scheduling priority for short requests, new `max_long_partial_prefills` and `long_prefill_token_threshold` parameter combination is added. The former limits the number of long requests in single prefill batch, the latter defines the token threshold for long requests. The system will prioritize batch space for short requests, thereby reducing short request latency in mixed workload scenarios while maintaining stable throughput.
 
-
 ## 4. ```api_key``` parameter description
 
 Multi-value configuration method in startup.  That takes precedence over environment variable configuration.
 ```bash
-  --api-key "key1" 
+  --api-key "key1"
   --api-key "key2"
 ```
 Environment variable multi-value configuration method (use `,` separation):
