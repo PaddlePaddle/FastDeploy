@@ -757,7 +757,9 @@ def main():
     speculative_config = SpeculativeConfig(args.speculative_config)
     num_extra_layers = speculative_config.num_extra_cache_layer
     key_cache_shape_list = [int(i) for i in args.key_cache_shape.split(",")]
-    value_cache_shape_list = [int(i) for i in args.value_cache_shape.split(",")]
+    value_cache_shape_list = []
+    if args.value_cache_shape:
+        value_cache_shape_list = [int(i) for i in args.value_cache_shape.split(",")]
     total_gpu_blocks = key_cache_shape_list[0]
     num_extra_layer_gpu_blocks = int(total_gpu_blocks * speculative_config.num_gpu_block_expand_ratio)
     gpu_cache_kvs = {}

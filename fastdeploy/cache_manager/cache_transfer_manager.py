@@ -116,7 +116,9 @@ class CacheTransferManager:
         self.gpu_cache_v_tensors = []
         self.speculative_config = SpeculativeConfig(args.speculative_config)
         self.key_cache_shape = [int(i) for i in args.key_cache_shape.split(",")]
-        self.value_cache_shape = [int(i) for i in args.value_cache_shape.split(",")]
+        self.value_cache_shape = []
+        if args.value_cache_shape:
+            self.value_cache_shape = [int(i) for i in args.value_cache_shape.split(",")]
         self.num_gpu_blocks = self.key_cache_shape[0]
         self.num_extra_layers = self.speculative_config.num_extra_cache_layer
         self.num_extra_layer_gpu_blocks = int(self.num_gpu_blocks * self.speculative_config.num_gpu_block_expand_ratio)
