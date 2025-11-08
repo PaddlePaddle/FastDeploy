@@ -186,12 +186,8 @@ class IluvatarAttnBackend(AttentionBackend):
         """
         Calculate kv cache shape
         """
-        return (
-            max_num_blocks,
-            self.num_kv_heads,
-            self.block_size,
-            self.head_dim,
-        )
+        key_cache_shape = value_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
+        return key_cache_shape, value_cache_shape
 
     def transpose(self, hidden_states):
         for ids, reverse_ids in zip(self.id_group, self.reverse_id_group):
