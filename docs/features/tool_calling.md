@@ -94,14 +94,7 @@ The output for this sample request is shown below; note that both the reasoning 
       "logprobs": null,
       "finish_reason": "tool_calls"
     }
-  ],
-  "usage": {
-    "prompt_tokens": 242,
-    "total_tokens": 363,
-    "completion_tokens": 121,
-    "prompt_tokens_details": {
-      "cached_tokens": 0
-    }
+  ]
   }
 }
 ```
@@ -207,15 +200,7 @@ The parsed model output that can be obtained is as follows, comprising both the 
             "logprobs": null,
             "finish_reason": "stop"
         }
-    ],
-    "usage": {
-        "prompt_tokens": 217,
-        "total_tokens": 489,
-        "completion_tokens": 272,
-        "prompt_tokens_details": {
-            "cached_tokens": 0
-        }
-    }
+    ]
 }
 ```
 ## Writing a Custom Tool Parser
