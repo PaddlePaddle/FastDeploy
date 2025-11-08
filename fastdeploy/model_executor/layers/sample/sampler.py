@@ -509,6 +509,7 @@ class SpeculativeSampler(nn.Layer):
         reject_all_drafts: bool = False,
         think_end_id: int = -1,
         line_break_id: int = -1,
+        response_start_id: int = -1,
     ) -> paddle.Tensor:
         logits = apply_speculative_penalty_multi_scores(
             sampling_metadata.pre_token_ids,
@@ -573,7 +574,7 @@ class SpeculativeSampler(nn.Layer):
             accept_all_drafts,
         )
 
-        if think_end_id > 0 and line_break_id > 0:
+        if think_end_id > 0 and line_break_id > 0 and response_start_id > 0:
             speculate_limit_thinking_content_length_v2(
                 share_inputs["accept_tokens"],
                 share_inputs["max_think_lens"],
@@ -583,6 +584,7 @@ class SpeculativeSampler(nn.Layer):
                 share_inputs["seq_lens_decoder"],
                 think_end_id,
                 line_break_id,
+                response_start_id,
             )
 
         num_logprobs = sampling_metadata.max_num_logprobs

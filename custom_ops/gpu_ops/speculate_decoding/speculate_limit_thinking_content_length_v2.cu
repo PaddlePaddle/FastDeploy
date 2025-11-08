@@ -28,6 +28,7 @@ __global__ void speculate_limit_thinking_content_length_kernel_v2(
     int* seq_lens_decoder,
     const int64_t think_end_id,
     const int64_t line_break_id,
+    const int64_t response_start_id,
     const int tokens_per_step,
     const int bs) {
     int bid = threadIdx.x;
@@ -81,6 +82,12 @@ __global__ void speculate_limit_thinking_content_length_kernel_v2(
                 // 强制将当前token替换为结束思考的token
                 next_token = line_break_id;
                 // 将状态推进到 1, 表示 "正在结束思考"
+                current_limit_think_status = 1;
+                condition_triggered = true;  // 因为修改了token，需要截断
+            } else if (current_step == max_think_len + 4) {
+                // 强制将当前token替换为结束思考的token
+                next_token = response_start_id;
+                // 将状态推进到 1, 表示 "正在结束思考"
                 current_limit_think_status = 2;
                 condition_triggered = true;  // 因为修改了token，需要截断
             }
@@ -129,7 +136,8 @@ void SpeculateLimitThinkingContentLengthV2(
     const paddle::Tensor& accept_num,
     const paddle::Tensor& seq_lens_decoder,
     const int64_t think_end_id,
-    const int64_t line_break_id) {
+    const int64_t line_break_id,
+    const int64_t response_start_id) {
     const int batch_size = next_tokens.shape()[0];
     const int tokens_per_step = next_tokens.shape()[1];
 
@@ -142,6 +150,7 @@ void SpeculateLimitThinkingContentLengthV2(
         const_cast<int*>(seq_lens_decoder.data<int>()),
         think_end_id,
         line_break_id,
+        response_start_id,
         tokens_per_step,
         batch_size);
 }
@@ -153,7 +162,10 @@ PD_BUILD_STATIC_OP(speculate_limit_thinking_content_length_v2)
              "limit_think_status",
              "accept_num",
              "seq_lens_decoder"})
-    .Attrs({"think_end_id: int64_t", "line_break_id: int64_t"})
+    .Attrs({
+        "think_end_id: int64_t",
+        "line_break_id: int64_t",
+        "response_start_id: int64_t"})
     .Outputs({"next_tokens_out"})
     .SetInplaceMap({{"next_tokens", "next_tokens_out"}})
     .SetKernelFn(PD_KERNEL(SpeculateLimitThinkingContentLengthV2));

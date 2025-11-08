@@ -701,7 +701,8 @@ void SpeculateLimitThinkingContentLengthV2(
     const paddle::Tensor& accept_num,
     const paddle::Tensor& seq_lens_decoder,
     const int64_t think_end_id,
-    const int64_t line_break_id);
+    const int64_t line_break_id,
+    const int64_t response_start_id);
 
 void SpeculateUpdate(const paddle::Tensor &seq_lens_encoder,
                        const paddle::Tensor &seq_lens_decoder,
