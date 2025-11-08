@@ -1,5 +1,4 @@
-"""
-# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+"""# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"
 # you may not use this file except in compliance with the License.
@@ -38,6 +37,7 @@ from fastdeploy.engine.engine import LLMEngine
 from fastdeploy.engine.expert_service import ExpertService
 from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.engine_client import EngineClient
+from fastdeploy.entrypoints.openai.middleware import AuthenticationMiddleware
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -264,6 +264,12 @@ app = FastAPI(lifespan=lifespan)
 app.add_exception_handler(RequestValidationError, ExceptionHandler.handle_request_validation_exception)
 app.add_exception_handler(Exception, ExceptionHandler.handle_exception)
 instrument(app)
+
+
+env_api_key_func = environment_variables.get("FD_API_KEY")
+env_tokens = env_api_key_func() if env_api_key_func else []
+if tokens := [key for key in (args.api_key or env_tokens) if key]:
+    app.add_middleware(AuthenticationMiddleware, tokens)
 
 
 @asynccontextmanager
