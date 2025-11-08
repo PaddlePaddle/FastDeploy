@@ -197,7 +197,9 @@ class PrefixCacheManager:
 
         cache_messager_processes = []
         key_cache_shape, val_cache_shape = self._get_kv_cache_shape(cache_config.total_block_num)
-
+        key_cache_shape = ",".join([str(i) for i in key_cache_shape])
+        val_cache_shape = ",".join([str(i) for i in val_cache_shape])
+        logger.info(f"key_cache_shape {key_cache_shape} value_cache_shape {val_cache_shape}")
         if self.enable_splitwise:
             cache_messager_processes = self.launch_cache_messager(
                 cache_config,
@@ -253,8 +255,8 @@ class PrefixCacheManager:
                 + f" --num_layers {cache_config.model_cfg.num_hidden_layers}"
                 + f" --mp_num {tensor_parallel_size}"
                 + f" --cache_dtype {cache_config.cache_dtype}"
-                + f" --key_cache_shape '{key_cache_shape}'"
-                + f" --value_cache_shape '{val_cache_shape}'"
+                + f" --key_cache_shape {key_cache_shape}"
+                + f" --value_cache_shape {val_cache_shape}"
                 + f" --cache_queue_port {cache_config.cache_queue_port}"
                 + f" --enable_splitwise {int(self.enable_splitwise)}"
                 + f" --pod_ip {pod_ip}"
@@ -337,8 +339,8 @@ class PrefixCacheManager:
                 + f" --num_layers {cache_config.model_cfg.num_hidden_layers}"
                 + f" --mp_num {tensor_parallel_size}"
                 + f" --cache_dtype {cache_config.cache_dtype}"
-                + f" --key_cache_shape '{key_cache_shape}'"
-                + f" --value_cache_shape '{value_cache_shape}'"
+                + f" --key_cache_shape {key_cache_shape}"
+                + f" --value_cache_shape {value_cache_shape}"
                 + f" --pod_ip {pod_ip}"
                 + f" --cache_queue_port {cache_config.cache_queue_port}"
                 + f" --engine_worker_queue_port {engine_worker_queue_port}"

@@ -66,8 +66,8 @@ def parse_args():
         choices=["uint8", "bfloat16"],
         help="cache dtype",
     )
-    parser.add_argument("--key_cache_shape", type=list, default=[], help="key cache shape")
-    parser.add_argument("--value_cache_shape", type=list, default=[], help="value cache shape")
+    parser.add_argument("--key_cache_shape", type=str, default="", help="key cache shape")
+    parser.add_argument("--value_cache_shape", type=str, default="", help="value cache shape")
     parser.add_argument("--cache_queue_port", type=int, default=9923, help="cache queue port")
     parser.add_argument("--enable_splitwise", type=int, default=0, help="enable splitwise ")
     parser.add_argument("--pod_ip", type=str, default="0.0.0.0", help="pod ip")
@@ -115,7 +115,9 @@ class CacheTransferManager:
         self.gpu_cache_k_tensors = []
         self.gpu_cache_v_tensors = []
         self.speculative_config = SpeculativeConfig(args.speculative_config)
-        self.num_gpu_blocks = args.key_cache_shape[0]
+        self.key_cache_shape = [int(i) for i in args.key_cache_shape.split(",")]
+        self.value_cache_shape = [int(i) for i in args.value_cache_shape.split(",")]
+        self.num_gpu_blocks = self.key_cache_shape[0]
         self.num_extra_layers = self.speculative_config.num_extra_cache_layer
         self.num_extra_layer_gpu_blocks = int(self.num_gpu_blocks * self.speculative_config.num_gpu_block_expand_ratio)
 
@@ -207,16 +209,16 @@ class CacheTransferManager:
             val_name = f"value_caches_{i}_rank{self.rank}.device{self.device}"
             key_cache_shape = [
                 num_gpu_blocks,
-                args.key_cache_shape[1],
-                args.key_cache_shape[2],
-                args.key_cache_shape[3],
+                self.key_cache_shape[1],
+                self.key_cache_shape[2],
+                self.key_cache_shape[3],
             ]
-            if args.value_cache_shape:
+            if self.value_cache_shape:
                 value_cache_shape = [
                     num_gpu_blocks,
-                    args.key_cache_shape[1],
-                    args.key_cache_shape[2],
-                    args.key_cache_shape[3],
+                    self.value_cache_shape[1],
+                    self.value_cache_shape[2],
+                    self.value_cache_shape[3],
                 ]
             if args.create_cache_tensor:
                 logger.info(
@@ -224,7 +226,7 @@ class CacheTransferManager:
                 )
                 key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=args.cache_dtype)
                 set_data_ipc(key_cache, key_name)
-                if args.value_cache_shape:
+                if self.value_cache_shape:
                     val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=args.cache_dtype)
                     set_data_ipc(val_cache, val_name)
             else:
@@ -234,7 +236,7 @@ class CacheTransferManager:
                 key_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
                 val_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
                 key_cache = share_external_data_(key_cache, key_name, key_cache_shape, True)
-                if args.value_cache_shape:
+                if self.value_cache_shape:
                     val_cache = share_external_data_(val_cache, val_name, value_cache_shape, True)
 
             self.gpu_cache_kvs[key_name] = key_cache

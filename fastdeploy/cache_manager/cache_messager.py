@@ -52,8 +52,8 @@ def parse_args():
     parser.add_argument("--rank", type=int, default=0, help="current rank")
     parser.add_argument("--device_id", type=int, default=0, help="device id")
     parser.add_argument("--num_layers", type=int, default=1, help="model num layers")
-    parser.add_argument("--key_cache_shape", type=list, default=[], help="key cache shape")
-    parser.add_argument("--value_cache_shape", type=list, default=[], help="value cache shape")
+    parser.add_argument("--key_cache_shape", type=str, default="", help="key cache shape")
+    parser.add_argument("--value_cache_shape", type=str, default="", help="value cache shape")
     parser.add_argument("--rdma_port", type=str, default="", help="rmda port")
     parser.add_argument("--mp_num", type=int, default=1, help="number of model parallel")
     parser.add_argument("--engine_pid", type=str, default=None, help="engine pid")
@@ -756,7 +756,9 @@ def main():
     cache_type = args.cache_dtype
     speculative_config = SpeculativeConfig(args.speculative_config)
     num_extra_layers = speculative_config.num_extra_cache_layer
-    total_gpu_blocks = args.key_cache_shape[0]
+    key_cache_shape_list = [int(i) for i in args.key_cache_shape.split(",")]
+    value_cache_shape_list = [int(i) for i in args.value_cache_shape.split(",")]
+    total_gpu_blocks = key_cache_shape_list[0]
     num_extra_layer_gpu_blocks = int(total_gpu_blocks * speculative_config.num_gpu_block_expand_ratio)
     gpu_cache_kvs = {}
     gpu_cache_k_tensors = []
@@ -767,16 +769,16 @@ def main():
         num_gpu_blocks = total_gpu_blocks if i < args.num_layers else num_extra_layer_gpu_blocks
         key_cache_shape = [
             num_gpu_blocks,
-            args.key_cache_shape[1],
-            args.key_cache_shape[2],
-            args.key_cache_shape[3],
+            key_cache_shape_list[1],
+            key_cache_shape_list[2],
+            key_cache_shape_list[3],
         ]
-        if args.value_cache_shape:
+        if value_cache_shape_list:
             value_cache_shape = [
                 num_gpu_blocks,
-                args.key_cache_shape[1],
-                args.key_cache_shape[2],
-                args.key_cache_shape[3],
+                value_cache_shape_list[1],
+                value_cache_shape_list[2],
+                value_cache_shape_list[3],
             ]
         logger.info(
             f"[rank {rank}/{args.mp_num}] ..creating kv cache for layer {i}: {key_cache_shape} {value_cache_shape}"
@@ -792,7 +794,7 @@ def main():
             gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"],
             f"key_caches_{i}_rank{rank}.device{device}",
         )
-        if args.value_cache_shape:
+        if value_cache_shape_list:
             gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"] = paddle.full(
                 shape=value_cache_shape,
                 fill_value=0,
