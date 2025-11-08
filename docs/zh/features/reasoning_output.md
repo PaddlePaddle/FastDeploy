@@ -85,7 +85,7 @@ for chunk in chat_response:
 
 ```
 ## 工具调用
-如果模型支持工具调用， 可以同时启动模型回复内容的思考链解析  `reasoning_content` 及工具解析 ` tool-call-parser`。 工具内容仅从模型回复内容 `content` 中进行解析，而不会影响思考链内容。   
+如果模型支持工具调用， 可以同时启动模型回复内容的思考链解析  `reasoning_content` 及工具解析 `tool-call-parser`。 工具内容仅从模型回复内容 `content` 中进行解析，而不会影响思考链内容。
 例如，
 ```bash
 curl -X POST "http://0.0.0.0:8390/v1/chat/completions" \
