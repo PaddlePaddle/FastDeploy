@@ -95,7 +95,9 @@ class LLM:
         # Create the Engine
         self.llm_engine = LLMEngine.from_engine_args(engine_args=engine_args)
 
-        self.default_sampling_params = SamplingParams(max_tokens=self.llm_engine.cfg.model_config.max_model_len)
+        self.default_sampling_params = SamplingParams(
+            max_tokens=self.llm_engine.cfg.model_config.max_model_len, temperature=1e-06
+        )
 
         self.llm_engine.start()
 
@@ -168,8 +170,13 @@ class LLM:
 
         if isinstance(sampling_params, SamplingParams):
             sampling_params_len = 1
+            if sampling_params.temperature is not None and sampling_params.temperature == 0:
+                sampling_params.temperature = 1e-06
         else:
             sampling_params_len = len(sampling_params)
+            for param in sampling_params:
+                if param.temperature is not None and param.temperature == 0:
+                    param.temperature = 1e-06
 
         if isinstance(prompts, str):
             prompts = [prompts]
@@ -234,8 +241,13 @@ class LLM:
 
         if isinstance(sampling_params, SamplingParams):
             sampling_params_len = 1
+            if sampling_params.temperature is not None and sampling_params.temperature == 0:
+                sampling_params.temperature = 1e-06
         else:
             sampling_params_len = len(sampling_params)
+            for param in sampling_params:
+                if param.temperature is not None and param.temperature == 0:
+                    param.temperature = 1e-06
 
         if isinstance(messages, list) and isinstance(messages[0], dict):
             messages = [messages]
