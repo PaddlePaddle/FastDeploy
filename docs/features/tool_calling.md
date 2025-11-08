@@ -219,7 +219,8 @@ The parsed model output that can be obtained is as follows, comprising both the 
 }
 ```
 ## Writing a Custom Tool Parser
-FastDeploy currently uses a unified OpenAI tool-calling parser.If you want to create a custom plugin, FastDeploy exposes an entrypoint:[fastdeploy/entrypoints/openai/tool_parser/]
+FastDeploy supports custom tool-call parser plug-ins; you can create one under:`fastdeploy/entrypoints/openai/tool_parser/`
+
 A custom parser should implement:
 ``` python
 @ToolParserManager.register_module("my-parser")

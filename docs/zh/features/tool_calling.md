@@ -227,9 +227,7 @@ curl -X POST "http://0.0.0.0:8000/v1/chat/completions" \
 }
 ```
 ## 编写自定义工具解析器
-FastDeploy 当前使用统一的 OpenAI 工具调用解析器。如果你想创建自定义插件，可以使用以下入口：
-
-`fastdeploy/entrypoints/openai/tool_parser/`
+FastDeploy支持自定义工具解析器插件，可以在以下地址创建：`fastdeploy/entrypoints/openai/tool_parser/`
 
 自定义解析器需要实现：
 
