@@ -112,10 +112,12 @@ class GPUModelRunner(ModelRunnerBase):
         self.speculative_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.speculative_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
-        self.max_logprobs = fd_config.model_config.max_logprobs
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
         self.is_pooling_model = self.fd_config.model_config.runner_type == "pooling"
-        self.vocal_size = self.fd_config.model_config.vocab_size
+        self.ori_vocab_size = self.fd_config.model_config.ori_vocab_size
+        self.max_logprobs = (
+            self.ori_vocab_size if fd_config.model_config.max_logprobs == -1 else fd_config.model_config.max_logprobs
+        )
         self.prompt_logprobs_reqs: dict[str, Request] = {}
         self.in_progress_prompt_logprobs: dict[str, LogprobsTensors] = {}
 
@@ -2051,7 +2053,7 @@ class GPUModelRunner(ModelRunnerBase):
         self,
         model_forward_batch: Optional[List[Request]] = None,
         num_running_requests: int = None,
-    ) -> Optional[ModelRunnerOutput]:
+    ) -> None:
         """
         The Entrance of model execute.
         Args:
@@ -2139,10 +2141,6 @@ class GPUModelRunner(ModelRunnerBase):
                 speculative_decoding=self.speculative_decoding,
                 skip_save_output=False,
                 async_output_queue=self.async_output_queue,
-            )
-
-            self.seq_lens_this_time_buffer[:num_running_requests].copy_(
-                self.share_inputs["seq_lens_this_time"][:num_running_requests], False
             )
 
             return None
@@ -2306,9 +2304,6 @@ class GPUModelRunner(ModelRunnerBase):
                     self.speculative_config.num_speculative_tokens,
                 )
 
-            self.seq_lens_this_time_buffer[:num_running_requests].copy_(
-                self.share_inputs["seq_lens_this_time"][:num_running_requests], False
-            )
             return None
 
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
@@ -2387,7 +2382,11 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 2. Dummy run
         self._dummy_run(
-            num_tokens=self.scheduler_config.max_num_batched_tokens,
+            num_tokens=(
+                self.scheduler_config.max_num_seqs
+                if self.scheduler_config.splitwise_role == "decode"
+                else self.scheduler_config.max_num_batched_tokens
+            ),
             batch_size=self.scheduler_config.max_num_seqs,
         )
 
@@ -2726,7 +2725,7 @@ class GPUModelRunner(ModelRunnerBase):
             if request.prompt_token_ids is None or num_prompt_logprobs is None:
                 continue
             if num_prompt_logprobs == -1:
-                num_prompt_logprobs = self.vocal_size
+                num_prompt_logprobs = self.ori_vocab_size
 
             num_tokens = request.prefill_end_index - request.prefill_start_index
             num_prompt_tokens = len(request.prompt_token_ids)

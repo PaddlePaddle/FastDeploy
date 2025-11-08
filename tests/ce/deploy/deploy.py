@@ -13,6 +13,19 @@ import requests
 import yaml
 from flask import Flask, Response, jsonify, request
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+tests_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
+
+sys.path.insert(0, tests_dir)
+
+from e2e.utils.serving_utils import (
+    FD_API_PORT,
+    FD_CACHE_QUEUE_PORT,
+    FD_ENGINE_QUEUE_PORT,
+    FD_METRICS_PORT,
+    clean_ports,
+)
+
 app = Flask(__name__)
 
 
@@ -56,10 +69,6 @@ PID_FILE = "pid_port"
 LOG_FILE = "server.log"
 base_port = get_base_port()
 FLASK_PORT = get_available_port("FLASK_PORT", base_port + 1)
-FD_API_PORT = get_available_port("FD_API_PORT", FLASK_PORT + 1)
-FD_ENGINE_QUEUE_PORT = get_available_port("FD_ENGINE_QUEUE_PORT", FD_API_PORT + 1)
-FD_METRICS_PORT = get_available_port("FD_METRICS_PORT", FD_ENGINE_QUEUE_PORT + 1)
-FD_CACHE_QUEUE_PORT = get_available_port("FD_CACHE_QUEUE_PORT", FD_METRICS_PORT + 1)
 DEFAULT_PARAMS = {
     "--port": FD_API_PORT,
     "--engine-worker-queue-port": FD_ENGINE_QUEUE_PORT,
@@ -176,6 +185,7 @@ def stop_server(signum=None, frame=None):
         os.remove("gemm_profiles.json")
 
     try:
+        clean_ports()
         # 终止进程组（包括所有子进程）
         os.killpg(os.getpgid(pid_port["PID"]), signal.SIGTERM)
     except Exception as e:
