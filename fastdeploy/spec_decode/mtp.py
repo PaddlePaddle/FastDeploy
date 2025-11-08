@@ -169,11 +169,11 @@ class MTPProposer(Proposer):
             kv_cache_quant_type = self.quant_config.kv_cache_quant_type
 
         # Get kv cache shape
-        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
+        key_cache_shape, value_cache_shape = self.attn_backends[0].get_kv_cache_shape(
             max_num_blocks=self.num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
         )
         if kv_cache_quant_type == "block_wise_fp8":
-            kv_cache_scale_shape = [kv_cache_shape[0], kv_cache_shape[1], kv_cache_shape[2]]
+            kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
         if not profile and (
             self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed"
@@ -186,22 +186,22 @@ class MTPProposer(Proposer):
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
-                key_cache = share_external_data(key_cache, key_cache_name, kv_cache_shape)
+                key_cache = share_external_data(key_cache, key_cache_name, key_cache_shape)
                 cache_kvs_list.append(key_cache)
                 value_cache = paddle.empty(shape=[], dtype=cache_type)
-                value_cache = share_external_data(value_cache, val_cache_name, kv_cache_shape)
+                value_cache = share_external_data(value_cache, val_cache_name, value_cache_shape)
                 cache_kvs_list.append(value_cache)
 
             self.model_inputs["caches"] = cache_kvs_list
         else:
             for i in range(self.model_config.num_hidden_layers):
                 self.cache_kvs[f"key_caches_{i}"] = paddle.full(
-                    shape=kv_cache_shape,
+                    shape=key_cache_shape,
                     fill_value=0,
                     dtype=cache_type,
                 )
                 self.cache_kvs[f"value_caches_{i}"] = paddle.full(
-                    shape=kv_cache_shape,
+                    shape=value_cache_shape,
                     fill_value=0,
                     dtype=cache_type,
                 )
