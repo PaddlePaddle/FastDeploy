@@ -68,7 +68,15 @@ class IluvatarAttnBackend(AttentionBackend):
     Which is used only for testing purpose.
     """
 
-    def __init__(self, fd_config: FDConfig, kv_num_heads: int, num_heads: int, head_dim: int):
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        kv_num_heads: int,
+        num_heads: int,
+        head_dim: int,
+        encoder_block_shape_q: int = -1,
+        decoder_block_shape_q: int = -1,
+    ):
         super().__init__()
         self.attention_metadata = IluvatarAttentionMetadata()
         self.block_size = fd_config.cache_config.block_size
