@@ -1,8 +1,6 @@
 # Tool_Calling
 
-本文档介绍如何在 FastDeploy 中配置服务器以使用工具解析器（tool parsers），以及如何在客户端调用工具。
-
-FastDeploy GitHub: [https://github.com/PaddlePaddle/FastDeploy](https://github.com/PaddlePaddle/FastDeploy)
+本文档介绍如何在 FastDeploy 中配置服务器以使用工具解析器（tool parser），以及如何在客户端调用工具。
 
 ---
 
@@ -10,7 +8,7 @@ FastDeploy GitHub: [https://github.com/PaddlePaddle/FastDeploy](https://github.c
 
 ### 启动包含解析器的FastDeploy
 
-使用包含思考解析器和工具解析器的命令启动服务器。下面的示例使用 ERNIE-4.5-21B-A3B。我们可以使用 fastdeploy 目录中的 ernie-x1 思考解析器（thought parser）和 ernie-x1 工具调用解析器（tool-call parser）；从而实现解析模型的思考内容、回复内容以及工具调用信息：
+使用包含思考解析器和工具解析器的命令启动服务器。下面的示例使用 ERNIE-4.5-21B-A3B。我们可以使用 fastdeploy 目录中的 ernie-x1 思考解析器（reasoning parser）和 ernie-x1 工具调用解析器（tool-call parser）；从而实现解析模型的思考内容、回复内容以及工具调用信息：
 
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server
@@ -20,7 +18,7 @@ python -m fastdeploy.entrypoints.openai.api_server
     --tool-call-parser ernie-x1
 ```
 
-### 客户端示例：触发工具调用
+### 触发工具调用示例
 
 构造一个包含工具的请求以触发模型调用工具：
 
@@ -63,53 +61,34 @@ curl -X POST http://0.0.0.0:8000/v1/chat/completions \
   }'
 ```
 
-示例输出如下，可以看到成功解析出了模型输出的思考内容以及工具调用信息：
+示例输出如下，可以看到成功解析出了模型输出的思考内容`reasoning_content`以及工具调用信息`tool_calls`，且当前的回复内容`content`为空,`finish_reason`为工具调用`tool_calls`：
 ```bash
 {
-  "id": "chatcmpl-84d89bea-2e78-40ab-9618-d49983722140",
-  "object": "chat.completion",
-  "created": 1760098769,
-  "model": "/root/paddlejob/models/Qwen3-30B-A3B-FP8",
-  "choices": [
-    {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "",
-        "multimodal_content": null,
-        "reasoning_content": "User wants to ... ",
-        "tool_calls": [
-          {
-            "id": "chatcmpl-tool-bc90641c67e44dbfb981a79bc986fbe5",
-            "type": "function",
-            "function": {
-              "name": "get_weather",
-              "arguments": "{\"location\": \"北京\", \"unit\": \"c\"}"
+    "choices": [
+        {
+            "index": 0,
+            "message": {
+                "role": "assistant",
+                "content": "",
+                "multimodal_content": null,
+                "reasoning_content": "User wants to ... ",
+                "tool_calls": [
+                    {
+                        "id": "chatcmpl-tool-bc90641c67e44dbfb981a79bc986fbe5",
+                        "type": "function",
+                        "function": {
+                            "name": "get_weather",
+                            "arguments": "{\"location\": \"北京\", \"unit\": \"c\"}"
+                        }
+                    }
+                ],
+                "finish_reason": "tool_calls"
             }
-          }
-        ],
-        "prompt_token_ids": null,
-        "completion_token_ids": null,
-        "text_after_process": null,
-        "raw_prediction": null,
-        "prompt_tokens": null,
-        "completion_tokens": null
-      },
-      "logprobs": null,
-      "finish_reason": "tool_calls"
-    }
-  ],
-  "usage": {
-    "prompt_tokens": 242,
-    "total_tokens": 363,
-    "completion_tokens": 121,
-    "prompt_tokens_details": {
-      "cached_tokens": 0
-    }
-  }
+        }
+    ]
 }
 ```
-## 并行工具调用（Parallel Tool Calls）
+## 并行工具调用
 
 如果模型能够生成多个并行的工具调用，FastDeploy 会返回一个列表：
 
@@ -120,7 +99,7 @@ tool_calls=[
 ]
 ```
 
-## 会话历史中包含工具调用的情况
+## 工具调用结果出现在历史会话中
 
 如果前几轮对话中包含工具调用，可以按以下方式构造请求：
 
@@ -154,11 +133,9 @@ curl -X POST "http://0.0.0.0:8000/v1/chat/completions" \
       "role": "tool",
       "tool_call_id": "call_1",
       "content": {
-        "location": "北京",
-        "temperature": "23",
-        "weather": "晴",
-        "unit": "c"
-      }
+        "type": "text",
+        "text": "{\"location\": \"北京\",\"temperature\": \"23\",\"weather\": \"晴\",\"unit\": \"c\"}"
+        }
     }
   ],
   "tools": [
@@ -195,14 +172,9 @@ curl -X POST "http://0.0.0.0:8000/v1/chat/completions" \
   ]
 }'
 ```
-解析出的模型输出结果如下，包含思考内容与回复内容：
-
+解析出的模型输出结果如下，包含思考内容`reasoning_content`与回复内容`content`，且`finish_reason`为`stop`：
 ```bash
 {
-    "id": "chatcmpl-6b881172-d927-4a6a-8113-3b0a9b257469",
-    "object": "chat.completion",
-    "created": 1754720554,
-    "model": "default",
     "choices": [
         {
             "index": 0,
@@ -212,30 +184,40 @@ curl -X POST "http://0.0.0.0:8000/v1/chat/completions" \
                 "reasoning_content": "用户想...",
                 "tool_calls": null
             },
-            "logprobs": null,
             "finish_reason": "stop"
         }
-    ],
-    "usage": {
-        "prompt_tokens": 217,
-        "total_tokens": 489,
-        "completion_tokens": 272,
-        "prompt_tokens_details": {
-            "cached_tokens": 0
-        }
-    }
+    ]
 }
 ```
 ## 编写自定义工具解析器
-FastDeploy支持自定义工具解析器插件，可以在以下地址创建：`fastdeploy/entrypoints/openai/tool_parser/`
+FastDeploy支持自定义工具解析器插件，可以参考以下地址中的`tool parser`创建：`fastdeploy/entrypoints/openai/tool_parser`
 
 自定义解析器需要实现：
 
 ```python
+# import the required packages
+# register the tool parser to ToolParserManager
 @ToolParserManager.register_module("my-parser")
 class ToolParser:
+    def __init__(self, tokenizer: AnyTokenizer):
+      super().__init__(tokenizer)
+
+    # implement the tool parse for non-stream call
     def extract_tool_calls(self, model_output: str, request: ChatCompletionRequest) -> ExtractToolCallInformation:
-        ...
+      return ExtractedToolCallInformation(tools_called=False,tool_calls=[],content=text)
+
+    # implement the tool call parse for stream call
+    def extract_tool_calls_streaming(
+        self,
+        previous_text: str,
+        current_text: str,
+        delta_text: str,
+        previous_token_ids: Sequence[int],
+        current_token_ids: Sequence[int],
+        delta_token_ids: Sequence[int],
+        request: ChatCompletionRequest,
+    ) -> DeltaMessage | None:
+        return delta
 ```
 
 通过以下方式启用自定义解析器：
