@@ -581,13 +581,6 @@ class EngineClient:
             if "data" not in request_dict or not isinstance(request_dict["data"], list):
                 content = {"code": 1, "msg": "data not in request or data is not a list"}
                 status_code = HTTPStatus.BAD_REQUEST
-
-            elif len(request_dict["data"]) != len(self.expert_tokens_stats_array_list):
-                content = {
-                    "code": 1,
-                    "msg": f"actual data length {len(request_dict['data'])}, expect length {len(self.expert_tokens_stats_array_list)}",
-                }
-                status_code = HTTPStatus.BAD_REQUEST
             else:
                 weight = np.array(request_dict["data"], dtype=np.int32)
                 for idx in range(len(self.expert_tokens_stats_array_list)):
