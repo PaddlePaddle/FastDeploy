@@ -92,9 +92,10 @@ class AppendAttentionBackend(AttentionBackend):
         self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False) or getattr(
             fd_config.model_config, "use_3d_rope", False
         )
+        if fd_config.speculative_config.model_type != "main":
+            self.rope_3d = False
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
         self.speculative_method: str = fd_config.speculative_config.method
-        self.use_speculate: bool = self.speculative_method is not None
         self.speculate_max_draft_token_num: int = fd_config.speculative_config.num_speculative_tokens
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
         self.num_layers_draft_model: int = int(fd_config.speculative_config.method in ["mtp"])

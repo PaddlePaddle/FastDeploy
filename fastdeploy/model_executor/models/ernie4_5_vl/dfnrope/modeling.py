@@ -169,13 +169,14 @@ class VisionFlashAttention2(nn.Layer):
         self.tensor_parallel_degree = tensor_parallel_degree
         self.tensor_parallel_rank = tensor_parallel_rank
         if tensor_parallel_degree > 1:
+            use_fuse_matmul_bias = False if current_platform.is_maca() or current_platform.is_iluvatar() else True
             self.qkv = ColumnParallelLinear(
                 dim,
                 dim * 3,
                 mp_group=fleet.get_hybrid_communicate_group().get_model_parallel_group(),
                 weight_attr=None,
                 has_bias=True,
-                fuse_matmul_bias=False if current_platform.is_iluvatar() else True,
+                fuse_matmul_bias=use_fuse_matmul_bias,
                 gather_output=False,
             )
             self.proj = RowParallelLinear(
@@ -204,7 +205,7 @@ class VisionFlashAttention2(nn.Layer):
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
         if weight_need_transpose:
-            loaded_weight = loaded_weight.transpose([1, 0])
+            loaded_weight = get_tensor(loaded_weight).transpose([1, 0])
         load_bias = getattr(param, "load_bias", None)
         if load_bias:
             head_dim = self.hidden_size // self.num_heads

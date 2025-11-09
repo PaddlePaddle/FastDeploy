@@ -131,12 +131,13 @@ def get_sm_version(archs):
     Get sm version of paddle.
     """
     arch_set = set(archs)
-    try:
-        prop = paddle.device.cuda.get_device_properties()
-        cc = prop.major * 10 + prop.minor
-        arch_set.add(cc)
-    except ValueError:
-        pass
+    if len(arch_set) == 0:
+        try:
+            prop = paddle.device.cuda.get_device_properties()
+            cc = prop.major * 10 + prop.minor
+            arch_set.add(cc)
+        except ValueError:
+            pass
     return list(arch_set)
 
 
@@ -305,6 +306,9 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/merge_prefill_decode_output.cu",
         "gpu_ops/limit_thinking_content_length_v1.cu",
         "gpu_ops/limit_thinking_content_length_v2.cu",
+        "gpu_ops/update_attn_mask_offsets.cu",
+        "gpu_ops/fused_neox_rope_embedding.cu",
+        "gpu_ops/gelu_tanh.cu",
     ]
 
     # pd_disaggregation
@@ -382,7 +386,9 @@ elif paddle.is_compiled_with_cuda():
 
     if cc >= 80:
         # append_attention
-        os.system("python gpu_ops/append_attn/autogen_template_instantiation.py")
+        os.system(
+            "python utils/auto_gen_template_instantiation.py --config gpu_ops/append_attn/template_config.json --output gpu_ops/append_attn/template_instantiation/autogen"
+        )
         sources += ["gpu_ops/append_attention.cu"]
         sources += find_end_files("gpu_ops/append_attn", ".cu")
         # mla
@@ -395,6 +401,9 @@ elif paddle.is_compiled_with_cuda():
         nvcc_compile_args += ["-DENABLE_BF16"]
         # moe
         os.system("python gpu_ops/moe/moe_wna16_marlin_utils/generate_kernels.py")
+        os.system(
+            "python utils/auto_gen_template_instantiation.py --config gpu_ops/moe/template_config.json --output gpu_ops/moe/template_instantiation/autogen"
+        )
         sources += find_end_files("gpu_ops/cutlass_kernels/moe_gemm/", ".cu")
         sources += find_end_files("gpu_ops/cutlass_kernels/w4a8_moe/", ".cu")
         sources += find_end_files("gpu_ops/moe/", ".cu")
@@ -608,6 +617,9 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/text_image_gather_scatter.cu",
         "gpu_ops/text_image_index_out.cu",
         "gpu_ops/get_position_ids_and_mask_encoder_batch.cu",
+        "gpu_ops/limit_thinking_content_length_v1.cu",
+        "gpu_ops/limit_thinking_content_length_v2.cu",
+        "gpu_ops/update_attn_mask_offsets.cu",
         "gpu_ops/append_attn/mla_cache_kernel.cu",
         "gpu_ops/append_attn/get_block_shape_and_split_kv_block.cu",
         "gpu_ops/moe/tritonmoe_preprocess.cu",

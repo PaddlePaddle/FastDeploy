@@ -22,7 +22,7 @@ from fastdeploy.config import FDConfig
 def init_rank_and_device_id(fd_config: FDConfig):
     """ """
     rank = (
-        fd_config.parallel_config.expert_parallel_rank * fd_config.parallel_config.tensor_parallel_size
+        fd_config.parallel_config.local_data_parallel_id * fd_config.parallel_config.tensor_parallel_size
         + fd_config.parallel_config.tensor_parallel_rank
     )
 

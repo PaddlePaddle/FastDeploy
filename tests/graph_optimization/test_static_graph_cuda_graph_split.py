@@ -91,7 +91,7 @@ class TestStaticGraphCUDAGraphSplit(unittest.TestCase):
         # Set FastDeploy config
         graph_opt_config = GraphOptimizationConfig({"use_cudagraph": True, "graph_opt_level": 1})
         scheduler_config = SchedulerConfig({"max_num_seqs": 1})
-        graph_opt_config._set_cudagraph_sizes(max_num_seqs=scheduler_config.max_num_seqs)
+        graph_opt_config._set_cudagraph_sizes(max_capture_size=scheduler_config.max_num_seqs)
         graph_opt_config.init_with_cudagrpah_size(max_capture_size=scheduler_config.max_num_seqs)
         cache_config = CacheConfig({})
         parallel_config = ParallelConfig(args={})
@@ -108,7 +108,7 @@ class TestStaticGraphCUDAGraphSplit(unittest.TestCase):
 
         test_model1 = TestModel(fd_config=fd_config)
         x = paddle.randint(32, shape=[1, 8])
-        forward_meta1 = ForwardMeta(input_ids=x, ids_remove_padding=x, step_use_cudagraph=True)
+        forward_meta1 = ForwardMeta(ids_remove_padding=x, step_use_cudagraph=True)
 
         # Trigger Capture
         with sot_warmup_guard(True):
