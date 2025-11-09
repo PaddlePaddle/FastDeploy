@@ -43,7 +43,7 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
             "tools": [1],
             "temperature": 0,
         }
-        self.valid_parameters(request)
+        self.engine_client.valid_parameters(request)
         assert request["temperature"] == 1e-6
 
 
