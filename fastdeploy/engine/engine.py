@@ -251,7 +251,7 @@ class LLMEngine:
         request = Request.from_dict(task)
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
-            if sampling_params.temperature is not None and sampling_params.temperature == 0:
+            if sampling_params.temperature is not None and abs(sampling_params.temperature) < 1e-06:
                 sampling_params.temperature = 1e-06
             request.sampling_params = sampling_params
         request.preprocess_start_time = time.time()
