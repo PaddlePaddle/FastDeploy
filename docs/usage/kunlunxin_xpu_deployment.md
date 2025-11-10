@@ -238,3 +238,77 @@ for chunk in response:
         print(reasoning_content + content, end='', flush=True)
 print('\n')
 ```
+
+### Deploy online serving based on ERNIE-4.5-VL-28B-A3B-Thinking
+
+#### Start service
+Deploy the ERNIE-4.5-VL-28B-A3B-Thinking model with WINT8 precision and 128K context length on 1 XPU
+
+```bash
+export XPU_VISIBLE_DEVICES="0"# Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+--model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Thinking \
+--port 8188 \
+--tensor-parallel-size 1 \
+--quantization "wint8" \
+--max-model-len 131072 \
+--max-num-seqs 32 \
+--engine-worker-queue-port 8189 \
+--metrics-port 8190 \
+--cache-queue-port 8191 \
+--reasoning-parser ernie-45-vl-thinking \
+--tool-call-parser ernie-45-vl-thinking \
+--mm-processor-kwargs '{"image_max_pixels": 12845056 }'
+--load-choices "default_v1"
+```
+
+#### Send requests
+
+```bash
+curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": [
+              {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg", "detail": "high"}},
+              {"type": "text", "text": "请描述图片内容"}
+            ]}
+    ],
+    "metadata": {"enable_thinking": true}
+}'
+```
+
+```python
+import openai
+
+ip = "0.0.0.0"
+service_http_port = "8188"
+client = openai.Client(base_url=f"http://{ip}:{service_http_port}/v1", api_key="EMPTY_API_KEY")
+
+response = client.chat.completions.create(
+    model="default",
+    messages=[
+        {"role": "user", "content": [
+              {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg", "detail": "high"}},
+              {"type": "text", "text": "请描述图片内容"}
+            ]
+        },
+    ],
+    temperature=0.0001,
+    max_tokens=10000,
+    stream=True,
+    top_p=0,
+    metadata={"enable_thinking": True},
+)
+
+def get_str(content_raw):
+    content_str = str(content_raw) if content_raw is not None else ''
+    return content_str
+
+for chunk in response:
+    if chunk.choices[0].delta is not None and chunk.choices[0].delta.role != 'assistant':
+        reasoning_content = get_str(chunk.choices[0].delta.reasoning_content)
+        content = get_str(chunk.choices[0].delta.content)
+        print(reasoning_content + content + is_reason, end='', flush=True)
+print('\n')
+```
