@@ -10,6 +10,7 @@
 | baidu/ERNIE-4.5-VL-424B-A47B-Paddle  | ernie-45-vl | ✅       | ❌ |
 | baidu/ERNIE-4.5-VL-28B-A3B-Paddle | ernie-45-vl |    ✅    |  ❌  |
 | baidu/ERNIE-4.5-21B-A3B-Thinking  | ernie-x1  |   ✅不支持关思考  | ✅|
+| baidu/ERNIE-4.5-VL-28B-A3B-Thinking  | ernie-45-vl-thinking  |   ✅不支持关思考   | ✅|
 
 思考模型需要指定解析器,以便于对思考内容进行解析. 通过 `"enable_thinking": false` 参数可以关闭模型思考模式.
 

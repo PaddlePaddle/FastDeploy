@@ -10,6 +10,7 @@ Reasoning models return an additional `reasoning_content` field in their output,
 | baidu/ERNIE-4.5-VL-424B-A47B-Paddle  | ernie-45-vl | ✅       | ❌ |
 | baidu/ERNIE-4.5-VL-28B-A3B-Paddle | ernie-45-vl |    ✅    |  ❌  |
 | baidu/ERNIE-4.5-21B-A3B-Thinking  | ernie-x1  |   ✅ no off supported  | ✅|
+| baidu/ERNIE-4.5-VL-28B-A3B-Thinking  | ernie-45-vl-thinking  |   ✅ no off supported   | ✅|
 
 The reasoning model requires a specified parser to extract reasoning content. The reasoning mode can be disabled by setting the `"enable_thinking": false` parameter.
 
