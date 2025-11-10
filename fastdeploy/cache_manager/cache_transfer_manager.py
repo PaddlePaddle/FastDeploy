@@ -165,6 +165,26 @@ class CacheTransferManager:
             )
             self.gpu_cache_v_tensors.append(self.gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"])
 
+            if cache_type == "block_wise_fp8":
+                self.gpu_cache_kvs[f"key_cache_scales_{i}_rank{rank}_device{device}"] = paddle.full(
+                    shape=[num_gpu_blocks, args.kv_num_head, args.block_size],
+                    fill_value=0,
+                    dtype=paddle.get_default_dtype(),
+                )
+                self.gpu_cache_kvs[f"value_cache_scales_{i}_rank{rank}_device{device}"] = paddle.full(
+                    shape=[num_gpu_blocks, args.kv_num_head, args.block_size],
+                    fill_value=0,
+                    dtype=paddle.get_default_dtype(),
+                )
+                set_data_ipc(
+                    self.gpu_cache_kvs[f"key_cache_scales_{i}_rank{rank}_device{device}"],
+                    f"key_cache_scales_{i}_rank{rank}.device{device}",
+                )
+                set_data_ipc(
+                    self.gpu_cache_kvs[f"value_cache_scales_{i}_rank{rank}_device{device}"],
+                    f"value_cache_scales_{i}_rank{rank}.device{device}",
+                )
+
             set_data_ipc(
                 self.gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"],
                 f"key_caches_{i}_rank{rank}.device{device}",
