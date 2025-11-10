@@ -358,6 +358,7 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
+            layer_id=layer_id,
         )
 
         self.post_attention_layernorm = RMSNorm(
@@ -365,6 +366,7 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
+            layer_id=layer_id,
         )
 
     def load_state_dict(self, state_dict):
@@ -544,7 +546,7 @@ class Ernie4_5_VLModel(nn.Layer):
                 vl_moe_meta,
             )
 
-        out = self.norm(hidden_states, residual)[0]
+        out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
         return out
 

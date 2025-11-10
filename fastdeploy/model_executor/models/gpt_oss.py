@@ -150,6 +150,7 @@ class GptOssDecoderLayer(nn.Layer):
             hidden_size=hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
+            layer_id=layer_id,
         )
         self.mlp = GptOssMoe(fd_config, layer_id, prefix=f"{prefix}.mlp")
 

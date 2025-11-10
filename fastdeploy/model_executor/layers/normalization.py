@@ -185,7 +185,7 @@ class RMSNorm(nn.Layer):
         x,
         residual_input: Optional[paddle.Tensor] = None,
         forward_meta: Optional[ForwardMeta] = None,
-        external_rmsnorm: Callable = None,
+        external_rmsnorm: Optional[Callable] = None,
     ) -> paddle.Tensor:
         """
         Defines the forward computation of the layer.
@@ -244,6 +244,7 @@ class RMSNorm(nn.Layer):
             assert residual_out is not None
             residual_out = self.split(residual_out)
         if self.allgather_out:
+            assert forward_meta is not None
             out = self.allgather(out, forward_meta.ids_remove_padding.shape[0])
 
         return out, residual_out

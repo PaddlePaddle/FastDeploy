@@ -194,6 +194,7 @@ class Glm4MoeAttention(nn.Layer):
             prefix=f"{prefix}.o_proj",
             input_size=fd_config.model_config.num_attention_heads * fd_config.model_config.head_dim,
             output_size=fd_config.model_config.hidden_size,
+            layer_id=layer_id,
         )
 
         self.attn = Attention(
@@ -275,6 +276,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
+            layer_id=layer_id,
         )
 
         self.post_attention_layernorm = RMSNorm(
@@ -282,6 +284,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
+            layer_id=layer_id,
         )
 
     def forward(
@@ -365,7 +368,7 @@ class Glm4MoeModel(nn.Layer):
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
-        out = self.norm(hidden_states, residual)[0]
+        out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
         return out
 
