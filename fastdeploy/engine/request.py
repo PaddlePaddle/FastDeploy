@@ -161,6 +161,7 @@ class Request:
         self.extend_block_tables = []
         # dp
         self.dp_rank = dp_rank
+        self.llm_engine_recv_req_timestamp = time.time()
 
     @classmethod
     def from_dict(cls, d: dict):

@@ -132,7 +132,10 @@ class CacheMessager:
         self.gpu_cache_kvs = gpu_cache_kvs
         self.rank = rank
         self.nranks = nranks
-        address = (pod_ip, engine_worker_queue_port)
+        if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+            address = (pod_ip, engine_worker_queue_port)
+        else:
+            address = f"/dev/shm/fd_task_queue_{engine_worker_queue_port}.sock"
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
@@ -423,7 +426,10 @@ class CacheMessagerV1:
         self.gpu_cache_kvs = gpu_cache_kvs
         self.rank = rank
         self.nranks = nranks
-        address = (pod_ip, engine_worker_queue_port)
+        if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+            address = (pod_ip, engine_worker_queue_port)
+        else:
+            address = f"/dev/shm/fd_task_queue_{engine_worker_queue_port}.sock"
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
