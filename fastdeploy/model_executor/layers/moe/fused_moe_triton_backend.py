@@ -248,6 +248,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         """
         Triton compute Fused MoE.
         """
+        x = paddle.concat([x, paddle.ones([1, layer.hidden_size], dtype=x.dtype)])        
         gate_out = gate(x.cast("float32"))
         token_num = x.shape[0]
         top_k = layer.top_k
@@ -395,6 +396,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         if layer.reduce_results and layer.tp_size > 1:
             out = tensor_model_parallel_all_reduce(out)
 
+        out = out[:-1]
         return out
 
 
