@@ -249,8 +249,11 @@ class LLMEngine:
         if sampling_params is not None:
             task.update(asdict(sampling_params))
         request = Request.from_dict(task)
+        request.llm_engine_recv_req_timestamp = time.time()
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
+            if sampling_params.temperature is not None and abs(sampling_params.temperature) < 1e-06:
+                sampling_params.temperature = 1e-06
             request.sampling_params = sampling_params
         request.preprocess_start_time = time.time()
         chat_template_kwargs = kwargs.get("chat_template_kwargs") or {}
@@ -551,6 +554,7 @@ class LLMEngine:
             f" --convert {self.cfg.model_config.convert}"
             f" --override-pooler-config {self.cfg.model_config.override_pooler_config}"
             f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
+            f" --max_logprobs {self.cfg.model_config.max_logprobs}"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
@@ -691,8 +695,6 @@ class LLMEngine:
             )
             self.splitwise_receive_thread.daemon = True
             self.splitwise_receive_thread.start()
-
-        self.cfg.init_cache_info()
 
         role = self.cfg.scheduler_config.splitwise_role
         host_ip = self.cfg.host_ip

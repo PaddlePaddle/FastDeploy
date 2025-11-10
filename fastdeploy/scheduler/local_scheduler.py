@@ -195,6 +195,20 @@ class LocalScheduler:
         results += [(request_id, "duplicated request_id") for request_id in duplicated_ids]
         return results
 
+    def has_request(self, request_id: str) -> bool:
+        """
+        Check if there are any pending requests in the scheduler.
+
+        Args:
+            request_id: Optional specific request ID to check.
+                        If None, checks whether there are any pending requests.
+
+        Returns:
+            True if there are pending requests, False otherwise.
+        """
+        with self.mutex:
+            return request_id in self.requests
+
     def calc_required_blocks(self, token_num, block_size):
         """
         Calculate the number of blocks needed for a given number of tokens.
@@ -292,6 +306,7 @@ class LocalScheduler:
         Args:
             results: List of RequestOutput objects containing results
         """
+        scheduler_logger.debug(f"put results: {results}")
         responses: List[ScheduledResponse] = [ScheduledResponse(result) for result in results]
 
         finished_responses = [response.request_id for response in responses if response.finished]
@@ -354,4 +369,8 @@ class LocalScheduler:
                 if finished:
                     self._recycle(request_id)
                     scheduler_logger.info(f"Scheduler has pulled a finished response: {[request_id]}")
+
+            if results:
+                scheduler_logger.debug(f"get responses, {results}")
+
             return results

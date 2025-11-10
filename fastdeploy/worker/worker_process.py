@@ -51,12 +51,7 @@ from fastdeploy.eplb.async_expert_loader import (
 from fastdeploy.eplb.experts_manager import RedundantExpertManager
 from fastdeploy.eplb.utils import RearrangeExpertState
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
-from fastdeploy.inter_communicator import (
-    ExistTaskStatus,
-    IPCSignal,
-    ModelWeightsStatus,
-    shared_memory_exists,
-)
+from fastdeploy.inter_communicator import ExistTaskStatus, IPCSignal, ModelWeightsStatus
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
@@ -480,8 +475,10 @@ class PaddleDisWorkerProc:
 
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
+            start_execute_time = time.time()
             self.worker.execute_model(req_dicts, num_running_requests)
             self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
+            logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many
@@ -544,16 +541,12 @@ class PaddleDisWorkerProc:
     def graph_optimize_and_warm_up_model(self) -> None:
         self.worker.graph_optimize_and_warm_up_model()
         # reset cache_messager prefilled_step signal
-        if self.scheduler_config.splitwise_role == "prefill":
+        if not envs.ENABLE_V1_KVCACHE_SCHEDULER and self.scheduler_config.splitwise_role == "prefill":
             gpu_id = self.worker.model_runner.device_id
             prefilled_step_name = f"splitwise_complete_prefilled_step_{self.local_rank}"
             prefilled_step_idx_data = np.zeros(shape=[1], dtype=np.int32)
             step_shm_value = IPCSignal(
-                name=prefilled_step_name,
-                array=prefilled_step_idx_data,
-                dtype=np.int32,
-                suffix=gpu_id,
-                create=not shared_memory_exists(prefilled_step_name),
+                name=prefilled_step_name, array=prefilled_step_idx_data, dtype=np.int32, suffix=gpu_id, create=False
             )
             step_shm_value.value[0] = -1
 
@@ -746,6 +739,12 @@ def parse_args():
         help="Enable output of token-level log probabilities.",
     )
     parser.add_argument(
+        "--max_logprobs",
+        type=int,
+        default=20,
+        help="Maximum number of log probabilities.",
+    )
+    parser.add_argument(
         "--logprobs_mode",
         type=str,
         default="raw_logprobs",
@@ -856,7 +855,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
             num_experts = model_config.moe_num_experts[0]
         else:
             num_experts = model_config.moe_num_experts
-
         num_experts_per_rank = num_experts // parallel_config.expert_parallel_size
         num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8

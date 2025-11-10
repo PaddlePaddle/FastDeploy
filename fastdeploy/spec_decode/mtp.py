@@ -623,7 +623,6 @@ class MTPProposer(Proposer):
         """
         # Initialize forward meta
         self.forward_meta = ForwardMeta(
-            input_ids=self.model_inputs["input_ids"],
             ids_remove_padding=self.model_inputs["ids_remove_padding"],
             rotary_embs=self.model_inputs["rope_emb"],
             attn_backend=self.attn_backends[0],
