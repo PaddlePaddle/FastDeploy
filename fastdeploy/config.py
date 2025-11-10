@@ -124,7 +124,6 @@ class ModelConfig:
         self.max_model_len = 0
         self.dtype = ""
         self.enable_logprob = False
-        self.enable_redundant_experts = False
         self.redundant_experts_num = 0
         self.seed = 0
         self.quantization = None
@@ -242,6 +241,60 @@ class ModelConfig:
         Print all configuration information.
         """
         logger.info("Model Configuration Information :")
+        for k, v in self.__dict__.items():
+            logger.info("{:<20}:{:<6}{}".format(k, "", v))
+        logger.info("=============================================================")
+
+
+class EPLBConfig:
+    """
+    Configuration for EPLB manager.
+    """
+
+    def __init__(
+        self,
+        args,
+    ):
+        # enable eplb
+        self.enable_eplb: bool = False
+        # redundant experts num
+        self.redundant_experts_num: int = 0
+        # expert ip shm size
+        self.redundant_expert_ip_shm_size: int = 1024
+        # expert meta dir
+        self.redundant_expert_meta_dir: str = "/tmp/redundant_expert_meta"
+        # expert api user and password
+        self.redundant_expert_api_user: str = ""
+        self.redundant_expert_api_password: str = ""
+        # expert eplb strategy
+        self.redundant_expert_eplb_strategy: str = ""
+        # expert dump workload interval
+        self.redundant_expert_dump_workload_interval: int = 10
+        # expert async load model shmem size gb
+        self.redundant_expert_async_load_model_shmem_size_gb: int = 0
+        # expert enable schedule cordon
+        self.redundant_expert_enable_schedule_cordon: bool = True
+        # model use safetensors
+        self.model_use_safetensors: bool = True
+        # model use offline quant
+        self.model_use_offline_quant: bool = True
+        # moe quant type
+        self.moe_quant_type: str = "w4a8"
+        for key, value in args.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+
+    def to_json_string(self):
+        """
+        Convert eplb_config to json string.
+        """
+        return json.dumps({key: value for key, value in self.__dict__.items() if value is not None})
+
+    def print(self):
+        """
+        Print all configuration information.
+        """
+        logger.info("EPLB Configuration Information :")
         for k, v in self.__dict__.items():
             logger.info("{:<20}:{:<6}{}".format(k, "", v))
         logger.info("=============================================================")
@@ -1143,6 +1196,7 @@ class FDConfig:
         reasoning_parser: str = None,
         guided_decoding_backend: Optional[str] = None,
         disable_any_whitespace: bool = False,
+        eplb_config: EPLBConfig = None,
         early_stop_config: Optional[Dict[str, Any]] = None,
         tool_parser: str = None,
         test_mode=False,
@@ -1161,6 +1215,7 @@ class FDConfig:
         self.early_stop_config: Optional[EarlyStopConfig] = early_stop_config
         self.decoding_config: DecodingConfig = decoding_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
+        self.eplb_config: Optional[EPLBConfig] = eplb_config
         self.moba_attention_config: Optional[MobaAttentionConfig] = moba_attention_config
         self.enable_attention_dp_balance = enable_attention_dp_balance
         self.attention_dp_time_out_iters = attention_dp_time_out_iters
@@ -1388,6 +1443,7 @@ class FDConfig:
                 or k == "scheduler_config"
                 or k == "parallel_config"
                 or k == "commit_config"
+                or k == "eplb_config"
             ):
                 if v is not None:
                     v.print()

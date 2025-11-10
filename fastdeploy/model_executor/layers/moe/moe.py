@@ -191,6 +191,7 @@ class FusedMoE(nn.Layer):
         else:
             self.quant_method = get_moe_method()
         self.redundant_table_manger = redundant_table_manger
+        self.is_rearrange = False
         if self.ep_size > 1:
             self.quant_method.init_ep(self)
 
@@ -397,7 +398,7 @@ class FusedMoE(nn.Layer):
             )
         ]
         ep_rank_to_expert_id_list = [i for i in range(self.num_experts)]
-        if self.redundant_table_manger is not None:
+        if self.redundant_table_manger is not None and is_rearrange is True:
             (
                 ep_rank_to_expert_id_list,
                 expert_id_to_ep_rank_array,

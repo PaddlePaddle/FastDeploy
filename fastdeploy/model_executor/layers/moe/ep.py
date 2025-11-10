@@ -436,6 +436,8 @@ class EPRunner:
                 expert_in_rank_num_list,
                 tokens_per_expert_stats_list,
             ) = layer.redundant_table_manger.get_ep_rank_to_expert_id_list_by_layer(layer.layer_idx)
+            if layer.is_rearrange is False:
+                expert_id_to_ep_rank_array = paddle.arange(layer.num_experts).cast("int32")
 
             if layer.topk_method == "noaux_tc":
                 from .moe import get_moe_scores
