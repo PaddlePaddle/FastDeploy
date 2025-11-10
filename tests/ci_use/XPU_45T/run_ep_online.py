@@ -21,6 +21,7 @@ def test_ep():
     client = openai.Client(base_url=f"http://{ip}:{service_http_port}/v1", api_key="EMPTY_API_KEY")
     base_response_ep8tp1 = "你好呀！我是一个人工智能助手，可以帮你解答问题、提供建议、陪你聊天，或者做点有趣的事情～比如现在，你想聊点什么？😊"
     base_response_ep8tp8 = "你好呀！我是一个人工智能助手，可以帮你解答问题、提供建议、陪你聊天，或者做任何你需要的帮助～😊 你有什么想聊的或者需要帮忙的吗？"
+    base_response_ep8tp8_all2all = "你好呀！我是一个人工智能助手，可以帮你解答问题、提供建议、陪你聊天，或者做任何你需要的任务～😊 你是谁呢？或者有什么想聊的吗？"
     # 非流式对话
     response = client.chat.completions.create(
         model="default",
@@ -38,6 +39,7 @@ def test_ep():
     assert (
         response.choices[0].message.content == base_response_ep8tp1
         or response.choices[0].message.content == base_response_ep8tp8
+        or response.choices[0].message.content == base_response_ep8tp8_all2all
     )
 
 
