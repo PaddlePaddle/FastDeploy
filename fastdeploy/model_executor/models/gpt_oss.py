@@ -211,9 +211,8 @@ class GptOssModel(nn.Layer):
         residual = None
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
-        hidden_states = hidden_states + residual
 
-        hidden_states = self.norm(hidden_states)[0]
+        hidden_states = self.norm(hidden_states, residual)[0]
         return hidden_states
 
 

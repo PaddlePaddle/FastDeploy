@@ -283,9 +283,7 @@ class Qwen2Model(nn.Layer):
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
-        hidden_states = hidden_states + residual
-
-        out = self.norm(hidden_states)[0]
+        out = self.norm(hidden_states, residual)[0]
 
         return out
 

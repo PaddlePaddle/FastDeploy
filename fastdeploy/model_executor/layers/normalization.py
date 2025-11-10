@@ -185,6 +185,7 @@ class RMSNorm(nn.Layer):
         x,
         residual_input: Optional[paddle.Tensor] = None,
         forward_meta: Optional[ForwardMeta] = None,
+        external_rmsnorm: Callable = None,
     ) -> paddle.Tensor:
         """
         Defines the forward computation of the layer.
@@ -210,26 +211,31 @@ class RMSNorm(nn.Layer):
 
         if residual_input is None:
             residual_out = x
-
-        if current_platform.is_gcu():
-            if residual_input is None:
-                norm_out = rms_norm(x, self.weight, self.eps)
-                return norm_out.astype(x_dtype), residual_out
-            norm_out = self.norm_func(x, residual_input, self.weight, self.eps)
+        if external_rmsnorm is None:
+            if current_platform.is_gcu():
+                if residual_input is None:
+                    norm_out = rms_norm(x, self.weight, self.eps)
+                    return norm_out.astype(x_dtype), residual_out
+                norm_out = self.norm_func(x, residual_input, self.weight, self.eps)
+            else:
+                norm_out = self.norm_func(
+                    x,
+                    norm_weight=self.weight,
+                    norm_bias=None,
+                    epsilon=self.eps,
+                    begin_norm_axis=self.begin_norm_axis,
+                    bias=self.bias,
+                    residual=residual_input,
+                    quant_scale=(-1 if self.quant_scale is None else self.quant_scale),
+                    quant_round_type=self.quant_round_type,
+                    quant_max_bound=self.quant_max_bound,
+                    quant_min_bound=self.quant_min_bound,
+                )
         else:
-            norm_out = self.norm_func(
-                x,
-                norm_weight=self.weight,
-                norm_bias=None,
-                epsilon=self.eps,
-                begin_norm_axis=self.begin_norm_axis,
-                bias=self.bias,
-                residual=residual_input,
-                quant_scale=(-1 if self.quant_scale is None else self.quant_scale),
-                quant_round_type=self.quant_round_type,
-                quant_max_bound=self.quant_max_bound,
-                quant_min_bound=self.quant_min_bound,
-            )
+            if residual_input is not None:
+                x = x + residual_input
+            norm_out = external_rmsnorm(x, self.weight, self.eps), x
+
         out = norm_out[0].astype(x_dtype)
         if residual_input is not None:
             residual_out = norm_out[1].astype(residual_input_dtype)

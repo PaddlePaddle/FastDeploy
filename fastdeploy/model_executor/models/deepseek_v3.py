@@ -586,8 +586,7 @@ class DeepSeekV3Model(nn.Layer):
                 position_ids,
                 mask_encoder_batch,
             )
-        hidden_states = hidden_states + residual
-        out = self.norm(hidden_states)[0]
+        out = self.norm(hidden_states, residual)[0]
 
         return out
 

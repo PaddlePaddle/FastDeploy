@@ -544,8 +544,7 @@ class Ernie4_5_VLModel(nn.Layer):
                 vl_moe_meta,
             )
 
-        hidden_states = hidden_states + residual
-        out = self.norm(hidden_states)[0]
+        out = self.norm(hidden_states, residual)[0]
 
         return out
 
