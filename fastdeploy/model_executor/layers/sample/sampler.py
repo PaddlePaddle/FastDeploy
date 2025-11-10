@@ -71,7 +71,9 @@ class GuidedDecoding:
         self.token_bitmask = None
         self.logits_processors: List[Any] = [None] * fd_config.scheduler_config.max_num_seqs
         self.reasoning_parser = None
-        self._prefill_done_idxs = [False] * fd_config.scheduler_config.max_num_seqs
+        self._prefill_done_idxs: List[bool] = [False] * fd_config.scheduler_config.max_num_seqs
+        # for pd
+        self._tokens_to_acc: List[None | List[int]] = [None] * fd_config.scheduler_config.max_num_seqs
 
     def apply_reasoning_parser(self, reasoning_parser: Optional[ReasoningParser] = None):
         self.reasoning_parser = reasoning_parser
@@ -83,7 +85,6 @@ class GuidedDecoding:
         prefill_tokens: List[int] = [],
     ):
         """add logits processor to SamplerProcessor"""
-        assert len(prefill_tokens) == 0
         self._prefill_done_idxs[idx] = False
 
         if future is None:
@@ -91,12 +92,19 @@ class GuidedDecoding:
             self.logits_processors[idx] = None
             return
 
+        if len(prefill_tokens) != 0:
+            # first_token from prefill node
+            self._prefill_done_idxs[idx] = True
+
         if future.done():
             # cached xgrammar
             self.logits_processors[idx] = future.result()
+            for token in prefill_tokens:
+                self._accept_token(idx, token)
         else:
             # async
             self.logits_processors[idx] = future
+            self._tokens_to_acc[idx] = prefill_tokens
 
     def should_fill_bitmask(self, idx: int) -> bool:
         """
@@ -142,11 +150,21 @@ class GuidedDecoding:
                 self.reset_processor(idx)
                 continue
 
+            self.accept_tokens_from_prefill_node(idx)
+
             if self.token_bitmask is None:
                 self.token_bitmask = self.logits_processors[idx].allocate_token_bitmask()
 
             if self.should_fill_bitmask(idx):
                 processor.fill_token_bitmask(self.token_bitmask, idx)
+
+    def accept_tokens_from_prefill_node(self, idx: int):
+        """accept prefill token, not future"""
+        if self._tokens_to_acc[idx] is not None:
+            # accept token from prefill node first
+            for token in self._tokens_to_acc[idx]:
+                self._accept_token(idx, token)
+            self._tokens_to_acc[idx] = None
 
     def apply_token_mask(self, logits: paddle.Tensor, prefill_done_idxs: List[int] = []):
         """apply token mask to logits"""
@@ -171,6 +189,7 @@ class GuidedDecoding:
             if wait:
                 logger.debug(f"[{idx} join async compile xgrammar, time_cost:{time.time() - ts}]")
 
+            self.accept_tokens_from_prefill_node(idx)
             # Possible optimization: Extract 'think' content validation from logits_processors,
             # allowing join operations to complete immediately after 'think' terminates.
             # Furthermore, the current idx could be skipped, with compilation overhead
@@ -223,6 +242,7 @@ class GuidedDecoding:
             if token < 0:
                 self.reset_processor(idx)
                 continue
+            logger.debug(f"[{idx}]accept token{token}")
             self._accept_token(idx, token)
 
     def pre_process(self, prefill_done_idxs: List[int] = []):
