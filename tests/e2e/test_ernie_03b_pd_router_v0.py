@@ -53,6 +53,7 @@ PORTS_TO_CLEAN = [
     FD_ROUTER_PORT,
 ]
 
+
 @pytest.fixture(scope="session", autouse=True)
 def setup_and_run_server():
     """

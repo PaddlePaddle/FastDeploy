@@ -757,7 +757,7 @@ class CacheMessagerV1:
                 self.engine_worker_queue.connect_task_response_barrier.wait()
                 self.engine_worker_queue.put_connect_rdma_task_response(response)
             except Exception as e:
-                logger.error(f"handle_connect_task has exception: {e}")
+                logger.error(f"handle_connect_task has exception: {e}, {traceback.format_exc()}")
 
 
 def main():
