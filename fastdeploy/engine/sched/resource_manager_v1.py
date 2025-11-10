@@ -431,14 +431,7 @@ class ResourceManagerV1(ResourceManager):
             if scheduled_reqs:
                 llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
 
-            # Update metrics
-            num_tasks = sum([1 if task else 0 for task in self.tasks_list])
-            num_blocks_used_by_tasks = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
-            main_process_metrics.available_gpu_block_num.set(self.total_block_number() - num_blocks_used_by_tasks)
-            main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
-            main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
-            main_process_metrics.num_requests_running.set(len(self.running))
-            main_process_metrics.num_requests_waiting.set(num_tasks - len(self.running))
+            self.update_metrics()
 
             return scheduled_reqs
 
@@ -549,3 +542,15 @@ class ResourceManagerV1(ResourceManager):
                     del self.requests[req_id]
         except Exception as e:
             llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")
+        finally:
+            self.update_metrics()
+
+    def update_metrics(self):
+        # Update metrics
+        num_tasks = sum([1 if task else 0 for task in self.tasks_list])
+        num_blocks_used_by_tasks = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
+        main_process_metrics.available_gpu_block_num.set(self.total_block_number() - num_blocks_used_by_tasks)
+        main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
+        main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
+        main_process_metrics.num_requests_running.set(len(self.running))
+        main_process_metrics.num_requests_waiting.set(num_tasks - len(self.running))
