@@ -196,6 +196,7 @@ class OpenAIServingChat:
         num_cached_tokens = 0
         num_image_tokens = [0] * num_choices
         tool_called = [False] * num_choices
+        inference_start_time = [0] * num_choices
         max_streaming_response_tokens = (
             request.max_streaming_response_tokens
             if request.max_streaming_response_tokens is not None
@@ -272,7 +273,7 @@ class OpenAIServingChat:
 
                     if res["metrics"]["first_token_time"] is not None:
                         arrival_time = res["metrics"]["first_token_time"]
-                        inference_start_time = res["metrics"]["inference_start_time"]
+                        inference_start_time[idx] = res["metrics"]["inference_start_time"]
                     else:
                         arrival_time = res["metrics"]["arrival_time"] - inference_start_time
                     if first_iteration:
