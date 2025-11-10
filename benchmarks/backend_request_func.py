@@ -171,7 +171,8 @@ async def async_request_eb_openai_chat_completions(
                     # output.generated_text = generated_text
                     # 在流式结束时，记录最后一个 chunk 收到的时间戳
                     output.end_timestamp = most_recent_timestamp
-                    if output.generated_text.strip() == "":
+                    # 兼容思考内容超长截断的情况，此时回复内容为空
+                    if output.generated_text.strip() == "" and output.reasoning_content.strip() == "":
                         output.success = False
                         output.error = "No generated text found!"
                     else:
