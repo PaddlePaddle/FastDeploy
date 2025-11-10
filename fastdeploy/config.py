@@ -823,6 +823,8 @@ class GraphOptimizationConfig:
         self.real_shape_to_captured_size: dict[int, int] = None
         """ Whether to use shared memory pool for multi capture_size """
         self.use_unique_memory_pool: bool = True
+        """ Whether to use cudagraph for draft model."""
+        self.draft_model_use_cudagraph: bool = False
 
         # CINN Config ...
         if args is not None:
@@ -1545,6 +1547,8 @@ class FDConfig:
             self.cache_config.max_encoder_cache = 0
 
         # Adjustment GraphOptConfig
+        if self.scheduler_config is not None and self.scheduler_config.splitwise_role == "prefill":
+            self.graph_opt_config.use_cudagraph = self.graph_opt_config.cudagraph_only_prefill
         if self.load_config is not None and self.load_config.dynamic_load_weight is True:
             self.graph_opt_config.graph_opt_level = 0
             logger.info(

@@ -200,9 +200,7 @@ class OpenAIServingChat:
 
         max_streaming_response_tokens = max(1, max_streaming_response_tokens)
 
-        enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
-        if enable_thinking is None:
-            enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
+        enable_thinking = self._get_thinking_status(request)
 
         include_stop_str_in_output = request.include_stop_str_in_output
 
@@ -461,9 +459,7 @@ class OpenAIServingChat:
         """
         created_time = int(time.time())
         num_choices = 1 if request.n is None else request.n
-        enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
-        if enable_thinking is None:
-            enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
+        enable_thinking = self._get_thinking_status(request)
 
         include_stop_str_in_output = request.include_stop_str_in_output
         try:
@@ -621,7 +617,7 @@ class OpenAIServingChat:
 
         if output is not None and output.get("metrics") and output["metrics"].get("request_start_time"):
             work_process_metrics.e2e_request_latency.observe(
-                time.time() - output.get("metrics").get("request_start_time")
+                time.time() - data.get("metrics").get("request_start_time")
             )
         message = ChatMessage(
             role="assistant",
@@ -655,7 +651,7 @@ class OpenAIServingChat:
                 finish_reason = "tool_calls"
         else:
             finish_reason = "length"
-        if output.get("error_msg") is not None and "Recover" in output["error_msg"]:
+        if data.get("error_msg") is not None and "Recover" in data["error_msg"]:
             finish_reason = "recover_stop"
 
         return ChatCompletionResponseChoice(
@@ -750,3 +746,20 @@ class OpenAIServingChat:
             error_msg = f"Error in _build_logprobs_response: {e}, {str(traceback.format_exc())}"
             api_server_logger.error(error_msg)
             return None
+
+    def _get_thinking_status(self, request: ChatCompletionRequest) -> bool:
+        """
+        Get the thinking status from the request.
+        """
+        enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
+        if enable_thinking is None:
+            enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
+        options = request.chat_template_kwargs.get("options") if request.chat_template_kwargs else None
+        if options:
+            thinking_mode = options.get("thinking_mode")
+            if thinking_mode:
+                if thinking_mode == "close" or thinking_mode == "false":
+                    enable_thinking = False
+                else:
+                    enable_thinking = True
+        return enable_thinking

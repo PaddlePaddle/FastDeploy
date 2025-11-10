@@ -202,23 +202,28 @@ def xpu_post_process(
         max_think_lens = share_inputs["max_think_lens"]
         step_idx = share_inputs["step_idx"]
         limit_think_status = share_inputs["limit_think_status"]
+        stop_flags = share_inputs["stop_flags"]
+        eos_token_ids = share_inputs["eos_token_id"]
         if limit_strategy == "</think>":
-            # for ernie4_5_vl
+            # for ernie-45-vl
             limit_thinking_content_length_v1(
                 sampled_token_ids,
                 max_think_lens,
                 step_idx,
                 limit_think_status,
+                stop_flags,
+                eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
                 think_end_id,
             )
         elif limit_strategy == "\n</think>\n\n":
-            # for ernie_x1
+            # for ernie-x1
             assert line_break_id > 0
             limit_thinking_content_length_v2(
                 sampled_token_ids,
                 max_think_lens,
                 step_idx,
                 limit_think_status,
+                stop_flags,
                 think_end_id,
                 line_break_id,
             )
@@ -847,12 +852,9 @@ class XPUModelRunner(ModelRunnerBase):
             head_dim = self.model_config.head_dim
             if "paddleocr" in self.model_config.model_type:  # neox style = True
                 rope_head_dim = head_dim
+                self.share_inputs["pos_emb_type"] = "NEOX"
             else:  # neox style = False
                 rope_head_dim = head_dim // 2
-
-            if rope_head_dim == self.model_config.head_dim:
-                self.share_inputs["pos_emb_type"] = "NORMAL"
-            else:
                 self.share_inputs["pos_emb_type"] = "HALF_HEAD_DIM"
 
             self.share_inputs["rope_emb"] = paddle.full(

@@ -131,12 +131,13 @@ def get_sm_version(archs):
     Get sm version of paddle.
     """
     arch_set = set(archs)
-    try:
-        prop = paddle.device.cuda.get_device_properties()
-        cc = prop.major * 10 + prop.minor
-        arch_set.add(cc)
-    except ValueError:
-        pass
+    if len(arch_set) == 0:
+        try:
+            prop = paddle.device.cuda.get_device_properties()
+            cc = prop.major * 10 + prop.minor
+            arch_set.add(cc)
+        except ValueError:
+            pass
     return list(arch_set)
 
 
@@ -304,6 +305,8 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/merge_prefill_decode_output.cu",
         "gpu_ops/limit_thinking_content_length_v1.cu",
         "gpu_ops/limit_thinking_content_length_v2.cu",
+        "gpu_ops/fused_neox_rope_embedding.cu",
+        "gpu_ops/gelu_tanh.cu",
     ]
 
     # pd_disaggregation
