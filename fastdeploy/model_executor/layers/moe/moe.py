@@ -28,7 +28,7 @@ from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 
 try:
-    from fastdeploy.model_executor.ops.gpu import noaux_tc
+    from fastdeploy.model_executor.ops.gpu import noaux_tc, noaux_tc_redundant
 except:
     logger.warning("import noaux_tc Failed!")
 
@@ -66,6 +66,10 @@ def get_moe_scores(
     top_k,
     routed_scaling_factor,
     e_score_correction_bias,
+    expert_id_to_ep_rank_array=None,
+    expert_in_rank_num_list=None,
+    tokens_per_expert_stats_list=None,
+    redundant_ep_rank_num_plus_one=1,
 ) -> paddle.Tensor:
     """
     compute moe scores using e_score_correction_bias.
@@ -73,14 +77,28 @@ def get_moe_scores(
     scores = paddle.nn.functional.sigmoid(gating_output)
     assert e_score_correction_bias is not None, "e_score_correction_bias is none!"
     scores_with_bias = scores + e_score_correction_bias
-    scores, topk_values, topk_idx = noaux_tc(
-        scores,
-        scores_with_bias,
-        n_group if n_group > 0 else 1,
-        topk_group if topk_group > 0 else 1,
-        top_k,
-        routed_scaling_factor,
-    )
+    if expert_id_to_ep_rank_array is None:
+        scores, topk_values, topk_idx = noaux_tc(
+            scores,
+            scores_with_bias,
+            n_group if n_group > 0 else 1,
+            topk_group if topk_group > 0 else 1,
+            top_k,
+            routed_scaling_factor,
+        )
+    else:
+        scores, topk_values, topk_idx, _ = noaux_tc_redundant(
+            scores,
+            scores_with_bias,
+            expert_id_to_ep_rank_array,
+            expert_in_rank_num_list,
+            tokens_per_expert_stats_list,
+            n_group if n_group > 0 else 1,
+            topk_group if topk_group > 0 else 1,
+            top_k,
+            routed_scaling_factor,
+            redundant_ep_rank_num_plus_one,
+        )
     return scores, topk_values, topk_idx
 
 
