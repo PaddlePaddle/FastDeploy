@@ -619,6 +619,7 @@ async def benchmark(
 
 
 def benchmark_metrics(
+    max_concurrency: int,
     benchmark_duration: float,
     result_file: str,
     selected_percentiles: list[float],
@@ -627,6 +628,7 @@ def benchmark_metrics(
 ):
     """Benchmark metrics statistics，generate benchmark result"""
     outputs = []
+    first_case_occured = False
     with open(result_file) as f:
         for line in f.readlines():
             if "RequestFuncOutput" in line:
@@ -635,7 +637,14 @@ def benchmark_metrics(
                 para_str = line[start : end + 1]
 
                 output = eval(para_str)
+                if output.no == 1 and first_case_occured is True:
+                    continue
+
+                if output.no == 1 and first_case_occured is False:
+                    first_case_occured = True
+
                 outputs.append(output)
+
 
     input_requests = [[]] * len(outputs)
     goodput_config_dict = check_goodput_args(args)
@@ -649,11 +658,14 @@ def benchmark_metrics(
     )
 
     print("{s:{c}^{n}}".format(s=" Serving Benchmark Result ", n=50, c="="))
+    print(f"Maximum request concurrency: {max_concurrency}")
+
+    
     print("{:<40} {:<10}".format("Successful requests:", metrics.completed))
     print("{:<40} {:<10.2f}".format("Benchmark duration (s):", benchmark_duration))
     print("{:<40} {:<10}".format("Total input tokens:", metrics.total_input))
     print("{:<40} {:<10}".format("Total generated tokens:", metrics.total_output))
-    print("{:<40} {:<10.2f}".format("Request throughput (req/s):", metrics.request_throughput))
+    print("{:<40} {:<10.3f}".format("Request throughput (req/s):", metrics.request_throughput))
     if goodput_config_dict:
         print("{:<40} {:<10.2f}".format("Request goodput (req/s):", metrics.request_goodput))
     print("{:<40} {:<10.2f}".format("Output token throughput (tok/s):", metrics.output_throughput))
@@ -669,11 +681,13 @@ def benchmark_metrics(
         "output_throughput": metrics.output_throughput,
         "total_token_throughput": metrics.total_token_throughput,
         "input_lens": [output.prompt_len for output in outputs],
-        "output_lens": actual_output_lens,
+        "infer_input_lens": [output.prompt_tokens for output in outputs],
+        "output_lens": [output.output_tokens for output in outputs],
         "ttfts": [output.ttft for output in outputs],
         "itls": [output.itl for output in outputs],
         "input_texts": ["" for input in input_requests],
         "generated_texts": [output.generated_text for output in outputs],
+        "reasoning_contents": [output.reasoning_content for output in outputs],
         "errors": [output.error for output in outputs],
     }
 
@@ -751,7 +765,7 @@ def benchmark_metrics(
     process_one_metric("s_itl", "S_ITL", "Infer Inter-token Latency")
     process_one_metric("e2el", "E2EL", "End-to-end Latency")
     process_one_metric("s_e2el", "S_E2EL", "Infer End-to-end Latency")
-    process_one_length("input_len", "Input Length", "Input Length")
+    process_one_length("input_len", "Cached Tokens", "Cached Tokens")
     process_one_length("s_input_len", "Input Length", "Infer Input Length")
     process_one_length("output_len", "Output Length", "Output Length")
 
@@ -928,6 +942,7 @@ def main(args: argparse.Namespace):
     )
 
     # benchmark_result = benchmark_metrics(
+    # max_concurrency=args.max_concurrency,
     #     benchmark_duration=3600,
     #     result_file="your result file",
     #     selected_percentile_metrics=args.percentile_metrics.split(","),
