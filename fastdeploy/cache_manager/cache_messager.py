@@ -622,7 +622,9 @@ class CacheMessagerV1:
                                     target_id = int(task["rdma_ports"][self.rank])
                                     if "error" in task["status"]:
                                         continue
-                                    logger.debug("rdma, start connect decode")
+
+                                    # TODO: use is connected to check if the connection is still alive
+                                    logger.debug(f"rdma, start connect decode, {target_ip}:{target_id}")
                                     status = self.messager[current_transfer_protocol].connect(target_ip, target_id)
                                     if status:
                                         logger.info(f"connect to {target_ip}:{target_id} success")
