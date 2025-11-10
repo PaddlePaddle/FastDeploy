@@ -125,15 +125,15 @@ def check_service_health(base_url: str, timeout: int = 3) -> bool:
         return False
 
 
-def get_registered_number(router_url) -> list:
+def get_registered_number(router_url) -> dict:
     """
-    Get the number of registered models in the router.
+    Get the registered model counts by type from the router.
 
     Args:
         router_url (str): The base URL of the router, e.g. "http://localhost:8080".
 
     Returns:
-        int: The number of registered models.
+        dict: A dictionary containing registered model counts with keys "mixed", "prefill", and "decode".
     """
     if not router_url.startswith("http"):
         router_url = f"http://{router_url}"
