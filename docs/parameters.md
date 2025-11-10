@@ -58,6 +58,7 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```load_choices```       | `str`      | By default, the "default" loader is used for weight loading. To load Torch weights or enable weight acceleration, "default_v1" must be used.|
 | ```max_encoder_cache```   | `int` | Maximum number of tokens in the encoder cache (use 0 to disable). |
 | ```max_processor_cache```  | `int` | Maximum number of bytes(in GiB) in the processor cache (use 0 to disable). |
+| ```api_key```  |`dict[str]`| Validate API keys in the service request headers, supporting multiple key inputs|
 
 ## 1. Relationship between KVCache allocation, ```num_gpu_blocks_override``` and ```block_size```?
 
@@ -82,3 +83,41 @@ In actual inference, it's difficult for users to know how to properly configure 
 When `enable_chunked_prefill` is enabled, the service processes long input sequences through dynamic chunking, significantly improving GPU resource utilization. In this mode, the original `max_num_batched_tokens` parameter no longer constrains the batch token count in prefill phase (limiting single prefill token count), thus introducing `max_num_partial_prefills` parameter specifically to limit concurrently processed partial batches.
 
 To optimize scheduling priority for short requests, new `max_long_partial_prefills` and `long_prefill_token_threshold` parameter combination is added. The former limits the number of long requests in single prefill batch, the latter defines the token threshold for long requests. The system will prioritize batch space for short requests, thereby reducing short request latency in mixed workload scenarios while maintaining stable throughput.
+
+## 4. ```api_key``` parameter description
+
+Multi-value configuration method in startup.  That takes precedence over environment variable configuration.
+```bash
+  --api-key "key1"
+  --api-key "key2"
+```
+Environment variable multi-value configuration method (use `,` separation):
+```bash
+  export FD_API_KEY="key1,key2"
+```
+
+When making requests using Curl, add the validation header. Any matching `api_key` will pass.
+
+```bash
+curl -X POST "http://0.0.0.0:8265/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer key1" \
+-d '{
+  "messages": [
+    {"role": "user", "content":"你好"}
+  ],
+  "stream": false,
+  "return_token_ids": true,
+  "chat_template_kwargs": {"enable_thinking": true}
+}'
+```
+The system will validate `key1` after parsing `Authorization: Bearer`.
+
+When using the openai SDK for requests, pass the `api_key` parameter:
+
+```python
+client = OpenAI(
+    api_key="your-api-key-here",
+    base_url="http://localhost:8000/v1"
+)
+```
