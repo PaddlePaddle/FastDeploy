@@ -56,6 +56,7 @@
 | ```load_choices```       | `str`      | 默认使用"default" loader进行权重加载，加载torch权重/权重加速需开启 "default_v1"|
 | ```max_encoder_cache```   | `int` | 编码器缓存的最大token数（使用0表示禁用）。 |
 | ```max_processor_cache```  | `int` | 处理器缓存的最大字节数（以GiB为单位，使用0表示禁用）。 |
+| ```api_key```  |`dict[str]`| 校验服务请求头中的API密钥，支持传入多个密钥；与环境变量`FD_API_KEY`中的值效果相同，且优先级高于环境变量配置|
 
 ## 1. KVCache分配与```num_gpu_blocks_override```、```block_size```的关系？
 
@@ -79,3 +80,39 @@ FastDeploy在推理过程中，显存被```模型权重```、```预分配KVCache
 当启用 `enable_chunked_prefill` 时，服务通过动态分块处理长输入序列，显著提升GPU资源利用率。在此模式下，原有 `max_num_batched_tokens` 参数不再约束预填充阶段的批处理token数量（限制单次prefill的token数量），因此引入 `max_num_partial_prefills` 参数，专门用于限制同时处理的分块批次数。
 
 为优化短请求的调度优先级，新增 `max_long_partial_prefills` 与 `long_prefill_token_threshold` 参数组合。前者限制单个预填充批次中的长请求数量，后者定义长请求的token阈值。系统会优先保障短请求的批处理空间，从而在混合负载场景下降低短请求延迟，同时保持整体吞吐稳定。
+
+## 4. ```api_key``` 参数使用说明
+
+启动参数多值配置方式， 优先级高于环境变量中配置。
+```bash
+  --api-key "key1"
+  --api-key "key2"
+```
+环境变量多值配置方式，使用逗号分隔
+```bash
+  export FD_API_KEY="key1,key2"
+```
+
+使用 Curl 命令请求时，增加 API_KEY头信息，进行请求合法性校验。匹配任一```api_key```即可。
+```bash
+curl -X POST "http://0.0.0.0:8265/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer key1" \
+-d '{
+  "messages": [
+    {"role": "user", "content":"你好"}
+  ],
+  "stream": false,
+  "return_token_ids": true,
+  "chat_template_kwargs": {"enable_thinking": true}
+}'
+```
+解析`Authorization: Bearer` 后 `key1`进行校验。
+
+使用 openai sdk 进行请求时，需要传`api_key`参数。
+```python
+client = OpenAI(
+    api_key="your-api-key-here",
+    base_url="http://localhost:8000/v1"
+)
+```
