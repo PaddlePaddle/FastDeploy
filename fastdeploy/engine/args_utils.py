@@ -257,6 +257,8 @@ class EngineArgs:
     #
     # In this case, ensure the input to the experts is sequence parallel
     # to avoid the excess work.
+    #
+    # This optimization is enabled by default, and can be disabled by using this flag.
     """
 
     engine_worker_queue_port: str = "0"

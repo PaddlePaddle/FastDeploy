@@ -609,12 +609,11 @@ class FusedMoE(nn.Layer):
 
         """
         token_num = x.shape[0]
-        tp_size = self.fd_config.parallel_config.tensor_parallel_size
         if (
             self.ep_size > 1
-            and tp_size > 1
+            and self.tp_size > 1
             and (not self.fd_config.parallel_config.use_sequence_parallel_moe)
-            and token_num >= tp_size
+            and token_num >= self.tp_size
         ):
             out = self.forward_split_allgather(x, gate)
         else:
