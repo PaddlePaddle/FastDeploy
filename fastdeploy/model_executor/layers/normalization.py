@@ -100,27 +100,19 @@ class RMSNorm(nn.Layer):
         self.begin_norm_axis: int = begin_norm_axis
 
         self.layer_id = layer_id
-        parallel_config = self.fd_config.parallel_config
-        self.ep_size = parallel_config.expert_parallel_size
-        self.tp_size = parallel_config.tensor_parallel_size
-        self.tp_rank = parallel_config.tensor_parallel_rank
-        self.tp_group = parallel_config.tp_group
-        self.ep_tp_strategy = parallel_config.ep_tp_strategy
-        self.moe_layer_start_index = self.fd_config.model_config.moe_layer_start_index
+        self.ep_size = self.fd_config.parallel_config.expert_parallel_size
+        self.tp_size = self.fd_config.parallel_config.tensor_parallel_size
+        self.tp_rank = self.fd_config.parallel_config.tensor_parallel_rank
+        self.tp_group = self.fd_config.parallel_config.tp_group
         is_input_norm = prefix.endswith(".input_layernorm")
         is_last_norm = prefix.endswith(".norm")
         self.split_x = (
-            self.ep_size > 1
-            and self.tp_size > 1
-            and self.ep_tp_strategy == "all_to_all"
-            and self.layer_id == self.moe_layer_start_index
+            self.fd_config.parallel_config.use_sequence_parallel_moe
+            and self.layer_id == self.fd_config.model_config.moe_layer_start_index
             and is_input_norm
         )
-        self.allgather_out = (
-            self.ep_size > 1
-            and self.tp_size > 1
-            and self.ep_tp_strategy == "all_to_all"
-            and ((self.layer_id > self.moe_layer_start_index and is_input_norm) or is_last_norm)
+        self.allgather_out = self.fd_config.parallel_config.use_sequence_parallel_moe and (
+            (self.layer_id > self.fd_config.model_config.moe_layer_start_index and is_input_norm) or is_last_norm
         )
 
         self.init_weight()

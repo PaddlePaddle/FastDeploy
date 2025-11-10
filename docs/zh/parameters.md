@@ -38,6 +38,8 @@
 | ```use_cudagraph```                | `bool`      | __[已废弃]__ 2.3版本开始 CUDAGraph 默认开启，详细说明参考 [graph_optimization.md](./features/graph_optimization.md) |
 | ```graph_optimization_config```    | `dict[str]`       | 可以配置计算图优化相关的参数，默认值为'{"use_cudagraph":true, "graph_opt_level":0}'，详细说明参考 [graph_optimization.md](./features/graph_optimization.md)|
 | ```disable_custom_all_reduce```     | `bool`      | 关闭Custom all-reduce，默认False |
+| ```use_internode_ll_two_stage``` | `bool` | 是否在DeepEP MoE中使用两阶段通信, default: False |
+| ```disable_sequence_parallel_moe``` | `bool` | 禁止在TP+EP中使用序列并行优化, default: False |
 | ```splitwise_role```               | `str`       | 是否开启splitwise推理，默认值mixed， 支持参数为["mixed", "decode", "prefill"] |
 | ```innode_prefill_ports```         | `str`       | prefill 实例内部引擎启动端口 （仅单机PD分离需要），默认值None |
 | ```guided_decoding_backend```      | `str`       | 指定要使用的guided decoding后端，支持 `auto`、`xgrammar`、`off`, 默认为 `off` |
