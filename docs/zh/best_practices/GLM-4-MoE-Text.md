@@ -96,8 +96,5 @@ CUDAGraph 是 NVIDIA 提供的一项 GPU 计算加速技术，通过将 CUDA 操
 export FD_SAMPLING_CLASS=rejection
 ```
 
-#### 2.2.6 MTP (Multi-Token Prediction)
-暂未支持
-
 ## 三、常见问题FAQ
 如果您在使用过程中遇到问题，可以在[FAQ](./FAQ.md)中查阅。

@@ -94,12 +94,5 @@ Add the following environment variables before starting
 export FD_SAMPLING_CLASS=rejection
 ```
 
-#### 2.2.6 MTP (Multi-Token Prediction)
-**Idea:**
-By predicting multiple tokens at once, the number of decoding steps is reduced to significantly speed up the generation speed, while maintaining the generation quality through certain strategies. For details, please refer to [Speculative Decoding](../features/speculative_decoding.md)。
-
-**How to enable:**
-Not supported currently
-
 ## FAQ
 If you encounter any problems during use, you can refer to [FAQ](./FAQ.md).
