@@ -214,7 +214,7 @@ class RMSNorm(nn.Layer):
         if current_platform.is_gcu():
             if residual_input is None:
                 norm_out = rms_norm(x, self.weight, self.eps)
-                return norm_out.astype(x_dtype)
+                return norm_out.astype(x_dtype), residual_out
             norm_out = self.norm_func(x, residual_input, self.weight, self.eps)
         else:
             norm_out = self.norm_func(
