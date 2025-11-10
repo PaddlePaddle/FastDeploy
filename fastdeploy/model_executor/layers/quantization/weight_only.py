@@ -38,7 +38,11 @@ if current_platform.is_xpu():
 else:
     from paddle.nn.quant import weight_only_linear
 
-from fastdeploy.model_executor.layers.quantization.ops.machete_mm import _ENABLE_MACHETE
+from fastdeploy.model_executor.layers.quantization.ops.machete_mm import (
+    _ENABLE_MACHETE,
+    check_machete_supports_shape,
+    query_machete_supported_group_size,
+)
 
 from ..moe import FusedMoE
 from ..utils import get_tensor
@@ -74,6 +78,7 @@ class WeightOnlyConfig(QuantConfigBase):
         self.quant_min_bound = 0
         self.quant_round_type = 0
         self.is_checkpoint_bf16 = is_checkpoint_bf16
+        self.group_size = -1
 
     def name(self) -> str:
         return "weight_only"
@@ -167,10 +172,10 @@ class WeightOnlyConfig(QuantConfigBase):
                     and envs.FD_USE_MACHETE == "1"
                     and not layer.is_quantized
                     and not layer.fd_config.load_config.dynamic_load_weight
-                    and layer.weight_shape[1]
-                    and layer.weight_shape[1] % 128 == 0
+                    and check_machete_supports_shape(layer.weight_shape[0], layer.weight_shape[1])
                 ):
-                    logger.info("Using Machete kernel for WeightOnlyLinearMethod")
+                    self.group_size = query_machete_supported_group_size(layer.weight_shape[0])
+                    logger.info(f"Using Machete kernel for WeightOnlyLinearMethod, group size: {self.group_size}")
                     return MacheteWeightOnlyLinearMethod(self)
                 return GPUWeightOnlyLinearMethod(self)
 
@@ -252,8 +257,8 @@ class WeightOnlyLinearMethod(QuantMethodBase):
             )
         else:
             if isinstance(self, MacheteWeightOnlyLinearMethod):
-                # Using group scale for machete, group size is 128
-                weight_scale_shape = [(layer.weight_shape[0] + 127) // 128, layer.weight_shape[1]]
+                # Using group scale for machete
+                weight_scale_shape = [layer.weight_shape[0] // self.quant_config.group_size, layer.weight_shape[1]]
                 if self.quant_config.name() == "wint4":
                     layer.weight_shape[0] //= 8
                 else:
@@ -304,16 +309,13 @@ class WeightOnlyLinearMethod(QuantMethodBase):
         if not self.quant_config.is_checkpoint_bf16:
             return
         if isinstance(self, MacheteWeightOnlyLinearMethod):
-            from fastdeploy.model_executor.layers.quantization.ops import (
-                machete_quantize_and_pack,
-            )
 
-            # Using group scale for machete, group size is 128
+            # Using group scale for machete
             quanted_weight_tensor, weight_scale_tensor = machete_quantize_and_pack(
                 w=layer.weight,
                 atype=layer._dtype,
                 quant_type="uint4b8" if self.quant_config.name() == "wint4" else "uint8b128",
-                group_size=128,
+                group_size=self.quant_config.group_size,
             )
         else:
             quanted_weight_tensor, weight_scale_tensor = weight_quantize(
@@ -417,7 +419,7 @@ class MacheteWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             w=weight,
             atype=layer._dtype,
             quant_type="uint4b8" if self.quant_config.name() == "wint4" else "uint8b128",
-            group_size=128,
+            group_size=self.quant_config.group_size,
         )
         layer.weight.set_value(quanted_weight_tensor)
         layer.weight_scale.set_value(weight_scale_tensor.astype(paddle.get_default_dtype()))
@@ -430,7 +432,7 @@ class MacheteWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             w_prepack=layer.weight,
             w_g_s=layer.weight_scale,
             weight_dtype="uint4b8" if self.quant_config.name() == "wint4" else "uint8b128",
-            group_size=128,
+            group_size=self.quant_config.group_size,
         )
         if layer.with_bias:
             linear_out = paddle.add(linear_out, layer.bias)
