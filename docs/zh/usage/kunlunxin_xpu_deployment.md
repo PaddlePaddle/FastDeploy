@@ -104,7 +104,7 @@ OpenAI 协议的更多说明可参考文档 [OpenAI Chat Completion API](https:/
 基于 WINT8 精度和 32K 上下文部署 ERNIE-4.5-VL-28B-A3B-Paddle 模型到 单卡 P800 服务器
 
 ```bash
-export XPU_VISIBLE_DEVICES="0" # Specify any card
+export XPU_VISIBLE_DEVICES="0" # 指定任意一张卡
 python -m fastdeploy.entrypoints.openai.api_server \
 --model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Paddle \
 --port 8188 \
@@ -227,6 +227,81 @@ response = client.chat.completions.create(
     stream=True,
     top_p=0,
     metadata={"enable_thinking": False},
+)
+
+def get_str(content_raw):
+    content_str = str(content_raw) if content_raw is not None else ''
+    return content_str
+
+for chunk in response:
+    if chunk.choices[0].delta is not None and chunk.choices[0].delta.role != 'assistant':
+        reasoning_content = get_str(chunk.choices[0].delta.reasoning_content)
+        content = get_str(chunk.choices[0].delta.content)
+        print(reasoning_content + content, end='', flush=True)
+print('\n')
+```
+
+### 基于ERNIE-4.5-VL-28B-A3B-Thinking模型部署在线服务
+
+#### 启动服务
+
+基于 WINT8 精度和 128K 上下文部署 ERNIE-4.5-VL-28B-A3B-Thinking 模型到 单卡 P800 服务器
+
+```bash
+export XPU_VISIBLE_DEVICES="0"# 指定任意一张卡
+python -m fastdeploy.entrypoints.openai.api_server \
+--model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Thinking \
+--port 8188 \
+--tensor-parallel-size 1 \
+--quantization "wint8" \
+--max-model-len 131072 \
+--max-num-seqs 32 \
+--engine-worker-queue-port 8189 \
+--metrics-port 8190 \
+--cache-queue-port 8191 \
+--reasoning-parser ernie-45-vl-thinking \
+--tool-call-parser ernie-45-vl-thinking \
+--mm-processor-kwargs '{"image_max_pixels": 12845056 }'
+--load-choices "default_v1"
+```
+
+#### 请求服务
+
+```bash
+curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": [
+              {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg", "detail": "high"}},
+              {"type": "text", "text": "请描述图片内容"}
+            ]}
+    ],
+    "metadata": {"enable_thinking": true}
+}'
+```
+
+```python
+import openai
+
+ip = "0.0.0.0"
+service_http_port = "8188"
+client = openai.Client(base_url=f"http://{ip}:{service_http_port}/v1", api_key="EMPTY_API_KEY")
+
+response = client.chat.completions.create(
+    model="default",
+    messages=[
+        {"role": "user", "content": [
+              {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg", "detail": "high"}},
+              {"type": "text", "text": "请描述图片内容"}
+            ]
+        },
+    ],
+    temperature=0.0001,
+    max_tokens=10000,
+    stream=True,
+    top_p=0,
+    metadata={"enable_thinking": True},
 )
 
 def get_str(content_raw):
