@@ -252,6 +252,8 @@ class LLMEngine:
         request.llm_engine_recv_req_timestamp = time.time()
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
+            if sampling_params.temperature is not None and abs(sampling_params.temperature) < 1e-06:
+                sampling_params.temperature = 1e-06
             request.sampling_params = sampling_params
         request.preprocess_start_time = time.time()
         chat_template_kwargs = kwargs.get("chat_template_kwargs") or {}
@@ -707,7 +709,9 @@ class LLMEngine:
             for i in range(self.cfg.parallel_config.data_parallel_size):
                 request_queues_for_dp_ipc.append(multiprocessing.Queue())
             self.engine.scheduler.start(
-                self.cfg.node_rank * self.cfg.worker_num_per_node, request_queues_for_dp_ipc, result_queue_for_dp_ipc
+                self.cfg.node_rank * self.cfg.worker_num_per_node % self.cfg.worker_num_per_node,
+                request_queues_for_dp_ipc,
+                result_queue_for_dp_ipc,
             )
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
@@ -719,10 +723,14 @@ class LLMEngine:
                     1,
                     self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
                 ):
-                    address = (
-                        self.cfg.master_ip,
-                        int(self.cfg.parallel_config.engine_worker_queue_port[i]),
-                    )
+                    if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+                        address = (
+                            self.cfg.master_ip,
+                            int(self.cfg.parallel_config.engine_worker_queue_port[i]),
+                        )
+                    else:
+                        address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[i]}.sock"
+
                     llm_logger.info(f"dp start queue service {address}")
                     self.dp_engine_worker_queue_server.append(
                         EngineWorkerQueue(
