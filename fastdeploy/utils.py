@@ -824,7 +824,8 @@ def download_from_bos(bos_client, bos_links, timeout=1):
             response = bos_client.get_object_as_string(bucket_name, object_key)
             yield True, pickle.loads(response)
         except Exception as e:
-            return False, f"link {link} download error: {str(e)}"
+            yield False, f"link {link} download error: {str(e)}"
+            break
 
 
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")
