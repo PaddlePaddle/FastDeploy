@@ -271,6 +271,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             input_size=self.num_attention_heads * self.v_head_dim,
             output_size=self.hidden_size,
             with_bias=False,
+            layer_id=layer_id,
         )
 
         self.kv_b_proj_bmm = KVBatchLinear(
@@ -479,6 +480,7 @@ class DeepSeekV3DecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
+            layer_id=layer_id,
         )
 
         self.post_attention_layernorm = RMSNorm(
@@ -587,7 +589,7 @@ class DeepSeekV3Model(nn.Layer):
                 position_ids,
                 mask_encoder_batch,
             )
-        out = self.norm(hidden_states, residual)[0]
+        out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
         return out
 
