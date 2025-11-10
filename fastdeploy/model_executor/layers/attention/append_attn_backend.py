@@ -167,9 +167,16 @@ class AppendAttentionBackend(AttentionBackend):
         """
         Calculate kv cache shape
         """
-        key_cache_shape = value_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
+        key_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
+        value_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
-            key_cache_shape = value_cache_shape = [
+            key_cache_shape = [
+                max_num_blocks,
+                self.kv_num_heads,
+                self.block_size,
+                self.head_dim // 2,
+            ]
+            value_cache_shape = [
                 max_num_blocks,
                 self.kv_num_heads,
                 self.block_size,
