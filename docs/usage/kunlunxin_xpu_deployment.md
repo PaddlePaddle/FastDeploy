@@ -126,7 +126,7 @@ curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
   "messages": [
     {"role": "user", "content": [
               {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg", "detail": "high"}},
-              {"type": "text", "text": "请描述图片内容"}
+              {"type": "text", "text": "Please describe the content of the image"}
             ]}
     ],
     "metadata": {"enable_thinking": false}
@@ -145,7 +145,7 @@ response = client.chat.completions.create(
     messages=[
         {"role": "user", "content": [
               {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg", "detail": "high"}},
-              {"type": "text", "text": "请描述图片内容"}
+              {"type": "text", "text": "Please describe the content of the image"}
             ]
         },
     ],
@@ -271,7 +271,7 @@ curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
   "messages": [
     {"role": "user", "content": [
               {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg", "detail": "high"}},
-              {"type": "text", "text": "请描述图片内容"}
+              {"type": "text", "text": "Please describe the content of the image"}
             ]}
     ],
     "metadata": {"enable_thinking": true}
@@ -290,7 +290,7 @@ response = client.chat.completions.create(
     messages=[
         {"role": "user", "content": [
               {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg", "detail": "high"}},
-              {"type": "text", "text": "请描述图片内容"}
+              {"type": "text", "text": "Please describe the content of the image"}
             ]
         },
     ],
