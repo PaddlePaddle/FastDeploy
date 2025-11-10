@@ -83,7 +83,7 @@ for chunk in chat_response:
         print("\n")
 ```
 ## Tool Calling
-The reasoning content is also available when both tool calling and the reasoning parser are enabled. Additionally, tool calling only parses functions from the `content` field, not from the `reasoning_content`.   
+The reasoning content is also available when both tool calling and the reasoning parser are enabled. Additionally, tool calling only parses functions from the `content` field, not from the `reasoning_content`.
 
 Model request example:
 ```bash
