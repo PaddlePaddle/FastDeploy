@@ -52,7 +52,6 @@ from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG
 from fastdeploy.metrics.metrics import (
     EXCLUDE_LABELS,
-    cleanup_prometheus_files,
     get_filtered_metrics,
     main_process_metrics,
 )
@@ -476,8 +475,9 @@ def launch_metrics_server():
     if not is_port_available(args.host, args.metrics_port):
         raise Exception(f"The parameter `metrics_port`:{args.metrics_port} is already in use.")
 
-    prom_dir = cleanup_prometheus_files(True)
-    os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
+    # Move setting prometheus directory to fastdeploy/__init__.py
+    # prom_dir = cleanup_prometheus_files(True)
+    # os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
     metrics_server_thread = threading.Thread(target=run_metrics_server, daemon=True)
     metrics_server_thread.start()
     time.sleep(1)
