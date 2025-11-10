@@ -26,13 +26,16 @@ export KVCACHE_GDRCOPY_FLUSH_ENABLE=1
 unset http_proxy && unset https_proxy
 rm -rf log_*
 
+S1_PORT=52400
+S2_PORT=52500
+ROUTER_PORT=52600
+
 # start router
 export FD_LOG_DIR="log_router"
 mkdir -p ${FD_LOG_DIR}
 
-router_port=9000
 nohup python -m fastdeploy.router.launch \
-    --port ${router_port} \
+    --port ${ROUTER_PORT} \
     2>&1 >${FD_LOG_DIR}/nohup &
 sleep 1
 
@@ -43,16 +46,16 @@ mkdir -p ${FD_LOG_DIR}
 
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
-       --port 8100 \
-       --metrics-port 8101 \
-       --engine-worker-queue-port 8102 \
-       --cache-queue-port 8103 \
+       --port ${S1_PORT} \
+       --metrics-port $((S1_PORT + 1)) \
+       --engine-worker-queue-port $((S1_PORT + 2)) \
+       --cache-queue-port $((S1_PORT + 3)) \
        --max-model-len 32768 \
-       --router "0.0.0.0:${router_port}" \
+       --router "0.0.0.0:${ROUTER_PORT}" \
        2>&1 >${FD_LOG_DIR}/nohup &
 sleep 1
 
-# wait_for_health 8100
+wait_for_health ${S1_PORT}
 
 # start modelserver 1
 export CUDA_VISIBLE_DEVICES=1
@@ -61,21 +64,19 @@ mkdir -p ${FD_LOG_DIR}
 
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
-       --port 8200 \
-       --metrics-port 8201 \
-       --engine-worker-queue-port 8202 \
-       --cache-queue-port 8203 \
+       --port ${S2_PORT} \
+       --metrics-port $((S2_PORT + 1)) \
+       --engine-worker-queue-port $((S2_PORT + 2)) \
+       --cache-queue-port $((S2_PORT + 3)) \
        --max-model-len 32768 \
-       --router "0.0.0.0:${router_port}" \
+       --router "0.0.0.0:${ROUTER_PORT}" \
        2>&1 >${FD_LOG_DIR}/nohup &
 
-wait_for_health 8200
-
+wait_for_health ${S2_PORT}
 
 # send request
 sleep 10  # make sure server is registered to router
-port=9000
-curl -X POST "http://0.0.0.0:${port}/v1/chat/completions" \
+curl -X POST "http://0.0.0.0:${ROUTER_PORT}/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [

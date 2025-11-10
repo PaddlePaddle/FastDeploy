@@ -38,10 +38,14 @@ fi
 unset http_proxy && unset https_proxy
 rm -rf log_*
 
+P_PORT=52400
+D_PORT=52500
+REDIS_PORT=56388
+
 # start redis
-if ! redis-cli ping &>/dev/null; then
+if ! redis-cli -p ${REDIS_PORT} ping &>/dev/null; then
     echo "Redis is not running. Starting redis-server..."
-    redis-server --daemonize yes
+    redis-server --daemonize yes --port ${REDIS_PORT}
     sleep 1
 else
     echo "Redis is already running."
@@ -55,22 +59,23 @@ mkdir -p ${FD_LOG_DIR}
 
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
-       --port 8100 \
-       --metrics-port 8101 \
-       --engine-worker-queue-port 8102 \
-       --cache-queue-port 8103 \
+       --port ${P_PORT} \
+       --metrics-port $((P_PORT + 1)) \
+       --engine-worker-queue-port $((P_PORT + 2)) \
+       --cache-queue-port $((P_PORT + 3)) \
        --max-model-len 32768 \
        --num-gpu-blocks-override 1000 \
        --splitwise-role "prefill" \
        --cache-transfer-protocol "rdma" \
-       --rdma-comm-ports 8104 \
-       --pd-comm-port 8105 \
+       --rdma-comm-ports $((P_PORT + 4)) \
+       --pd-comm-port $((P_PORT + 5)) \
        --scheduler-name "splitwise" \
        --scheduler-host "127.0.0.1" \
-       --scheduler-port 6379 \
+       --scheduler-port ${REDIS_PORT} \
        --scheduler-ttl 9000 \
        2>&1 >${FD_LOG_DIR}/nohup &
-# wait_for_health 8100
+
+wait_for_health ${P_PORT}
 
 # start decode
 export CUDA_VISIBLE_DEVICES=1
@@ -79,27 +84,27 @@ mkdir -p ${FD_LOG_DIR}
 
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
-       --port 9000 \
-       --metrics-port 9001 \
-       --engine-worker-queue-port 9002 \
-       --cache-queue-port 9003 \
+       --port ${D_PORT} \
+       --metrics-port $((D_PORT + 1)) \
+       --engine-worker-queue-port $((D_PORT + 2)) \
+       --cache-queue-port $((D_PORT + 3)) \
        --max-model-len 32768 \
        --splitwise-role "decode" \
        --cache-transfer-protocol "rdma" \
-       --rdma-comm-ports 9004 \
-       --pd-comm-port 9005 \
+       --rdma-comm-ports $((D_PORT + 4)) \
+       --pd-comm-port $((D_PORT + 5)) \
        --scheduler-name "splitwise" \
        --scheduler-host "127.0.0.1" \
-       --scheduler-port 6379 \
+       --scheduler-port ${REDIS_PORT} \
        --scheduler-ttl 9000 \
        2>&1 >${FD_LOG_DIR}/nohup &
-wait_for_health 9000
+
+wait_for_health ${D_PORT}
 
 
 # send request
 sleep 10  # make sure server is registered to router
-port=9000
-curl -X POST "http://0.0.0.0:${port}/v1/chat/completions" \
+curl -X POST "http://0.0.0.0:${D_PORT}/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [

@@ -38,13 +38,16 @@ fi
 unset http_proxy && unset https_proxy
 rm -rf log_*
 
+P_PORT=52400
+D_PORT=52500
+ROUTER_PORT=52600
+
 # start router
 export FD_LOG_DIR="log_router"
 mkdir -p ${FD_LOG_DIR}
 
-router_port=9000
 nohup python -m fastdeploy.router.launch \
-    --port ${router_port} \
+    --port ${ROUTER_PORT} \
     --splitwise \
     2>&1 >${FD_LOG_DIR}/nohup &
 sleep 1
@@ -56,20 +59,20 @@ mkdir -p ${FD_LOG_DIR}
 
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
-       --port 8100 \
-       --metrics-port 8101 \
-       --engine-worker-queue-port 8102 \
-       --cache-queue-port 8103 \
+       --port "${P_PORT}" \
+       --metrics-port "$((P_PORT + 1))" \
+       --engine-worker-queue-port "$((P_PORT + 2))" \
+       --cache-queue-port "$((P_PORT + 3))" \
        --max-model-len 32768 \
        --splitwise-role "prefill" \
        --cache-transfer-protocol "rdma" \
-       --rdma-comm-ports 8104 \
-       --pd-comm-port 8105 \
+       --rdma-comm-ports "$((P_PORT + 4))" \
+       --pd-comm-port "$((P_PORT + 5))" \
        --num-gpu-blocks-override 2000 \
-       --router "0.0.0.0:${router_port}" \
+       --router "0.0.0.0:${ROUTER_PORT}" \
        2>&1 >${FD_LOG_DIR}/nohup &
 
-# wait_for_health 8100
+wait_for_health ${P_PORT}
 
 # start decode
 export CUDA_VISIBLE_DEVICES=1
@@ -78,24 +81,23 @@ mkdir -p ${FD_LOG_DIR}
 
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
-       --port 8200 \
-       --metrics-port 8201 \
-       --engine-worker-queue-port 8202 \
-       --cache-queue-port 8203 \
+       --port "${D_PORT}" \
+       --metrics-port "$((D_PORT + 2))" \
+       --engine-worker-queue-port "$((D_PORT + 3))" \
+       --cache-queue-port "$((D_PORT + 1))" \
        --max-model-len 32768 \
        --splitwise-role "decode" \
        --cache-transfer-protocol "rdma" \
-       --rdma-comm-ports 8204 \
-       --pd-comm-port 8205 \
-       --router "0.0.0.0:${router_port}" \
+       --rdma-comm-ports "$((D_PORT + 4))" \
+       --pd-comm-port "$((D_PORT + 5))" \
+       --router "0.0.0.0:${ROUTER_PORT}" \
        2>&1 >${FD_LOG_DIR}/nohup &
 
-wait_for_health 8200
+wait_for_health ${D_PORT}
 
 # send request
 sleep 10  # make sure server is registered to router
-port=9000
-curl -X POST "http://0.0.0.0:${port}/v1/chat/completions" \
+curl -X POST "http://0.0.0.0:${ROUTER_PORT}/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [
