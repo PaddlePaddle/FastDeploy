@@ -104,17 +104,17 @@ Deploy the ERNIE-4.5-VL-28B-A3B-Paddle model with WINT8 precision and 32K contex
 ```bash
 export XPU_VISIBLE_DEVICES="0" # Specify any card
 python -m fastdeploy.entrypoints.openai.api_server \
---model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Paddle \
---port 8188  \
---tensor-parallel-size 1 \
---quantization "wint8" \
---max-model-len 32768 \
---max-num-seqs 10 \
---enable-mm \
---mm-processor-kwargs '{"video_max_frames": 30}' \
---limit-mm-per-prompt '{"image": 10, "video": 3}' \
---reasoning-parser ernie-45-vl \
---load-choices "default"
+    --model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Paddle \
+    --port 8188  \
+    --tensor-parallel-size 1 \
+    --quantization "wint8" \
+    --max-model-len 32768 \
+    --max-num-seqs 10 \
+    --enable-mm \
+    --mm-processor-kwargs '{"video_max_frames": 30}' \
+    --limit-mm-per-prompt '{"image": 10, "video": 3}' \
+    --reasoning-parser ernie-45-vl \
+    --load-choices "default"
 ```
 
 #### Send requests
@@ -258,7 +258,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 --cache-queue-port 8191 \
 --reasoning-parser ernie-45-vl-thinking \
 --tool-call-parser ernie-45-vl-thinking \
---mm-processor-kwargs '{"image_max_pixels": 12845056 }'
+--mm-processor-kwargs '{"image_max_pixels": 12845056 }' \
 --load-choices "default_v1"
 ```
 
