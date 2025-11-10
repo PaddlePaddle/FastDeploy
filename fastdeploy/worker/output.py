@@ -44,14 +44,6 @@ class LogprobsLists(NamedTuple):
     # [num_reqs]
     sampled_token_ranks: list[int]
 
-    def slice(self, start: int, end: int):
-        """slice"""
-        return LogprobsLists(
-            self.logprob_token_ids[start:end],
-            self.logprobs[start:end],
-            self.sampled_token_ranks[start:end],
-        )
-
     def slice_columns(self, start: int, end: int):
         """
         Slice columns (per-row top-k logprobs and token IDs).
