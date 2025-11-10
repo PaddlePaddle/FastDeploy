@@ -130,7 +130,9 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
                 dtype="float32",
                 is_bias=False,
             )
-            extra_weight_attrs["output_dim"] = not extra_weight_attrs["output_dim"]
+            extra_weight_attrs["output_dim"] = (
+                not extra_weight_attrs["output_dim"] if extra_weight_attrs["output_dim"] is not None else None
+            )
 
             extra_weight_attrs["weight_need_transpose"] = not extra_weight_attrs.get("model_format") == "torch"
             set_weight_attrs(

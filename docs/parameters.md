@@ -40,6 +40,8 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```use_cudagraph```                | `bool`      | __[DEPRECATED]__ CUDAGraph is enabled by default since version 2.3. It is recommended to read [graph_optimization.md](./features/graph_optimization.md) carefully before opening. |
 | ```graph_optimization_config```    | `dict[str]`       | Can configure parameters related to calculation graph optimization, the default value is'{"use_cudagraph":true, "graph_opt_level":0}'，Detailed description reference [graph_optimization.md](./features/graph_optimization.md)|
 | ```disable_custom_all_reduce``` | `bool` | Disable Custom all-reduce, default: False |
+| ```use_internode_ll_two_stage``` | `bool` | Use two stage communication in deepep moe, default: False |
+| ```disable_sequence_parallel_moe``` | `bool` | Disable sequence parallel moe, default: False |
 | ```splitwise_role``` | `str` | Whether to enable splitwise inference, default value: mixed, supported parameters: ["mixed", "decode", "prefill"] |
 | ```innode_prefill_ports``` | `str` | Internal engine startup ports for prefill instances (only required for single-machine PD separation), default: None |
 | ```guided_decoding_backend``` | `str` | Specify the guided decoding backend to use, supports `auto`, `xgrammar`, `off`, default: `off` |

@@ -240,12 +240,25 @@ class EngineArgs:
 
     disable_custom_all_reduce: bool = False
     """
-    Flag to enable the custom all-reduce kernel.
+    Flag to disable the custom all-reduce kernel.
     """
 
     use_internode_ll_two_stage: bool = False
     """
     Flag to use the internode_ll_two_stage kernel.
+    """
+
+    disable_sequence_parallel_moe: bool = False
+    """
+    # The all_reduce at the end of attention (during o_proj) means that
+    # inputs are replicated across each rank of the tensor parallel group.
+    # If using expert-parallelism with DeepEP All2All ops, replicated
+    # tokens results in useless duplicate computation and communication.
+    #
+    # In this case, ensure the input to the experts is sequence parallel
+    # to avoid the excess work.
+    #
+    # This optimization is enabled by default, and can be disabled by using this flag.
     """
 
     engine_worker_queue_port: str = "0"
@@ -765,6 +778,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.use_internode_ll_two_stage,
             help="Flag to use the internode_ll_two_stage kernel.",
+        )
+        parallel_group.add_argument(
+            "--disable-sequence-parallel-moe",
+            action="store_true",
+            default=EngineArgs.disable_sequence_parallel_moe,
+            help="Flag to disable disable the sequence parallel moe.",
         )
         parallel_group.add_argument(
             "--max-num-seqs",

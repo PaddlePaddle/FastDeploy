@@ -660,6 +660,11 @@ def parse_args():
         action="store_true",
         help="enable custom all-reduce",
     )
+    parser.add_argument(
+        "--disable_sequence_parallel_moe",
+        action="store_true",
+        help="disable sequence parallel moe",
+    )
     parser.add_argument("--splitwise_role", type=str, default="mixed", help="splitwise role")
     parser.add_argument(
         "--tensor_parallel_size",

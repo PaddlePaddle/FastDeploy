@@ -20,7 +20,6 @@ from typing import Dict, Optional, Union
 import numpy as np
 import paddle
 import paddle.nn as nn
-from paddleformers.transformers import PretrainedModel
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -104,9 +103,7 @@ class PaddleOCRVLModel(nn.Layer):
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
-        hidden_states = hidden_states + residual
-
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual)[0]
 
         return out
 
@@ -257,94 +254,3 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
             )
 
         return hidden_states
-
-
-class PaddleOCRVLPretrainedModel(PretrainedModel):
-
-    config_class = FDConfig
-
-    def _init_weight(self, layer):
-        """
-        _init_weight
-        """
-        return None
-
-    @classmethod
-    def arch_name(self):
-        return "PaddleOCRVLForConditionalGeneration"
-
-    from fastdeploy.model_executor.models.tp_utils import TensorSplitMode as tsm
-    from fastdeploy.model_executor.models.utils import LayerIdPlaceholder as layerid
-    from fastdeploy.model_executor.models.utils import WeightMeta
-
-    weight_infos = [
-        WeightMeta(
-            f".layers.{{{layerid.LAYER_ID}}}.self_attn.qkv_proj.weight",
-            True,
-            tsm.GQA,
-        ),
-        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.o_proj.weight", False),
-        WeightMeta(
-            f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.up_gate_proj.weight",
-            True,
-            tsm.PairFused,
-        ),
-        WeightMeta(f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.down_proj.weight", False),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.TEXT_EXPERT_ID}}}.up_gate_proj.weight",
-            True,
-            tsm.PairFused,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.TEXT_EXPERT_ID}}}.down_proj.weight",
-            False,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.IMG_EXPERT_ID}}}.up_gate_proj.weight",
-            True,
-            tsm.PairFused,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.IMG_EXPERT_ID}}}.down_proj.weight",
-            False,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.up_gate_proj.weight",
-            True,
-            tsm.PairFused,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.down_proj.weight",
-            False,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.down_proj.weight",
-            False,
-        ),
-        WeightMeta(".embed_tokens.weight", False),
-        WeightMeta("lm_head.weight", True),
-    ]
-
-    weight_vison = [
-        # resampler_model
-        WeightMeta("ernie.resampler_model.spatial_linear.0.weight", False),
-        WeightMeta("resampler_model.spatial_linear.0.weight", False),
-        # vision
-        WeightMeta(
-            f"vision_model.blocks.{{{layerid.LAYER_ID}}}.attn.proj.weight",
-            False,
-        ),
-        WeightMeta(f"vision_model.blocks.{{{layerid.LAYER_ID}}}.mlp.fc2.weight", False),
-        WeightMeta(f"vision_model.blocks.{{{layerid.LAYER_ID}}}.mlp.fc1.weight", True),
-        WeightMeta(f"vision_model.blocks.{{{layerid.LAYER_ID}}}.mlp.fc1.bias", True),
-        WeightMeta(
-            f"vision_model.blocks.{{{layerid.LAYER_ID}}}.attn.qkv.weight",
-            True,
-            tsm.GQA,
-        ),
-        WeightMeta(
-            f"vision_model.blocks.{{{layerid.LAYER_ID}}}.attn.qkv.bias",
-            True,
-            tsm.GQA,
-        ),
-    ]

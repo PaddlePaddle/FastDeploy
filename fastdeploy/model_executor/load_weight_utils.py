@@ -269,7 +269,7 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
 
     if fd_config.parallel_config.tensor_parallel_size > 1:
         no_tp_action_keys = copy.deepcopy(num_local_ffn_keys)
-        if fd_config.parallel_config.ep_tp_strategy == "all_to_all":
+        if fd_config.parallel_config.use_sequence_parallel_moe:
             for i in range(fd_config.model_config.moe_layer_start_index, fd_config.model_config.num_hidden_layers):
                 k = f"ernie.layers.{i}.self_attn.o_proj.weight"
                 if k in weight_list:

@@ -286,7 +286,7 @@ class LLMEngine:
 
         if request.get("stop_seqs_len") is not None:
             stop_seqs_len = request.get("stop_seqs_len")
-            max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
+            max_stop_seqs_num = envs.FD_MAX_STOP_SEQS_NUM
             if len(stop_seqs_len) > max_stop_seqs_num:
                 error_msg = (
                     f"Length of stop ({stop_seqs_len}) exceeds the limit max_stop_seqs_num({max_stop_seqs_num})."
@@ -294,7 +294,7 @@ class LLMEngine:
                 )
                 llm_logger.error(error_msg)
                 raise EngineError(error_msg, error_code=400)
-            stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
+            stop_seqs_max_len = envs.FD_STOP_SEQS_MAX_LEN
             for single_stop_seq_len in stop_seqs_len:
                 if single_stop_seq_len > stop_seqs_max_len:
                     error_msg = (
@@ -568,6 +568,7 @@ class LLMEngine:
             "disable_any_whitespace": self.cfg.structured_outputs_config.disable_any_whitespace,
             "disable_custom_all_reduce": self.cfg.parallel_config.disable_custom_all_reduce,
             "use_internode_ll_two_stage": self.cfg.parallel_config.use_internode_ll_two_stage,
+            "disable_sequence_parallel_moe": self.cfg.parallel_config.disable_sequence_parallel_moe,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
         }
