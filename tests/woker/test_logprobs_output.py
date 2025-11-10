@@ -39,7 +39,7 @@ class TestLogprobsOutput(unittest.TestCase):
         assert logprobs_tensors_cpu.selected_token_ranks.shape == [num_positions]
 
         logprobs_list = logprobs_tensors_cpu.tolists()
-        assert isinstance(logprobs_list.logprobs)
+        assert isinstance(logprobs_list.logprobs, list)
         assert len(logprobs_list.logprobs) == num_positions
 
         row_sliced_logprobs_list = logprobs_list.slice_rows(1, 2)
