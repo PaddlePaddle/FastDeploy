@@ -41,12 +41,7 @@ from fastdeploy.config import (
     StructuredOutputsConfig,
 )
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
-from fastdeploy.inter_communicator import (
-    ExistTaskStatus,
-    IPCSignal,
-    ModelWeightsStatus,
-    shared_memory_exists,
-)
+from fastdeploy.inter_communicator import ExistTaskStatus, IPCSignal, ModelWeightsStatus
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
@@ -423,16 +418,12 @@ class PaddleDisWorkerProc:
     def graph_optimize_and_warm_up_model(self) -> None:
         self.worker.graph_optimize_and_warm_up_model()
         # reset cache_messager prefilled_step signal
-        if self.scheduler_config.splitwise_role == "prefill":
+        if not envs.ENABLE_V1_KVCACHE_SCHEDULER and self.scheduler_config.splitwise_role == "prefill":
             gpu_id = self.worker.model_runner.device_id
             prefilled_step_name = f"splitwise_complete_prefilled_step_{self.local_rank}"
             prefilled_step_idx_data = np.zeros(shape=[1], dtype=np.int32)
             step_shm_value = IPCSignal(
-                name=prefilled_step_name,
-                array=prefilled_step_idx_data,
-                dtype=np.int32,
-                suffix=gpu_id,
-                create=not shared_memory_exists(prefilled_step_name),
+                name=prefilled_step_name, array=prefilled_step_idx_data, dtype=np.int32, suffix=gpu_id, create=False
             )
             step_shm_value.value[0] = -1
 
@@ -485,7 +476,7 @@ def parse_args():
         help="model dir",
     )
     parser.add_argument("-mbs", "--max_num_seqs", type=int, default=34, help="max batch size")
-    parser.add_argument("--total_block_num", type=int, default=2000)
+    parser.add_argument("--num_gpu_blocks_override", type=int, default=None)
     parser.add_argument("--block_size", type=int, default=64)
     parser.add_argument("--pod_ip", type=str, default="127.0.0.1")
     parser.add_argument("--engine_worker_queue_port", type=str, default="9923")
@@ -720,6 +711,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     parallel_config = ParallelConfig(vars(args))
     cache_config = CacheConfig(vars(args))
     scheduler_config = SchedulerConfig(vars(args))
+
     parallel_config.tensor_parallel_rank = local_rank % parallel_config.tensor_parallel_size
     parallel_config.data_parallel_rank = local_rank // parallel_config.tensor_parallel_size
     # config for EP

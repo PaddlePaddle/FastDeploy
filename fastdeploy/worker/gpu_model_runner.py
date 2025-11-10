@@ -2016,6 +2016,10 @@ class GPUModelRunner(ModelRunnerBase):
         if not self.not_need_stop():
             self._execute_empty_input()
             return None
+        # TODO: Fix ORC 0 size bug
+        if self.forward_meta.ids_remove_padding.shape[0] == 0:
+            self.share_inputs["not_need_stop"].zero_()
+            return None
 
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()

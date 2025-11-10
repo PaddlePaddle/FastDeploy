@@ -72,6 +72,7 @@ class VLMoEMeta:
     image_index: paddle.Tensor
     token_type_ids: paddle.Tensor
     image_token_num: paddle.Tensor
+    num_image_patch_id: paddle.Tensor
 
     def __str__(self):
         return (
@@ -170,8 +171,8 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
         # TODO(hehongyu): remove this after fix model network
         setattr(
             self.gate.weight,
-            "model_format",
-            "",
+            "weight_need_transpose",
+            False,
         )
 
     def forward(self, hidden_states: paddle.Tensor):
@@ -499,11 +500,13 @@ class Ernie4_5_VLModel(nn.Layer):
         ids_remove_padding: paddle.Tensor,
     ) -> VLMoEMeta:
 
-        image_mask = ids_remove_padding == self.im_patch_id
+        image_mask = ids_remove_padding >= self.im_patch_id
         token_type_ids = image_mask.cast("int32")
         image_token_num = image_mask.sum()
         token_num = ids_remove_padding.shape[0]
         text_token_num = paddle.maximum((token_num - image_token_num), paddle.ones([], dtype="int64"))
+        num_image_patch_id = ids_remove_padding == self.im_patch_id
+        num_image_patch_id = num_image_patch_id.cast("int32").sum()
 
         # The scenario requiring padding is CUDA graph, thus we only need to pad the maximum capture size.
         self._cuda_graph_buffers["token_type_ids"][: self.fd_config.graph_opt_config.max_capture_size].fill_(-1)
@@ -517,6 +520,7 @@ class Ernie4_5_VLModel(nn.Layer):
             image_index=self._cuda_graph_buffers["image_index"][:token_num],
             token_type_ids=self._cuda_graph_buffers["token_type_ids"][:token_num],
             image_token_num=self._cuda_graph_buffers["image_token_num"],
+            num_image_patch_id=num_image_patch_id,
         )
 
     def get_input_embeddings(self, ids_remove_padding: paddle.Tensor) -> paddle.Tensor:
@@ -787,7 +791,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         input_embeddings = self.get_input_embeddings(
             ids_remove_padding=ids_remove_padding,
             image_features=image_features,
-            image_token_num=vl_moe_meta.image_token_num.item(),
+            image_token_num=vl_moe_meta.num_image_patch_id.item(),
         )
         self._input_embeddings.copy_(input_embeddings, False)
 

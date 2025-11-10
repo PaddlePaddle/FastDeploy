@@ -25,7 +25,6 @@ from paddleformers.transformers import PretrainedModel
 from paddleformers.transformers.configuration_utils import PretrainedConfig
 from paddleformers.utils.log import logger
 
-from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
@@ -154,12 +153,8 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         )
 
         # Persistent buffers for CUDA graphs.
-        if envs.FD_ENABLE_MAX_PREFILL:
-            max_length = fd_config.scheduler_config.max_num_seqs * fd_config.model_config.max_model_len
-        else:
-            max_length = fd_config.model_config.max_model_len
-        self._input_embeddings = paddle.zeros(
-            [max_length, fd_config.model_config.hidden_size],
+        self._decoder_input_embeddings = paddle.zeros(
+            [fd_config.scheduler_config.max_num_seqs, fd_config.model_config.hidden_size],
             dtype=fd_config.model_config.dtype,
         )
 
@@ -265,12 +260,19 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         input_embeddings = self.get_input_embeddings(
             ids_remove_padding=ids_remove_padding, image_features=image_features
         )
-        self._input_embeddings.copy_(input_embeddings, False)
 
-        hidden_states = self.model(
-            input_embeddings=self._input_embeddings,
-            forward_meta=forward_meta,
-        )
+        if forward_meta.step_use_cudagraph:
+            self._decoder_input_embeddings.copy_(input_embeddings, False)
+
+            hidden_states = self.model(
+                input_embeddings=self._decoder_input_embeddings,
+                forward_meta=forward_meta,
+            )
+        else:
+            hidden_states = self.model(
+                input_embeddings=input_embeddings,
+                forward_meta=forward_meta,
+            )
 
         return hidden_states
 
