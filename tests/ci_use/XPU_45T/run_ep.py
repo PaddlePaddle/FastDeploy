@@ -37,8 +37,9 @@ def test_fd_ep():
     else:
         tensor_parallel_size = xpu_device_num
         data_parallel_size = 1
-
-    engine_worker_queue_port = [str(8023 + i * 10) for i in range(data_parallel_size)]
+    gpu_id = int(os.getenv("GPU_ID", "0"))
+    base_port = 8023 + gpu_id * 100
+    engine_worker_queue_port = [str(base_port + i * 10) for i in range(data_parallel_size)]
     engine_worker_queue_port = ",".join(engine_worker_queue_port)
 
     llm = LLM(
