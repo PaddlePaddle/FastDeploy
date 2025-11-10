@@ -1,5 +1,17 @@
 """
-redundant expert manger
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """
 
 import threading
@@ -38,9 +50,9 @@ class RedundantExpertManager:
         self.eplb_config = fd_config.eplb_config
         self.api_user = self.eplb_config.redundant_expert_api_user
         self.api_passwd = self.eplb_config.redundant_expert_api_password
-        self.num_hidden_layers = self.eplb_config.model_config.num_layers
-        self.num_logical_experts = self.eplb_config.model_config.moe_num_experts
         self.num_redundant_experts = self.eplb_config.redundant_experts_num
+        self.num_hidden_layers = self.fd_config.model_config.num_hidden_layers
+        self.num_logical_experts = self.fd_config.model_config.moe_num_experts
         self.ipc_signal_suffix = ipc_signal_suffix
 
         self.num_replicas = self.num_logical_experts + self.num_redundant_experts
@@ -121,12 +133,14 @@ class RedundantExpertManager:
             name=f"eplb::async_load_model_{rank}",
             args=(
                 self.rank,
+                self.fd_config.model_config.model,
                 self.expert_per_rank,
                 self.fd_config.model_config.moe_layer_start_index,
                 self.eplb_config.moe_quant_type,
+                self.ipc_signal_suffix,
+                self.eplb_config,
                 child_data_conn,
                 child_mg_conn,
-                self.ipc_signal_suffix,
             ),
         ).start()
         child_data_conn.close()
@@ -214,7 +228,7 @@ class RedundantExpertManager:
                     ).decode("utf-8")
                     self.logger.info(f"redundant_expert: all rank ips {address}")
                     rearrange_experts_ips_size_signal.value[0] = 0
-                    rearrange_experts_signal.value[0] = RearrangeExpertStatus.DOING
+                    rearrange_experts_signal.value[0] = RearrangeExpertStatus.DOING.value
 
                     self.dp_rank_address = address.strip().split(";")
                     if self.allreduce_experts_stat():
@@ -222,18 +236,18 @@ class RedundantExpertManager:
                         self.load_weight_begin_ts = now
                         self.logger.info("redundant_expert: all-reduce experts stats success")
                     else:
-                        rearrange_experts_signal.value[0] = RearrangeExpertStatus.FREE
+                        rearrange_experts_signal.value[0] = RearrangeExpertStatus.FREE.value
                         self.logger.warning("redundant_expert: all-reduce experts stats fail")
                 elif self.need_allgather_load_weight_result and self.allreduce_load_weight_result():
                     # step 3. all reduce the result of load weight from disk
                     self.need_allgather_load_weight_result = False
-                    rearrange_experts_signal.value[0] = RearrangeExpertStatus.LOAD_SUCC
+                    rearrange_experts_signal.value[0] = RearrangeExpertStatus.LOAD_SUCC.value
                     self.rearrange_end_ts = now
                 if rearrange_experts_signal.value[0] > 1 and (
                     now - self.rearrange_end_ts > self.rearrange_reset_interval
                 ):
                     # reset rearrange status
-                    rearrange_experts_signal.value[0] = RearrangeExpertStatus.FREE
+                    rearrange_experts_signal.value[0] = RearrangeExpertStatus.FREE.value
 
             if signal_update_weight_from_disk_array.value[0] == 1:
                 # step 2. async load weight: disk -> memory
@@ -330,8 +344,8 @@ class RedundantExpertManager:
         """
         allgather_expert_token_stats
         """
-        success_count = 0
         expert_token_stats = np.zeros((self.num_hidden_layers, self.num_logical_experts), dtype=np.int32)
+        success_count = 0
         for addr in self.dp_rank_address:
             try:
                 # TODO: 请求失败重试
@@ -347,8 +361,10 @@ class RedundantExpertManager:
                         + f"addr {addr}, res {res.status_code} {res.json()}"
                     )
                     break
+
+                for meta_data in res.json()["data"]:
+                    expert_token_stats += np.array(meta_data, dtype=np.int32)
                 success_count += 1
-                expert_token_stats += np.array(res.json()["data"], dtype=np.int32)
             except Exception as e:
                 self.logger.error(f"redundant_expert: allgather_expert_token_stats fail. addr {addr}, error {e}")
         if success_count == len(self.dp_rank_address):
@@ -460,142 +476,28 @@ class RedundantExpertManager:
                         + f"addr {addr}, res {res.status_code} {res.json()}"
                     )
                     break
-                result = res.json()["data"]
+                result_list = res.json()["data"]
                 self.logger.info(
-                    f"redundant_expert: allgather_load_weight_result success. addr {addr}, result {result}"
+                    f"redundant_expert: allgather_load_weight_result success. addr {addr}, result_list {result_list}"
                 )
-                if result == 1:
-                    success_count += 1
-                elif result == -1:
-                    fail_count += 1
-                    self.logger.error(
-                        f"redundant_expert: allgather_load_weight_result fail. addr {addr}, result {result}"
-                    )
-                    exist_fail = True
+                for result in result_list:
+                    if result == 1:
+                        success_count += 1
+                    elif result == -1:
+                        fail_count += 1
+                        self.logger.error(
+                            f"redundant_expert: allgather_load_weight_result fail. addr {addr}, result {result}"
+                        )
+                        exist_fail = True
             except Exception as e:
                 self.logger.error(f"redundant_expert: allgather_load_weight_result error. addr {addr}, error {e}")
-        if success_count == len(self.dp_rank_address):
-            self.logger.info("redundant_expert: allgather_load_weight_result all success")
-            all_success = True
-        else:
+
+        if fail_count > 0:
             self.logger.info(
                 "redundant_expert: allgather_load_weight_result not all ready, "
                 + f"succ {success_count} fail {fail_count} total {len(self.dp_rank_address)}"
             )
+        else:
+            self.logger.info("redundant_expert: allgather_load_weight_result all success")
+            all_success = True
         return all_success, exist_fail
-
-
-# def init_shared_memory_for_eplb_rank0(rank):
-#     rearrange_experts_ips_size = np.zeros([1], dtype=np.int32)
-#     shm_rearrange_experts_ips_size = shared_memory.SharedMemory(
-#         create=True,
-#         size=rearrange_experts_ips_size.nbytes,
-#         name=f"{envs.get_unique_name('rearrange_experts_ips_size_dprank' + rank)}",
-#     )
-#     rearrange_experts_ips_size_array = np.ndarray(
-#         rearrange_experts_ips_size.shape,
-#         dtype=rearrange_experts_ips_size.dtype,
-#         buffer=shm_rearrange_experts_ips_size.buf,
-#     )
-#     shm_rearrange_experts_ips_list = shared_memory.SharedMemory(
-#         create=True,
-#         size=envs.FD_REDUNDANT_EXPERT_IP_SHM_SIZE,
-#         name=f"{envs.get_unique_name('rearrange_experts_ips_list_dprank' + rank)}",
-#     )
-#     # 记录专家重排状态
-#     rearrange_experts_status = np.zeros([1], dtype=np.int32)
-#     shm_rearrange_experts_status = shared_memory.SharedMemory(
-#         create=True,
-#         size=rearrange_experts_status.nbytes,
-#         name=f"{envs.get_unique_name('rearrange_experts_status_dprank' + rank)}",
-#     )
-#     rearrange_experts_status_array = np.ndarray(
-#         rearrange_experts_status.shape, dtype=rearrange_experts_status.dtype, buffer=shm_rearrange_experts_status.buf
-#     )
-#     # 接收更新权重的信号
-#     signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
-#     shm_signal_update_weight_from_tensor = shared_memory.SharedMemory(
-#         create=True,
-#         size=signal_update_weight_from_tensor.nbytes,
-#         name=f"{envs.get_unique_name('signal_update_weight_from_tensor_dprank' + rank) }",
-#     )
-#     signal_update_weight_from_tensor_array = np.ndarray(
-#         signal_update_weight_from_tensor.shape,
-#         dtype=signal_update_weight_from_tensor.dtype,
-#         buffer=shm_signal_update_weight_from_tensor.buf,
-#     )
-#     return (
-#         rearrange_experts_ips_size_array,
-#         shm_rearrange_experts_ips_list,
-#         rearrange_experts_status_array,
-#         signal_update_weight_from_tensor_array,
-#     )
-
-
-# def init_shared_memory_for_eplb_each_rank(fd_config, rank, ipc_signal_suffix):
-#     # 记录专家负载
-#     experts_token_stats = np.zeros(
-#         (fd_config.model_config.num_hidden_layers, fd_config.model_config.moe_num_experts),
-#         dtype=np.int32,
-#     )
-
-#     shm_local_experts_token_stats = shared_memory.SharedMemory(
-#         create=True,
-#         size=experts_token_stats.nbytes,
-#         name=f"{envs.get_unique_name('local_experts_token_stats_dprank' + rank)}",
-#     )
-#     local_experts_token_stats_array = np.ndarray(
-#         experts_token_stats.shape, dtype=experts_token_stats.dtype, buffer=shm_local_experts_token_stats.buf
-#     )
-#     # TODO: 全局专家负载状态是一样的，节点上的所有DP可以共用一份，但需要避免多个DP同时更新
-#     shm_all_experts_token_stats = shared_memory.SharedMemory(
-#         create=True,
-#         size=experts_token_stats.nbytes,
-#         name=f"{envs.get_unique_name('all_experts_token_stats_dprank' + rank)}",
-#     )
-#     expert_tokens_stats_array = np.ndarray(
-#         experts_token_stats.shape, dtype=experts_token_stats.dtype, buffer=shm_all_experts_token_stats.buf
-#     )
-#     # 接收加载权重的信号
-#     signal_update_weight_from_disk = np.zeros([1], dtype=np.int32)
-#     shm_signal_update_weight_from_disk = shared_memory.SharedMemory(
-#         create=True,
-#         size=signal_update_weight_from_disk.nbytes,
-#         name=f"{envs.get_unique_name('signal_update_weight_from_disk_dprank' + rank)}",
-#     )
-#     signal_update_weight_from_disk_array = np.ndarray(
-#         signal_update_weight_from_disk.shape,
-#         dtype=signal_update_weight_from_disk.dtype,
-#         buffer=shm_signal_update_weight_from_disk.buf,
-#     )
-#     # 记录加载权重的结果
-#     result_update_weight_from_disk = np.zeros([1], dtype=np.int32)
-#     shm_result_update_weight_from_disk = shared_memory.SharedMemory(
-#         create=True,
-#         size=result_update_weight_from_disk.nbytes,
-#         name=f"{envs.get_unique_name('result_update_weight_from_disk_dprank' + rank)}",
-#     )
-#     result_update_weight_from_disk_array = np.ndarray(
-#         result_update_weight_from_disk.shape,
-#         dtype=result_update_weight_from_disk.dtype,
-#         buffer=shm_result_update_weight_from_disk.buf,
-#     )
-#     # 接收清零专家负载的信号
-#     signal_clear_experts_token_stats = np.zeros([1], dtype=np.int32)
-#     shm_signal_clear_experts_token_stats = shared_memory.SharedMemory(
-#         create=True,
-#         size=signal_clear_experts_token_stats.nbytes,
-#         name=f"{envs.get_unique_name('signal_clear_experts_token_stats_dprank' + rank)}",
-#     )
-#     signal_clear_experts_token_stats_array = np.ndarray(
-#         signal_clear_experts_token_stats.shape,
-#         dtype=signal_clear_experts_token_stats.dtype,
-#         buffer=shm_signal_clear_experts_token_stats.buf,
-#     )
-#     return (
-#         local_experts_token_stats_array,
-#         expert_tokens_stats_array,
-#         signal_update_weight_from_disk_array,
-#         result_update_weight_from_disk_array,
-#         signal_clear_experts_token_stats_array,
-#     )

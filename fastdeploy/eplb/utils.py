@@ -1,4 +1,18 @@
-"""eplb utilities"""
+"""
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
 
 import json
 import os
@@ -82,36 +96,6 @@ def init_eplb_signals(config: FDConfig, ipc_signal_suffix):
             create=True,
         )
 
-        # Record expert workload
-        experts_token_stats = np.zeros(
-            (config.model_config.num_hidden_layers, config.model_config.moe_num_experts),
-            dtype=np.int32,
-        )
-        _ = IPCSignal(
-            name="all_experts_token_stats",
-            array=experts_token_stats,
-            dtype=np.int32,
-            suffix=ipc_signal_suffix,
-            create=True,
-        )
-        _ = IPCSignal(
-            name="local_experts_token_stats",
-            array=experts_token_stats,
-            dtype=np.int32,
-            suffix=ipc_signal_suffix,
-            create=True,
-        )
-
-        # Receive signals for loading weights
-        signal_update_weight_from_disk = np.zeros([1], dtype=np.int32)
-        _ = IPCSignal(
-            name="signal_update_weight_from_disk",
-            array=signal_update_weight_from_disk,
-            dtype=np.int32,
-            suffix=ipc_signal_suffix,
-            create=True,
-        )
-
         # Receive signals for updating weights
         signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
         _ = IPCSignal(
@@ -122,24 +106,54 @@ def init_eplb_signals(config: FDConfig, ipc_signal_suffix):
             create=True,
         )
 
-        # Receive signals for clearing expert loads
-        clear_experts_token_stats = np.zeros([1], dtype=np.int32)
-        _ = IPCSignal(
-            name="signal_clear_experts_token_stats",
-            array=clear_experts_token_stats,
-            dtype=np.int32,
-            suffix=ipc_signal_suffix,
-            create=True,
-        )
+    # Record expert workload
+    experts_token_stats = np.zeros(
+        (config.model_config.num_hidden_layers, config.model_config.moe_num_experts),
+        dtype=np.int32,
+    )
+    _ = IPCSignal(
+        name="all_experts_token_stats",
+        array=experts_token_stats,
+        dtype=np.int32,
+        suffix=ipc_signal_suffix,
+        create=True,
+    )
+    _ = IPCSignal(
+        name="local_experts_token_stats",
+        array=experts_token_stats,
+        dtype=np.int32,
+        suffix=ipc_signal_suffix,
+        create=True,
+    )
 
-        result_update_weight_from_disk = np.zeros([1], dtype=np.int32)
-        _ = IPCSignal(
-            name="result_update_weight_from_disk",
-            array=result_update_weight_from_disk,
-            dtype=np.int32,
-            suffix=ipc_signal_suffix,
-            create=True,
-        )
+    # Receive signals for loading weights
+    signal_update_weight_from_disk = np.zeros([1], dtype=np.int32)
+    _ = IPCSignal(
+        name="signal_update_weight_from_disk",
+        array=signal_update_weight_from_disk,
+        dtype=np.int32,
+        suffix=ipc_signal_suffix,
+        create=True,
+    )
+
+    # Receive signals for clearing expert loads
+    clear_experts_token_stats = np.zeros([1], dtype=np.int32)
+    _ = IPCSignal(
+        name="signal_clear_experts_token_stats",
+        array=clear_experts_token_stats,
+        dtype=np.int32,
+        suffix=ipc_signal_suffix,
+        create=True,
+    )
+
+    result_update_weight_from_disk = np.zeros([1], dtype=np.int32)
+    _ = IPCSignal(
+        name="result_update_weight_from_disk",
+        array=result_update_weight_from_disk,
+        dtype=np.int32,
+        suffix=ipc_signal_suffix,
+        create=True,
+    )
 
 
 if __name__ == "__main__":

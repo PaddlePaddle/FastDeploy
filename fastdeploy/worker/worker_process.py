@@ -286,7 +286,7 @@ class PaddleDisWorkerProc:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
-        if self.eplb_config.enable_redundant_experts:
+        if self.eplb_config.enable_eplb:
             self.last_dump_expert_workload_ts = 0
             self.experts_manager = RedundantExpertManager(
                 rank=self.local_rank,
@@ -294,7 +294,6 @@ class PaddleDisWorkerProc:
                 fd_config=self.fd_config,
                 ipc_signal_suffix=self.parallel_config.engine_worker_queue_port,
             )
-
             experts_token_stats = np.zeros(
                 (self.fd_config.model_config.num_hidden_layers, self.fd_config.model_config.moe_num_experts),
                 dtype=np.int32,
@@ -335,14 +334,14 @@ class PaddleDisWorkerProc:
                     create=False,
                 )
 
-                expert_workload_dump_interval = envs.FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL
-                mmap_infos = create_mmap(
-                    [MODEL_MAIN_NAME],
-                    self.local_rank,
-                    self.ranks,
-                    shm_uuid=self.parallel_config.engine_worker_queue_port,
-                    logger=logger,
-                )
+            mmap_infos = create_mmap(
+                [MODEL_MAIN_NAME],
+                self.local_rank,
+                self.ranks,
+                shm_uuid=self.parallel_config.engine_worker_queue_port,
+                eplb_config=self.eplb_config,
+                logger=logger,
+            )
         # Currently, only support single node
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
         req_ids = []
@@ -350,11 +349,12 @@ class PaddleDisWorkerProc:
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
-            if self.eplb_config.enable_redundant_experts:
+            if self.eplb_config.enable_eplb:
                 rearrange_time = time.time()
                 # 获取专家负载
                 if local_experts_token_stats_array.value is not None and (
-                    int(rearrange_time) - self.last_dump_expert_workload_ts > expert_workload_dump_interval
+                    int(rearrange_time) - self.last_dump_expert_workload_ts
+                    > self.eplb_config.redundant_expert_dump_workload_interval
                 ):
                     self.last_dump_expert_workload_ts = int(rearrange_time)
                     clear_stat = False
@@ -386,7 +386,7 @@ class PaddleDisWorkerProc:
                     )
                     paddle.distributed.barrier()
                     if self.local_rank == 0:
-                        rearrange_experts_signal.value[0] = RearrangeExpertStatus.DONE
+                        rearrange_experts_signal.value[0] = RearrangeExpertStatus.DONE.value
                     logger.info("redundant_expert: done")
             if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
                 if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
@@ -827,6 +827,13 @@ def parse_args():
         help="FQCNs (Fully Qualified Class Names) of logits processors supported by the service.",
     )
 
+    parser.add_argument(
+        "--eplb_config",
+        type=json.loads,
+        default=None,
+        help="EPLB Configuration.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -882,7 +889,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     plas_attention_config = PlasAttentionConfig(args.plas_attention_config)
 
     early_stop_config = EarlyStopConfig(args.early_stop_config)
-    eplb_config = EPLBConfig()
+    eplb_config = EPLBConfig(args.eplb_config)
 
     structured_outputs_config: StructuredOutputsConfig = StructuredOutputsConfig(args=vars(args))
 
