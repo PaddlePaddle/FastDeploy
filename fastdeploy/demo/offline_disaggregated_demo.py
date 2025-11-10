@@ -20,7 +20,7 @@ import time
 
 from fastdeploy.entrypoints.llm import LLM
 
-model_name_or_path = "/root/PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
+model_name_or_path = "baidu/ERNIE-4.5-0.3B-Paddle"
 
 
 def start_decode(model_name_or_path):

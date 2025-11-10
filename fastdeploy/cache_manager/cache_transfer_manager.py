@@ -215,6 +215,7 @@ class CacheTransferManager:
                 self.key_cache_shape[2],
                 self.key_cache_shape[3],
             ]
+            value_cache_shape = []
             if self.value_cache_shape:
                 value_cache_shape = [
                     num_gpu_blocks,
@@ -257,9 +258,9 @@ class CacheTransferManager:
         logger.info(f"[rank {self.rank}/{self.n_ranks}] done init cache (full) gmem alloc : {memory_allocated()}")
 
     def _init_cpu_cache(self, args):
-        key_cache_size = args.key_cache_shape[1] * args.key_cache_shape[2] * args.key_cache_shape[3]
+        key_cache_size = self.key_cache_shape[1] * self.key_cache_shape[2] * self.key_cache_shape[3]
         if args.value_cache_shape:
-            value_cache_size = args.value_cache_shape[1] * args.value_cache_shape[2] * args.value_cache_shape[3]
+            value_cache_size = self.value_cache_shape[1] * self.value_cache_shape[2] * self.value_cache_shape[3]
         else:
             value_cache_size = 0
         if args.cache_dtype == "bfloat16":
@@ -270,7 +271,9 @@ class CacheTransferManager:
             raise ValueError(f"Unsupported cache dtype: {args.cache_dtype}")
         key_need_to_allocate_bytes = args.num_cpu_blocks * cache_bytes * key_cache_size
         value_need_to_allocate_bytes = args.num_cpu_blocks * cache_bytes * value_cache_size
-        # logger.info(f"[rank {self.rank}/{self.n_ranks}] ..swap space size : { / 1024 ** 3:.2f}GB")
+        logger.info(
+            f"[rank {self.rank}/{self.n_ranks}] ..swap space size : {(key_need_to_allocate_bytes + value_need_to_allocate_bytes) / 1024 ** 3:.2f}GB"
+        )
         if args.num_cpu_blocks == 0:
             logger.info(f"[rank {self.rank}/{self.n_ranks}] 💡 no swap space (cpu cache) is specified.")
             self.swap_space_ready_signal.value[self.rank] = 1

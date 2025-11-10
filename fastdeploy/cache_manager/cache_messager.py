@@ -775,6 +775,7 @@ def main():
             key_cache_shape_list[2],
             key_cache_shape_list[3],
         ]
+        value_cache_shape = []
         if value_cache_shape_list:
             value_cache_shape = [
                 num_gpu_blocks,
