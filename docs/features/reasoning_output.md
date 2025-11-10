@@ -5,10 +5,11 @@
 Reasoning models return an additional `reasoning_content` field in their output, which contains the reasoning steps that led to the final conclusion.
 
 ## Supported Models
-| Model Name     | Parser Name    | Eable_thinking by Default |
-|----------------|----------------|---------------------------|
-| baidu/ERNIE-4.5-VL-424B-A47B-Paddle    | ernie-45-vl    | ✓                         |
-| baidu/ERNIE-4.5-VL-28B-A3B-Paddle | ernie-45-vl    | ✓                         |
+| Model Name     | Parser Name    | Eable_thinking by Default | Tool Calling  |
+|---------------|-------------|---------|---------|
+| baidu/ERNIE-4.5-VL-424B-A47B-Paddle  | ernie-45-vl | ✅       | ❌ |
+| baidu/ERNIE-4.5-VL-28B-A3B-Paddle | ernie-45-vl |    ✅    |  ❌  |
+| baidu/ERNIE-4.5-21B-A3B-Thinking  | ernie-x1  |   ✅ no off supported  | ✅|
 
 The reasoning model requires a specified parser to extract reasoning content. The reasoning mode can be disabled by setting the `"enable_thinking": false` parameter.
 
@@ -81,3 +82,78 @@ for chunk in chat_response:
         print(chunk.choices[0].delta, end='')
         print("\n")
 ```
+## Tool Calling
+The reasoning content is also available when both tool calling and the reasoning parser are enabled. Additionally, tool calling only parses functions from the `content` field, not from the `reasoning_content`.
+
+Model request example:
+```bash
+curl -X POST "http://0.0.0.0:8390/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Get the current weather in BeiJing"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Determine weather in my location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string",
+              "description": "The city and state e.g. San Francisco, CA"
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "c",
+                "f"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "location",
+            "unit"
+          ]
+        },
+        "strict": true
+      }
+    }],
+    "stream": false
+}'
+```
+Model output example
+
+```json
+{
+    "choices": [
+        {
+            "index": 0,
+            "message": {
+                "role": "assistant",
+                "content": "",
+                "reasoning_content": "The user asks about ...",
+                "tool_calls": [
+                    {
+                        "id": "chatcmpl-tool-311b9bda34274722afc654c55c8ce6a0",
+                        "type": "function",
+                        "function": {
+                            "name": "get_weather",
+                            "arguments": "{\"location\": \"BeiJing\", \"unit\": \"c\"}"
+                        }
+                    }
+                ]
+            },
+            "finish_reason": "tool_calls"
+        }
+    ]
+}
+```
+More reference documentation related to tool calling usage：  [Tool Calling](./tool_calling.md)
