@@ -21,6 +21,8 @@ import time
 import uuid
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
+from jsonschema import Draft7Validator
+from jsonschema import exceptions as jsonschema_exceptions
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 from fastdeploy.engine.pooling_params import PoolingParams
@@ -182,6 +184,38 @@ class FunctionDefinition(BaseModel):
     name: str
     description: Optional[str] = None
     parameters: Optional[dict[str, Any]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_parameters_and_name(cls, data):
+        """
+        Validate parameters and name.
+        """
+        function_name = data.get("name", None)
+        if function_name is None or function_name == "":
+            raise ValueError("name", "function name is required")
+        if data.get("parameters", None) is not None:
+            try:
+                # Serialize and then deserialize the arbitrary object using JSON
+                json_obj = json.loads(json.dumps(data.get("parameters"), default=lambda o: o.__dict__))
+
+                # Load the meta schema for JSON Schema Draft-07
+                meta_schema = Draft7Validator.META_SCHEMA
+                validator = Draft7Validator(meta_schema)
+
+                # Execute the validation
+                errors = sorted(validator.iter_errors(json_obj), key=lambda e: e.path)
+                if errors:
+                    error_messages = "; ".join([f"{'/'.join([str(p) for p in e.path])}: {e.message}" for e in errors])
+                    raise ValueError(f"function={function_name}, msg={error_messages}")
+
+            except json.JSONDecodeError:
+                raise ValueError(f"function={function_name}, msg=function is not a valid json")
+
+            except jsonschema_exceptions.SchemaError as e:
+                raise ValueError(f"function={function_name}, msg=Invalid schema: {str(e)}")
+
+        return data
 
 
 class ChatCompletionToolsParam(BaseModel):
