@@ -26,6 +26,7 @@ def test_fd_ep():
 
     enable_expert_parallel = strtobool(os.getenv("enable_expert_parallel", "1"))
     enable_tensor_parallel = strtobool(os.getenv("enable_tensor_parallel", "0"))
+    disable_sequence_parallel_moe = strtobool(os.getenv("disable_sequence_parallel_moe", "0"))
     print(f"enable_expert_parallel: {enable_expert_parallel}, enable_tensor_parallel: {enable_tensor_parallel}")
     if enable_expert_parallel:
         if enable_tensor_parallel:
@@ -47,6 +48,7 @@ def test_fd_ep():
         enable_expert_parallel=enable_expert_parallel,
         tensor_parallel_size=tensor_parallel_size,
         data_parallel_size=data_parallel_size,
+        disable_sequence_parallel_moe=disable_sequence_parallel_moe,
         max_model_len=8192,
         quantization="wint4",
         engine_worker_queue_port=engine_worker_queue_port,

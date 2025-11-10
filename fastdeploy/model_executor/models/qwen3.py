@@ -66,6 +66,7 @@ class Qwen3Attention(nn.Layer):
             prefix=f"{prefix}.o_proj",
             input_size=fd_config.model_config.head_dim * fd_config.model_config.num_attention_heads,
             output_size=fd_config.model_config.hidden_size,
+            layer_id=layer_id,
         )
 
         self.attn = Attention(
@@ -114,11 +115,11 @@ class Qwen3Attention(nn.Layer):
         q, k, v = qkv_out.split([self.q_size, self.kv_size, self.kv_size], axis=-1)
 
         q_by_head = q.reshape([*q.shape[:-1], q.shape[-1] // self.head_dim, self.head_dim])
-        q_by_head = self.q_norm(q_by_head)
+        q_by_head = self.q_norm(q_by_head)[0]
         q = q_by_head.reshape(q.shape)
 
         k_by_head = k.reshape([*k.shape[:-1], k.shape[-1] // self.head_dim, self.head_dim])
-        k_by_head = self.k_norm(k_by_head)
+        k_by_head = self.k_norm(k_by_head)[0]
         k = k_by_head.reshape(k.shape)
 
         qkv_out = paddle.concat([q, k, v], axis=-1)
@@ -216,9 +217,7 @@ class Qwen3Model(nn.Layer):
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
-        hidden_states = hidden_states + residual
-
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual)[0]
 
         return out
 

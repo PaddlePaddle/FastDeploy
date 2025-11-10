@@ -124,9 +124,7 @@ class Qwen2_5_VLModel(nn.Layer):
                 residual,
             )
 
-        hidden_states = hidden_states + residual
-
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual)[0]
 
         return out
 
@@ -261,21 +259,6 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         logits[:, self.ori_vocab_size :] = -float("inf")
 
         return logits
-
-    def empty_input_forward(self):
-        """
-        empty_input_forward
-        """
-        fake_hidden_states = paddle.empty(
-            shape=[0, self.fd_config.model_config.hidden_size],
-            dtype=paddle.get_default_dtype(),
-        )
-        for i in range(
-            self.fd_config.model_config.moe_layer_start_index,
-            self.fd_config.model_config.num_hidden_layers,
-        ):
-            self.ernie.layers[i].mlp.text_fused_moe(fake_hidden_states)
-            self.ernie.layers[i].mlp.image_fused_moe(fake_hidden_states)
 
     def get_input_embeddings(
         self,

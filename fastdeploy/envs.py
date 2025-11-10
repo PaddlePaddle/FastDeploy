@@ -35,9 +35,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Model download cache directory.
     "FD_MODEL_CACHE": lambda: os.getenv("FD_MODEL_CACHE", None),
     # Maximum number of stop sequences.
-    "FD_MAX_STOP_SEQS_NUM": lambda: os.getenv("FD_MAX_STOP_SEQS_NUM", "5"),
+    "FD_MAX_STOP_SEQS_NUM": lambda: int(os.getenv("FD_MAX_STOP_SEQS_NUM", "5")),
     # Maximum length of stop sequences.
-    "FD_STOP_SEQS_MAX_LEN": lambda: os.getenv("FD_STOP_SEQS_MAX_LEN", "8"),
+    "FD_STOP_SEQS_MAX_LEN": lambda: int(os.getenv("FD_STOP_SEQS_MAX_LEN", "8")),
     # GPU devices that will be used. This is a string that
     # splited by comma, such as 0,1,2.
     "CUDA_VISIBLE_DEVICES": lambda: os.getenv("CUDA_VISIBLE_DEVICES", None),
@@ -159,10 +159,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_OFFLINE_PERF_TEST_FOR_PD": lambda: int(os.getenv("FD_OFFLINE_PERF_TEST_FOR_PD", "0")),
     "FD_ENABLE_E2W_TENSOR_CONVERT": lambda: int(os.getenv("FD_ENABLE_E2W_TENSOR_CONVERT", "0")),
     "FD_ENGINE_TASK_QUEUE_WITH_SHM": lambda: int(os.getenv("FD_ENGINE_TASK_QUEUE_WITH_SHM", "0")),
-    # ep+tp strategy: "all_reduce" or "all_to_all"
-    # all_reduce: qkv_linear + attn + out_linear + allreduce
-    # all_to_all: allgather + qkv_linear + attn + all2all + out_linear
-    "FD_EP_TP_STRATEGY": lambda: os.getenv("FD_EP_TP_STRATEGY", "all_reduce"),
 }
 
 

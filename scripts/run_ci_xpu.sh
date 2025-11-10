@@ -360,6 +360,7 @@ export BKCL_RDMA_VERBS=1
 
 export enable_expert_parallel=1
 export enable_tensor_parallel=1
+export disable_sequence_parallel_moe=1
 
 python -m pytest -s --timeout=600 tests/ci_use/XPU_45T/run_ep.py
 ep_exit_code=$?
@@ -373,6 +374,7 @@ unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
 unset enable_expert_parallel
 unset enable_tensor_parallel
+unset disable_sequence_parallel_moe
 stop_processes
 
 if [ ${ep_exit_code} -ne 0 ]; then
@@ -400,7 +402,6 @@ export BKCL_RDMA_VERBS=1
 
 export enable_expert_parallel=1
 export enable_tensor_parallel=1
-export FD_EP_TP_STRATEGY=all_to_all
 
 python -m pytest -s --timeout=600 tests/ci_use/XPU_45T/run_ep.py
 ep_exit_code=$?
@@ -414,7 +415,6 @@ unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
 unset enable_expert_parallel
 unset enable_tensor_parallel
-unset FD_EP_TP_STRATEGY
 stop_processes
 
 if [ ${ep_exit_code} -ne 0 ]; then
