@@ -1,3 +1,5 @@
+// adapted from:
+// https://github.com/flashinfer-ai/flashinfer/blob/0e48aaf941a6b05f6557c9c9f606884f826afedd/csrc/norm.cu
 #include "norm.cuh"
 
 #define CHECK_CUDA(x) PD_CHECK(x.is_gpu(), #x " must be a CUDA tensor")
@@ -57,7 +59,9 @@ std::vector<paddle::Tensor> fused_add_rmsnorm(paddle::Tensor& input,
 std::vector<paddle::DataType> FusedAddRMSNormTcInferDtype(
     const paddle::DataType& input_dtype,
     const paddle::DataType& residual_dtype,
-    const paddle::DataType& weight_dtype) {
+    const paddle::DataType& weight_dtype,
+    const float eps,
+    const bool enable_pdl) {
   return {input_dtype, residual_dtype};
 }
 

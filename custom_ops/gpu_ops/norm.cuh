@@ -1,3 +1,5 @@
+// adapted from:
+// https://github.com/flashinfer-ai/flashinfer/blob/0e48aaf941a6b05f6557c9c9f606884f826afedd/include/flashinfer/norm.cuh
 #pragma once
 
 #include <cuda_runtime.h>

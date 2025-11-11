@@ -26,6 +26,7 @@ if current_platform.is_gcu():
     from fastdeploy.model_executor.ops.gcu import fused_add_rms_norm, rms_norm
 else:
     from paddle.incubate.nn.functional import fused_layer_norm, fused_rms_norm
+    from fastdeploy.model_executor.ops.gpu import fused_add_rmsnorm as fused_add_rmsnorm_flashinfer
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -38,7 +39,7 @@ def fused_add_rmsnorm(
     residual: paddle.Tensor,
     weight: paddle.Tensor,
     eps: float = 1e-6,
-    enable_pdl: Optional[bool] = None,
+    enable_pdl: Optional[bool] = False,
 ) -> None:
     r"""Fused add root mean square normalization.
 
@@ -63,11 +64,7 @@ def fused_add_rmsnorm(
         <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#programmatic-dependent-launch-and-synchronization>`_
         If None, will be automatically enabled on Hopper architecture.
     """
-    from fastdeploy.model_executor.ops.gpu import fused_add_rmsnorm
-
-    if enable_pdl is None:
-        enable_pdl = is_arch_support_pdl()
-    input, residual = fused_add_rmsnorm(input, residual, weight, eps, enable_pdl)
+    input, residual = fused_add_rmsnorm_flashinfer(input, residual, weight, eps, enable_pdl)
     return (input, residual)
 
 
@@ -152,6 +149,7 @@ class RMSNorm(nn.Layer):
         self.allgather_out = self.fd_config.parallel_config.use_sequence_parallel_moe and (
             (self.layer_id > self.fd_config.model_config.moe_layer_start_index and is_input_norm) or is_last_norm
         )
+        self.enable_pdl = is_arch_support_pdl()
 
         self.init_weight()
 
@@ -256,8 +254,8 @@ class RMSNorm(nn.Layer):
                     return norm_out.astype(x_dtype), residual_out
                 norm_out = self.norm_func(x, residual_input, self.weight, self.eps)
             else:
-                if residual_input is not None and self.quant_scale is None and len(x) == 2:
-                    norm_out = fused_add_rmsnorm(x, residual_input, self.weight, self.eps)
+                if residual_input is not None and self.quant_scale is None and len(x.shape) == 2:
+                    norm_out = fused_add_rmsnorm(x, residual_input, self.weight, self.eps, self.enable_pdl)
                 else:
                     norm_out = self.norm_func(
                         x,
