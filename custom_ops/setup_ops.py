@@ -306,6 +306,8 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/limit_thinking_content_length_v1.cu",
         "gpu_ops/limit_thinking_content_length_v2.cu",
         "gpu_ops/update_attn_mask_offsets.cu",
+        "gpu_ops/fused_neox_rope_embedding.cu",
+        "gpu_ops/gelu_tanh.cu",
         "gpu_ops/norm.cu",
     ]
 
@@ -617,6 +619,7 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/get_position_ids_and_mask_encoder_batch.cu",
         "gpu_ops/limit_thinking_content_length_v1.cu",
         "gpu_ops/limit_thinking_content_length_v2.cu",
+        "gpu_ops/update_attn_mask_offsets.cu",
         "gpu_ops/append_attn/mla_cache_kernel.cu",
         "gpu_ops/append_attn/get_block_shape_and_split_kv_block.cu",
         "gpu_ops/moe/tritonmoe_preprocess.cu",

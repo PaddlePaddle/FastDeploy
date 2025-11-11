@@ -365,7 +365,7 @@ class AppendAttentionBackend(AttentionBackend):
                 getattr(layer, "cache_v_zp", None),
                 layer.linear_shift,
                 layer.linear_smooth,
-                None,
+                forward_meta.attn_mask_offsets,
                 metadata.kv_signal_data_list[layer.layer_id],
                 getattr(layer, "q_norm_weight", None),
                 getattr(layer, "k_norm_weight", None),
@@ -384,7 +384,7 @@ class AppendAttentionBackend(AttentionBackend):
                 metadata.max_partition_size,
                 metadata.encoder_max_partition_size,
                 self.speculate_max_draft_token_num + 1,
-                True,
+                self.causal,
                 self.speculative_method is not None,
                 sliding_window,
             )

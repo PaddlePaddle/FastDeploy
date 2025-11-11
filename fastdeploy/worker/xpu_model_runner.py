@@ -89,7 +89,6 @@ def xpu_pre_process(
     share_inputs["cu_seqlens_k"] = cu_seqlens_k
 
     xpu_forward_meta = XPUForwardMeta(
-        input_ids=share_inputs["input_ids"],
         ids_remove_padding=share_inputs["ids_remove_padding"],
         rotary_embs=share_inputs["rope_emb"],
         attn_backend=None,
@@ -202,6 +201,8 @@ def xpu_post_process(
         max_think_lens = share_inputs["max_think_lens"]
         step_idx = share_inputs["step_idx"]
         limit_think_status = share_inputs["limit_think_status"]
+        stop_flags = share_inputs["stop_flags"]
+        eos_token_ids = share_inputs["eos_token_id"]
         if limit_strategy == "</think>":
             # for ernie-45-vl
             limit_thinking_content_length_v1(
@@ -209,6 +210,8 @@ def xpu_post_process(
                 max_think_lens,
                 step_idx,
                 limit_think_status,
+                stop_flags,
+                eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
                 think_end_id,
             )
         elif limit_strategy == "\n</think>\n\n":
@@ -219,6 +222,7 @@ def xpu_post_process(
                 max_think_lens,
                 step_idx,
                 limit_think_status,
+                stop_flags,
                 think_end_id,
                 line_break_id,
             )
@@ -1151,6 +1155,13 @@ class XPUModelRunner(ModelRunnerBase):
         # 1. Prepare inputs of model and decoder.
         self._prepare_inputs(is_dummy_run=is_dummy_run)
 
+        # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
+        # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
+        # when there is data on other runner, the current runner is required to execute part of the model.
+        if not self.not_need_stop() and not is_dummy_run:
+            self._execute_empty_input()
+            return None
+
         # 2. Padding inputs for cuda grph
 
         # 3. Execute model
@@ -1219,6 +1230,17 @@ class XPUModelRunner(ModelRunnerBase):
         )
 
         return None
+
+    def _execute_empty_input(self) -> None:
+        """
+        In certain scenarios, such as during EP,
+        the runner needs to execute partial modules of the model without input data.
+        This requires the model to implement the `empty_input_forward` method.
+        """
+        if hasattr(self.model, "empty_input_forward"):
+            self.model.empty_input_forward()
+        else:
+            raise ValueError(f"{type(self.model)} has no attribute 'empty_input_forward")
 
     @profile_run_guard(True)
     def profile_run(self) -> None:

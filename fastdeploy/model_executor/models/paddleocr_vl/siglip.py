@@ -21,39 +21,13 @@ import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-from paddleformers.transformers.activations import ACT2FN
 from paddleformers.transformers.model_utils import PretrainedModel
 
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import slice_fn
 
 from .config import PaddleOCRVisionConfig
-
-
-def rotate_half(x):
-    Dh = x.shape[-1]
-    x1 = x[..., : Dh // 2]
-    x2 = x[..., Dh // 2 :]
-    return paddle.concat([-x2, x1], axis=-1)
-
-
-def _ensure_cos_sin_dim(cos, sin, dim_needed):
-    last = cos.shape[-1]
-    if last == dim_needed:
-        return cos, sin
-    elif last * 2 == dim_needed:
-        cos = paddle.concat([cos, cos], axis=-1)
-        sin = paddle.concat([sin, sin], axis=-1)
-        return cos, sin
-    else:
-        raise ValueError(f"Unexpected cos/sin last-dim: {last}, expected {dim_needed} or {dim_needed//2}")
-
-
-def apply_rotary_pos_emb_vision(x, cos, sin):
-    orig_dtype = x.dtype
-    x = x.astype("float32")
-    x_embed = (x * cos) + (rotate_half(x) * sin)
-    return x_embed.astype(orig_dtype)
+from .siglip_ops import get_activation_fn, neox_rope_embedding
 
 
 class SiglipAttention(nn.Layer):
@@ -147,29 +121,12 @@ class SiglipAttention(nn.Layer):
         output_attentions: Optional[bool] = False,
         cu_seqlens: Optional[List[paddle.Tensor]] = None,
         max_seqlen: Optional[paddle.Tensor] = None,
-        rope_emb: Optional[Tuple[paddle.Tensor, paddle.Tensor]] = None,  # (cos, sin)
+        cos_emb: Optional[paddle.Tensor] = None,  # (cos, sin)
+        sin_emb: Optional[paddle.Tensor] = None,  # (cos, sin)
     ):
         B, seq_length, D = hidden_states.shape
-
-        qkv = (
-            self.qkv_proj(hidden_states)
-            .reshape(
-                [
-                    seq_length,
-                    3,
-                    self.num_heads,
-                    -1,
-                ]
-            )
-            .transpose(perm=[1, 0, 2, 3])
-        )
-        q, k, v = qkv.unbind(axis=0)
-        cos, sin = rope_emb
-
-        # --------
-        q = apply_rotary_pos_emb_vision(q, cos, sin)
-        k = apply_rotary_pos_emb_vision(k, cos, sin)
-
+        qkv = self.qkv_proj(hidden_states)
+        q, k, v = neox_rope_embedding(qkv, cos_emb, sin_emb, self.num_heads, self.head_dim)
         attn_output = self.flash_attn_func(
             q,
             k,
@@ -181,11 +138,9 @@ class SiglipAttention(nn.Layer):
             causal=False,
             **self.flash_attn_kwargs,
         )[0]
-        # --------
 
         attn_output = attn_output.reshape((seq_length, -1))
         attn_output = self.out_proj(attn_output)
-
         return attn_output
 
 
@@ -327,11 +282,7 @@ class SiglipMLP(nn.Layer):
     def __init__(self, config):
         super().__init__()
         self.config = config
-        if config.hidden_act == "gelu_pytorch_tanh":
-            config.hidden_act = "gelu_new"
-
-        self.activation_fn = ACT2FN[config.hidden_act]
-
+        self.activation_fn = get_activation_fn(config.hidden_act)
         self.fc1 = nn.Linear(config.hidden_size, config.intermediate_size)
         self.fc1.weight.weight_loader = self.weight_loader
         self.fc2 = nn.Linear(config.intermediate_size, config.hidden_size)
@@ -353,7 +304,7 @@ class SiglipMLP(nn.Layer):
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         hidden_states = self.fc1(hidden_states)
-        hidden_states = self.activation_fn(hidden_states)
+        hidden_states = self.activation_fn(hidden_states[0])
         hidden_states = self.fc2(hidden_states)
         return hidden_states
 
@@ -375,7 +326,8 @@ class SiglipEncoderLayer(paddle.nn.Layer):
         output_attentions=False,
         cu_seqlens=None,
         max_seqlen=None,
-        rope_emb=None,
+        cos_emb=None,
+        sin_emb=None,
     ):
 
         residual = hidden_states
@@ -388,7 +340,8 @@ class SiglipEncoderLayer(paddle.nn.Layer):
             output_attentions=output_attentions,
             cu_seqlens=cu_seqlens,
             max_seqlen=max_seqlen,
-            rope_emb=rope_emb,
+            cos_emb=cos_emb,
+            sin_emb=sin_emb,
         )
 
         hs_post_attn = residual + x
@@ -545,13 +498,13 @@ class SiglipEncoder(nn.Layer):
 
             rope_emb = rope_emb_max_grid[pids].flatten(1)
             rope_emb = rope_emb.tile((1, 2))
-            cos = rope_emb.cos().astype("float32")
-            sin = rope_emb.sin().astype("float32")
-            cos = cos.unsqueeze(-2)
-            sin = sin.unsqueeze(-2)
-            rope_emb = (cos, sin)
+            cos_emb = rope_emb.cos().astype("float32")
+            sin_emb = rope_emb.sin().astype("float32")
+            cos_emb = cos_emb.unsqueeze(-2)
+            sin_emb = sin_emb.unsqueeze(-2)
         else:
-            rope_emb = None
+            cos_emb = None
+            sin_emb = None
 
             window_indices, cu_seqlens_within_windows = None, None
 
@@ -588,7 +541,8 @@ class SiglipEncoder(nn.Layer):
                 output_attentions=output_attentions,
                 cu_seqlens=attn_cu_seqlens,
                 max_seqlen=max_seqlen,
-                rope_emb=rope_emb,
+                cos_emb=cos_emb,
+                sin_emb=sin_emb,
             )
             hidden_states = layer_outputs[0]
 
@@ -736,35 +690,3 @@ class SiglipVisionModel(PretrainedModel):
             use_rope=use_rope,
             window_size=window_size,
         )
-
-    def load_state_dict(self, state_dict):
-        params_dict = dict(self.named_parameters())
-        for param_name, param in params_dict.items():
-            state_dict_key = f"{self.prefix_name}.{param_name}"
-            if state_dict_key not in state_dict:
-                if "self_attn.qkv_proj.weight" in state_dict_key:
-                    q_weight_key = state_dict_key.replace("qkv_proj", "q_proj")
-                    k_weight_key = state_dict_key.replace("qkv_proj", "k_proj")
-                    v_weight_key = state_dict_key.replace("qkv_proj", "v_proj")
-                    q_tensor = get_tensor(state_dict.pop(q_weight_key))
-                    k_tensor = get_tensor(state_dict.pop(k_weight_key))
-                    v_tensor = get_tensor(state_dict.pop(v_weight_key))
-                    weight_tensor = paddle.concat([q_tensor, k_tensor, v_tensor], axis=-1).transpose([1, 0])
-                    tensor = paddle.transpose(weight_tensor, perm=[1, 0])
-                elif "self_attn.qkv_proj.bias" in state_dict_key:
-                    q_bias_key = state_dict_key.replace("qkv_proj", "q_proj")
-                    k_bias_key = state_dict_key.replace("qkv_proj", "k_proj")
-                    v_bias_key = state_dict_key.replace("qkv_proj", "v_proj")
-                    q_bias = get_tensor(state_dict.pop(q_bias_key))
-                    k_bias = get_tensor(state_dict.pop(k_bias_key))
-                    v_bias = get_tensor(state_dict.pop(v_bias_key))
-                    qkv_bias = paddle.concat([q_bias, k_bias, v_bias], axis=-1)
-                    tensor = qkv_bias
-                else:
-                    raise ValueError(f"The key {state_dict_key} does not exist in state_dict. ")
-            else:
-                tensor = get_tensor(state_dict.pop(state_dict_key))
-            if param.shape != tensor.shape:
-                raise ValueError(f"{state_dict_key} param.shape={param.shape} tensor.shape={tensor.shape}")
-            else:
-                param.copy_(tensor, False)
