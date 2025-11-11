@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import sys
 import unittest
 from unittest.mock import MagicMock, Mock, patch
@@ -19,17 +20,145 @@ from unittest.mock import MagicMock, Mock, patch
 import numpy as np
 import pytest
 
+# Set environment to CPU-only mode for unit tests
+# This avoids GPU-related issues and makes tests more portable
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "-1")
+
+# Mock paddle CUDA functions BEFORE any imports
+import paddle
+
+original_get_device_properties = paddle.device.cuda.get_device_properties
+original_cuda_places = paddle.static.cuda_places
+
+
+def mock_get_device_properties(device_id=None):
+    """Mock CUDA device properties to avoid GPU access"""
+    from unittest.mock import Mock
+
+    props = Mock()
+    props.name = "Mock GPU"
+    props.major = 8
+    props.minor = 0
+    return props
+
+
+def mock_cuda_places():
+    """Mock CUDA places to return empty list"""
+    return []
+
+
+# Apply mocks
+paddle.device.cuda.get_device_properties = mock_get_device_properties
+paddle.static.cuda_places = mock_cuda_places
+
+
 # Mock paddleformers and related modules BEFORE importing fastdeploy
-paddleformers_mock = MagicMock()
+# Create a base mock module that allows attribute access and acts as a proper module
+class MockModule(MagicMock):
+    """Mock module that can be imported and has submodules"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__path__ = []  # Make it a package
+        self.__name__ = kwargs.get("__name__", "mock_module")
+
+    def __getattr__(self, name):
+        # Return existing attribute or create new MagicMock
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return MagicMock()
+
+
+# Create dummy classes for inheritance checks
+class MockPretrainedModel:
+    """Dummy PretrainedModel class for issubclass checks"""
+
+    pass
+
+
+class MockPretrainedConfig:
+    """Dummy PretrainedConfig class for inheritance"""
+
+    pass
+
+
+class MockPretrainedTokenizer:
+    """Dummy PretrainedTokenizer class for inheritance"""
+
+    pass
+
+
+class MockBaseImageProcessor:
+    """Dummy BaseImageProcessor class for inheritance"""
+
+    pass
+
+
+# Create mock modules
+paddleformers_mock = MockModule(__name__="paddleformers")
+paddleformers_utils_mock = MockModule(__name__="paddleformers.utils")
+paddleformers_transformers_mock = MockModule(__name__="paddleformers.transformers")
+
+# Add dummy classes to transformers mock
+paddleformers_transformers_mock.PretrainedModel = MockPretrainedModel
+paddleformers_transformers_mock.PretrainedConfig = MockPretrainedConfig
+paddleformers_transformers_mock.PretrainedTokenizer = MockPretrainedTokenizer
+
+# Register all paddleformers modules
 sys.modules["paddleformers"] = paddleformers_mock
-sys.modules["paddleformers.utils"] = MagicMock()
-sys.modules["paddleformers.utils.log"] = MagicMock()
-sys.modules["paddleformers.transformers"] = MagicMock()
-sys.modules["paddleformers.transformers.configuration_utils"] = MagicMock()
+sys.modules["paddleformers.utils"] = paddleformers_utils_mock
+sys.modules["paddleformers.utils.log"] = MockModule(__name__="paddleformers.utils.log")
+sys.modules["paddleformers.utils.safetensors"] = MockModule(__name__="paddleformers.utils.safetensors")
+sys.modules["paddleformers.transformers"] = paddleformers_transformers_mock
+sys.modules["paddleformers.generation"] = MockModule(__name__="paddleformers.generation")
+
+# Mock common paddleformers.transformers submodules
+# Adding all commonly used submodules to avoid repeated imports
+transformers_submodules = [
+    "configuration_utils",
+    "model_utils",
+    "conversion_utils",
+    "activations",
+    "attention_utils",
+    "modeling_utils",
+    "tokenizer_utils_base",
+    "tokenizer_utils",
+    "image_utils",
+    "feature_extraction_utils",
+    "image_processing_utils",
+    "processing_utils",
+    "image_transforms",
+]
+
+for submodule in transformers_submodules:
+    mock_mod = MockModule(__name__=f"paddleformers.transformers.{submodule}")
+    sys.modules[f"paddleformers.transformers.{submodule}"] = mock_mod
+    setattr(paddleformers_transformers_mock, submodule, mock_mod)
+
+# Ensure dummy classes are available in all relevant modules
+sys.modules["paddleformers.transformers.model_utils"].PretrainedModel = MockPretrainedModel
+sys.modules["paddleformers.transformers.configuration_utils"].PretrainedConfig = MockPretrainedConfig
+sys.modules["paddleformers.transformers.tokenizer_utils_base"].PretrainedTokenizer = MockPretrainedTokenizer
+sys.modules["paddleformers.transformers.image_processing_utils"].BaseImageProcessor = MockBaseImageProcessor
 
 # Mock other potentially missing modules
 missing_modules = []
-for module_name in ["msgspec", "aistudio_sdk", "modelscope", "fastapi", "huggingface_hub"]:
+modules_to_mock = [
+    "msgspec",
+    "aistudio_sdk",
+    "modelscope",
+    "fastapi",
+    "huggingface_hub",
+    "torch",
+    "xgrammar",
+    "openai",
+    "zmq",
+    "aiozmq",
+    "crcmod",
+]
+
+for module_name in modules_to_mock:
     try:
         __import__(module_name)
     except ImportError:
@@ -50,16 +179,33 @@ try:
     if missing_modules:
         print(f"Warning: Mocked modules due to missing dependencies: {', '.join(missing_modules)}")
 except Exception as e:
+    import traceback
+
     IMPORT_ERROR = str(e)
+    print(f"Failed to import GPUModelRunner: {e}")
+    print(f"Mocked modules: {missing_modules}")
+    print("Full traceback:")
+    traceback.print_exc()
     # Set module-level skip marker
     pytestmark = pytest.mark.skip(reason=f"Cannot import GPUModelRunner: {e}")
 
 
+def get_common_patches():
+    """Get common patches needed for GPUModelRunner initialization"""
+    return [
+        patch("fastdeploy.worker.gpu_model_runner.get_attention_backend"),
+        patch("fastdeploy.worker.gpu_model_runner.Sampler"),
+        patch("fastdeploy.worker.gpu_model_runner.GPUMemoryChecker"),
+        patch("fastdeploy.worker.gpu_model_runner.get_model_loader"),
+        patch("paddle.device.set_device"),
+    ]
+
+
 def create_mock_fd_config():
-    """Create a complete mock FDConfig object"""
+    """Create a complete mock FDConfig object with all required attributes"""
     mock_config = Mock()
 
-    # model_config
+    # model_config - Add all required attributes
     mock_config.model_config = Mock()
     mock_config.model_config.enable_mm = False
     mock_config.model_config.runner_type = "generation"
@@ -74,6 +220,23 @@ def create_mock_fd_config():
     mock_config.model_config.max_model_len = 2048
     mock_config.model_config.vocab_size = 50000
     mock_config.model_config.model_type = "llama"
+    mock_config.model_config.pad_token_id = 0  # Must be int for paddle.full()
+    mock_config.model_config.eos_token_id = 2
+    mock_config.model_config.eos_tokens_lens = 1
+    mock_config.model_config.top_p = 0.7
+    mock_config.model_config.temperature = 0.95
+    mock_config.model_config.penalty_score = 1.0
+    mock_config.model_config.frequency_score = 0.0
+    mock_config.model_config.presence_score = 0.0
+    mock_config.model_config.min_length = 0
+    mock_config.model_config.max_stop_seqs_num = 4
+    mock_config.model_config.stop_seqs_max_len = 16
+    mock_config.model_config.rope_theta = 10000
+    mock_config.model_config.partial_rotary_factor = 1.0
+    mock_config.model_config.think_end_id = None
+    mock_config.model_config.line_break_id = None
+    mock_config.model_config.architectures = []  # Must be list for iteration
+    mock_config.model_config.model_dir = "/tmp/model"
 
     # cache_config
     mock_config.cache_config = Mock()
@@ -81,6 +244,10 @@ def create_mock_fd_config():
     mock_config.cache_config.total_block_num = 1000
     mock_config.cache_config.kv_cache_dtype = "float16"
     mock_config.cache_config.max_encoder_cache = 0
+    mock_config.cache_config.kv_cache_ratio = 0.9
+    mock_config.cache_config.enc_dec_block_num = 0
+    mock_config.cache_config.enable_prefix_caching = False
+    mock_config.cache_config.enable_chunked_prefill = False
 
     # scheduler_config
     mock_config.scheduler_config = Mock()
@@ -93,18 +260,25 @@ def create_mock_fd_config():
     mock_config.parallel_config.tensor_parallel_size = 1
     mock_config.parallel_config.engine_worker_queue_port = 6666
     mock_config.parallel_config.use_ep = False
+    mock_config.parallel_config.data_parallel_rank = 0
+    mock_config.parallel_config.msg_queue_id = 1
+    mock_config.parallel_config.tensor_parallel_rank = 0
+    mock_config.parallel_config.enable_expert_parallel = False
 
     # speculative_config
     mock_config.speculative_config = Mock()
     mock_config.speculative_config.method = None
+    mock_config.speculative_config.num_speculative_tokens = 0
+    mock_config.speculative_config.num_gpu_block_expand_ratio = 0
 
     # graph_opt_config
     mock_config.graph_opt_config = Mock()
     mock_config.graph_opt_config.use_cudagraph = False
-    mock_config.graph_opt_config.cudagraph_capture_sizes = [1, 2, 4]
+    mock_config.graph_opt_config.cudagraph_capture_sizes = [1, 2, 4, 8]
     mock_config.graph_opt_config.sot_warmup_sizes = []
     mock_config.graph_opt_config.cudagraph_only_prefill = False
     mock_config.graph_opt_config.graph_opt_level = 0
+    mock_config.graph_opt_config.draft_model_use_cudagraph = False
 
     # early_stop_config
     mock_config.early_stop_config = Mock()
@@ -140,24 +314,29 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
 
     def test_initialization_basic(self):
         """Test basic initialization"""
-        with patch("fastdeploy.worker.gpu_model_runner.get_attention_backend"):
-            with patch("fastdeploy.worker.gpu_model_runner.Sampler"):
-                with patch("fastdeploy.worker.gpu_model_runner.GPUMemoryChecker"):
-                    runner = GPUModelRunner(
-                        fd_config=self.mock_fd_config,
-                        device="gpu:0",
-                        device_id=0,
-                        rank=0,
-                        local_rank=0,
-                    )
+        patches = get_common_patches()
+        for p in patches:
+            p.start()
 
-                    # Verify initialization
-                    self.assertEqual(runner.rank, 0)
-                    self.assertEqual(runner.local_rank, 0)
-                    self.assertEqual(runner.device_id, 0)
-                    self.assertIsNotNone(runner.share_inputs)
-                    self.assertIsInstance(runner.mm_cache, dict)
-                    self.assertIsInstance(runner.requests, list)
+        try:
+            runner = GPUModelRunner(
+                fd_config=self.mock_fd_config,
+                device="gpu:0",
+                device_id=0,
+                rank=0,
+                local_rank=0,
+            )
+
+            # Verify initialization
+            self.assertEqual(runner.rank, 0)
+            self.assertEqual(runner.local_rank, 0)
+            self.assertEqual(runner.device_id, 0)
+            self.assertIsNotNone(runner.share_inputs)
+            self.assertIsInstance(runner.mm_cache, dict)
+            self.assertIsInstance(runner.requests, list)
+        finally:
+            for p in patches:
+                p.stop()
 
     def test_exist_prefill(self):
         """Test exist_prefill method - real logic test"""
