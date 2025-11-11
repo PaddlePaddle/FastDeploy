@@ -248,9 +248,11 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         """
         Triton compute Fused MoE.
         """
+        token_num = x.shape[0]
+        if token_num == 0:
+            return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
         x = paddle.concat([x, paddle.ones([1, layer.hidden_size], dtype=x.dtype)])
         gate_out = gate(x.cast("float32"))
-        token_num = x.shape[0]
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
         top_k = layer.top_k
@@ -396,7 +398,6 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         if layer.reduce_results and layer.tp_size > 1:
             out = tensor_model_parallel_all_reduce(out)
 
-        out = out[:-1]
         return out
 
 
@@ -603,9 +604,11 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
         """
         Triton compute Fused MoE.
         """
+        token_num = x.shape[0]
+        if token_num == 0:
+            return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
         x = paddle.concat([x, paddle.ones([1, layer.hidden_size], dtype=x.dtype)])
         gate_out = gate(x.cast("float32"))
-        token_num = x.shape[0]
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
         moe_intermediate_size = layer.moe_intermediate_size
@@ -772,7 +775,6 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
         if layer.reduce_results and layer.tp_size > 1:
             out = tensor_model_parallel_all_reduce(out)
 
-        out = out[:-1]
         return out
 
 
@@ -895,9 +897,11 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         """
         Triton compute Fused MoE.
         """
+        token_num = x.shape[0]
+        if token_num == 0:
+            return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
         x = paddle.concat([x, paddle.ones([1, layer.hidden_size], dtype=x.dtype)])
         gate_out = gate(x.cast("float32"))
-        token_num = x.shape[0]
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
         moe_intermediate_size = layer.moe_intermediate_size
@@ -1063,7 +1067,6 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         if layer.tp_size > 1:
             out = tensor_model_parallel_all_reduce(out)
 
-        out = out[:-1]
         return out
 
 
@@ -1321,9 +1324,11 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         """
         Triton compute Fused MoE.
         """
+        token_num = x.shape[0]
+        if token_num == 0:
+            return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
         x = paddle.concat([x, paddle.ones([1, layer.hidden_size], dtype=x.dtype)])
         gate_out = gate(x.cast("float32"))
-        token_num = x.shape[0]
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
         moe_intermediate_size = layer.moe_intermediate_size
@@ -1469,5 +1474,4 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         if layer.tp_size > 1:
             out = tensor_model_parallel_all_reduce(out)
 
-        out = out[:-1]
         return out
