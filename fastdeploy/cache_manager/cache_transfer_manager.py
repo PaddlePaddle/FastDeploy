@@ -28,9 +28,6 @@ import paddle
 
 from fastdeploy import envs
 from fastdeploy.cache_manager.cache_data import CacheStatus
-
-from fastdeploy.cache_manager.transfer_factory import MooncakeStore
-
 from fastdeploy.cache_manager.ops import (
     cuda_host_alloc,
     cuda_host_free,
@@ -42,6 +39,7 @@ from fastdeploy.cache_manager.ops import (
     swap_cache_layout,
     unset_data_ipc,
 )
+from fastdeploy.cache_manager.transfer_factory import MooncakeStore
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheStatus
 from fastdeploy.platforms import current_platform
@@ -212,10 +210,8 @@ class CacheTransferManager:
                 self.storage_backend = MooncakeStore()
                 self._init_storage_buffer()
             else:
-                raise NotImplementedError(
-                    f"Unsupported storage backend: {storage_backend}"
-                )
-            
+                raise NotImplementedError(f"Unsupported storage backend: {storage_backend}")
+
         write_policy = args.write_policy
         if write_policy not in [
             "write_through",
@@ -223,19 +219,17 @@ class CacheTransferManager:
         ]:
             raise ValueError(f"Invalid write policy: {write_policy}")
         self.write_policy = write_policy
-    
 
         threading.Thread(target=self.clear_or_update_caches, args=[args], daemon=True).start()
 
-
     def _init_storage_buffer(self):
         total_layers = args.num_layers + self.num_extra_layers
-        need_to_allocate_bytes = 32*1024 * args.bytes_per_layer_per_block * total_layers // args.block_size
+        need_to_allocate_bytes = 32 * 1024 * args.bytes_per_layer_per_block * total_layers // args.block_size
         self.cache_stride = args.bytes_per_layer_per_block * total_layers
         logger.info(
             f"[rank {self.rank}/{self.n_ranks}] ..creating cpu cache for alllayers {total_layers}: {2 * need_to_allocate_bytes / 1024 ** 3:.2f}GB"
         )
-        self.key_register_buffer = cuda_host_alloc(need_to_allocate_bytes*2)
+        self.key_register_buffer = cuda_host_alloc(need_to_allocate_bytes * 2)
         self.val_register_buffer = self.key_register_buffer + need_to_allocate_bytes
         self.storage_backend.register_buffer(self.key_register_buffer, need_to_allocate_bytes * 2)
 
@@ -410,7 +404,6 @@ class CacheTransferManager:
         logger.info(f"[rank {self.rank}/{self.n_ranks}] ✅ swap space (cpu cache) is ready!")
         self.swap_space_ready_signal.value[self.rank] = 1
 
-
     def load_storage_task(
         self,
         task_id,
@@ -434,7 +427,6 @@ class CacheTransferManager:
         if current_number > 0:
             keys_k = [f"{key}_key_{self.rank}" for key in hash_keys]
             keys_v = [f"{key}_value_{self.rank}" for key in hash_keys]
-            
 
             target_location_k = [self.key_register_buffer + i * self.cache_stride for i in range(len(gpu_block_ids))]
             target_location_v = [self.val_register_buffer + i * self.cache_stride for i in range(len(gpu_block_ids))]
@@ -444,47 +436,27 @@ class CacheTransferManager:
             keys = keys_k + keys_v
             target_location = target_location_k + target_location_v
 
-
-            self.storage_backend.get(
-                keys_k,
-                target_location=target_location,
-                target_sizes=target_sizes
-            )
+            self.storage_backend.get(keys_k, target_location=target_location, target_sizes=target_sizes)
 
             swap_cache_layout(
-               self.gpu_cache_k_tensors,
-               self.key_register_buffer,
-               gpu_block_ids,
-               self.rank,
-               0 # gpu ==> cpu
+                self.gpu_cache_k_tensors, self.key_register_buffer, gpu_block_ids, self.rank, 0  # gpu ==> cpu
             )
-            swap_cache_layout(
-               self.gpu_cache_v_tensors,
-               self.val_register_buffer,
-               gpu_block_ids,
-               self.rank,
-               0
-            )
-        result =(
-            hash_keys,
-            gpu_block_ids,
-            [],
-            CacheStatus.STORAGE2GPU,
-            task_id
-        )
+            swap_cache_layout(self.gpu_cache_v_tensors, self.val_register_buffer, gpu_block_ids, self.rank, 0)
+        result = (hash_keys, gpu_block_ids, [], CacheStatus.STORAGE2GPU, task_id)
         self.cache_task_queue.swap_storage_to_gpu_barrier.wait()
         if self.rank == 0:
-            logger.info(f"[rank {self.rank}/{self.n_ranks}] {current_number} data found in storage for task {task_id}, finish loading.")
+            logger.info(
+                f"[rank {self.rank}/{self.n_ranks}] {current_number} data found in storage for task {task_id}, finish loading."
+            )
             self.cache_task_queue.swap_storage_to_gpu_barrier.reset()
             self.cache_task_queue.put_transfer_done_signal(result)
 
-
     def write_back_storage_task(
-            self,
-            keys,
-            gpu_block_ids,
-            transfer_task_id,
-        ):
+        self,
+        keys,
+        gpu_block_ids,
+        transfer_task_id,
+    ):
         """
         writeback kv cache to storage
         """
@@ -492,9 +464,9 @@ class CacheTransferManager:
         logger.debug(f"write cache to storage {keys} {gpu_block_ids}  {transfer_task_id}")
         if gpu_block_ids is None:
             raise ValueError("gpu_block_ids cannot be None")
-        
+
         keys_k = [f"{key}_key_{self.rank}" for key in keys]
-        result  = self.storage_backend.exists(keys_k)
+        result = self.storage_backend.exists(keys_k)
         uncached_keys_k = []
         uncached_keys_v = []
         uncached_block_ids = []
@@ -508,31 +480,25 @@ class CacheTransferManager:
 
         if len(uncached_keys_k) > 0:
             swap_cache_layout(
-               self.gpu_cache_k_tensors,
-               self.key_register_buffer,
-               uncached_block_ids,
-               self.rank,
-               1 # gpu ==> cpu
+                self.gpu_cache_k_tensors, self.key_register_buffer, uncached_block_ids, self.rank, 1  # gpu ==> cpu
             )
             swap_cache_layout(
-               self.gpu_cache_v_tensors,
-               self.val_register_buffer,
-               uncached_block_ids,
-               self.rank,
-               1 # gpu ==> cpu
+                self.gpu_cache_v_tensors, self.val_register_buffer, uncached_block_ids, self.rank, 1  # gpu ==> cpu
             )
 
-            target_location_k = [self.key_register_buffer + i * self.cache_stride for i in range(len(uncached_block_ids))]
-            target_location_v = [self.val_register_buffer + i * self.cache_stride for i in range(len(uncached_block_ids))]
+            target_location_k = [
+                self.key_register_buffer + i * self.cache_stride for i in range(len(uncached_block_ids))
+            ]
+            target_location_v = [
+                self.val_register_buffer + i * self.cache_stride for i in range(len(uncached_block_ids))
+            ]
 
             target_sizes = [self.cache_stride] * len(uncached_block_ids) * 2
 
             target_location = target_location_k + target_location_v
             logger.info(f"write cache to storage {uncached_keys_k + uncached_keys_v} {target_location} {target_sizes}")
             self.storage_backend.set(
-                uncached_keys_k + uncached_keys_v,
-                target_location=target_location,
-                target_sizes=target_sizes
+                uncached_keys_k + uncached_keys_v, target_location=target_location, target_sizes=target_sizes
             )
 
         result = (

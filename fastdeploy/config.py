@@ -1287,7 +1287,6 @@ class CacheConfig:
             self.enable_hierarchical_cache = False
         else:
             self.enable_hierarchical_cache = True
-        
 
         if self.model_cfg is not None:
             if self.model_cfg.quantization is not None and isinstance(self.model_cfg.quantization, dict):

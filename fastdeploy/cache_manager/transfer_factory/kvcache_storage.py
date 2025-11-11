@@ -14,16 +14,15 @@
 # limitations under the License.
 """
 
-import hashlib
-import logging
-import os
 from abc import ABC, abstractmethod
 from typing import Any, List, Optional
+
 import paddle
 
 from fastdeploy.utils import get_logger
 
 logger = get_logger("kvcache_storage", "kvcache_storage.log")
+
 
 def get_hash_str(token_ids: List[int], prefix_block_key: str) -> str:
     """

@@ -701,7 +701,7 @@ class ResourceManagerV1(ResourceManager):
                                     storage_block_ids = self.get_storage_cached_blocks(request, extra_gpu_block_ids)
                                     num_new_tokens -= len(storage_block_ids) * self.config.cache_config.block_size
                                 request.block_tables.extend(extra_gpu_block_ids)
-                            
+
                             self.waiting.popleft()
                             self.running.append(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
@@ -885,7 +885,7 @@ class ResourceManagerV1(ResourceManager):
                 self.real_bsz = i + 1
                 break
         return self.real_bsz
-    
+
     def get_storage_cached_blocks(self, request: Request, extra_gpu_block_ids: list = []):
         """
         set prefix cached information for the given request
@@ -893,10 +893,10 @@ class ResourceManagerV1(ResourceManager):
         try:
             cache_prepare_time = time.time()
             llm_logger.info(f"req {request.request_id}")
-            matched_block_ids = self.cache_manager.request_match_storage_blocks(
-                request, extra_gpu_block_ids
+            matched_block_ids = self.cache_manager.request_match_storage_blocks(request, extra_gpu_block_ids)
+            llm_logger.info(
+                f"storage backend: {self.config.cache_config.kvcache_storage_backend} matched block ids: {matched_block_ids}"
             )
-            llm_logger.info(f"storage backend: {self.config.cache_config.kvcache_storage_backend} matched block ids: {matched_block_ids}")
 
             matched_token_num = len(matched_block_ids) * self.config.cache_config.block_size
 
@@ -910,12 +910,12 @@ class ResourceManagerV1(ResourceManager):
             # Report the number of cached tokens to Prometheus metrics
             main_process_metrics.prefix_cache_token_num.inc(matched_token_num)
             request.num_computed_tokens += matched_token_num
-            request.cache_prepare_time += (time.time() - cache_prepare_time)
+            request.cache_prepare_time += time.time() - cache_prepare_time
             return matched_block_ids
         except Exception as e:
             llm_logger.error(f"prefix match blocks error: {e}, {str(traceback.format_exc())} waiting reschedule...")
             return []
-           
+
     def get_prefix_cached_blocks(self, request: Request):
         """
         set prefix cached information for the given request
