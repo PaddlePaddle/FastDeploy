@@ -47,9 +47,8 @@ def load_plugins_by_group(group: str) -> dict[str, Callable[[], Any]]:
 
     plugins = dict[str, Callable[[], Any]]()
     for plugin in discovered_plugins:
-        if  plugin.name in allowed_plugins:
+        if plugin.name in allowed_plugins:
             logger.info("Loading plugin %s", plugin.name)
-
             try:
                 func = plugin.load()
                 plugins[plugin.name] = func
