@@ -48,7 +48,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 |模型|DataType|模型案例|
 |-|-|-|
-| ERNIE-VL  |BF16/WINT4/WINT8| baidu/ERNIE-4.5-VL-424B-A47B-Paddle<br>&emsp;[快速部署](./get_started/ernie-4.5-vl.md) &emsp; [最佳实践](./best_practices/ERNIE-4.5-VL-424B-A47B-Paddle.md) ;<br>baidu/ERNIE-4.5-VL-28B-A3B-Paddle<br>&emsp;[快速部署](./get_started/quick_start_vl.md) &emsp; [最佳实践](./best_practices/ERNIE-4.5-VL-28B-A3B-Paddle.md) ;|
+| ERNIE-VL  |BF16/WINT4/WINT8| baidu/ERNIE-4.5-VL-424B-A47B-Paddle<br>&emsp;[快速部署](./get_started/ernie-4.5-vl.md) &emsp; [最佳实践](./best_practices/ERNIE-4.5-VL-424B-A47B-Paddle.md) ;<br>baidu/ERNIE-4.5-VL-28B-A3B-Paddle<br>&emsp;[快速部署](./get_started/quick_start_vl.md) &emsp; [最佳实践](./best_practices/ERNIE-4.5-VL-28B-A3B-Paddle.md) ;<br>baidu/ERNIE-4.5-VL-28B-A3B-Thinking<br>&emsp;[快速部署](./get_started/ernie-4.5-vl-thinking.md)&emsp; [最佳实践](./best_practices/ERNIE-4.5-VL-28B-A3B-Thinking.md) ;
 | PaddleOCR-VL  |BF16/WINT4/WINT8| PaddlePaddle/PaddleOCR-VL<br>&emsp; [最佳实践](./best_practices/PaddleOCR-VL-0.9B.md) ;|
 | QWEN-VL  |BF16/WINT4/FP8| Qwen/Qwen2.5-VL-72B-Instruct;<br>Qwen/Qwen2.5-VL-32B-Instruct;<br>Qwen/Qwen2.5-VL-7B-Instruct;<br>Qwen/Qwen2.5-VL-3B-Instruct|
 
