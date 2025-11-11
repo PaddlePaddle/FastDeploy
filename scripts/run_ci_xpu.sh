@@ -38,7 +38,10 @@ echo "uninstall org"
 python -m pip uninstall paddlepaddle-xpu -y
 python -m pip uninstall fastdeploy-xpu -y
 
-python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
+# python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
+#由于主框架更新 暂时锁死版本
+export data=20251109
+python -m pip install https://paddle-whl.bj.bcebos.com/nightly/xpu-p800/paddlepaddle-xpu/paddlepaddle_xpu-3.3.0.dev${data}-cp310-cp310-linux_x86_64.whl
 
 echo "build whl"
 bash custom_ops/xpu_ops/download_dependencies.sh develop
