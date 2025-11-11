@@ -279,7 +279,9 @@ class FusedMoE(nn.Layer):
             shard_offset = self.tp_rank * block_size
             shard_size = (self.tp_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, tp_shard_dim, shard_offset, shard_size)
-        loaded_weight = get_tensor(loaded_weight)
+            loaded_weight = get_tensor(loaded_weight, moe_output_dim=tp_shard_dim)
+        else:
+            loaded_weight = get_tensor(loaded_weight)
         expert_param = param[expert_id - self.expert_id_offset]
         dim = -1 if shard_dim else 0
         param_shard_size = expert_param.shape[dim] // 2
@@ -325,7 +327,9 @@ class FusedMoE(nn.Layer):
             shard_offset = self.tp_rank * block_size
             shard_size = (self.tp_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, tp_shard_dim, shard_offset, shard_size)
-        loaded_weight = get_tensor(loaded_weight)
+            loaded_weight = get_tensor(loaded_weight, moe_output_dim=tp_shard_dim)
+        else:
+            loaded_weight = get_tensor(loaded_weight)
         expert_param = param[expert_id - self.expert_id_offset]
         if hasattr(param, "tensor_track"):
             # for dyn quant

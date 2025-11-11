@@ -125,7 +125,7 @@ def _set_var_distributed(var: Tensor, split_axis: int):
         main_block._find_var_recursive(var.name).is_distributed = True
 
 
-def get_tensor(input: Union[paddle.Tensor, np.ndarray, str], model_path=None) -> paddle.Tensor:
+def get_tensor(input: Union[paddle.Tensor, np.ndarray, str], model_path=None, moe_output_dim=False) -> paddle.Tensor:
     """
     Return a corresponding PaddlePaddle tensor based on the type and content of the input.
 
@@ -144,7 +144,15 @@ def get_tensor(input: Union[paddle.Tensor, np.ndarray, str], model_path=None) ->
             return input.to(paddle.device.get_device())
         return input
     elif isinstance(input, np.ndarray):
-        return paddle.to_tensor(input)
+        if not moe_output_dim:
+            try:
+                input = paddle.Tensor(input, zero_copy=True)
+                input = input._copy_to(paddle.framework._current_expected_place(), False)
+                return input
+            except Exception:
+                return paddle.to_tensor(input)
+        else:
+            return paddle.to_tensor(input)
     elif isinstance(input, str):
         from fastdeploy.model_executor.load_weight_utils import load_reordered_experts
 
