@@ -44,14 +44,6 @@ class LogprobsLists(NamedTuple):
     # [num_reqs]
     sampled_token_ranks: list[int]
 
-    def slice(self, start: int, end: int):
-        """slice"""
-        return LogprobsLists(
-            self.logprob_token_ids[start:end],
-            self.logprobs[start:end],
-            self.sampled_token_ranks[start:end],
-        )
-
     def slice_columns(self, start: int, end: int):
         """
         Slice columns (per-row top-k logprobs and token IDs).
@@ -61,6 +53,17 @@ class LogprobsLists(NamedTuple):
             [row[start:end] for row in self.logprob_token_ids],
             [row[start:end] for row in self.logprobs],
             self.sampled_token_ranks,  # unchanged
+        )
+
+    def slice_rows(self, start: int, end: int):
+        """
+        Slice rows.
+        Keeps the number of max_num_logprobs unchanged.
+        """
+        return LogprobsLists(
+            self.logprob_token_ids[start:end],
+            self.logprobs[start:end],
+            self.sampled_token_ranks[start:end],
         )
 
 
@@ -86,13 +89,37 @@ class LogprobsTensors(NamedTuple):
     def empty_cpu(num_positions: int, num_tokens_per_position: int) -> "LogprobsTensors":
         """Create empty LogprobsTensors on CPU."""
 
-        logprob_token_ids = paddle.empty([num_positions, num_tokens_per_position], dtype=paddle.int64).cpu()
-        logprobs = paddle.empty_like(logprob_token_ids, dtype=paddle.float32)
-        selected_token_ranks = paddle.empty([num_positions], dtype=paddle.int64).cpu()
+        logprob_token_ids = paddle.empty([num_positions, num_tokens_per_position], device="cpu", dtype=paddle.int64)
+        logprobs = paddle.empty_like(logprob_token_ids, device="cpu", dtype=paddle.float32)
+        selected_token_ranks = paddle.empty([num_positions], device="cpu", dtype=paddle.int64)
         return LogprobsTensors(
             logprob_token_ids=logprob_token_ids,
             logprobs=logprobs,
             selected_token_ranks=selected_token_ranks,
+        )
+
+    @staticmethod
+    def empty(num_positions: int, num_tokens_per_position: int) -> "LogprobsTensors":
+        """Create empty LogprobsTensors on default device."""
+
+        logprob_token_ids = paddle.empty([num_positions, num_tokens_per_position], dtype=paddle.int64)
+        logprobs = paddle.empty_like(logprob_token_ids, dtype=paddle.float32)
+        selected_token_ranks = paddle.empty([num_positions], dtype=paddle.int64)
+        return LogprobsTensors(
+            logprob_token_ids=logprob_token_ids,
+            logprobs=logprobs,
+            selected_token_ranks=selected_token_ranks,
+        )
+
+    def slice_rows(self, start: int, end: int):
+        """
+        Slice rows.
+        Keeps the number of max_num_logprobs unchanged.
+        """
+        return LogprobsTensors(
+            self.logprob_token_ids[start:end],
+            self.logprobs[start:end],
+            self.selected_token_ranks[start:end],
         )
 
 
@@ -241,6 +268,11 @@ class ModelOutputData:
         step mask rollback in some cases
     """
     mask_rollback: paddle.Tensor = None
+
+    """
+        prompt_logprobs
+    """
+    prompt_logprobs_list: Optional[LogprobsTensors] = None
 
 
 @dataclass

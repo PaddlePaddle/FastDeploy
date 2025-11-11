@@ -623,7 +623,6 @@ class MTPProposer(Proposer):
         """
         # Initialize forward meta
         self.forward_meta = ForwardMeta(
-            input_ids=self.model_inputs["input_ids"],
             ids_remove_padding=self.model_inputs["ids_remove_padding"],
             rotary_embs=self.model_inputs["rope_emb"],
             attn_backend=self.attn_backends[0],
@@ -660,7 +659,7 @@ class MTPProposer(Proposer):
         """
         check whether prefill stage exist
         """
-        if int(paddle.max(self.model_inputs["seq_lens_encoder"])) != 0:
+        if np.any(self.share_inputs["seq_lens_encoder"].numpy() > 0):
             return 1
         else:
             return 0

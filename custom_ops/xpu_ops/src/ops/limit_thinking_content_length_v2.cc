@@ -25,6 +25,7 @@ void LimitThinkingContentLengthV2(const paddle::Tensor& next_tokens,
                                   const paddle::Tensor& max_think_lens,
                                   const paddle::Tensor& step_idx,
                                   const paddle::Tensor& limit_think_status,
+                                  const paddle::Tensor& stop_flags,
                                   const int64_t think_end_id,
                                   const int64_t line_break_id) {
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
@@ -38,6 +39,7 @@ void LimitThinkingContentLengthV2(const paddle::Tensor& next_tokens,
       max_think_lens.data<int>(),
       step_idx.data<int64_t>(),
       const_cast<int*>(limit_think_status.data<int>()),
+      stop_flags.data<bool>(),
       think_end_id,
       line_break_id,
       batch_size);
@@ -47,7 +49,11 @@ void LimitThinkingContentLengthV2(const paddle::Tensor& next_tokens,
 }
 
 PD_BUILD_STATIC_OP(limit_thinking_content_length_v2)
-    .Inputs({"next_tokens", "max_think_lens", "step_idx", "limit_think_status"})
+    .Inputs({"next_tokens",
+             "max_think_lens",
+             "step_idx",
+             "limit_think_status",
+             "stop_flags"})
     .Attrs({"think_end_id: int64_t", "line_break_id: int64_t"})
     .Outputs({"next_tokens_out"})
     .SetInplaceMap({{"next_tokens", "next_tokens_out"}})

@@ -6,12 +6,30 @@ echo "$DIR"
 apt install -y lsof
 
 #先kill一遍
-ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-lsof -t -i :8188 | xargs kill -9 || true
-#设置模型路径
-export model_path=${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle
+function stop_processes() {
+    ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+    ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+    ps -efww | grep -E "$((8188 + GPU_ID * 100))" | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+    lsof -t -i :$((8188 + GPU_ID * 100)) | xargs kill -9 || true
+}
+stop_processes
+
+# 由于机器原因，需重启使用的卡，以保障没有问题
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
+
+mkdir -p /workspace/deps
+cd /workspace/deps
+wget -q https://klx-sdk-release-public.su.bcebos.com/xre/kl3-release/5.0.21.21/xre-Linux-x86_64-5.0.21.21.tar.gz
+tar -zxf xre-Linux-x86_64-5.0.21.21.tar.gz && mv xre-Linux-x86_64-5.0.21.21 xre
+cd -
+export PATH=/workspace/deps/xre/bin:$PATH
+
+xpu-smi -r -i $XPU_VISIBLE_DEVICES
+xpu-smi
 
 echo "pip requirements"
 python -m pip install -r requirements.txt
@@ -20,13 +38,15 @@ echo "uninstall org"
 python -m pip uninstall paddlepaddle-xpu -y
 python -m pip uninstall fastdeploy-xpu -y
 
-python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
+# python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
+#由于主框架更新 暂时锁死版本
+export data=20251109
+python -m pip install https://paddle-whl.bj.bcebos.com/nightly/xpu-p800/paddlepaddle-xpu/paddlepaddle_xpu-3.3.0.dev${data}-cp310-cp310-linux_x86_64.whl
 
 echo "build whl"
 bash custom_ops/xpu_ops/download_dependencies.sh develop
 export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
 export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
-
 bash build.sh || exit 1
 
 echo "pip others"
@@ -39,6 +59,8 @@ unset http_proxy
 unset https_proxy
 unset no_proxy
 
+stop_processes
+
 # 起服务
 rm -rf log/*
 rm -f core*
@@ -46,15 +68,24 @@ rm -f core*
 #清空消息队列
 ipcrm --all=msg
 echo "============================开始V1模式测试!============================"
-export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
+export port_num=$((8188 + GPU_ID * 100))
 python -m fastdeploy.entrypoints.openai.api_server \
-    --model ${model_path} \
-    --port 8188 \
-    --tensor-parallel-size 8 \
+    --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle \
+    --port $port_num \
+    --engine-worker-queue-port $((port_num + 1)) \
+    --metrics-port $((port_num + 2)) \
+    --cache-queue-port $((port_num + 47873)) \
+    --tensor-parallel-size 4 \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
     --max-num-seqs 128 \
-    --quantization wint4   > server.log 2>&1 &
+    --quantization wint4  \
+    --load-choices default  > server.log 2>&1 &
 
 sleep 60
 # 探活
@@ -71,7 +102,10 @@ while true; do
     # 超时判断
     if [ $ELAPSED -ge $TIMEOUT ]; then
         echo -e "\n服务启动超时：经过 $((TIMEOUT/60)) 分钟服务仍未启动！"
+        stop_processes
+        echo "server.log"
         cat server.log
+        echo "log/workerlog.0"
         cat log/workerlog.0
         exit 1
     fi
@@ -93,10 +127,7 @@ python -m pytest tests/ci_use/XPU_45T/run_45T.py
 kv_block_test_exit_code=$?
 echo kv_block_test_exit_code is ${kv_block_test_exit_code}
 
-ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-lsof -t -i :8188 | xargs kill -9 || true
+stop_processes
 
 if [ ${kv_block_test_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
@@ -113,15 +144,24 @@ rm -f core*
 #清空消息队列
 ipcrm --all=msg
 echo "============================开始W4A8测试!============================"
-export XPU_VISIBLE_DEVICES="0,1,2,3"
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
+export port_num=$((8188 + GPU_ID * 100))
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle \
-    --port 8188 \
+    --port $port_num \
+    --engine-worker-queue-port $((port_num + 1)) \
+    --metrics-port $((port_num + 2)) \
+    --cache-queue-port $((port_num + 47873)) \
     --tensor-parallel-size 4 \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
     --max-num-seqs 64 \
-    --quantization "W4A8"   > server.log 2>&1 &
+    --quantization "W4A8" \
+    --load-choices default  > server.log 2>&1 &
 
 sleep 60
 # 探活
@@ -138,7 +178,10 @@ while true; do
     # 超时判断
     if [ $ELAPSED -ge $TIMEOUT ]; then
         echo -e "\n服务启动超时：经过 $((TIMEOUT/60)) 分钟服务仍未启动！"
+        stop_processes
+        echo "server.log"
         cat server.log
+        echo "log/workerlog.0"
         cat log/workerlog.0
         exit 1
     fi
@@ -160,10 +203,7 @@ python -m pytest tests/ci_use/XPU_45T/run_w4a8.py
 w4a8_test_exit_code=$?
 echo w4a8_test_exit_code is ${w4a8_test_exit_code}
 
-ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-lsof -t -i :8188 | xargs kill -9 || true
+stop_processes
 
 if [ ${w4a8_test_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
@@ -180,18 +220,27 @@ rm -f core*
 #清空消息队列
 ipcrm --all=msg
 echo "============================开始vl模型测试!============================"
-export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
+export port_num=$((8188 + GPU_ID * 100))
 python -m fastdeploy.entrypoints.openai.api_server \
-    --model ${MODEL_PATH}/ERNIE-4.5-VL-424B-A47B-Paddle \
-    --port 8188 \
-    --tensor-parallel-size 8 \
+    --model ${MODEL_PATH}/ERNIE-4.5-VL-28B-A3B-Paddle \
+    --port $port_num \
+    --engine-worker-queue-port $((port_num + 1)) \
+    --metrics-port $((port_num + 2)) \
+    --cache-queue-port $((port_num + 47873)) \
+    --tensor-parallel-size 4 \
     --max-model-len 32768 \
     --max-num-seqs 10 \
     --quantization wint8 \
     --enable-mm \
     --mm-processor-kwargs '{"video_max_frames": 30}' \
     --limit-mm-per-prompt '{"image": 10, "video": 3}' \
-    --reasoning-parser ernie-45-vl > server.log 2>&1 &
+    --reasoning-parser ernie-45-vl \
+    --load-choices default > server.log 2>&1 &
 
 sleep 60
 # 探活
@@ -208,7 +257,10 @@ while true; do
     # 超时判断
     if [ $ELAPSED -ge $TIMEOUT ]; then
         echo -e "\n服务启动超时：经过 $((TIMEOUT/60)) 分钟服务仍未启动！"
+        stop_processes
+        echo "server.log"
         cat server.log
+        echo "log/workerlog.0"
         cat log/workerlog.0
         exit 1
     fi
@@ -230,10 +282,7 @@ python -m pytest tests/ci_use/XPU_45T/run_45vl.py
 vl_test_exit_code=$?
 echo vl_test_exit_code is ${vl_test_exit_code}
 
-ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-lsof -t -i :8188 | xargs kill -9 || true
+stop_processes
 
 if [ ${vl_test_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
@@ -243,12 +292,18 @@ if [ ${vl_test_exit_code} -ne 0 ]; then
 fi
 
 
-echo "============================开始EP并行测试!============================"
+echo "============================开始 EP8TP1 测试!============================"
 sleep 5
 rm -rf log/*
 rm -f core*
+ipcrm --all=msg
 xpu-smi
-export XPU_VISIBLE_DEVICES="0,1,2,3"
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
+
 export BKCL_ENABLE_XDR=1
 export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
 export BKCL_TRACE_TOPO=1
@@ -263,6 +318,9 @@ cd xDeepEP
 bash build.sh
 cd -
 
+export enable_expert_parallel=1
+export enable_tensor_parallel=0
+
 python -m pytest -s --timeout=600 tests/ci_use/XPU_45T/run_ep.py
 ep_exit_code=$?
 
@@ -273,14 +331,98 @@ unset BKCL_PCIE_RING
 unset XSHMEM_MODE
 unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
-ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-lsof -t -i :8188 | xargs kill -9 || true
+stop_processes
 
 if [ ${ep_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
     cat log/workerlog.0
-    echo "EP并行 相关测试失败，请检查pr代码"
+    echo "EP8TP1 相关测试失败，请检查pr代码"
+    exit 1
+fi
+
+
+echo "============================开始 EP8TP8 allreduce 测试!============================"
+sleep 5
+rm -rf log/*
+rm -f core*
+ipcrm --all=msg
+xpu-smi
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
+
+export BKCL_ENABLE_XDR=1
+export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
+export BKCL_TRACE_TOPO=1
+export BKCL_PCIE_RING=1
+export XSHMEM_MODE=1
+export XSHMEM_QP_NUM_PER_RANK=32
+export BKCL_RDMA_VERBS=1
+
+export enable_expert_parallel=1
+export enable_tensor_parallel=1
+export disable_sequence_parallel_moe=1
+
+python -m pytest -s --timeout=600 tests/ci_use/XPU_45T/run_ep.py
+ep_exit_code=$?
+
+unset BKCL_ENABLE_XDR
+unset BKCL_RDMA_NICS
+unset BKCL_TRACE_TOPO
+unset BKCL_PCIE_RING
+unset XSHMEM_MODE
+unset XSHMEM_QP_NUM_PER_RANK
+unset BKCL_RDMA_VERBS
+unset enable_expert_parallel
+unset enable_tensor_parallel
+unset disable_sequence_parallel_moe
+stop_processes
+
+if [ ${ep_exit_code} -ne 0 ]; then
+    echo "log/workerlog.0"
+    cat log/workerlog.0
+    echo "EP8TP8 allreduce 相关测试失败，请检查pr代码"
+    exit 1
+fi
+
+
+echo "============================开始 EP8TP8 all2all 测试!============================"
+sleep 5
+rm -rf log/*
+rm -f core*
+ipcrm --all=msg
+xpu-smi
+export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+export BKCL_ENABLE_XDR=1
+export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
+export BKCL_TRACE_TOPO=1
+export BKCL_PCIE_RING=1
+export XSHMEM_MODE=1
+export XSHMEM_QP_NUM_PER_RANK=32
+export BKCL_RDMA_VERBS=1
+
+export enable_expert_parallel=1
+export enable_tensor_parallel=1
+
+python -m pytest -s --timeout=600 tests/ci_use/XPU_45T/run_ep.py
+ep_exit_code=$?
+
+unset BKCL_ENABLE_XDR
+unset BKCL_RDMA_NICS
+unset BKCL_TRACE_TOPO
+unset BKCL_PCIE_RING
+unset XSHMEM_MODE
+unset XSHMEM_QP_NUM_PER_RANK
+unset BKCL_RDMA_VERBS
+unset enable_expert_parallel
+unset enable_tensor_parallel
+stop_processes
+
+if [ ${ep_exit_code} -ne 0 ]; then
+    echo "log/workerlog.0"
+    cat log/workerlog.0
+    echo "EP8TP8 all2all 相关测试失败，请检查pr代码"
     exit 1
 fi

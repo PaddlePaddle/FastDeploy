@@ -587,7 +587,6 @@ class GCUModelRunner(ModelRunnerBase):
         """
         # Initialize forward meta
         self.forward_meta = ForwardMeta(
-            input_ids=self.share_inputs["input_ids"],
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
             attn_backend=self.attn_backends[0],
