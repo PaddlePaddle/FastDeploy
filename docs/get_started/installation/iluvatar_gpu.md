@@ -22,7 +22,7 @@ docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
 ### Start Container
 
 ```bash
-docker run -itd --name paddle_infer -v /usr/src:/usr/src -v /lib/modules:/lib/modules -v /dev:/dev -v /home/paddle:/home/paddle --privileged --cap-add=ALL --pid=host ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
+docker run -itd --name paddle_infer --network host -v /usr/src:/usr/src -v /lib/modules:/lib/modules -v /dev:/dev -v /home/paddle:/home/paddle --privileged --cap-add=ALL --pid=host ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
 docker exec -it paddle_infer bash
 ```
 
@@ -432,7 +432,7 @@ docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
 ### Start Container
 
 ```bash
-docker run -itd --name paddle_infer -v /usr/src:/usr/src -v /lib/modules:/lib/modules -v /dev:/dev -v /home/paddle:/home/paddle --privileged --cap-add=ALL --pid=host ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
+docker run -itd --name paddle_infer --network host -v /usr/src:/usr/src -v /lib/modules:/lib/modules -v /dev:/dev -v /home/paddle:/home/paddle --privileged --cap-add=ALL --pid=host ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:latest
 docker exec -it paddle_infer bash
 ```
 
@@ -441,8 +441,8 @@ docker exec -it paddle_infer bash
 ### Install paddle
 
 ```bash
-pip3 install paddlepaddle==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
-pip3 install paddle-iluvatar-gpu==3.0.0.dev20250926 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
+pip3 install paddlepaddle==3.3.0.dev20251028 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
+pip3 install paddle-iluvatar-gpu==3.0.0.dev20251029 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
 ```
 For latest paddle version on iluvatar. Refer to [PaddlePaddle Installation](https://www.paddlepaddle.org.cn/)
 
@@ -555,4 +555,81 @@ generated_text=
 图中的文物是**北齐释迦牟尼佛像**，属于**北齐（公元550年－577年）**的文物。
 
 这件佛像具有典型的北齐风格，佛像结跏趺坐于莲花座上，身披通肩袈裟，面部圆润，神态安详，体现了北齐佛教艺术的独特魅力。
+```
+
+## Testing thinking model
+
+### ERNIE-4.5-21B-A3B-Thinking
+Refer to [gpu doc](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/best_practices/ERNIE-4.5-21B-A3B-Thinking.md), the command is bellow:
+
+server:
+```bash
+#!/bin/bash
+export PADDLE_XCCL_BACKEND=iluvatar_gpu
+export INFERENCE_MSG_QUEUE_ID=232132
+export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
+export FD_SAMPLING_CLASS=rejection
+export FD_DEBUG=1
+python3 -m fastdeploy.entrypoints.openai.api_server \
+       --model baidu/ERNIE-4.5-21B-A3B-Thinking \
+       --port 8180 \
+       --load-choices "default_v1" \
+       --tensor-parallel-size 2 \
+       --max-model-len 32768 \
+       --quantization wint8 \
+       --block-size 16 \
+       --reasoning-parser ernie_x1 \
+       --tool-call-parser ernie_x1 \
+       --max-num-seqs 8
+```
+
+client:
+
+```bash
+curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "Write me a poem about large language model."}
+  ]
+}'
+```
+
+### ERNIE-4.5-VL-28B-A3B
+Refer to [gpu doc](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/get_started/ernie-4.5-vl.md), set `"chat_template_kwargs":{"enable_thinking": true}` and the command is bellow:
+
+server:
+```bash
+#!/bin/bash
+export PADDLE_XCCL_BACKEND=iluvatar_gpu
+export INFERENCE_MSG_QUEUE_ID=232132
+export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
+export FD_SAMPLING_CLASS=rejection
+export FD_DEBUG=1
+python3 -m fastdeploy.entrypoints.openai.api_server \
+       --model baidu/ERNIE-4.5-VL-28B-A3B-Paddle \
+       --port 8180 \
+       --tensor-parallel-size 2 \
+       --max-model-len 32768 \
+       --quantization wint8 \
+       --block-size 16 \
+       --limit-mm-per-prompt '{"image": 100, "video": 100}' \
+       --reasoning-parser ernie-45-vl \
+       --max-num-seqs 8
+```
+
+client:
+
+```bash
+curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": [
+      {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg"}},
+      {"type": "text", "text": "From which era does the artifact in the image originate?"}
+    ]}
+  ],
+  "chat_template_kwargs":{"enable_thinking": true}
+}'
 ```

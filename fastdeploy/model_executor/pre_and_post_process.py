@@ -27,6 +27,8 @@ from fastdeploy.platforms import current_platform
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
         get_padding_offset,
+        limit_thinking_content_length_v1,
+        limit_thinking_content_length_v2,
         save_output,
         set_stop_value_multi_ends,
         step_paddle,
