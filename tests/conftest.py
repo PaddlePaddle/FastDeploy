@@ -34,6 +34,8 @@ class FDRunner:
         ports_to_clean = []
         if "engine_worker_queue_port" in kwargs:
             ports_to_clean.append(kwargs["engine_worker_queue_port"])
+        if "cache_queue_port" in kwargs:
+            ports_to_clean.append(kwargs["cache_queue_port"])
         clean_ports(ports_to_clean)
         time.sleep(5)
         graph_optimization_config = {"use_cudagraph": False}
