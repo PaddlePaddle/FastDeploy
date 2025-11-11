@@ -83,7 +83,9 @@ class XPUAttentionBackend(AttentionBackend):
         self.rope_theta: float = (
             10000.0 if fd_config.model_config.rope_theta is None else fd_config.model_config.rope_theta
         )
-        self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False)
+        self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False) or getattr(
+            fd_config.model_config, "use_3d_rope", False
+        )
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
         self.rank: int = fd_config.parallel_config.tensor_parallel_rank

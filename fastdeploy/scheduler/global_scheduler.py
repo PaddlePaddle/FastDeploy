@@ -24,13 +24,12 @@ from typing import Dict, List, Optional, Tuple
 import crcmod
 from redis import ConnectionPool
 
-from fastdeploy import envs
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.scheduler import utils
 from fastdeploy.scheduler.data import ScheduledRequest, ScheduledResponse
 from fastdeploy.scheduler.storage import AdaptedRedis
 from fastdeploy.scheduler.workers import Task, Workers
-from fastdeploy.utils import scheduler_logger
+from fastdeploy.utils import envs, scheduler_logger
 
 
 class GlobalScheduler:

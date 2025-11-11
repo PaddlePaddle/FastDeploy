@@ -47,6 +47,12 @@ class RequestType(Enum):
 
 
 @dataclass
+class ImagePosition:
+    offset: int = 0
+    length: int = 0
+
+
+@dataclass
 class Request:
     def __init__(
         self,
@@ -155,6 +161,7 @@ class Request:
         self.extend_block_tables = []
         # dp
         self.dp_rank = dp_rank
+        self.llm_engine_recv_req_timestamp = time.time()
 
     @classmethod
     def from_dict(cls, d: dict):
@@ -191,7 +198,7 @@ class Request:
             guided_grammar=d.get("guided_grammar", None),
             structural_tag=d.get("structural_tag", None),
             guided_json_object=d.get("guided_json_object", None),
-            enable_thinking=d.get("enable_thinking", False),
+            enable_thinking=d.get("enable_thinking", None),
             reasoning_max_tokens=d.get("reasoning_max_tokens", None),
             trace_carrier=d.get("trace_carrier", {}),
             chat_template=d.get("chat_template", None),
@@ -393,6 +400,9 @@ class RequestMetrics:
     model_forward_time: Optional[float] = None
     model_execute_time: Optional[float] = None
     request_start_time: Optional[float] = None
+    llm_engine_recv_req_timestamp: Optional[float] = None
+    llm_engine_send_req_to_engine_timestamp: Optional[float] = None
+    llm_engine_recv_token_timestamp: Optional[float] = None
 
     def to_dict(self):
         """
@@ -407,6 +417,9 @@ class RequestMetrics:
             "model_forward_time": self.model_forward_time,
             "model_execute_time": self.model_execute_time,
             "request_start_time": self.request_start_time,
+            "llm_engine_recv_req_timestamp": self.llm_engine_recv_req_timestamp,
+            "llm_engine_send_req_to_engine_timestamp": self.llm_engine_send_req_to_engine_timestamp,
+            "llm_engine_recv_token_timestamp": self.llm_engine_recv_token_timestamp,
         }
 
     @classmethod
@@ -441,6 +454,8 @@ class RequestOutput:
         encoder_prompt_token_ids: The token IDs of the encoder prompt.
                                   None if decoder-only.
         num_cached_tokens: The number of tokens with prefix cache hit.
+        num_input_image_tokens: The number of input image tokens.
+        num_input_video_tokens: The number of input video tokens.
     """
 
     def __init__(
@@ -453,6 +468,8 @@ class RequestOutput:
         finished: bool = False,
         metrics: Optional[RequestMetrics] = None,
         num_cached_tokens: Optional[int] = 0,
+        num_input_image_tokens: Optional[int] = 0,
+        num_input_video_tokens: Optional[int] = 0,
         error_code: Optional[int] = 200,
         error_msg: Optional[str] = None,
     ) -> None:
@@ -464,6 +481,8 @@ class RequestOutput:
         self.finished = finished
         self.metrics = metrics
         self.num_cached_tokens = num_cached_tokens
+        self.num_input_image_tokens = num_input_image_tokens
+        self.num_input_video_tokens = num_input_video_tokens
         self.error_code = error_code
         self.error_msg = error_msg
 
@@ -506,7 +525,11 @@ class RequestOutput:
             f"outputs={self.outputs}, "
             f"finished={self.finished}, "
             f"num_cached_tokens={self.num_cached_tokens}, "
+            f"num_input_image_tokens={self.num_input_image_tokens}, "
+            f"num_input_video_tokens={self.num_input_video_tokens}, "
             f"metrics={self.metrics}, "
+            f"error_code={self.error_code}, "
+            f"error_msg={self.error_msg},"
         )
 
     @classmethod
@@ -528,6 +551,8 @@ class RequestOutput:
             "metrics": None if self.metrics is None else self.metrics.to_dict(),
             "finished": self.finished,
             "num_cached_tokens": self.num_cached_tokens,
+            "num_input_image_tokens": self.num_input_image_tokens,
+            "num_input_video_tokens": self.num_input_video_tokens,
             "error_code": self.error_code,
             "error_msg": self.error_msg,
         }
@@ -720,6 +745,47 @@ class ScoringRequestOutput(PoolingRequestOutput[ScoringOutput]):
         return ScoringRequestOutput(
             request_id=request_output.request_id,
             outputs=ScoringOutput.from_base(request_output.outputs),
+            prompt_token_ids=request_output.prompt_token_ids,
+            finished=request_output.finished,
+        )
+
+
+@dataclass
+class RewardOutput:
+    """The output data of one reward output of a request.
+
+    Args:
+        reward: The score, which is a list of floats.
+            Its length depends on the hidden dimension of the model.
+    """
+
+    score: list[float]
+
+    @staticmethod
+    def from_base(pooling_output: PoolingOutput):
+        pooled_data = pooling_output.data
+        # if pooled_data.ndim != 1:
+        #     raise ValueError("pooled_data should be a 1-D embedding vector")
+
+        if isinstance(pooled_data, list):
+            return RewardOutput(pooled_data)
+
+        return RewardOutput(pooled_data.tolist())
+
+    @property
+    def hidden_size(self) -> int:
+        return len(self.score)
+
+    def __repr__(self) -> str:
+        return f"RewardOutput(hidden_size={self.hidden_size})"
+
+
+class RewardRequestOutput(PoolingRequestOutput[RewardOutput]):
+    @staticmethod
+    def from_base(request_output: PoolingRequestOutput):
+        return RewardRequestOutput(
+            request_id=request_output.request_id,
+            outputs=RewardOutput.from_base(request_output.outputs),
             prompt_token_ids=request_output.prompt_token_ids,
             finished=request_output.finished,
         )

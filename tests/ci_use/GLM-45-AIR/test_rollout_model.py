@@ -1,0 +1,66 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import os
+import subprocess
+import sys
+
+
+def test_rollout_model_with_distributed_launch():
+    """
+    test_rollout_model
+    """
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    utils_dir = os.path.join(os.path.dirname(current_dir), "utils")
+    rollout_script = os.path.join(utils_dir, "rollout_model.py")
+    baseline_path = os.path.join(current_dir, "baseline.txt")
+
+    base_path = os.getenv("MODEL_PATH")
+    if base_path:
+        model_path = os.path.join(base_path, "GLM-4.5-Air-Fake")
+    else:
+        model_path = "./GLM-4.5-Air-Fake"
+    print(f"model_path = {model_path}")
+
+    command = [
+        sys.executable,
+        "-m",
+        "paddle.distributed.launch",
+        "--gpus",
+        "0,1",
+        rollout_script,
+        "--model_path",
+        model_path,
+        "--baseline_path",
+        baseline_path,
+    ]
+
+    print(f"Executing command: {' '.join(command)}")
+
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    try:
+        stdout, stderr = process.communicate(timeout=300)
+        return_code = process.returncode
+    except subprocess.TimeoutExpired:
+        process.kill()
+        stdout, stderr = process.communicate()
+        return_code = -1
+
+    print("\n" + "=" * 50 + " STDOUT " + "=" * 50)
+    print(stdout)
+    print("\n" + "=" * 50 + " STDERR " + "=" * 50)
+    print(stderr)
+
+    assert return_code != 1, f"Process exited with code {return_code}"

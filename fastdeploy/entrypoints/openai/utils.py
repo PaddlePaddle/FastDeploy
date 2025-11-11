@@ -125,6 +125,8 @@ class DealerConnectionManager:
                 request_id = response[-1]["request_id"]
                 if request_id[:4] in ["cmpl", "embd"]:
                     request_id = request_id.rsplit("_", 1)[0]
+                elif "reward" == request_id[:6]:
+                    request_id = request_id.rsplit("_", 1)[0]
                 elif "chatcmpl" == request_id[:8]:
                     request_id = request_id.rsplit("_", 1)[0]
                 async with self.lock:
@@ -236,6 +238,8 @@ def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
         type=int,
         help="Workers silent for more than this many seconds are killed and restarted.Value is a positive number or 0. Setting it to 0 has the effect of infinite timeouts by disabling timeouts for all workers entirely.",
     )
+
+    parser.add_argument("--api-key", type=str, action="append", help="API_KEY required for service authentication")
 
     parser = EngineArgs.add_cli_args(parser)
     return parser

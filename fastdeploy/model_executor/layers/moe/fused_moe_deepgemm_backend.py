@@ -198,11 +198,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             layer,
             weight_name,
             layer.create_parameter(
-                shape=[
-                    layer.num_local_experts,
-                    ceil_div(layer.moe_intermediate_size * 2, self.quant_config.weight_block_size[0]),
-                    ceil_div(layer.hidden_size, self.quant_config.weight_block_size[1]),
-                ],
+                shape=weight.shape,
                 dtype=weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
@@ -212,11 +208,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             layer,
             scale_name,
             layer.create_parameter(
-                shape=[
-                    layer.num_local_experts,
-                    ceil_div(layer.hidden_size, self.quant_config.weight_block_size[0]),
-                    ceil_div(layer.moe_intermediate_size, self.quant_config.weight_block_size[1]),
-                ],
+                shape=scale.shape,
                 dtype=scale_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             ),
@@ -334,8 +326,12 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             recv_topk_weights,
             recv_num_tokens_per_expert_list,
             handle,
-            _,
-        ) = self.ep_prefill_runner.dispatch(x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor)
+            event,
+        ) = self.ep_prefill_runner.dispatch(
+            x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128
+        )
+        if self.ep_prefill_runner.ep_engine.async_finish:
+            event.current_stream_wait()
 
         token_all_num = sum(recv_num_tokens_per_expert_list)
 
@@ -345,7 +341,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             (recv_x, recv_x_scale) = recv_x
 
             token_nums_this_rank = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)
-            token_nums_this_rank_padded = sum(token_nums_this_rank[1].numpy().tolist())
 
             (
                 permute_input,
@@ -365,7 +360,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 token_nums_this_rank[0],
                 token_nums_this_rank[1],
                 True,  # use_in_ep
-                token_nums_this_rank_padded,
+                token_all_num,
             )
 
             permute_scale = permute_scale.transpose([1, 0]).contiguous()
@@ -417,7 +412,12 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             tmp_ffn_out = paddle.cast(recv_x[0], paddle.bfloat16)
 
         # 5. EP combine
-        return self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
+        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
+
+        if self.ep_prefill_runner.ep_engine.async_finish:
+            event.current_stream_wait()
+
+        return tmp_ffn_out
 
     def apply_ep_decode(
         self,

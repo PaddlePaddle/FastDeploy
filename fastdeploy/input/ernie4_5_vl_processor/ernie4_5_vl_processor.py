@@ -26,6 +26,8 @@ from fastdeploy.utils import data_processor_logger
 
 from .process import DataProcessor
 
+_SAMPLING_EPS = 1e-5
+
 
 class Ernie4_5_VLProcessor(Ernie4_5Processor):
     """The processor class for ERNIE MoE VL models."""
@@ -37,6 +39,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         mm_processor_kwargs=None,
         reasoning_parser_obj=None,
         tool_parser_obj=None,
+        enable_processor_cache=False,
     ):
         data_processor_logger.info(f"model_name_or_path: {model_name_or_path}")
         tokenizer_path = model_name_or_path
@@ -46,6 +49,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         self.ernie4_5_processor = DataProcessor(
             tokenizer_name=tokenizer_path,
             image_preprocessor_name=preprocessor_path,
+            enable_processor_cache=enable_processor_cache,
             **processor_kwargs,
         )
         self.ernie4_5_processor.eval()
@@ -231,10 +235,18 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             if chat_template_kwargs:
                 if isinstance(chat_template_kwargs, dict):
                     for k, v in chat_template_kwargs.items():
-                        if k not in request:
+                        if k not in request or request[k] is None:
                             request[k] = v
                 else:
                     raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                options = chat_template_kwargs.get("options")
+                if options:
+                    thinking_mode = options.get("thinking_mode")
+                    if thinking_mode:
+                        if thinking_mode == "close" or thinking_mode == "false":
+                            request["enable_thinking"] = False
+                        else:
+                            request["enable_thinking"] = True
             request.setdefault("enable_thinking", True)
             outputs = self.ernie4_5_processor.request2ids(request)
         else:
@@ -257,6 +269,9 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         if request.get("reasoning_max_tokens") is None:
             request["reasoning_max_tokens"] = max(int(request["max_tokens"] * 0.8), 1)
         data_processor_logger.info(f"Processed request {request}")
+
+        if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
+            request["top_p"] = _SAMPLING_EPS
 
         return request
 
