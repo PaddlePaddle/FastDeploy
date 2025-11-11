@@ -19,9 +19,9 @@
 |ERNIE-4.5-0.3B|128K|WINT8|1 (Recommended)|export XPU_VISIBLE_DEVICES="0" # Specify any card<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 1 \ <br>    --max-model-len 131072 \ <br>    --max-num-seqs 128 \ <br>    --quantization "wint8" \ <br>    --gpu-memory-utilization 0.9 \ <br>    --load-choices "default"|2.3.0|
 |ERNIE-4.5-300B-A47B-W4A8C8-TP4|32K|W4A8|4|export XPU_VISIBLE_DEVICES="0,1,2,3" or "4,5,6,7"<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 4 \ <br>    --max-model-len 32768 \ <br>    --max-num-seqs 64 \ <br>    --quantization "W4A8" \ <br>    --gpu-memory-utilization 0.9 \ <br>    --load-choices "default"|2.3.0|
 |ERNIE-4.5-VL-28B-A3B|32K|WINT8|1|export XPU_VISIBLE_DEVICES="0" # Specify any card<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Paddle \ <br>    --port 8188  \ <br> --tensor-parallel-size 1 \ <br> --quantization "wint8" \ <br>  --max-model-len 32768 \ <br> --max-num-seqs 10 \ <br>     --enable-mm \ <br>   --mm-processor-kwargs '{"video_max_frames": 30}' \ <br>     --limit-mm-per-prompt '{"image": 10, "video": 3}' \ <br>     --reasoning-parser ernie-45-vl \ <br>    --load-choices "default"|2.3.0|
-|ERNIE-4.5-VL-424B-A47B|32K|WINT8|8|export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" <br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-VL-424B-A47B-Paddle \ <br>    --port 8188 \ <br> --tensor-parallel-size 8 \ <br> --quantization "wint8" \ <br>  --max-model-len 32768 \ <br> --max-num-seqs 8 \ <br>     --enable-mm \ <br>   --mm-processor-kwargs '{"video_max_frames": 30}' \ <br>     --limit-mm-per-prompt '{"image": 10, "video": 3}' \ <br>     --reasoning-parser ernie-45-vl \ <br>    --load-choices "default"|2.3.0|
+|ERNIE-4.5-VL-424B-A47B|32K|WINT8|8|export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" <br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-VL-424B-A47B-Paddle \ <br>    --port 8188 \ <br> --tensor-parallel-size 8 \ <br> --quantization "wint8" \ <br>  --max-model-len 32768 \ <br> --max-num-seqs 8 \ <br>     --enable-mm \ <br>   --mm-processor-kwargs '{"video_max_frames": 30}' \ <br>     --limit-mm-per-prompt '{"image": 10, "video": 3}' \ <br>     --reasoning-parser ernie-45-vl \ <br> --gpu-memory-utilization 0.7 \ <br>  --load-choices "default"|2.3.0|
 |PaddleOCR-VL-0.9B|32K|BF16|1|export FD_ENABLE_MAX_PREFILL=1 <br>export XPU_VISIBLE_DEVICES="0" # Specify any card <br>python -m fastdeploy.entrypoints.openai.api_server \ <br>   --model PaddlePaddle/PaddleOCR-VL \ <br>  --port 8188 \ <br> --metrics-port 8181 \ <br> --engine-worker-queue-port 8182 \ <br> --max-model-len 16384 \ <br> --max-num-batched-tokens 16384 \ <br> --gpu-memory-utilization 0.8 \ <br> --max-num-seqs 256|2.3.0|
-|ERNIE-4.5-VL-28B-A3B-Thinking|128K|WINT8|1|export XPU_VISIBLE_DEVICES="0"# Specify any card<br>python -m fastdeploy.entrypoints.openai.api_server \ <br> --model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Thinking \ <br> --port 8188 \ <br> --tensor-parallel-size 1 \ <br> --quantization "wint8" \ <br> --max-model-len 131072 \ <br> --max-num-seqs 32 \ <br> --engine-worker-queue-port 8189 \ <br> --metrics-port 8190 \ <br> --cache-queue-port 8191 \ <br> --reasoning-parser ernie-45-vl-thinking \ <br> --tool-call-parser ernie-45-vl-thinking \ <br> --mm-processor-kwargs '{"image_max_pixels": 12845056 }' <br> --load-choices "default_v1"|2.3.0|
+|ERNIE-4.5-VL-28B-A3B-Thinking|128K|WINT8|1|export XPU_VISIBLE_DEVICES="0"# Specify any card<br>python -m fastdeploy.entrypoints.openai.api_server \ <br> --model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Thinking \ <br> --port 8188 \ <br> --tensor-parallel-size 1 \ <br> --quantization "wint8" \ <br> --max-model-len 131072 \ <br> --max-num-seqs 32 \ <br> --engine-worker-queue-port 8189 \ <br> --metrics-port 8190 \ <br> --cache-queue-port 8191 \ <br> --reasoning-parser ernie-45-vl-thinking \ <br> --tool-call-parser ernie-45-vl-thinking \ <br> --mm-processor-kwargs '{"image_max_pixels": 12845056 }' \ <br> --load-choices "default_v1"|2.3.0|
 
 ## Quick start
 
@@ -104,17 +104,17 @@ Deploy the ERNIE-4.5-VL-28B-A3B-Paddle model with WINT8 precision and 32K contex
 ```bash
 export XPU_VISIBLE_DEVICES="0" # Specify any card
 python -m fastdeploy.entrypoints.openai.api_server \
---model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Paddle \
---port 8188  \
---tensor-parallel-size 1 \
---quantization "wint8" \
---max-model-len 32768 \
---max-num-seqs 10 \
---enable-mm \
---mm-processor-kwargs '{"video_max_frames": 30}' \
---limit-mm-per-prompt '{"image": 10, "video": 3}' \
---reasoning-parser ernie-45-vl \
---load-choices "default"
+    --model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Paddle \
+    --port 8188  \
+    --tensor-parallel-size 1 \
+    --quantization "wint8" \
+    --max-model-len 32768 \
+    --max-num-seqs 10 \
+    --enable-mm \
+    --mm-processor-kwargs '{"video_max_frames": 30}' \
+    --limit-mm-per-prompt '{"image": 10, "video": 3}' \
+    --reasoning-parser ernie-45-vl \
+    --load-choices "default"
 ```
 
 #### Send requests
@@ -247,19 +247,19 @@ Deploy the ERNIE-4.5-VL-28B-A3B-Thinking model with WINT8 precision and 128K con
 ```bash
 export XPU_VISIBLE_DEVICES="0"# Specify any card
 python -m fastdeploy.entrypoints.openai.api_server \
---model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Thinking \
---port 8188 \
---tensor-parallel-size 1 \
---quantization "wint8" \
---max-model-len 131072 \
---max-num-seqs 32 \
---engine-worker-queue-port 8189 \
---metrics-port 8190 \
---cache-queue-port 8191 \
---reasoning-parser ernie-45-vl-thinking \
---tool-call-parser ernie-45-vl-thinking \
---mm-processor-kwargs '{"image_max_pixels": 12845056 }'
---load-choices "default_v1"
+    --model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Thinking \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --quantization "wint8" \
+    --max-model-len 131072 \
+    --max-num-seqs 32 \
+    --engine-worker-queue-port 8189 \
+    --metrics-port 8190 \
+    --cache-queue-port 8191 \
+    --reasoning-parser ernie-45-vl-thinking \
+    --tool-call-parser ernie-45-vl-thinking \
+    --mm-processor-kwargs '{"image_max_pixels": 12845056 }' \
+    --load-choices "default_v1"
 ```
 
 #### Send requests
