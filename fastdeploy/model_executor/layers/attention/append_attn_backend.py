@@ -65,7 +65,7 @@ class AppendAttentionMetadata(AttentionMetadata):
 
 
 def allocate_launch_related_buffer(
-    max_num_seqs,
+    max_batch_size,
     max_model_len,
     encoder_block_shape_q,
     decoder_block_shape_q,
@@ -79,9 +79,11 @@ def allocate_launch_related_buffer(
 
     # NOTE: (changwenbin) When using auto_chunk,
     # decode_max_tile_size must take into account the maximum case, where *1024 can cover 128K.
-    decode_max_tile_size = 1024 * max_num_seqs * np.ceil((decoder_step_token_num * group_size) / decoder_block_shape_q)
-    encode_max_tile_size = max_num_seqs * np.ceil((max_model_len * group_size) / encoder_block_shape_q)
-    kv_max_tile_size = max_num_seqs * np.ceil(max_model_len / block_size)
+    decode_max_tile_size = (
+        1024 * max_batch_size * np.ceil((decoder_step_token_num * group_size) / decoder_block_shape_q)
+    )
+    encode_max_tile_size = max_batch_size * np.ceil((max_model_len * group_size) / encoder_block_shape_q)
+    kv_max_tile_size = max_batch_size * np.ceil(max_model_len / block_size)
     res = {}
     res["decoder_batch_ids"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
     res["decoder_tile_ids_per_batch"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
