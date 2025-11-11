@@ -27,7 +27,7 @@
 
 ## 最新活动
 
-**[2025-11] FastDeploy v2.3 全新发布!** 新增[ERNIE-4.5-VL-28B-Thinking](docs/zh/get_started/ernie-4.5-vl-thinking.md)与[PaddleOCR-VL-0.9B](docs/zh/best_practices/PaddleOCR-VL-0.9B.md)两大重磅模型在多硬件平台上的部署支持，进一步优化全方位推理性能，以及带来更多部署功能和易用性的提升，升级全部内容参阅[v2.3 ReleaseNote](https://github.com/PaddlePaddle/FastDeploy/releases/tag/v2.3.0)。
+**[2025-11] FastDeploy v2.3 全新发布!** 新增[ERNIE-4.5-VL-28B-A3B-Thinking](docs/zh/get_started/ernie-4.5-vl-thinking.md)与[PaddleOCR-VL-0.9B](docs/zh/best_practices/PaddleOCR-VL-0.9B.md)两大重磅模型在多硬件平台上的部署支持，进一步优化全方位推理性能，以及带来更多部署功能和易用性的提升，升级全部内容参阅[v2.3 ReleaseNote](https://github.com/PaddlePaddle/FastDeploy/releases/tag/v2.3.0)。
 
 **[2025-09] FastDeploy v2.2**: HuggingFace生态模型兼容，性能进一步优化，更新增对[baidu/ERNIE-21B-A3B-Thinking](https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-Thinking)支持!
 
