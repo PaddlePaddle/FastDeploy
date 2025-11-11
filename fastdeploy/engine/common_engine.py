@@ -148,7 +148,7 @@ class EngineService:
             )
         self._init_worker_monitor_signals()
 
-        if self.cfg.eplb_config.enable_redundant_experts:
+        if self.cfg.eplb_config.enable_eplb:
             current_suffix = int(
                 self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
             )
