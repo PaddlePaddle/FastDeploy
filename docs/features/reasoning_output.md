@@ -5,7 +5,7 @@
 Reasoning models return an additional `reasoning_content` field in their output, which contains the reasoning steps that led to the final conclusion.
 
 ## Supported Models
-| Model Name     | Parser Name    | Eable_thinking by Default | Tool Calling  | Thinking switch  parameters|
+| Model Name     | Parser Name    | Enable thinking by Default | Tool Calling  | Thinking switch  parameters|
 |---------------|-------------|---------|---------|----------------|
 | baidu/ERNIE-4.5-VL-424B-A47B-Paddle  | ernie-45-vl | ✅       | ❌ | "chat_template_kwargs":{"enable_thinking": true/false}|
 | baidu/ERNIE-4.5-VL-28B-A3B-Paddle | ernie-45-vl |    ✅    |  ❌  |"chat_template_kwargs":{"enable_thinking": true/false}|
