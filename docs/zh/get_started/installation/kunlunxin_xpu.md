@@ -39,7 +39,7 @@ docker exec -it fastdeploy-xpu /bin/bash
 ### 安装 PaddlePaddle
 
 ```bash
-python -m pip install paddlepaddle-xpu==3.2.2 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
+python -m pip install paddlepaddle-xpu==3.2.1 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
 ```
 
 或者您也可以安装最新版 PaddlePaddle（不推荐）
@@ -65,7 +65,7 @@ python -m pip install --pre fastdeploy-xpu -i https://www.paddlepaddle.org.cn/pa
 ### 安装 PaddlePaddle
 
 ```bash
-python -m pip install paddlepaddle-xpu==3.2.2 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
+python -m pip install paddlepaddle-xpu==3.2.1 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
 ```
 
 或者您也可以安装最新版 PaddlePaddle（不推荐）
