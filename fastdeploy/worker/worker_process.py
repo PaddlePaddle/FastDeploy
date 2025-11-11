@@ -556,10 +556,13 @@ class PaddleDisWorkerProc:
 
     def start_task_queue_service(self):
         # Initialize task queue
-        task_address = (
-            self.parallel_config.pod_ip,
-            self.parallel_config.engine_worker_queue_port,
-        )
+        if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+            task_address = (
+                self.parallel_config.pod_ip,
+                self.parallel_config.engine_worker_queue_port,
+            )
+        else:
+            task_address = f"/dev/shm/fd_task_queue_{self.parallel_config.engine_worker_queue_port}.sock"
         logger.info(f"connect task queue address {task_address}")
         self.task_queue = TaskQueue(
             address=task_address,
@@ -656,6 +659,11 @@ def parse_args():
         "--disable_custom_all_reduce",
         action="store_true",
         help="enable custom all-reduce",
+    )
+    parser.add_argument(
+        "--disable_sequence_parallel_moe",
+        action="store_true",
+        help="disable sequence parallel moe",
     )
     parser.add_argument("--splitwise_role", type=str, default="mixed", help="splitwise role")
     parser.add_argument(

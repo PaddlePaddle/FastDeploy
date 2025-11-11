@@ -571,6 +571,10 @@ class GPUModelRunner(ModelRunnerBase):
                 if request.sampling_params is not None and request.sampling_params.prompt_logprobs is not None:
                     self.prompt_logprobs_reqs[request.request_id] = request
                 has_prefill_task = True
+                if (
+                    self.fd_config.scheduler_config.splitwise_role == "decode"
+                ):  # In PD, we continue to decode after P generate first token
+                    self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
                 encoder_block_num = len(request.block_tables)
@@ -2731,7 +2735,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             logprobs_tensors = self.in_progress_prompt_logprobs.get(req_id)
             if not logprobs_tensors:
-                logprobs_tensors = LogprobsTensors.empty(num_prompt_tokens - 1, num_prompt_logprobs + 1)
+                logprobs_tensors = LogprobsTensors.empty_cpu(num_prompt_tokens - 1, num_prompt_logprobs + 1)
                 self.in_progress_prompt_logprobs[req_id] = logprobs_tensors
             start_idx = request.prefill_start_index
             start_tok = start_idx + 1
