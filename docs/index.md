@@ -29,6 +29,7 @@
 |QWEN2|BF16/WINT8/FP8|⛔|✅|✅|🚧|✅|128K|
 |DEEPSEEK-V3|BF16/WINT4|⛔|✅|🚧|🚧|✅|128K|
 |DEEPSEEK-R1|BF16/WINT4|⛔|✅|🚧|🚧|✅|128K|
+|GLM-4.5/4.6|BF16/FP8/WINT4|⛔|✅|✅|🚧|✅|128K|
 
 ```
 ✅ Supported 🚧 In Progress ⛔ No Plan
