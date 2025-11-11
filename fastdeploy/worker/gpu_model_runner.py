@@ -222,13 +222,13 @@ class GPUModelRunner(ModelRunnerBase):
         """
         check whether prefill stage exist
         """
-        return int(paddle.max(self.share_inputs["seq_lens_encoder"])) > 0
+        return np.any(self.share_inputs["seq_lens_encoder"].numpy() > 0)
 
     def exist_decode(self):
         """
         check whether decode stage exist
         """
-        return int(paddle.max(self.share_inputs["seq_lens_decoder"])) > 0
+        return np.any(self.share_inputs["seq_lens_decoder"].numpy() > 0)
 
     def only_prefill(self):
         """
@@ -1272,7 +1272,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
 
         # Update bad tokens len
-        max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
+        max_bad_tokens_len = np.max(self.share_inputs["bad_tokens_len"].numpy())
 
         # Initialize forward meta data
         self.initialize_forward_meta()
@@ -2735,7 +2735,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             logprobs_tensors = self.in_progress_prompt_logprobs.get(req_id)
             if not logprobs_tensors:
-                logprobs_tensors = LogprobsTensors.empty(num_prompt_tokens - 1, num_prompt_logprobs + 1)
+                logprobs_tensors = LogprobsTensors.empty_cpu(num_prompt_tokens - 1, num_prompt_logprobs + 1)
                 self.in_progress_prompt_logprobs[req_id] = logprobs_tensors
             start_idx = request.prefill_start_index
             start_tok = start_idx + 1
