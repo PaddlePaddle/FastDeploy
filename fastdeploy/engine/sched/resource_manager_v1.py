@@ -677,10 +677,7 @@ class ResourceManagerV1(ResourceManager):
                         self._update_mm_hashes(request)
                         # Enable prefix caching
                         if self.config.cache_config.enable_prefix_caching:
-                            if (
-                                self.config.cache_config.enable_hierarchical_cache
-                                and self.cache_manager.num_cpu_blocks > 0
-                            ):
+                            if self.cache_manager.num_cpu_blocks > 0:
                                 if not self.cache_manager.can_allocate_gpu_blocks(
                                     (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
                                     // self.config.cache_config.block_size
@@ -727,10 +724,7 @@ class ResourceManagerV1(ResourceManager):
                             request.num_total_tokens
                         )  # Before preempted task rescheduled, preempted task has been sent to engine, no more tokens are output, here num_total_tokens should be static and correct
                         if self.config.cache_config.enable_prefix_caching:
-                            if (
-                                self.config.cache_config.enable_hierarchical_cache
-                                and self.cache_manager.num_cpu_blocks > 0
-                            ):
+                            if self.cache_manager.num_cpu_blocks > 0:
                                 if not self.cache_manager.can_allocate_gpu_blocks(
                                     (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
                                     // self.config.cache_config.block_size
@@ -997,7 +991,7 @@ class ResourceManagerV1(ResourceManager):
             ) // self.config.cache_config.block_size + self.config.cache_config.enc_dec_block_num  # consider for mtp, plus enc_dec_block_num
             if self.config.cache_config.enable_prefix_caching:
                 # Enable prefix caching
-                if self.config.cache_config.enable_hierarchical_cache and self.cache_manager.num_cpu_blocks > 0:
+                if self.cache_manager.num_cpu_blocks > 0:
                     if not self.cache_manager.can_allocate_gpu_blocks(
                         need_prealloc_prefill_blocks
                     ):  # to prevent block allocation for matching in hierarchical cache and cause dead lock

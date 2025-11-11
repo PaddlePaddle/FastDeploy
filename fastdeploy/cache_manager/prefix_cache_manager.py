@@ -14,10 +14,8 @@
 # limitations under the License.
 """
 
-import hashlib
 import heapq
 import os
-import pickle
 import subprocess
 import sys
 import threading
@@ -34,7 +32,7 @@ from fastdeploy import envs
 from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
 from fastdeploy.cache_manager.cache_metrics import CacheMetrics
 from fastdeploy.cache_manager.ops import get_all_visible_devices
-from fastdeploy.cache_manager.transfer_factory import get_hash_str, get_hash_str_mooncake
+from fastdeploy.cache_manager.transfer_factory import get_hash_str
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, PrefixTreeStatus
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import get_logger
@@ -301,7 +299,7 @@ class PrefixCacheManager:
         while np.sum(self.cache_ready_signal.value) != tensor_parallel_size:
             time.sleep(1)
 
-        if cache_config.enable_hierarchical_cache and self.num_cpu_blocks > 0:
+        if self.num_cpu_blocks > 0:
             while np.sum(self.swap_space_ready_signal.value) != tensor_parallel_size:
                 time.sleep(1)
 
@@ -314,7 +312,7 @@ class PrefixCacheManager:
             )
 
         # Start additional threads
-        if cache_config.enable_hierarchical_cache:
+        if cache_config.enable_hierarchical_kvcache or self.num_cpu_blocks > 0:
             logger.info("Enable hierarchical cache.")
             threading.Thread(target=self.recv_data_transfer_result).start()
         if cache_config.enable_prefix_caching:
@@ -1200,10 +1198,7 @@ class PrefixCacheManager:
                         break
                     node = heapq.heappop(self.gpu_lru_leaf_heap)
                     self.gpu_lru_leaf_set.remove(node)
-                    if (
-                        not self.cache_config.enable_hierarchical_cache
-                        or self.cache_config.num_cpu_blocks < need_block_num
-                    ):
+                    if self.cache_config.num_cpu_blocks < need_block_num:
                         if node.shared_count == 0 and node.is_gpu_leaf_node:  # 直接回收
                             self._handle_free_gpu_node_without_cpu(node)
                             total_gpu_free_count += 1
@@ -1498,7 +1493,7 @@ class PrefixCacheManager:
                     mm_idx=mm_idx,
                 )
                 hash_value = self.cal_block_hash(token_block, extra_keys)
-                
+
                 if hash_value in current_match_node.children:
                     child = current_match_node.children[hash_value]
                     matche_nodes.append(child)

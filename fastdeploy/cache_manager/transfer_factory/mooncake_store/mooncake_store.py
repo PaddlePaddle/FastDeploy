@@ -14,14 +14,12 @@
 # limitations under the License.
 """
 
-import hashlib
 import json
 import os
 import uuid
 from dataclasses import dataclass
 from typing import Any, List, Optional
 
-import numpy as np
 import paddle
 
 from fastdeploy.cache_manager.transfer_factory.kvcache_storage import (
@@ -33,14 +31,9 @@ DEFAULT_GLOBAL_SEGMENT_SIZE = 4 * 1024 * 1024 * 1024  # 4 GiB
 DEFAULT_LOCAL_BUFFER_SIZE = 128 * 1024 * 1024  # 128 MB
 
 
-def get_hash_str_mooncake(token_ids: List, prefix_block_key: str):
-    prefix_str = ""
-    if prefix_block_key:
-        prefix_str = hashlib.sha256(prefix_block_key.encode()).hexdigest()[:16]
-    current_token_ids_bytes = np.array(token_ids).tobytes()
-    current_hash_object = hashlib.sha256(current_token_ids_bytes)
-    current_hash_hex = current_hash_object.hexdigest()
-    return f"{prefix_str}_{int(current_hash_hex[:16], 16)}"
+def get_hash_str_mooncake(token_ids: List, extra_keys: list = [], prefix_block_key: str = "") -> str:
+    # TODO page 存储 计算hash
+    pass
 
 
 @dataclass

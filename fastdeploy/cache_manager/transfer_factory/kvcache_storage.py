@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import hashlib
+import pickle
 from abc import ABC, abstractmethod
 from typing import Any, List, Optional
 
@@ -24,11 +26,15 @@ from fastdeploy.utils import get_logger
 logger = get_logger("kvcache_storage", "kvcache_storage.log")
 
 
-def get_hash_str(token_ids: List[int], prefix_block_key: str) -> str:
+def get_hash_str(token_ids: List[int], extra_keys: list = []) -> str:
     """
-    calculate hash value of a block
+    calculate hash value of a block with additional keys
+
+    Args:
+        token_ids: Input token IDs
+        extra_keys: Additional keys for block identification
     """
-    return hash(tuple(token_ids))
+    return hashlib.sha256(pickle.dumps((token_ids, extra_keys))).hexdigest()
 
 
 class KVCacheStorage(ABC):
