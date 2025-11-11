@@ -5,13 +5,14 @@
 Reasoning models return an additional `reasoning_content` field in their output, which contains the reasoning steps that led to the final conclusion.
 
 ## Supported Models
-| Model Name     | Parser Name    | Eable_thinking by Default | Tool Calling  |
-|---------------|-------------|---------|---------|
-| baidu/ERNIE-4.5-VL-424B-A47B-Paddle  | ernie-45-vl | ✅       | ❌ |
-| baidu/ERNIE-4.5-VL-28B-A3B-Paddle | ernie-45-vl |    ✅    |  ❌  |
-| baidu/ERNIE-4.5-21B-A3B-Thinking  | ernie-x1  |   ✅ no off supported  | ✅|
+| Model Name     | Parser Name    | Enable thinking by Default | Tool Calling  | Thinking switch  parameters|
+|---------------|-------------|---------|---------|----------------|
+| baidu/ERNIE-4.5-VL-424B-A47B-Paddle  | ernie-45-vl | ✅       | ❌ | "chat_template_kwargs":{"enable_thinking": true/false}|
+| baidu/ERNIE-4.5-VL-28B-A3B-Paddle | ernie-45-vl |    ✅    |  ❌  |"chat_template_kwargs":{"enable_thinking": true/false}|
+| baidu/ERNIE-4.5-21B-A3B-Thinking  | ernie-x1  |   ✅ Not supported for turning off   | ✅|❌|
+| baidu/ERNIE-4.5-VL-28B-A3B-Thinking  | ernie-45-vl-thinking  |   ✅ Not recommended to turn off   | ✅|"chat_template_kwargs": {"options": {"thinking_mode": "open/close"}}|
 
-The reasoning model requires a specified parser to extract reasoning content. The reasoning mode can be disabled by setting the `"enable_thinking": false` parameter.
+The reasoning model requires a specified parser to extract reasoning content. Referring to the `thinking switch parameters` of each model can turn off the model's thinking mode.
 
 Interfaces that support toggling the reasoning mode:
 1. `/v1/chat/completions` requests in OpenAI services.
@@ -35,6 +36,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```
 
 Next, make a request to the model that should return the reasoning content in the response.
+Taking the baidu/ERNIE-4.5-VL-28B-A3B-Paddle model as an example：
 
 ```bash
 curl -X POST "http://0.0.0.0:8192/v1/chat/completions" \
