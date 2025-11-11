@@ -164,6 +164,14 @@ class CacheTransferManager:
                 dtype=cache_type,
             )
             self.gpu_cache_v_tensors.append(self.gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"])
+            set_data_ipc(
+                self.gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"],
+                f"key_caches_{i}_rank{rank}.device{device}",
+            )
+            set_data_ipc(
+                self.gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"],
+                f"value_caches_{i}_rank{rank}.device{device}",
+            )
 
             if cache_type == "block_wise_fp8":
                 self.gpu_cache_kvs[f"key_cache_scales_{i}_rank{rank}_device{device}"] = paddle.full(
@@ -184,15 +192,6 @@ class CacheTransferManager:
                     self.gpu_cache_kvs[f"value_cache_scales_{i}_rank{rank}_device{device}"],
                     f"value_cache_scales_{i}_rank{rank}.device{device}",
                 )
-
-            set_data_ipc(
-                self.gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"],
-                f"key_caches_{i}_rank{rank}.device{device}",
-            )
-            set_data_ipc(
-                self.gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"],
-                f"value_caches_{i}_rank{rank}.device{device}",
-            )
         cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in self.gpu_cache_kvs.items()])
         logger.info(f"device :{self.device}")
         logger.info(f"cache_kv_size_byte : {cache_kv_size_byte}")
