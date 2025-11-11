@@ -91,7 +91,7 @@ sleep 60
 # 探活
 TIMEOUT=$((15 * 60))
 INTERVAL=10            # 检查间隔（秒）
-ENDPOINT="http://0.0.0.0:8188/health"
+ENDPOINT="http://0.0.0.0:${port_num}/health"
 START_TIME=$(date +%s) # 记录开始时间戳
 echo "开始服务健康检查，最长等待时间：${TIMEOUT}秒"
 while true; do
@@ -167,7 +167,7 @@ sleep 60
 # 探活
 TIMEOUT=$((15 * 60))
 INTERVAL=10            # 检查间隔（秒）
-ENDPOINT="http://0.0.0.0:8188/health"
+ENDPOINT="http://0.0.0.0:${port_num}/health"
 START_TIME=$(date +%s) # 记录开始时间戳
 echo "开始服务健康检查，最长等待时间：${TIMEOUT}秒"
 while true; do
@@ -246,7 +246,7 @@ sleep 60
 # 探活
 TIMEOUT=$((15 * 60))
 INTERVAL=10            # 检查间隔（秒）
-ENDPOINT="http://0.0.0.0:8188/health"
+ENDPOINT="http://0.0.0.0:${port_num}/health"
 START_TIME=$(date +%s) # 记录开始时间戳
 echo "开始服务健康检查，最长等待时间：${TIMEOUT}秒"
 while true; do
