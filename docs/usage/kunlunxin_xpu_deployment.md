@@ -164,7 +164,7 @@ for chunk in response:
     if chunk.choices[0].delta is not None and chunk.choices[0].delta.role != 'assistant':
         reasoning_content = get_str(chunk.choices[0].delta.reasoning_content)
         content = get_str(chunk.choices[0].delta.content)
-        print(reasoning_content + content + is_reason, end='', flush=True)
+        print(reasoning_content + content, end='', flush=True)
 print('\n')
 ```
 
