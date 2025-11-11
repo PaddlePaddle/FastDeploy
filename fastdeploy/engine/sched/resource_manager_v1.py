@@ -379,12 +379,12 @@ class ResourceManagerV1(ResourceManager):
                 req_index += 1
             # schedule the WAITING requests.
             if not preempted_reqs:
-                waiting_idx = 0
-                while len(self.waiting) > waiting_idx and token_budget > 0:
+                skip_requests: list[Request] = []
+                while len(self.waiting) > 0 and token_budget > 0:
                     if len(self.running) == self.max_num_seqs:
                         break
 
-                    request = self.waiting[waiting_idx]
+                    request = self.waiting[0]
                     if (self._is_mm_request(request) and self.exist_mm_prefill(scheduled_reqs)) or (
                         paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)
                     ):
@@ -398,7 +398,8 @@ class ResourceManagerV1(ResourceManager):
                             continue
                         elif result is True:
                             # skip current request, try next request
-                            waiting_idx += 1
+                            skip_requests.append(request)
+                            self.waiting.popleft()
                             continue
 
                         # Enable prefix caching
@@ -484,6 +485,10 @@ class ResourceManagerV1(ResourceManager):
                             break
                     else:
                         llm_logger.error("Unknown request status type")
+
+                for req in skip_requests:
+                    # move waiting request to end of the deque
+                    self.waiting.append(req)
             if scheduled_reqs:
                 llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
 

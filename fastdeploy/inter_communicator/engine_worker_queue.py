@@ -297,12 +297,14 @@ class EngineWorkerQueue:
                     "token_type_ids",
                     "position_ids",
                     "attention_mask_offset",
+                ]
+                list_keys = [
                     "image_features",
                     "video_features",
                     "audio_features",
                 ]
 
-                llm_logger.info(f"Converting multimodal inputs to tensor...{tensor_keys}")
+                llm_logger.info(f"Converting multimodal inputs to tensor...{tensor_keys + list_keys}")
 
                 for key in tensor_keys:
                     value = multimodal_inputs.get(key)
@@ -312,6 +314,13 @@ class EngineWorkerQueue:
                         multimodal_inputs[key] = [paddle.to_tensor(v) for v in value]
                     elif not isinstance(value, paddle.Tensor):
                         multimodal_inputs[key] = paddle.to_tensor(value)
+
+                for key in list_keys:
+                    value = multimodal_inputs.get(key)
+                    if value is None:
+                        continue
+                    if isinstance(value, list):
+                        multimodal_inputs[key] = [paddle.to_tensor(v) for v in value]
         except Exception as e:
             llm_logger.warning(f"Tensor conversion failed: {type(e).__name__}: {e}")
 
