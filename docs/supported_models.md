@@ -50,7 +50,7 @@ These models accept multi-modal inputs (e.g., images and text).
 
 |Models|DataType|Example HF Model|
 |-|-|-|
-| ERNIE-VL  |BF16/WINT4/WINT8| baidu/ERNIE-4.5-VL-424B-A47B-Paddle<br>&emsp;[quick start](./get_started/ernie-4.5-vl.md) &emsp; [best practice](./best_practices/ERNIE-4.5-VL-424B-A47B-Paddle.md) ;<br>baidu/ERNIE-4.5-VL-28B-A3B-Paddle<br>&emsp;[quick start](./get_started/quick_start_vl.md) &emsp; [best practice](./best_practices/ERNIE-4.5-VL-28B-A3B-Paddle.md) ;|
+| ERNIE-VL  |BF16/WINT4/WINT8| baidu/ERNIE-4.5-VL-424B-A47B-Paddle<br>&emsp;[quick start](./get_started/ernie-4.5-vl.md) &emsp; [best practice](./best_practices/ERNIE-4.5-VL-424B-A47B-Paddle.md) ;<br>baidu/ERNIE-4.5-VL-28B-A3B-Paddle<br>&emsp;[quick start](./get_started/quick_start_vl.md) &emsp; [best practice](./best_practices/ERNIE-4.5-VL-28B-A3B-Paddle.md) ;<br>baidu/ERNIE-4.5-VL-28B-A3B-Thinking<br>&emsp;[quick start](./get_started/ernie-4.5-vl-thinking.md) &emsp; [best practice](./best_practices/ERNIE-4.5-VL-28B-A3B-Thinking.md);
 | PaddleOCR-VL  |BF16/WINT4/WINT8| PaddlePaddle/PaddleOCR-VL<br>&emsp; [best practice](./best_practices/PaddleOCR-VL-0.9B.md) ;|
 | QWEN-VL  |BF16/WINT4/FP8| Qwen/Qwen2.5-VL-72B-Instruct;<br>Qwen/Qwen2.5-VL-32B-Instruct;<br>Qwen/Qwen2.5-VL-7B-Instruct;<br>Qwen/Qwen2.5-VL-3B-Instruct|
 
