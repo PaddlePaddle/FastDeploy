@@ -18,7 +18,6 @@ RUN python -m pip install --no-cache-dir paddlepaddle-gpu==${PADDLE_VERSION} -i 
 # build and install FastDeploy
 RUN python -m pip install --no-cache-dir  fastdeploy-gpu==${FD_VERSION} -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
-
 ENV http_proxy=""
 ENV https_proxy=""
 ENV no_proxy=""
