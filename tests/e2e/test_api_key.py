@@ -1,6 +1,5 @@
 import os
 import signal
-import socket
 import subprocess
 import sys
 import time
@@ -22,6 +21,7 @@ from e2e.utils.serving_utils import (
 )
 
 current_server_process: Optional[subprocess.Popen] = None
+
 
 def start_api_server(api_key_cli: Optional[list[str]] = None, api_key_env: Optional[str] = None):
     global current_server_process
