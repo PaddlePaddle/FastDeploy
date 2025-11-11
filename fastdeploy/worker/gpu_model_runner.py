@@ -1508,7 +1508,7 @@ class GPUModelRunner(ModelRunnerBase):
             max_model_len=self.model_config.max_model_len,
             encoder_block_shape_q=encoder_block_shape_q,
             decoder_block_shape_q=decoder_block_shape_q,
-            decoder_step_token_num=self.scheduler_config.decoder_step_token_num,
+            decoder_step_token_num=self.speculative_config.num_speculative_tokens + 1,
             num_heads=num_heads,
             kv_num_heads=self.model_config.kv_num_heads,
             block_size=self.model_config.block_size,
