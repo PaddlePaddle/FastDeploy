@@ -1504,14 +1504,14 @@ class GPUModelRunner(ModelRunnerBase):
         decoder_block_shape_q = 16
 
         res_buffer = allocate_launch_related_buffer(
-            max_num_seqs=self.scheduler_config.max_num_seqs,
+            max_batch_size=self.scheduler_config.max_num_seqs,
             max_model_len=self.model_config.max_model_len,
             encoder_block_shape_q=encoder_block_shape_q,
             decoder_block_shape_q=decoder_block_shape_q,
             decoder_step_token_num=self.speculative_config.num_speculative_tokens + 1,
             num_heads=num_heads,
             kv_num_heads=self.model_config.kv_num_heads,
-            block_size=self.model_config.block_size,
+            block_size=self.fd_config.cache_config.block_size,
         )
         self.share_inputs.update(res_buffer)
 
