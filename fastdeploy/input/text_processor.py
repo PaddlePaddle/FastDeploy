@@ -550,7 +550,6 @@ class DataProcessor(BaseDataProcessor):
             tokenize=False,
             split_special_tokens=False,
             add_special_tokens=False,
-            return_tensors="pd",
             **kwargs,
         )
         request["prompt_tokens"] = spliced_message

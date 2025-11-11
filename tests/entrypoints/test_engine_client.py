@@ -33,6 +33,19 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
         assert request["tools"] == [1]
         # assert request["chat_template_kwargs"]["tools"] == [1]
 
+    def test_valid_parameters(self):
+        request = {
+            "request_id": "test-request-id",
+            "chat_template_kwargs": {"enable_thinking": True},
+            "prompt_token_ids": [1],
+            "chat_template": "Hello",
+            "max_tokens": 20,
+            "tools": [1],
+            "temperature": 0,
+        }
+        self.engine_client.valid_parameters(request)
+        assert request["temperature"] == 1e-6
+
 
 if __name__ == "__main__":
     unittest.main()
