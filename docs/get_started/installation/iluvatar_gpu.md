@@ -633,3 +633,42 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
   "chat_template_kwargs":{"enable_thinking": true}
 }'
 ```
+
+### ERNIE-4.5-VL-28B-A3B-Thinking
+Refer to [gpu doc](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/get_started/ernie-4.5-vl-thinking.md), the command is bellow:
+
+server:
+```bash
+#!/bin/bash
+export PADDLE_XCCL_BACKEND=iluvatar_gpu
+export INFERENCE_MSG_QUEUE_ID=232132
+export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
+export FD_SAMPLING_CLASS=rejection
+export FD_DEBUG=1
+python3 -m fastdeploy.entrypoints.openai.api_server \
+       --model baidu/ERNIE-4.5-VL-28B-A3B-Thinking \
+       --port 8180 \
+       --tensor-parallel-size 2 \
+       --max-model-len 32768 \
+       --quantization wint8 \
+       --block-size 16 \
+       --limit-mm-per-prompt '{"image": 100, "video": 100}' \
+       --reasoning-parser ernie-45-vl-thinking \
+       --tool-call-parser ernie-45-vl-thinking \
+       --mm-processor-kwargs '{"image_max_pixels": 12845056 }' \
+       --max-num-seqs 8
+```
+
+client:
+```bash
+curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": [
+      {"type":"image_url", "image_url": {"url":"https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg"}},
+      {"type":"text", "text":"From which era does the artifact in the image originate?"}
+    ]}
+  ]
+}'
+```
