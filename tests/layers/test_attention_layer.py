@@ -22,7 +22,6 @@ import time
 import types
 import unittest
 
-import numpy as np
 import paddle
 from paddle import nn
 
@@ -43,6 +42,9 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta, ForwardMode
 from fastdeploy.model_executor.layers.attention import (
     AttentionBackend,
     get_attention_backend,
+)
+from fastdeploy.model_executor.layers.attention.append_attn_backend import (
+    allocate_launch_related_buffer,
 )
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
@@ -193,38 +195,6 @@ class TestAttentionPerformance(unittest.TestCase):
             }
         return state_dict
 
-    def create_attn_backend_buffers(self, m_config: ModelConfig, batch_size: int, block_size: int) -> dict:
-        """
-        Pre-allocates metadata buffers required by the Attention backend.
-        """
-        encoder_block_shape_q = 64
-        decoder_block_shape_q = 16
-        decoder_step_token_num = 1
-        num_heads = m_config.num_attention_heads
-        kv_num_heads = m_config.num_key_value_heads
-        group_size = np.ceil(num_heads / kv_num_heads)
-
-        decode_max_tile_size = (
-            1024 * batch_size * np.ceil((decoder_step_token_num * group_size) / decoder_block_shape_q)
-        )
-        encode_max_tile_size = batch_size * np.ceil((m_config.max_model_len * group_size) / encoder_block_shape_q)
-        kv_max_tile_size = batch_size * np.ceil(m_config.max_model_len / block_size)
-
-        return {
-            "decoder_batch_ids": paddle.full([int(decode_max_tile_size)], 0, dtype="int32"),
-            "decoder_tile_ids_per_batch": paddle.full([int(decode_max_tile_size)], 0, dtype="int32"),
-            "decoder_num_blocks_cpu": paddle.full([1], 0, dtype="int32").pin_memory(),
-            "decoder_num_blocks_device": paddle.full([1], 0, dtype="int32"),
-            "decoder_chunk_size_device": paddle.full([1], 64, dtype="int32"),
-            "max_len_tensor_cpu": paddle.full([8], 0, dtype="int32").cpu(),
-            "encoder_batch_ids": paddle.full([int(encode_max_tile_size)], 0, dtype="int32"),
-            "encoder_tile_ids_per_batch": paddle.full([int(encode_max_tile_size)], 0, dtype="int32"),
-            "encoder_num_blocks_x_cpu": paddle.full([1], 0, dtype="int32").cpu(),
-            "kv_batch_ids": paddle.full([int(kv_max_tile_size)], 0, dtype="int32"),
-            "kv_tile_ids_per_batch": paddle.full([int(kv_max_tile_size)], 0, dtype="int32"),
-            "kv_num_blocks_x_cpu": paddle.full([1], 0, dtype="int32").cpu(),
-        }
-
     def create_forward_meta(
         self,
         batch_size: int,
@@ -252,8 +222,15 @@ class TestAttentionPerformance(unittest.TestCase):
         else:
             raise ValueError(f"Unsupported ForwardMode: {mode}")
 
-        attn_backend_buffers = self.create_attn_backend_buffers(
-            fd_config.model_config, batch_size, fd_config.cache_config.block_size
+        attn_backend_buffers = allocate_launch_related_buffer(
+            max_batch_size=batch_size,
+            max_model_len=fd_config.model_config.max_model_len,
+            encoder_block_shape_q=64,
+            decoder_block_shape_q=16,
+            decoder_step_token_num=1,
+            num_heads=fd_config.model_config.num_attention_heads,
+            kv_num_heads=fd_config.model_config.num_key_value_heads,
+            block_size=fd_config.cache_config.block_size,
         )
 
         if existing_caches is None:
