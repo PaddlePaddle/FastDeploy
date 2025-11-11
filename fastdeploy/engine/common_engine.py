@@ -270,10 +270,16 @@ class EngineService:
         """
         start queue service for engine worker communication
         """
-        address = (
-            self.cfg.master_ip,
-            int(self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]),
-        )
+
+        if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+            address = (
+                self.cfg.master_ip,
+                int(
+                    self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+                ),
+            )
+        else:
+            address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]}.sock"
 
         if start_queue and (self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0"):
             self.llm_logger.info(f"Starting engine worker queue server service at {address}")
@@ -284,15 +290,18 @@ class EngineService:
                 local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
             )
             # Dynamically updates the port value if an anonymous port is used
-            self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id] = str(
-                self.engine_worker_queue_server.get_server_port()
-            )
-            address = (
-                self.cfg.master_ip,
-                int(
-                    self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
-                ),
-            )
+            if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+                self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id] = (
+                    str(self.engine_worker_queue_server.get_server_port())
+                )
+                address = (
+                    self.cfg.master_ip,
+                    int(
+                        self.cfg.parallel_config.engine_worker_queue_port[
+                            self.cfg.parallel_config.local_data_parallel_id
+                        ]
+                    ),
+                )
 
             if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
                 self.cache_task_queue = EngineCacheQueue(

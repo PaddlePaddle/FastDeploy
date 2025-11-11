@@ -100,27 +100,19 @@ class RMSNorm(nn.Layer):
         self.begin_norm_axis: int = begin_norm_axis
 
         self.layer_id = layer_id
-        parallel_config = self.fd_config.parallel_config
-        self.ep_size = parallel_config.expert_parallel_size
-        self.tp_size = parallel_config.tensor_parallel_size
-        self.tp_rank = parallel_config.tensor_parallel_rank
-        self.tp_group = parallel_config.tp_group
-        self.ep_tp_strategy = parallel_config.ep_tp_strategy
-        self.moe_layer_start_index = self.fd_config.model_config.moe_layer_start_index
+        self.ep_size = self.fd_config.parallel_config.expert_parallel_size
+        self.tp_size = self.fd_config.parallel_config.tensor_parallel_size
+        self.tp_rank = self.fd_config.parallel_config.tensor_parallel_rank
+        self.tp_group = self.fd_config.parallel_config.tp_group
         is_input_norm = prefix.endswith(".input_layernorm")
         is_last_norm = prefix.endswith(".norm")
         self.split_x = (
-            self.ep_size > 1
-            and self.tp_size > 1
-            and self.ep_tp_strategy == "all_to_all"
-            and self.layer_id == self.moe_layer_start_index
+            self.fd_config.parallel_config.use_sequence_parallel_moe
+            and self.layer_id == self.fd_config.model_config.moe_layer_start_index
             and is_input_norm
         )
-        self.allgather_out = (
-            self.ep_size > 1
-            and self.tp_size > 1
-            and self.ep_tp_strategy == "all_to_all"
-            and ((self.layer_id > self.moe_layer_start_index and is_input_norm) or is_last_norm)
+        self.allgather_out = self.fd_config.parallel_config.use_sequence_parallel_moe and (
+            (self.layer_id > self.fd_config.model_config.moe_layer_start_index and is_input_norm) or is_last_norm
         )
 
         self.init_weight()
@@ -193,6 +185,7 @@ class RMSNorm(nn.Layer):
         x,
         residual_input: Optional[paddle.Tensor] = None,
         forward_meta: Optional[ForwardMeta] = None,
+        external_rmsnorm: Optional[Callable] = None,
     ) -> paddle.Tensor:
         """
         Defines the forward computation of the layer.
@@ -215,37 +208,46 @@ class RMSNorm(nn.Layer):
         if residual_input is not None:
             residual_input_dtype = residual_input.dtype
             residual_input = residual_input.astype(self.weight.dtype)
-        if current_platform.is_gcu():
-            if residual_input is None:
-                norm_out = rms_norm(x, self.weight, self.eps)
-                return norm_out.astype(x_dtype)
-            norm_out = self.norm_func(x, residual_input, self.weight, self.eps)
-        else:
-            norm_out = self.norm_func(
-                x,
-                norm_weight=self.weight,
-                norm_bias=None,
-                epsilon=self.eps,
-                begin_norm_axis=self.begin_norm_axis,
-                bias=self.bias,
-                residual=residual_input,
-                quant_scale=(-1 if self.quant_scale is None else self.quant_scale),
-                quant_round_type=self.quant_round_type,
-                quant_max_bound=self.quant_max_bound,
-                quant_min_bound=self.quant_min_bound,
-            )
-        out = norm_out[0].astype(x_dtype)
-        residual_out = norm_out[1].astype(residual_input_dtype) if residual_input is not None else None
-
-        if self.split_x:
-            residual_out = self.split(residual_out)
-        if self.allgather_out:
-            out = self.allgather(out, forward_meta.ids_remove_padding.shape[0])
 
         if residual_input is None:
-            return out
+            residual_out = x
+        if external_rmsnorm is None:
+            if current_platform.is_gcu():
+                if residual_input is None:
+                    norm_out = rms_norm(x, self.weight, self.eps)
+                    return norm_out.astype(x_dtype), residual_out
+                norm_out = self.norm_func(x, residual_input, self.weight, self.eps)
+            else:
+                norm_out = self.norm_func(
+                    x,
+                    norm_weight=self.weight,
+                    norm_bias=None,
+                    epsilon=self.eps,
+                    begin_norm_axis=self.begin_norm_axis,
+                    bias=self.bias,
+                    residual=residual_input,
+                    quant_scale=(-1 if self.quant_scale is None else self.quant_scale),
+                    quant_round_type=self.quant_round_type,
+                    quant_max_bound=self.quant_max_bound,
+                    quant_min_bound=self.quant_min_bound,
+                )
         else:
-            return out, residual_out
+            if residual_input is not None:
+                x = x + residual_input
+            norm_out = external_rmsnorm(x, self.weight, self.eps), x
+
+        out = norm_out[0].astype(x_dtype)
+        if residual_input is not None:
+            residual_out = norm_out[1].astype(residual_input_dtype)
+
+        if self.split_x:
+            assert residual_out is not None
+            residual_out = self.split(residual_out)
+        if self.allgather_out:
+            assert forward_meta is not None
+            out = self.allgather(out, forward_meta.ids_remove_padding.shape[0])
+
+        return out, residual_out
 
 
 class LayerNorm(nn.Layer):
