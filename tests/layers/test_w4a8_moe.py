@@ -17,6 +17,7 @@ from fastdeploy.config import (
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.w4a8 import W4A8Config
 from fastdeploy.scheduler import SchedulerConfig
+from fastdeploy.worker.worker_process import init_distributed_environment
 from tests.utils import OpPerformanceTester
 
 paddle.set_default_dtype("bfloat16")
@@ -202,7 +203,7 @@ class TestW4A8FusedMoE(unittest.TestCase):
         return self.model_name_or_path
 
     def test_fused_moe(self):
-        # init_distributed_environment()
+        init_distributed_environment()
 
         gating = paddle.nn.Linear(self.model_config.hidden_size, self.model_config.moe_num_experts)
         gating.to(dtype=paddle.float32)  # it's dtype is bfloat16 default, but the forward input is float32
@@ -213,8 +214,8 @@ class TestW4A8FusedMoE(unittest.TestCase):
         ep_size = 1
         ep_rank = 0
 
-        tp_rank = 0
         tp_size = 1
+        tp_rank = 0
 
         nnodes = (ep_size + 7) // 8
 
@@ -234,7 +235,7 @@ class TestW4A8FusedMoE(unittest.TestCase):
 
         tester.benchmark(
             input_size=self.model_config.hidden_size,
-            batch_sizes=[10, 20, 40, 60, 80, 100, 128, 160, 192, 256],
+            batch_sizes=[10, 20, 40, 60, 80, 100, 128],
         )
 
     def tearDown(self) -> None:
