@@ -4,14 +4,15 @@
 
 思考模型在输出中返回 `reasoning_content` 字段，表示思考链内容,即得出最终结论的思考步骤.
 
-##目前支持思考链的模型
-| 模型名称          | 解析器名称       | 默认开启思考链 | 工具调用  |
-|---------------|-------------|---------|---------|
-| baidu/ERNIE-4.5-VL-424B-A47B-Paddle  | ernie-45-vl | ✅       | ❌ |
-| baidu/ERNIE-4.5-VL-28B-A3B-Paddle | ernie-45-vl |    ✅    |  ❌  |
-| baidu/ERNIE-4.5-21B-A3B-Thinking  | ernie-x1  |   ✅不支持关思考  | ✅|
+## 目前支持思考链的模型
+| 模型名称          | 解析器名称       | 默认开启思考链 | 工具调用  | 思考开关控制参数|
+|---------------|-------------|---------|---------|--------- |
+| baidu/ERNIE-4.5-VL-424B-A47B-Paddle  | ernie-45-vl | ✅       | ❌ |  "chat_template_kwargs":{"enable_thinking": true/false}|
+| baidu/ERNIE-4.5-VL-28B-A3B-Paddle | ernie-45-vl |    ✅    |  ❌  |"chat_template_kwargs":{"enable_thinking": true/false}|
+| baidu/ERNIE-4.5-21B-A3B-Thinking  | ernie-x1  |   ✅不支持关思考  | ✅|❌|
+| baidu/ERNIE-4.5-VL-28B-A3B-Thinking  | ernie-45-vl-thinking  |   ✅不推荐关闭   | ✅|"chat_template_kwargs": {"options": {"thinking_mode": "open/close"}}|
 
-思考模型需要指定解析器,以便于对思考内容进行解析. 通过 `"enable_thinking": false` 参数可以关闭模型思考模式.
+思考模型需要指定解析器,以便于对思考内容进行解析. 参考各个模型的 `思考开关控制参数` 可以关闭模型思考模式.
 
 可以支持思考模式开关的接口:
 1. OpenAI 服务中 `/v1/chat/completions`  请求.
@@ -34,7 +35,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --reasoning-parser ernie-45-vl
 ```
 
-接下来, 向模型发送  `chat completion` 请求
+接下来, 向模型发送  `chat completion` 请求， 以`baidu/ERNIE-4.5-VL-28B-A3B-Paddle`模型为例
 
 ```bash
 curl -X POST "http://0.0.0.0:8192/v1/chat/completions" \
