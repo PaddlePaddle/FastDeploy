@@ -1128,7 +1128,6 @@ class MetaxModelRunner(ModelRunnerBase):
         """
         # Initialize forward meta
         self.forward_meta = ForwardMeta(
-            input_ids=self.share_inputs["input_ids"],
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
             attn_backend=self.attn_backends[0],
@@ -1943,7 +1942,7 @@ class MetaxModelRunner(ModelRunnerBase):
         else:
             skip_save_output = False
         post_process(
-            sampler_output=sampler_output,
+            sampler_or_pooler_output=sampler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
             block_size=self.cache_config.block_size,

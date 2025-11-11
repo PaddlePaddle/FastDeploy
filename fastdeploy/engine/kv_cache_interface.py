@@ -16,7 +16,7 @@
 
 import copy
 from dataclasses import dataclass
-from typing import list
+from typing import List
 
 from typing_extensions import Self
 
@@ -33,11 +33,11 @@ class KVCacheSpec:
     block_memory_used: int
 
     @classmethod
-    def merge(cls, specs: list[Self]) -> Self:
+    def merge(cls, specs: List[Self]) -> Self:
         """
-        Merge a list of KVCacheSpec objects into a single KVCacheSpec object.
+        Merge a List of KVCacheSpec objects into a single KVCacheSpec object.
         """
-        # check list
+        # check List
         assert all(
             (spec.block_size == specs[0].block_size and spec.block_memory_used == specs[0].block_memory_used)
             for spec in specs[1:]
