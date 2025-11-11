@@ -194,6 +194,7 @@ class Glm4MoeAttention(nn.Layer):
             prefix=f"{prefix}.o_proj",
             input_size=fd_config.model_config.num_attention_heads * fd_config.model_config.head_dim,
             output_size=fd_config.model_config.hidden_size,
+            layer_id=layer_id,
         )
 
         self.attn = Attention(
@@ -229,8 +230,8 @@ class Glm4MoeAttention(nn.Layer):
 
         if self.use_qk_norm:
             q, k, v = qkv_out.split([self.q_size, self.kv_size, self.kv_size], axis=-1)
-            q = self.q_norm(q.reshape([-1, self.num_heads, self.head_dim])).reshape(q.shape)
-            k = self.k_norm(k.reshape([-1, self.num_kv_heads, self.head_dim])).reshape(k.shape)
+            q = self.q_norm(q.reshape([-1, self.num_heads, self.head_dim]))[0].reshape(q.shape)
+            k = self.k_norm(k.reshape([-1, self.num_kv_heads, self.head_dim]))[0].reshape(k.shape)
             qkv_out = paddle.concat([q, k, v], axis=-1)
 
         atten_out = self.attn(
@@ -275,6 +276,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
+            layer_id=layer_id,
         )
 
         self.post_attention_layernorm = RMSNorm(
@@ -282,6 +284,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
+            layer_id=layer_id,
         )
 
     def forward(
@@ -291,11 +294,9 @@ class Glm4MoeDecoderLayer(nn.Layer):
         residual: paddle.Tensor = None,
     ):
         """ """
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
-        else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        hidden_states, residual = self.input_layernorm(
+            hidden_states, residual_input=residual, forward_meta=forward_meta
+        )
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
@@ -366,9 +367,8 @@ class Glm4MoeModel(nn.Layer):
 
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
-        hidden_states = hidden_states + residual
 
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
         return out
 

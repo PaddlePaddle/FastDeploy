@@ -2,7 +2,11 @@
 
 本文档介绍如何在 FastDeploy 中配置服务器以使用工具解析器（tool parser），以及如何在客户端调用工具。
 
----
+## Ernie系列模型配套工具解释器
+| 模型名称          | 解析器名称       |
+|---------------|-------------|
+| baidu/ERNIE-4.5-21B-A3B-Thinking  | ernie-x1  |
+| baidu/ERNIE-4.5-VL-28B-A3B-Thinking  | ernie-45-vl-thinking  |
 
 ## 快速开始
 
