@@ -18,7 +18,6 @@ import argparse
 import json
 import os
 import time
-from multiprocessing import shared_memory
 from typing import Tuple
 
 import numpy as np
@@ -49,9 +48,13 @@ from fastdeploy.eplb.async_expert_loader import (
     load_tensor_from_shm_mem,
 )
 from fastdeploy.eplb.experts_manager import RedundantExpertManager
-from fastdeploy.eplb.utils import RearrangeExpertState
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
-from fastdeploy.inter_communicator import ExistTaskStatus, IPCSignal, ModelWeightsStatus
+from fastdeploy.inter_communicator import (
+    ExistTaskStatus,
+    IPCSignal,
+    ModelWeightsStatus,
+    RearrangeExpertStatus,
+)
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
@@ -283,63 +286,62 @@ class PaddleDisWorkerProc:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
-        if self.eplb_config.enable_redundant_experts:
+        if self.eplb_config.enable_eplb:
             self.last_dump_expert_workload_ts = 0
             self.experts_manager = RedundantExpertManager(
-                rank=self.local_rank, ep_size=self.ranks, fd_config=self.fd_config
+                rank=self.local_rank,
+                ep_size=self.ranks,
+                fd_config=self.fd_config,
+                ipc_signal_suffix=self.parallel_config.engine_worker_queue_port,
             )
-            num_layers = self.fd_config.model_config.num_hidden_layers
-            num_experts = self.fd_config.model_config.moe_num_experts
-            expert_token_stats = np.zeros((num_layers, num_experts), dtype=np.int32)
-            shm_local_experts_token_stats = shared_memory.SharedMemory(
+            experts_token_stats = np.zeros(
+                (self.fd_config.model_config.num_hidden_layers, self.fd_config.model_config.moe_num_experts),
+                dtype=np.int32,
+            )
+            local_experts_token_stats_array = IPCSignal(
+                name="local_experts_token_stats",
+                array=experts_token_stats,
+                dtype=np.int32,
+                suffix=self.parallel_config.engine_worker_queue_port,
                 create=False,
-                size=expert_token_stats.nbytes,
-                name=f"{envs.get_unique_name('local_experts_token_stats_dprank' + self.local_rank)}",
             )
-            expert_tokens_stats_array = np.ndarray(
-                expert_token_stats.shape, dtype=expert_token_stats.dtype, buffer=shm_local_experts_token_stats.buf
-            )
-            signal_clear_experts_token_stats = np.zeros([1], dtype=np.int32)
-            shm_signal_clear_experts_token_stats = shared_memory.SharedMemory(
+
+            clear_experts_token_stats = np.zeros([1], dtype=np.int32)
+            signal_clear_experts_token_stats = IPCSignal(
+                name="signal_clear_experts_token_stats",
+                array=clear_experts_token_stats,
+                dtype=np.int32,
+                suffix=self.parallel_config.engine_worker_queue_port,
                 create=False,
-                size=signal_clear_experts_token_stats.nbytes,
-                name=f"{envs.get_unique_name('signal_clear_experts_token_stats_dprank' + self.local_rank)}",
             )
-            signal_clear_experts_token_stats_array = np.ndarray(
-                signal_clear_experts_token_stats.shape,
-                dtype=signal_clear_experts_token_stats.dtype,
-                buffer=shm_signal_clear_experts_token_stats.buf,
-            )
+
             if self.local_rank == 0:
                 signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
-                shm_signal_update_weight_from_tensor = shared_memory.SharedMemory(
+                signal_update_weight_from_tensor_array = IPCSignal(
+                    name="signal_update_weight_from_tensor",
+                    array=signal_update_weight_from_tensor,
+                    dtype=np.int32,
+                    suffix=self.parallel_config.engine_worker_queue_port,
                     create=False,
-                    size=signal_update_weight_from_tensor.nbytes,
-                    name=f"{envs.get_unique_name('signal_update_weight_from_tensor_dprank' + self.local_rank)}",
-                )
-                signal_update_weight_from_tensor_array = np.ndarray(
-                    signal_update_weight_from_tensor.shape,
-                    dtype=signal_update_weight_from_tensor.dtype,
-                    buffer=shm_signal_update_weight_from_tensor.buf,
                 )
 
                 rearrange_experts_status = np.zeros([1], dtype=np.int32)
-                shm_rearrange_experts_status = shared_memory.SharedMemory(
+                rearrange_experts_signal = IPCSignal(
+                    name="rearrange_experts_status",
+                    array=rearrange_experts_status,
+                    dtype=np.int32,
+                    suffix=self.parallel_config.engine_worker_queue_port,
                     create=False,
-                    size=rearrange_experts_status.nbytes,
-                    name=f"{envs.get_unique_name('rearrange_experts_status_dprank' + self.local_rank)}",
                 )
 
-                rearrange_experts_status_array = np.ndarray(
-                    rearrange_experts_status.shape,
-                    dtype=rearrange_experts_status.dtype,
-                    buffer=shm_rearrange_experts_status.buf,
-                )
-
-                expert_workload_dump_interval = envs.FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL
-                mmap_infos = create_mmap(
-                    [MODEL_MAIN_NAME], self.local_rank, self.ranks, shm_uuid=os.getenv("SHM_UUID", ""), logger=logger
-                )
+            mmap_infos = create_mmap(
+                [MODEL_MAIN_NAME],
+                self.local_rank,
+                self.ranks,
+                shm_uuid=self.parallel_config.engine_worker_queue_port,
+                eplb_config=self.eplb_config,
+                logger=logger,
+            )
         # Currently, only support single node
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
         req_ids = []
@@ -347,32 +349,33 @@ class PaddleDisWorkerProc:
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
-            if self.eplb_config.enable_redundant_experts:
+            if self.eplb_config.enable_eplb:
                 rearrange_time = time.time()
                 # 获取专家负载
-                if expert_tokens_stats_array is not None and (
-                    int(rearrange_time) - self.last_dump_expert_workload_ts > expert_workload_dump_interval
+                if local_experts_token_stats_array.value is not None and (
+                    int(rearrange_time) - self.last_dump_expert_workload_ts
+                    > self.eplb_config.redundant_expert_dump_workload_interval
                 ):
                     self.last_dump_expert_workload_ts = int(rearrange_time)
                     clear_stat = False
-                    if signal_clear_experts_token_stats_array[0] == 1:
+                    if signal_clear_experts_token_stats.value[0] == 1:
                         clear_stat = True
-                        signal_clear_experts_token_stats_array[0] = 0
+                        signal_clear_experts_token_stats.value[0] = 0
                     (
                         new_stats_array,
                         _,
                         _,
                         _,
                     ) = self.worker.get_model().redundant_table_manger.get_expert_tokens_stats(clear_stat=clear_stat)
-                    expert_tokens_stats_array[:] = new_stats_array[:]
-                elif expert_tokens_stats_array is None:
-                    logger.warning("redundant_expert: expert_tokens_stats_array not init")
+                    local_experts_token_stats_array.value[:] = new_stats_array[:]
+                elif local_experts_token_stats_array.value is None:
+                    logger.warning("redundant_expert: local_experts_token_stats not init")
 
                 # 所有DP同步更新权重
                 broadcast_value = 0
-                if self.local_rank == 0 and signal_update_weight_from_tensor_array[0] == 1:
+                if self.local_rank == 0 and signal_update_weight_from_tensor_array.value[0] == 1:
                     logger.info("redundant_expert: update_weight_from_tensor broadcast signal")
-                    signal_update_weight_from_tensor_array[0] = 0
+                    signal_update_weight_from_tensor_array.value[0] = 0
                     broadcast_value = REARRANGE_EXPERT_MAGIC_NUM
                 data = paddle.to_tensor([broadcast_value])
                 paddle.distributed.broadcast(data, 0)
@@ -383,7 +386,7 @@ class PaddleDisWorkerProc:
                     )
                     paddle.distributed.barrier()
                     if self.local_rank == 0:
-                        rearrange_experts_status_array[0] = RearrangeExpertState.done.value
+                        rearrange_experts_signal.value[0] = RearrangeExpertStatus.DONE.value
                     logger.info("redundant_expert: done")
             if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
                 if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
@@ -825,6 +828,13 @@ def parse_args():
         help="FQCNs (Fully Qualified Class Names) of logits processors supported by the service.",
     )
 
+    parser.add_argument(
+        "--eplb_config",
+        type=json.loads,
+        default=None,
+        help="EPLB Configuration.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -880,7 +890,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     plas_attention_config = PlasAttentionConfig(args.plas_attention_config)
 
     early_stop_config = EarlyStopConfig(args.early_stop_config)
-    eplb_config = EPLBConfig()
+    eplb_config = EPLBConfig(args.eplb_config)
 
     structured_outputs_config: StructuredOutputsConfig = StructuredOutputsConfig(args=vars(args))
 

@@ -445,6 +445,16 @@ class EngineArgs:
     - To enable custom logits processors, add your dotted paths to module and class names to the list.
     """
 
+    enable_eplb: bool = False
+    """
+    Flag to enable eplb
+    """
+
+    eplb_config: Optional[Dict[str, Any]] = None
+    """
+    Configuration for eplb.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -796,6 +806,18 @@ class EngineArgs:
             default=EngineArgs.enable_expert_parallel,
             help="Enable expert parallelism.",
         )
+        parallel_group.add_argument(
+            "--enable-eplb",
+            action="store_true",
+            default=EngineArgs.enable_eplb,
+            help="Enable eplb.",
+        )
+        parallel_group.add_argument(
+            "--eplb-config",
+            type=json.loads,
+            default=EngineArgs.eplb_config,
+            help="Config of eplb.",
+        )
 
         # Load group
         load_group = parser.add_argument_group("Load Configuration")
@@ -1103,13 +1125,21 @@ class EngineArgs:
                 early_stop_args[k] = v
         return EarlyStopConfig(early_stop_args)
 
+    def create_eplb_config(self) -> EPLBConfig:
+        """
+        Create and retuan an EPLBConfig object based on the current settings.
+        """
+        eplb_args = asdict(self)
+        if self.eplb_config is not None:
+            for k, v in self.eplb_config.items():
+                eplb_args[k] = v
+        return EPLBConfig(eplb_args)
+
     def create_engine_config(self, port_availability_check=True) -> FDConfig:
         """
         Create and return a Config object based on the current settings.
         """
         all_dict = asdict(self)
-        eplb_cfg = EPLBConfig()
-        all_dict["enable_redundant_experts"] = eplb_cfg.enable_redundant_experts
         model_cfg = ModelConfig(all_dict)
 
         # XPU currently disable prefix cache for VL model
@@ -1152,6 +1182,7 @@ class EngineArgs:
         graph_opt_cfg = self.create_graph_optimization_config()
         plas_attention_config = self.create_plas_attention_config()
 
+        eplb_cfg = self.create_eplb_config()
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
         structured_outputs_config: StructuredOutputsConfig = StructuredOutputsConfig(args=all_dict)

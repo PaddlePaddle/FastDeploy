@@ -42,3 +42,4 @@ opentelemetry-instrumentation-fastapi
 partial_json_parser
 msgspec
 einops
+cuda-python==12.8
