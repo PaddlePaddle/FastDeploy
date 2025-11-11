@@ -1068,17 +1068,11 @@ std::vector<paddle::Tensor> FusedNeoxRopeEmbedding(
 
 std::vector<paddle::Tensor> GeluTanh(paddle::Tensor& input);
 
-void rmsnorm(paddle::Tensor& output,
-             paddle::Tensor& input,
-             paddle::Tensor& weight,
-             float eps,
-             bool enable_pdl);
-
-void fused_add_rmsnorm(paddle::Tensor& input,
-                       paddle::Tensor& residual,
-                       paddle::Tensor& weight,
-                       float eps,
-                       bool enable_pdl);
+std::vector<paddle::Tensor> fused_add_rmsnorm(paddle::Tensor& input,
+                                              paddle::Tensor& residual,
+                                              paddle::Tensor& weight,
+                                              const float eps,
+                                              const bool enable_pdl);
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_expert_token_num",
@@ -1675,8 +1669,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         "fused_neox_rope_embedding function");
 
   m.def("gelu_tanh", &GeluTanh, "gelu_tanh function");
-
-  m.def("rmsnorm", &rmsnorm, "rmsnorm function");
 
   m.def("fused_add_rmsnorm", &fused_add_rmsnorm, "fused_add_rmsnorm function");
 }

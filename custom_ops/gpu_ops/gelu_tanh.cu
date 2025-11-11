@@ -77,7 +77,7 @@ std::vector<paddle::Tensor> GeluTanh(paddle::Tensor& input) {
   paddle::Tensor output =
       GetEmptyTensor(input.dims(), input.dtype(), input.place());
 
-  DISPATCH_FLOAT_FP6_DTYPE(input.dtype(), scalar_t, {
+  DISPATCH_FLOAT_FP16_DTYPE(input.dtype(), scalar_t, {
     uint32_t vec_size = 16 / sizeof(scalar_t);
     cudaLaunchConfig_t config;
     config.gridDim = num_tokens;
