@@ -264,51 +264,166 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 #### Send requests
 
+Initiate a service request through the following command
 ```bash
 curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [
-    {"role": "user", "content": [
-              {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg", "detail": "high"}},
-              {"type": "text", "text": "Please describe the content of the image"}
-            ]}
-    ],
-    "metadata": {"enable_thinking": true}
+    {"role": "user", "content": "Adapt Li Bai's "Silent Night Thoughts" into a modern poem"}
+  ]
 }'
 ```
-
-```python
-import openai
-
-ip = "0.0.0.0"
-service_http_port = "8188"
-client = openai.Client(base_url=f"http://{ip}:{service_http_port}/v1", api_key="EMPTY_API_KEY")
-
-response = client.chat.completions.create(
-    model="default",
-    messages=[
-        {"role": "user", "content": [
-              {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg", "detail": "high"}},
-              {"type": "text", "text": "Please describe the content of the image"}
+When inputting images, initiate a request using the following command
+```
+curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": [
+      {"type":"image_url", "image_url": {"url":"https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg"}},
+      {"type":"text", "text":"Which era does the cultural relic in the picture belong to?"}
+    ]}
+  ]
+}'
+```
+When inputting a video, initiate a request by following the following command
+```
+curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": [
+      {"type":"video_url", "video_url": {"url":"https://bj.bcebos.com/v1/paddlenlp/datasets/paddlemix/demo_video/example_video.mp4"}},
+      {"type":"text", "text":"How many apples are there in the picture"}
+    ]}
+  ]
+}'
+```
+When the input contains a tool call, initiate the request by following the command
+```
+curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d $'{
+    "tools": [
+        {
+            "type": "function",
+            "function": {
+                "name": "image_zoom_in_tool",
+                "description": "Zoom in on a specific region of an image by cropping it based on a bounding box (bbox) and an optional object label.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "bbox_2d": {
+                            "type": "array",
+                            "items": {
+                                "type": "number"
+                            },
+                            "minItems": 4,
+                            "maxItems": 4,
+                            "description": "The bounding box of the region to zoom in, as [x1, y1, x2, y2], where (x1, y1) is the top-left corner and (x2, y2) is the bottom-right corner, and the values of x1, y1, x2, y2 are all normalized to the range 0–1000 based on the original image dimensions."
+                        },
+                        "label": {
+                            "type": "string",
+                            "description": "The name or label of the object in the specified bounding box (optional)."
+                        }
+                    },
+                    "required": [
+                        "bbox_2d"
+                    ]
+                },
+                "strict": false
+            }
+        }
+    ],
+    "messages": [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Is the old lady on the left side of the empty table behind older couple?"
+                }
+            ]
+        }
+    ],
+    "stream": false
+}'
+```
+When there are multiple requests and the tool returns results in the historical context, initiate the request by following the command below
+When there are multiple requests and the tool returns results in the historical context, initiate the request by following the command below
+```
+curl -X POST "http://0.0.0.0:8188/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d $'{
+    "messages": [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Get the current weather in Beijing"
+                }
             ]
         },
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "arguments": {
+                            "location": "Beijing",
+                            "unit": "c"
+                        }
+                    }
+                }
+            ],
+            "content": ""
+        },
+        {
+            "role": "tool",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "location: Beijing，temperature: 23，weather: sunny，unit: c"
+                }
+            ]
+        }
     ],
-    temperature=0.0001,
-    max_tokens=10000,
-    stream=True,
-    top_p=0,
-    metadata={"enable_thinking": True},
-)
-
-def get_str(content_raw):
-    content_str = str(content_raw) if content_raw is not None else ''
-    return content_str
-
-for chunk in response:
-    if chunk.choices[0].delta is not None and chunk.choices[0].delta.role != 'assistant':
-        reasoning_content = get_str(chunk.choices[0].delta.reasoning_content)
-        content = get_str(chunk.choices[0].delta.content)
-        print(reasoning_content + content + is_reason, end='', flush=True)
-print('\n')
+    "tools": [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Determine weather in my location",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "The city and state e.g. San Francisco, CA"
+                        },
+                        "unit": {
+                            "type": "string",
+                            "enum": [
+                                "c",
+                                "f"
+                            ]
+                        }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                        "location",
+                        "unit"
+                    ]
+                },
+                "strict": true
+            }
+        }
+    ],
+    "stream": false
+}'
 ```
