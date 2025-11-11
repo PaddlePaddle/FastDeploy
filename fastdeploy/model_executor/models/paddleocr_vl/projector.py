@@ -20,8 +20,6 @@ from typing import Optional
 import paddle
 import paddle.nn as nn
 
-from fastdeploy.model_executor.layers.utils import get_tensor
-
 
 class GELUActivation(nn.Layer):
     """
@@ -98,7 +96,6 @@ class Projector(nn.Layer):
         return hidden_states
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        loaded_weight = get_tensor(loaded_weight)
         loaded_weight = loaded_weight.transpose([1, 0])
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"

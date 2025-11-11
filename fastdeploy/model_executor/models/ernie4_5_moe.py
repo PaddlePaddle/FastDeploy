@@ -562,7 +562,9 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         )
         params_dict = dict(self.named_parameters())
 
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(
+            dict(self.named_sublayers()), fd_config=self.fd_config
+        )
 
         for loaded_weight_name, loaded_weight in weights_iterator:
             loaded_weight_name = loaded_weight_name.replace("model", "ernie")
@@ -598,7 +600,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings:
-            self.lm_head.load_state_dict({self.lm_head.weight_key: self.ernie.embed_tokens.embeddings.weight})
+            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight)
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)

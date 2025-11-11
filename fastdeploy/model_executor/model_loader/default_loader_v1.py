@@ -29,6 +29,7 @@ from fastdeploy.model_executor.load_weight_utils import (
 from fastdeploy.model_executor.model_loader.base_loader import BaseModelLoader
 from fastdeploy.model_executor.models.adapters import as_embedding_model
 from fastdeploy.model_executor.models.model_base import ModelRegistry
+from fastdeploy.model_executor.utils import process_final_after_loading
 from fastdeploy.platforms import current_platform
 
 
@@ -55,6 +56,8 @@ class DefaultModelLoaderV1(BaseModelLoader):
             load_weights_from_cache(model, weights_iterator)
         else:
             model.load_weights(weights_iterator)
+            if fd_config.speculative_config.model_type != "mtp":
+                process_final_after_loading(model, fd_config)
 
         self.clean_memory_fragments()
 

@@ -19,7 +19,13 @@ from abc import abstractmethod
 import paddle
 from paddle import nn
 
-from fastdeploy.model_executor.utils import default_weight_loader, set_weight_attrs
+from fastdeploy.model_executor.utils import (
+    TensorTracker,
+    default_weight_loader,
+    free_tensor,
+    set_weight_attrs,
+    weight_fully_copied,
+)
 from fastdeploy.platforms import current_platform
 
 from ..quantization.quant_base import QuantMethodBase
@@ -215,14 +221,21 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
         num_experts = extra_weight_attrs.pop("num_experts")
         hidden_size = extra_weight_attrs.pop("hidden_size")
         moe_intermediate_size = extra_weight_attrs.pop("moe_intermediate_size")
-        if current_platform.is_cuda():
+        self.model_format = extra_weight_attrs.get("model_format")
+        if current_platform.is_cuda() and self.model_format != "torch":
             self.up_gate_proj_weight_shape = [num_experts, hidden_size, moe_intermediate_size * 2]
             self.down_proj_weight_shape = [num_experts, moe_intermediate_size, hidden_size]
-            extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 1, "down": 0, "up": 1}}
+            extra_weight_attrs = {
+                **(extra_weight_attrs or {}),
+                "SHARD_ID_TO_SHARDED_DIM": {"gate": 1, "down": 0, "up": 1},
+            }
         else:
             self.up_gate_proj_weight_shape = [num_experts, moe_intermediate_size * 2, hidden_size]
             self.down_proj_weight_shape = [num_experts, hidden_size, moe_intermediate_size]
-            extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}}
+            extra_weight_attrs = {
+                **(extra_weight_attrs or {}),
+                "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0},
+            }
 
         layer.up_gate_proj_weight = layer.create_parameter(
             shape=self.up_gate_proj_weight_shape,
@@ -235,31 +248,46 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
             dtype=layer.weight_dtype,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
-
+        extra_weight_attrs["weight_loader"] = extra_weight_attrs.get(
+            "weight_loader", default_weight_loader(layer.fd_config)
+        )
+        if self.model_format != "torch":
+            up_gate_proj_attrs = extra_weight_attrs
+            down_proj_attrs = extra_weight_attrs
+        else:
+            up_gate_proj_attrs = {
+                **extra_weight_attrs,
+                "tensor_track": TensorTracker(
+                    shape=layer.up_gate_proj_weight.shape,
+                    output_dim=extra_weight_attrs["SHARD_ID_TO_SHARDED_DIM"]["gate"],
+                ),
+            }
+            down_proj_attrs = {
+                **extra_weight_attrs,
+                "tensor_track": TensorTracker(
+                    shape=layer.down_proj_weight.shape,
+                    output_dim=extra_weight_attrs["SHARD_ID_TO_SHARDED_DIM"]["down"],
+                ),
+            }
         set_weight_attrs(
             layer.up_gate_proj_weight,
-            {
-                "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
-                "weight_need_transpose": extra_weight_attrs.get("model_format") == "torch",
-            },
+            up_gate_proj_attrs,
         )
         set_weight_attrs(
             layer.down_proj_weight,
-            {
-                "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
-                "weight_need_transpose": extra_weight_attrs.get("model_format") == "torch",
-            },
+            down_proj_attrs,
         )
 
         if layer.with_bias:
+            # only pt model now
             layer.up_gate_proj_bias = layer.create_parameter(
-                shape=[layer.num_experts, layer.moe_intermediate_size * 2],
+                shape=[num_experts, moe_intermediate_size * 2],
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
 
             layer.down_proj_bias = layer.create_parameter(
-                shape=[layer.num_experts, layer.hidden_size],
+                shape=[num_experts, hidden_size],
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
@@ -267,13 +295,37 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
                 layer.up_gate_proj_bias,
                 {
                     "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
-                    "model_format": extra_weight_attrs.get("model_format", ""),
                 },
             )
             set_weight_attrs(
                 layer.down_proj_bias,
                 {
                     "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
-                    "model_format": extra_weight_attrs.get("model_format", ""),
                 },
             )
+
+    def process_weights_after_loading(self, layer):
+        if self.model_format != "torch":
+            return
+        if not weight_fully_copied(layer.up_gate_proj_weight) or not weight_fully_copied(layer.down_proj_weight):
+            return
+        up_gate_proj_weight_transpose = layer.up_gate_proj_weight.transpose([0, 2, 1])
+        down_proj_weight_transpose = layer.down_proj_weight.transpose([0, 2, 1])
+        up_gate_proj = layer.create_parameter(
+            shape=up_gate_proj_weight_transpose.shape,
+            dtype=up_gate_proj_weight_transpose.dtype,
+            default_initializer=paddle.nn.initializer.Normal(mean=0.0, std=0.02),
+            is_bias=False,
+        )
+        up_gate_proj.copy_(up_gate_proj_weight_transpose, False)
+        free_tensor(layer.up_gate_proj_weight)
+        layer.up_gate_proj_weight = up_gate_proj
+        down_proj = layer.create_parameter(
+            shape=down_proj_weight_transpose.shape,
+            dtype=down_proj_weight_transpose.dtype,
+            default_initializer=paddle.nn.initializer.Normal(mean=0.0, std=0.02),
+            is_bias=False,
+        )
+        down_proj.copy_(down_proj_weight_transpose, False)
+        free_tensor(layer.down_proj_weight)
+        layer.down_proj_weight = down_proj
