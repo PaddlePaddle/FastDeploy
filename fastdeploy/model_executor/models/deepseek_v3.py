@@ -271,6 +271,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             input_size=self.num_attention_heads * self.v_head_dim,
             output_size=self.hidden_size,
             with_bias=False,
+            layer_id=layer_id,
         )
 
         self.kv_b_proj_bmm = KVBatchLinear(
@@ -344,13 +345,13 @@ class DeepseekV3MLAAttention(nn.Layer):
             [self.q_lora_rank, self.kv_lora_rank, self.qk_rope_head_dim], axis=-1
         )
 
-        query = self.q_a_layernorm(query)
+        query = self.q_a_layernorm(query)[0]
         query = self.q_b_proj(query)
         query = query.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
         query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
 
         key_pe = key_pe.reshape([-1, 1, self.qk_rope_head_dim])
-        compressed_kv = self.kv_a_layernorm(compressed_kv)
+        compressed_kv = self.kv_a_layernorm(compressed_kv)[0]
 
         query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
 
@@ -479,6 +480,7 @@ class DeepSeekV3DecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
+            layer_id=layer_id,
         )
 
         self.post_attention_layernorm = RMSNorm(
@@ -486,6 +488,7 @@ class DeepSeekV3DecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
+            layer_id=layer_id,
         )
 
     def load_state_dict(self, state_dict):
@@ -504,11 +507,9 @@ class DeepSeekV3DecoderLayer(nn.Layer):
         mask_encoder_batch: paddle.Tensor,
     ):
         """ """
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
-        else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        hidden_states, residual = self.input_layernorm(
+            hidden_states, residual_input=residual, forward_meta=forward_meta
+        )
 
         hidden_states = self.self_attn(forward_meta, hidden_states, position_ids, mask_encoder_batch)
 
@@ -588,8 +589,7 @@ class DeepSeekV3Model(nn.Layer):
                 position_ids,
                 mask_encoder_batch,
             )
-        hidden_states = hidden_states + residual
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
         return out
 
