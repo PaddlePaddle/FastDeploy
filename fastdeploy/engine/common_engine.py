@@ -802,7 +802,10 @@ class EngineService:
                     )
                     # Since the request is not in scheduler
                     # Send result by zmq directly
-                    self.send_response_server.send_response(request_id, [error_result])
+                    if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                        self.send_response_server.send_response(None, [[error_result]])
+                    else:
+                        self.send_response_server.send_response(request_id, [error_result])
             except Exception as e:
                 self.llm_logger.error(
                     f"Error happened while receiving new request from zmq, details={e}, "
@@ -819,8 +822,11 @@ class EngineService:
                 if len(results) == 0:
                     time.sleep(0.005)
                     continue
-                for request_id, contents in results.items():
-                    self.send_response_server.send_response(request_id, contents)
+                if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                    self.send_response_server.send_response(None, results)
+                else:
+                    for request_id, contents in results.items():
+                        self.send_response_server.send_response(request_id, contents)
 
             except Exception as e:
                 self.llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
