@@ -223,7 +223,7 @@ class FusedMoE(nn.Layer):
         if expert_id - self.expert_id_offset >= 0 and expert_id - self.expert_id_offset < self.num_local_experts:
             if hasattr(param, "SHARD_ID_TO_SHARDED_DIM"):
                 SHARD_ID_TO_SHARDED_DIM = param.SHARD_ID_TO_SHARDED_DIM
-            elif current_platform.is_cuda():
+            elif current_platform.is_cuda() or current_platform.is_iluvatar():
                 SHARD_ID_TO_SHARDED_DIM = {"gate": 1, "down": 0, "up": 1}
             else:
                 SHARD_ID_TO_SHARDED_DIM = {"gate": 0, "down": 1, "up": 0}
