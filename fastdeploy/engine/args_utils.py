@@ -235,6 +235,7 @@ class EngineArgs:
     """
     KVCache write policy
     """
+    enable_hierarchical_kvcache: bool = False
 
     # System configuration parameters
     use_warmup: int = 0
@@ -861,6 +862,13 @@ class EngineArgs:
             type=int,
             default=EngineArgs.static_decode_blocks,
             help="Static decoding blocks num.",
+        )
+
+        cache_group.add_argument(
+            "--enable-hierarchical-kvcache",
+            action="store_true",
+            default=EngineArgs.enable_hierarchical_kvcache,
+            help="Enable hierarchical kvcache.",
         )
 
         cache_group.add_argument(
