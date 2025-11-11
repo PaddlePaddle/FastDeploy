@@ -659,7 +659,7 @@ class MTPProposer(Proposer):
         """
         check whether prefill stage exist
         """
-        if int(paddle.max(self.model_inputs["seq_lens_encoder"])) != 0:
+        if np.any(self.share_inputs["seq_lens_encoder"].numpy() > 0):
             return 1
         else:
             return 0
