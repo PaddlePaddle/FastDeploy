@@ -940,10 +940,10 @@ class CacheConfig:
             self.enable_hierarchical_cache = True
 
         if self.model_cfg is not None:
-            if self.model_cfg.quantization_config is not None:
-                self.cache_dtype = self.model_cfg.quantization_config.get("kv_cache_quant_type", self.cache_dtype)
-            elif self.model_cfg.quantization is not None:
+            if self.model_cfg.quantization is not None and isinstance(self.model_cfg.quantization, dict):
                 self.cache_dtype = self.model_cfg.quantization.get("kv_cache_quant_type", self.cache_dtype)
+            elif self.model_cfg.quantization_config is not None:
+                self.cache_dtype = self.model_cfg.quantization_config.get("kv_cache_quant_type", self.cache_dtype)
             if (
                 hasattr(self.model_cfg, "num_key_value_heads")
                 and hasattr(self.model_cfg, "num_key_value_heads")
