@@ -245,7 +245,7 @@ print('\n')
 Deploy the ERNIE-4.5-VL-28B-A3B-Thinking model with WINT8 precision and 128K context length on 1 XPU
 
 ```bash
-export XPU_VISIBLE_DEVICES="0"# Specify any card
+export XPU_VISIBLE_DEVICES="0" # Specify any card
 python -m fastdeploy.entrypoints.openai.api_server \
     --model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Thinking \
     --port 8188 \
