@@ -3,9 +3,7 @@ import os
 import shutil
 import unittest
 
-import numpy as np
 import paddle
-import paddle.device.cuda.graphs as graphs
 from paddle.distributed import fleet
 
 from fastdeploy.config import (
@@ -19,6 +17,7 @@ from fastdeploy.config import (
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.w4a8 import W4A8Config
 from fastdeploy.scheduler import SchedulerConfig
+from tests.utils import OpPerformanceTester
 
 paddle.set_default_dtype("bfloat16")
 
@@ -170,6 +169,7 @@ class TestW4A8FusedMoE(unittest.TestCase):
         self.moe_k = 8
         self.hidden_act = "silu"
         self.num_attention_heads = 64
+        self.num_hidden_layers = 54
         self.model_config = self.build_model_config()
 
     def build_model_config(self) -> ModelConfig:
@@ -190,10 +190,11 @@ class TestW4A8FusedMoE(unittest.TestCase):
             "moe_k": self.moe_k,
             "hidden_act": self.hidden_act,
             "num_attention_heads": self.num_attention_heads,
+            "num_hidden_layers": self.num_hidden_layers,
             "dtype": "bfloat16",
         }
 
-        tmp_dir = f"./tmpwedfewfef{paddle.distributed.get_rank()}"
+        tmp_dir = f"./tmp_w4a8_moe_{paddle.distributed.get_rank()}"
         os.makedirs(tmp_dir, exist_ok=True)
         with open(f"./{tmp_dir}/config.json", "w") as f:
             json.dump(config_dict, f)
@@ -220,64 +221,26 @@ class TestW4A8FusedMoE(unittest.TestCase):
         # 这行代码必须保留，否则影响均匀性！
         paddle.seed(ep_rank + 100)
 
-        num_layers = 54
-        real_weight_layers = 9
-        fused_moe = [None] * real_weight_layers
-        for i in range(real_weight_layers):
-            fused_moe[i] = FuseMoEWrapper(self.model_config, tp_size, tp_rank, ep_size, ep_rank, nnodes=nnodes)
+        fused_moe = FuseMoEWrapper(self.model_config, tp_size, tp_rank, ep_size, ep_rank, nnodes=nnodes).fused_moe
+        weight_size = fused_moe.top_k * fused_moe.hidden_size * fused_moe.moe_intermediate_size * 3 / 2
 
-        moe_cuda_graphs = [None] * 100
-        cache_hidden_states = [None] * 100
-        test_token_nums = [10, 20, 40, 60, 80, 100, 128, 160, 192, 256]
-        # test_token_nums = [1024 * i for i in [1,2,4,8,16,32]]
-        for idx, num_tokens in enumerate(test_token_nums):
+        tester = OpPerformanceTester(
+            op_name="w4a8-moe",
+            op_fn=fused_moe,
+            num_layers=self.model_config.num_hidden_layers,
+            weight_size=weight_size,
+            gate=gating,
+        )
 
-            cache_hidden_states[idx] = paddle.rand((num_tokens, self.model_config.hidden_size), dtype=paddle.bfloat16)
+        tester.benchmark(
+            input_size=self.model_config.hidden_size,
+            batch_sizes=[10, 20, 40, 60, 80, 100, 128, 160, 192, 256],
+        )
 
-            def fake_model_run():
-                for j in range(num_layers):
-                    out = fused_moe[j % real_weight_layers].fused_moe(cache_hidden_states[idx], gating)
-
-                return out
-
-            fake_model_run()
-            moe_cuda_graphs[idx] = graphs.CUDAGraph()
-            moe_cuda_graphs[idx].capture_begin()
-
-            fake_model_run()
-
-            moe_cuda_graphs[idx].capture_end()
-
-            num_tests = 20
-            start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
-            end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
-            for i in range(num_tests):
-                start_events[i].record()
-
-                moe_cuda_graphs[idx].replay()
-
-                end_events[i].record()
-            paddle.device.cuda.synchronize()
-
-            times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
-            print("num_token:", num_tokens)
-            print(times[-5:])
-            rdma_GB = 3.0 * num_tokens * self.moe_k * self.hidden_size / (1e9)
-            times_s = (times[-1] / num_layers) / (1e3)
-            print(times[-1], round(rdma_GB / times_s, 1))
-
-            tmp_layer = fused_moe[0].fused_moe
-            memory_GB = (
-                tmp_layer.num_local_experts
-                * tmp_layer.hidden_size
-                * tmp_layer.moe_intermediate_size
-                * 3
-                / (1e9)
-                * num_layers
-            )
-            print(round(memory_GB / times[-1], 1), "TB/s")
-
-        shutil.rmtree(self.model_name_or_path)
+    def tearDown(self) -> None:
+        if self.model_name_or_path:
+            print("Remove tmp model config file")
+            shutil.rmtree(self.model_name_or_path)
 
 
 if __name__ == "__main__":
