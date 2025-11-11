@@ -513,6 +513,7 @@ class SplitwiseConnector:
                     num_cached_tokens=task["num_cached_tokens"],
                     error_code=task["error_code"],
                     error_msg=task["error_msg"],
+                    ic_req_data=task["ic_req_data"],
                 )
             )
         self.engine_worker_queue.put_disaggregated_tasks(("decode", tasks))
