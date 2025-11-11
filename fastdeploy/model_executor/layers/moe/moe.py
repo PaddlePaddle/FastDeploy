@@ -149,9 +149,14 @@ class FusedMoE(nn.Layer):
         self.hidden_size = fd_config.model_config.hidden_size
         self.num_experts = num_experts
 
-        self.num_local_experts = self.num_experts // self.ep_size
+        if fd_config.parallel_config.enable_dense_tp_and_moe_ep:
+            self.num_local_experts = self.num_experts // self.tp_size
+            self.moe_intermediate_size = moe_intermediate_size
+            expert_id_offset = fd_config.parallel_config.tensor_parallel_rank * self.num_local_experts
+        else:
+            self.num_local_experts = self.num_experts // self.ep_size
 
-        self.moe_intermediate_size = moe_intermediate_size // self.tp_size
+            self.moe_intermediate_size = moe_intermediate_size // self.tp_size
 
         self.top_k = top_k
         self.weight_key_map = weight_key_map

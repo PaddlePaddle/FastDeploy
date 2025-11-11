@@ -689,6 +689,11 @@ def parse_args():
         action="store_true",
         help="enable expert parallel",
     )
+    parser.add_argument(
+        "--enable_dense_tp_and_moe_ep",
+        action="store_true",
+        help="enable tensor parallelism for dense and expert parallelism for moe",
+    )
     parser.add_argument("--ori_vocab_size", type=int, default=None)
     parser.add_argument("--think_end_id", type=int, default=-1)
     parser.add_argument("--image_patch_id", type=int, default=-1)
@@ -879,6 +884,21 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
             parallel_config.local_data_parallel_id
         ]
     parallel_config.set_communicate_group()
+    # config for Dense TP + MoE EP
+    if parallel_config.enable_dense_tp_and_moe_ep:
+        expert_parallel_rank = int(local_rank % parallel_config.tensor_parallel_size)
+        if isinstance(model_config.moe_num_experts, list):
+            num_experts = model_config.moe_num_experts[0]
+        else:
+            num_experts = model_config.moe_num_experts
+
+        num_experts_per_rank = num_experts // parallel_config.tensor_parallel_size
+        num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
+        max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+
+        parallel_config.expert_parallel_rank = expert_parallel_rank
+        parallel_config.num_experts_per_rank = num_experts_per_rank
+        parallel_config.num_experts_start_offset = num_experts_start_offset
 
     load_config = LoadConfig(vars(args))
 
