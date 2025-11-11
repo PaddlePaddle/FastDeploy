@@ -525,7 +525,10 @@ class ResourceManagerV1(ResourceManager):
                     if request in self.running:  # normally run and finished
                         self.running.remove(request)
                         request.status = RequestStatus.FINISHED
-                        self._free_blocks(request)
+                        try:
+                            self._free_blocks(request)
+                        except Exception as e:
+                            llm_logger.warning(f"release block failed {req_id}: {e}")
                     if (
                         request.request_id in self.to_be_rescheduled_request_id_set
                     ):  # finished after preempted, blocks have been recycled.
