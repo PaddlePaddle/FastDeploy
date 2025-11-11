@@ -102,6 +102,8 @@ def allocate_launch_related_buffer(
     res["kv_tile_ids_per_batch"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
     res["kv_num_blocks_x_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
 
+    return res
+
 
 class AppendAttentionBackend(AttentionBackend):
     """
