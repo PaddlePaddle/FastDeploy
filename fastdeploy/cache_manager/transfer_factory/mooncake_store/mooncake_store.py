@@ -16,7 +16,6 @@
 
 import hashlib
 import json
-import logging
 import os
 import uuid
 from dataclasses import dataclass
@@ -25,7 +24,10 @@ from typing import Any, List, Optional
 import numpy as np
 import paddle
 
-from fastdeploy.cache_manager.transfer_factory.kvcache_storage import KVCacheStorage, logger
+from fastdeploy.cache_manager.transfer_factory.kvcache_storage import (
+    KVCacheStorage,
+    logger,
+)
 
 DEFAULT_GLOBAL_SEGMENT_SIZE = 4 * 1024 * 1024 * 1024  # 4 GiB
 DEFAULT_LOCAL_BUFFER_SIZE = 128 * 1024 * 1024  # 128 MB
@@ -56,20 +58,14 @@ class MooncakeStoreConfig:
         """Load the config from a JSON file."""
         file_path = os.getenv("MOONCAKE_CONFIG_PATH")
         if file_path is None:
-            raise ValueError(
-                "The environment variable 'MOONCAKE_CONFIG_PATH' is not set."
-            )
+            raise ValueError("The environment variable 'MOONCAKE_CONFIG_PATH' is not set.")
         with open(file_path) as fin:
             config = json.load(fin)
         return MooncakeStoreConfig(
             local_hostname=config.get("local_hostname"),
             metadata_server=config.get("metadata_server"),
-            global_segment_size=config.get(
-                "global_segment_size", DEFAULT_GLOBAL_SEGMENT_SIZE
-            ),
-            local_buffer_size=config.get(
-                "local_buffer_size", DEFAULT_LOCAL_BUFFER_SIZE
-            ),
+            global_segment_size=config.get("global_segment_size", DEFAULT_GLOBAL_SEGMENT_SIZE),
+            local_buffer_size=config.get("local_buffer_size", DEFAULT_LOCAL_BUFFER_SIZE),
             protocol=config.get("protocol", "rdma"),
             device_name=config.get("device_name", "auto"),
             master_server_address=config.get("master_server_address"),
@@ -89,12 +85,8 @@ class MooncakeStoreConfig:
         return MooncakeStoreConfig(
             local_hostname=os.getenv("LOCAL_HOSTNAME", "localhost"),
             metadata_server=os.getenv("MOONCAKE_TE_META_DATA_SERVER", "P2PHANDSHAKE"),
-            global_segment_size=int(
-                os.getenv("MOONCAKE_GLOBAL_SEGMENT_SIZE", DEFAULT_GLOBAL_SEGMENT_SIZE)
-            ),
-            local_buffer_size=int(
-                os.getenv("MOONCAKE_LOCAL_BUFFER_SIZE", DEFAULT_LOCAL_BUFFER_SIZE)
-            ),
+            global_segment_size=int(os.getenv("MOONCAKE_GLOBAL_SEGMENT_SIZE", DEFAULT_GLOBAL_SEGMENT_SIZE)),
+            local_buffer_size=int(os.getenv("MOONCAKE_LOCAL_BUFFER_SIZE", DEFAULT_LOCAL_BUFFER_SIZE)),
             protocol=os.getenv("MOONCAKE_PROTOCOL", "tcp"),
             device_name=os.getenv("MOONCAKE_DEVICE", "auto"),
             master_server_address=os.getenv("MOONCAKE_MASTER"),
@@ -104,9 +96,7 @@ class MooncakeStoreConfig:
         # TODO check nic
         if self.device_name == "auto":
             os.environ["MC_MS_AUTO_DISC"] = "1"
-            os.environ["MC_MS_FILTERS"] = (
-                "mlx5_bond_0, mlx5_bond_1, mlx5_bond_2, mlx5_bond_3"
-            )
+            os.environ["MC_MS_FILTERS"] = "mlx5_bond_0, mlx5_bond_1, mlx5_bond_2, mlx5_bond_3"
 
 
 class MooncakeStore(KVCacheStorage):
@@ -134,6 +124,15 @@ class MooncakeStore(KVCacheStorage):
                 self.config.device_name,
                 self.config.master_server_address,
             )
+            # ret_code = store.setup(
+            #     config.local_hostname,
+            #     config.metadata_server,
+            #     config.global_segment_size,
+            #     config.local_buffer_size,
+            #     config.protocol,
+            #     config.device_name,
+            #     config.master_server_address,
+            # )
             if ret_code:
                 logger.error(f"failed to setup mooncake store, error code: {ret_code}")
 
@@ -248,18 +247,14 @@ class MooncakeStore(KVCacheStorage):
     def clear(self) -> None:
         raise (NotImplementedError)
 
-    def _put_batch_zero_copy_impl(
-        self, key_strs: List[str], buffer_ptrs: List[int], buffer_sizes: List[int]
-    ) -> None:
+    def _put_batch_zero_copy_impl(self, key_strs: List[str], buffer_ptrs: List[int], buffer_sizes: List[int]) -> None:
         try:
             self.store.batch_put_from(key_strs, buffer_ptrs, buffer_sizes)
         except TypeError as err:
             logger.error("Failed to put value to Mooncake Store: %s", err)
             raise TypeError("Mooncake Store Put Type Error.") from err
 
-    def _get_batch_zero_copy_impl(
-        self, key_strs: List[str], buffer_ptrs: List[int], buffer_sizes: List[int]
-    ) -> None:
+    def _get_batch_zero_copy_impl(self, key_strs: List[str], buffer_ptrs: List[int], buffer_sizes: List[int]) -> None:
         try:
             self.store.batch_get_into(key_strs, buffer_ptrs, buffer_sizes)
         except TypeError as err:

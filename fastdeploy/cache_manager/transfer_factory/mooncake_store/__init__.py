@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
 from .mooncake_store import MooncakeStore, get_hash_str_mooncake
 
 __all__ = ["MooncakeStore", "get_hash_str_mooncake"]
