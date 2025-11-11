@@ -351,6 +351,7 @@ __global__ void permute_x_kernel(const T *src_x,
                                  int *cumsum_idx_gpu,
                                  int64_t *token_nums_per_expert_cumsum,
                                  int64_t *expert_idx_per_token, // [num_rows, moe_topk]
+                                 float* dequant_scale,
                                  float max_bound = 127.0,
                                  float min_bound = -127.0) {
     const int src_token_idx = blockIdx.x;
@@ -358,6 +359,8 @@ __global__ void permute_x_kernel(const T *src_x,
     constexpr int vec_size = sizeof(int4) / sizeof(T);
     __shared__ int write_idx; // cumsum start idx
     __shared__ int token_nums_per_expert_cum[NUM_EXPERTS_PER_RANK];
+    extern __shared__ char smem_[];
+    T* data_smem = reinterpret_cast<T*>(smem_);
     AlignedVector<T, vec_size> src_vec;
     AlignedVector<OutT, vec_size> res_vec;
     if (tid == 0) {
@@ -390,30 +393,57 @@ __global__ void permute_x_kernel(const T *src_x,
           dst_weights[dst_token_idx] = topk_weights[s_token_idx * moe_topk + expert_idx];
           dst_indices[s_token_idx * NUM_EXPERTS_PER_RANK + expert_now] = expert_now;
           // cp x
-          for (int v_id = tid; v_id < hidden_size_int4; v_id += blockDim.x) {
-            Load<T, vec_size>(&src_x[s_token_idx * hidden_size + v_id * vec_size], &src_vec);
-            if (up_gate_proj_in_scale) {
+          if (dequant_scale) { // dynamic quant
+            float abs_max = 0.0f;
+            for (int v_id = tid; v_id < hidden_size_int4; v_id += blockDim.x) {
+              Load<T, vec_size>(&src_x[s_token_idx * hidden_size + v_id * vec_size], &src_vec);
+              Store<T, vec_size>(src_vec, &data_smem[v_id * vec_size]);
+              #pragma unroll
               for (int i = 0; i < vec_size; i++) {
-                float quant_value = max_bound * up_gate_proj_in_scale[expert_now] * static_cast<float>(src_vec[i]);
-                if constexpr (std::is_same<OutT, int8_t>::value) {
-                  // w4aint8
-                  if (RoundType == 0) {
-                    res_vec[i] = static_cast<OutT>(ClipFunc<float>(rint(quant_value), min_bound, max_bound));
-                  } else {
-                    res_vec[i] = static_cast<OutT>(ClipFunc<float>(round(quant_value), min_bound, max_bound));
-                  }
-                } else {
-                  // w4afp8
-                  float value = ClipFunc<float>(quant_value, min_bound, max_bound);
-                  res_vec[i] = static_cast<OutT>(value);
-                }
-              }
-            } else {
-              for (int i = 0; i < vec_size; i++) {
-                res_vec[i] = static_cast<OutT>(src_vec[i]);
+                abs_max = fmaxf(abs_max, fabsf(static_cast<float>(src_vec[i])));
               }
             }
-            Store<OutT, vec_size>(res_vec, &permute_x[dst_token_idx * hidden_size + v_id * vec_size]);
+            abs_max = phi::BlockAllReduce<MaxOp, float, Kthread>(abs_max);
+            float scale = 440.f / abs_max; // use 440 so we do not have to clip
+            dequant_scale[dst_token_idx] = abs_max;
+            for (int v_id = tid; v_id < hidden_size_int4; v_id += blockDim.x) {
+              Load<T, vec_size>(&data_smem[v_id * vec_size], &src_vec);
+              #pragma unroll
+              for (int i = 0; i < vec_size; i++) {
+                float quant_value = scale * static_cast<float>(src_vec[i]);
+                // dynamic quant only supporet for w4afp8
+                res_vec[i] = static_cast<OutT>(quant_value);
+              }
+              Store<OutT, vec_size>(res_vec, &permute_x[dst_token_idx * hidden_size + v_id * vec_size]);
+            }
+          } else { // static quant or not quant
+            for (int v_id = tid; v_id < hidden_size_int4; v_id += blockDim.x) {
+              Load<T, vec_size>(&src_x[s_token_idx * hidden_size + v_id * vec_size], &src_vec);
+              if (up_gate_proj_in_scale) {
+                #pragma unroll
+                for (int i = 0; i < vec_size; i++) {
+                  float quant_value = max_bound * up_gate_proj_in_scale[expert_now] * static_cast<float>(src_vec[i]);
+                  if constexpr (std::is_same<OutT, int8_t>::value) {
+                    // w4aint8
+                    if (RoundType == 0) {
+                      res_vec[i] = static_cast<OutT>(ClipFunc<float>(rint(quant_value), min_bound, max_bound));
+                    } else {
+                      res_vec[i] = static_cast<OutT>(ClipFunc<float>(round(quant_value), min_bound, max_bound));
+                    }
+                  } else {
+                    // w4afp8
+                    float value = ClipFunc<float>(quant_value, min_bound, max_bound);
+                    res_vec[i] = static_cast<OutT>(value);
+                  }
+                }
+              } else {
+                #pragma unroll
+                for (int i = 0; i < vec_size; i++) {
+                  res_vec[i] = static_cast<OutT>(src_vec[i]);
+                }
+              }
+              Store<OutT, vec_size>(res_vec, &permute_x[dst_token_idx * hidden_size + v_id * vec_size]);
+            }            
           }
           expert_idx_per_token[dst_token_idx] = expert_now;
         }
@@ -438,7 +468,8 @@ void EPMoeDispatchKernel(const paddle::Tensor& input,
                          paddle::Tensor* dst_indices,
                          paddle::Tensor* cumsum_idx_gpu,
                          paddle::Tensor* token_nums_per_expert_cumsum,
-                         paddle::Tensor* expert_idx_per_token) {
+                         paddle::Tensor* expert_idx_per_token,
+                         paddle::Tensor* dequant_scale) {
   using namespace phi;
 
   typedef PDTraits<T> traits_;
@@ -471,12 +502,14 @@ void EPMoeDispatchKernel(const paddle::Tensor& input,
       cumsum_idx_gpu->data<int>(),
       token_nums_per_expert_cumsum->data<int64_t>(),
       expert_idx_per_token->data<int64_t>(),
+      nullptr, // dequant_scale
       127.0,
       -127.0
     );)
   } else if (moe_quant_type == "w4afp8") {
+    const int smem_size = up_gate_proj_in_scale ? 0 : hidden_size * sizeof(data_t);
     DISPATCH_NUM_EXPERTS_PER_RANK(num_experts_per_rank, NUM_EXPERTS_PER_RANK,
-    permute_x_kernel<data_t, data_t_fp8, NUM_EXPERTS_PER_RANK, 512><<<gridx, 512, 0, stream>>>(
+    permute_x_kernel<data_t, data_t_fp8, NUM_EXPERTS_PER_RANK, 512><<<gridx, 512, smem_size, stream>>>(
       input.data<data_t>(),
       topk_ids.data<int64_t>(),
       topk_weights.data<float>(),
@@ -493,6 +526,7 @@ void EPMoeDispatchKernel(const paddle::Tensor& input,
       cumsum_idx_gpu->data<int>(),
       token_nums_per_expert_cumsum->data<int64_t>(),
       expert_idx_per_token->data<int64_t>(),
+      up_gate_proj_in_scale ? nullptr : dequant_scale->data<float>(), // up_gate_proj_in_scale is used for static quant, while dequant_scale is used for dynamic quant
       448.0f,
       -448.0f
     );)
@@ -515,6 +549,7 @@ void EPMoeDispatchKernel(const paddle::Tensor& input,
       cumsum_idx_gpu->data<int>(),
       token_nums_per_expert_cumsum->data<int64_t>(),
       expert_idx_per_token->data<int64_t>(),
+      nullptr, // dequant scale
       127.0,
       -127.0
     );)
@@ -563,6 +598,13 @@ std::vector<paddle::Tensor> EPMoeExpertDispatch(
   auto permute_indices_per_token = paddle::full({num_experts_per_rank, num_rows}, -1, paddle::DataType::INT32, place);
   auto cumsum_idx_gpu = paddle::full({num_experts_per_rank}, 0, paddle::DataType::INT32, place);
 
+  int dequant_scale_size = 1;
+  if (moe_quant_type == "w4afp8" && !up_gate_proj_in_scale) {
+    dequant_scale_size = moe_topk * num_rows;
+  }
+
+  auto dequant_scale =
+      GetEmptyTensor({dequant_scale_size}, paddle::DataType::FLOAT32, place);
 
   switch (input_type) {
     case paddle::DataType::BFLOAT16:
@@ -583,7 +625,8 @@ std::vector<paddle::Tensor> EPMoeExpertDispatch(
                                                       &dst_indices,
                                                       &cumsum_idx_gpu,
                                                       &token_nums_per_expert_cumsum,
-                                                      &expert_idx_per_token);
+                                                      &expert_idx_per_token,
+                                                      &dequant_scale);
       break;
     case paddle::DataType::FLOAT16:
       EPMoeDispatchKernel<paddle::DataType::FLOAT16>(input,
@@ -603,7 +646,8 @@ std::vector<paddle::Tensor> EPMoeExpertDispatch(
                                                      &dst_indices,
                                                      &cumsum_idx_gpu,
                                                      &token_nums_per_expert_cumsum,
-                                                     &expert_idx_per_token);
+                                                     &expert_idx_per_token,
+                                                     &dequant_scale);
       break;
     default:
       PD_THROW("Unsupported data type for EPMoeDispatchKernel");
@@ -614,7 +658,8 @@ std::vector<paddle::Tensor> EPMoeExpertDispatch(
           dst_weights,
           dst_indices,
           cumsum_idx_gpu,
-          expert_idx_per_token};
+          expert_idx_per_token,
+          dequant_scale};
 }
 
 
@@ -642,7 +687,8 @@ std::vector<std::vector<int64_t>> EPMoeExpertDispatchInferShape(
           {token_nums_this_rank},
           {num_rows, expert_num},
           {expert_num},
-          {token_nums_this_rank}}; // dst_idx per expert
+          {token_nums_this_rank},// dst_idx per expert
+          {token_nums_this_rank}}; 
 }
 
 std::vector<paddle::DataType> EPMoeExpertDispatchInferDtype(
@@ -658,7 +704,8 @@ std::vector<paddle::DataType> EPMoeExpertDispatchInferDtype(
           paddle::DataType::FLOAT32,
           paddle::DataType::INT32,
           paddle::DataType::INT32,
-          paddle::DataType::INT64};
+          paddle::DataType::INT64,
+          paddle::DataType::FLOAT32};
 }
 
 
@@ -671,7 +718,8 @@ PD_BUILD_STATIC_OP(ep_moe_expert_dispatch)
               "dst_weights",
               "dst_indices",
               "cumsum_idx_gpu",
-              "expert_idx_per_token"})
+              "expert_idx_per_token",
+              "dequant_scale"})
     .Attrs({
       "token_nums_per_expert: std::vector<int>",
       "token_nums_this_rank: int",

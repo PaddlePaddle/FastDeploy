@@ -156,6 +156,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 dst_indices,
                 cumsum_idx_gpu,
                 expert_idx_per_token,
+                dequant_scale,
             ) = fastdeploy.model_executor.ops.gpu.ep_moe_expert_dispatch(
                 recv_x,
                 recv_topk_idx,
@@ -172,11 +173,17 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             else:
                 expert_idx_per_token = expert_idx_per_token.cast("int64")
 
+            if hasattr(layer, "up_gate_proj_in_scale"):
+                dequant_scale = None
+
             ffn_out = self.compute_ffn(
                 layer,
                 permute_input,
                 recv_num_tokens_per_expert_list_cumsum,
-                expert_idx_per_token,
+                expert_idx_per_token, 
+                False, 
+                -1, 
+                dequant_scale
             )
 
             # prmt back per rank
@@ -212,10 +219,14 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         if hasattr(layer, "up_gate_proj_in_scale_all_experts"):  # only use in w4a8
             expertwise_scale = getattr(layer, "up_gate_proj_in_scale_all_experts", None)
         use_fp8 = self.moe_quant_type == "w4afp8"
+        quant_group_size = -1 if self.moe_quant_type == "w4afp8" else 128
         # 2. EP Dispatch
         permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
-            x, topk_idx, topk_weights, expertwise_scale=expertwise_scale, use_fp8=use_fp8
+            x, topk_idx, topk_weights, expertwise_scale=expertwise_scale, use_fp8=use_fp8, quant_group_size=quant_group_size
         )
+        dequant_scale = None
+        if self.moe_quant_type == "w4afp8" and expertwise_scale is None:
+            (permute_input, dequant_scale) = permute_input
         # 3. Compute ffn
         if self.moe_quant_type == "w4a8" or self.moe_quant_type == "w4afp8":
             num_local_experts, max_num, _ = permute_input.shape
@@ -232,6 +243,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             expert_idx_per_token,
             True,
             estimate_total_token_nums,
+            dequant_scale,
         )
 
         # 4. EP combine
@@ -873,7 +885,7 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
         """
 
         self.default_dtype = layer._helper.get_default_dtype()
-        if layer.ep_size > 1:
+        if layer.ep_size > 1 and not layer.moe_quant_config.moe_dynamic_quant:
             setattr(
                 layer,
                 "up_gate_proj_in_scale_all_experts",
@@ -896,18 +908,6 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                         default_initializer=paddle.nn.initializer.Constant(0),
                     ),
                 )
-        else:
-            if layer.ep_size > 1:
-                for in_scale_name in ["up_gate_proj_in_scale"]:
-                    setattr(
-                        layer,
-                        in_scale_name,
-                        layer.create_parameter(
-                            shape=[layer.num_local_experts],
-                            dtype="float32",
-                            default_initializer=paddle.nn.initializer.Constant(0),
-                        ),
-                    )
 
         # weight_scales
         setattr(
@@ -974,7 +974,7 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                 else:
                     processed_weight_scale = processed_weight_scale / processed_in_scale[:, None]
             else:
-                processed_weight_scale = paddle.stack(weight_scales, axis=0) / (448 * 7 * 2 ** (-9))
+                processed_weight_scale = paddle.stack(weight_scales, axis=0) / (440 * 7 * 2 ** (-9))
 
             if len(processed_weight_scale.shape) == 3:
                 if name == "up_gate_proj_weight_scale" and processed_weight_scale.shape[-1] * 128 != layer.hidden_size:
@@ -1042,7 +1042,7 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                 raise ValueError(f"scale {name} should not be none in w4a8 mode.")
 
         # 2. Extract scale tensor from state dict
-        if layer.ep_size > 1:
+        if layer.ep_size > 1 and not layer.moe_quant_config.moe_dynamic_quant:
             for expert_idx in ep_rank_to_expert_id_list:
                 scale_tensor = get_tensor(
                     (

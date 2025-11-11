@@ -86,10 +86,10 @@ void w4afp8_gemm_M{M}_N{N}_G{GROUPSIZE}_K{K}_E{EXPERTS}_P{PADDING}_{TYPE}(
 
 # [M, K, Number of experts, token Padding Size, weight K group size]
 gemm_case = [
-    [8192, 3584, 16, 0, 128],  # eb45T ffn1
-    [8192, 3584, 16, 512, 128],  # eb45T ffn1
-    [7168, 8192, 16, 0, 128],  # eb45T ffn2
-    [7168, 8192, 16, 512, 128],  # eb45T ffn2
+    [8192, 3584, 16, 0, 3584],  # eb45T ffn1
+    [8192, 3584, 16, 1024, 3584],  # eb45T ffn1
+    [7168, 8192, 16, 0, 8192],  # eb45T ffn2
+    [7168, 8192, 16, 1024, 8192],  # eb45T ffn2
     [1792, 8192, 64, 0, 8192],  # eb45t ffn1
     [8192, 896, 64, 0, 896],  # eb45t ffn2
     [1792, 8192, 64, 0, 128],  # eb45t ffn1
