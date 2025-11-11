@@ -16,6 +16,7 @@
 
 import json
 import os
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Any, List, Optional
@@ -105,7 +106,7 @@ class MooncakeStore(KVCacheStorage):
 
         try:
             self.store = MooncakeDistributedStore()
-            self.config = MooncakeStoreConfig.load_from_env()
+            self.config = MooncakeStoreConfig.from_file()
             logger.info("Mooncake Configuration loaded from env successfully.")
 
             ret_code = self.store.setup(
@@ -117,15 +118,7 @@ class MooncakeStore(KVCacheStorage):
                 self.config.device_name,
                 self.config.master_server_address,
             )
-            # ret_code = store.setup(
-            #     config.local_hostname,
-            #     config.metadata_server,
-            #     config.global_segment_size,
-            #     config.local_buffer_size,
-            #     config.protocol,
-            #     config.device_name,
-            #     config.master_server_address,
-            # )
+
             if ret_code:
                 logger.error(f"failed to setup mooncake store, error code: {ret_code}")
 
@@ -229,8 +222,16 @@ class MooncakeStore(KVCacheStorage):
         result = {k: v for k, v in zip(keys, self.store.batch_is_exist(keys))}
         return result
 
-    def delete(self, key) -> None:
-        raise (NotImplementedError)
+    def delete(self, key, timeout=5) -> None:
+        while timeout:
+            result = self.store.remove(key)
+            if result == 0:
+                logger.info("Successfully removed")
+                break
+            else:
+                time.sleep(1)
+                timeout -= 1
+        return result
 
     def close(self):
         # MooncakeDistributedStore will automatically call the destructor, so
@@ -238,7 +239,11 @@ class MooncakeStore(KVCacheStorage):
         pass
 
     def clear(self) -> None:
-        raise (NotImplementedError)
+        """
+        clear all the objects in the store
+        """
+        count = self.store.remove_all()
+        logger.info(f"Removed {count} objects")
 
     def _put_batch_zero_copy_impl(self, key_strs: List[str], buffer_ptrs: List[int], buffer_sizes: List[int]) -> None:
         try:
