@@ -2735,7 +2735,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             logprobs_tensors = self.in_progress_prompt_logprobs.get(req_id)
             if not logprobs_tensors:
-                logprobs_tensors = LogprobsTensors.empty(num_prompt_tokens - 1, num_prompt_logprobs + 1)
+                logprobs_tensors = LogprobsTensors.empty_cpu(num_prompt_tokens - 1, num_prompt_logprobs + 1)
                 self.in_progress_prompt_logprobs[req_id] = logprobs_tensors
             start_idx = request.prefill_start_index
             start_tok = start_idx + 1
