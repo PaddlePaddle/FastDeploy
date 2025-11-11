@@ -94,10 +94,11 @@ async def async_request_eb_openai_chat_completions(
             "stream_options": {
                 "include_usage": True,
                 "continuous_usage_stats": True,
-            }
+            },
+            "max_tokens": request_func_input.output_len,
         }
         if request_func_input.response_format:
-            payload["response_format"] =request_func_input.response_format
+            payload["response_format"] = request_func_input.response_format
 
         # 超参由yaml传入
         payload.update(request_func_input.hyper_parameters)
@@ -132,13 +133,13 @@ async def async_request_eb_openai_chat_completions(
 
                         chunk = chunk_bytes.decode("utf-8").removeprefix("data: ")
                         if chunk != "[DONE]":
-                            #print("####chunk:", chunk, type(chunk))
+                            # print("####chunk:", chunk, type(chunk))
                             timestamp = time.perf_counter()
                             data = json.loads(chunk)
 
                             if request_id == "None" and "id" in data:
                                 request_id = data["id"]
-                            
+
                             if choices := data.get("choices"):
                                 content = choices[0]["delta"].get("content")
                                 reason_content = choices[0]["delta"].get("reasoning_content")
@@ -164,7 +165,6 @@ async def async_request_eb_openai_chat_completions(
                             elif usage := data.get("usage", {}):
                                 output.output_tokens = usage.get("completion_tokens", 0)
                                 output.prompt_tokens = usage.get("prompt_tokens", 0)
-                            
 
                             most_recent_timestamp = timestamp
 

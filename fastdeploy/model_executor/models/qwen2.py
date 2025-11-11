@@ -176,6 +176,7 @@ class Qwen2DecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
+            layer_id=layer_id,
         )
 
     def load_state_dict(self, state_dict):
@@ -193,11 +194,9 @@ class Qwen2DecoderLayer(nn.Layer):
     ):
         """ """
         # Self Attention
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
-        else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        hidden_states, residual = self.input_layernorm(
+            hidden_states, residual_input=residual, forward_meta=forward_meta
+        )
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
@@ -285,9 +284,7 @@ class Qwen2Model(nn.Layer):
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
-        hidden_states = hidden_states + residual
-
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual)[0]
 
         return out
 
@@ -314,7 +311,7 @@ class Qwen2ForCausalLM(ModelForCasualLM):
         self.qwen2 = Qwen2Model(fd_config=fd_config)
 
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
-
+        self.tie_word_embeddings = fd_config.model_config.tie_word_embeddings
         self.lm_head = ParallelLMHead(
             fd_config=fd_config,
             embedding_dim=fd_config.model_config.hidden_size,
@@ -379,6 +376,8 @@ class Qwen2ForCausalLM(ModelForCasualLM):
                 weight_loader(param, loaded_weight)
             model_sublayer_name = re.sub(r"\.(weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
+        if self.tie_word_embeddings:
+            self.lm_head.load_state_dict({self.lm_head.weight_key: self.qwen2.embed_tokens.embeddings.weight})
 
     @classmethod
     def name(self):

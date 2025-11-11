@@ -46,7 +46,7 @@ class SampleRequest:
     prompt_len: int
     expected_output_len: int
     response_format: Optional[dict] = None
-    
+
 
 class BenchmarkDataset(ABC):
     """BenchmarkDataset"""
@@ -299,7 +299,7 @@ class EBChatDataset(BenchmarkDataset):
             prompt = entry["messages"][-1].get("content", "")
             history_QA = entry.get("messages", [])
             response_format = entry.get("response_format")
-            new_output_len = int(entry.get("max_tokens", 12288))
+            new_output_len = int(entry.get("max_tokens", output_len if output_len else 12288))
 
             if enable_multimodal_chat:
                 prompt = self.apply_multimodal_chat_transformation(prompt, None)
@@ -311,7 +311,7 @@ class EBChatDataset(BenchmarkDataset):
                     prompt_len=0,
                     history_QA=history_QA,
                     expected_output_len=new_output_len,
-                    response_format=response_format
+                    response_format=response_format,
                 )
             )
             cnt += 1
