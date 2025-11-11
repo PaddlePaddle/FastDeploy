@@ -251,7 +251,6 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         token_num = x.shape[0]
         if token_num == 0:
             return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
-        x = paddle.concat([x, paddle.ones([1, layer.hidden_size], dtype=x.dtype)])
         gate_out = gate(x.cast("float32"))
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
@@ -607,7 +606,6 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
         token_num = x.shape[0]
         if token_num == 0:
             return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
-        x = paddle.concat([x, paddle.ones([1, layer.hidden_size], dtype=x.dtype)])
         gate_out = gate(x.cast("float32"))
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
@@ -900,7 +898,6 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         token_num = x.shape[0]
         if token_num == 0:
             return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
-        x = paddle.concat([x, paddle.ones([1, layer.hidden_size], dtype=x.dtype)])
         gate_out = gate(x.cast("float32"))
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
@@ -1327,7 +1324,6 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         token_num = x.shape[0]
         if token_num == 0:
             return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
-        x = paddle.concat([x, paddle.ones([1, layer.hidden_size], dtype=x.dtype)])
         gate_out = gate(x.cast("float32"))
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
