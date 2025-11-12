@@ -473,7 +473,8 @@ def mm_batch_invariant(a, b, transpose_x=False, transpose_y=False):
 def addmm_batch_invariant(
     input: paddle.Tensor, x: paddle.Tensor, y: paddle.Tensor, beta: float = 1.0, alpha: float = 1.0
 ) -> paddle.Tensor:
-    result = matmul_persistent(a=x, b=y, bias=input)
+    matmul_result = matmul_persistent(a=x, b=y)
+    result = beta * input + alpha * matmul_result
     return result
 
 
