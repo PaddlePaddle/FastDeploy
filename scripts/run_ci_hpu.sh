@@ -24,7 +24,7 @@ python -m pip uninstall paddle-intel-hpu -y
 python -m pip uninstall fastdeploy_intel_hpu -y
 
 #to install paddlepaddle
-pip install paddlepaddle==3.1.1
+pip install paddlepaddle==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
 #to install paddlecustomdevice? (paddle-intel-hpu)
 pip install https://paddle-qa.bj.bcebos.com/HPU/paddle_intel_hpu-0.0.1-cp310-cp310-linux_x86_64.whl
 
