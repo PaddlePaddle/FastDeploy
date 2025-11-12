@@ -65,7 +65,7 @@ function python_version_check() {
 
 function init() {
     echo -e "${BLUE}[init]${NONE} removing building directory..."
-    rm -rf $BUILD_DIR $EGG_DIR $DIST_DIR $PRE_WHEEL_DIR
+    rm -rf $BUILD_DIR $EGG_DIR $PRE_WHEEL_DIR
     ${python} -m pip install setuptools_scm
     echo -e "${BLUE}[init]${NONE} ${GREEN}init success\n"
 }
@@ -151,90 +151,101 @@ function copy_ops(){
 
 function install_from_precompiled_wheel() {
   local WHL_NAME="fastdeploy_gpu-0.0.0-py3-none-any.whl"
+  local WHL_PATTERN="fastdeploy*.whl"
+  local LOCAL_DIST_WHL=$(find "${DIST_DIR}" -maxdepth 1 -type f -name "${WHL_PATTERN}" | head -n 1)
+
+  # commit ID
   if [ -z "$FD_COMMIT_ID" ]; then
     if git rev-parse HEAD >/dev/null 2>&1; then
       FD_COMMIT_ID=$(git rev-parse HEAD)
-      echo -e "${BLUE}[init]${NONE} Using current repo commit ID: ${GREEN}${FD_COMMIT_ID}${NONE}"
+      echo -e "${BLUE}[init]${NONE} Using current commit: ${GREEN}${FD_COMMIT_ID}${NONE}"
     else
-      echo -e "${RED}[ERROR]${NONE} Cannot determine commit ID (not a git repo). Please provide manually."
+      echo -e "${RED}[ERROR]${NONE} Cannot determine commit ID. Please set FD_COMMIT_ID manually."
       exit 1
     fi
   fi
 
+  # CUDA version and GPU arch
   CUDA_VERSION=$(nvcc --version | grep "release" | sed -E 's/.*release ([0-9]+)\.([0-9]+).*/\1\2/')
-  echo -e "${BLUE}[info]${NONE} Detected CUDA version: ${GREEN}cu${CUDA_VERSION}${NONE}"
+  echo -e "${BLUE}[info]${NONE} CUDA version: ${GREEN}cu${CUDA_VERSION}${NONE}"
 
   GPU_ARCH_STR=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader \
     | awk '{printf("%d\n",$1*10)}' | sort -u | awk '{printf("SM_%s_",$1)}' | sed 's/_$//')
-  echo -e "${BLUE}[info]${NONE} Detected GPU arch: ${GREEN}${GPU_ARCH_STR}${NONE}"
-
-  local WHL_PATH="${PRE_WHEEL_DIR}/${WHL_NAME}"
-  local REMOTE_URL="https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/cu${CUDA_VERSION}/${GPU_ARCH_STR}/develop/${FD_COMMIT_ID}/${WHL_NAME}"
+  echo -e "${BLUE}[info]${NONE} GPU arch: ${GREEN}${GPU_ARCH_STR}${NONE}"
 
   mkdir -p "${PRE_WHEEL_DIR}"
+  local REMOTE_URL="https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/cu${CUDA_VERSION}/${GPU_ARCH_STR}/develop/${FD_COMMIT_ID}/${WHL_NAME}"
+  local WHL_PATH=""
 
-  if [ ! -f "$WHL_PATH" ]; then
-    echo -e "${BLUE}[precompiled]${NONE} Local wheel not found, downloading from: ${REMOTE_URL}"
-    wget --no-check-certificate -O "$WHL_PATH" "$REMOTE_URL" || {
+  if [ -f "$LOCAL_DIST_WHL" ]; then
+    echo -e "${BLUE}[precompiled]${NONE} Found local dist wheel: ${GREEN}${LOCAL_DIST_WHL}${NONE}"
+    WHL_PATH="$LOCAL_DIST_WHL"
+  else
+    # Check cached pre_wheel
+    WHL_PATH=$(find "${PRE_WHEEL_DIR}" -maxdepth 1 -type f -name "${WHL_PATTERN}" | head -n 1)
+    if [ -z "$WHL_PATH" ]; then
+      WHL_PATH="${PRE_WHEEL_DIR}/${WHL_NAME}"
+      echo -e "${BLUE}[precompiled]${NONE} No local wheel, downloading from: ${REMOTE_URL}"
+      wget --no-check-certificate -O "$WHL_PATH" "$REMOTE_URL" || {
         echo -e "${YELLOW}[WARNING]${NONE} Failed to download wheel."
         return 1
-    }
-    echo -e "${GREEN}[SUCCESS]${NONE} Downloaded precompiled wheel to ${WHL_PATH}"
-  else
-    echo -e "${BLUE}[precompiled]${NONE} Found local wheel: ${WHL_PATH}"
-    if ! unzip -t "$WHL_PATH" >/dev/null 2>&1; then
-      echo -e "${BLUE}[WARNING]${NONE} Local wheel seems invalid."
-      echo -e "${BLUE}[fallback]${NONE} Falling back to source compilation..."
-      return 1
+      }
+      echo -e "${GREEN}[SUCCESS]${NONE} Downloaded wheel to ${WHL_PATH}"
+    else
+      echo -e "${BLUE}[precompiled]${NONE} Found cached wheel: ${WHL_PATH}"
     fi
   fi
 
-  local TMP_DIR="${PRE_WHEEL_DIR}/tmp_whl_unpack"
+  # Validate wheel
+  if ! ${python} -m zipfile -t "$WHL_PATH" >/dev/null 2>&1; then
+    echo -e "${YELLOW}[WARNING]${NONE} Invalid or corrupted wheel: ${WHL_PATH}"
+    echo -e "${BLUE}[fallback]${NONE} Falling back to source build..."
+    return 1
+  fi
+
+  # Unpack wheel
+  if [[ "$WHL_PATH" == ./dist/* ]]; then
+    TMP_DIR="./dist/tmp_whl_unpack"
+  else
+    TMP_DIR="${PRE_WHEEL_DIR}/tmp_whl_unpack"
+  fi
+
   rm -rf "$TMP_DIR"
   mkdir -p "$TMP_DIR"
 
   echo -e "${BLUE}[precompiled]${NONE} Unpacking wheel..."
   ${python} -m zipfile -e "$WHL_PATH" "$TMP_DIR"
 
-  local DATA_DIR
-  DATA_DIR=$(find "$TMP_DIR" -maxdepth 1 -type d -name "*.data" | head -n 1)
-  if [ -z "$DATA_DIR" ]; then
-    echo -e "${RED}[ERROR]${NONE} Cannot find *.data directory in unpacked wheel."
-    rm -rf "$TMP_DIR"
-    echo -e "${YELLOW}[fallback]${NONE} Falling back to source compilation..."
-    FD_USE_PRECOMPILED=0
-    return 1
-  fi
-
-  local PLATLIB_DIR="${DATA_DIR}/platlib"
-  local SRC_DIR="${PLATLIB_DIR}/fastdeploy/model_executor/ops/gpu"
+  local DATA_DIR PLATLIB_DIR SRC_DIR
   local DST_DIR="fastdeploy/model_executor/ops/gpu"
 
-  if [ ! -d "$SRC_DIR" ]; then
-    echo -e "${RED}[ERROR]${NONE} GPU ops directory not found in wheel: $SRC_DIR"
+  DATA_DIR=$(find "$TMP_DIR" -maxdepth 1 -type d -name "*.data" | head -n 1)
+  if [ -n "$DATA_DIR" ]; then
+    PLATLIB_DIR="${DATA_DIR}/platlib"
+    SRC_DIR="${PLATLIB_DIR}/fastdeploy/model_executor/ops/gpu"
+  else
+    SRC_DIR=$(find "$TMP_DIR" -type d -path "*/fastdeploy/model_executor/ops/gpu" | head -n 1)
+  fi
+
+  if [ -z "$SRC_DIR" ] || [ ! -d "$SRC_DIR" ]; then
+    echo -e "${RED}[ERROR]${NONE} GPU ops not found in wheel (checked: ${SRC_DIR:-N/A})"
     rm -rf "$TMP_DIR"
-    echo -e "${YELLOW}[fallback]${NONE} Falling back to source compilation..."
+    echo -e "${YELLOW}[fallback]${NONE} Falling back to source build..."
     FD_USE_PRECOMPILED=0
     return 1
   fi
 
-  echo -e "${BLUE}[precompiled]${NONE} Copying GPU precompiled contents..."
+  # Copy precompiled GPU ops
+  echo -e "${BLUE}[precompiled]${NONE} Copying GPU precompiled files..."
   mkdir -p "$DST_DIR"
   cp -r "$SRC_DIR/deep_gemm" "$DST_DIR/" 2>/dev/null || true
-  cp -r "$SRC_DIR/fastdeploy_ops.py" "$DST_DIR/" 2>/dev/null || true
   cp -f "$SRC_DIR/"fastdeploy_ops_*.so "$DST_DIR/" 2>/dev/null || true
+  cp -f "$SRC_DIR/fastdeploy_ops.py" "$DST_DIR/" 2>/dev/null || true
   cp -f "$SRC_DIR/version.txt" "$DST_DIR/" 2>/dev/null || true
 
-  echo -e "${BLUE}[precompiled]${NONE} Installing FastDeploy (using precomplied wheel)..."
-  if ! ${python} -m pip install . --no-build-isolation; then
-    echo -e "${RED}[FAIL]${NONE} pip install failed, fallback to source build..."
-    FD_USE_PRECOMPILED=0
-    rm -rf "$TMP_DIR"
-    return 1
-  fi
-
-  echo -e "${GREEN}[SUCCESS]${NONE} Installed FastDeploy using precompiled wheel."
-  rm -rf "${PRE_WHEEL_DIR}/tmp_whl_unpack"
+  echo -e "${BLUE}[cleanup]${NONE} Removing temp unpack dir..."
+  rm -rf "${TMP_DIR}"
+  return 0
 }
 
 function build_and_install_ops() {
@@ -315,7 +326,7 @@ function cleanup() {
   fi
 
   rm -rf $OPS_SRC_DIR/$BUILD_DIR $OPS_SRC_DIR/$EGG_DIR
-  rm -rf $OPS_SRC_DIR/$OPS_TMP_DIR
+  rm -rf $OPS_SRC_DIR/$OPS_TMP_DIR $PRE_WHEEL_DIR
 }
 
 function abort() {
@@ -324,7 +335,7 @@ function abort() {
 
   cur_dir=`basename "$pwd"`
 
-  rm -rf $BUILD_DIR $EGG_DIR $DIST_DIR
+  rm -rf $BUILD_DIR $EGG_DIR
   ${python} -m pip uninstall -y fastdeploy-${DEVICE_TYPE}
 
   rm -rf $OPS_SRC_DIR/$BUILD_DIR $OPS_SRC_DIR/$EGG_DIR
@@ -345,6 +356,8 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
       echo -e "${GREEN}[DONE]${NONE} Precompiled wheel installed successfully."
       echo -e "${BLUE}[MODE]${NONE} Building wheel package from installed files..."
       build_and_install
+      echo -e "${BLUE}[MODE]${NONE} Installing newly built FastDeploy wheel..."
+      ${python} -m pip install ./dist/fastdeploy*.whl
       # get Paddle version
       PADDLE_VERSION=`${python} -c "import paddle; print(paddle.version.full_version)"`
       PADDLE_COMMIT=`${python} -c "import paddle; print(paddle.version.commit)"`
@@ -365,6 +378,7 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
       FD_USE_PRECOMPILED=0
     fi
   fi
+
   if [ "$FD_USE_PRECOMPILED" -eq 0 ]; then
     echo -e "${BLUE}[MODE]${NONE} Building from source (ops)..."
     build_and_install_ops
@@ -401,6 +415,6 @@ else
   init
   build_and_install_ops
   version_info
-  rm -rf $BUILD_DIR $EGG_DIR $DIST_DIR
+  rm -rf $BUILD_DIR $EGG_DIR
   rm -rf $OPS_SRC_DIR/$BUILD_DIR $OPS_SRC_DIR/$EGG_DIR
 fi
