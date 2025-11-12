@@ -57,7 +57,7 @@ class TestBatchInvariantForLogsoftmax(unittest.TestCase):
     def test_batch_invariance(self, B: int = 2048, D: int = 4096, dtype=paddle.float32):
         a = self.create_softmax_trap_tensor(B, D, dtype)
 
-        # Method 1: Matrix-vector multiplication (batch size 1)
+        # Method 1: log_softmax on batch size 1 (first row)
         out1 = paddle.nn.functional.log_softmax(a[:1])
 
         # Method 2: Matrix-matrix multiplication, then slice (full batch)
