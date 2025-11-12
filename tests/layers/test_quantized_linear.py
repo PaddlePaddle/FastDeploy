@@ -17,6 +17,8 @@ import os
 import shutil
 import unittest
 
+os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
+
 import paddle
 
 from fastdeploy.config import (
