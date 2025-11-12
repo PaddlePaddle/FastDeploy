@@ -72,6 +72,8 @@ class XPUAttentionBackend(AttentionBackend):
         kv_num_heads: int,
         num_heads: int,
         head_dim: int,
+        encoder_block_shape_q: int = -1,
+        decoder_block_shape_q: int = -1,
     ):
         """
         XPUAttentionBackend __init__
@@ -129,16 +131,13 @@ class XPUAttentionBackend(AttentionBackend):
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,
-    ) -> Tuple[int, int, int, int]:
+        kv_cache_quant_type: str = None,
+    ) -> Tuple[list, list]:
         """
         Calculate kv cache shape
         """
-        return (
-            max_num_blocks,
-            self.kv_num_heads,
-            self.block_size,
-            self.head_dim,
-        )
+        key_cache_shape = value_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
+        return key_cache_shape, value_cache_shape
 
     def forward_mixed(
         self,

@@ -22,9 +22,8 @@ class Args:
     num_cpu_blocks = 1
     num_gpu_blocks = 1
     num_layers = 1
-    head_dim = 1
-    kv_num_head = 1
-    bytes_per_layer_per_block = 1024
+    key_cache_shape = "1,1,1,1"
+    value_cache_shape = ""
     create_cache_tensor = False
 
 
