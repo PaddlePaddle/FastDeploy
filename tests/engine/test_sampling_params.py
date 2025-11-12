@@ -184,7 +184,7 @@ class TestSamplingParamsVerification(unittest.TestCase):
             params._verify_args()
 
         error_msg = str(cm.exception)
-        self.assertIn("prompt_logprobs must can't be less than -1", error_msg)
+        self.assertIn("prompt_logprobs must be greater than or equal to -1", error_msg)
         self.assertIn("got -10", error_msg)
 
     def test_post_init_calls_verify_args(self):
