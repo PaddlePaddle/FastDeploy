@@ -27,6 +27,8 @@ from fastdeploy.platforms import current_platform
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
         get_padding_offset,
+        limit_thinking_content_length_v1,
+        limit_thinking_content_length_v2,
         save_output,
         set_stop_value_multi_ends,
         step_paddle,
@@ -91,12 +93,7 @@ else:
 
 from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
 from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
-from fastdeploy.worker.output import (
-    LogprobsTensors,
-    ModelOutputData,
-    ModelRunnerOutput,
-    SamplerOutput,
-)
+from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOutput
 
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
 
@@ -208,7 +205,8 @@ def pre_process(
     """
     token_num = paddle.sum(seq_lens_this_time)
 
-    if current_platform.is_cuda() and not speculative_decoding:
+    specific_platform = current_platform.is_cuda() or current_platform.is_maca() or current_platform.is_iluvatar()
+    if specific_platform and not speculative_decoding:
         # Note(ZKK): This case's code is very simple!
         ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
             input_ids, token_num, seq_lens_this_time
@@ -322,7 +320,7 @@ def post_process_normal(
     async_output_queue: queue.Queue = None,
     think_end_id: int = -1,
     line_break_id: int = -1,
-) -> ModelRunnerOutput:
+):
     """Post-processing steps after completing a single token generation."""
     if think_end_id > 0:
         limit_thinking_content_length(

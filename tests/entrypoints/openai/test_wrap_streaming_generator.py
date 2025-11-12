@@ -35,6 +35,7 @@ with (
         scheduler_db=None,
         scheduler_password=None,
         scheduler_topic=None,
+        api_key=None,
     )
     mock_parse_args.return_value = mock_args
     mock_retrive_model.return_value = "test-model"  # Just return the model name without downloading

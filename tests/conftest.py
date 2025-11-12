@@ -32,10 +32,10 @@ class FDRunner:
         from fastdeploy.entrypoints.llm import LLM
 
         ports_to_clean = []
-        if "engine_worker_queue_port" in kwargs:
-            ports_to_clean.append(kwargs["engine_worker_queue_port"])
+        port_keys = ["engine_worker_queue_port", "cache_queue_port", "port", "metrics_port"]
+        ports_to_clean.extend(kwargs[k] for k in port_keys if k in kwargs)
         clean_ports(ports_to_clean)
-        time.sleep(5)
+        time.sleep(10)
         graph_optimization_config = {"use_cudagraph": False}
         self.llm = LLM(
             model=model_name_or_path,

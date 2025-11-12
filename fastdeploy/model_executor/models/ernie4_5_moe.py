@@ -235,6 +235,7 @@ class Ernie4_5_Attention(nn.Layer):
             prefix=f"{prefix}.o_proj",
             input_size=fd_config.model_config.head_dim * fd_config.model_config.num_attention_heads,
             output_size=fd_config.model_config.hidden_size,
+            layer_id=layer_id,
         )
         self.attn = Attention(
             fd_config=fd_config,
@@ -303,6 +304,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
+            layer_id=layer_id,
         )
 
         self.post_attention_layernorm = RMSNorm(
@@ -310,6 +312,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
+            layer_id=layer_id,
         )
 
     def load_state_dict(self, state_dict):
@@ -327,18 +330,19 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         hidden_states: paddle.Tensor,
         residual: paddle.Tensor = None,
     ):
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
-        else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        hidden_states, residual = self.input_layernorm(
+            hidden_states, residual_input=residual, forward_meta=forward_meta
+        )
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
             forward_meta=forward_meta,
         )
 
-        hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
+        hidden_states, residual = self.post_attention_layernorm(
+            hidden_states,
+            residual,
+        )
 
         hidden_states = self.mlp(hidden_states)
 
@@ -442,9 +446,7 @@ class Ernie4_5_Model(nn.Layer):
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
-        hidden_states = hidden_states + residual
-
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
         if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
             out = forward_meta.attn_backend.reverse_transpose(out)
@@ -560,7 +562,9 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         )
         params_dict = dict(self.named_parameters())
 
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(
+            dict(self.named_sublayers()), fd_config=self.fd_config
+        )
 
         for loaded_weight_name, loaded_weight in weights_iterator:
             loaded_weight_name = loaded_weight_name.replace("model", "ernie")
@@ -596,7 +600,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings:
-            self.lm_head.load_state_dict({self.lm_head.weight_key: self.ernie.embed_tokens.embeddings.weight})
+            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight)
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)

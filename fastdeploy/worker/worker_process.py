@@ -475,8 +475,10 @@ class PaddleDisWorkerProc:
 
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
+            start_execute_time = time.time()
             self.worker.execute_model(req_dicts, num_running_requests)
             self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
+            logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
 
     def initialize_kv_cache(self) -> None:
         """Profiles the peak memory usage of the model to determine how many
@@ -554,10 +556,13 @@ class PaddleDisWorkerProc:
 
     def start_task_queue_service(self):
         # Initialize task queue
-        task_address = (
-            self.parallel_config.pod_ip,
-            self.parallel_config.engine_worker_queue_port,
-        )
+        if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+            task_address = (
+                self.parallel_config.pod_ip,
+                self.parallel_config.engine_worker_queue_port,
+            )
+        else:
+            task_address = f"/dev/shm/fd_task_queue_{self.parallel_config.engine_worker_queue_port}.sock"
         logger.info(f"connect task queue address {task_address}")
         self.task_queue = TaskQueue(
             address=task_address,
@@ -654,6 +659,11 @@ def parse_args():
         "--disable_custom_all_reduce",
         action="store_true",
         help="enable custom all-reduce",
+    )
+    parser.add_argument(
+        "--disable_sequence_parallel_moe",
+        action="store_true",
+        help="disable sequence parallel moe",
     )
     parser.add_argument("--splitwise_role", type=str, default="mixed", help="splitwise role")
     parser.add_argument(
@@ -853,7 +863,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
             num_experts = model_config.moe_num_experts[0]
         else:
             num_experts = model_config.moe_num_experts
-
         num_experts_per_rank = num_experts // parallel_config.expert_parallel_size
         num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
         max_chips_per_node = 16 if current_platform.is_iluvatar() else 8

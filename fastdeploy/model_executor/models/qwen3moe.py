@@ -167,15 +167,17 @@ class Qwen3DecoderLayer(nn.Layer):
         self.input_layernorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-6,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
+            layer_id=layer_id,
         )
 
         self.post_attention_layernorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-6,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
+            layer_id=layer_id,
         )
 
     def load_state_dict(self, state_dict):
@@ -192,11 +194,9 @@ class Qwen3DecoderLayer(nn.Layer):
         residual: paddle.Tensor = None,
     ):
         """ """
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
-        else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        hidden_states, residual = self.input_layernorm(
+            hidden_states, residual_input=residual, forward_meta=forward_meta
+        )
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
@@ -251,7 +251,7 @@ class Qwen3MoeModel(nn.Layer):
         self.norm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
-            eps=1e-6,
+            eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{fd_config.model_config.pretrained_config.prefix_name}.norm",
         )
 
@@ -275,16 +275,14 @@ class Qwen3MoeModel(nn.Layer):
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
-        """ """
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
 
         residual = None
 
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
-        hidden_states = hidden_states + residual
 
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
         return out
 
@@ -362,7 +360,7 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
         ]
         expert_params_mapping = self.get_expert_mapping()
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
@@ -419,6 +417,20 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
         logits[:, self.ori_vocab_size :] = -float("inf")
 
         return logits
+
+    def empty_input_forward(self):
+        """
+        empty_input_forward
+        """
+        fake_hidden_states = paddle.empty(
+            shape=[1, self.fd_config.model_config.hidden_size],
+            dtype=paddle.get_default_dtype(),
+        )
+        for i in range(
+            self.fd_config.model_config.moe_layer_start_index,
+            self.fd_config.model_config.num_hidden_layers,
+        ):
+            self.model.layers[i].mlp.experts(fake_hidden_states, self.model.layers[i].mlp.gate)
 
     def forward(
         self,
