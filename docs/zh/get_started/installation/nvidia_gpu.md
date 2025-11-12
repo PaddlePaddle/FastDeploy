@@ -112,7 +112,7 @@ cd FastDeploy
 # 第3个参数: 是否编译 CPU 推理算子 (false 表示仅 GPU)
 # 第4个参数: GPU 架构 (当前仅支持 [90])
 # 第5个参数: 是否使用预编译算子 (1 表示启用预编译)
-# 第6个参数(可选): 指定预编译算子的 commitID
+# 第6个参数(可选): 指定预编译算子的 commitID（默认使用当前的 commitID）
 
 # 使用预编译 whl 包加速构建
 bash build.sh 1 python false [90] 1

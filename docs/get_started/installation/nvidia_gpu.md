@@ -106,7 +106,7 @@ cd FastDeploy
 # Argument 3: Whether to compile CPU inference operators (false for GPU only)
 # Argument 4: Target GPU architectures (currently supports [90])
 # Argument 5: Whether to use precompiled operators (1 for enable)
-# Argument 6 (optional): Specific commitID for precompiled operators
+# Argument 6 (optional): Specific commitID for precompiled operators(The default is the current commit ID.)
 
 # Use precompiled operators for accelerated build
 bash build.sh 1 python false [90] 1
