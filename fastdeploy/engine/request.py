@@ -29,7 +29,12 @@ from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
 from fastdeploy.utils import data_processor_logger
-from fastdeploy.worker.output import LogprobsLists, SampleLogprobs
+from fastdeploy.worker.output import (
+    LogprobsLists,
+    LogprobsTensors,
+    PromptLogprobs,
+    SampleLogprobs,
+)
 
 
 class RequestStatus(Enum):
@@ -463,6 +468,8 @@ class RequestOutput:
         request_id: str,
         prompt: Optional[str] = None,
         prompt_token_ids: Optional[list[int]] = None,
+        prompt_logprobs: Optional[PromptLogprobs] = None,
+        prompt_logprobs_tensors: Optional[LogprobsTensors] = None,
         output_type: Optional[int] = 3,
         outputs: CompletionOutput = None,
         finished: bool = False,
@@ -476,6 +483,8 @@ class RequestOutput:
         self.request_id = request_id
         self.prompt = prompt
         self.prompt_token_ids = prompt_token_ids
+        self.prompt_logprobs = prompt_logprobs
+        self.prompt_logprobs_tensors = prompt_logprobs_tensors
         self.output_type = output_type
         self.outputs = outputs
         self.finished = finished
@@ -521,6 +530,7 @@ class RequestOutput:
             f"RequestOutput(request_id={self.request_id}, "
             f"prompt={self.prompt!r}, "
             f"prompt_token_ids={self.prompt_token_ids}, "
+            f"prompt_logprobs={self.prompt_logprobs}, "
             f"output_type={self.output_type}, "
             f"outputs={self.outputs}, "
             f"finished={self.finished}, "
@@ -546,6 +556,7 @@ class RequestOutput:
             "request_id": self.request_id,
             "prompt": self.prompt,
             "prompt_token_ids": self.prompt_token_ids,
+            "prompt_logprobs": self.prompt_logprobs,
             "output_type": self.output_type,
             "outputs": None if self.outputs is None else self.outputs.to_dict(),
             "metrics": None if self.metrics is None else self.metrics.to_dict(),

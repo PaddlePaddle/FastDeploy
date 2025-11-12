@@ -16,11 +16,13 @@
 
 from __future__ import annotations
 
+import itertools
 import logging
 import threading
 import time
 import traceback
 import uuid
+from collections.abc import Iterable
 from typing import Any, Optional, Union
 
 from pydantic import ValidationError
@@ -37,12 +39,19 @@ from fastdeploy.utils import (
     llm_logger,
     retrive_model_from_server,
 )
-from fastdeploy.worker.output import Logprob, LogprobsLists
+from fastdeploy.worker.output import (
+    Logprob,
+    LogprobsLists,
+    LogprobsTensors,
+    PromptLogprobs,
+)
 
 root_logger = logging.getLogger()
 for handler in root_logger.handlers[:]:
     if isinstance(handler, logging.StreamHandler):
         root_logger.removeHandler(handler)
+
+NONES = itertools.repeat(None)
 
 
 class LLM:
@@ -189,12 +198,17 @@ class LLM:
         req_ids = self._add_request(prompts=prompts, sampling_params=sampling_params)
 
         topk_logprobs = sampling_params[0].logprobs if sampling_params_len > 1 else sampling_params.logprobs
+        num_prompt_logprobs = (
+            sampling_params[0].prompt_logprobs if sampling_params_len > 1 else sampling_params.prompt_logprobs
+        )
 
         # get output
         if stream:
             return self._run_engine_stream(req_ids, prompts, use_tqdm=use_tqdm, topk_logprobs=topk_logprobs)
         else:
-            outputs = self._run_engine(req_ids, use_tqdm=use_tqdm, topk_logprobs=topk_logprobs)
+            outputs = self._run_engine(
+                req_ids, use_tqdm=use_tqdm, topk_logprobs=topk_logprobs, num_prompt_logprobs=num_prompt_logprobs
+            )
             for i in range(len(outputs)):
                 outputs[i].prompt = prompts[i]
             return outputs
@@ -321,6 +335,27 @@ class LLM:
                 current_sampling_params = sampling_params[i]
             else:
                 current_sampling_params = sampling_params
+            if kwargs.get("stream") and current_sampling_params.prompt_logprobs is not None:
+                raise ValueError("prompt_logprobs is not supported with streaming.")
+            max_logprobs = self.llm_engine.cfg.model_config.max_logprobs
+            if max_logprobs == -1:
+                max_logprobs = self.llm_engine.cfg.model_config.ori_vocab_size
+            if current_sampling_params.logprobs is not None:
+                num_logprobs = current_sampling_params.logprobs
+                if num_logprobs == -1:
+                    num_logprobs = self.llm_engine.cfg.model_config.ori_vocab_size
+                if num_logprobs > max_logprobs:
+                    raise ValueError(
+                        f"Number of logprobs requested ({num_logprobs}) exceeds maximum allowed value ({max_logprobs})."
+                    )
+            if current_sampling_params.prompt_logprobs is not None:
+                num_prompt_logprobs = current_sampling_params.prompt_logprobs
+                if num_prompt_logprobs == -1:
+                    num_prompt_logprobs = self.llm_engine.cfg.model_config.ori_vocab_size
+                if num_prompt_logprobs > max_logprobs:
+                    raise ValueError(
+                        f"Number of logprobs requested ({num_prompt_logprobs}) exceeds maximum allowed value ({max_logprobs})."
+                    )
             if current_sampling_params.guided_decoding is not None:
                 guided_decoding_dict = current_sampling_params.guided_decoding.to_dict()
                 tasks.update(guided_decoding_dict)
@@ -377,7 +412,93 @@ class LLM:
         except Exception as e:
             llm_logger.error(f"Error building sample logprobs from LogprobsLists: {e}, {str(traceback.format_exc())}")
 
-    def _run_engine(self, req_ids: list[str], use_tqdm: bool, topk_logprobs: Optional[int] = None):
+    def _build_prompt_logprobs(
+        self,
+        prompt_logprobs_tensors: LogprobsTensors,
+        num_prompt_logprobs: int,
+    ):
+        """Update with prompt logprobs from worker.
+        Args:
+          prompt_logprobs_tensors: tuple containing the prompt logprobs
+                                   tensors.
+        """
+
+        token_ids, logprobs, ranks = prompt_logprobs_tensors
+
+        # Detokenize non-incrementally.
+        # Output is flat: [num_tok, num_lps] -> [num_tok * num_lps]
+        decoded_tokens = [self._decode_token(token_id) for token_id in token_ids.flatten().tolist()]
+
+        # Recover shapes.
+        num_prompt_tokens, num_logprobs = logprobs.shape
+
+        # Pythonize the paddle tensors.
+        prompt_token_ranks = ranks.tolist()
+        prompt_logprobs = logprobs.tolist()
+        token_ids = token_ids.tolist()
+        result: Optional[PromptLogprobs] = []
+        # Make Logprob for each position.
+        for pos in range(num_prompt_tokens):
+            # Handle flattening.
+            offset = pos * num_logprobs
+            offset_end = offset + num_logprobs
+            decoded_tokens_for_pos = NONES if decoded_tokens is None else decoded_tokens[offset:offset_end]
+
+            # Update with the Logprob dictionary for this pos.
+            result.append(
+                self._make_logprob_dict(
+                    prompt_logprobs[pos],
+                    token_ids[pos],
+                    decoded_tokens_for_pos,
+                    prompt_token_ranks[pos],
+                    num_prompt_logprobs,
+                )
+            )
+        return result
+
+    @staticmethod
+    def _make_logprob_dict(
+        logprobs: list[float],
+        logprob_token_ids: list[int],
+        decoded_tokens: Iterable[str | None],
+        rank: int,
+        num_logprobs: int,
+    ) -> dict[int, Logprob]:
+        """Make a Logprob dictionary for a position.
+        Args:
+          logprobs: list of log probabilities
+          logprob_token_ids: list of top token ids
+          decoded_tokens: list of decoded top tokens
+          rank: rank of the sampled token
+          num_logprobs: number of logprobs requested
+            by the user (in addition to sampled logprob)
+        Returns:
+          dict[token id, Logprob]
+        """
+        if num_logprobs == -1:
+            num_logprobs = len(logprobs)
+        # We do not need a special case for the sampled token
+        # being in the topk, since inserting duplicated data
+        # into a dictionary twice is the same as doing it once.
+        topk_ranks = range(1, num_logprobs + 1)
+        ranks = itertools.chain((rank,), topk_ranks)
+
+        return {
+            token_id: Logprob(
+                logprob=logprob,
+                rank=rank,
+                decoded_token=token,
+            )
+            for token_id, logprob, rank, token in zip(logprob_token_ids, logprobs, ranks, decoded_tokens)
+        }
+
+    def _run_engine(
+        self,
+        req_ids: list[str],
+        use_tqdm: bool,
+        topk_logprobs: Optional[int] = None,
+        num_prompt_logprobs: Optional[int] = None,
+    ):
         """
             运行引擎，并返回结果列表。
 
@@ -422,8 +543,16 @@ class LLM:
 
                     # filter logprobs
                     if result.outputs.top_logprobs and topk_logprobs:
+                        if topk_logprobs == -1:
+                            topk_logprobs = self.llm_engine.cfg.model_config.ori_vocab_size
                         result.outputs.logprobs = self._build_sample_logprobs(
                             result.outputs.top_logprobs, topk_logprobs
+                        )
+                    if result.prompt_logprobs_tensors and num_prompt_logprobs:
+                        if num_prompt_logprobs == -1:
+                            num_prompt_logprobs = self.llm_engine.cfg.model_config.ori_vocab_size
+                        result.prompt_logprobs = self._build_prompt_logprobs(
+                            result.prompt_logprobs_tensors, num_prompt_logprobs
                         )
 
                     output[pos] = result
