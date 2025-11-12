@@ -24,6 +24,7 @@ from paddle.distributed import fleet
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.utils import h2d_copy, set_weight_attrs, slice_fn
+from fastdeploy.platforms import current_platform
 
 from .utils import (
     DEFAULT_VOCAB_PADDING_SIZE,
@@ -274,7 +275,8 @@ class VocabParallelEmbedding(nn.Layer):
 
         if output_dim == 0:
             h2d_copy(param[: shard_weight.shape[0]], shard_weight)
-            param[shard_weight.shape[0] :].fill_(0)
+            if not current_platform.is_maca():
+                param[shard_weight.shape[0] :].fill_(0)
         else:
             h2d_copy(param[:, : shard_weight.shape[1]], shard_weight)
             param[:, shard_weight.shape[1] :].fill_(0)

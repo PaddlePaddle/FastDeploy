@@ -142,11 +142,18 @@ class MetaxCutlassMoEMethod(MoEMethodBase):
                 1.0,
             )
         else:
+            added_weight_attrs0 = getattr(layer, self.added_weight_attrs[0])
+            added_weight_attrs1 = getattr(layer, self.added_weight_attrs[1])
+
+            if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
+                added_weight_attrs0 = paddle.transpose(added_weight_attrs0, perm=[0, 2, 1])
+                added_weight_attrs1 = paddle.transpose(added_weight_attrs1, perm=[0, 2, 1])
+
             fused_moe_out = fused_expert_moe(
                 x,
                 gate.weight,
-                getattr(layer, self.added_weight_attrs[0]),
-                getattr(layer, self.added_weight_attrs[1]),
+                added_weight_attrs0,
+                added_weight_attrs1,
                 None,
                 (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
                 None,
@@ -348,6 +355,7 @@ class MetaxCutlassWeightOnlyMoEMethod(MetaxCutlassMoEMethod):
         weight_name = self.added_weight_attrs[weight_id_map[weight_type]]
         unquantized_weight_name = weight_name.replace("quant_weight", "weight")
         weight_shape = self.up_gate_proj_weight_shape if weight_type == "gate_up" else self.down_proj_weight_shape
+        weight_shape[1], weight_shape[2] = weight_shape[2], weight_shape[1]
         weight_dtype = "int8"
         # scale
         scale_name = self.added_scale_attrs[weight_id_map[weight_type]]

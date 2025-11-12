@@ -326,6 +326,9 @@ class WeightOnlyLinearMethod(QuantMethodBase):
                     arch=self.quant_config.weight_only_linear_arch,
                 )
 
+                if current_platform.is_maca():
+                    quanted_weight_tensor = paddle.transpose(quanted_weight_tensor, [1, 0])
+
             free_tensor(layer.weight)
 
             layer.weight = layer.create_parameter(
