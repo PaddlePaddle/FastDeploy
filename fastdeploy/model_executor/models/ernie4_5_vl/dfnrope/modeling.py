@@ -34,7 +34,7 @@ from paddle.nn.functional.flash_attention import (
 from paddleformers.transformers.model_utils import PretrainedModel
 
 from fastdeploy.model_executor.layers.utils import divide, get_tensor
-from fastdeploy.model_executor.utils import set_weight_attrs
+from fastdeploy.model_executor.utils import fd_cast, h2d_copy, set_weight_attrs
 from fastdeploy.platforms import current_platform
 
 from .activation import ACT2FN
@@ -210,7 +210,7 @@ class VisionFlashAttention2(nn.Layer):
         if load_bias:
             head_dim = self.hidden_size // self.num_heads
             shard_weight = loaded_weight[...].reshape([3, self.num_heads, head_dim])
-            shard_weight = np.split(shard_weight, self.tensor_parallel_degree, axis=-2)[self.tensor_parallel_rank]
+            shard_weight = paddle.split(shard_weight, self.tensor_parallel_degree, axis=-2)[self.tensor_parallel_rank]
             shard_weight = shard_weight.reshape([-1])
         else:
             shard_weight = loaded_weight[...].reshape(
@@ -221,13 +221,14 @@ class VisionFlashAttention2(nn.Layer):
                     self.head_dim,
                 ]
             )
-            shard_weight = np.split(shard_weight, self.tensor_parallel_degree, axis=-2)[self.tensor_parallel_rank]
+            shard_weight = paddle.split(shard_weight, self.tensor_parallel_degree, axis=-2)[self.tensor_parallel_rank]
             shard_weight = shard_weight.reshape([self.hidden_size, -1])
         shard_weight = get_tensor(shard_weight)
+        shard_weight = fd_cast(shard_weight, param)
         assert param.shape == shard_weight.shape, (
             f" Attempted to load weight ({shard_weight.shape}) " f"into parameter ({param.shape})"
         )
-        param.copy_(shard_weight, False)
+        h2d_copy(param, shard_weight)
 
     def forward(
         self,
