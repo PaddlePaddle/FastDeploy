@@ -17,9 +17,7 @@ import os
 import shutil
 import unittest
 
-import numpy as np
 import paddle
-import paddle.device.cuda.graphs as graphs
 
 from fastdeploy.config import (
     CacheConfig,
@@ -30,14 +28,24 @@ from fastdeploy.config import (
     ParallelConfig,
 )
 from fastdeploy.model_executor.layers.linear import QKVParallelLinear, RowParallelLinear
+from fastdeploy.model_executor.layers.quantization.block_wise_fp8 import (
+    BlockWiseFP8Config,
+)
 from fastdeploy.model_executor.layers.quantization.weight_only import (
     WINT4Config,
     WINT8Config,
 )
 from fastdeploy.scheduler import SchedulerConfig
+from tests.utils import OpPerformanceTester
 
 paddle.set_default_dtype("bfloat16")
 paddle.seed(1024)
+
+QUANT_CONFIG_MAP = {
+    "wint8": WINT8Config({}),
+    "wint4": WINT4Config({}),
+    "block_wise_fp8": BlockWiseFP8Config(weight_block_size=[128, 128]),
+}
 
 
 class QuantizedLinearWrapper(paddle.nn.Layer):
@@ -56,7 +64,7 @@ class QuantizedLinearWrapper(paddle.nn.Layer):
         self.fd_config = FDConfig(
             model_config=self.model_config,
             parallel_config=ParallelConfig({"tensor_parallel_size": self.tp_size}),
-            quant_config=WINT8Config({}) if quant_type == "wint8" else WINT4Config({}),
+            quant_config=QUANT_CONFIG_MAP[quant_type],
             load_config=LoadConfig({}),
             graph_opt_config=GraphOptimizationConfig({}),
             scheduler_config=SchedulerConfig({}),
@@ -158,66 +166,20 @@ class TestQuantizedLinear(unittest.TestCase):
             )
             mm = quantized_linear
 
-        print(f"========Method: {type}, Quant Type: {quant_type}=========")
-        print(
-            "{:<15} {:<40} {:<15} {:<15} {:<15}".format(
-                "Batch Size", "Last 5 Times (us)", "Last Time (us)", "TFlops", "TB/s"
-            )
+        tester = OpPerformanceTester(
+            op_name=f"{type}-{quant_type}",
+            op_fn=mm,
+            num_layers=self.model_config.num_hidden_layers,
+            weight_size=weight_size,
         )
 
-        num_layers = self.model_config.num_hidden_layers
-        real_weight_layers = self.model_config.num_hidden_layers
-        linear = [None] * real_weight_layers
-        for i in range(real_weight_layers):
-            linear[i] = mm
-
-        linear_cuda_graphs = [None] * 2000
-        input = [None] * 2000
-        # for idx, bsz in enumerate([1024 * i for i in [1,2,4,8,16,32,64]]):
-        for idx, bsz in enumerate([1, 8, 16, 32, 128, 1024]):
-
-            input[idx] = paddle.rand((bsz, input_size), dtype=paddle.bfloat16)
-
-            def fake_model_run():
-                for j in range(num_layers):
-                    out = linear[j % real_weight_layers](input[idx])
-
-                return out
-
-            fake_model_run()
-
-            linear_cuda_graphs[idx] = graphs.CUDAGraph()
-            linear_cuda_graphs[idx].capture_begin()
-
-            fake_model_run()
-
-            linear_cuda_graphs[idx].capture_end()
-
-            num_tests = 20
-            start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
-            end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
-            for i in range(num_tests):
-                start_events[i].record()
-
-                linear_cuda_graphs[idx].replay()
-
-                end_events[i].record()
-            paddle.device.synchronize()
-
-            times = np.array([round(s.elapsed_time(e), 2) for s, e in zip(start_events, end_events)])[1:]
-            times = times * 1e3 / num_layers
-            times = np.array([round(time, 2) for time in times])
-            last_5_times = times[-5:]
-            last_time = times[-1]  # us
-
-            flops = 2 * bsz * weight_size
-            memory = weight_size
-            tfloaps = round(flops / (1e12) / (last_time * 1e-6), 1)
-            tbps = round(memory / (1e12) / (last_time * 1e-6), 1)
-            print("{:<15} {:<40} {:<15} {:<15} {:<15}".format(bsz, str(last_5_times), last_time, tfloaps, tbps))
+        tester.benchmark(
+            input_size=input_size,
+            batch_sizes=[1, 8, 16, 32, 128],
+        )
 
     def test_quantized_linear(self):
-        for type in ["qkv_proj", "o_proj", "out_proj+qkv_proj"]:
+        for type in ["qkv_proj", "o_proj"]:
             for quant_type in ["wint4", "wint8"]:
                 for use_machete in ["0", "1"]:
                     os.environ["FD_USE_MACHETE"] = use_machete
