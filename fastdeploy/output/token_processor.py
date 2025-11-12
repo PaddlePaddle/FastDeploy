@@ -232,6 +232,7 @@ class TokenProcessor:
                 ),
                 finished=False,
                 metrics=metrics,
+                ic_req_data=task.ic_req_data,
             )
 
             if self.tokens_counter[task_id] == 0:
@@ -399,9 +400,15 @@ class TokenProcessor:
                 if task_id in self.resource_manager.req_dict:
                     del self.resource_manager.req_dict[task_id]
 
-        num_blocks_used_by_tasks = sum([len(task.block_tables) if task else 0 for task in self.resource_manager.tasks_list])
-        main_process_metrics.set_value("available_gpu_block_num", self.resource_manager.total_block_number() - num_blocks_used_by_tasks)
-        main_process_metrics.set_value("batch_size", self.resource_manager.max_num_seqs - self.resource_manager.available_batch())
+        num_blocks_used_by_tasks = sum(
+            [len(task.block_tables) if task else 0 for task in self.resource_manager.tasks_list]
+        )
+        main_process_metrics.set_value(
+            "available_gpu_block_num", self.resource_manager.total_block_number() - num_blocks_used_by_tasks
+        )
+        main_process_metrics.set_value(
+            "batch_size", self.resource_manager.max_num_seqs - self.resource_manager.available_batch()
+        )
         main_process_metrics.set_value("available_batch_size", self.resource_manager.available_batch())
 
         if task_id in self.tokens_counter:
@@ -535,6 +542,8 @@ class TokenProcessor:
                 ),
                 finished=False,
                 metrics=metrics,
+                ic_req_data=task.ic_req_data,
+                prompt_token_ids_len=task.prompt_token_ids_len,
             )
             if self.tokens_counter[task_id] == 0:
                 if task.messages is not None:

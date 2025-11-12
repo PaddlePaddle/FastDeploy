@@ -23,7 +23,7 @@ from typing import Dict
 import zmq
 
 from fastdeploy import envs
-from fastdeploy.engine.request import CompletionOutput, Request, RequestOutput
+from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.inter_communicator import EngineWorkerQueue
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import get_logger
@@ -500,19 +500,5 @@ class SplitwiseConnector:
         """
         tasks = []
         for task in payload:
-            tasks.append(
-                RequestOutput(
-                    request_id=task["request_id"],
-                    outputs=CompletionOutput(
-                        index=task["outputs"]["index"],
-                        send_idx=0,
-                        token_ids=task["outputs"]["token_ids"],
-                        draft_token_ids=task["outputs"]["draft_token_ids"],
-                    ),
-                    finished=True,
-                    num_cached_tokens=task["num_cached_tokens"],
-                    error_code=task["error_code"],
-                    error_msg=task["error_msg"],
-                )
-            )
+            tasks.append(RequestOutput.from_dict(task))
         self.engine_worker_queue.put_disaggregated_tasks(("decode", tasks))

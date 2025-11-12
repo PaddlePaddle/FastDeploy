@@ -721,7 +721,7 @@ class EngineService:
             self.recv_request_server = ZmqTcpServer(port=envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT, mode=zmq.PULL)
             self.send_response_server = ZmqTcpServer(port=envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT, mode=zmq.ROUTER)
             self.internal_adapter = InternalAdapter(
-                cfg=self.cfg, engine=self, dp_rank=self.cfg.node_rank * self.cfg.worker_num_per_node
+                cfg=self.cfg, engine=self, dp_rank=self.cfg.parallel_config.local_data_parallel_id
             )
         else:
             self.recv_request_server = ZmqIpcServer(name=api_server_pid, mode=zmq.PULL)
@@ -802,7 +802,10 @@ class EngineService:
                     )
                     # Since the request is not in scheduler
                     # Send result by zmq directly
-                    self.send_response_server.send_response(request_id, [error_result])
+                    if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                        self.send_response_server.send_response(None, [[error_result]])
+                    else:
+                        self.send_response_server.send_response(request_id, [error_result])
             except Exception as e:
                 self.llm_logger.error(
                     f"Error happened while receiving new request from zmq, details={e}, "
@@ -819,8 +822,11 @@ class EngineService:
                 if len(results) == 0:
                     time.sleep(0.005)
                     continue
-                for request_id, contents in results.items():
-                    self.send_response_server.send_response(request_id, contents)
+                if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                    self.send_response_server.send_response(None, results)
+                else:
+                    for request_id, contents in results.items():
+                        self.send_response_server.send_response(request_id, contents)
 
             except Exception as e:
                 self.llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
@@ -890,6 +896,8 @@ class EngineService:
                                                     )
                                                     del self.resource_manager.requests[task.request_id]
                                                     del self.resource_manager.req_dict[task.request_id]
+                                                    task.finished = True
+                                                    self.scheduler.put_results([task])
                                                     continue
                                             if task.error_code != 200:
                                                 cur_task = self.resource_manager.requests[task.request_id]
@@ -904,6 +912,7 @@ class EngineService:
                                                 )
                                                 continue
                                             self.token_processor.tokens_counter[task.request_id] = 1
+                                            self.scheduler.put_results([task])
                                             self.resource_manager.insert_task_for_decoding(task)
 
                                     else:
