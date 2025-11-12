@@ -71,8 +71,8 @@ jobs:
           echo "PARENT_DIR:$PARENT_DIR"
           docker run --rm --net=host --cap-add=SYS_PTRACE --privileged --shm-size=64G  \
           -v $(pwd):/workspace -w /workspace \
-          -v "/ssd3:/ssd3" \
-          -e "MODEL_PATH=/ssd3/model" \
+          -v "/home:/home" \
+          -e "MODEL_PATH=/home/model" \
           -e "http_proxy=$(git config --global --get http.proxy)" \
           -e "https_proxy=$(git config --global --get https.proxy)" \
           -e "no_proxy=bcebos.com,mirrors.tuna.tsinghua.edu.cn,localhost,127.0.0.1,0.0.0.0,10.0.0.0/8,192.168.1.0/24" \
