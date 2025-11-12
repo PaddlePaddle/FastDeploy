@@ -353,6 +353,13 @@ def h2d_copy(dst, src, blocking=True):
 def v1_loader_support(fd_config):
     _v1_no_support_archs = ["Qwen2VLForConditionalGeneration"]
 
+    def _get_unsupported_quant():
+        if current_platform.is_cuda():
+            return {"w4a8", "w4afp8", "wint2"}
+        elif current_platform.is_xpu():
+            return {"w4a8", "w8a8"}
+        return set()
+
     def _err_msg(msg: str) -> str:
         logger.info(msg + "; fallback to the v0 loader for model loading.")
 
@@ -375,7 +382,7 @@ def v1_loader_support(fd_config):
         else:
             moe_quant_type = fd_config.quant_config.name()
             dense_quant_type = fd_config.quant_config.name()
-        unsupported_quant = {"w4a8", "w4afp8", "wint2"}
+        unsupported_quant = _get_unsupported_quant()
 
         if unsupported_quant & {moe_quant_type, dense_quant_type}:
             _err_msg("v1 loader currently does not support w4a8/w4afp8/win2 quantization")
