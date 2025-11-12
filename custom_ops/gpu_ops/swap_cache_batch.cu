@@ -39,7 +39,6 @@ void SwapCacheImplAllLayers(const std::vector<paddle::Tensor>& cache_gpu_tensors
         if (cache_shape.size() == 4) {
             head_dim = cache_shape[3];
         }
-        printf("current layer: %d, num_heads: %ld, cache_shape.size(): %ld, head_dim: %ld\n", layer_idx, num_heads, cache_shape.size(), head_dim);
         const int64_t cache_stride = num_heads * block_size * head_dim;
 
         auto stream = cache_gpu.stream();
