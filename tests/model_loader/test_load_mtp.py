@@ -53,8 +53,8 @@ class TestErnie4_5_MTPLoadWeights(unittest.TestCase):
 
     def test_load_weights_normal_case(self):
         weights_iterator = [
-            ("ernie.embed_tokens.weight", np.random.rand(32000, 768).astype("float32")),
-            ("ernie.mtp_block.0.self_attn.qkv_proj.weight", np.random.rand(768, 768 * 3).astype("float32")),
+            ("ernie.embed_tokens.weight", paddle.rand([32000, 768], dtype="float32")),
+            ("ernie.mtp_block.0.self_attn.qkv_proj.weight", paddle.rand([768, 768 * 3], dtype="float32")),
         ]
         for k, v in self.model.named_parameters():
             print("{}".format(k))
@@ -65,8 +65,8 @@ class TestErnie4_5_MTPLoadWeights(unittest.TestCase):
 
     def test_load_weights_with_unexpected_keys(self):
         weights_iterator = [
-            ("unknown_key", np.random.rand(10, 10).astype("float32")),
-            ("ernie.embed_tokens.weight", np.random.rand(32000, 768).astype("float32")),
+            ("unknown_key", paddle.rand([10, 10], dtype="float32")),
+            ("ernie.embed_tokens.weight", paddle.rand([32000, 768], dtype="float32")),
         ]
 
         self.model.load_weights(iter(weights_iterator))

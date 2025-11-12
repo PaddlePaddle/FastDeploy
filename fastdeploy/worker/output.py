@@ -44,14 +44,6 @@ class LogprobsLists(NamedTuple):
     # [num_reqs]
     sampled_token_ranks: list[int]
 
-    def slice(self, start: int, end: int):
-        """slice"""
-        return LogprobsLists(
-            self.logprob_token_ids[start:end],
-            self.logprobs[start:end],
-            self.sampled_token_ranks[start:end],
-        )
-
     def slice_columns(self, start: int, end: int):
         """
         Slice columns (per-row top-k logprobs and token IDs).
@@ -97,9 +89,9 @@ class LogprobsTensors(NamedTuple):
     def empty_cpu(num_positions: int, num_tokens_per_position: int) -> "LogprobsTensors":
         """Create empty LogprobsTensors on CPU."""
 
-        logprob_token_ids = paddle.empty([num_positions, num_tokens_per_position], dtype=paddle.int64).cpu()
-        logprobs = paddle.empty_like(logprob_token_ids, dtype=paddle.float32).cpu()
-        selected_token_ranks = paddle.empty([num_positions], dtype=paddle.int64).cpu()
+        logprob_token_ids = paddle.empty([num_positions, num_tokens_per_position], device="cpu", dtype=paddle.int64)
+        logprobs = paddle.empty_like(logprob_token_ids, device="cpu", dtype=paddle.float32)
+        selected_token_ranks = paddle.empty([num_positions], device="cpu", dtype=paddle.int64)
         return LogprobsTensors(
             logprob_token_ids=logprob_token_ids,
             logprobs=logprobs,

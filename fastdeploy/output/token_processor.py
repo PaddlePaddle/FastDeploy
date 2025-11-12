@@ -241,6 +241,11 @@ class TokenProcessor:
 
             task_id = task.request_id
             token_ids = stream_data.tokens  # numpy.array
+            if token_ids is not None and token_ids[-1] <= 0:
+                if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                    if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                        self.resource_manager.reschedule_preempt_task(task_id)
+                continue
 
             current_time = time.time()
             if self.tokens_counter[task_id] == 0:
@@ -306,8 +311,6 @@ class TokenProcessor:
         """
         if self.speculative_decoding:
             raise NotImplementedError("GET_SAVE_OUTPUT_V1 does not support speculative decoding")
-        if self.use_logprobs:
-            raise NotImplementedError("GET_SAVE_OUTPUT_V1 does not support use_logprobs")
         rank_id = self.cfg.parallel_config.local_data_parallel_id
         while True:
             try:
@@ -316,7 +319,8 @@ class TokenProcessor:
                 ) or (rank_id == 0):
                     receive_datas = self.zmq_server.recv_pyobj()
                     assert isinstance(receive_datas, list)
-                    llm_logger.debug(f"token_processor receive_data {receive_datas}")
+                    if envs.FD_DEBUG:
+                        llm_logger.debug(f"token_processor receive_data {receive_datas}")
 
                     self._reschedule_preempt_task_use_zmq(receive_datas)
 

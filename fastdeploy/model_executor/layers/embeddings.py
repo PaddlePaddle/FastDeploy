@@ -23,7 +23,8 @@ from paddle import nn
 from paddle.distributed import fleet
 
 from fastdeploy.config import FDConfig
-from fastdeploy.model_executor.utils import set_weight_attrs, slice_fn
+from fastdeploy.model_executor.utils import h2d_copy, set_weight_attrs, slice_fn
+from fastdeploy.platforms import current_platform
 
 from .utils import (
     DEFAULT_VOCAB_PADDING_SIZE,
@@ -273,10 +274,11 @@ class VocabParallelEmbedding(nn.Layer):
         shard_weight = slice_fn(loaded_weight, output_dim, start_idx, end_idx)
 
         if output_dim == 0:
-            param[: shard_weight.shape[0]].copy_(shard_weight, False)
-            param[shard_weight.shape[0] :].fill_(0)
+            h2d_copy(param[: shard_weight.shape[0]], shard_weight)
+            if not current_platform.is_maca():
+                param[shard_weight.shape[0] :].fill_(0)
         else:
-            param[:, : shard_weight.shape[1]].copy_(shard_weight, False)
+            h2d_copy(param[:, : shard_weight.shape[1]], shard_weight)
             param[:, shard_weight.shape[1] :].fill_(0)
 
     def forward(self, ids_remove_padding=None) -> paddle.Tensor:

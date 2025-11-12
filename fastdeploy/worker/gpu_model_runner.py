@@ -38,6 +38,9 @@ from fastdeploy.model_executor.guided_decoding import (
     get_guided_backend,
 )
 from fastdeploy.model_executor.layers.attention import get_attention_backend
+from fastdeploy.model_executor.layers.attention.append_attn_backend import (
+    allocate_launch_related_buffer,
+)
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
 )
@@ -112,10 +115,12 @@ class GPUModelRunner(ModelRunnerBase):
         self.speculative_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.speculative_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
-        self.max_logprobs = fd_config.model_config.max_logprobs
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
         self.is_pooling_model = self.fd_config.model_config.runner_type == "pooling"
-        self.vocal_size = self.fd_config.model_config.vocab_size
+        self.ori_vocab_size = self.fd_config.model_config.ori_vocab_size
+        self.max_logprobs = (
+            self.ori_vocab_size if fd_config.model_config.max_logprobs == -1 else fd_config.model_config.max_logprobs
+        )
         self.prompt_logprobs_reqs: dict[str, Request] = {}
         self.in_progress_prompt_logprobs: dict[str, LogprobsTensors] = {}
 
@@ -220,13 +225,13 @@ class GPUModelRunner(ModelRunnerBase):
         """
         check whether prefill stage exist
         """
-        return int(paddle.max(self.share_inputs["seq_lens_encoder"])) > 0
+        return np.any(self.share_inputs["seq_lens_encoder"].numpy() > 0)
 
     def exist_decode(self):
         """
         check whether decode stage exist
         """
-        return int(paddle.max(self.share_inputs["seq_lens_decoder"])) > 0
+        return np.any(self.share_inputs["seq_lens_decoder"].numpy() > 0)
 
     def only_prefill(self):
         """
@@ -569,6 +574,10 @@ class GPUModelRunner(ModelRunnerBase):
                 if request.sampling_params is not None and request.sampling_params.prompt_logprobs is not None:
                     self.prompt_logprobs_reqs[request.request_id] = request
                 has_prefill_task = True
+                if (
+                    self.fd_config.scheduler_config.splitwise_role == "decode"
+                ):  # In PD, we continue to decode after P generate first token
+                    self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
                 encoder_block_num = len(request.block_tables)
@@ -1305,7 +1314,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
 
         # Update bad tokens len
-        max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
+        max_bad_tokens_len = np.max(self.share_inputs["bad_tokens_len"].numpy())
 
         # Initialize forward meta data
         self.initialize_forward_meta()
@@ -1438,11 +1447,11 @@ class GPUModelRunner(ModelRunnerBase):
             kv_cache_quant_type = self.quant_config.kv_cache_quant_type
 
         # Get kv cache shape
-        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
+        key_cache_shape, value_cache_shape = self.attn_backends[0].get_kv_cache_shape(
             max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
         )
         if kv_cache_quant_type == "block_wise_fp8":
-            kv_cache_scale_shape = [kv_cache_shape[0], kv_cache_shape[1], kv_cache_shape[2]]
+            kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
         cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
@@ -1474,15 +1483,16 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
         for i in range(self.model_config.num_hidden_layers):
+            # init key cache
             key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
-            if not self.mla_cache:
+            if value_cache_shape:
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
             if create_cache_tensor:
-                logger.info(f"..creating kv cache for layer {i}: {kv_cache_shape}")
-                key_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
+                logger.info(f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
+                key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_type)
                 set_data_ipc(key_cache, key_cache_name)
-                if not self.mla_cache:
-                    val_cache = paddle.full(shape=kv_cache_shape, fill_value=0, dtype=cache_type)
+                if value_cache_shape:
+                    val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=cache_type)
                     set_data_ipc(val_cache, val_cache_name)
                     cache_kvs_list.extend([key_cache, val_cache])
                 else:
@@ -1491,7 +1501,7 @@ class GPUModelRunner(ModelRunnerBase):
                     key_cache_scales = paddle.full(
                         shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
                     )
-                    if not self.mla_cache:
+                    if value_cache_shape:
                         val_cache_scales = paddle.full(
                             shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
                         )
@@ -1499,12 +1509,12 @@ class GPUModelRunner(ModelRunnerBase):
                     else:
                         cache_kvs_list.extend([key_cache_scales])
             else:
-                logger.info(f"..attaching kv cache for layer {i}: {kv_cache_shape}")
+                logger.info(f"..attaching kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
-                key_cache = share_external_data(key_cache, key_cache_name, kv_cache_shape)
-                if not self.mla_cache:
+                key_cache = share_external_data(key_cache, key_cache_name, key_cache_shape)
+                if value_cache_shape:
                     val_cache = paddle.empty(shape=[], dtype=cache_type)
-                    val_cache = share_external_data(val_cache, val_cache_name, kv_cache_shape)
+                    val_cache = share_external_data(val_cache, val_cache_name, value_cache_shape)
                     cache_kvs_list.extend([key_cache, val_cache])
                 else:
                     cache_kvs_list.extend([key_cache])
@@ -1530,41 +1540,20 @@ class GPUModelRunner(ModelRunnerBase):
         )
         head_dim = self.model_config.head_dim
 
-        # Initialize AttentionBackend buffers
         encoder_block_shape_q = 64
         decoder_block_shape_q = 16
-        decoder_step_token_num = self.speculative_config.num_speculative_tokens + 1
-        group_size = np.ceil(num_heads / self.model_config.kv_num_heads)
 
-        # NOTE: (changwenbin) When using auto_chunk,
-        # decode_max_tile_size must take into account the maximum case, where *1024 can cover 128K.
-        decode_max_tile_size = (
-            1024
-            * self.scheduler_config.max_num_seqs
-            * np.ceil((decoder_step_token_num * group_size) / decoder_block_shape_q)
+        res_buffer = allocate_launch_related_buffer(
+            max_batch_size=self.scheduler_config.max_num_seqs,
+            max_model_len=self.model_config.max_model_len,
+            encoder_block_shape_q=encoder_block_shape_q,
+            decoder_block_shape_q=decoder_block_shape_q,
+            decoder_step_token_num=self.speculative_config.num_speculative_tokens + 1,
+            num_heads=num_heads,
+            kv_num_heads=self.model_config.kv_num_heads,
+            block_size=self.fd_config.cache_config.block_size,
         )
-        encode_max_tile_size = self.scheduler_config.max_num_seqs * np.ceil(
-            (self.model_config.max_model_len * group_size) / encoder_block_shape_q
-        )
-        kv_max_tile_size = self.scheduler_config.max_num_seqs * np.ceil(
-            self.model_config.max_model_len / self.fd_config.cache_config.block_size
-        )
-        self.share_inputs["decoder_batch_ids"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
-        self.share_inputs["decoder_tile_ids_per_batch"] = paddle.full([int(decode_max_tile_size)], 0, dtype="int32")
-        self.share_inputs["decoder_num_blocks_cpu"] = paddle.full([1], 0, dtype="int32").pin_memory()
-        # NOTE: (changwenbin) MLA kernel only needs decoder_num_blocks_device in place of GPU tensor,
-        # adapted to cudagraph.
-        self.share_inputs["decoder_num_blocks_device"] = paddle.full([1], 0, dtype="int32")
-        self.share_inputs["decoder_chunk_size_device"] = paddle.full([1], 64, dtype="int32")
-        self.share_inputs["max_len_tensor_cpu"] = paddle.full([9], 0, dtype="int32").cpu()
-
-        self.share_inputs["encoder_batch_ids"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
-        self.share_inputs["encoder_tile_ids_per_batch"] = paddle.full([int(encode_max_tile_size)], 0, dtype="int32")
-        self.share_inputs["encoder_num_blocks_x_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
-
-        self.share_inputs["kv_batch_ids"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
-        self.share_inputs["kv_tile_ids_per_batch"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
-        self.share_inputs["kv_num_blocks_x_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
+        self.share_inputs.update(res_buffer)
 
         # Get the attention backend
         attn_cls = get_attention_backend()
@@ -2770,14 +2759,14 @@ class GPUModelRunner(ModelRunnerBase):
             if request.prompt_token_ids is None or num_prompt_logprobs is None:
                 continue
             if num_prompt_logprobs == -1:
-                num_prompt_logprobs = self.vocal_size
+                num_prompt_logprobs = self.ori_vocab_size
 
             num_tokens = request.prefill_end_index - request.prefill_start_index
             num_prompt_tokens = len(request.prompt_token_ids)
 
             logprobs_tensors = self.in_progress_prompt_logprobs.get(req_id)
             if not logprobs_tensors:
-                logprobs_tensors = LogprobsTensors.empty(num_prompt_tokens - 1, num_prompt_logprobs + 1)
+                logprobs_tensors = LogprobsTensors.empty_cpu(num_prompt_tokens - 1, num_prompt_logprobs + 1)
                 self.in_progress_prompt_logprobs[req_id] = logprobs_tensors
             start_idx = request.prefill_start_index
             start_tok = start_idx + 1

@@ -549,6 +549,8 @@ class ParallelConfig:
         self.do_profile: bool = False
         # Use internode_ll_two_stage or not
         self.use_internode_ll_two_stage: bool = False
+        # disable sequence parallel moe
+        self.disable_sequence_parallel_moe: bool = False
 
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
@@ -578,14 +580,14 @@ class ParallelConfig:
         else:
             self.pd_disaggregation_mode = "None"
 
-        # ep+tp strategy: "all_reduce" or "all_to_all"
-        # all_reduce: qkv_linear + attn + out_linear + allreduce
-        # all_to_all: allgather + qkv_linear + attn + all2all + out_linear
-        self.ep_tp_strategy = envs.FD_EP_TP_STRATEGY
-        assert self.ep_tp_strategy in [
-            "all_reduce",
-            "all_to_all",
-        ], f"FD_EP_TP_STRATEGY: '{self.ep_tp_strategy}' is not supported, only supports 'all_reduce' or 'all_to_all'."
+        # disable_sequence_parallel_moe: qkv_linear + attn + out_linear + allreduce
+        # use_sequence_parallel_moe: allgather + qkv_linear + attn + all2all + out_linear
+        self.use_sequence_parallel_moe = (
+            (not self.disable_sequence_parallel_moe)
+            and self.expert_parallel_size > 1
+            and self.tensor_parallel_size > 1
+        )
+        logger.info(f"use_sequence_parallel_moe: {self.use_sequence_parallel_moe}")
 
     def set_communicate_group(self):
         # different tp group id
