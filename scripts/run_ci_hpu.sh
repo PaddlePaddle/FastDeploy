@@ -30,6 +30,9 @@ pip install https://paddle-qa.bj.bcebos.com/HPU/paddle_intel_hpu-0.0.1-cp310-cp3
 
 #to build and install fastdeploy
 echo "build whl"
+wget -q https://paddle-qa.bj.bcebos.com/suijiaxin/HPU/third-party/DeepGEMM.tar.gz && tar -xzf DeepGEMM.tar.gz -C custom_ops/third_party/
+wget -q https://paddle-qa.bj.bcebos.com/suijiaxin/HPU/third-party/cutlass.tar.gz && tar -xzf cutlass.tar.gz -C custom_ops/third_party/
+wget -q https://paddle-qa.bj.bcebos.com/suijiaxin/HPU/third-party/json.tar.gz && tar -xzf json.tar.gz -C custom_ops/third_party/
 chmod +x build.sh
 bash build.sh || exit 1
 pip install dist/fastdeploy_intel_hpu-2.3.0.dev0-py3-none-any.whl --force-reinstall
