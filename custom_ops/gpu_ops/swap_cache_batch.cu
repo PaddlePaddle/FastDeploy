@@ -35,7 +35,7 @@ void SwapCacheImplAllLayers(const std::vector<paddle::Tensor>& cache_gpu_tensors
         const int64_t max_block_num_gpu = cache_shape[0];
         const int64_t num_heads = cache_shape[1];
         const int64_t block_size = cache_shape[2];
-        const int64_t head_dim = 1;
+        int64_t head_dim = 1;
         if (cache_shape.size() == 4) {
             head_dim = cache_shape[3];
         }
