@@ -20,7 +20,7 @@ class TestBatchInvariantForMean(unittest.TestCase):
     def test_batch_invariance(self, B: int = 2048, D: int = 4096, dtype=paddle.float32):
         a = paddle.linspace(-100, 100, B * D, dtype=dtype).reshape(B, D)
 
-        # Method 1: Matrix-vector multiplication (batch size 1)
+        # Method 1: Mean reduction over last axis (batch size 1)
         out1 = paddle.mean(a[:1], axis=-1)
 
         # Method 2: Matrix-matrix multiplication, then slice (full batch)
