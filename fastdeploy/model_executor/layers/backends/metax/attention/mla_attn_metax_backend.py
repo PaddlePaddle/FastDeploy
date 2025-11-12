@@ -183,7 +183,7 @@ class MetaxMLAAttentionBackend(AttentionBackend):
         )
 
         # MLA
-        metadata.max_enc_len_this_time = forward_meta.max_len_tensor_cpu[1]
+        metadata.max_enc_len_this_time = forward_meta.max_len_tensor_cpu[1].item()
         metadata.max_dec_len_this_time = forward_meta.max_len_tensor_cpu[2]
         metadata.max_kv_len_this_time = forward_meta.max_len_tensor_cpu[8]
 
@@ -191,6 +191,20 @@ class MetaxMLAAttentionBackend(AttentionBackend):
         metadata.kv_signal_data_list = [None] * self.num_layers
 
         self.attention_metadata: AttentionMetadata = metadata
+
+        seq_lens_decoder = forward_meta.seq_lens_decoder.squeeze(-1)
+        seq_lens_this_time = forward_meta.seq_lens_this_time.squeeze(-1)
+        non_zero_index = seq_lens_this_time.nonzero().flatten()
+        seq_lens_decoder = seq_lens_decoder[non_zero_index]
+        seq_lens_this_time = seq_lens_this_time[non_zero_index]
+
+        self.seq_lens_this_time = list(seq_lens_this_time.cpu())
+        self.seq_lens_this_time_max = max(self.seq_lens_this_time)
+        self.seq_lens_this_time_min = min(self.seq_lens_this_time)
+        self.seq_lens = seq_lens_decoder + seq_lens_this_time
+        self.block_tables = forward_meta.block_tables[non_zero_index]
+
+        paddle.device.empty_cache()
 
     def get_attntion_meta(self) -> AttentionMetadata:
         """get_attntion_meta"""
@@ -221,45 +235,34 @@ class MetaxMLAAttentionBackend(AttentionBackend):
 
         assert latent_cache is not None
 
-        seq_lens_decoder = forward_meta.seq_lens_decoder.squeeze(-1)
-        seq_lens_this_time = forward_meta.seq_lens_this_time.squeeze(-1)
-        non_zero_index = paddle.nonzero(seq_lens_this_time).flatten()
-        seq_lens_decoder = seq_lens_decoder[non_zero_index]
-        seq_lens_this_time = seq_lens_this_time[non_zero_index]
-
         latent_cache = latent_cache.transpose([0, 2, 1, 3])
-        block_tables = self.attention_metadata.block_tables[non_zero_index]
-        seq_lens = seq_lens_decoder + seq_lens_this_time
-        batch_size = block_tables.shape[0]
-        seq_len_q = seq_lens_this_time.max()
+        seq_len_q = self.seq_lens_this_time_max
         num_heads_q = self.num_heads
         num_heads_kv = latent_cache.shape[2]
         head_dim_v = self.kv_lora_rank
         head_dim_qk = self.kv_lora_rank + self.qk_rope_head_dim
 
-        if seq_len_q != seq_lens_this_time.min():
-            x = query.split(list(seq_lens_this_time), axis=0)
-            x = [paddle.concat([xi, paddle.zeros((seq_len_q - xi.shape[0], xi.shape[1]))], axis=0) for xi in x]
-            query = paddle.to_tensor(x)
+        if seq_len_q != self.seq_lens_this_time_min:
+            query = paddle.stack(
+                [
+                    paddle.concat([x, paddle.zeros((seq_len_q - x.shape[0], x.shape[1]), dtype=x.dtype)])
+                    for x in paddle.split(query, self.seq_lens_this_time)
+                ]
+            )
 
-        query = query.reshape([batch_size, seq_len_q, num_heads_q, head_dim_qk])
+        query = query.reshape([-1, seq_len_q, num_heads_q, head_dim_qk])
 
         tile_scheduler_metadata, num_splits = get_mla_metadata(
-            seq_lens, seq_len_q * num_heads_q // num_heads_kv, num_heads_kv
+            self.seq_lens, seq_len_q * num_heads_q // num_heads_kv, num_heads_kv
         )
 
-        if tile_scheduler_metadata.shape[0] == 0:
-            print(f"seq_lens: {seq_lens}")
-            print(f"seq_len_q: {seq_len_q}")
-            print(f"num_heads_q: {num_heads_q}")
-            print(f"num_heads_kv: {num_heads_kv}")
-            assert tile_scheduler_metadata.shape[0] != 0
+        assert tile_scheduler_metadata.shape[0] != 0
 
         out = flash_mla_with_kvcache(
             query,
             latent_cache,
-            block_tables,
-            seq_lens,
+            self.block_tables,
+            self.seq_lens,
             head_dim_v,
             tile_scheduler_metadata,
             num_splits,
@@ -267,9 +270,8 @@ class MetaxMLAAttentionBackend(AttentionBackend):
             causal=self.causal,
         )[0]
 
-        if seq_len_q != seq_lens_this_time.min():
-            x = [xi.split([num, seq_len_q - num], axis=0)[0] for xi, num in zip(out, seq_lens_this_time)]
-            out = paddle.concat(x, axis=0)
+        if seq_len_q != self.seq_lens_this_time_min:
+            out = paddle.concat([paddle.split(x, [n, seq_len_q - n])[0] for x, n in zip(out, self.seq_lens_this_time)])
         else:
             out = out.reshape([-1, num_heads_q, head_dim_v])
 
