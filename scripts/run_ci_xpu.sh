@@ -11,7 +11,7 @@ function stop_processes() {
     ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
     ps -efww | grep -E "$((8188 + GPU_ID * 100))" | grep -v grep | awk '{print $2}' | xargs kill -9 || true
     lsof -t -i :$((8188 + GPU_ID * 100)) | xargs kill -9 || true
-    for port in 8023 8033 8043 8053 8063 8073 8083 8093; do
+    for port in $((8188 + GPU_ID * 100 + 10)) 8033 8043 8053 8063 8073 8083 8093; do
         lsof -t -i :${port} | xargs kill -9 || true
     done
 }
@@ -289,7 +289,7 @@ if [ ${vl_test_exit_code} -ne 0 ]; then
 fi
 
 
-echo "============================开始 EP8TP8 在线服务测试!============================"
+echo "============================开始 EP4TP4 在线服务测试!============================"
 sleep 5
 rm -rf log/*
 rm -f core*
@@ -316,17 +316,18 @@ cd xDeepEP
 bash build.sh
 cd -
 
+export port_num=$((8188 + GPU_ID * 100))
 # 启动服务
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle \
-    --port 8188 \
-    --tensor-parallel-size 8 \
+    --port port_num \
+    --tensor-parallel-size 4 \
     --enable-expert-parallel \
     --data-parallel-size 1 \
     --max-model-len 32768 \
     --max-num-seqs 64 \
     --quantization "wint4" \
-    --engine-worker-queue-port "8023" \
+    --engine-worker-queue-port $((port_num + 10)) \
     --gpu-memory-utilization 0.9 \
     --load-choices "default" > server.log 2>&1 &
 
@@ -334,7 +335,7 @@ sleep 60
 # 探活
 TIMEOUT=$((15 * 60))
 INTERVAL=10
-ENDPOINT="http://0.0.0.0:8188/health"
+ENDPOINT="http://0.0.0.0:${port_num}/health"
 START_TIME=$(date +%s)
 echo "开始服务健康检查，最长等待时间：${TIMEOUT}秒"
 while true; do
@@ -376,18 +377,22 @@ stop_processes
 
 if [ ${ep_online_exit_code} -ne 0 ]; then
     cat log/workerlog.0
-    echo "EP8TP8 在线服务相关测试失败，请检查pr代码"
+    echo "EP4TP4 在线服务相关测试失败，请检查pr代码"
     exit 1
 fi
 
-echo "============================开始 EP8TP1 在线服务测试!============================"
+echo "============================开始 EP4TP1 在线服务测试!============================"
 sleep 5
 rm -rf log/*
 rm -f core*
 # pkill -9 python #流水线不执行这个
 ipcrm --all=msg
 xpu-smi
-export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
 export BKCL_ENABLE_XDR=1
 export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
 export BKCL_TRACE_TOPO=1
@@ -396,22 +401,26 @@ export XSHMEM_MODE=1
 export XSHMEM_QP_NUM_PER_RANK=32
 export BKCL_RDMA_VERBS=1
 
+export port_num=$((8188 + GPU_ID * 100))
 # 启动服务
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle \
-    --port 8188 \
+    --port port_num \
     --tensor-parallel-size 1 \
     --enable-expert-parallel \
-    --data-parallel-size 8 \
+    --data-parallel-size 4 \
     --max-model-len 32768 \
     --max-num-seqs 64 \
     --quantization "wint4" \
-    --engine-worker-queue-port "8023,8033,8043,8053,8063,8073,8083,8093" \
+    --engine-worker-queue-port $((port_num + 10)), $((port_num + 20)), $((port_num + 30)), $((port_num + 40)) \
     --gpu-memory-utilization 0.9 \
     --load-choices "default" > server.log 2>&1 &
 
 sleep 60
 # 探活（同上）
+TIMEOUT=$((15 * 60))
+INTERVAL=10
+ENDPOINT="http://0.0.0.0:${port_num}/health"
 START_TIME=$(date +%s)
 while true; do
     CURRENT_TIME=$(date +%s)
@@ -450,11 +459,11 @@ stop_processes
 
 if [ ${ep_online_exit_code} -ne 0 ]; then
     cat log/workerlog.0
-    echo "EP8TP1 在线服务相关测试失败，请检查pr代码"
+    echo "EP4TP1 在线服务相关测试失败，请检查pr代码"
     exit 1
 fi
 
-echo "============================开始 EP8TP8 all2all 测试!============================"
+echo "============================开始 EP4TP4 all2all 测试!============================"
 sleep 5
 rm -rf log/*
 rm -f core*
@@ -476,17 +485,18 @@ export XSHMEM_QP_NUM_PER_RANK=32
 export BKCL_RDMA_VERBS=1
 export FD_EP_TP_STRATEGY=all_to_all
 
+export port_num=$((8188 + GPU_ID * 100))
 # 启动服务
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle \
-    --port 8188 \
-    --tensor-parallel-size 8 \
+    --port port_num \
+    --tensor-parallel-size 4 \
     --enable-expert-parallel \
     --data-parallel-size 1 \
     --max-model-len 32768 \
     --max-num-seqs 64 \
     --quantization "wint4" \
-    --engine-worker-queue-port "8023" \
+    --engine-worker-queue-port $((port_num + 10)) \
     --gpu-memory-utilization 0.9 \
     --load-choices "default" > server.log 2>&1 &
 
@@ -494,7 +504,7 @@ sleep 60
 # 探活
 TIMEOUT=$((15 * 60))
 INTERVAL=10
-ENDPOINT="http://0.0.0.0:8188/health"
+ENDPOINT="http://0.0.0.0:${port_num}/health"
 START_TIME=$(date +%s)
 echo "开始服务健康检查，最长等待时间：${TIMEOUT}秒"
 while true; do
@@ -537,6 +547,6 @@ stop_processes
 
 if [ ${ep_online_exit_code} -ne 0 ]; then
     cat log/workerlog.0
-    echo "EP8TP8 在线服务相关测试失败，请检查pr代码"
+    echo "EP4TP4 all2all 在线服务相关测试失败，请检查pr代码"
     exit 1
 fi
