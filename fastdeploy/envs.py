@@ -110,9 +110,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # LLMEngine send response port, used when FD_ENABLE_INTERNAL_ADAPTER=1
     "FD_ZMQ_SEND_RESPONSE_SERVER_PORT": lambda: os.getenv("FD_ZMQ_SEND_RESPONSE_SERVER_PORT", "8201"),
     # LLMEngine recieve requests port, used when FD_ENABLE_INTERNAL_ADAPTER=1
-    "FD_ZMQ_RECV_REQUEST_SERVER_PORTS": os.getenv("FD_ZMQ_RECV_REQUEST_SERVER_PORTS", "8200"),
+    "FD_ZMQ_RECV_REQUEST_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_RECV_REQUEST_SERVER_PORTS", "8200"),
     # LLMEngine send response port, used when FD_ENABLE_INTERNAL_ADAPTER=1
-    "FD_ZMQ_SEND_RESPONSE_SERVER_PORTS": os.getenv("FD_ZMQ_SEND_RESPONSE_SERVER_PORTS", "8201"),
+    "FD_ZMQ_SEND_RESPONSE_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_SEND_RESPONSE_SERVER_PORTS", "8201"),
     # LLMEngine recieve control command port, used when FD_ENABLE_INTERNAL_ADAPTER=1
     "FD_ZMQ_CONTROL_CMD_SERVER_PORTS": lambda: os.getenv("FD_ZMQ_CONTROL_CMD_SERVER_PORTS", "8202"),
     # Whether to enable cache task in decode node
