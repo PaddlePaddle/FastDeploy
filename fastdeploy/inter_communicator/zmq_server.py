@@ -246,6 +246,7 @@ class ZmqIpcServer(ZmqServerBase):
     """
 
     def __init__(self, name, mode):
+        super(ZmqIpcServer, self).__init__()
         self.name = name
         self.mode = mode
         self.cached_results = defaultdict(list)
@@ -306,6 +307,7 @@ class ZmqTcpServer(ZmqServerBase):
     """
 
     def __init__(self, port, mode):
+        super(ZmqTcpServer, self).__init__()
         self.mode = mode
         self.port = port
         self.cached_results = defaultdict(list)

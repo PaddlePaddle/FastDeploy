@@ -721,7 +721,7 @@ class EngineService:
             self.recv_request_server = ZmqTcpServer(port=envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT, mode=zmq.PULL)
             self.send_response_server = ZmqTcpServer(port=envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT, mode=zmq.ROUTER)
             self.internal_adapter = InternalAdapter(
-                cfg=self.cfg, engine=self, dp_rank=self.cfg.node_rank * self.cfg.worker_num_per_node
+                cfg=self.cfg, engine=self, dp_rank=self.cfg.parallel_config.local_data_parallel_id
             )
         else:
             self.recv_request_server = ZmqIpcServer(name=api_server_pid, mode=zmq.PULL)
@@ -896,6 +896,8 @@ class EngineService:
                                                     )
                                                     del self.resource_manager.requests[task.request_id]
                                                     del self.resource_manager.req_dict[task.request_id]
+                                                    task.finished = True
+                                                    self.scheduler.put_results([task])
                                                     continue
                                             if task.error_code != 200:
                                                 cur_task = self.resource_manager.requests[task.request_id]
@@ -910,6 +912,7 @@ class EngineService:
                                                 )
                                                 continue
                                             self.token_processor.tokens_counter[task.request_id] = 1
+                                            self.scheduler.put_results([task])
                                             self.resource_manager.insert_task_for_decoding(task)
 
                                     else:
