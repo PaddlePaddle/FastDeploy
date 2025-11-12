@@ -92,8 +92,8 @@ bash build.sh 1 python false [80,90]
 
 FastDeploy 提供了 GPU 算子预编译版 Wheel 包，可在无需完整源码编译的情况下快速构建。该方式当前仅支持 **SM90 架构（H20/H100等）** 和 **CUDA 12.6** 环境。
 
->默认情况下，`build.sh` 会优先尝试使用预编译算子；
->如果当前环境不满足要求或服务器上对应 commit 的 whl 包不存在，系统会自动回退至 `4. wheel 包源码编译` 模式。
+>默认情况下，`build.sh` 会从源码编译；若希望使用预编译包，可使用`FD_USE_PRECOMPILED` 参数；
+>若预编译包下载失败或与环境不匹配，系统会自动回退至 `4. wheel 包源码编译` 模式。
 
 首先安装 paddlepaddle-gpu，详细安装方式参考 [PaddlePaddle安装](https://www.paddlepaddle.org.cn/)
 
@@ -114,7 +114,7 @@ cd FastDeploy
 # 第5个参数: 是否使用预编译算子 (1 表示启用预编译)
 # 第6个参数(可选): 指定预编译算子的 commitID
 
-# 使用预编译算子加速构建
+# 使用预编译 whl 包加速构建
 bash build.sh 1 python false [90] 1
 
 # 从指定 commitID 获取对应预编译算子

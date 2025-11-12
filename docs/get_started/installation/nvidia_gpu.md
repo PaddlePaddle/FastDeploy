@@ -85,8 +85,8 @@ The built packages will be in the ```FastDeploy/dist``` directory.
 FastDeploy provides precompiled GPU operator wheel packages for quick setup without building the entire source code.
 This method currently supports **SM90 architecture (e.g., H20/H100)** and **CUDA 12.6** environments only.
 
-> By default, `build.sh` will automatically attempt to use the precompiled operators.
-> If the environment does not meet the requirements or the corresponding commit wheel is unavailable, it will automatically fall back to `4. Build Wheel from Source`.
+> By default, `build.sh` compiles all custom operators from source.To use the precompiled package, enable it with the `FD_USE_PRECOMPILED` parameter.
+> If the precompiled package cannot be downloaded or does not match the current environment, the system will automatically fall back to `4. Build Wheel from Source`.
 
 First, install paddlepaddle-gpu.
 For detailed instructions, please refer to the [PaddlePaddle Installation Guide](https://www.paddlepaddle.org.cn/).
@@ -111,7 +111,7 @@ cd FastDeploy
 # Use precompiled operators for accelerated build
 bash build.sh 1 python false [90] 1
 
-# Use precompiled operators from a specific commit
+# Use precompiled wheel from a specific commit
 bash build.sh 1 python false [90] 1 7dbd9412b0de47aacad9011e8ace492af7247620
 ```
 
