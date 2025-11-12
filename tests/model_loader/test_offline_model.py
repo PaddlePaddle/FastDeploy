@@ -30,10 +30,6 @@ from tests.model_loader.utils import (
     run_with_timeout,
 )
 
-FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
-FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
-
-
 model_param_map = {
     "Qwen3-30B-A3B-FP8": {
         "tensor_parallel_size": 2,
@@ -102,8 +98,6 @@ def test_offline_model(
             max_tokens,
             quantization,
             "default_v1",
-            FD_ENGINE_QUEUE_PORT,
             prompts,
-            FD_CACHE_QUEUE_PORT,
         ),
     )
