@@ -437,6 +437,7 @@ class RequestOutput:
         error_msg: Optional[str] = None,
         # for internal adapter
         ic_req_data: Optional[dict] = None,
+        prompt_token_ids_len: Optional[int] = 0,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -448,6 +449,7 @@ class RequestOutput:
         self.error_code = error_code
         self.error_msg = error_msg
         self.ic_req_data = ic_req_data
+        self.prompt_token_ids_len = prompt_token_ids_len
 
         if prompt_token_ids is None:
             self.prompt_token_ids = []
@@ -503,4 +505,5 @@ class RequestOutput:
             "error_code": self.error_code,
             "error_msg": self.error_msg,
             "ic_req_data": self.ic_req_data,
+            "prompt_token_ids_len": self.prompt_token_ids_len,
         }
