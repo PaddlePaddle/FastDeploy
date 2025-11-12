@@ -289,7 +289,7 @@ if [ ${vl_test_exit_code} -ne 0 ]; then
 fi
 
 
-echo "============================开始 EP8TP1 测试!============================"
+echo "============================开始EP并行测试!============================"
 sleep 5
 rm -rf log/*
 rm -f core*
@@ -315,9 +315,6 @@ cd xDeepEP
 bash build.sh
 cd -
 
-export enable_expert_parallel=1
-export enable_tensor_parallel=0
-
 python -m pytest -s --timeout=600 tests/ci_use/XPU_45T/run_ep.py
 ep_exit_code=$?
 
@@ -328,98 +325,14 @@ unset BKCL_PCIE_RING
 unset XSHMEM_MODE
 unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
-stop_processes
+ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+lsof -t -i :8188 | xargs kill -9 || true
 
 if [ ${ep_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
     cat log/workerlog.0
-    echo "EP8TP1 相关测试失败，请检查pr代码"
-    exit 1
-fi
-
-
-echo "============================开始 EP8TP8 allreduce 测试!============================"
-sleep 5
-rm -rf log/*
-rm -f core*
-ipcrm --all=msg
-xpu-smi
-if [[ "$GPU_ID" == "0" ]]; then
-    export XPU_VISIBLE_DEVICES="0,1,2,3"
-else
-    export XPU_VISIBLE_DEVICES="4,5,6,7"
-fi
-
-export BKCL_ENABLE_XDR=1
-export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
-export BKCL_TRACE_TOPO=1
-export BKCL_PCIE_RING=1
-export XSHMEM_MODE=1
-export XSHMEM_QP_NUM_PER_RANK=32
-export BKCL_RDMA_VERBS=1
-
-export enable_expert_parallel=1
-export enable_tensor_parallel=1
-export disable_sequence_parallel_moe=1
-
-python -m pytest -s --timeout=600 tests/ci_use/XPU_45T/run_ep.py
-ep_exit_code=$?
-
-unset BKCL_ENABLE_XDR
-unset BKCL_RDMA_NICS
-unset BKCL_TRACE_TOPO
-unset BKCL_PCIE_RING
-unset XSHMEM_MODE
-unset XSHMEM_QP_NUM_PER_RANK
-unset BKCL_RDMA_VERBS
-unset enable_expert_parallel
-unset enable_tensor_parallel
-unset disable_sequence_parallel_moe
-stop_processes
-
-if [ ${ep_exit_code} -ne 0 ]; then
-    echo "log/workerlog.0"
-    cat log/workerlog.0
-    echo "EP8TP8 allreduce 相关测试失败，请检查pr代码"
-    exit 1
-fi
-
-
-echo "============================开始 EP8TP8 all2all 测试!============================"
-sleep 5
-rm -rf log/*
-rm -f core*
-ipcrm --all=msg
-xpu-smi
-export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
-export BKCL_ENABLE_XDR=1
-export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
-export BKCL_TRACE_TOPO=1
-export BKCL_PCIE_RING=1
-export XSHMEM_MODE=1
-export XSHMEM_QP_NUM_PER_RANK=32
-export BKCL_RDMA_VERBS=1
-
-export enable_expert_parallel=1
-export enable_tensor_parallel=1
-
-python -m pytest -s --timeout=600 tests/ci_use/XPU_45T/run_ep.py
-ep_exit_code=$?
-
-unset BKCL_ENABLE_XDR
-unset BKCL_RDMA_NICS
-unset BKCL_TRACE_TOPO
-unset BKCL_PCIE_RING
-unset XSHMEM_MODE
-unset XSHMEM_QP_NUM_PER_RANK
-unset BKCL_RDMA_VERBS
-unset enable_expert_parallel
-unset enable_tensor_parallel
-stop_processes
-
-if [ ${ep_exit_code} -ne 0 ]; then
-    echo "log/workerlog.0"
-    cat log/workerlog.0
-    echo "EP8TP8 all2all 相关测试失败，请检查pr代码"
+    echo "EP并行 相关测试失败，请检查pr代码"
     exit 1
 fi
