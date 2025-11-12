@@ -9,13 +9,27 @@ apt install -y lsof
 function stop_processes() {
     ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
     ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-    ps -efww | grep -E '8188' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
-    lsof -t -i :8188 | xargs kill -9 || true
+    ps -efww | grep -E "$((8188 + GPU_ID * 100))" | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+    lsof -t -i :$((8188 + GPU_ID * 100)) | xargs kill -9 || true
 }
 stop_processes
 
-#设置模型路径
-export model_path=${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle
+# 由于机器原因，需重启使用的卡，以保障没有问题
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
+
+mkdir -p /workspace/deps
+cd /workspace/deps
+wget -q https://klx-sdk-release-public.su.bcebos.com/xre/kl3-release/5.0.21.21/xre-Linux-x86_64-5.0.21.21.tar.gz
+tar -zxf xre-Linux-x86_64-5.0.21.21.tar.gz && mv xre-Linux-x86_64-5.0.21.21 xre
+cd -
+export PATH=/workspace/deps/xre/bin:$PATH
+
+xpu-smi -r -i $XPU_VISIBLE_DEVICES
+xpu-smi
 
 echo "pip requirements"
 python -m pip install -r requirements.txt
@@ -51,22 +65,29 @@ rm -f core*
 #清空消息队列
 ipcrm --all=msg
 echo "============================开始V1模式测试!============================"
-export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
+export port_num=$((8188 + GPU_ID * 100))
 python -m fastdeploy.entrypoints.openai.api_server \
-    --model ${model_path} \
-    --port 8188 \
-    --tensor-parallel-size 8 \
+    --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle \
+    --port $port_num \
+    --engine-worker-queue-port $((port_num + 1)) \
+    --metrics-port $((port_num + 2)) \
+    --cache-queue-port $((port_num + 47873)) \
+    --tensor-parallel-size 4 \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
     --max-num-seqs 128 \
-    --quantization wint4  \
-    --load-choices default  > server.log 2>&1 &
+    --quantization wint4 > server.log 2>&1 &
 
 sleep 60
 # 探活
 TIMEOUT=$((15 * 60))
 INTERVAL=10            # 检查间隔（秒）
-ENDPOINT="http://0.0.0.0:8188/health"
+ENDPOINT="http://0.0.0.0:${port_num}/health"
 START_TIME=$(date +%s) # 记录开始时间戳
 echo "开始服务健康检查，最长等待时间：${TIMEOUT}秒"
 while true; do
@@ -119,22 +140,29 @@ rm -f core*
 #清空消息队列
 ipcrm --all=msg
 echo "============================开始W4A8测试!============================"
-export XPU_VISIBLE_DEVICES="0,1,2,3"
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
+export port_num=$((8188 + GPU_ID * 100))
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle \
-    --port 8188 \
+    --port $port_num \
+    --engine-worker-queue-port $((port_num + 1)) \
+    --metrics-port $((port_num + 2)) \
+    --cache-queue-port $((port_num + 47873)) \
     --tensor-parallel-size 4 \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
     --max-num-seqs 64 \
-    --quantization "W4A8" \
-    --load-choices default  > server.log 2>&1 &
+    --quantization "W4A8"   > server.log 2>&1 &
 
 sleep 60
 # 探活
 TIMEOUT=$((15 * 60))
 INTERVAL=10            # 检查间隔（秒）
-ENDPOINT="http://0.0.0.0:8188/health"
+ENDPOINT="http://0.0.0.0:${port_num}/health"
 START_TIME=$(date +%s) # 记录开始时间戳
 echo "开始服务健康检查，最长等待时间：${TIMEOUT}秒"
 while true; do
@@ -187,10 +215,18 @@ rm -f core*
 #清空消息队列
 ipcrm --all=msg
 echo "============================开始vl模型测试!============================"
-export XPU_VISIBLE_DEVICES="0,1,2,3"
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
+export port_num=$((8188 + GPU_ID * 100))
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_PATH}/ERNIE-4.5-VL-28B-A3B-Paddle \
-    --port 8188 \
+    --port $port_num \
+    --engine-worker-queue-port $((port_num + 1)) \
+    --metrics-port $((port_num + 2)) \
+    --cache-queue-port $((port_num + 47873)) \
     --tensor-parallel-size 4 \
     --max-model-len 32768 \
     --max-num-seqs 10 \
@@ -198,14 +234,13 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --enable-mm \
     --mm-processor-kwargs '{"video_max_frames": 30}' \
     --limit-mm-per-prompt '{"image": 10, "video": 3}' \
-    --reasoning-parser ernie-45-vl \
-    --load-choices default > server.log 2>&1 &
+    --reasoning-parser ernie-45-vl > server.log 2>&1 &
 
 sleep 60
 # 探活
 TIMEOUT=$((15 * 60))
 INTERVAL=10            # 检查间隔（秒）
-ENDPOINT="http://0.0.0.0:8188/health"
+ENDPOINT="http://0.0.0.0:${port_num}/health"
 START_TIME=$(date +%s) # 记录开始时间戳
 echo "开始服务健康检查，最长等待时间：${TIMEOUT}秒"
 while true; do
@@ -257,7 +292,12 @@ rm -rf log/*
 rm -f core*
 ipcrm --all=msg
 xpu-smi
-export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
+
 export BKCL_ENABLE_XDR=1
 export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
 export BKCL_TRACE_TOPO=1
@@ -301,7 +341,12 @@ rm -rf log/*
 rm -f core*
 ipcrm --all=msg
 xpu-smi
-export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
+
 export BKCL_ENABLE_XDR=1
 export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
 export BKCL_TRACE_TOPO=1
@@ -312,6 +357,7 @@ export BKCL_RDMA_VERBS=1
 
 export enable_expert_parallel=1
 export enable_tensor_parallel=1
+export disable_sequence_parallel_moe=1
 
 python -m pytest -s --timeout=600 tests/ci_use/XPU_45T/run_ep.py
 ep_exit_code=$?
@@ -325,6 +371,7 @@ unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
 unset enable_expert_parallel
 unset enable_tensor_parallel
+unset disable_sequence_parallel_moe
 stop_processes
 
 if [ ${ep_exit_code} -ne 0 ]; then
@@ -341,7 +388,11 @@ rm -rf log/*
 rm -f core*
 ipcrm --all=msg
 xpu-smi
-export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
 export BKCL_ENABLE_XDR=1
 export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
 export BKCL_TRACE_TOPO=1
@@ -352,7 +403,6 @@ export BKCL_RDMA_VERBS=1
 
 export enable_expert_parallel=1
 export enable_tensor_parallel=1
-export FD_EP_TP_STRATEGY=all_to_all
 
 python -m pytest -s --timeout=600 tests/ci_use/XPU_45T/run_ep.py
 ep_exit_code=$?
@@ -366,7 +416,6 @@ unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
 unset enable_expert_parallel
 unset enable_tensor_parallel
-unset FD_EP_TP_STRATEGY
 stop_processes
 
 if [ ${ep_exit_code} -ne 0 ]; then

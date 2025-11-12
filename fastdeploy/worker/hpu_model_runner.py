@@ -851,17 +851,17 @@ class HPUModelRunner(ModelRunnerBase):
         cache_kvs = {}
         max_block_num = self.num_gpu_blocks
 
-        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(max_num_blocks=max_block_num)
+        key_cache_shape, value_cache_shape = self.attn_backends[0].get_kv_cache_shape(max_num_blocks=max_block_num)
 
         for i in range(self.model_config.num_hidden_layers):
             cache_type = self.model_config.dtype
             cache_kvs["key_caches_{}".format(i)] = paddle.full(
-                shape=kv_cache_shape,
+                shape=key_cache_shape,
                 fill_value=0,
                 dtype=cache_type,
             )
             cache_kvs["value_caches_{}".format(i)] = paddle.full(
-                shape=kv_cache_shape,
+                shape=value_cache_shape,
                 fill_value=0,
                 dtype=cache_type,
             )
