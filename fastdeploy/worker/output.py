@@ -30,6 +30,7 @@ class Logprob(NamedTuple):
     decoded_token: Optional[str] = None
 
 
+PromptLogprobs = list[dict[int, Logprob] | None]
 # [{token_id, logprob}] for tokens sampled from the top-k
 SampleLogprobs = list[dict[int, Logprob]]
 
