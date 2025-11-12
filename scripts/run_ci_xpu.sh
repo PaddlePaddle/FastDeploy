@@ -328,6 +328,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --max-num-seqs 64 \
     --quantization "wint4" \
     --engine-worker-queue-port $((port_num + 10)) \
+    --metrics-port $((port_num + 2)) \
+    --cache-queue-port $((port_num + 47873)) \
     --gpu-memory-utilization 0.9 \
     --load-choices "default" > server.log 2>&1 &
 
@@ -413,6 +415,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --max-num-seqs 64 \
     --quantization "wint4" \
     --engine-worker-queue-port "$((port_num + 10)),$((port_num + 20)),$((port_num + 30)),$((port_num + 40))" \
+    --metrics-port $((port_num + 2)) \
+    --cache-queue-port $((port_num + 47873)) \
     --gpu-memory-utilization 0.9 \
     --load-choices "default" > server.log 2>&1 &
 
@@ -497,6 +501,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --max-num-seqs 64 \
     --quantization "wint4" \
     --engine-worker-queue-port $((port_num + 10)) \
+    --metrics-port $((port_num + 2)) \
+    --cache-queue-port $((port_num + 47873)) \
     --gpu-memory-utilization 0.9 \
     --load-choices "default" > server.log 2>&1 &
 
