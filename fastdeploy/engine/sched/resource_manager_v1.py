@@ -405,7 +405,6 @@ class ResourceManagerV1(ResourceManager):
                             self.running.append(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             request.inference_start_time = time.time()
-                            request.schedule_start_time = time.time()
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
                             if self.config.cache_config.enable_prefix_caching:
@@ -520,7 +519,9 @@ class ResourceManagerV1(ResourceManager):
             # Update metrics
             num_tasks = sum([1 if task else 0 for task in self.tasks_list])
             num_blocks_used_by_tasks = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
-            main_process_metrics.set_value("available_gpu_block_num", self.total_block_number() - num_blocks_used_by_tasks)
+            main_process_metrics.set_value(
+                "available_gpu_block_num", self.total_block_number() - num_blocks_used_by_tasks
+            )
             main_process_metrics.set_value("batch_size", self.max_num_seqs - self.available_batch())
             main_process_metrics.set_value("gpu_cache_usage_perc", self.get_gpu_cache_usage_perc())
             main_process_metrics.set_value("num_requests_running", len(self.running))
@@ -604,7 +605,6 @@ class ResourceManagerV1(ResourceManager):
         with self.lock:
             for request in requests:
                 request.inference_start_time = time.time()
-                request.schedule_start_time = time.time()
                 self.running.append(request)
 
     def preallocate_resource_in_p(self, request: Request):
@@ -709,7 +709,7 @@ class ResourceManagerV1(ResourceManager):
             # update request.need_prefill_tokens
             request.need_prefill_tokens = len(request.prompt_token_ids) + 1
             request.inference_start_time = time.time()
-            request.schedule_start_time = time.time()
+            request.schedule_start_time = time.time()  # decode node do not need to be scheduled
             self.running.append(request)
 
     def _free_blocks(self, request: Request):
