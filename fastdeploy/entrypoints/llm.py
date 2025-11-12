@@ -432,7 +432,7 @@ class LLM:
         # Recover shapes.
         num_prompt_tokens, num_logprobs = logprobs.shape
 
-        # Pythonize the torch tensors.
+        # Pythonize the paddle tensors.
         prompt_token_ranks = ranks.tolist()
         prompt_logprobs = logprobs.tolist()
         token_ids = token_ids.tolist()
