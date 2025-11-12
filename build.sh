@@ -149,7 +149,7 @@ function copy_ops(){
     return
 }
 
-function install_from_precompiled_wheel() {
+function extract_ops_from_precompiled_wheel() {
   local WHL_NAME="fastdeploy_gpu-0.0.0-py3-none-any.whl"
   if [ -z "$FD_COMMIT_ID" ]; then
     if git rev-parse HEAD >/dev/null 2>&1; then
@@ -333,7 +333,7 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
   # Whether to enable precompiled wheel
   if [ "$FD_USE_PRECOMPILED" -eq 1 ]; then
     echo -e "${BLUE}[MODE]${NONE} Using precompiled .whl"
-    if install_from_precompiled_wheel; then
+    if extract_ops_from_precompiled_wheel; then
       echo -e "${GREEN}[DONE]${NONE} Precompiled wheel installed successfully."
       echo -e "${BLUE}[MODE]${NONE} Building wheel package from installed files..."
       build_and_install
