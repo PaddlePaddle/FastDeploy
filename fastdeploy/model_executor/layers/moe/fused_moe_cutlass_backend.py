@@ -988,7 +988,6 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                 processed_weight_scale = paddle.stack(weight_scales, axis=0) / (440 * 7 * 2 ** (-9))
 
             if len(processed_weight_scale.shape) == 3:
-                processed_weight_scale = processed_weight_scale.transpose([0, 2, 1])
                 if name == "up_gate_proj_weight_scale" and processed_weight_scale.shape[-1] * 128 != layer.hidden_size:
                     assert (
                         layer.hidden_size // 128 % processed_weight_scale.shape[-1] == 0
