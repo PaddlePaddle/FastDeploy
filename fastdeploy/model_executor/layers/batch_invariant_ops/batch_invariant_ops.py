@@ -292,7 +292,6 @@ def log_softmax(input: paddle.Tensor, axis: int = -1) -> paddle.Tensor:
     Args:
         input: Input tensor
         axis: Dimension along which to compute log_softmax (only -1 or last dim supported)
-    >> Stashed changes
     Returns:
         Tensor with log_softmax applied along the specified dimension
     """
