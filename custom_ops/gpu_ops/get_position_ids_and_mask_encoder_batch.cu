@@ -24,22 +24,22 @@ __global__ void GetPositionIdsAndMaskEncoderBatchKernel(
     int* mask_encoder_batch,
     const int bsz) {  // 批次大小
   // 当前线程索引（每个线程对应一个批次）
-  int tid = threadIdx.x;
+  int tid = threadIdx.x; // 4
   if (tid >= bsz) return;
 
   // 动态计算当前批次的偏移量
   int offset = 0;
   for (int i = 0; i < tid; i++) {
-    offset += seq_lens_encoder[i];
+    offset += seq_lens_encoder[i]; // +1020
     if (seq_lens_decoder[i] > 0) {
-      offset += seq_lens_this_time[i];
+      offset += seq_lens_this_time[i]; // 1+1+1+1+1020
     }
   }
 
   // 当前批次的 encoder 和 decoder 长度
-  int encoder_len = seq_lens_encoder[tid];
-  int decoder_len = seq_lens_decoder[tid];
-  int seq_len_this_time = seq_lens_this_time[tid];
+  int encoder_len = seq_lens_encoder[tid]; //1020
+  int decoder_len = seq_lens_decoder[tid]; //747
+  int seq_len_this_time = seq_lens_this_time[tid]; //1020
 
   // 写入 encoder 的 position_ids
   for (int i = 0; i < encoder_len; i++) {

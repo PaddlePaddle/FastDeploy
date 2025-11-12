@@ -52,6 +52,7 @@ class AttentionBackend(ABC):
         k_pe: paddle.Tensor,
         layer: paddle.nn.Layer,
         forward_meta: ForwardMeta,
+        kv_b_proj: Optional[paddle.nn.Layer] = None,
     ) -> paddle.Tensor:
         """
         Run a forward.
@@ -74,6 +75,7 @@ class AttentionBackend(ABC):
                 k_pe,
                 layer,
                 forward_meta,
+                kv_b_proj,
             )
         elif forward_meta.forward_mode.is_decode():
             return self.forward_decode(
@@ -85,6 +87,7 @@ class AttentionBackend(ABC):
                 k_pe,
                 layer,
                 forward_meta,
+                kv_b_proj,
             )
         elif forward_meta.forward_mode.is_native():
             return self.forward_native_backend(
@@ -105,6 +108,7 @@ class AttentionBackend(ABC):
                 k_pe,
                 layer,
                 forward_meta,
+                kv_b_proj,
             )
 
     def forward_mixed(
@@ -117,6 +121,7 @@ class AttentionBackend(ABC):
         k_pe: paddle.Tensor,
         layer: paddle.nn.Layer,
         forward_meta: ForwardMeta,
+        kv_b_proj: Optional[paddle.nn.Layer] = None,
     ) -> paddle.Tensor:
         """Run a forward for mix."""
         raise NotImplementedError

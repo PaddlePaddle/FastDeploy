@@ -87,6 +87,7 @@ async def async_request_eb_openai_chat_completions(
         content = [{"type": "text", "text": request_func_input.prompt}]
         if request_func_input.multi_modal_content:
             content.append(request_func_input.multi_modal_content)
+        request_func_input.history_QA[-1]["content"] += "/no_think"
         payload = {
             "model": request_func_input.model,
             "messages": request_func_input.history_QA,

@@ -59,6 +59,13 @@ def parse_args():
     parser.add_argument("--device_id", type=int, default=0, help="device id")
     parser.add_argument("--num_layers", type=int, default=1, help="model num layers")
     parser.add_argument("--head_dim", type=int, default=1, help="model head dim")
+    parser.add_argument("--kv_lora_rank", type=int, default=1, help="model kv lora rank")
+    parser.add_argument(
+        "--qk_rope_head_dim",
+        type=int,
+        default=1,
+        help="model qk rope head dim",
+    )
     parser.add_argument("--kv_num_head", type=int, default=1, help="model kv num head")
     parser.add_argument("--rdma_port", type=str, default="", help="rmda port")
     parser.add_argument("--mp_num", type=int, default=1, help="number of model parallel")
@@ -135,6 +142,7 @@ class CacheTransferManager:
         self.rank = rank
         self.device = device
         self.engine_pid = args.engine_pid
+        self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
 
         address = (args.pod_ip, args.cache_queue_port)
         self.cache_task_queue = EngineCacheQueue(
@@ -211,26 +219,32 @@ class CacheTransferManager:
         for i in range(args.num_layers + self.num_extra_layers):
             num_gpu_blocks = args.num_gpu_blocks if i < args.num_layers else self.num_extra_layer_gpu_blocks
             cache_shape = [num_gpu_blocks, args.kv_num_head, args.block_size, args.head_dim]
+            if self.mla_cache:
+                cache_shape = [num_gpu_blocks, 1, args.block_size, args.kv_lora_rank + args.qk_rope_head_dim]
             key_name = f"key_caches_{i}_rank{self.rank}.device{self.device}"
-            val_name = f"value_caches_{i}_rank{self.rank}.device{self.device}"
+            if not self.mla_cache:
+                val_name = f"value_caches_{i}_rank{self.rank}.device{self.device}"
 
             if args.create_cache_tensor:
                 logger.info(f"[rank {self.rank}/{self.n_ranks}] ..creating kv cache for layer {i}: {cache_shape}")
                 key_cache = paddle.full(shape=cache_shape, fill_value=0, dtype=args.cache_dtype)
-                val_cache = paddle.full(shape=cache_shape, fill_value=0, dtype=args.cache_dtype)
                 set_data_ipc(key_cache, key_name)
-                set_data_ipc(val_cache, val_name)
+                if not self.mla_cache:
+                    val_cache = paddle.full(shape=cache_shape, fill_value=0, dtype=args.cache_dtype)
+                    set_data_ipc(val_cache, val_name)
             else:
                 logger.info(f"[rank {self.rank}/{self.n_ranks}] ..attaching kv cache for layer {i}: {cache_shape}")
                 key_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
-                val_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
                 key_cache = share_external_data_(key_cache, key_name, cache_shape, True)
-                val_cache = share_external_data_(val_cache, val_name, cache_shape, True)
+                if not self.mla_cache:
+                    val_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
+                    val_cache = share_external_data_(val_cache, val_name, cache_shape, True)
 
             self.gpu_cache_kvs[key_name] = key_cache
-            self.gpu_cache_kvs[val_name] = val_cache
             self.gpu_cache_k_tensors.append(self.gpu_cache_kvs[key_name])
-            self.gpu_cache_v_tensors.append(self.gpu_cache_kvs[val_name])
+            if not self.mla_cache:
+                self.gpu_cache_kvs[val_name] = val_cache
+                self.gpu_cache_v_tensors.append(self.gpu_cache_kvs[val_name])
 
         if args.create_cache_tensor:
             logger.info(f"[rank {self.rank}/{self.n_ranks}] ✅ kv cache is ready!")
@@ -252,15 +266,17 @@ class CacheTransferManager:
         self.v_dst_ptrs = []
         for i in range(args.num_layers + self.num_extra_layers):
             key_name = f"key_caches_{i}_rank{self.rank}"
-            val_name = f"value_caches_{i}_rank{self.rank}"
+            if not self.mla_cache:
+                val_name = f"value_caches_{i}_rank{self.rank}"
             need_to_allocate_bytes = args.num_cpu_blocks * args.bytes_per_layer_per_block
             logger.info(
                 f"[rank {self.rank}/{self.n_ranks}] ..creating cpu cache for layer {i}: {2 * need_to_allocate_bytes / 1024 ** 3:.2f}GB"
             )
             self.cpu_cache_kvs[key_name] = cuda_host_alloc(need_to_allocate_bytes)
             self.k_dst_ptrs.append(self.cpu_cache_kvs[key_name])
-            self.cpu_cache_kvs[val_name] = cuda_host_alloc(need_to_allocate_bytes)
-            self.v_dst_ptrs.append(self.cpu_cache_kvs[val_name])
+            if not self.mla_cache:
+                self.cpu_cache_kvs[val_name] = cuda_host_alloc(need_to_allocate_bytes)
+                self.v_dst_ptrs.append(self.cpu_cache_kvs[val_name])
         logger.info(f"[rank {self.rank}/{self.n_ranks}] ✅ swap space (cpu cache) is ready!")
         self.swap_space_ready_signal.value[self.rank] = 1
 

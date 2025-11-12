@@ -311,6 +311,7 @@ class DeepseekV3MLAAttention(nn.Layer):
         )
 
         self.mla_attn = Attention(
+            # kv_b_proj=self.kv_b_proj,
             fd_config=fd_config,
             layer_id=layer_id,
             prefix=prefix,
@@ -379,16 +380,18 @@ class DeepseekV3MLAAttention(nn.Layer):
                 compressed_kv=compressed_kv,
                 k_pe=key_pe,
                 forward_meta=forward_meta,
+                kv_b_proj=self.kv_b_proj,
             )
 
-            fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
-            fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
+            # fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
+            # fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
             fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
             fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
 
             fmha_out = fmha_out_prefill
 
         if forward_meta.max_len_tensor_cpu[2]:  # max_dec_len_this_time
+            
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
 
             q_input = paddle.concat([q_nope_out, query_pe], axis=-1)
