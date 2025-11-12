@@ -403,7 +403,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
 
         params_dict = dict(self.named_parameters())
         shard_id = None
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, exp_id, shard_id in all_param_mapping:
                 if weight_name not in loaded_weight_name:
