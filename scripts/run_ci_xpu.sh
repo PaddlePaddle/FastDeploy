@@ -388,7 +388,11 @@ rm -rf log/*
 rm -f core*
 ipcrm --all=msg
 xpu-smi
-export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
 export BKCL_ENABLE_XDR=1
 export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
 export BKCL_TRACE_TOPO=1
