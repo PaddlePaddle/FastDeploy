@@ -53,7 +53,12 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
     AttentionMetadata,
 )
-from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
+from fastdeploy.model_executor.layers.attention.utils import (
+    HookManager,
+    init_rank_and_device_id,
+)
+
+hook_mgr = HookManager()
 
 
 def yarn_get_mscale(scale=1, mscale=1):
@@ -184,6 +189,25 @@ class MLAAttentionBackend(AttentionBackend):
         metadata.attn_mask = forward_meta.attn_mask
         metadata.pre_caches_length = forward_meta.pre_caches_length
 
+        paddle.set_printoptions(precision=4, threshold=80, edgeitems=30, sci_mode=False, linewidth=120)
+        # hook_mgr.register(get_block_shape_and_split_kv_block)
+        # print("====================qian=======================")
+        # print("forward_meta.seq_lens_encoder",forward_meta.seq_lens_encoder)
+        # print("forward_meta.seq_lens_decoder",forward_meta.seq_lens_decoder)
+        # print("forward_meta.seq_lens_this_time",forward_meta.seq_lens_this_time)
+        # print("forward_meta.decoder_batch_ids",forward_meta.decoder_batch_ids)
+        # print("forward_meta.decoder_tile_ids_per_batch",forward_meta.decoder_tile_ids_per_batch)
+        # print("forward_meta.decoder_num_blocks_cpu",forward_meta.decoder_num_blocks_cpu)
+        # print("forward_meta.decoder_num_blocks_device",forward_meta.decoder_num_blocks_device)
+        # print("forward_meta.decoder_chunk_size_device",forward_meta.decoder_chunk_size_device)
+        # print("forward_meta.max_len_tensor_cpu",forward_meta.max_len_tensor_cpu)
+        # print("forward_meta.encoder_batch_ids",forward_meta.encoder_batch_ids)
+        # print("forward_meta.encoder_tile_ids_per_batch",forward_meta.encoder_tile_ids_per_batch)
+        # print("forward_meta.encoder_num_blocks_x_cpu",forward_meta.encoder_num_blocks_x_cpu)
+        # print("forward_meta.kv_batch_ids",forward_meta.kv_batch_ids)
+        # print("forward_meta.kv_tile_ids_per_batch",forward_meta.kv_tile_ids_per_batch)
+        # print("forward_meta.kv_num_blocks_x_cpu",forward_meta.kv_num_blocks_x_cpu)
+
         get_block_shape_and_split_kv_block(
             forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
@@ -206,6 +230,27 @@ class MLAAttentionBackend(AttentionBackend):
             self.block_size,
             self.speculate_max_draft_token_num + 1,
         )
+
+        print("========================hou============================")
+        print("forward_meta.seq_lens_encoder", forward_meta.seq_lens_encoder)
+        print("forward_meta.seq_lens_decoder", forward_meta.seq_lens_decoder)
+        print("forward_meta.seq_lens_this_time", forward_meta.seq_lens_this_time)
+        print("forward_meta.decoder_batch_ids", forward_meta.decoder_batch_ids)
+        print("forward_meta.decoder_tile_ids_per_batch", forward_meta.decoder_tile_ids_per_batch)
+        print("forward_meta.decoder_num_blocks_cpu", forward_meta.decoder_num_blocks_cpu)
+        print("forward_meta.decoder_num_blocks_device", forward_meta.decoder_num_blocks_device)
+        print("forward_meta.decoder_chunk_size_device", forward_meta.decoder_chunk_size_device)
+        print("forward_meta.max_len_tensor_cpu", forward_meta.max_len_tensor_cpu)
+        print("forward_meta.encoder_batch_ids", forward_meta.encoder_batch_ids)
+        print("forward_meta.encoder_tile_ids_per_batch", forward_meta.encoder_tile_ids_per_batch)
+        print("forward_meta.encoder_num_blocks_x_cpu", forward_meta.encoder_num_blocks_x_cpu)
+        print("metadata.block_tables", metadata.block_tables)
+        print("forward_meta.kv_batch_ids", forward_meta.kv_batch_ids)
+        print("forward_meta.kv_tile_ids_per_batch", forward_meta.kv_tile_ids_per_batch)
+        print("forward_meta.kv_num_blocks_x_cpu", forward_meta.kv_num_blocks_x_cpu)
+        print("========================init  end============================")
+        print("========================init  end============================")
+        print("========================init  end============================")
 
         # MLA
         metadata.max_enc_len_this_time = forward_meta.max_len_tensor_cpu[1]
@@ -294,8 +339,10 @@ class MLAAttentionBackend(AttentionBackend):
             v,
             forward_meta.cu_seqlens_q,
             forward_meta.cu_seqlens_k,
-            metadata.max_enc_len_this_time,
-            metadata.max_enc_len_this_time,
+            max_seqlen_q=metadata.max_enc_len_this_time,
+            max_seqlen_k=metadata.max_enc_len_this_time,
+            # max_seqlen_q=forward_meta.max_len_tensor_cpu[0],
+            # max_seqlen_k=forward_meta.max_len_tensor_cpu[3],
             causal=self.causal,
             **self.flash_attn_kwargs,
         )[0]
@@ -350,6 +397,7 @@ class MLAAttentionBackend(AttentionBackend):
             q,
             latent_cache,
             latent_cache,
+            forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
             forward_meta.seq_lens_this_time,
             forward_meta.cu_seqlens_q,
@@ -417,6 +465,9 @@ class MLAAttentionBackend(AttentionBackend):
         latent_cache = forward_meta.caches[layer.layer_id] if hasattr(forward_meta, "caches") else None
 
         if k is not None:
+            print("============================================================================================")
+            print("=================================== this is Prefill!!!  ====================================")
+            print("============================================================================================")
             prefill_mla_write_cache(
                 compressed_kv,
                 k_pe,
@@ -437,8 +488,10 @@ class MLAAttentionBackend(AttentionBackend):
                 v,
                 forward_meta.cu_seqlens_q,
                 forward_meta.cu_seqlens_k,
-                metadata.max_enc_len_this_time,
-                metadata.max_enc_len_this_time,
+                max_seqlen_q=metadata.max_enc_len_this_time,
+                max_seqlen_k=metadata.max_enc_len_this_time,
+                # max_seqlen_q=forward_meta.max_len_tensor_cpu[0],
+                # max_seqlen_k=forward_meta.max_len_tensor_cpu[3],
                 causal=self.causal,
                 **self.flash_attn_kwargs,
             )[0]
@@ -447,6 +500,14 @@ class MLAAttentionBackend(AttentionBackend):
 
         # Decode
         if k is None:
+            paddle.device.synchronize()
+            print("============================================================================================")
+            print("=================================== this is Decode!!!  =====================================")
+            print("============================================================================================")
+
+            # print("=======latent_cache qian =======",latent_cache)
+            tmp1 = paddle.clone(latent_cache)
+            paddle.device.synchronize()
             decode_mla_write_cache(
                 compressed_kv,
                 k_pe,
@@ -460,12 +521,15 @@ class MLAAttentionBackend(AttentionBackend):
                 self.max_seq_len,
                 speculate_decoder,
             )
+            paddle.device.synchronize()
+            print("-------latent_cache hou -------", paddle.max(latent_cache - tmp1))
 
             # 多头潜在注意力计算
             fmha_out = multi_head_latent_attention(
                 q,
                 latent_cache,
                 latent_cache,
+                forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
                 forward_meta.seq_lens_this_time,
                 forward_meta.cu_seqlens_q,
@@ -503,5 +567,12 @@ class MLAAttentionBackend(AttentionBackend):
                 True,  # causal
                 speculate_decoder,
             )
+            # paddle.set_printoptions(precision=3, threshold=20, edgeitems=10, sci_mode=False, linewidth=80)
+            # print("===================",metadata.block_tables)
+            # print("===================",forward_meta.kv_batch_ids)
+            # print("===================",forward_meta.kv_tile_ids_per_batch)
+
+            # if paddle.isnan(fmha_out).sum().item():
+            print("---------------------------------------------------D out", fmha_out)
 
             return fmha_out

@@ -390,6 +390,8 @@ class DeepseekV3MLAAttention(nn.Layer):
             fmha_out = fmha_out_prefill
 
         if forward_meta.max_len_tensor_cpu[2]:  # max_dec_len_this_time
+            # if not forward_meta.decoder_num_blocks_cpu[0] > 0:
+            # else:
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
 
             q_input = paddle.concat([q_nope_out, query_pe], axis=-1)
