@@ -666,7 +666,6 @@ class ResourceManagerV1(ResourceManager):
                             self.running.append(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             request.inference_start_time = time.time()
-                            request.schedule_start_time = time.time()
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
                             if self.config.cache_config.enable_prefix_caching:
@@ -815,7 +814,6 @@ class ResourceManagerV1(ResourceManager):
         with self.lock:
             for request in requests:
                 request.inference_start_time = time.time()
-                request.schedule_start_time = time.time()
                 self.running.append(request)
 
     def preallocate_resource_in_p(self, request: Request):
@@ -920,7 +918,7 @@ class ResourceManagerV1(ResourceManager):
             # update request.need_prefill_tokens
             request.need_prefill_tokens = len(request.prompt_token_ids) + 1
             request.inference_start_time = time.time()
-            request.schedule_start_time = time.time()
+            request.schedule_start_time = time.time()  # decode node do not need to be scheduled
             self.running.append(request)
 
     def _free_blocks(self, request: Request):
