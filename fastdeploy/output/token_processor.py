@@ -290,6 +290,19 @@ class TokenProcessor:
                     finished=False,
                     metrics=metrics,
                 )
+                if self.use_logprobs:
+                    if getattr(stream_data, "logprobs", None) is not None:
+                        try:
+                            logprobs_list: LogprobsLists = stream_data.logprobs.tolists()
+                            result.outputs.logprob = float(logprobs_list.logprobs[0][0])
+                            result.outputs.top_logprobs = logprobs_list
+                        except Exception as e:
+                            llm_logger.warning(f"Failed to parse logprobs from StreamTransferData: {e}")
+                    if getattr(stream_data, "prompt_logprobs", None) is not None:
+                        try:
+                            result.prompt_logprobs_tensors = stream_data.prompt_logprobs
+                        except Exception as e:
+                            llm_logger.warning(f"Failed to parse prompt_logprobs from StreamTransferData: {e}")
                 if self.tokens_counter[task_id] == 0:
                     if task.messages is not None:
                         result.prompt = task.messages
