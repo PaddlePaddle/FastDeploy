@@ -226,7 +226,7 @@ function install_from_precompiled_wheel() {
   cp -f "$SRC_DIR/version.txt" "$DST_DIR/" 2>/dev/null || true
 
   echo -e "${GREEN}[SUCCESS]${NONE} Installed FastDeploy using precompiled wheel."
-  rm -rf "${PRE_WHEEL_DIR}/tmp_whl_unpack"
+  rm -rf "${PRE_WHEEL_DIR}"
 }
 
 function build_and_install_ops() {
