@@ -186,10 +186,10 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 layer,
                 permute_input,
                 recv_num_tokens_per_expert_list_cumsum,
-                expert_idx_per_token, 
-                False, 
-                -1, 
-                dequant_scale
+                expert_idx_per_token,
+                False,
+                -1,
+                dequant_scale,
             )
 
             # prmt back per rank
@@ -228,7 +228,12 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         quant_group_size = -1 if self.moe_quant_type == "w4afp8" else 128
         # 2. EP Dispatch
         permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
-            x, topk_idx, topk_weights, expertwise_scale=expertwise_scale, use_fp8=use_fp8, quant_group_size=quant_group_size
+            x,
+            topk_idx,
+            topk_weights,
+            expertwise_scale=expertwise_scale,
+            use_fp8=use_fp8,
+            quant_group_size=quant_group_size,
         )
         dequant_scale = None
         if self.moe_quant_type == "w4afp8" and expertwise_scale is None:

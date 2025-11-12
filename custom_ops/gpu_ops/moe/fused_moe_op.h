@@ -1285,7 +1285,7 @@ __global__ void initialize_moe_routing_kernel(
              tid += blockDim.x * VecSize) {
           Load<T, VecSize>(&source_row_ptr[tid], &src_vec);
           Store<T, VecSize>(src_vec, &data_smem[tid]);
-          #pragma unroll
+#pragma unroll
           for (int j = 0; j < VecSize; j++) {
             abs_max = fmaxf(abs_max, fabsf(static_cast<float>(src_vec[j])));
           }

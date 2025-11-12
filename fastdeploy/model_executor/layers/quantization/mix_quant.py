@@ -86,7 +86,7 @@ class MixQuantConfig(QuantConfigBase):
                     .from_config(
                         {
                             "is_permuted": self.is_permuted,
-                            "is_quantized": self.is_quantized,
+                            "is_quantized": not self.is_checkpoint_bf16,
                             "hadamard_block_size": self.hadamard_block_size,
                         }
                     )
@@ -98,7 +98,7 @@ class MixQuantConfig(QuantConfigBase):
                     .from_config(
                         {
                             "is_permuted": self.is_permuted,
-                            "is_quantized": self.is_quantized,
+                            "is_quantized": not self.is_checkpoint_bf16,
                             "hadamard_block_size": self.hadamard_block_size,
                         }
                     )
@@ -116,6 +116,6 @@ class MixQuantConfig(QuantConfigBase):
         else:
             return (
                 get_quantization_config(self.dense_quant_type)
-                .from_config({"is_quantized": self.is_quantized})
+                .from_config({"is_quantized": not self.is_checkpoint_bf16})
                 .get_quant_method(layer)
             )
