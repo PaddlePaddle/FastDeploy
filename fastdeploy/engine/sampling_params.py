@@ -97,6 +97,7 @@ class SamplingParams:
     reasoning_max_tokens: Optional[int] = None
     min_tokens: int = 1
     logprobs: Optional[int] = None
+    prompt_logprobs: Optional[int] = None
     # For logits and logprobs post processing
     temp_scaled_logprobs: bool = False
     top_p_normalized_logprobs: bool = False
@@ -134,6 +135,7 @@ class SamplingParams:
         reasoning_max_tokens=None,
         min_tokens=1,
         logprobs=None,
+        prompt_logprobs=None,
         bad_words=None,
         guided_decoding=None,
         bad_words_token_ids=None,
@@ -157,6 +159,7 @@ class SamplingParams:
             reasoning_max_tokens=reasoning_max_tokens,
             min_tokens=min_tokens,
             logprobs=logprobs,
+            prompt_logprobs=prompt_logprobs,
             bad_words=bad_words,
             guided_decoding=guided_decoding,
             bad_words_token_ids=bad_words_token_ids,

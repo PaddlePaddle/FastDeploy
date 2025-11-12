@@ -85,7 +85,11 @@ class OpenAIServingCompletion:
                     error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
                 )
         created_time = int(time.time())
-        if request.user is not None:
+        if request.request_id is not None:
+            request_id = request.request_id
+            if not request_id.startswith("cmpl-"):
+                request_id = f"cmpl-{request_id}"
+        elif request.user is not None:
             request_id = f"cmpl-{request.user}-{uuid.uuid4()}"
         else:
             request_id = f"cmpl-{uuid.uuid4()}"

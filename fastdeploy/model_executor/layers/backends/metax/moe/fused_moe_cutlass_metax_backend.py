@@ -1,5 +1,5 @@
 """
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,15 +14,22 @@
 # limitations under the License.
 """
 
+import os
+
 import paddle
 from paddle import nn
 from paddle.nn.quant import weight_quantize
 
-import fastdeploy
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
+from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.model_executor.layers.utils import get_tensor
-from fastdeploy.model_executor.ops.gpu import fused_expert_moe
+from fastdeploy.model_executor.ops.gpu import (
+    fused_expert_moe,
+    moe_expert_dispatch,
+    moe_expert_ffn,
+    moe_expert_reduce,
+)
 from fastdeploy.model_executor.utils import TensorTracker, free_tensor, set_weight_attrs
 
 
@@ -54,7 +61,7 @@ class MetaxCutlassMoEMethod(MoEMethodBase):
         """
         Paddle Cutlass compute Fused MoE.
         """
-        return fastdeploy.model_executor.ops.gpu.moe_expert_ffn(
+        return moe_expert_ffn(
             permute_input,
             token_nums_per_expert,
             getattr(layer, self.added_weight_attrs[0]),
@@ -96,23 +103,62 @@ class MetaxCutlassMoEMethod(MoEMethodBase):
         """
         Paddle Cutlass compute Fused MoE.
         """
+        if layer.topk_method == "noaux_tc":
+            gate_out = gate(x.cast("float32"))
 
-        fused_moe_out = fused_expert_moe(
-            x,
-            gate.weight,
-            getattr(layer, self.added_weight_attrs[0]),
-            getattr(layer, self.added_weight_attrs[1]),
-            None,
-            (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
-            None,
-            (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
-            "weight_only_int8",
-            layer.top_k,
-            True,
-            False,
-        )
+            gate_out, topk_weights, topk_idx = get_moe_scores(
+                gate_out,
+                layer.n_group,
+                layer.topk_group,
+                layer.top_k,
+                layer.routed_scaling_factor,
+                layer.gate_correction_bias,
+                getattr(layer, "renormalize", True),
+            )
+
+            (
+                permute_input,
+                token_nums_per_expert,
+                permute_indices_per_token,
+                topk_weights,
+                topk_idx,
+            ) = moe_expert_dispatch(
+                x,
+                gate_out,
+                layer.top_k,
+                False,
+                True,
+            )
+
+            ffn_out = self.compute_ffn(layer, permute_input, token_nums_per_expert, None)
+
+            fused_moe_out = moe_expert_reduce(
+                ffn_out,
+                topk_weights,
+                permute_indices_per_token,
+                topk_idx,
+                None,
+                False,
+                1.0,
+            )
+        else:
+            fused_moe_out = fused_expert_moe(
+                x,
+                gate.weight,
+                getattr(layer, self.added_weight_attrs[0]),
+                getattr(layer, self.added_weight_attrs[1]),
+                None,
+                (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
+                None,
+                (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
+                "weight_only_int8",
+                layer.top_k,
+                True,
+                False,
+            )
+
         if layer.reduce_results and layer.tp_size > 1:
-            tensor_model_parallel_all_reduce(fused_moe_out, layer.fd_config.parallel_config.tp_group)
+            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out, layer.fd_config.parallel_config.tp_group)
 
         return fused_moe_out
 
@@ -122,15 +168,14 @@ class MetaxCutlassWeightOnlyMoEMethod(MetaxCutlassMoEMethod):
     weight only for moe
     """
 
-    def __init__(self, quant_config=None):
-        """
-        weight only for moe
-        """
+    def __init__(self, quant_config):
         super().__init__(quant_config)
-        # print(f"[DEBUG] quant_config: {quant_config}")
         self.quant_config = quant_config
         self.moe_quant_type = self.quant_config.algo
         self.pack_num = 1
+        self.weight_only_linear_arch = os.getenv("FLAGS_weight_only_linear_arch")
+        if self.weight_only_linear_arch is not None:
+            self.weight_only_linear_arch = int(self.weight_only_linear_arch)
 
     def process_prequanted_weights(self, layer: nn.Layer, state_dict, is_rearrange: bool = False):
         """
@@ -200,20 +245,20 @@ class MetaxCutlassWeightOnlyMoEMethod(MetaxCutlassMoEMethod):
             ]
         self.up_gate_proj_scale_shape = [layer.num_local_experts, layer.moe_intermediate_size * 2]
         self.down_proj_scale_shape = [layer.num_local_experts, layer.hidden_size]
-
-        if layer.fd_config.load_config.load_choices == "default_v1":
+        # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
+        if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
             layer.up_gate_proj_weight = layer.create_parameter(
-                shape=[layer.num_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
+                shape=[layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
 
             layer.down_proj_weight = layer.create_parameter(
-                shape=[layer.num_experts, layer.moe_intermediate_size, layer.hidden_size],
+                shape=[layer.num_local_experts, layer.moe_intermediate_size, layer.hidden_size],
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
-
+            extra_weight_attrs["weight_need_transpose"] = extra_weight_attrs.get("model_format") == "torch"
             set_weight_attrs(
                 layer.up_gate_proj_weight,
                 {
@@ -273,7 +318,7 @@ class MetaxCutlassWeightOnlyMoEMethod(MetaxCutlassMoEMethod):
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ),
             )
-
+            extra_weight_attrs["weight_need_transpose"] = not extra_weight_attrs.get("model_format") == "torch"
             moe_extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}}
             set_weight_attrs(layer.up_gate_proj_weight, moe_extra_weight_attrs)
             set_weight_attrs(layer.down_proj_weight, moe_extra_weight_attrs)
@@ -286,7 +331,7 @@ class MetaxCutlassWeightOnlyMoEMethod(MetaxCutlassMoEMethod):
 
     def process_weights_after_loading(self, layer):
         """ """
-        if not layer.fd_config.load_config.load_choices == "default_v1":
+        if not self.quant_config.is_checkpoint_bf16:
             return
         weight_id_map = {"gate_up": 0, "down": 1}
         if (
@@ -316,9 +361,11 @@ class MetaxCutlassWeightOnlyMoEMethod(MetaxCutlassMoEMethod):
 
         # 3.quantize weight
 
-        for expert_id in range(layer.num_experts):
+        for expert_id in range(layer.num_local_experts):
             weight[expert_id], scale[expert_id] = weight_quantize(
-                getattr(layer, unquantized_weight_name)[expert_id], algo=self.moe_quant_type, arch=80, group_size=-1
+                getattr(layer, unquantized_weight_name)[expert_id],
+                algo=self.moe_quant_type,
+                arch=self.weight_only_linear_arch,
             )
 
         free_tensor(getattr(layer, unquantized_weight_name))
@@ -360,7 +407,7 @@ class MetaxCutlassWeightOnlyMoEMethod(MetaxCutlassMoEMethod):
             weight_scale_list = []
             for i in range(layer.num_local_experts):
                 quant_weight, scale = weight_quantize(
-                    weight_tensor[i], algo=self.moe_quant_type, arch=80, group_size=-1
+                    weight_tensor[i], algo=self.moe_quant_type, arch=self.weight_only_linear_arch
                 )
                 quant_weight = paddle.transpose(quant_weight, [1, 0])
                 weight_list.append(quant_weight)
