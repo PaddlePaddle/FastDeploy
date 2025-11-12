@@ -11,7 +11,7 @@ function stop_processes() {
     ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
     ps -efww | grep -E "$((8188 + GPU_ID * 100))" | grep -v grep | awk '{print $2}' | xargs kill -9 || true
     lsof -t -i :$((8188 + GPU_ID * 100)) | xargs kill -9 || true
-    for port in $((8188 + GPU_ID * 100 + 10)) 8033 8043 8053 8063 8073 8083 8093; do
+    for port in {$((8188 + GPU_ID * 100 + 10))..$((8188 + GPU_ID * 100 + 40))}; do
         lsof -t -i :${port} | xargs kill -9 || true
     done
 }
@@ -330,6 +330,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --engine-worker-queue-port $((port_num + 10)) \
     --metrics-port $((port_num + 2)) \
     --cache-queue-port $((port_num + 47873)) \
+    --disable_sequence_parallel_moe \
     --gpu-memory-utilization 0.9 \
     --load-choices "default" > server.log 2>&1 &
 
@@ -487,7 +488,6 @@ export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
 export XSHMEM_QP_NUM_PER_RANK=32
 export BKCL_RDMA_VERBS=1
-export FD_EP_TP_STRATEGY=all_to_all
 
 export port_num=$((8188 + GPU_ID * 100))
 # 启动服务
@@ -548,7 +548,6 @@ unset BKCL_PCIE_RING
 unset XSHMEM_MODE
 unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
-unset FD_EP_TP_STRATEGY
 stop_processes
 
 if [ ${ep_online_exit_code} -ne 0 ]; then

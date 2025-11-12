@@ -11,13 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 
 import openai
 
 
 def test_ep():
     ip = "0.0.0.0"
-    service_http_port = "8188"  # 服务配置的
+    gpu_id = int(os.getenv("GPU_ID", "0"))
+    service_http_port = 8188 + gpu_id * 100  # 服务配置的
     client = openai.Client(base_url=f"http://{ip}:{service_http_port}/v1", api_key="EMPTY_API_KEY")
     # 非流式对话
     response = client.chat.completions.create(
