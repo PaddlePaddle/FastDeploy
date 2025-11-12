@@ -225,8 +225,8 @@ function install_from_precompiled_wheel() {
   cp -f "$SRC_DIR/"fastdeploy_ops_*.so "$DST_DIR/" 2>/dev/null || true
   cp -f "$SRC_DIR/version.txt" "$DST_DIR/" 2>/dev/null || true
 
-  echo -e "${BLUE}[precompiled]${NONE} Installing FastDeploy (editable mode)..."
-  if ! ${python} -m pip install -e . --no-build-isolation; then
+  echo -e "${BLUE}[precompiled]${NONE} Installing FastDeploy (using precomplied wheel)..."
+  if ! ${python} -m pip install . --no-build-isolation; then
     echo -e "${RED}[FAIL]${NONE} pip install failed, fallback to source build..."
     FD_USE_PRECOMPILED=0
     rm -rf "$TMP_DIR"
@@ -338,11 +338,26 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
 
   init
   version_info
-  # Whether to enable Python-only mode
+  # Whether to enable precompiled wheel
   if [ "$FD_USE_PRECOMPILED" -eq 1 ]; then
-    echo -e "${BLUE}[MODE]${NONE} Python-only mode using precompiled .whl"
+    echo -e "${BLUE}[MODE]${NONE} Using precompiled .whl"
     if install_from_precompiled_wheel; then
-      echo -e "${GREEN}[DONE]${NONE} Precompiled wheel installed successfully. Exiting."
+      echo -e "${GREEN}[DONE]${NONE} Precompiled wheel installed successfully."
+      echo -e "${BLUE}[MODE]${NONE} Building wheel package from installed files..."
+      build_and_install
+      # get Paddle version
+      PADDLE_VERSION=`${python} -c "import paddle; print(paddle.version.full_version)"`
+      PADDLE_COMMIT=`${python} -c "import paddle; print(paddle.version.commit)"`
+      # get FastDeploy info
+      EFFLLM_BRANCH=`git rev-parse --abbrev-ref HEAD`
+      EFFLLM_COMMIT=`git rev-parse --short HEAD`
+      # get Python version
+      PYTHON_VERSION=`${python} -c "import platform; print(platform.python_version())"`
+      echo -e "\n${GREEN}fastdeploy wheel packaged successfully${NONE}
+              ${BLUE}Python version:${NONE} $PYTHON_VERSION
+              ${BLUE}Paddle version:${NONE} $PADDLE_VERSION ($PADDLE_COMMIT)
+              ${BLUE}fastdeploy branch:${NONE} $EFFLLM_BRANCH ($EFFLLM_COMMIT)\n"
+      echo -e "${GREEN}wheel saved under${NONE} ${RED}${BOLD}./dist${NONE}"
       trap : 0
       exit 0
     else
@@ -381,6 +396,7 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
   echo -e "${GREEN}wheel install success${NONE}\n"
 
   trap : 0
+
 else
   init
   build_and_install_ops
