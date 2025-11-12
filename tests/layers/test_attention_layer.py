@@ -64,8 +64,6 @@ class TestAttentionPerformance(unittest.TestCase):
 
         self.model_dir = self.create_model_config_json()
         self.fd_config = self.create_fd_config_from_model_path(self.model_dir, tensor_parallel_size=1)
-        # Adjust config for the test
-        self.fd_config.model_config.max_model_len = 2 * (9000 + 128)
         self.fd_config.parallel_config.tp_group = [0]
 
         # Initialize Attention Layer
@@ -117,12 +115,12 @@ class TestAttentionPerformance(unittest.TestCase):
         config_dict = {
             "architectures": ["Ernie4_5_MoeForCausalLM"],
             "dtype": "bfloat16",
-            "hidden_size": 4096,
+            "hidden_size": 1536,
             "max_position_embeddings": 131072,
-            "model_type": "ernie4_5_moe",
-            "num_attention_heads": 32,
+            "max_model_len": 2 * (9000 + 128),
+            "num_attention_heads": 12,
             "num_key_value_heads": 4,
-            "num_hidden_layers": 46,
+            "num_hidden_layers": 39,
         }
         model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
         config_path = os.path.join(model_dir, "config.json")
@@ -130,6 +128,35 @@ class TestAttentionPerformance(unittest.TestCase):
             json.dump(config_dict, f, indent=4)
         print(f"Successfully created config.json at: {config_path}")
         return model_dir
+
+    def create_fd_config_from_model_path(self, model_path, tensor_parallel_size=1):
+        """Creates a complete FDConfig from a model path."""
+        model_args = {"model": model_path, "dtype": "bfloat16"}
+        model_config = ModelConfig(model_args)
+        model_config.tensor_parallel_size = tensor_parallel_size
+        parallel_config = ParallelConfig({"tensor_parallel_size": tensor_parallel_size, "data_parallel_size": 1})
+        cache_config = CacheConfig(
+            {
+                "block_size": 64,
+                "model_cfg": model_config,
+                "tensor_parallel_size": tensor_parallel_size,
+            }
+        )
+        return FDConfig(
+            model_config=model_config,
+            cache_config=cache_config,
+            parallel_config=parallel_config,
+            scheduler_config=SchedulerConfig({}),
+            load_config=LoadConfig({}),
+            quant_config=MixQuantConfig(
+                dense_quant_type="block_wise_fp8", moe_quant_type="block_wise_fp8", kv_cache_quant_type="float8_e4m3fn"
+            ),
+            graph_opt_config=GraphOptimizationConfig({}),
+            commit_config=CommitConfig(),
+            device_config=DeviceConfig({}),
+            speculative_config=SpeculativeConfig({}),
+            early_stop_config=EarlyStopConfig({}),
+        )
 
     def create_random_attention_state_dict(self, fd_config: FDConfig, prefix: str) -> dict:
         """
@@ -171,8 +198,6 @@ class TestAttentionPerformance(unittest.TestCase):
         mode: ForwardMode,
         fd_config: FDConfig,
         attn_backend: AttentionBackend,
-        existing_caches: list[paddle.Tensor] | None = None,
-        existing_block_tables: paddle.Tensor | None = None,
         use_dynamic_quant: bool = False,
     ) -> ForwardMeta:
         """
@@ -262,43 +287,11 @@ class TestAttentionPerformance(unittest.TestCase):
         )
         return forward_meta
 
-    def create_fd_config_from_model_path(self, model_path, tensor_parallel_size=1):
-        """Creates a complete FDConfig from a model path."""
-        model_args = {"model": model_path, "dtype": "bfloat16"}
-        model_config = ModelConfig(model_args)
-        model_config.tensor_parallel_size = tensor_parallel_size
-        parallel_config = ParallelConfig({"tensor_parallel_size": tensor_parallel_size, "data_parallel_size": 1})
-        cache_config = CacheConfig(
-            {
-                "block_size": 64,
-                "gpu_memory_utilization": 0.9,
-                "model_cfg": model_config,
-                "tensor_parallel_size": tensor_parallel_size,
-            }
-        )
-        return FDConfig(
-            model_config=model_config,
-            cache_config=cache_config,
-            parallel_config=parallel_config,
-            scheduler_config=SchedulerConfig({}),
-            load_config=LoadConfig({}),
-            quant_config=MixQuantConfig(
-                dense_quant_type="block_wise_fp8", moe_quant_type="block_wise_fp8", kv_cache_quant_type="float8_e4m3fn"
-            ),
-            graph_opt_config=GraphOptimizationConfig({}),
-            commit_config=CommitConfig(),
-            device_config=DeviceConfig({}),
-            speculative_config=SpeculativeConfig({}),
-            early_stop_config=EarlyStopConfig({}),
-            plas_attention_config=None,
-            test_mode=True,
-        )
-
     def test_decode_performance_with_prefill(self):
         # Test parameters
         test_steps = 100
         prefill_batch_size = 1
-        decode_batch_size = 32  # This can be configured as needed
+        decode_batch_size = 100  # This can be configured as needed
         prefill_seq_len = 4096
         use_dynamic_quant = True
         act_tensor_dtype = paddle.bfloat16
@@ -324,13 +317,12 @@ class TestAttentionPerformance(unittest.TestCase):
 
         import paddle.profiler as profiler
 
-        p = profiler.Profiler(
-            targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
-            on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
-        )
-
-        p.start()
-        p.step()
+        # p = profiler.Profiler(
+        #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
+        #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+        # )
+        # p.start()
+        # p.step()
 
         start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
         end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
@@ -345,7 +337,7 @@ class TestAttentionPerformance(unittest.TestCase):
         times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
         print(times[-5:])
 
-        p.stop()
+        # p.stop()
 
         decode_hidden_states = paddle.randn(
             [decode_batch_size, self.fd_config.model_config.hidden_size], dtype=act_tensor_dtype
@@ -362,15 +354,18 @@ class TestAttentionPerformance(unittest.TestCase):
 
         self.attn_backend.init_attention_metadata(forward_meta)
 
-        # import paddle.profiler as profiler
-        # p = profiler.Profiler(
-        #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
-        #     on_trace_ready=profiler.export_chrome_tracing('./profile_log'))
+        p = profiler.Profiler(
+            targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
+            on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+        )
 
-        # p.start()
-        # p.step()
+        p.start()
+        p.step()
 
         paddle.device.synchronize()
+
+        # 必须要先预热一次！因为预处理被放到了第一层再做了！
+        self.attn_forward(forward_meta, decode_hidden_states)
 
         attn_cuda_graphs = graphs.CUDAGraph()
         attn_cuda_graphs.capture_begin()
@@ -385,7 +380,7 @@ class TestAttentionPerformance(unittest.TestCase):
             start_events[i].record()
 
             attn_cuda_graphs.replay()
-            # self.attn_forward(decode_meta, decode_hidden_states)
+            # self.attn_forward(forward_meta, decode_hidden_states)
 
             end_events[i].record()
         paddle.device.synchronize()
@@ -393,7 +388,7 @@ class TestAttentionPerformance(unittest.TestCase):
         times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
         print(times[-5:])
 
-        # p.stop()
+        p.stop()
 
 
 if __name__ == "__main__":
