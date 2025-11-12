@@ -96,7 +96,7 @@ class TestSamplingParamsVerification(unittest.TestCase):
             params = SamplingParams(prompt_logprobs=-2)
             params._verify_args()
 
-        self.assertIn("prompt_logprobs must can't be less than -1", str(cm.exception))
+        self.assertIn("prompt_logprobs must be greater than or equal to -1", str(cm.exception))
         self.assertIn("got -2", str(cm.exception))
 
     def test_combined_logprobs_and_prompt_logprobs(self):
