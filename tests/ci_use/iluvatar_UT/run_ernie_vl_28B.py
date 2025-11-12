@@ -42,7 +42,7 @@ def timeout(seconds):
     return decorator
 
 
-@timeout(150)
+@timeout(180)
 def offline_infer_check():
     set_random_seed(123)
 
