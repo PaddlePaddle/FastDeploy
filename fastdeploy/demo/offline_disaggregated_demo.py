@@ -20,7 +20,7 @@ import time
 
 from fastdeploy.entrypoints.llm import LLM
 
-model_name_or_path = "baidu/ERNIE-4.5-21B-A3B-Paddle"
+model_name_or_path = "baidu/ERNIE-4.5-0.3B-Paddle"
 
 
 def start_decode(model_name_or_path):
@@ -31,7 +31,7 @@ def start_decode(model_name_or_path):
         tensor_parallel_size=1,
         splitwise_role="decode",
         engine_worker_queue_port=6678,
-        innode_prefill_ports=[6676],
+        innode_prefill_ports=[6677],
         cache_queue_port=55668,
     )
     return llm_decode

@@ -38,10 +38,7 @@ echo "uninstall org"
 python -m pip uninstall paddlepaddle-xpu -y
 python -m pip uninstall fastdeploy-xpu -y
 
-# python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
-#由于主框架更新 暂时锁死版本
-export data=20251109
-python -m pip install https://paddle-whl.bj.bcebos.com/nightly/xpu-p800/paddlepaddle-xpu/paddlepaddle_xpu-3.3.0.dev${data}-cp310-cp310-linux_x86_64.whl
+python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
 
 echo "build whl"
 bash custom_ops/xpu_ops/download_dependencies.sh develop
@@ -84,14 +81,13 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
     --max-num-seqs 128 \
-    --quantization wint4  \
-    --load-choices default  > server.log 2>&1 &
+    --quantization wint4 > server.log 2>&1 &
 
 sleep 60
 # 探活
 TIMEOUT=$((15 * 60))
 INTERVAL=10            # 检查间隔（秒）
-ENDPOINT="http://0.0.0.0:8188/health"
+ENDPOINT="http://0.0.0.0:${port_num}/health"
 START_TIME=$(date +%s) # 记录开始时间戳
 echo "开始服务健康检查，最长等待时间：${TIMEOUT}秒"
 while true; do
@@ -160,14 +156,13 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
     --max-num-seqs 64 \
-    --quantization "W4A8" \
-    --load-choices default  > server.log 2>&1 &
+    --quantization "W4A8"   > server.log 2>&1 &
 
 sleep 60
 # 探活
 TIMEOUT=$((15 * 60))
 INTERVAL=10            # 检查间隔（秒）
-ENDPOINT="http://0.0.0.0:8188/health"
+ENDPOINT="http://0.0.0.0:${port_num}/health"
 START_TIME=$(date +%s) # 记录开始时间戳
 echo "开始服务健康检查，最长等待时间：${TIMEOUT}秒"
 while true; do
@@ -239,14 +234,13 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --enable-mm \
     --mm-processor-kwargs '{"video_max_frames": 30}' \
     --limit-mm-per-prompt '{"image": 10, "video": 3}' \
-    --reasoning-parser ernie-45-vl \
-    --load-choices default > server.log 2>&1 &
+    --reasoning-parser ernie-45-vl > server.log 2>&1 &
 
 sleep 60
 # 探活
 TIMEOUT=$((15 * 60))
 INTERVAL=10            # 检查间隔（秒）
-ENDPOINT="http://0.0.0.0:8188/health"
+ENDPOINT="http://0.0.0.0:${port_num}/health"
 START_TIME=$(date +%s) # 记录开始时间戳
 echo "开始服务健康检查，最长等待时间：${TIMEOUT}秒"
 while true; do
@@ -394,7 +388,11 @@ rm -rf log/*
 rm -f core*
 ipcrm --all=msg
 xpu-smi
-export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+if [[ "$GPU_ID" == "0" ]]; then
+    export XPU_VISIBLE_DEVICES="0,1,2,3"
+else
+    export XPU_VISIBLE_DEVICES="4,5,6,7"
+fi
 export BKCL_ENABLE_XDR=1
 export BKCL_RDMA_NICS=xgbe1,xgbe2,xgbe3,xgbe4
 export BKCL_TRACE_TOPO=1
