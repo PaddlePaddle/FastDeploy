@@ -398,7 +398,7 @@ def get_all_weights_file(model_path: str):
     """
     model_path = Path(model_path)
     use_safetensors = True
-    files_list = [file for file in model_path.glob("*.pdparams") if file.name != "scheduler.pdparams"]
+    files_list = [str(file) for file in model_path.glob("*.pdparams") if file.name != "scheduler.pdparams"]
     if len(files_list) > 0:
         key_name_list = []
         use_safetensors = False
