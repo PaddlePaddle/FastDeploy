@@ -140,7 +140,7 @@ jobs:
 
   publish_pre_check:
     name: Publish Docker Images Pre Check
-    needs: [ci_image_build, unittest_coverage,logprob_test,pre_ce_test,base_test,accuracy_test,stable_test]
+    needs: [ci_image_build, unittest_coverage,logprob_test,pre_ce_test,base_test]
     runs-on: [self-hosted, Docker-Build]
     steps:
       - name: Images Uploading
