@@ -83,7 +83,6 @@ def parse_args():
         "--cache_dtype",
         type=str,
         default="bfloat16",
-        choices=["uint8", "bfloat16"],
         help="cache dtype",
     )
     parser.add_argument(
@@ -115,6 +114,8 @@ class CacheTransferManager:
         self.cpu_cache_kvs = {}
         self.gpu_cache_k_tensors = []
         self.gpu_cache_v_tensors = []
+        self.gpu_cache_scales_k_tensors = []
+        self.gpu_cache_scales_v_tensors = []
         self.speculative_config = SpeculativeConfig(args.speculative_config)
         self.num_extra_layers = self.speculative_config.num_extra_cache_layer
         self.num_extra_layer_gpu_blocks = int(args.num_gpu_blocks * self.speculative_config.num_gpu_block_expand_ratio)
@@ -126,6 +127,7 @@ class CacheTransferManager:
         self.n_ranks = args.mp_num
         self.rank = rank
         self.device = device
+        self.cache_dtype = args.cache_dtype
 
         address = (args.pod_ip, args.cache_queue_port)
         self.cache_task_queue = EngineCacheQueue(
@@ -137,8 +139,11 @@ class CacheTransferManager:
         )
 
         self.num_cpu_blocks = args.num_cpu_blocks
+        if args.cache_dtype == "block_wise_fp8":
+            cache_type = "uint8"
+        else:
+            cache_type = args.cache_dtype
 
-        cache_type = args.cache_dtype
         for i in range(args.num_layers + self.num_extra_layers):
             num_gpu_blocks = args.num_gpu_blocks if i < args.num_layers else self.num_extra_layer_gpu_blocks
 
@@ -173,7 +178,7 @@ class CacheTransferManager:
                 f"value_caches_{i}_rank{rank}.device{device}",
             )
 
-            if cache_type == "block_wise_fp8":
+            if args.cache_dtype == "block_wise_fp8":
                 self.gpu_cache_kvs[f"key_cache_scales_{i}_rank{rank}_device{device}"] = paddle.full(
                     shape=[num_gpu_blocks, args.kv_num_head, args.block_size],
                     fill_value=0,
@@ -183,6 +188,12 @@ class CacheTransferManager:
                     shape=[num_gpu_blocks, args.kv_num_head, args.block_size],
                     fill_value=0,
                     dtype=paddle.get_default_dtype(),
+                )
+                self.gpu_cache_scales_k_tensors.append(
+                    self.gpu_cache_kvs[f"key_cache_scales_{i}_rank{rank}_device{device}"]
+                )
+                self.gpu_cache_scales_v_tensors.append(
+                    self.gpu_cache_kvs[f"value_cache_scales_{i}_rank{rank}_device{device}"]
                 )
                 set_data_ipc(
                     self.gpu_cache_kvs[f"key_cache_scales_{i}_rank{rank}_device{device}"],
@@ -200,6 +211,8 @@ class CacheTransferManager:
         paddle.set_device("cpu")
         self.k_dst_ptrs = []
         self.v_dst_ptrs = []
+        self.k_scales_ptrs = []
+        self.v_scales_ptrs = []
         for i in range(args.num_layers + self.num_extra_layers):
             self.cpu_cache_kvs[f"key_caches_{i}_rank{rank}"] = cuda_host_alloc(
                 args.num_cpu_blocks * args.bytes_per_layer_per_block
@@ -209,6 +222,14 @@ class CacheTransferManager:
                 args.num_cpu_blocks * args.bytes_per_layer_per_block
             )
             self.v_dst_ptrs.append(self.cpu_cache_kvs[f"value_caches_{i}_rank{rank}"])
+            self.cpu_cache_kvs[f"key_caches_scales_{i}_rank{rank}"] = cuda_host_alloc(
+                args.num_cpu_blocks * args.bytes_per_layer_per_block
+            )
+            self.k_scales_ptrs.append(self.cpu_cache_kvs[f"key_caches_scales_{i}_rank{rank}"])
+            self.cpu_cache_kvs[f"value_caches_scales_{i}_rank{rank}"] = cuda_host_alloc(
+                args.num_cpu_blocks * args.bytes_per_layer_per_block
+            )
+            self.v_scales_ptrs.append(self.cpu_cache_kvs[f"value_caches_scales_{i}_rank{rank}"])
 
         cache_ready_signal_data = np.zeros(shape=[args.mp_num], dtype=np.int32)
         self.cache_ready_signal = IPCSignal(
@@ -407,6 +428,25 @@ class CacheTransferManager:
                     self.device,
                     0,
                 )
+                if self.cache_dtype == "block_wise_fp8":
+                    swap_cache_all_layers(
+                        self.gpu_cache_scales_k_tensors,
+                        self.k_scales_ptrs,
+                        self.num_cpu_blocks,
+                        gpu_block_ids,
+                        cpu_block_ids,
+                        self.device,
+                        0,
+                    )
+                    swap_cache_all_layers(
+                        self.gpu_cache_scales_v_tensors,
+                        self.v_scales_ptrs,
+                        self.num_cpu_blocks,
+                        gpu_block_ids,
+                        cpu_block_ids,
+                        self.device,
+                        0,
+                    )
 
             elif event_type.value == CacheStatus.SWAP2GPU.value:
                 swap_cache_all_layers(
@@ -427,6 +467,25 @@ class CacheTransferManager:
                     self.device,
                     1,
                 )
+                if self.cache_dtype == "block_wise_fp8":
+                    swap_cache_all_layers(
+                        self.gpu_cache_scales_k_tensors,
+                        self.k_scales_ptrs,
+                        self.num_cpu_blocks,
+                        gpu_block_ids,
+                        cpu_block_ids,
+                        self.device,
+                        1,
+                    )
+                    swap_cache_all_layers(
+                        self.gpu_cache_scales_v_tensors,
+                        self.v_scales_ptrs,
+                        self.num_cpu_blocks,
+                        gpu_block_ids,
+                        cpu_block_ids,
+                        self.device,
+                        1,
+                    )
             else:
                 logger.warning(
                     f"transfer data: Get unexpected event type {event_type}, only SWAP2CPU and SWAP2GPU supported"
