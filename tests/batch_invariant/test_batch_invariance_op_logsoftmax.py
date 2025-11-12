@@ -60,7 +60,7 @@ class TestBatchInvariantForLogsoftmax(unittest.TestCase):
         # Method 1: log_softmax on batch size 1 (first row)
         out1 = paddle.nn.functional.log_softmax(a[:1])
 
-        # Method 2: Matrix-matrix multiplication, then slice (full batch)
+        # Method 2: log_softmax on full batch, then slice (first row)
         out2 = paddle.nn.functional.log_softmax(a)[:1]
 
         # Check if results are identical

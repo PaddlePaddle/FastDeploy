@@ -23,7 +23,7 @@ class TestBatchInvariantForMean(unittest.TestCase):
         # Method 1: Mean reduction over last axis (batch size 1)
         out1 = paddle.mean(a[:1], axis=-1)
 
-        # Method 2: Matrix-matrix multiplication, then slice (full batch)
+        # Method 2: Mean reduction over last axis (full batch)
         out2 = paddle.mean(a, axis=-1)[:1]
 
         # Check if results are identical

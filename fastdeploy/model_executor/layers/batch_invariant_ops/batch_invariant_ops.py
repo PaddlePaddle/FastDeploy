@@ -140,7 +140,7 @@ def get_compute_units():
             NUM_SMS = device_properties.multi_processor_count
         except Exception:
             print("Could not get CUDA device properties. Falling back to CPU threads.")
-            # TODO: Paddle lacks a torch.get_num_threads() equivalent for the *configured* thread count.
+            # TODO(liujundong): Paddle lacks a torch.get_num_threads() equivalent for the *configured* thread count.
             # Using os.cpu_count() (total logical cores) as a fallback, which may not be correct.
             # Must check downstream logic to determine if this impacts correctness.
             NUM_SMS = os.cpu_count()
@@ -474,7 +474,9 @@ def addmm_batch_invariant(
     input: paddle.Tensor, x: paddle.Tensor, y: paddle.Tensor, beta: float = 1.0, alpha: float = 1.0
 ) -> paddle.Tensor:
     matmul_result = matmul_persistent(a=x, b=y)
-    result = beta * input + alpha * matmul_result
+    result = (
+        beta * input + alpha * matmul_result
+    )  # TODO(liujundong): paddle._C_ops.addmm have more parameters, this may effect the performance
     return result
 
 

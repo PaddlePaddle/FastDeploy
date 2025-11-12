@@ -21,10 +21,10 @@ class TestBatchInvariantForAddmm(unittest.TestCase):
         a = paddle.linspace(-100, 100, B * D, dtype=dtype).reshape(B, D)
         b = paddle.linspace(-100, 100, D * D, dtype=dtype).reshape(D, D)
 
-        # Method 1: Matrix-vector multiplication (batch size 1)
+        # Method 1: Matrix-vector multiplication and add (batch size 1)
         out1 = paddle.addmm(a[:1].squeeze(0), a[:1], b)
 
-        # Method 2: Matrix-matrix multiplication, then slice (full batch)
+        # Method 2: Matrix-matrix multiplication and add, then slice (full batch)
         out2 = paddle.addmm(a[:1].squeeze(0), a, b)[:1]
 
         # Check if results are identical
