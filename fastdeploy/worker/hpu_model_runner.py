@@ -1038,6 +1038,17 @@ class HPUModelRunner(ModelRunnerBase):
         pass
 
     def update_warmup_inputs(self, requests, is_decode=False, context_len=0) -> None:
+        """
+        Update the shared input tensors for warmup requests.
+        Args:
+            requests (list): List of request dicts containing input data.
+            is_decode (bool, optional): If True, sets up inputs for decode phase. Defaults to False.
+            context_len (int, optional): The length of the context (prefix) to use for prefix caching during warmup.
+                If >0, this value is used to set the decoder sequence length for prefill (prefix caching).
+                Typically, set to the number of tokens in the prefix to be cached. Defaults to 0 (no prefix caching).
+        This parameter affects the warmup behavior for prefix caching by controlling how much of the input
+        is considered as context for the decoder during the prefill phase.
+        """
         for i in range(len(requests)):
             request = requests[i]
             idx = request["idx"]

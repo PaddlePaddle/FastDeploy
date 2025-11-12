@@ -347,8 +347,8 @@ class HPUAttentionBackend(AttentionBackend_HPU):
             qkv_proj.weight,
             qkv_proj.bias,
             o_proj.weight,
-            None,
-            None,
+            None,  # past_key: not used in decode mode
+            None,  # past_value: not used in decode mode
             self.head_dim,
             self.num_heads,
             scaling_factor=self.head_dim**-0.5,

@@ -47,7 +47,20 @@ from fastdeploy.platforms import current_platform
 
 def reload_ep_checkpoint(model_path: str, fd_config: FDConfig, state_dict: dict, return_numpy: bool = False):
     """
-    load ep checkpoint
+    Reloads Mixture of Experts (MoE) expert parallel (EP) checkpoint weights for Dense Tensor Parallel (TP) models.
+    This function selectively reloads expert weights from safetensor files for the specified model layers and experts,
+    updating the provided `state_dict` in-place. It is designed for use in distributed training or inference scenarios
+    where expert parallelism is employed.
+    Parameters:
+        model_path (str): Path to the directory containing the model checkpoint and safetensor files.
+        fd_config (FDConfig): FastDeploy configuration object containing model and parallelism settings.
+        state_dict (dict): Dictionary of model weights to be updated with reloaded expert weights.
+        return_numpy (bool, optional): If True, weights are returned as NumPy arrays; if False (default), as Paddle tensors.
+    Returns:
+        dict: The updated state_dict containing the reloaded expert weights.
+    Notes:
+        - Only expert weights for the local rank are reloaded; other expert weights are removed from state_dict.
+        - This function is intended for use in Dense TP + MoE EP model architectures.
     """
     with open(os.path.join(model_path, "model.safetensors.index.json"), "r") as f:
         weight_list = json.load(f)["weight_map"]
