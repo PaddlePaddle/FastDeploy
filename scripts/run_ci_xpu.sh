@@ -320,7 +320,7 @@ export port_num=$((8188 + GPU_ID * 100))
 # 启动服务
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle \
-    --port port_num \
+    --port $port_num \
     --tensor-parallel-size 4 \
     --enable-expert-parallel \
     --data-parallel-size 1 \
@@ -405,14 +405,14 @@ export port_num=$((8188 + GPU_ID * 100))
 # 启动服务
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle \
-    --port port_num \
+    --port $port_num \
     --tensor-parallel-size 1 \
     --enable-expert-parallel \
     --data-parallel-size 4 \
     --max-model-len 32768 \
     --max-num-seqs 64 \
     --quantization "wint4" \
-    --engine-worker-queue-port $((port_num + 10)), $((port_num + 20)), $((port_num + 30)), $((port_num + 40)) \
+    --engine-worker-queue-port "$((port_num + 10)),$((port_num + 20)),$((port_num + 30)),$((port_num + 40))" \
     --gpu-memory-utilization 0.9 \
     --load-choices "default" > server.log 2>&1 &
 
@@ -489,7 +489,7 @@ export port_num=$((8188 + GPU_ID * 100))
 # 启动服务
 python -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle \
-    --port port_num \
+    --port $port_num \
     --tensor-parallel-size 4 \
     --enable-expert-parallel \
     --data-parallel-size 1 \
