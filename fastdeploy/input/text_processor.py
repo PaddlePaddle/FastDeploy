@@ -216,7 +216,7 @@ class DataProcessor(BaseDataProcessor):
         stop_sequences = request.get("stop", [])
         if stop_sequences is not None and len(stop_sequences) != 0:
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
-            request.set("stop_seqs", stop_seqs)
+            request.set("stop", stop_seqs)
             request.set("stop_seqs_len", stop_seqs_len)
 
         # processing bad_words

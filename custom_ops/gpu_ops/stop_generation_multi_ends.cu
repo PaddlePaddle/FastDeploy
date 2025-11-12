@@ -156,7 +156,6 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
   PD_CHECK(stop_flags.dtype() == paddle::DataType::BOOL);
   bool prefill_one_step_stop = false;
   if (const char *env_p = std::getenv("PREFILL_NODE_ONE_STEP_STOP")) {
-    // std::cout << "Your PATH is: " << env_p << '\n';
     if (env_p[0] == '1') {
       prefill_one_step_stop = true;
     }
