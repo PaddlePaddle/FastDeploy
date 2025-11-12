@@ -18,7 +18,8 @@ def test_fd_ep():
     sampling_params = SamplingParams(top_p=0, max_tokens=500)
 
     # 模型路径与设备配置
-    model = os.getenv("model_path", "/home/ERNIE-4.5-300B-A47B-Paddle")
+    model_root = os.getenv("MODEL_PATH", "/home")
+    model = f"{model_root}/ERNIE-4.5-300B-A47B-Paddle"
     xpu_visible_devices = os.getenv("XPU_VISIBLE_DEVICES", "0")
     xpu_device_num = len(xpu_visible_devices.split(","))
 
@@ -30,7 +31,9 @@ def test_fd_ep():
         tensor_parallel_size = xpu_device_num
         data_parallel_size = 1
 
-    engine_worker_queue_port = [str(8023 + i * 10) for i in range(data_parallel_size)]
+    gpu_id = int(os.getenv("GPU_ID", "0"))
+    base_port = 8023 + gpu_id * 100
+    engine_worker_queue_port = [str(base_port + i * 10) for i in range(data_parallel_size)]
     engine_worker_queue_port = ",".join(engine_worker_queue_port)
 
     print(f"[INFO] messages: {messages}")
