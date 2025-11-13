@@ -274,7 +274,6 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             tmp_max_tokens = min(
                 max_model_len - len(request["prompt_token_ids"]), max(0, request["max_tokens"] - completion_token_len)
             )
-            request["max_tokens"] = min(max_model_len - len(request["prompt_token_ids"]), request["max_tokens"])
         if request.get("reasoning_max_tokens") is None:
             request["reasoning_max_tokens"] = max(int(tmp_max_tokens * 0.8), 1)
         data_processor_logger.info(f"Processed request {request}")
