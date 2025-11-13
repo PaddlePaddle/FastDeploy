@@ -192,7 +192,7 @@ class PaddleDisWorkerProc:
         # init worker_ready_signal
         array_size = min(
             self.max_chips_per_node,
-            self.parallel_config.tensor_parallel_size * self.parallel_config.data_parallel_size,
+            dist.get_world_size(),
         )
 
         workers_ready = np.zeros(shape=[array_size], dtype=np.int32)
