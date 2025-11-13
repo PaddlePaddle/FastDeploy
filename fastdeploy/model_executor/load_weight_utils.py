@@ -398,7 +398,7 @@ def get_all_weights_file(model_path: str):
     """
     model_path = Path(model_path)
     use_safetensors = True
-    files_list = [file for file in model_path.glob("*.pdparams") if file.name != "scheduler.pdparams"]
+    files_list = [str(file) for file in model_path.glob("*.pdparams") if file.name != "scheduler.pdparams"]
     if len(files_list) > 0:
         key_name_list = []
         use_safetensors = False
@@ -525,6 +525,9 @@ def load_composite_checkpoint(
                 state_dict = load_tp_checkpoint_v1(model_path, cls, fd_config, use_fastsafetensor=True)
                 deal_state_dict(state_dict)
             else:
+                fd_config.model_config.pretrained_config.use_sequence_parallel_moe = (
+                    fd_config.parallel_config.use_sequence_parallel_moe
+                )
                 # NOTE: for very big model, cpu will be out of memory
                 state_dict = load_tp_checkpoint(
                     model_path,
