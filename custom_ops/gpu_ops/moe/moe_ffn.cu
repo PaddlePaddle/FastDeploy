@@ -18,8 +18,8 @@
 #include "cutlass_kernels/w4a8_moe/w4a8_moe_gemm_kernel.h"
 #include "group_swiglu_with_masked.h"
 #include "helper.h"
-#include "moe/fast_hardmard/fast_hardamard_kernel.h"
 #include "moe/fused_moe_helper.h"
+#include "moe/moe_fast_hardamard_kernel.h"
 #include "swigluoai.h"
 #include "w4afp8_gemm/w4afp8_gemm.h"
 

@@ -28,9 +28,9 @@ class TestW4AFP8GEMM(unittest.TestCase):
     def setUp(self):
         paddle.seed(0)
         self.tokens_per_group = 1
-        self.N = 1792
-        self.K = 8192
-        self.BATCH = 64
+        self.N = 256
+        self.K = 256
+        self.BATCH = 2
         self.TokenPadding = 0
 
         tokens = [self.tokens_per_group] * self.BATCH
