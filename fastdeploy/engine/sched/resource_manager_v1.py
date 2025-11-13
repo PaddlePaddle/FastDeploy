@@ -333,7 +333,7 @@ class ResourceManagerV1(ResourceManager):
         # TODO: set condition to new _get_num_new_tokens
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
 
-        if os.environ["FD_ATTENTION_BACKEND"] == "DYNAMIC_QUANT_CACHE_ATTN":
+        if "FD_ATTENTION_BACKEND" in os.environ and os.environ["FD_ATTENTION_BACKEND"] == "DYNAMIC_QUANT_CACHE_ATTN":
             remain_tokens = request.need_prefill_tokens - request.prefill_end_index
             if remain_tokens < self.config.scheduler_config.max_num_batched_tokens:
                 #  last chunk
