@@ -39,6 +39,5 @@ def test_w4a8():
     assert any(keyword in response.choices[0].message.content for keyword in ["人工智能", "文心一言"])
 
 
-
 if __name__ == "__main__":
     test_w4a8()
