@@ -485,24 +485,38 @@ class EngineWorkerQueue:
     @staticmethod
     def to_tensor(tasks):
         """
-        Convert NumPy arrays in multimodal inputs to PaddlePaddle tensors.
+        Convert NumPy arrays in multimodal inputs to Paddle tensors.
 
         Args:
-            tasks: List of tasks containing multimodal inputs.
+            tasks (tuple): ([request], bsz)
         """
+        if (not envs.FD_ENABLE_MAX_PREFILL) and (not envs.FD_ENABLE_E2W_TENSOR_CONVERT):
+            return
         try:
-            if envs.FD_ENABLE_MAX_PREFILL:
-                llm_logger.debug(f"Convert image to tensor, type: {type(tasks)}")
-                batch_tasks, _ = tasks
-                for task in batch_tasks:
-                    if not hasattr(task, "multimodal_inputs"):
+            batch_tasks, _ = tasks
+            for task in batch_tasks:
+                multimodal_inputs = getattr(task, "multimodal_inputs", None)
+                if not multimodal_inputs:
+                    continue
+                # tensor keys
+                tensor_keys = [
+                    "images",
+                    "patch_idx",
+                    "token_type_ids",
+                    "position_ids",
+                    "attention_mask_offset",
+                ]
+
+                llm_logger.debug(f"Converting multimodal inputs to tensor...{tensor_keys}")
+
+                for key in tensor_keys:
+                    value = multimodal_inputs.get(key)
+                    if value is None:
                         continue
-                    images = task.multimodal_inputs["images"]
-                    if isinstance(images, np.ndarray):
-                        llm_logger.debug(f"Convert image to tensor, shape: {images.shape}")
-                        task.multimodal_inputs["images"] = paddle.to_tensor(images)
+                    if not isinstance(value, paddle.Tensor):
+                        multimodal_inputs[key] = paddle.to_tensor(value)
         except Exception as e:
-            llm_logger.warning(f"Failed to convert to tensor: {e}")
+            llm_logger.warning(f"Tensor conversion failed: {type(e).__name__}: {e}")
 
     @staticmethod
     def to_numpy(tasks):

@@ -40,7 +40,13 @@ elif current_platform.is_iluvatar():
     )
 
 from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
-from fastdeploy.model_executor.utils import TensorTracker, free_tensor, set_weight_attrs
+from fastdeploy.model_executor.utils import (
+    TensorTracker,
+    free_tensor,
+    process_weight_transpose,
+    set_weight_attrs,
+    weight_fully_copied,
+)
 
 
 class CutlassMoEMethod(UnquantizedFusedMoEMethod):
@@ -1084,33 +1090,60 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
             ]
         self.up_gate_proj_scale_shape = [layer.num_local_experts, layer.moe_intermediate_size * 2]
         self.down_proj_scale_shape = [layer.num_local_experts, layer.hidden_size]
+        self.model_format = extra_weight_attrs.get("model_format")
         # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
         if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
+            if self.model_format != "torch":
+                up_gate_proj_weight_shape = [
+                    layer.num_local_experts,
+                    layer.hidden_size,
+                    layer.moe_intermediate_size * 2,
+                ]
+                down_proj_weight_shape = [layer.num_local_experts, layer.moe_intermediate_size, layer.hidden_size]
+                up_gate_proj_attrs = {
+                    **extra_weight_attrs,
+                    "tensor_track": TensorTracker(shape=up_gate_proj_weight_shape, output_dim=True),
+                }
+                down_proj_attrs = {
+                    **extra_weight_attrs,
+                    "tensor_track": TensorTracker(shape=down_proj_weight_shape, output_dim=False),
+                }
+            else:
+                up_gate_proj_weight_shape = [
+                    layer.num_local_experts,
+                    layer.moe_intermediate_size * 2,
+                    layer.hidden_size,
+                ]
+                down_proj_weight_shape = [layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size]
+                up_gate_proj_attrs = {
+                    **extra_weight_attrs,
+                    "tensor_track": TensorTracker(shape=up_gate_proj_weight_shape, output_dim=False),
+                    "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0},
+                }
+                down_proj_attrs = {
+                    **extra_weight_attrs,
+                    "tensor_track": TensorTracker(shape=down_proj_weight_shape, output_dim=True),
+                    "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0},
+                }
+
             layer.up_gate_proj_weight = layer.create_parameter(
-                shape=[layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size * 2],
+                shape=up_gate_proj_weight_shape,
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
 
             layer.down_proj_weight = layer.create_parameter(
-                shape=[layer.num_local_experts, layer.moe_intermediate_size, layer.hidden_size],
+                shape=down_proj_weight_shape,
                 dtype=layer.weight_dtype,
                 default_initializer=paddle.nn.initializer.Constant(0),
             )
-            extra_weight_attrs["weight_need_transpose"] = extra_weight_attrs.get("model_format") == "torch"
             set_weight_attrs(
                 layer.up_gate_proj_weight,
-                {
-                    **extra_weight_attrs,
-                    "tensor_track": TensorTracker(shape=layer.up_gate_proj_weight.shape, output_dim=True),
-                },
+                up_gate_proj_attrs,
             )
             set_weight_attrs(
                 layer.down_proj_weight,
-                {
-                    **extra_weight_attrs,
-                    "tensor_track": TensorTracker(shape=layer.down_proj_weight.shape, output_dim=False),
-                },
+                down_proj_attrs,
             )
         else:
             self.weight_dtype = "int8"
@@ -1157,7 +1190,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ),
             )
-            extra_weight_attrs["weight_need_transpose"] = not extra_weight_attrs.get("model_format") == "torch"
+            # The v1 loader currently does not support loading offline quantized weight-only weights.
             moe_extra_weight_attrs = {**extra_weight_attrs, "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0}}
             set_weight_attrs(layer.up_gate_proj_weight, moe_extra_weight_attrs)
             set_weight_attrs(layer.down_proj_weight, moe_extra_weight_attrs)
@@ -1191,66 +1224,70 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
             )
 
     def process_weights_after_loading(self, layer):
-        """ """
-        if not self.quant_config.is_checkpoint_bf16:
-            return
-        weight_id_map = {"gate_up": 0, "down": 1}
-        if (
-            hasattr(layer.up_gate_proj_weight, "tensor_track")
-            and layer.up_gate_proj_weight.tensor_track is not None
-            and layer.up_gate_proj_weight.tensor_track.is_fully_copied()
-        ):
-            weight_type = "gate_up"
-        else:
-            weight_type = "down"
+        def _process_quantize(weight_idx):
+            # 1.init shape and type
+            # quantized_weight_name
+            weight_name = self.added_weight_attrs[weight_idx]
+            unquantized_weight_name = weight_name.replace("quant_weight", "weight")
+            weight_shape = self.up_gate_proj_weight_shape if weight_type == "gate_up" else self.down_proj_weight_shape
+            weight_dtype = "int8"
+            # scale
+            scale_name = self.added_scale_attrs[weight_idx]
+            scale_shape = self.up_gate_proj_scale_shape if weight_type == "gate_up" else self.down_proj_scale_shape
+            scale_dtype = self.default_dtype
 
-        # 1.init shape and type
-        # weight
-        weight_name = self.added_weight_attrs[weight_id_map[weight_type]]
-        unquantized_weight_name = weight_name.replace("quant_weight", "weight")
-        weight_shape = self.up_gate_proj_weight_shape if weight_type == "gate_up" else self.down_proj_weight_shape
-        weight_dtype = "int8"
-        # scale
-        scale_name = self.added_scale_attrs[weight_id_map[weight_type]]
-        scale_shape = self.up_gate_proj_scale_shape if weight_type == "gate_up" else self.down_proj_scale_shape
-        scale_dtype = self.default_dtype
+            # 2.crate tmp tensor
 
-        # 2.crate tmp tensor
+            weight = paddle.empty(weight_shape, dtype=weight_dtype)
+            scale = paddle.empty(scale_shape, dtype=scale_dtype)
 
-        weight = paddle.empty(weight_shape, dtype=weight_dtype)
-        scale = paddle.empty(scale_shape, dtype=scale_dtype)
+            # 3.quantize weight
 
-        # 3.quantize weight
+            for expert_id in range(layer.num_local_experts):
+                weight[expert_id], scale[expert_id] = weight_quantize(
+                    getattr(layer, unquantized_weight_name)[expert_id], algo=self.moe_quant_type
+                )
 
-        for expert_id in range(layer.num_local_experts):
-            weight[expert_id], scale[expert_id] = weight_quantize(
-                getattr(layer, unquantized_weight_name)[expert_id], algo=self.moe_quant_type
+            free_tensor(getattr(layer, unquantized_weight_name))
+
+            # create weight
+            setattr(
+                layer,
+                weight_name,
+                layer.create_parameter(
+                    shape=weight_shape,
+                    dtype=weight_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
             )
+            # create scale
+            setattr(
+                layer,
+                scale_name,
+                layer.create_parameter(
+                    shape=scale_shape,
+                    dtype=scale_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            getattr(layer, weight_name).copy_(weight, False)
+            getattr(layer, scale_name).copy_(scale, False)
 
-        free_tensor(getattr(layer, unquantized_weight_name))
+        if self.quant_config.is_checkpoint_bf16:
+            weight_id_map = {"gate_up": 0, "down": 1}
+            if weight_fully_copied(layer.up_gate_proj_weight):
+                weight_type = "gate_up"
+            else:
+                weight_type = "down"
 
-        # create weight
-        setattr(
-            layer,
-            weight_name,
-            layer.create_parameter(
-                shape=weight_shape,
-                dtype=weight_dtype,
-                default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
-        # create scale
-        setattr(
-            layer,
-            scale_name,
-            layer.create_parameter(
-                shape=scale_shape,
-                dtype=scale_dtype,
-                default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
-        getattr(layer, weight_name).copy_(weight, False)
-        getattr(layer, scale_name).copy_(scale, False)
+            if self.model_format == "torch":
+                unquantized_weight_name = self.added_weight_attrs[weight_id_map[weight_type]].replace(
+                    "quant_weight", "weight"
+                )
+                process_weight_transpose(layer, unquantized_weight_name)
+            _process_quantize(weight_id_map[weight_type])
+        else:
+            return
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
