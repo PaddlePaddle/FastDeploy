@@ -16,7 +16,6 @@
 
 from __future__ import annotations
 
-import os
 import random
 from dataclasses import dataclass, fields
 from enum import Enum
@@ -209,8 +208,7 @@ class SamplingParams:
             )
         if self.logprobs is not None and self.logprobs < -1:
             raise ValueError(f"logprobs must be greater than -1, got {self.logprobs}.")
-        if self.logprobs is not None and self.logprobs > 20 and os.getenv("FD_USE_GET_SAVE_OUTPUT_V1", "0") == "0":
-            raise ValueError("Invalid value for 'top_logprobs': must be less than or equal to 20.")
+
         if self.prompt_logprobs is not None and self.prompt_logprobs < -1:
             raise ValueError(f"prompt_logprobs must be greater than or equal to -1, got {self.prompt_logprobs}.")
 

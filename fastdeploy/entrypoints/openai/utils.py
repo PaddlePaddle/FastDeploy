@@ -17,9 +17,9 @@
 import asyncio
 import heapq
 import random
+from multiprocessing.reduction import ForkingPickler
 
 import aiozmq
-import msgpack
 import zmq
 
 from fastdeploy.engine.args_utils import EngineArgs
@@ -121,7 +121,7 @@ class DealerConnectionManager:
         while self.running:
             try:
                 raw_data = await dealer.read()
-                response = msgpack.unpackb(raw_data[-1])
+                response = ForkingPickler.loads(raw_data[-1])
                 request_id = response[-1]["request_id"]
                 if request_id[:4] in ["cmpl", "embd"]:
                     request_id = request_id.rsplit("_", 1)[0]

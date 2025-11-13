@@ -69,10 +69,12 @@ class EngineClient:
         enable_prefix_caching=None,
         splitwise_role=None,
         max_processor_cache=0,
+        max_logprobs=20,
     ):
         model_config = ModelConfig({"model": model_name_or_path})
         self.enable_mm = model_config.enable_mm
         enable_processor_cache = self.enable_mm and max_processor_cache > 0
+        self.max_logprobs = max_logprobs
         input_processor = InputPreprocessor(
             model_config,
             reasoning_parser,
@@ -84,6 +86,11 @@ class EngineClient:
         self.enable_logprob = enable_logprob
         self.reasoning_parser = reasoning_parser
         self.data_processor = input_processor.create_processor()
+        self.ori_vocab_size = (
+            len(self.data_processor.tokenizer.sp_model)
+            if hasattr(self.data_processor.tokenizer, "sp_model")
+            else len(self.data_processor.tokenizer.vocab)
+        )
         self.max_model_len = max_model_len
         self.enable_prefix_caching = enable_prefix_caching
         self.enable_splitwise = splitwise_role != "mixed"
@@ -321,6 +328,34 @@ class EngineClient:
         elif logprobs:
             raise ParameterError("logprobs", "Invalid type for 'logprobs'")
 
+        max_logprobs = self.max_logprobs
+        if max_logprobs == -1:
+            max_logprobs = self.ori_vocab_size
+        if max_logprobs < -1:
+            err_msg = f"Invalid 'max_logprobs': must be >= -1, got {max_logprobs}."
+            api_server_logger.error(err_msg)
+            raise ValueError("max_logprobs", err_msg)
+
+        prompt_logprobs = data.get("prompt_logprobs", None)
+        if prompt_logprobs is not None:
+            if not self.enable_logprob:
+                err_msg = "Logprobs is disabled, please enable it in startup config."
+                api_server_logger.error(err_msg)
+                raise ParameterError("logprobs", err_msg)
+
+            if prompt_logprobs == -1:
+                prompt_logprobs = self.ori_vocab_size
+
+            if prompt_logprobs < -1:
+                err_msg = f"Invalid 'prompt_logprobs': must be >= -1, got {prompt_logprobs}."
+                api_server_logger.error(err_msg)
+                raise ValueError("prompt_logprobs", err_msg)
+
+            if prompt_logprobs > max_logprobs:
+                err_msg = "Number of prompt_logprobs requested ({prompt_logprobs}) exceeds maximum allowed value ({max_logprobs})."
+                api_server_logger.error(err_msg)
+                raise ValueError("prompt_logprobs", err_msg)
+
         # enable_logprob
         if top_logprobs:
             if not self.enable_logprob:
@@ -334,15 +369,20 @@ class EngineClient:
                 api_server_logger.error(err_msg)
                 raise ParameterError("top_logprobs", err_msg)
 
-            if top_logprobs < 0:
-                err_msg = f"Invalid 'top_logprobs': must be >= 0, got {top_logprobs}."
-                api_server_logger.error(err_msg)
-                raise ParameterError("top_logprobs", err_msg)
+            if top_logprobs == -1:
+                top_logprobs = self.ori_vocab_size
 
-            if top_logprobs > 20:
-                err_msg = "Invalid value for 'top_logprobs': must be <= 20."
+            if top_logprobs < -1:
+                err_msg = f"Invalid 'top_logprobs': must be >= -1, got {top_logprobs}."
                 api_server_logger.error(err_msg)
-                raise ParameterError("top_logprobs", err_msg)
+                raise ValueError("top_logprobs", err_msg)
+
+            if top_logprobs > max_logprobs:
+                err_msg = (
+                    f"Number of logprobs requested ({top_logprobs}) exceeds maximum allowed value ({max_logprobs})."
+                )
+                api_server_logger.error(err_msg)
+                raise ValueError("top_logprobs", err_msg)
 
     def check_health(self, time_interval_threashold=30):
         """
