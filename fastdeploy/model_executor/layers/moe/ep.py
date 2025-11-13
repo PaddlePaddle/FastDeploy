@@ -275,6 +275,7 @@ class DeepEPEngine:
         topk_idx: paddle.Tensor,
         expertwise_scale,
         use_fp8: bool = False,
+        quant_group_size: int = 128,
     ):
         if self.deepep_engine is None:
             raise RuntimeError("DeepEP buffer not initialized!")
@@ -294,6 +295,7 @@ class DeepEPEngine:
             use_fp8=use_fp8,
             async_finish=False,
             return_recv_hook=True,
+            num_per_channel=quant_group_size,
         )
 
         return packed_recv_x, recv_expert_count, handle, dispatch_hook
