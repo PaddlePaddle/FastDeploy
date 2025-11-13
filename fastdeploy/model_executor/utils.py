@@ -363,8 +363,13 @@ def v1_loader_support(fd_config):
     def _err_msg(msg: str) -> str:
         logger.info(msg + "; fallback to the v0 loader for model loading.")
 
-    if not (current_platform.is_cuda() or current_platform.is_xpu() or current_platform.is_iluvatar()):
-        _err_msg("v1loader currently only support backends gpu, xpu and iluvatar")
+    if not (
+        current_platform.is_cuda()
+        or current_platform.is_xpu()
+        or current_platform.is_iluvatar()
+        or current_platform.is_maca()
+    ):
+        _err_msg("v1loader currently only support backends gpu, xpu, iluvatar and maca")
         return False
 
     if is_pre_sliced_weight(fd_config.model_config.model):
