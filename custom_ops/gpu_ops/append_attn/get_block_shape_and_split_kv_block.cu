@@ -291,14 +291,10 @@ void GetBlockShapeAndSplitKVBlock(
   // Note (sunxin): Skip capturing the DtoH copy (it's time-consuming); CPU data
   // is only for branching in attention.
 #ifndef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
-  if (!phi::backends::gpu::IsCUDAGraphCapturing()) {
+  if (!phi::backends::gpu::IsCUDAGraphCapturing())
+#endif
     max_len_tensor_cpu.copy_(
         max_len_tensor_gpu, max_len_tensor_cpu.place(), false);
-  }
-#else
-  max_len_tensor_cpu.copy_(
-      max_len_tensor_gpu, max_len_tensor_cpu.place(), false);
-#endif
 
   auto max_len_cpu_ptr = max_len_tensor_cpu.data<int>();
   int max_len_this_time = max_len_cpu_ptr[0];
@@ -410,14 +406,10 @@ void GetBlockShapeAndSplitKVBlock(
       // Note (sunxin): Skip capturing the DtoH copy (it's time-consuming); CPU
       // data is only for branching in attention.
 #ifndef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
-      if (!phi::backends::gpu::IsCUDAGraphCapturing()) {
+      if (!phi::backends::gpu::IsCUDAGraphCapturing())
+#endif
         decoder_num_blocks_cpu.copy_(
             decoder_num_blocks_device, decoder_num_blocks_cpu.place(), false);
-      }
-#else
-      decoder_num_blocks_cpu.copy_(
-          decoder_num_blocks_device, decoder_num_blocks_cpu.place(), false);
-#endif
       PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
           decoder_chunk_size_device.data<int>(), 64, sizeof(int32_t), stream));
     }
