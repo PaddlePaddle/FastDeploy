@@ -13,17 +13,24 @@
 # limitations under the License.
 
 """
-Integration tests for diffusion models - focuses on DiffusionConfig.
+Integration tests for diffusion models - focuses on DiffusionConfig - Refactored to use Paddle framework.
 """
 
-import unittest
 import sys
 import os
 import importlib.util
-from unittest.mock import Mock, patch, MagicMock
+import unittest
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+
+# Import new Paddle test framework
+# Use relative import or direct file location import
+paddle_test_base_path = os.path.join(os.path.dirname(__file__), 'paddle_test_base.py')
+spec = importlib.util.spec_from_file_location("paddle_test_base", paddle_test_base_path)
+paddle_test_base_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(paddle_test_base_module)
+PaddleDiffusionTestCase = paddle_test_base_module.PaddleDiffusionTestCase
 
 # Import DiffusionConfig directly
 DIFFUSION_AVAILABLE = True
@@ -43,12 +50,10 @@ except Exception as e:
     raise
 
 
-class TestDiffusionIntegration(unittest.TestCase):
-    """Integration tests for DiffusionConfig."""
+class TestDiffusionIntegration(PaddleDiffusionTestCase):
+    """Integration tests for DiffusionConfig - Using Paddle test framework."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        pass
+    # setUp is handled by parent class automatically
 
     def test_diffusion_config_basic(self):
         """Test basic DiffusionConfig functionality."""
@@ -173,8 +178,8 @@ class TestDiffusionIntegration(unittest.TestCase):
         self.assertEqual(config_dict["custom_param2"], 42)
 
 
-class TestDiffusionConfigDefaults(unittest.TestCase):
-    """Test default configurations."""
+class TestDiffusionConfigDefaults(PaddleDiffusionTestCase):
+    """Test default configurations - Using Paddle test framework."""
 
     def test_default_device_is_gpu(self):
         """Test that default device is GPU."""

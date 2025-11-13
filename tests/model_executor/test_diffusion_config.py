@@ -13,21 +13,25 @@
 # limitations under the License.
 
 """
-Tests for DiffusionConfig class.
+Tests for DiffusionConfig class - Refactored to use Paddle framework.
 """
 
-import unittest
 import sys
 import os
-from unittest.mock import Mock, patch
+import importlib.util
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-# Import DiffusionConfig directly without importing the full fastdeploy package
-import sys
-import importlib.util
+# Import new Paddle test framework
+# Use relative import or direct file location import
+paddle_test_base_path = os.path.join(os.path.dirname(__file__), 'paddle_test_base.py')
+spec = importlib.util.spec_from_file_location("paddle_test_base", paddle_test_base_path)
+paddle_test_base_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(paddle_test_base_module)
+PaddleDiffusionTestCase = paddle_test_base_module.PaddleDiffusionTestCase
 
+# Import DiffusionConfig directly without importing the full fastdeploy package
 CONFIG_AVAILABLE = True
 try:
     # Load the config module directly
@@ -46,12 +50,10 @@ except Exception as e:
     raise
 
 
-class TestDiffusionConfig(unittest.TestCase):
-    """Test cases for DiffusionConfig class."""
+class TestDiffusionConfig(PaddleDiffusionTestCase):
+    """Test cases for DiffusionConfig class - Using Paddle test framework."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        pass
+    # setUp is handled by parent class automatically
 
     def test_config_initialization_default(self):
         """Test DiffusionConfig initialization with default values."""

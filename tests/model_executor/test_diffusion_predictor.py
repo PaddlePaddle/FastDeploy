@@ -13,17 +13,25 @@
 # limitations under the License.
 
 """
-Tests for DiffusionPredictor class and file availability.
+Tests for DiffusionPredictor class and file availability - Refactored to use Paddle framework.
 """
 
-import unittest
 import sys
 import os
-from unittest.mock import Mock, patch, MagicMock
 import importlib.util
+import unittest
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+
+# Import new Paddle test framework
+# Use relative import or direct file location import
+paddle_test_base_path = os.path.join(os.path.dirname(__file__), 'paddle_test_base.py')
+spec = importlib.util.spec_from_file_location("paddle_test_base", paddle_test_base_path)
+paddle_test_base_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(paddle_test_base_module)
+PaddleTestCase = paddle_test_base_module.PaddleTestCase
+PaddleDiffusionTestCase = paddle_test_base_module.PaddleDiffusionTestCase
 
 # Import DiffusionConfig
 try:
@@ -42,8 +50,8 @@ except Exception as e:
     print(f"Warning: Could not import DiffusionConfig: {e}")
 
 
-class TestDiffusionPredictorStructure(unittest.TestCase):
-    """Test cases for DiffusionPredictor structure."""
+class TestDiffusionPredictorStructure(PaddleTestCase):
+    """Test cases for DiffusionPredictor structure - Using Paddle test framework."""
 
     def test_predictor_file_exists(self):
         """Test that predictor.py file exists."""
@@ -83,8 +91,8 @@ class TestDiffusionPredictorStructure(unittest.TestCase):
             self.assertIn('class DiffusionPredictor', source_code)
 
 
-class TestPredictorInterface(unittest.TestCase):
-    """Test cases for expected predictor interface."""
+class TestPredictorInterface(PaddleDiffusionTestCase):
+    """Test cases for expected predictor interface - Using Paddle test framework."""
 
     @unittest.skipUnless(CONFIG_AVAILABLE, "DiffusionConfig not available")
     def test_predictor_config_initialization(self):
@@ -125,8 +133,8 @@ class TestPredictorInterface(unittest.TestCase):
         pass
 
 
-class TestDiffusionPredictorIntegration(unittest.TestCase):
-    """Integration tests for DiffusionPredictor."""
+class TestDiffusionPredictorIntegration(PaddleDiffusionTestCase):
+    """Integration tests for DiffusionPredictor - Using Paddle test framework."""
 
     @unittest.skipUnless(CONFIG_AVAILABLE, "DiffusionConfig not available")
     def test_predictor_config_with_custom_dimensions(self):

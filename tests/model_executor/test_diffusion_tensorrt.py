@@ -13,17 +13,25 @@
 # limitations under the License.
 
 """
-Tests for Diffusion TensorRT integration.
+Tests for Diffusion TensorRT integration - Refactored to use Paddle framework.
 """
 
-import unittest
 import sys
 import os
-from unittest.mock import Mock, patch, MagicMock
 import importlib.util
+import unittest
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+
+# Import new Paddle test framework
+# Use relative import or direct file location import
+paddle_test_base_path = os.path.join(os.path.dirname(__file__), 'paddle_test_base.py')
+spec = importlib.util.spec_from_file_location("paddle_test_base", paddle_test_base_path)
+paddle_test_base_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(paddle_test_base_module)
+PaddleTestCase = paddle_test_base_module.PaddleTestCase
+PaddleDiffusionTestCase = paddle_test_base_module.PaddleDiffusionTestCase
 
 # Import DiffusionConfig
 try:
@@ -42,8 +50,8 @@ except Exception as e:
     print(f"Warning: Could not import DiffusionConfig: {e}")
 
 
-class TestDiffusionTensorRTStructure(unittest.TestCase):
-    """Test cases for TensorRT integration file structure."""
+class TestDiffusionTensorRTStructure(PaddleTestCase):
+    """Test cases for TensorRT integration file structure - Using Paddle test framework."""
 
     def test_tensorrt_integration_file_exists(self):
         """Test that tensorrt_integration.py file exists."""
@@ -87,8 +95,8 @@ class TestDiffusionTensorRTStructure(unittest.TestCase):
             )
 
 
-class TestTensorRTConfiguration(unittest.TestCase):
-    """Test cases for TensorRT configuration."""
+class TestTensorRTConfiguration(PaddleDiffusionTestCase):
+    """Test cases for TensorRT configuration - Using Paddle test framework."""
 
     @unittest.skipUnless(CONFIG_AVAILABLE, "DiffusionConfig not available")
     def test_tensorrt_enabled_config(self):
@@ -139,8 +147,8 @@ class TestTensorRTConfiguration(unittest.TestCase):
         self.assertFalse(config.use_fp16)
 
 
-class TestTensorRTIntegration(unittest.TestCase):
-    """Integration tests for TensorRT with diffusion models."""
+class TestTensorRTIntegration(PaddleDiffusionTestCase):
+    """Integration tests for TensorRT with diffusion models - Using Paddle test framework."""
 
     @unittest.skipUnless(CONFIG_AVAILABLE, "DiffusionConfig not available")
     def test_tensorrt_config_for_stable_diffusion(self):
@@ -187,8 +195,8 @@ class TestTensorRTIntegration(unittest.TestCase):
         self.assertTrue(config.enable_dynamic_shape)
 
 
-class TestTensorRTEngineManagement(unittest.TestCase):
-    """Test cases for TensorRT engine management."""
+class TestTensorRTEngineManagement(PaddleTestCase):
+    """Test cases for TensorRT engine management - Using Paddle test framework."""
 
     def test_tensorrt_engine_initialization(self):
         """Test expected TensorRT engine initialization flow."""
@@ -209,8 +217,8 @@ class TestTensorRTEngineManagement(unittest.TestCase):
         pass
 
 
-class TestTensorRTPerformance(unittest.TestCase):
-    """Test cases for TensorRT performance expectations."""
+class TestTensorRTPerformance(PaddleTestCase):
+    """Test cases for TensorRT performance expectations - Using Paddle test framework."""
 
     @unittest.skipUnless(CONFIG_AVAILABLE, "DiffusionConfig not available")
     def test_tensorrt_batch_processing(self):

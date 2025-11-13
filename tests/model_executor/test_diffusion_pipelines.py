@@ -13,17 +13,25 @@
 # limitations under the License.
 
 """
-Tests for diffusion model pipelines structure and availability.
+Tests for diffusion model pipelines structure and availability - Refactored to use Paddle framework.
 """
 
-import unittest
 import sys
 import os
-from unittest.mock import Mock, patch, MagicMock
 import importlib.util
+import unittest
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+
+# Import new Paddle test framework
+# Use relative import or direct file location import
+paddle_test_base_path = os.path.join(os.path.dirname(__file__), 'paddle_test_base.py')
+spec = importlib.util.spec_from_file_location("paddle_test_base", paddle_test_base_path)
+paddle_test_base_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(paddle_test_base_module)
+PaddleTestCase = paddle_test_base_module.PaddleTestCase
+PaddleDiffusionTestCase = paddle_test_base_module.PaddleDiffusionTestCase
 
 # Import DiffusionConfig
 try:
@@ -42,12 +50,10 @@ except Exception as e:
     print(f"Warning: Could not import DiffusionConfig: {e}")
 
 
-class TestPipelineStructure(unittest.TestCase):
-    """Test cases for diffusion pipeline structure."""
+class TestPipelineStructure(PaddleTestCase):
+    """Test cases for diffusion pipeline structure - Using Paddle test framework."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        pass
+    # setUp is handled by parent class automatically
 
     def test_sd_pipeline_file_exists(self):
         """Test that sd_pipeline.py file exists."""
@@ -99,8 +105,8 @@ class TestPipelineStructure(unittest.TestCase):
                     self.fail(f"Syntax error in {pipeline_file}: {e}")
 
 
-class TestPipelineIntegrationWithConfig(unittest.TestCase):
-    """Test cases for pipeline integration with DiffusionConfig."""
+class TestPipelineIntegrationWithConfig(PaddleDiffusionTestCase):
+    """Test cases for pipeline integration with DiffusionConfig - Using Paddle test framework."""
 
     @unittest.skipUnless(CONFIG_AVAILABLE, "DiffusionConfig not available")
     def test_config_creation_with_default_values(self):
@@ -171,8 +177,8 @@ class TestPipelineIntegrationWithConfig(unittest.TestCase):
         self.assertTrue(config.enable_dynamic_shape)
 
 
-class TestPipelineExpectedInterface(unittest.TestCase):
-    """Test cases for expected pipeline interface."""
+class TestPipelineExpectedInterface(PaddleTestCase):
+    """Test cases for expected pipeline interface - Using Paddle test framework."""
 
     def test_pipelines_should_have_config_attribute(self):
         """Test that pipelines should store and expose config."""
@@ -193,8 +199,8 @@ class TestPipelineExpectedInterface(unittest.TestCase):
         pass
 
 
-class TestDiffusionModelsPackage(unittest.TestCase):
-    """Test cases for diffusion models package structure."""
+class TestDiffusionModelsPackage(PaddleTestCase):
+    """Test cases for diffusion models package structure - Using Paddle test framework."""
 
     def test_diffusion_package_exists(self):
         """Test that diffusion package exists."""

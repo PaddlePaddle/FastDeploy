@@ -33,7 +33,6 @@ End-to-End Integration Tests for Stable Diffusion and Flux Models.
 
 import os
 import sys
-import unittest
 import tempfile
 import json
 import hashlib
@@ -42,7 +41,18 @@ import logging
 from pathlib import Path
 from typing import Dict, Tuple, Optional, List
 import importlib.util
+import unittest
 import platform
+
+# Import new Paddle test framework
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+# Import new Paddle test framework
+# Use relative import or direct file location import
+paddle_test_base_path = os.path.join(os.path.dirname(__file__), 'paddle_test_base.py')
+spec_test_base = importlib.util.spec_from_file_location("paddle_test_base", paddle_test_base_path)
+paddle_test_base_module = importlib.util.module_from_spec(spec_test_base)
+spec_test_base.loader.exec_module(paddle_test_base_module)
+PaddleDiffusionTestCase = paddle_test_base_module.PaddleDiffusionTestCase
 
 # 配置日志
 logging.basicConfig(
@@ -273,7 +283,7 @@ class MockDiffusionModel:
             raise
 
 
-class TestE2EConfiguration(unittest.TestCase):
+class TestE2EConfiguration(PaddleDiffusionTestCase):
     """端到端配置验证测试"""
     
     @unittest.skipUnless(CONFIG_AVAILABLE, "DiffusionConfig not available")
@@ -329,7 +339,7 @@ class TestE2EConfiguration(unittest.TestCase):
 
 
 @unittest.skipUnless(DEPENDENCIES_AVAILABLE, "Required dependencies not available")
-class TestE2EMockInference(unittest.TestCase):
+class TestE2EMockInference(PaddleDiffusionTestCase):
     """端到端推理测试（使用 Mock 模型）"""
     
     def setUp(self):
@@ -455,7 +465,7 @@ class TestE2EMockInference(unittest.TestCase):
             logger.info(f"✅ Generated image at {width}x{height}")
 
 
-class TestPrecisionAlignment(unittest.TestCase):
+class TestPrecisionAlignment(PaddleDiffusionTestCase):
     """精度对齐测试"""
     
     @unittest.skipUnless(CONFIG_AVAILABLE and DEPENDENCIES_AVAILABLE, "Dependencies not available")
@@ -493,7 +503,7 @@ class TestPrecisionAlignment(unittest.TestCase):
         logger.info("✅ Precision alignment test passed")
 
 
-class TestCrossPlatformCompatibility(unittest.TestCase):
+class TestCrossPlatformCompatibility(PaddleDiffusionTestCase):
     """跨平台兼容性测试"""
     
     def test_path_handling(self):
