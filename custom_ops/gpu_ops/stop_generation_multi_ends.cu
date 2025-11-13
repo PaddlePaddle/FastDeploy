@@ -75,9 +75,7 @@ __global__ void set_value_by_flags(bool *stop_flags,
 
       // If haven't reached min_tokens, cannot stop for any reason
       if (below_min_tokens) {
-        if (!beam_search && is_in_end(topk_ids[bid], end_ids, end_length)) {
-          return;
-        }
+        return;
       } else {
         if (!beam_search && is_in_end(topk_ids[bid], end_ids, end_length)) {
           stop_flags[bid] = true;
