@@ -284,6 +284,7 @@ class TokenProcessor:
                     ),
                     finished=False,
                     metrics=metrics,
+                    ic_req_data=task.ic_req_data,
                 )
                 if self.tokens_counter[task_id] == 0:
                     if task.messages is not None:
@@ -658,6 +659,8 @@ class TokenProcessor:
                 ),
                 finished=False,
                 metrics=metrics,
+                ic_req_data=task.ic_req_data,
+                prompt_token_ids_len=task.prompt_token_ids_len,
             )
             if self.tokens_counter[task_id] == 0:
                 if task.messages is not None:
