@@ -30,6 +30,7 @@ class Logprob(NamedTuple):
     decoded_token: Optional[str] = None
 
 
+PromptLogprobs = list[dict[int, Logprob] | None]
 # [{token_id, logprob}] for tokens sampled from the top-k
 SampleLogprobs = list[dict[int, Logprob]]
 
@@ -43,14 +44,6 @@ class LogprobsLists(NamedTuple):
     logprobs: list[list[float]]
     # [num_reqs]
     sampled_token_ranks: list[int]
-
-    def slice(self, start: int, end: int):
-        """slice"""
-        return LogprobsLists(
-            self.logprob_token_ids[start:end],
-            self.logprobs[start:end],
-            self.sampled_token_ranks[start:end],
-        )
 
     def slice_columns(self, start: int, end: int):
         """

@@ -23,8 +23,7 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 from paddleformers.transformers.model_utils import PretrainedModel
 
-from fastdeploy.model_executor.layers.utils import get_tensor
-from fastdeploy.model_executor.utils import slice_fn
+from fastdeploy.model_executor.utils import h2d_copy, slice_fn
 
 from .config import PaddleOCRVisionConfig
 from .siglip_ops import get_activation_fn, neox_rope_embedding
@@ -71,7 +70,6 @@ class SiglipAttention(nn.Layer):
 
     def qkv_weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         # Tensor parallelism splits the weight along the output_dim
-        loaded_weight = get_tensor(loaded_weight)
         if loaded_weight.dim() == 2:
             loaded_weight = loaded_weight.transpose([1, 0])
 
@@ -98,10 +96,9 @@ class SiglipAttention(nn.Layer):
                 loaded_weight = loaded_weight.view(param.dtype)
             else:
                 loaded_weight = loaded_weight.cast(param.dtype)
-        param.copy_(loaded_weight, False)
+        h2d_copy(param, loaded_weight)
 
     def out_proj_weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        loaded_weight = get_tensor(loaded_weight)
         loaded_weight = loaded_weight.transpose([1, 0])
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
@@ -289,7 +286,6 @@ class SiglipMLP(nn.Layer):
         self.fc2.weight.weight_loader = self.weight_loader
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        loaded_weight = get_tensor(loaded_weight)
         loaded_weight = loaded_weight.transpose([1, 0])
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"

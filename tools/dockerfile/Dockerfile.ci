@@ -11,7 +11,7 @@ RUN wget -q --no-proxy https://paddle-qa.bj.bcebos.com/FastDeploy/MLNX_OFED_LINU
     && tar xf MLNX_OFED_LINUX-24.10-3.2.5.0-ubuntu20.04-x86_64.tgz
 
 RUN rm -f /etc/apt/sources.list  \
-    && echo "deb http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse\ndeb http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse\ndeb http://archive.ubuntu.com/ubuntu jammy-security main restricted universe multiverse" | tee /etc/apt/sources.list > /dev/null
+    && echo "deb http://archive.ubuntu.com/ubuntu focal main restricted universe multiverse\ndeb http://archive.ubuntu.com/ubuntu focal-updates main restricted universe multiverse\ndeb http://archive.ubuntu.com/ubuntu focal-security main restricted universe multiverse" | tee /etc/apt/sources.list > /dev/null
 
 RUN cd MLNX_OFED_LINUX-24.10-3.2.5.0-ubuntu20.04-x86_64  \
     && apt clean \

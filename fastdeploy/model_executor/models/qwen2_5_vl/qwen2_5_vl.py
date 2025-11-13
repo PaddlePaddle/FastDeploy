@@ -208,7 +208,7 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         ]
 
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
@@ -231,10 +231,7 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
             process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings:
-            # because we use lazy guard and is not initialized by default
-            if not self.lm_head.linear.weight._is_initialized():
-                self.lm_head.linear.weight.initialize()
-            self.lm_head.load_state_dict({self.lm_head.weight_key: self.model.embed_tokens.embeddings.weight})
+            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight)
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
