@@ -10,7 +10,7 @@
 - Python >= 3.10
 - Linux X86_64
 
-可通过如下4种方式进行安装
+可通过如下5种方式进行安装
 
 ## 1. 预编译Docker安装(推荐)
 
@@ -87,6 +87,49 @@ bash build.sh 1 python false [80,90]
 ```
 
 编译后的产物在```FastDeploy/dist```目录下。
+
+## 5. 算子预编译 Wheel 包
+
+FastDeploy 提供了 GPU 算子预编译版 Wheel 包，可在无需完整源码编译的情况下快速构建。该方式当前仅支持 **SM90 架构（H20/H100等）** 和 **CUDA 12.6** 环境。
+
+>默认情况下，`build.sh` 会从源码编译；若希望使用预编译包，可使用`FD_USE_PRECOMPILED` 参数；
+>若预编译包下载失败或与环境不匹配，系统会自动回退至 `4. wheel 包源码编译` 模式。
+
+首先安装 paddlepaddle-gpu，详细安装方式参考 [PaddlePaddle安装](https://www.paddlepaddle.org.cn/)
+
+``` shell
+python -m pip install paddlepaddle-gpu==3.2.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+```
+
+接着克隆源代码，拉取 whl 包并安装
+
+```shell
+git clone https://github.com/PaddlePaddle/FastDeploy
+cd FastDeploy
+
+# 第1个参数: 是否打包成 wheel (1 表示打包)
+# 第2个参数: Python 解释器路径
+# 第3个参数: 是否编译 CPU 推理算子 (false 表示仅 GPU)
+# 第4个参数: GPU 架构 (当前仅支持 [90])
+# 第5个参数: 是否使用预编译算子 (1 表示启用预编译)
+# 第6个参数(可选): 指定预编译算子的 commitID（默认使用当前的 commitID）
+
+# 使用预编译 whl 包加速构建
+bash build.sh 1 python false [90] 1
+
+# 从指定 commitID 获取对应预编译算子
+bash build.sh 1 python false [90] 1 7dbd9412b0de47aacad9011e8ace492af7247620
+```
+
+下载的 whl 包在 `FastDeploy/pre_wheel`目录下。
+
+构建完成后，算子相关的产物位于 `FastDeploy/fastdeploy/model_executor/ops/gpu` 目录下。
+
+> **说明：**
+> - 该模式会优先下载预编译的 GPU 算子 whl 包，减少编译时间；
+> - 目前仅支持 **GPU + SM90 + CUDA 12.6**；
+> - 若希望自定义架构或修改算子逻辑，请使用 **源码编译方式（第4节）**。
+> - 您可以在 FastDeploy CI 构建状态页面查看对应 commit 的预编译 whl 是否已构建成功。
 
 ## 环境检查
 
