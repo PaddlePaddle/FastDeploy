@@ -11,11 +11,12 @@ function stop_processes() {
     ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
     ps -efww | grep -E "$((8188 + XPU_ID * 100))" | grep -v grep | awk '{print $2}' | xargs kill -9 || true
     lsof -t -i :$((8188 + XPU_ID * 100)) | xargs kill -9 || true
-    for port in {$((8188 + XPU_ID * 100 + 10))..$((8188 + XPU_ID * 100 + 40))}; do
+    for port in $(seq $((8188 + XPU_ID * 100 + 10)) $((8188 + XPU_ID * 100 + 40))); do
         lsof -t -i :${port} | xargs kill -9 || true
     done
 }
-stop_processes
+
+stop_processes >kill.log 2>&1
 
 # 由于机器原因，需重启使用的卡，以保障没有问题
 if [[ "$XPU_ID" == "0" ]]; then
@@ -59,7 +60,7 @@ unset http_proxy
 unset https_proxy
 unset no_proxy
 
-stop_processes
+stop_processes >kill.log 2>&1
 
 # 起服务
 rm -rf log/*
@@ -126,7 +127,7 @@ python -m pytest tests/ci_use/XPU_45T/run_45T.py
 kv_block_test_exit_code=$?
 echo kv_block_test_exit_code is ${kv_block_test_exit_code}
 
-stop_processes
+stop_processes >kill.log 2>&1
 
 if [ ${kv_block_test_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
@@ -201,7 +202,7 @@ python -m pytest tests/ci_use/XPU_45T/run_w4a8.py
 w4a8_test_exit_code=$?
 echo w4a8_test_exit_code is ${w4a8_test_exit_code}
 
-stop_processes
+stop_processes >kill.log 2>&1
 
 if [ ${w4a8_test_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
@@ -279,7 +280,7 @@ python -m pytest tests/ci_use/XPU_45T/run_45vl.py
 vl_test_exit_code=$?
 echo vl_test_exit_code is ${vl_test_exit_code}
 
-stop_processes
+stop_processes >kill.log 2>&1
 
 if [ ${vl_test_exit_code} -ne 0 ]; then
     echo "log/workerlog.0"
@@ -376,7 +377,7 @@ unset BKCL_PCIE_RING
 unset XSHMEM_MODE
 unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
-stop_processes
+stop_processes >kill.log 2>&1
 
 if [ ${ep_online_exit_code} -ne 0 ]; then
     cat log/workerlog.0
@@ -460,7 +461,7 @@ unset BKCL_PCIE_RING
 unset XSHMEM_MODE
 unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
-stop_processes
+stop_processes >kill.log 2>&1
 
 if [ ${ep_online_exit_code} -ne 0 ]; then
     cat log/workerlog.0
@@ -548,7 +549,7 @@ unset BKCL_PCIE_RING
 unset XSHMEM_MODE
 unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
-stop_processes
+stop_processes >kill.log 2>&1
 
 if [ ${ep_online_exit_code} -ne 0 ]; then
     cat log/workerlog.0
