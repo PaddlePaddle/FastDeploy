@@ -17,7 +17,8 @@
       ["phi::dtype::float16", "phi::dtype::float16", "float16_float16"],
       ["phi::dtype::float16", "int8_t", "float16_int8"],
       ["phi::dtype::bfloat16", "phi::dtype::bfloat16", "bfloat16_bfloat16"],
-      ["phi::dtype::bfloat16", "int8_t", "bfloat16_int8"]
+      ["phi::dtype::bfloat16", "int8_t", "bfloat16_int8"],
+      ["phi::dtype::bfloat16", "phi::dtype::float8_e4m3fn", "bfloat16_fp8"]
     ],
     "max_instances_per_file": 16,
     "file_prefix": "moe_fast_hardamard_impl_",
