@@ -573,7 +573,6 @@ export FD_DEBUG=1
 python3 -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-21B-A3B-Thinking \
        --port 8180 \
-       --load-choices "default_v1" \
        --tensor-parallel-size 2 \
        --max-model-len 32768 \
        --quantization wint8 \

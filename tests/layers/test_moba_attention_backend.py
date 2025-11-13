@@ -108,16 +108,16 @@ class TestPlasAttentionBackend(unittest.TestCase):
         backend = PlasAttentionBackend(fd_config, kv_num_heads=2, num_heads=2, head_dim=8)
 
         # Default
-        shape = backend.get_kv_cache_shape(max_num_blocks=2)
-        self.assertEqual(shape, (2, 2, 4, 8))
+        key_shape, value_shape = backend.get_kv_cache_shape(max_num_blocks=2)
+        self.assertEqual(key_shape, [2, 2, 4, 8])
 
         # int4_zp quant
-        shape_int4 = backend.get_kv_cache_shape(max_num_blocks=2, kv_cache_quant_type="int4_zp")
-        self.assertEqual(shape_int4, (2, 2, 4, 4))
+        key_shape_int4, value_shape_int4 = backend.get_kv_cache_shape(max_num_blocks=2, kv_cache_quant_type="int4_zp")
+        self.assertEqual(key_shape_int4, [2, 2, 4, 4])
 
         # Other quant types
-        shape_other = backend.get_kv_cache_shape(max_num_blocks=2, kv_cache_quant_type="int8")
-        self.assertEqual(shape_other, (2, 2, 4, 8))
+        key_shape_other, value_shape_other = backend.get_kv_cache_shape(max_num_blocks=2, kv_cache_quant_type="int8")
+        self.assertEqual(key_shape_other, [2, 2, 4, 8])
 
     @patch(
         "fastdeploy.model_executor.layers.attention.moba_attention_backend.moba_attention",
