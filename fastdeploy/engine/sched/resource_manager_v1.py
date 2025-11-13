@@ -728,14 +728,7 @@ class ResourceManagerV1(ResourceManager):
             if scheduled_reqs:
                 llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
 
-            # Update metrics
-            num_tasks = sum([1 if task else 0 for task in self.tasks_list])
-            num_blocks_used_by_tasks = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
-            main_process_metrics.available_gpu_block_num.set(self.total_block_number() - num_blocks_used_by_tasks)
-            main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
-            main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
-            main_process_metrics.num_requests_running.set(len(self.running))
-            main_process_metrics.num_requests_waiting.set(num_tasks - len(self.running))
+            self.update_metrics()
 
             return scheduled_reqs
 
@@ -771,8 +764,8 @@ class ResourceManagerV1(ResourceManager):
             )
 
             request.num_cached_tokens = matched_token_num
-            request.gpu_cache_token_num = hit_info["gpu_cache_blocks"] * self.config.cache_config.block_size
-            request.cpu_cache_token_num = hit_info["cpu_cache_blocks"] * self.config.cache_config.block_size
+            request.gpu_cache_token_num = hit_info["gpu_match_token_num"]
+            request.cpu_cache_token_num = hit_info["cpu_match_token_num"]
             request.cache_info = (matched_block_num, no_cache_block_num)
             request.block_tables = common_block_ids
             request.skip_allocate = False
@@ -962,7 +955,10 @@ class ResourceManagerV1(ResourceManager):
                     if request in self.running:  # normally run and finished
                         self.running.remove(request)
                         request.status = RequestStatus.FINISHED
-                        self._free_blocks(request)
+                        try:
+                            self._free_blocks(request)
+                        except Exception as e:
+                            llm_logger.warning(f"release block failed {req_id}: {e}")
                     if (
                         request.request_id in self.to_be_rescheduled_request_id_set
                     ):  # finished after preempted, blocks have been recycled.
@@ -981,7 +977,19 @@ class ResourceManagerV1(ResourceManager):
                         del self.req_dict[req_id]
         except Exception as e:
             llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")
+        finally:
+            self.update_metrics()
 
     def clear_data(self):
         self.waiting: deque[Request] = deque()
         self.to_be_rescheduled_request_id_set = set()
+
+    def update_metrics(self):
+        # Update metrics
+        num_tasks = sum([1 if task else 0 for task in self.tasks_list])
+        num_blocks_used_by_tasks = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
+        main_process_metrics.available_gpu_block_num.set(self.total_block_number() - num_blocks_used_by_tasks)
+        main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
+        main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
+        main_process_metrics.num_requests_running.set(len(self.running))
+        main_process_metrics.num_requests_waiting.set(num_tasks - len(self.running))

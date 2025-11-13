@@ -188,6 +188,7 @@ class ModelConfig:
         self.max_model_len = 0
         self.dtype = "bfloat16"
         self.enable_logprob = False
+        self.max_logprobs = 20
         self.logprobs_mode = "raw_logprobs"
         self.enable_redundant_experts = False
         self.redundant_experts_num = 0
@@ -222,7 +223,6 @@ class ModelConfig:
         else:
             pretrained_config = {}
             self.pretrained_config = None
-
         # we need set default value when not exist
         for key, value in PRETRAINED_INIT_CONFIGURATION.items():
             if not hasattr(self, key):
@@ -238,6 +238,8 @@ class ModelConfig:
         self.think_end_id = args.get("think_end_id", -1)
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
+        if self.max_logprobs < -1:
+            raise ValueError(" The possible values for max_logprobs can't be less than -1 ")
 
         self._post_init()
 
@@ -308,13 +310,16 @@ class ModelConfig:
         if not hasattr(self, "mla_use_absorb"):
             self.mla_use_absorb = False
 
+        if hasattr(self, "num_experts") and getattr(self, "moe_num_experts") is None:
+            self.moe_num_experts = self.num_experts
+
     def read_from_env(self):
         """
         Read configuration information from environment variables and update the object's attributes.
         If an attribute is not present or is an empty string in the environment variables, use the default value.
         """
-        self.max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
-        self.stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
+        self.max_stop_seqs_num = envs.FD_MAX_STOP_SEQS_NUM
+        self.stop_seqs_max_len = envs.FD_STOP_SEQS_MAX_LEN
 
         def reset_config_value(key, value):
             if not hasattr(self, key.lower()):
@@ -552,6 +557,10 @@ class ParallelConfig:
         self.engine_pid: Optional[int] = None
         # Do profile or not
         self.do_profile: bool = False
+        # Use internode_ll_two_stage or not
+        self.use_internode_ll_two_stage: bool = False
+        # disable sequence parallel moe
+        self.disable_sequence_parallel_moe: bool = False
 
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
@@ -580,6 +589,15 @@ class ParallelConfig:
             self.pd_disaggregation_mode = "per_query"
         else:
             self.pd_disaggregation_mode = "None"
+
+        # disable_sequence_parallel_moe: qkv_linear + attn + out_linear + allreduce
+        # use_sequence_parallel_moe: allgather + qkv_linear + attn + all2all + out_linear
+        self.use_sequence_parallel_moe = (
+            (not self.disable_sequence_parallel_moe)
+            and self.expert_parallel_size > 1
+            and self.tensor_parallel_size > 1
+        )
+        logger.info(f"use_sequence_parallel_moe: {self.use_sequence_parallel_moe}")
 
     def set_communicate_group(self):
         # different tp group id
@@ -1129,6 +1147,29 @@ class PoolerConfig:
     """
 
 
+class EPLBConfig:
+    """
+    Configuration for EPLB manager.
+    """
+
+    def __init__(
+        self,
+    ):
+        self.enable_redundant_experts = envs.FD_ENABLE_REDUNDANT_EXPERTS
+        self.redundant_experts_num = envs.FD_REDUNDANT_EXPERTS_NUM
+        self.redundant_expert_ip_shm_size = envs.FD_REDUNDANT_EXPERT_IP_SHM_SIZE
+        self.redundant_expert_meta_dir = envs.FD_REDUNDANT_EXPERT_META_DIR
+        self.redundant_expert_api_user = envs.FD_REDUNDANT_EXPERT_API_USER
+        self.redundant_expert_api_password = envs.FD_REDUNDANT_EXPERT_API_PASSWORD
+        self.redundant_expert_eplb_strategy = envs.FD_REDUNDANT_EXPERT_EPLB_STRATEGY
+        self.redundant_expert_dump_workload_interval = envs.FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL
+        self.redundant_expert_async_load_model_shmem_size_gb = envs.FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB
+        self.redundant_expert_enable_schedule_cordon = envs.FD_REDUNDANT_EXPERT_ENABLE_SCHEDULE_CORDON
+        self.model_use_safetensors = envs.FD_MODEL_USE_SAFETENSORS
+        self.model_use_offline_quant = envs.FD_MODEL_USE_OFFLINE_QUANT
+        self.moe_quant_type = envs.FD_MOE_QUANT_TYPE
+
+
 class CacheConfig:
     """
     Configuration for the KV cache.
@@ -1183,6 +1224,7 @@ class CacheConfig:
         self.swap_space = None
         self.max_encoder_cache = None
         self.max_processor_cache = None
+        self.disable_chunked_mm_input = False
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -1259,6 +1301,9 @@ class CacheConfig:
                 self.prefill_kvcache_block_num = self.total_block_num
             else:
                 self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
+            assert (
+                self.prefill_kvcache_block_num >= self.max_block_num_per_seq
+            ), f"current block number :{self.prefill_kvcache_block_num} should be greater than or equal to current model len needed minimum block number :{self.max_block_num_per_seq}"
         else:
             length = num_total_tokens // number_of_tasks
             block_num = (length + self.block_size - 1 + self.dec_token_num) // self.block_size
@@ -1279,6 +1324,9 @@ class CacheConfig:
             f"Reset block num, the total_block_num:{self.total_block_num},"
             f" prefill_kvcache_block_num:{self.prefill_kvcache_block_num}"
         )
+        assert (
+            self.prefill_kvcache_block_num >= self.max_block_num_per_seq
+        ), f"current block number :{self.prefill_kvcache_block_num} should be greater than or equal to current model len needed minimum block number :{self.max_block_num_per_seq}"
 
     def print(self):
         """
@@ -1289,6 +1337,24 @@ class CacheConfig:
         for k, v in self.__dict__.items():
             logger.info("{:<20}:{:<6}{}".format(k, "", v))
         logger.info("=============================================================")
+
+
+class RouterConfig:
+    """
+    Configuration for router
+    Attributes:
+        router: the url of router, such as http://127.0.0.1:8000
+        api_server_host: the host ip of model server
+        api_server_port: the http port of model server
+    """
+
+    def __init__(self, args: dict):
+        self.router = args["router"]
+        if self.router is not None and not self.router.startswith(("http://", "https://")):
+            self.router = f"http://{self.router}"
+
+        self.api_server_host = get_host_ip()
+        self.api_server_port = args["port"]
 
 
 class CommitConfig:
@@ -1390,7 +1456,9 @@ class FDConfig:
         graph_opt_config: GraphOptimizationConfig = None,
         plas_attention_config: PlasAttentionConfig = None,
         speculative_config: SpeculativeConfig = None,
+        eplb_config: EPLBConfig = None,
         structured_outputs_config: StructuredOutputsConfig = None,
+        router_config: RouterConfig = None,
         tokenizer: str = None,
         ips: str = None,
         use_warmup: bool = False,
@@ -1409,6 +1477,7 @@ class FDConfig:
         self.scheduler_config: SchedulerConfig = scheduler_config  # type: ignore
         self.parallel_config = parallel_config  # type: ignore
         self.speculative_config: SpeculativeConfig = speculative_config
+        self.eplb_config: Optional[EPLBConfig] = eplb_config
         self.device_config: DeviceConfig = device_config  # type: ignore
         self.load_config: LoadConfig = load_config
         self.quant_config: Optional[QuantConfigBase] = quant_config
@@ -1417,6 +1486,7 @@ class FDConfig:
         self.cache_config: CacheConfig = cache_config  # type: ignore
         self.plas_attention_config: Optional[PlasAttentionConfig] = plas_attention_config
         self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
+        self.router_config: RouterConfig = router_config
 
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
@@ -1496,6 +1566,7 @@ class FDConfig:
 
         self.read_from_config()
         self.postprocess()
+        self.init_cache_info()
         if test_mode:
             return
         self.check()
@@ -1531,8 +1602,8 @@ class FDConfig:
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.model_config.max_model_len * 0.04)
 
-        self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         self.cache_config.max_block_num_per_seq = int(self.model_config.max_model_len // self.cache_config.block_size)
+        self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.cache_config.enable_prefix_caching = False
 
@@ -1713,29 +1784,66 @@ class FDConfig:
         """
         initialize cache info
         """
-        disaggregate_info = {}
+        # TODO: group the splitiwse params, remove code of v0
+        # v0 requires prefill and decode in one node and it uses local scheduler
+        # v1 supports prefill and decode in multi node and it uses splitwise or dp scheduler
+        # v2 supports prefill and decode in multi node and it uses router and local scheduler
+        self.splitwise_version = None
+        if self.scheduler_config.name == "local" and (self.router_config is None or self.router_config.router is None):
+            self.splitwise_version = "v0"
+        elif self.scheduler_config.name in ("splitwise", "dp"):
+            self.splitwise_version = "v1"
+        elif self.scheduler_config.name == "local" and self.router_config and self.router_config.router:
+            self.splitwise_version = "v2"
+        else:
+            raise ValueError(
+                f"Unsupported scheduler mode, scheduler_name: {self.scheduler_config.name}, "
+                f"router_config: {self.router_config}"
+            )
+        logger.info(f"splitwise_version: {self.splitwise_version}")
+
+        if isinstance(self.parallel_config.engine_worker_queue_port, (int, str)):
+            engine_worker_queue_port = self.parallel_config.engine_worker_queue_port
+        else:
+            engine_worker_queue_port = self.parallel_config.engine_worker_queue_port[
+                self.parallel_config.local_data_parallel_id
+            ]
+        connector_port = self.cache_config.pd_comm_port[0] if self.cache_config.pd_comm_port else None
+
+        self.disaggregate_info = {}
         if self.scheduler_config.splitwise_role != "mixed":
-            disaggregate_info["role"] = self.scheduler_config.splitwise_role
-            disaggregate_info["cache_info"] = dict()
+            self.disaggregate_info["role"] = self.scheduler_config.splitwise_role
+            self.disaggregate_info["cache_info"] = dict()
             current_protocol = self.cache_config.cache_transfer_protocol.split(",")
-            disaggregate_info["transfer_protocol"] = current_protocol
+            self.disaggregate_info["transfer_protocol"] = current_protocol
+
             for protocol in current_protocol:
                 if protocol == "ipc":
-                    disaggregate_info["cache_info"][protocol] = {
+                    self.disaggregate_info["cache_info"][protocol] = {
                         "ip": self.host_ip,
-                        "port": self.parallel_config.engine_worker_queue_port[
-                            self.parallel_config.local_data_parallel_id
-                        ],
+                        "port": engine_worker_queue_port,
                         "device_ids": self.local_device_ids,
                     }
                 elif protocol == "rdma":
-                    disaggregate_info["cache_info"][protocol] = {
+                    self.disaggregate_info["cache_info"][protocol] = {
                         "ip": self.host_ip,
-                        "port": self.cache_config.pd_comm_port[0],
+                        "port": connector_port,
                         "rdma_port": self.cache_config.rdma_comm_ports,
                     }
-        self.disaggregate_info = disaggregate_info
-        logger.info(f"disaggregate_info: {self.disaggregate_info}")
+            logger.info(f"disaggregate_info: {self.disaggregate_info}")
+
+        if self.router_config:
+            self.register_info = {
+                "role": self.scheduler_config.splitwise_role,
+                "host_ip": self.host_ip,
+                "port": self.router_config.api_server_port,
+                "connector_port": connector_port,
+                "rdma_ports": self.cache_config.rdma_comm_ports,
+                "engine_worker_queue_port": engine_worker_queue_port,
+                "device_ids": self.local_device_ids,
+                "transfer_protocol": self.cache_config.cache_transfer_protocol.split(","),
+            }
+            logger.info(f"register_info: {self.register_info}")
 
     def read_from_config(self):
         """

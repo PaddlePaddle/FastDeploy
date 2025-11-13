@@ -255,9 +255,11 @@ class Sampler(nn.Layer):
     def compute_logprobs(
         self,
         logits: paddle.Tensor,
-        sampling_metadata: SamplingMetadata,
+        sampling_metadata: Optional[SamplingMetadata] = None,
     ) -> paddle.Tensor:
         """ """
+        if sampling_metadata is None:
+            return F.log_softmax(logits, axis=-1)
         last_logits = logits
         real_bsz = last_logits.shape[0]
         temp_scaled_logprobs = sampling_metadata.temp_scaled_logprobs
@@ -317,6 +319,8 @@ class Sampler(nn.Layer):
         assert token_ids.dtype == paddle.int64
         logprobs.clip_(min=paddle.finfo(logprobs.dtype).min)
         # Get with the logprob of the prompt or sampled token.
+        if len(token_ids.shape) < len(logprobs.shape):
+            token_ids = token_ids.unsqueeze(-1)
         token_logprobs = paddle.take_along_axis(logprobs, token_ids, axis=-1)
 
         # Compute the ranks of the actual token.
@@ -330,7 +334,9 @@ class Sampler(nn.Layer):
         else:
             indices = token_ids
             top_logprobs = token_logprobs
-
+        indices = indices.cpu()
+        top_logprobs = top_logprobs.cpu()
+        token_ranks = token_ranks.cpu()
         return LogprobsTensors(indices, top_logprobs, token_ranks)
 
     def forward_cuda(
