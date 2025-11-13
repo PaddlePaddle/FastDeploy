@@ -97,7 +97,7 @@ class FastDeployLogger:
 
     def get_trace_logger(self, name, file_name, without_formater=False, print_to_console=False):
         """
-        兼容原有接口的日志获取方式
+        Log retrieval method compatible with the original interface
         """
 
         log_dir = envs.FD_LOG_DIR
@@ -106,32 +106,32 @@ class FastDeployLogger:
 
         is_debug = int(envs.FD_DEBUG)
         # logger = logging.getLogger(name)
-        # 为了兼容原有接口，使用命名空间进行隔离，避免logger覆盖、混乱等问题
+        # Use namespace for isolation to avoid logger overwrite and confusion issues for compatibility with original interface
         legacy_name = f"legacy.{name}"
         logger = logging.getLogger(legacy_name)
 
-        # 设置日志级别
+        # Set log level
         if is_debug:
             logger.setLevel(level=logging.DEBUG)
         else:
             logger.setLevel(level=logging.INFO)
 
-        # 设置格式化器
+        # Set formatter
         formatter = CustomFormatter(
             "[%(asctime)s] [%(levelname)-8s] (%(filename)s:%(funcName)s:%(lineno)d) %(message)s"
         )
 
-        # 清除现有的handlers（保持原有逻辑）
+        # Clear existing handlers (maintain original logic)
         for handler in logger.handlers[:]:
             logger.removeHandler(handler)
 
-        # 创建主日志文件handler
+        # Create main log file handler
         LOG_FILE = f"{log_dir}/{file_name}"
         backup_count = int(envs.FD_LOG_BACKUP_COUNT)
         # handler = LazyFileHandler(filename=LOG_FILE, backupCount=backup_count, level=hanlder_level)
         handler = DailyRotatingFileHandler(LOG_FILE, backupCount=backup_count)
 
-        # 创建ERROR日志文件handler（新增功能）
+        # Create ERROR log file handler (new feature)
         if not file_name.endswith(".log"):
             file_name = f"{file_name}.log" if "." not in file_name else file_name.split(".")[0] + ".log"
         ERROR_LOG_FILE = os.path.join(log_dir, file_name.replace(".log", "_error.log"))
@@ -143,11 +143,11 @@ class FastDeployLogger:
             handler.setFormatter(formatter)
             error_handler.setFormatter(formatter)
 
-        # 添加文件handlers
+        # Add file handlers
         logger.addHandler(handler)
         logger.addHandler(error_handler)
 
-        # 控制台handler
+        # Console handler
         if print_to_console:
             console_handler = logging.StreamHandler()
             if not without_formater:
@@ -155,7 +155,7 @@ class FastDeployLogger:
             logger.addHandler(console_handler)
             console_handler.propagate = False
 
-        # 设置propagate（保持原有逻辑）
+        # Set propagate (maintain original logic)
         # logger.propagate = False
 
         return logger

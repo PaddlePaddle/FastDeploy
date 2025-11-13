@@ -14,9 +14,9 @@
 """
 
 """
-自定义日志格式化器模块
-该模块定义了 ColoredFormatter 类，用于在控制台输出带颜色的日志信息，
-便于开发者在终端中快速识别不同级别的日志。
+Custom log formatter module
+This module defines the ColoredFormatter class for outputting colored log information to the console,
+helping developers quickly identify different levels of logs in the terminal.
 """
 
 import logging
@@ -26,32 +26,32 @@ import time
 
 class ColoredFormatter(logging.Formatter):
     """
-    自定义日志格式器，用于控制台输出带颜色的日志。
-    支持的颜色：
-        - WARNING: 黄色
-        - ERROR: 红色
-        - CRITICAL: 红色
-        - 其他等级: 默认终端颜色
+    Custom log formatter for console output with colored logs.
+    Supported colors:
+        - WARNING: Yellow
+        - ERROR: Red
+        - CRITICAL: Red
+        - Other levels: Default terminal color
     """
 
     COLOR_CODES = {
-        logging.WARNING: 33,  # 黄色
-        logging.ERROR: 31,  # 红色
-        logging.CRITICAL: 31,  # 红色
+        logging.WARNING: 33,  # Yellow
+        logging.ERROR: 31,  # Red
+        logging.CRITICAL: 31,  # Red
     }
 
     def format(self, record):
         """
-        格式化日志记录，并根据日志等级添加 ANSI 颜色前缀和后缀。
-        新增支持attributes展开和otelSpanID/otelTraceID字段。
+        Format log record and add ANSI color prefix and suffix based on log level.
+        Newly supports attributes expansion and otelSpanID/otelTraceID fields.
         Args:
-            record (LogRecord): 日志记录对象。
+            record (LogRecord): Log record object.
         Returns:
-            str: 带有颜色的日志消息字符串。
+            str: Colored log message string.
         """
 
         try:
-            # 添加otel相关字段
+            # Add OpenTelemetry-related fields.
             if hasattr(record, "otelSpanID") and record.otelSpanID is not None:
                 record.msg = f"[otel_span_id={record.otelSpanID}] {record.msg}"
             if hasattr(record, "otelTraceID") and record.otelTraceID is not None:
@@ -70,13 +70,13 @@ class ColoredFormatter(logging.Formatter):
 
 class CustomFormatter(logging.Formatter):
     """
-    自定义日志格式器，用于控制台输出日志。
-    支持字段展开，并添加线程、时间戳等信息。
+    Custom log formatter for console output.
+    Supports field expansion and adds thread, timestamp and other information.
     """
 
     def _format_attributes(self, record):
         """
-        将record中的attributes展开为[attr=value]格式
+        Expand attributes in record to [attr=value] format
         """
         if hasattr(record, "attributes"):
             if isinstance(record.attributes, dict):
@@ -84,18 +84,18 @@ class CustomFormatter(logging.Formatter):
         return ""
 
     def _camel_to_snake(self, name: str) -> str:
-        """驼峰转下划线"""
+        """Convert camel case to snake case"""
         s1 = re.sub("([a-z0-9])([A-Z])", r"\1_\2", name)
         return s1.lower()
 
     def format(self, record):
         """
-        格式化日志记录，新增支持attributes展开和otelSpanID/otelTraceID字段。
-        支持字段展开，并添加线程、时间戳等信息。
+        Format log record, with new support for attributes expansion and otelSpanID/otelTraceID fields.
+        Supports field expansion and adds thread, timestamp and other information.
         Args:
-            record (LogRecord): 日志记录对象。
+            record (LogRecord): Log record object.
         Returns:
-            str: 日志消息字符串。
+            str: Log message string.
         """
 
         try:
@@ -109,14 +109,14 @@ class CustomFormatter(logging.Formatter):
                 for k, v in record.attributes.items():
                     log_fields[self._camel_to_snake(k)] = v
 
-            # 过滤空值
+            # filter out null values.
             log_fields = {k: v for k, v in log_fields.items() if not (isinstance(v, str) and v == "")}
 
             log_str = " ".join(f"[{k}={v}]" for k, v in log_fields.items())
             if log_str:
                 record.msg = f"{log_str} {record.msg}"
 
-            # 添加otel相关字段
+            # Add OpenTelemetry-related fields.
             if hasattr(record, "otelSpanID") and record.otelSpanID is not None:
                 record.msg = f"[otel_span_id={record.otelSpanID}] {record.msg}"
             if hasattr(record, "otelTraceID") and record.otelTraceID is not None:
