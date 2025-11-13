@@ -40,7 +40,12 @@ import numpy as np
 import paddle
 import requests
 import yaml
-from aistudio_sdk.snapshot_download import snapshot_download as aistudio_download
+
+try:
+    from aistudio_sdk.snapshot_download import snapshot_download as aistudio_download
+except ImportError:
+    aistudio_download = None
+
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -695,8 +700,11 @@ def retrive_model_from_server(model_name_or_path, revision="master"):
             if local_path is None:
                 local_path = f'{os.getenv("HOME")}'
             local_path = f"{local_path}/{repo_id}"
-            aistudio_download(repo_id=repo_id, revision=revision, local_dir=local_path)
-            model_name_or_path = local_path
+            if aistudio_download is not None:
+                aistudio_download(repo_id=repo_id, revision=revision, local_dir=local_path)
+                model_name_or_path = local_path
+            else:
+                raise ImportError("aistudio_sdk is not installed")
         except requests.exceptions.ConnectTimeout:
             if os.path.exists(local_path):
                 llm_logger.error(

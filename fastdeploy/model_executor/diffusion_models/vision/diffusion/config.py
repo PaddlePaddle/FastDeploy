@@ -46,7 +46,7 @@ class DiffusionConfig:
 
     def __init__(
         self,
-        model_path: str,
+        model_path: str = None,
         model_type: str = "stable-diffusion",
         device: str = "gpu",
         use_fp16: bool = True,
@@ -91,7 +91,7 @@ class DiffusionConfig:
     def _validate_config(self):
         """验证配置参数的有效性"""
         # 验证模型路径
-        if not os.path.exists(self.model_path):
+        if self.model_path and not os.path.exists(self.model_path):
             warnings.warn(f"Model path {self.model_path} does not exist")
 
         # 验证模型类型

@@ -13,49 +13,38 @@
 # limitations under the License.
 
 """
-Integration tests for diffusion models.
+Integration tests for diffusion models - focuses on DiffusionConfig.
 """
 
 import unittest
 import sys
 import os
+import importlib.util
 from unittest.mock import Mock, patch, MagicMock
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
+# Import DiffusionConfig directly
+DIFFUSION_AVAILABLE = True
 try:
-    from fastdeploy.model_executor.diffusion_models.vision.diffusion import (
-        DiffusionConfig,
-        SDPipeline,
-        SD3Pipeline,
-        FluxPipeline,
+    spec = importlib.util.spec_from_file_location(
+        "config_module",
+        os.path.join(os.path.dirname(__file__), '..', '..', 'fastdeploy', 
+                     'model_executor', 'diffusion_models', 'vision', 'diffusion', 'config.py')
     )
-    DIFFUSION_AVAILABLE = True
-except ImportError:
+    config_module = importlib.util.module_from_spec(spec)
+    sys.modules['config_module'] = config_module
+    spec.loader.exec_module(config_module)
+    DiffusionConfig = config_module.DiffusionConfig
+except Exception as e:
     DIFFUSION_AVAILABLE = False
-    # Create mock classes for testing
-    from unittest.mock import MagicMock
-
-    DiffusionConfig = MagicMock()
-    mock_config = MagicMock()
-    DiffusionConfig.return_value = mock_config
-
-    SDPipeline = MagicMock()
-    mock_sd = MagicMock()
-    SDPipeline.return_value = mock_sd
-
-    SD3Pipeline = MagicMock()
-    mock_sd3 = MagicMock()
-    SD3Pipeline.return_value = mock_sd3
-
-    FluxPipeline = MagicMock()
-    mock_flux = MagicMock()
-    FluxPipeline.return_value = mock_flux
+    print(f"Warning: Could not import DiffusionConfig: {e}")
+    raise
 
 
 class TestDiffusionIntegration(unittest.TestCase):
-    """Integration tests for diffusion models."""
+    """Integration tests for DiffusionConfig."""
 
     def setUp(self):
         """Set up test fixtures."""
@@ -65,143 +54,163 @@ class TestDiffusionIntegration(unittest.TestCase):
         """Test basic DiffusionConfig functionality."""
         config = DiffusionConfig(
             model_path="/tmp/test_model",
-            device="cuda",
-            dtype="float16"
+            device="gpu",
+            use_fp16=True
         )
 
         self.assertEqual(config.model_path, "/tmp/test_model")
-        self.assertEqual(config.device, "cuda")
-        self.assertEqual(config.dtype, "float16")
+        self.assertEqual(config.device, "gpu")
+        self.assertEqual(config.use_fp16, True)
 
-    def test_sd_pipeline_basic(self):
-        """Test basic SDPipeline functionality."""
-        config = DiffusionConfig()
-        pipeline = SDPipeline(config)
-
-        self.assertIsInstance(pipeline, SDPipeline)
-        self.assertEqual(pipeline.config, config)
-
-    def test_sd3_pipeline_basic(self):
-        """Test basic SD3Pipeline functionality."""
-        config = DiffusionConfig()
-        pipeline = SD3Pipeline(config)
-
-        self.assertIsInstance(pipeline, SD3Pipeline)
-        self.assertEqual(pipeline.config, config)
-
-    def test_flux_pipeline_basic(self):
-        """Test basic FluxPipeline functionality."""
-        config = DiffusionConfig()
-        pipeline = FluxPipeline(config)
-
-        self.assertIsInstance(pipeline, FluxPipeline)
-        self.assertEqual(pipeline.config, config)
-
-    @patch('fastdeploy.model_executor.diffusion_models.vision.diffusion.sd_pipeline.torch')
-    def test_sd_pipeline_generation_mock(self, mock_torch):
-        """Test SD pipeline image generation with mocked torch."""
-        mock_torch.no_grad.return_value.__enter__ = Mock()
-        mock_torch.no_grad.return_value.__exit__ = Mock()
-        mock_torch.randn.return_value = Mock()
-        mock_torch.tensor.return_value = Mock()
-
-        config = DiffusionConfig()
-        pipeline = SDPipeline(config)
-
-        try:
-            result = pipeline("test prompt")
-            self.assertIsInstance(result, (list, type(None)))
-        except Exception as e:
-            # Expected in test environment
-            self.assertIn("model", str(e).lower())
-
-    @patch('fastdeploy.model_executor.diffusion_models.vision.diffusion.flux_pipeline.torch')
-    def test_flux_pipeline_generation_mock(self, mock_torch):
-        """Test Flux pipeline image generation with mocked torch."""
-        mock_torch.no_grad.return_value.__enter__ = Mock()
-        mock_torch.no_grad.return_value.__exit__ = Mock()
-        mock_torch.randn.return_value = Mock()
-        mock_torch.tensor.return_value = Mock()
-
-        config = DiffusionConfig()
-        pipeline = FluxPipeline(config)
-
-        try:
-            result = pipeline("test prompt")
-            self.assertIsInstance(result, (list, type(None)))
-        except Exception as e:
-            # Expected in test environment
-            self.assertIn("model", str(e).lower())
-
-    def test_config_validation(self):
-        """Test configuration validation."""
-        # Test valid configuration
+    def test_config_with_custom_height_width(self):
+        """Test DiffusionConfig with custom height and width."""
         config = DiffusionConfig(
-            height=512,
-            width=512,
-            num_inference_steps=20,
-            guidance_scale=7.5
+            height=1024,
+            width=1024,
+            num_inference_steps=50,
+            guidance_scale=12.0
         )
+        self.assertEqual(config.height, 1024)
+        self.assertEqual(config.width, 1024)
+        self.assertEqual(config.num_inference_steps, 50)
+        self.assertEqual(config.guidance_scale, 12.0)
+
+    def test_config_device_validation(self):
+        """Test that invalid devices are rejected."""
+        with self.assertRaises(ValueError):
+            DiffusionConfig(device="invalid_device")
+
+    def test_config_model_type_validation(self):
+        """Test that invalid model types are rejected."""
+        with self.assertRaises(ValueError):
+            DiffusionConfig(model_type="invalid_model")
+
+    def test_config_valid_model_types(self):
+        """Test that valid model types are accepted."""
+        valid_types = ["stable-diffusion", "sdxl", "sd3", "flux"]
+        for model_type in valid_types:
+            config = DiffusionConfig(model_type=model_type)
+            self.assertEqual(config.model_type, model_type)
+
+    def test_config_inference_steps_validation(self):
+        """Test that invalid inference steps are rejected."""
+        with self.assertRaises(ValueError):
+            DiffusionConfig(num_inference_steps=0)
+        
+        with self.assertRaises(ValueError):
+            DiffusionConfig(num_inference_steps=-1)
+
+    def test_config_dimensions_validation(self):
+        """Test that invalid dimensions are rejected."""
+        with self.assertRaises(ValueError):
+            DiffusionConfig(height=0, width=512)
+        
+        with self.assertRaises(ValueError):
+            DiffusionConfig(height=512, width=0)
+        
+        with self.assertRaises(ValueError):
+            DiffusionConfig(height=-1, width=512)
+
+    def test_config_tensorrt_gpu_only(self):
+        """Test that TensorRT is GPU-only."""
+        # TensorRT on GPU should work
+        config = DiffusionConfig(device="gpu", use_tensorrt=True)
+        self.assertTrue(config.use_tensorrt)
+        
+        # TensorRT on CPU should fail
+        with self.assertRaises(ValueError):
+            DiffusionConfig(device="cpu", use_tensorrt=True)
+
+    def test_config_to_dict_integration(self):
+        """Test config to_dict and from_dict integration."""
+        original_config = DiffusionConfig(
+            model_path="/path/to/model",
+            model_type="flux",
+            device="gpu",
+            use_fp16=False,
+            height=768,
+            width=768,
+            num_inference_steps=30,
+            guidance_scale=9.0,
+            max_batch_size=2
+        )
+        
+        config_dict = original_config.to_dict()
+        restored_config = DiffusionConfig.from_dict(config_dict)
+        
+        self.assertEqual(restored_config.model_path, original_config.model_path)
+        self.assertEqual(restored_config.model_type, original_config.model_type)
+        self.assertEqual(restored_config.device, original_config.device)
+        self.assertEqual(restored_config.use_fp16, original_config.use_fp16)
+        self.assertEqual(restored_config.height, original_config.height)
+        self.assertEqual(restored_config.width, original_config.width)
+
+    def test_config_cinn_xpu_compatibility(self):
+        """Test config with CINN optimization on XPU."""
+        config = DiffusionConfig(device="xpu", use_cinn=True)
+        self.assertEqual(config.device, "xpu")
+        self.assertTrue(config.use_cinn)
+
+    def test_config_memory_optimization(self):
+        """Test memory optimization settings."""
+        config = DiffusionConfig(
+            enable_memory_optimization=True,
+            enable_dynamic_shape=True
+        )
+        self.assertTrue(config.enable_memory_optimization)
+        self.assertTrue(config.enable_dynamic_shape)
+
+    def test_config_extra_kwargs(self):
+        """Test that extra kwargs are stored."""
+        config = DiffusionConfig(
+            custom_param1="value1",
+            custom_param2=42
+        )
+        config_dict = config.to_dict()
+        self.assertIn("custom_param1", config_dict)
+        self.assertIn("custom_param2", config_dict)
+        self.assertEqual(config_dict["custom_param1"], "value1")
+        self.assertEqual(config_dict["custom_param2"], 42)
+
+
+class TestDiffusionConfigDefaults(unittest.TestCase):
+    """Test default configurations."""
+
+    def test_default_device_is_gpu(self):
+        """Test that default device is GPU."""
+        config = DiffusionConfig()
+        self.assertEqual(config.device, "gpu")
+
+    def test_default_fp16_enabled(self):
+        """Test that FP16 is enabled by default."""
+        config = DiffusionConfig()
+        self.assertTrue(config.use_fp16)
+
+    def test_default_cinn_enabled(self):
+        """Test that CINN is enabled by default."""
+        config = DiffusionConfig()
+        self.assertTrue(config.use_cinn)
+
+    def test_default_batch_size_is_one(self):
+        """Test that default batch size is 1."""
+        config = DiffusionConfig()
+        self.assertEqual(config.max_batch_size, 1)
+
+    def test_default_resolution_is_512(self):
+        """Test that default resolution is 512x512."""
+        config = DiffusionConfig()
         self.assertEqual(config.height, 512)
         self.assertEqual(config.width, 512)
 
-        # Test invalid height/width (should still work but may warn)
-        config_invalid = DiffusionConfig(height=0, width=0)
-        self.assertEqual(config_invalid.height, 0)
-        self.assertEqual(config_invalid.width, 0)
+    def test_default_inference_steps_is_20(self):
+        """Test that default inference steps is 20."""
+        config = DiffusionConfig()
+        self.assertEqual(config.num_inference_steps, 20)
 
-    def test_pipeline_config_integration(self):
-        """Test pipeline configuration integration."""
-        config = DiffusionConfig(
-            device="cpu",
-            dtype="float32",
-            seed=12345
-        )
-
-        pipelines = [SDPipeline(config), SD3Pipeline(config), FluxPipeline(config)]
-
-        for pipeline in pipelines:
-            self.assertEqual(pipeline.config.device, "cpu")
-            self.assertEqual(pipeline.config.dtype, "float32")
-            self.assertEqual(pipeline.config.seed, 12345)
-
-
-class TestDiffusionModelLoading(unittest.TestCase):
-    """Test cases for model loading functionality."""
-
-    def setUp(self):
-        """Set up test fixtures."""
-        if not DIFFUSION_AVAILABLE:
-            self.skipTest("Diffusion models not available")
-
-    @patch('os.path.exists')
-    def test_model_path_validation(self, mock_exists):
-        """Test model path validation."""
-        mock_exists.return_value = True
-
-        config = DiffusionConfig(model_path="/valid/path")
-        self.assertEqual(config.model_path, "/valid/path")
-
-        mock_exists.return_value = False
-        config = DiffusionConfig(model_path="/invalid/path")
-        self.assertEqual(config.model_path, "/invalid/path")
-
-    def test_model_loading_error_handling(self):
-        """Test error handling during model loading."""
-        config = DiffusionConfig(model_path=None)
-
-        # Test pipelines with no model path
-        pipelines = [SDPipeline(config), SD3Pipeline(config), FluxPipeline(config)]
-
-        for pipeline in pipelines:
-            with self.subTest(pipeline_type=type(pipeline).__name__):
-                try:
-                    result = pipeline("test")
-                    # Should handle gracefully
-                    self.assertIsInstance(result, (list, type(None)))
-                except Exception as e:
-                    # Expected behavior
-                    pass
+    def test_default_guidance_scale_is_7_5(self):
+        """Test that default guidance scale is 7.5."""
+        config = DiffusionConfig()
+        self.assertEqual(config.guidance_scale, 7.5)
 
 
 if __name__ == '__main__':

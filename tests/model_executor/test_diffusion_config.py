@@ -24,35 +24,26 @@ from unittest.mock import Mock, patch
 # Add the project root to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
+# Import DiffusionConfig directly without importing the full fastdeploy package
+import sys
+import importlib.util
+
+CONFIG_AVAILABLE = True
 try:
-    from fastdeploy.model_executor.diffusion_models.vision.diffusion.config import DiffusionConfig
-    CONFIG_AVAILABLE = True
-except ImportError:
+    # Load the config module directly
+    spec = importlib.util.spec_from_file_location(
+        "config_module",
+        os.path.join(os.path.dirname(__file__), '..', '..', 'fastdeploy', 
+                     'model_executor', 'diffusion_models', 'vision', 'diffusion', 'config.py')
+    )
+    config_module = importlib.util.module_from_spec(spec)
+    sys.modules['config_module'] = config_module
+    spec.loader.exec_module(config_module)
+    DiffusionConfig = config_module.DiffusionConfig
+except Exception as e:
     CONFIG_AVAILABLE = False
-    # Create mock DiffusionConfig for testing
-    from unittest.mock import MagicMock
-
-    DiffusionConfig = MagicMock()
-    # Set up basic mock behavior
-    mock_instance = MagicMock()
-    DiffusionConfig.return_value = mock_instance
-
-    # Configure mock attributes
-    mock_instance.model_path = None
-    mock_instance.device = "cuda"
-    mock_instance.dtype = "float16"
-    mock_instance.height = 512
-    mock_instance.width = 512
-    mock_instance.num_inference_steps = 20
-    mock_instance.guidance_scale = 7.5
-    mock_instance.negative_prompt = None
-    mock_instance.num_images_per_prompt = 1
-    mock_instance.seed = 42
-    mock_instance.scheduler_config = None
-    mock_instance.tensorrt_config = None
-    mock_instance.enable_tensorrt = False
-    mock_instance.enable_optimization = False
-    mock_instance.optimization_level = "O2"
+    print(f"Warning: Could not import DiffusionConfig: {e}")
+    raise
 
 
 class TestDiffusionConfig(unittest.TestCase):
@@ -68,68 +59,54 @@ class TestDiffusionConfig(unittest.TestCase):
 
         # Test default values
         self.assertIsNone(config.model_path)
-        self.assertEqual(config.device, "cuda")
-        self.assertEqual(config.dtype, "float16")
+        self.assertEqual(config.device, "gpu")
+        self.assertEqual(config.use_fp16, True)
         self.assertEqual(config.height, 512)
         self.assertEqual(config.width, 512)
         self.assertEqual(config.num_inference_steps, 20)
         self.assertEqual(config.guidance_scale, 7.5)
-        self.assertIsNone(config.negative_prompt)
-        self.assertEqual(config.num_images_per_prompt, 1)
-        self.assertEqual(config.seed, 42)
-        self.assertIsNone(config.scheduler_config)
-        self.assertIsNone(config.tensorrt_config)
-        self.assertFalse(config.enable_tensorrt)
-        self.assertFalse(config.enable_optimization)
-        self.assertEqual(config.optimization_level, "O2")
+        self.assertEqual(config.enable_memory_optimization, True)
+        self.assertEqual(config.enable_dynamic_shape, True)
 
     def test_config_initialization_custom(self):
         """Test DiffusionConfig initialization with custom values."""
-        scheduler_config = {"beta_start": 0.00085, "beta_end": 0.012}
-        tensorrt_config = {"max_workspace_size": 1 << 30}
-
         config = DiffusionConfig(
             model_path="/path/to/model",
-            device="cpu",
-            dtype="float32",
+            device="gpu",
+            use_fp16=False,
+            use_tensorrt=True,
+            use_cinn=False,
             height=1024,
             width=1024,
             num_inference_steps=50,
             guidance_scale=12.0,
-            negative_prompt="blurry",
-            num_images_per_prompt=4,
-            seed=123,
-            scheduler_config=scheduler_config,
-            tensorrt_config=tensorrt_config,
-            enable_tensorrt=True,
-            enable_optimization=True,
-            optimization_level="O3"
+            max_batch_size=4,
+            enable_memory_optimization=False,
+            enable_dynamic_shape=False
         )
 
         self.assertEqual(config.model_path, "/path/to/model")
-        self.assertEqual(config.device, "cpu")
-        self.assertEqual(config.dtype, "float32")
+        self.assertEqual(config.device, "gpu")
+        self.assertEqual(config.use_fp16, False)
         self.assertEqual(config.height, 1024)
         self.assertEqual(config.width, 1024)
         self.assertEqual(config.num_inference_steps, 50)
         self.assertEqual(config.guidance_scale, 12.0)
-        self.assertEqual(config.negative_prompt, "blurry")
-        self.assertEqual(config.num_images_per_prompt, 4)
-        self.assertEqual(config.seed, 123)
-        self.assertEqual(config.scheduler_config, scheduler_config)
-        self.assertEqual(config.tensorrt_config, tensorrt_config)
-        self.assertTrue(config.enable_tensorrt)
-        self.assertTrue(config.enable_optimization)
-        self.assertEqual(config.optimization_level, "O3")
+        self.assertEqual(config.max_batch_size, 4)
+        self.assertTrue(config.use_tensorrt)
+        self.assertFalse(config.use_cinn)
+        self.assertFalse(config.enable_memory_optimization)
+        self.assertFalse(config.enable_dynamic_shape)
 
     def test_config_validation(self):
         """Test DiffusionConfig validation methods."""
         config = DiffusionConfig()
 
-        # Test device validation
-        self.assertTrue(hasattr(config, '_validate_device'))
-        self.assertTrue(hasattr(config, '_validate_dtype'))
-        self.assertTrue(hasattr(config, '_validate_dimensions'))
+        # Test validation was performed
+        self.assertTrue(hasattr(config, '_validate_config'))
+        # Test that invalid device raises error
+        with self.assertRaises(ValueError):
+            DiffusionConfig(device="invalid_device")
 
     def test_config_to_dict(self):
         """Test config to dictionary conversion."""
@@ -139,51 +116,45 @@ class TestDiffusionConfig(unittest.TestCase):
         self.assertIsInstance(config_dict, dict)
         self.assertIn('model_path', config_dict)
         self.assertIn('device', config_dict)
-        self.assertIn('dtype', config_dict)
+        self.assertIn('use_fp16', config_dict)
         self.assertIn('height', config_dict)
         self.assertIn('width', config_dict)
         self.assertIn('num_inference_steps', config_dict)
         self.assertIn('guidance_scale', config_dict)
-        self.assertIn('negative_prompt', config_dict)
-        self.assertIn('num_images_per_prompt', config_dict)
-        self.assertIn('seed', config_dict)
-        self.assertIn('enable_tensorrt', config_dict)
-        self.assertIn('enable_optimization', config_dict)
-        self.assertIn('optimization_level', config_dict)
+        self.assertIn('max_batch_size', config_dict)
+        self.assertIn('use_tensorrt', config_dict)
+        self.assertIn('enable_memory_optimization', config_dict)
+        self.assertIn('enable_dynamic_shape', config_dict)
 
     def test_config_from_dict(self):
         """Test config from dictionary creation."""
         config_dict = {
             'model_path': '/path/to/model',
-            'device': 'cuda',
-            'dtype': 'float16',
+            'device': 'gpu',
+            'use_fp16': True,
+            'use_tensorrt': False,
             'height': 512,
             'width': 512,
             'num_inference_steps': 20,
             'guidance_scale': 7.5,
-            'negative_prompt': None,
-            'num_images_per_prompt': 1,
-            'seed': 42,
-            'enable_tensorrt': False,
-            'enable_optimization': False,
-            'optimization_level': 'O2'
+            'max_batch_size': 2,
+            'enable_memory_optimization': True,
+            'enable_dynamic_shape': True
         }
 
         config = DiffusionConfig.from_dict(config_dict)
 
         self.assertEqual(config.model_path, '/path/to/model')
-        self.assertEqual(config.device, 'cuda')
-        self.assertEqual(config.dtype, 'float16')
+        self.assertEqual(config.device, 'gpu')
+        self.assertEqual(config.use_fp16, True)
         self.assertEqual(config.height, 512)
         self.assertEqual(config.width, 512)
         self.assertEqual(config.num_inference_steps, 20)
         self.assertEqual(config.guidance_scale, 7.5)
-        self.assertIsNone(config.negative_prompt)
-        self.assertEqual(config.num_images_per_prompt, 1)
-        self.assertEqual(config.seed, 42)
-        self.assertFalse(config.enable_tensorrt)
-        self.assertFalse(config.enable_optimization)
-        self.assertEqual(config.optimization_level, 'O2')
+        self.assertEqual(config.max_batch_size, 2)
+        self.assertFalse(config.use_tensorrt)
+        self.assertTrue(config.enable_memory_optimization)
+        self.assertTrue(config.enable_dynamic_shape)
 
 
 if __name__ == '__main__':

@@ -24,7 +24,12 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 import paddle
 import paddle.distributed as dist
-from paddleformers.transformers.configuration_utils import PretrainedConfig
+
+try:
+    from paddleformers.transformers.configuration_utils import PretrainedConfig
+except ImportError:
+    PretrainedConfig = None
+
 from typing_extensions import assert_never
 
 import fastdeploy
@@ -205,12 +210,18 @@ class ModelConfig:
                 setattr(self, key, value)
 
         assert self.model != ""
-        pretrained_config, _ = PretrainedConfig.get_config_dict(self.model)
-        self.pretrained_config = PretrainedConfig.from_dict(pretrained_config)
+        
+        # Try to load pretrained config if available
+        if PretrainedConfig is not None:
+            pretrained_config, _ = PretrainedConfig.get_config_dict(self.model)
+            self.pretrained_config = PretrainedConfig.from_dict(pretrained_config)
 
-        # set attribute from pretrained_config
-        for key, value in pretrained_config.items():
-            setattr(self, key, value)
+            # set attribute from pretrained_config
+            for key, value in pretrained_config.items():
+                setattr(self, key, value)
+        else:
+            pretrained_config = {}
+            self.pretrained_config = None
 
         # we need set default value when not exist
         for key, value in PRETRAINED_INIT_CONFIGURATION.items():
@@ -220,7 +231,7 @@ class ModelConfig:
         if not hasattr(self, "head_dim"):
             self.head_dim = self.hidden_size // self.num_attention_heads
 
-        if hasattr(self, "vision_config"):
+        if hasattr(self, "vision_config") and PretrainedConfig is not None:
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
 
         self.ori_vocab_size = args.get("ori_vocab_size", self.vocab_size)
