@@ -1596,7 +1596,6 @@ class PrefixCacheManager:
             current_match_node,
             gpu_match_token_num,
             cpu_match_token_num,
-            prefix_block_key,
         )
 
     def _update_matched_node_info(self, req_id, last_node, current_time):
