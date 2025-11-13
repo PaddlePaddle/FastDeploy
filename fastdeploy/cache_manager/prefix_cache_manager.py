@@ -516,14 +516,7 @@ class PrefixCacheManager:
 
         self.task_swapping_event[transfer_task_id] = Event()
         self.cache_task_queue.put_transfer_task(
-            (
-                swap_node_ids,
-                gpu_block_ids,
-                cpu_block_ids,
-                event_type,
-                transfer_task_id,
-                0
-            )
+            (swap_node_ids, gpu_block_ids, cpu_block_ids, event_type, transfer_task_id, 0)
         )
         if is_sync:
             self.sync_swap_task(transfer_task_id)
@@ -987,25 +980,12 @@ class PrefixCacheManager:
                 raise e
 
     def write_back_storage(
-        self,
-        task_id,
-        hash_keys,
-        gpu_block_ids=None,
-        cpu_block_ids=None,
-        is_sync=True,
-        timeout=0.1
+        self, task_id, hash_keys, gpu_block_ids=None, cpu_block_ids=None, is_sync=True, timeout=0.1
     ):
 
         self.task_write_back_event[task_id] = Event()
         self.cache_task_queue.put_transfer_task(
-            (
-                hash_keys,
-                gpu_block_ids,
-                cpu_block_ids,
-                CacheStatus.GPU2STORAGE,
-                task_id,
-                timeout
-            )
+            (hash_keys, gpu_block_ids, cpu_block_ids, CacheStatus.GPU2STORAGE, task_id, timeout)
         )  # 发起数据传输任务
 
         if is_sync:
@@ -1020,25 +1000,11 @@ class PrefixCacheManager:
         self.task_write_back_event[task_id].wait()
         del self.task_write_back_event[task_id]
 
-    def prefetch_kv_cache(
-        self,
-        task_id,
-        hash_keys,
-        gpu_block_ids,
-        is_sync=True,
-        timeout=0.1
-    ):
+    def prefetch_kv_cache(self, task_id, hash_keys, gpu_block_ids, is_sync=True, timeout=0.1):
         storage_block_ids = []
         self.task_prefetch_event[task_id] = Event()
         self.cache_task_queue.put_transfer_task(
-            (
-                hash_keys,
-                gpu_block_ids,
-                None,
-                CacheStatus.STORAGE2GPU,
-                task_id,
-                timeout
-            )
+            (hash_keys, gpu_block_ids, None, CacheStatus.STORAGE2GPU, task_id, timeout)
         )  # 发起数据传输任务
         if is_sync:
             storage_block_ids = self.sync_prefetch_task(task_id)

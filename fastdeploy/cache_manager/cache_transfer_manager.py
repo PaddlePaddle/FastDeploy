@@ -15,6 +15,7 @@
 """
 
 import argparse
+import asyncio
 import concurrent.futures
 import gc
 import json
@@ -22,9 +23,9 @@ import queue
 import threading
 import time
 import traceback
+
 import numpy as np
 import paddle
-import asyncio
 
 from fastdeploy import envs
 from fastdeploy.cache_manager.cache_data import CacheStatus
@@ -116,14 +117,13 @@ def parse_args():
     return args
 
 
-
 class TimeoutController:
     def __init__(self):
         self._stop_event = threading.Event()
-    
+
     def stop(self):
         self._stop_event.set()
-    
+
     def should_stop(self):
         return self._stop_event.is_set()
 
@@ -240,7 +240,9 @@ class CacheTransferManager:
 
     def _init_storage_buffer(self):
         total_layers = args.num_layers + self.num_extra_layers
-        need_to_allocate_bytes =args.max_model_length * args.bytes_per_layer_per_block * total_layers // args.block_size
+        need_to_allocate_bytes = (
+            args.max_model_length * args.bytes_per_layer_per_block * total_layers // args.block_size
+        )
         self.cache_stride = args.bytes_per_layer_per_block * total_layers
         logger.info(
             f"[rank {self.rank}/{self.n_ranks}] ..creating cpu cache for alllayers {total_layers}: {2 * need_to_allocate_bytes / 1024 ** 3:.2f}GB"
@@ -440,14 +442,7 @@ class CacheTransferManager:
         )
         swap_cache_layout(self.gpu_cache_v_tensors, self.val_register_buffer, gpu_block_ids, self.rank, 0)
 
-
-    def load_storage_task(
-        self,
-        task_id,
-        hash_keys,
-        gpu_block_ids,
-        timeout=0.1
-    ):
+    def load_storage_task(self, task_id, hash_keys, gpu_block_ids, timeout=0.1):
         logger.info(f"[rank {self.rank}/{self.n_ranks}] {hash_keys} {task_id} {gpu_block_ids} load_storage_task")
         keys = [f"{key}_key_{self.rank}" for key in hash_keys]
         results = self.storage_backend.exists(keys)
@@ -470,7 +465,7 @@ class CacheTransferManager:
                 except RuntimeError:
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
-                
+
                 # Run with timeout
                 loop.run_until_complete(
                     asyncio.wait_for(self._run_async_load(hash_keys, gpu_block_ids), timeout=timeout)
@@ -502,30 +497,20 @@ class CacheTransferManager:
         )
 
         # Prepare locations
-        target_location_k = [
-            self.key_register_buffer + i * self.cache_stride for i in range(len(uncached_block_ids))
-        ]
-        target_location_v = [
-            self.val_register_buffer + i * self.cache_stride for i in range(len(uncached_block_ids))
-        ]
+        target_location_k = [self.key_register_buffer + i * self.cache_stride for i in range(len(uncached_block_ids))]
+        target_location_v = [self.val_register_buffer + i * self.cache_stride for i in range(len(uncached_block_ids))]
 
         target_sizes = [self.cache_stride] * len(uncached_block_ids) * 2
         target_location = target_location_k + target_location_v
-        
+
         logger.info(f"write cache to storage {uncached_keys_k + uncached_keys_v} {target_location} {target_sizes}")
-        
+
         # Execute storage set operation
         self.storage_backend.set(
             uncached_keys_k + uncached_keys_v, target_location=target_location, target_sizes=target_sizes
         )
-    
-    def write_back_storage_task(
-            self,
-            keys,
-            gpu_block_ids,
-            transfer_task_id,
-            timeout=0.1
-        ):
+
+    def write_back_storage_task(self, keys, gpu_block_ids, transfer_task_id, timeout=0.1):
         """
         writeback kv cache to storage with coroutine-based timeout control
         """
@@ -561,10 +546,12 @@ class CacheTransferManager:
                 except RuntimeError:
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
-                
+
                 # Run with timeout
                 loop.run_until_complete(
-                    asyncio.wait_for(self._run_async_write(uncached_keys_k, uncached_keys_v, uncached_block_ids), timeout=timeout)
+                    asyncio.wait_for(
+                        self._run_async_write(uncached_keys_k, uncached_keys_v, uncached_block_ids), timeout=timeout
+                    )
                 )
                 result = (
                     keys,
