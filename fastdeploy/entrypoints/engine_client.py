@@ -235,7 +235,6 @@ class EngineClient:
 
         if "stop_seqs_len" in task:
             stop_seqs_len = task["stop_seqs_len"]
-            print("stop_seqs_len", stop_seqs_len)
             max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
             if len(stop_seqs_len) > max_stop_seqs_num:
                 error_msg = (
@@ -245,7 +244,6 @@ class EngineClient:
                 api_server_logger.error(error_msg)
                 raise EngineError(error_msg, error_code=400)
             stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
-            print("stop_seqs_max_len", stop_seqs_max_len, type(stop_seqs_max_len))
             for single_stop_seq_len in stop_seqs_len:
                 if single_stop_seq_len > stop_seqs_max_len:
                     error_msg = (
