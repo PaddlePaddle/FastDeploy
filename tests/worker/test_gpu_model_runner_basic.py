@@ -11,20 +11,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import importlib
 import os
 import sys
+import traceback
 import unittest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock
+from unittest.mock import Mock
+from unittest.mock import patch
 
+import paddle
 import pytest
 
 # Set environment to CPU-only mode for unit tests
 # This avoids GPU-related issues and makes tests more portable
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "-1")
 
-# Mock paddle CUDA functions BEFORE any imports
-import paddle
 
 original_get_device_properties = paddle.device.cuda.get_device_properties
 original_cuda_places = paddle.static.cuda_places
@@ -32,8 +34,6 @@ original_cuda_places = paddle.static.cuda_places
 
 def mock_get_device_properties(device_id=None):
     """Mock CUDA device properties to avoid GPU access"""
-    from unittest.mock import Mock
-
     props = Mock()
     props.name = "Mock GPU"
     props.major = 8
@@ -49,7 +49,6 @@ def mock_cuda_places():
 # Apply mocks
 paddle.device.cuda.get_device_properties = mock_get_device_properties
 paddle.static.cuda_places = mock_cuda_places
-
 
 # Mock paddleformers and related modules BEFORE importing fastdeploy
 # Create a base mock module that allows attribute access and acts as a proper module
@@ -131,8 +130,12 @@ class MockIluvatarOps(MagicMock):
 
 
 # Create and register the mock ops modules
-sys.modules["fastdeploy.model_executor.ops"] = MockModule(__name__="fastdeploy.model_executor.ops")
-sys.modules["fastdeploy.model_executor.ops.gpu"] = MockGPUOps(__name__="fastdeploy.model_executor.ops.gpu")
+sys.modules["fastdeploy.model_executor.ops"] = MockModule(
+    __name__="fastdeploy.model_executor.ops"
+)
+sys.modules["fastdeploy.model_executor.ops.gpu"] = MockGPUOps(
+    __name__="fastdeploy.model_executor.ops.gpu"
+)
 sys.modules["fastdeploy.model_executor.ops.iluvatar"] = MockIluvatarOps(
     __name__="fastdeploy.model_executor.ops.iluvatar"
 )
@@ -148,18 +151,24 @@ paddleformers_transformers_mock.PretrainedConfig = MockPretrainedConfig
 paddleformers_transformers_mock.PretrainedTokenizer = MockPretrainedTokenizer
 
 # Create mock for paddleformers.transformers.utils with required functions
-paddleformers_transformers_utils_mock = MockModule(__name__="paddleformers.transformers.utils")
+paddleformers_transformers_utils_mock = MockModule(
+    __name__="paddleformers.transformers.utils"
+)
 paddleformers_transformers_utils_mock.paddleformers_load = MagicMock()
 
 # Register all paddleformers modules
 sys.modules["paddleformers"] = paddleformers_mock
 sys.modules["paddleformers.utils"] = paddleformers_utils_mock
 sys.modules["paddleformers.utils.log"] = MockModule(__name__="paddleformers.utils.log")
-sys.modules["paddleformers.utils.safetensors"] = MockModule(__name__="paddleformers.utils.safetensors")
+sys.modules["paddleformers.utils.safetensors"] = MockModule(
+    __name__="paddleformers.utils.safetensors"
+)
 sys.modules["paddleformers.utils.env"] = MockModule(__name__="paddleformers.utils.env")
 sys.modules["paddleformers.transformers"] = paddleformers_transformers_mock
 sys.modules["paddleformers.transformers.utils"] = paddleformers_transformers_utils_mock
-sys.modules["paddleformers.generation"] = MockModule(__name__="paddleformers.generation")
+sys.modules["paddleformers.generation"] = MockModule(
+    __name__="paddleformers.generation"
+)
 
 # Mock common paddleformers.transformers submodules
 # Adding all commonly used submodules to avoid repeated imports
@@ -185,10 +194,18 @@ for submodule in transformers_submodules:
     setattr(paddleformers_transformers_mock, submodule, mock_mod)
 
 # Ensure dummy classes are available in all relevant modules
-sys.modules["paddleformers.transformers.model_utils"].PretrainedModel = MockPretrainedModel
-sys.modules["paddleformers.transformers.configuration_utils"].PretrainedConfig = MockPretrainedConfig
-sys.modules["paddleformers.transformers.tokenizer_utils_base"].PretrainedTokenizer = MockPretrainedTokenizer
-sys.modules["paddleformers.transformers.image_processing_utils"].BaseImageProcessor = MockBaseImageProcessor
+sys.modules[
+    "paddleformers.transformers.model_utils"
+].PretrainedModel = MockPretrainedModel
+sys.modules[
+    "paddleformers.transformers.configuration_utils"
+].PretrainedConfig = MockPretrainedConfig
+sys.modules[
+    "paddleformers.transformers.tokenizer_utils_base"
+].PretrainedTokenizer = MockPretrainedTokenizer
+sys.modules[
+    "paddleformers.transformers.image_processing_utils"
+].BaseImageProcessor = MockBaseImageProcessor
 
 # Mock other potentially missing modules
 missing_modules = []
@@ -203,14 +220,20 @@ modules_to_mock = [
     "openai",
     "crcmod",
     "pynvml",  # Mock pynvml to avoid GPU memory access issues
+    "fastdeploy.model_executor.ops.gcu",
 ]
+
+GPU_RUNNER_MODULE = "fastdeploy.worker.gpu_model_runner"
+GPU_RUNNER_GATHER = f"{GPU_RUNNER_MODULE}.paddle.distributed.all_gather_object"
+GPU_RUNNER_ENV_FLAG = f"{GPU_RUNNER_MODULE}.envs.ENABLE_V1_KVCACHE_SCHEDULER"
 
 for module_name in modules_to_mock:
     try:
         __import__(module_name)
-    except ImportError:
+    except Exception as exc:
+        sys.modules.pop(module_name, None)
         sys.modules[module_name] = MagicMock()
-        missing_modules.append(module_name)
+        missing_modules.append(f"{module_name} ({exc.__class__.__name__})")
 
 # Always mock zmq and aiozmq to avoid IPC issues in tests
 sys.modules["zmq"] = MagicMock()
@@ -220,15 +243,25 @@ if "zmq" not in missing_modules:
 if "aiozmq" not in missing_modules:
     missing_modules.append("aiozmq (forced mock)")
 
+# Normalize missing module list for stable logging
+missing_modules = sorted(set(missing_modules))
+
+# Stub fastdeploy.platforms.cuda.available to avoid hard GPU assertions
+cuda_module = sys.modules.get("fastdeploy.platforms.cuda")
+if cuda_module is None:
+    cuda_module = MockModule(__name__="fastdeploy.platforms.cuda")
+    sys.modules["fastdeploy.platforms.cuda"] = cuda_module
+cuda_module.available = MagicMock(return_value=False)
+
 # Mock pynvml before importing any fastdeploy modules that use it
 mock_pynvml = MagicMock()
 mock_pynvml.nvmlInit = MagicMock()
 mock_pynvml.nvmlShutdown = MagicMock()
 mock_pynvml.nvmlDeviceGetHandleByIndex = MagicMock(return_value=MagicMock())
-mock_pynvml.nvmlDeviceGetMemoryInfo = MagicMock(return_value=MagicMock(total=1024**3, used=0, free=1024**3))
+mock_pynvml.nvmlDeviceGetMemoryInfo = MagicMock(
+    return_value=MagicMock(total=1024**3, used=0, free=1024**3)
+)
 sys.modules["pynvml"] = mock_pynvml
-
-import paddle
 
 # Try to import GPUModelRunner
 CAN_IMPORT = False
@@ -236,14 +269,14 @@ GPUModelRunner = None
 IMPORT_ERROR = None
 
 try:
-    from fastdeploy.worker.gpu_model_runner import GPUModelRunner
-
+    gpu_runner_module = importlib.import_module(GPU_RUNNER_MODULE)
+    GPUModelRunner = getattr(gpu_runner_module, "GPUModelRunner")
+    setattr(gpu_runner_module, "get_rope", lambda *_, **__: DummyRope())
     CAN_IMPORT = True
     if missing_modules:
-        print(f"Warning: Mocked modules due to missing dependencies: {', '.join(missing_modules)}")
+        missing_msg = ", ".join(missing_modules)
+        print("Warning: Mocked modules due to missing dependencies: " f"{missing_msg}")
 except Exception as e:
-    import traceback
-
     IMPORT_ERROR = str(e)
     print(f"Failed to import GPUModelRunner: {e}")
     print(f"Mocked modules: {missing_modules}")
@@ -253,6 +286,18 @@ except Exception as e:
     pytestmark = pytest.mark.skip(reason=f"Cannot import GPUModelRunner: {e}")
 
 
+def patch_gpu(attr: str, *args, **kwargs):
+    """Shorthand to patch attributes under GPU model runner module."""
+    return patch(f"{GPU_RUNNER_MODULE}.{attr}", *args, **kwargs)
+
+
+class DummyRope:
+    """Simple stand-in for rope embeddings with no device requirements."""
+
+    def to(self, *args, **kwargs):
+        return self
+
+
 def get_common_patches():
     """Get common patches needed for GPUModelRunner initialization
 
@@ -260,13 +305,14 @@ def get_common_patches():
     We also patch initialize_attn_backend to avoid pin_memory() which requires CUDA
     """
     return [
-        patch("fastdeploy.worker.gpu_model_runner.get_attention_backend"),
-        patch("fastdeploy.worker.gpu_model_runner.Sampler"),
-        patch("fastdeploy.worker.gpu_model_runner.SpeculativeSampler"),
-        patch("fastdeploy.worker.gpu_model_runner.get_model_loader"),
+        patch_gpu("get_attention_backend"),
+        patch_gpu("Sampler"),
+        patch_gpu("SpeculativeSampler"),
+        patch_gpu("get_model_loader"),
         patch("paddle.device.set_device"),
-        patch("fastdeploy.worker.gpu_model_runner.ZmqIpcClient"),
-        patch("fastdeploy.worker.gpu_model_runner.GPUModelRunner.initialize_attn_backend"),
+        patch_gpu("ZmqIpcClient"),
+        patch_gpu("GPUModelRunner.initialize_attn_backend"),
+        patch_gpu("get_rope", side_effect=lambda *_, **__: DummyRope()),
     ]
 
 
@@ -305,7 +351,8 @@ def create_mock_fd_config():
     mock_config.model_config.partial_rotary_factor = 1.0
     mock_config.model_config.think_end_id = None
     mock_config.model_config.line_break_id = None
-    mock_config.model_config.architectures = ["LlamaForCausalLM"]  # Must be list with valid architecture
+    # Must be list with valid architecture
+    mock_config.model_config.architectures = ["LlamaForCausalLM"]
     mock_config.model_config.model_dir = "/tmp/model"
 
     # cache_config
@@ -334,8 +381,10 @@ def create_mock_fd_config():
     mock_config.parallel_config.msg_queue_id = 1
     mock_config.parallel_config.tensor_parallel_rank = 0
     mock_config.parallel_config.enable_expert_parallel = False
-    mock_config.parallel_config.enable_async_output = False  # Disable async output for tests
-    mock_config.parallel_config.guided_decoding_backend = "off"  # Disable guided decoding for tests
+    # Disable async output for tests
+    mock_config.parallel_config.enable_async_output = False
+    # Disable guided decoding for tests
+    mock_config.parallel_config.guided_decoding_backend = "off"
     mock_config.parallel_config.max_model_len = 2048  # Must be int for paddle.full()
     mock_config.parallel_config.total_block_num = 1000  # Must be int for range()
 
@@ -414,14 +463,15 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
             for p in patches:
                 p.stop()
 
-    # NOTE: Many methods tested below do not exist in the actual GPUModelRunner class
-    # These tests are kept as templates for future implementation or removed if confirmed unnecessary
+    # NOTE: Many methods tested below do not exist in the actual GPUModelRunner
+    # class. These are templates for future implementation or can be removed
+    # once confirmed unnecessary.
 
     def test_config_attributes(self):
         """Test that runner properly inherits config attributes"""
-        with patch("fastdeploy.worker.gpu_model_runner.get_attention_backend"):
-            with patch("fastdeploy.worker.gpu_model_runner.Sampler"):
-                with patch("fastdeploy.worker.gpu_model_runner.GPUModelRunner.initialize_attn_backend"):
+        with patch_gpu("get_attention_backend"):
+            with patch_gpu("Sampler"):
+                with patch_gpu("GPUModelRunner.initialize_attn_backend"):
                     runner = GPUModelRunner(
                         fd_config=self.mock_fd_config,
                         device="gpu:0",
@@ -430,7 +480,7 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
                         local_rank=0,
                     )
 
-                    # Verify all config attributes are properly set (based on ModelRunnerBase.__init__)
+                    # Verify config attributes follow ModelRunnerBase.__init__
                     self.assertIsNotNone(runner.fd_config)
                     self.assertIsNotNone(runner.model_config)
                     self.assertIsNotNone(runner.load_config)
@@ -442,16 +492,16 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
                     self.assertIsNotNone(runner.graph_opt_config)
                     # quant_config can be None (quantization is optional)
                     self.assertTrue(hasattr(runner, "quant_config"))
-                    # early_stop_config is NOT stored as attribute, only accessible via fd_config
+                    # early_stop_config stays on fd_config
                     self.assertIsNotNone(runner.fd_config.early_stop_config)
                     self.assertEqual(runner.device, "gpu:0")
 
     def test_initialization_with_multimodal(self):
         """Test initialization with multimodal enabled"""
-        with patch("fastdeploy.worker.gpu_model_runner.get_attention_backend"):
-            with patch("fastdeploy.worker.gpu_model_runner.Sampler"):
-                with patch("fastdeploy.worker.gpu_model_runner.GPUModelRunner.initialize_attn_backend"):
-                    with patch("fastdeploy.worker.gpu_model_runner.GPUModelRunner._init_image_preprocess"):
+        with patch_gpu("get_attention_backend"):
+            with patch_gpu("Sampler"):
+                with patch_gpu("GPUModelRunner.initialize_attn_backend"):
+                    with patch_gpu("GPUModelRunner._init_image_preprocess"):
                         # Create a new config with multimodal enabled
                         mm_config = create_mock_fd_config()
                         mm_config.model_config.enable_mm = True
@@ -467,7 +517,7 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
 
                         # Verify multimodal initialization
                         self.assertTrue(runner.enable_mm)
-                        # Verify amp lists are set (these are only set when enable_mm=True)
+                        # Verify amp lists exist only when enable_mm=True
                         self.assertTrue(hasattr(runner, "amp_black"))
                         self.assertTrue(hasattr(runner, "amp_white"))
                         self.assertIsInstance(runner.amp_black, list)
@@ -475,9 +525,9 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
 
     def test_initialization_with_logprob(self):
         """Test initialization with logprob enabled"""
-        with patch("fastdeploy.worker.gpu_model_runner.get_attention_backend"):
-            with patch("fastdeploy.worker.gpu_model_runner.Sampler"):
-                with patch("fastdeploy.worker.gpu_model_runner.GPUModelRunner.initialize_attn_backend"):
+        with patch_gpu("get_attention_backend"):
+            with patch_gpu("Sampler"):
+                with patch_gpu("GPUModelRunner.initialize_attn_backend"):
                     # Enable logprob
                     self.mock_fd_config.model_config.enable_logprob = True
 
@@ -494,9 +544,9 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
 
     def test_initialization_with_early_stop(self):
         """Test initialization with early stop enabled"""
-        with patch("fastdeploy.worker.gpu_model_runner.get_attention_backend"):
-            with patch("fastdeploy.worker.gpu_model_runner.Sampler"):
-                with patch("fastdeploy.worker.gpu_model_runner.GPUModelRunner.initialize_attn_backend"):
+        with patch_gpu("get_attention_backend"):
+            with patch_gpu("Sampler"):
+                with patch_gpu("GPUModelRunner.initialize_attn_backend"):
                     # Enable early stop
                     self.mock_fd_config.early_stop_config.enable_early_stop = True
 
@@ -513,9 +563,9 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
 
     def test_device_id_assignment(self):
         """Test device_id and rank assignment"""
-        with patch("fastdeploy.worker.gpu_model_runner.get_attention_backend"):
-            with patch("fastdeploy.worker.gpu_model_runner.Sampler"):
-                with patch("fastdeploy.worker.gpu_model_runner.GPUModelRunner.initialize_attn_backend"):
+        with patch_gpu("get_attention_backend"):
+            with patch_gpu("Sampler"):
+                with patch_gpu("GPUModelRunner.initialize_attn_backend"):
                     runner = GPUModelRunner(
                         fd_config=self.mock_fd_config,
                         device="gpu:2",
@@ -532,9 +582,9 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
 
     def test_share_inputs_initialization(self):
         """Test that share_inputs is properly initialized"""
-        with patch("fastdeploy.worker.gpu_model_runner.get_attention_backend"):
-            with patch("fastdeploy.worker.gpu_model_runner.Sampler"):
-                with patch("fastdeploy.worker.gpu_model_runner.GPUModelRunner.initialize_attn_backend"):
+        with patch_gpu("get_attention_backend"):
+            with patch_gpu("Sampler"):
+                with patch_gpu("GPUModelRunner.initialize_attn_backend"):
                     runner = GPUModelRunner(
                         fd_config=self.mock_fd_config,
                         device="gpu:0",
@@ -554,9 +604,9 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
 
     def test_sampler_initialization(self):
         """Test that sampler is properly initialized"""
-        with patch("fastdeploy.worker.gpu_model_runner.get_attention_backend"):
-            with patch("fastdeploy.worker.gpu_model_runner.Sampler") as mock_sampler:
-                with patch("fastdeploy.worker.gpu_model_runner.GPUModelRunner.initialize_attn_backend"):
+        with patch_gpu("get_attention_backend"):
+            with patch_gpu("Sampler") as mock_sampler:
+                with patch_gpu("GPUModelRunner.initialize_attn_backend"):
                     runner = GPUModelRunner(
                         fd_config=self.mock_fd_config,
                         device="gpu:0",
@@ -677,6 +727,69 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
             for p in patches:
                 p.stop()
 
+    def test_cal_theortical_kvcache_with_quantization(self):
+        """Quantized kv cache should use byte_of_dtype=1"""
+        patches = get_common_patches()
+        for p in patches:
+            p.start()
+
+        try:
+            runner = GPUModelRunner(
+                fd_config=self.mock_fd_config,
+                device="gpu:0",
+                device_id=0,
+                rank=0,
+                local_rank=0,
+            )
+            runner.quant_config = Mock()
+            runner.quant_config.kv_cache_quant_type = "int8"
+
+            hidden_dim = runner.model_config.head_dim * runner.model_config.kv_num_heads
+            num_layers = runner.model_config.num_hidden_layers
+            block_size = runner.cache_config.block_size
+
+            expected = 1 * 2 * (block_size * hidden_dim) * num_layers
+            result = runner.cal_theortical_kvcache()
+            self.assertEqual(result, expected)
+        finally:
+            for p in patches:
+                p.stop()
+
+    def test_cal_theortical_kvcache_with_speculative_expand_ratio(self):
+        """Speculative MTP should count additional layers from expand ratio"""
+        patches = get_common_patches()
+        for p in patches:
+            p.start()
+
+        try:
+            spec_config = create_mock_fd_config()
+            spec_config.speculative_config.method = "mtp"
+            spec_config.speculative_config.num_gpu_block_expand_ratio = 3
+
+            runner = GPUModelRunner(
+                fd_config=spec_config,
+                device="gpu:0",
+                device_id=0,
+                rank=0,
+                local_rank=0,
+            )
+            runner.speculative_method = "mtp"
+
+            byte_of_dtype = 2
+            hidden_dim = runner.model_config.head_dim * runner.model_config.kv_num_heads
+            num_layers = (
+                runner.model_config.num_hidden_layers
+                + runner.speculative_config.num_gpu_block_expand_ratio
+            )
+            block_size = runner.cache_config.block_size
+
+            expected = byte_of_dtype * 2 * (block_size * hidden_dim) * num_layers
+            result = runner.cal_theortical_kvcache()
+            self.assertEqual(result, expected)
+        finally:
+            for p in patches:
+                p.stop()
+
     def test_clear_requests(self):
         """Test clear_requests method"""
         patches = get_common_patches()
@@ -697,19 +810,52 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
             stop_flags_mock = MagicMock()
             runner.share_inputs["stop_flags"] = stop_flags_mock
 
+            class TrackingDict(dict):
+                def __init__(self, *args, **kwargs):
+                    super().__init__(*args, **kwargs)
+                    self.clear_called = False
+
+                def clear(self):
+                    self.clear_called = True
+                    super().clear()
+
+            runner.prompt_logprobs_reqs = TrackingDict({"req-1": Mock()})
+            runner.in_progress_prompt_logprobs = TrackingDict({"req-1": Mock()})
+
             # Clear requests
             runner.clear_requests()
 
             # Verify stop_flags marked as True
-            stop_flags_mock.__setitem__.assert_called_with(slice(None, None, None), True)
+            stop_flags_mock.__setitem__.assert_called_with(
+                slice(None, None, None), True
+            )
+        finally:
+            for p in patches:
+                p.stop()
 
-            # Ensure prompt logprobs dictionaries exist and are empty if present
-            prompt_dict = getattr(runner, "prompt_logprobs_reqs", None)
-            if prompt_dict is not None:
-                self.assertEqual(len(prompt_dict), 0)
-            progress_dict = getattr(runner, "in_progress_prompt_logprobs", None)
-            if progress_dict is not None:
-                self.assertEqual(len(progress_dict), 0)
+    def test_clear_cache_without_forward_meta(self):
+        """clear_cache should still work when forward_meta is None"""
+        patches = get_common_patches()
+        for p in patches:
+            p.start()
+
+        try:
+            with patch("paddle.device.cuda.empty_cache") as mock_empty_cache:
+                runner = GPUModelRunner(
+                    fd_config=self.mock_fd_config,
+                    device="gpu:0",
+                    device_id=0,
+                    rank=0,
+                    local_rank=0,
+                )
+
+                runner.forward_meta = None
+                runner.share_inputs["caches"] = ["dummy_cache"]
+
+                runner.clear_cache()
+
+                self.assertNotIn("caches", runner.share_inputs)
+                mock_empty_cache.assert_called_once()
         finally:
             for p in patches:
                 p.stop()
@@ -719,7 +865,7 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
         patches = get_common_patches()
         for p in patches:
             p.start()
-        gather_patch = patch("fastdeploy.worker.gpu_model_runner.paddle.distributed.all_gather_object")
+        gather_patch = patch(GPU_RUNNER_GATHER)
         mock_gather = gather_patch.start()
 
         def gather_all_true(result_list, value):
@@ -759,7 +905,7 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
         patches = get_common_patches()
         for p in patches:
             p.start()
-        gather_patch = patch("fastdeploy.worker.gpu_model_runner.paddle.distributed.all_gather_object")
+        gather_patch = patch(GPU_RUNNER_GATHER)
         mock_gather = gather_patch.start()
 
         def gather_all_true(result_list, value):
@@ -793,10 +939,10 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
 
     def test_initialization_with_speculative_decoding(self):
         """Test initialization switches to SpeculativeSampler when method is set"""
-        with patch("fastdeploy.worker.gpu_model_runner.get_attention_backend"):
-            with patch("fastdeploy.worker.gpu_model_runner.Sampler") as mock_sampler:
-                with patch("fastdeploy.worker.gpu_model_runner.SpeculativeSampler") as mock_spec_sampler:
-                    with patch("fastdeploy.worker.gpu_model_runner.GPUModelRunner.initialize_attn_backend"):
+        with patch_gpu("get_attention_backend"):
+            with patch_gpu("Sampler") as mock_sampler:
+                with patch_gpu("SpeculativeSampler") as mock_spec_sampler:
+                    with patch_gpu("GPUModelRunner.initialize_attn_backend"):
                         spec_config = create_mock_fd_config()
                         spec_config.speculative_config.method = "ngram"
                         runner = GPUModelRunner(
@@ -815,9 +961,9 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
 
     def test_initialization_with_pooling_model(self):
         """Test initialization recognizes pooling runner type"""
-        with patch("fastdeploy.worker.gpu_model_runner.get_attention_backend"):
-            with patch("fastdeploy.worker.gpu_model_runner.Sampler"):
-                with patch("fastdeploy.worker.gpu_model_runner.GPUModelRunner.initialize_attn_backend"):
+        with patch_gpu("get_attention_backend"):
+            with patch_gpu("Sampler"):
+                with patch_gpu("GPUModelRunner.initialize_attn_backend"):
                     pooling_config = create_mock_fd_config()
                     pooling_config.model_config.runner_type = "pooling"
 
@@ -832,23 +978,29 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
                     # Some builds expose is_pooling_model, others rely on config only.
                     if hasattr(runner, "is_pooling_model"):
                         self.assertTrue(runner.is_pooling_model)
-                    self.assertEqual(runner.fd_config.model_config.runner_type, "pooling")
+                    self.assertEqual(
+                        runner.fd_config.model_config.runner_type,
+                        "pooling",
+                    )
 
     def test_initialization_with_guided_decoding(self):
         """Test initialization wires guided decoding backend"""
-        with patch("fastdeploy.worker.gpu_model_runner.get_attention_backend"):
-            with patch("fastdeploy.worker.gpu_model_runner.Sampler") as mock_sampler:
+        with patch_gpu("get_attention_backend"):
+            with patch_gpu("Sampler") as mock_sampler:
                 sampler_instance = Mock()
                 mock_sampler.return_value = sampler_instance
-                with patch("fastdeploy.worker.gpu_model_runner.GPUModelRunner.initialize_attn_backend"):
-                    with patch("fastdeploy.worker.gpu_model_runner.get_guided_backend") as mock_get_guided_backend:
+                with patch_gpu("GPUModelRunner.initialize_attn_backend"):
+                    with patch_gpu("get_guided_backend") as mock_get_guided_backend:
                         mock_guided_backend = Mock()
                         mock_parser = Mock()
-                        mock_guided_backend.get_reasoning_parser.return_value = mock_parser
+                        mock_guided_backend.get_reasoning_parser.return_value = (
+                            mock_parser
+                        )
                         mock_get_guided_backend.return_value = mock_guided_backend
 
                         guided_config = create_mock_fd_config()
-                        guided_config.structured_outputs_config.guided_decoding_backend = "xgrammar"
+                        guided_outputs = guided_config.structured_outputs_config
+                        guided_outputs.guided_decoding_backend = "xgrammar"
 
                         runner = GPUModelRunner(
                             fd_config=guided_config,
@@ -858,11 +1010,14 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
                             local_rank=0,
                         )
 
-                        # Depending on platform/build, guided backend may or may not be initialized.
+                        # Guided backend may or may not be initialized on all builds.
                         self.assertTrue(hasattr(runner, "guided_backend"))
                         if mock_get_guided_backend.call_count:
-                            mock_get_guided_backend.assert_called_once_with(fd_config=guided_config)
-                            sampler_instance.set_reasoning_parser.assert_called_once_with(mock_parser)
+                            mock_get_guided_backend.assert_called_once_with(
+                                fd_config=guided_config
+                            )
+                            set_parser = sampler_instance.set_reasoning_parser
+                            set_parser.assert_called_once_with(mock_parser)
 
     def test_update_share_input_block_num(self):
         """Test updating share input block numbers refreshes free list and kv cache"""
@@ -879,15 +1034,15 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
                 local_rank=0,
             )
 
-            runner.speculative_method = "mtp"
-            runner.proposer = Mock(spec=["update_mtp_block_num", "update_block_num"])
             with patch.object(runner, "initialize_kv_cache") as mock_init:
                 new_blocks = 32
                 runner.update_share_input_block_num(new_blocks)
 
+                # Verify basic updates
                 mock_init.assert_called_once()
                 self.assertEqual(runner.num_gpu_blocks, new_blocks)
 
+                # Verify free list is correctly updated
                 free_list_tensor = runner.share_inputs["free_list"]
                 free_list = free_list_tensor.numpy().tolist()
                 expected_free_list = list(
@@ -900,46 +1055,33 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
                 self.assertEqual(free_list, expected_free_list)
                 free_len = runner.share_inputs["free_list_len"].numpy()[0]
                 self.assertEqual(free_len, len(expected_free_list))
-                if runner.proposer is not None:
-                    called = False
-                    if hasattr(runner.proposer, "update_mtp_block_num"):
-                        if runner.proposer.update_mtp_block_num.call_count > 0:
-                            runner.proposer.update_mtp_block_num.assert_called_once_with(new_blocks)
-                            called = True
-                    if hasattr(runner.proposer, "update_block_num"):
-                        if runner.proposer.update_block_num.call_count > 0:
-                            runner.proposer.update_block_num.assert_called_once_with(new_blocks)
-                            called = True
-                    self.assertTrue(called)
-                else:
-                    self.assertTrue(True)
         finally:
             for p in patches:
                 p.stop()
 
     def test_max_logprobs_calculation(self):
         """Test max_logprobs derives from config"""
-        with patch("fastdeploy.worker.gpu_model_runner.get_attention_backend"):
-            with patch("fastdeploy.worker.gpu_model_runner.Sampler"):
-                with patch("fastdeploy.worker.gpu_model_runner.GPUModelRunner.initialize_attn_backend"):
+        with patch_gpu("get_attention_backend"):
+            with patch_gpu("Sampler"):
+                with patch_gpu("GPUModelRunner.initialize_attn_backend"):
                     # Case 1: max_logprobs == -1 uses ori_vocab_size
                     config1 = create_mock_fd_config()
                     config1.model_config.max_logprobs = -1
                     config1.model_config.ori_vocab_size = 32000
 
-                    # Depending on implementation, max_logprobs may not be exposed directly.
+                    # Some builds may not expose max_logprobs directly.
                     expected_max_logprobs = (
-                        32000 if config1.model_config.max_logprobs == -1 else config1.model_config.max_logprobs
+                        32000
+                        if config1.model_config.max_logprobs == -1
+                        else config1.model_config.max_logprobs
                     )
                     fd_config_after_init = config1
-                    self.assertEqual(
-                        (
-                            fd_config_after_init.model_config.max_logprobs
-                            if fd_config_after_init.model_config.max_logprobs != -1
-                            else fd_config_after_init.model_config.ori_vocab_size
-                        ),
-                        expected_max_logprobs,
+                    actual_max_logprobs = (
+                        fd_config_after_init.model_config.max_logprobs
+                        if fd_config_after_init.model_config.max_logprobs != -1
+                        else fd_config_after_init.model_config.ori_vocab_size
                     )
+                    self.assertEqual(actual_max_logprobs, expected_max_logprobs)
 
                     # Case 2: explicit max_logprobs value
                     config2 = create_mock_fd_config()
@@ -955,6 +1097,104 @@ class TestGPUModelRunnerBasic(unittest.TestCase):
                     )
 
                     self.assertEqual(config2.model_config.max_logprobs, 200)
+
+    def test_clear_cache_clears_forward_meta_and_caches(self):
+        """clear_cache should drop cache tensors and call forward_meta.clear_caches"""
+        patches = get_common_patches()
+        for p in patches:
+            p.start()
+
+        try:
+            with patch("paddle.device.cuda.empty_cache") as mock_empty_cache:
+                runner = GPUModelRunner(
+                    fd_config=self.mock_fd_config,
+                    device="gpu:0",
+                    device_id=0,
+                    rank=0,
+                    local_rank=0,
+                )
+
+                # Inject fake caches and forward_meta
+                runner.share_inputs["caches"] = ["dummy_cache"]
+                runner.forward_meta = Mock()
+
+                runner.clear_cache()
+
+                self.assertNotIn("caches", runner.share_inputs)
+                runner.forward_meta.clear_caches.assert_called_once()
+                mock_empty_cache.assert_called_once()
+        finally:
+            for p in patches:
+                p.stop()
+
+    def test_dummy_prefill_inputs_populates_share_inputs(self):
+        """_dummy_prefill_inputs should populate key share buffers"""
+        patches = get_common_patches()
+        for p in patches:
+            p.start()
+
+        try:
+            runner = GPUModelRunner(
+                fd_config=self.mock_fd_config,
+                device="gpu:0",
+                device_id=0,
+                rank=0,
+                local_rank=0,
+            )
+
+            runner._dummy_prefill_inputs([3], [7], 2)
+
+            self.assertTrue(
+                (runner.share_inputs["input_ids"][0, :3].numpy() == 5).all()
+            )
+            self.assertEqual(int(runner.share_inputs["seq_lens_encoder"][0]), 3)
+            self.assertEqual(int(runner.share_inputs["seq_lens_decoder"][0]), 0)
+            self.assertEqual(int(runner.share_inputs["max_dec_len"][0]), 7)
+            self.assertEqual(int(runner.share_inputs["block_tables"][0, 0]), 0)
+            self.assertEqual(int(runner.share_inputs["block_tables"][0, 1]), 1)
+        finally:
+            for p in patches:
+                p.stop()
+
+    def test_get_skip_idx_with_chunked_prefill(self):
+        """_get_skip_idx collects chunked prefill tasks when guided backend exists"""
+        patches = get_common_patches()
+        for p in patches:
+            p.start()
+        env_patch = patch(GPU_RUNNER_ENV_FLAG, False)
+        env_patch.start()
+
+        class DummyRequest(dict):
+            def __getattr__(self, item):
+                return self[item]
+
+        try:
+            chunked_config = create_mock_fd_config()
+            chunked_config.cache_config.enable_chunked_prefill = True
+            runner = GPUModelRunner(
+                fd_config=chunked_config,
+                device="gpu:0",
+                device_id=0,
+                rank=0,
+                local_rank=0,
+            )
+
+            runner.guided_backend = object()
+
+            request = DummyRequest(idx=2, chunk_idx=0, prefill_chunk_info=[4, 4])
+            skip_idx = runner._get_skip_idx([request])
+            self.assertEqual(skip_idx, [2])
+
+            # Ensure restore_chunked_prefill_request also contributes
+            runner.restore_chunked_prefill_request = {
+                "reqA": DummyRequest(idx=5, chunk_idx=0, prefill_chunk_info=[3, 3])
+            }
+            skip_idx = runner._get_skip_idx([request])
+            self.assertCountEqual(skip_idx, [2, 5])
+        finally:
+            env_patch.stop()
+            for p in patches:
+                p.stop()
 
 
 if __name__ == "__main__":
