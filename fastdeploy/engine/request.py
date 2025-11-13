@@ -168,6 +168,10 @@ class Request:
         self.dp_rank = dp_rank
         self.llm_engine_recv_req_timestamp = time.time()
 
+        self.async_process_futures = []
+        self.error_message = None
+        self.error_code = None
+
     @classmethod
     def from_dict(cls, d: dict):
         data_processor_logger.debug(f"{d}")

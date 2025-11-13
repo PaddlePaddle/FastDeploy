@@ -21,6 +21,7 @@ import importlib
 import json
 import logging
 import os
+import pickle
 import random
 import re
 import socket
@@ -973,6 +974,36 @@ def init_bos_client():
         credentials=BceCredentials(envs.ENCODE_FEATURE_BOS_AK, envs.ENCODE_FEATURE_BOS_SK), endpoint="bj.bcebos.com"
     )
     return BosClient(cfg)
+
+
+def download_from_bos(bos_client, bos_links):
+    """
+    Download pickled objects from Baidu Object Storage (BOS).
+    Args:
+        bos_client: BOS client instance
+        bos_links: Single link or list of BOS links in format "bos://bucket-name/path/to/object"
+    Yields:
+        tuple: (success: bool, data: np.ndarray | error_msg: str)
+            - On success: (True, deserialized_data)
+            - On failure: (False, error_message) and stops processing remaining links
+    Security Note:
+        Uses pickle deserialization. Only use with trusted data sources.
+    """
+    if not isinstance(bos_links, list):
+        bos_links = [bos_links]
+
+    for link in bos_links:
+        try:
+            if link.startswith("bos://"):
+                link = link.replace("bos://", "")
+
+            bucket_name = "/".join(link.split("/")[1:-1])
+            object_key = link.split("/")[-1]
+            response = bos_client.get_object_as_string(bucket_name, object_key)
+            yield True, pickle.loads(response)
+        except Exception as e:
+            yield False, f"link {link} download error: {str(e)}"
+            break
 
 
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")
