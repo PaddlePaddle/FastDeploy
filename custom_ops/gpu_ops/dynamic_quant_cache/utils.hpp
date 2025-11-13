@@ -15,12 +15,7 @@
 #include <cutlass/cutlass.h>
 #include <cutlass/numeric_conversion.h>
 #include <cutlass/numeric_types.h>
-#include "cute/algorithm/copy.hpp"
-#include "cute/algorithm/gemm.hpp"
-#include "cute/tensor.hpp"
-
 #include <cub/cub.cuh>
-
 #include "../moba_attn/moba_attn_utils.hpp"
 
 namespace dynamic_quant_cache {

@@ -26,9 +26,6 @@
 #include <cutlass/numeric_types.h>
 #include <cub/cub.cuh>
 #include <cute/arch/cluster_sm90.hpp>
-#include "cute/algorithm/copy.hpp"
-#include "cute/algorithm/gemm.hpp"
-#include "cute/atom/mma_atom.hpp"
 #include "cute/int_tuple.hpp"
 #include "cute/tensor.hpp"
 #include "cutlass/arch/reg_reconfig.h"

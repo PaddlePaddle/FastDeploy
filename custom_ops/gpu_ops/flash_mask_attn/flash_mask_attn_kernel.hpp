@@ -4,16 +4,8 @@
  ******************************************************************************/
 
 #pragma once
-#include "cute/algorithm/copy.hpp"
-#include "cute/atom/mma_atom.hpp"
-#include "cutlass/gemm/collective/collective_builder.hpp"
-
 #include "cutlass/arch/reg_reconfig.h"
 #include "cutlass/cluster_launch.hpp"
-#include "cutlass/cutlass.h"
-#include "cutlass/layout/layout.h"
-#include "cutlass/numeric_types.h"
-#include "cutlass/pipeline/pipeline.hpp"
 
 #include "kernel_traits.h"
 #include "mainloop_attn.hpp"
