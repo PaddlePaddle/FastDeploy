@@ -227,8 +227,8 @@ class ModelConfig:
         self.think_end_id = args.get("think_end_id", -1)
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
-        if self.max_logprobs == -1 and hasattr(self, "vocab_size"):
-            self.max_logprobs = self.vocab_size
+        if self.max_logprobs < -1:
+            raise ValueError(" The possible values for max_logprobs can't be less than -1 ")
 
         self._post_init()
 
@@ -307,8 +307,8 @@ class ModelConfig:
         Read configuration information from environment variables and update the object's attributes.
         If an attribute is not present or is an empty string in the environment variables, use the default value.
         """
-        self.max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
-        self.stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
+        self.max_stop_seqs_num = envs.FD_MAX_STOP_SEQS_NUM
+        self.stop_seqs_max_len = envs.FD_STOP_SEQS_MAX_LEN
 
         def reset_config_value(key, value):
             if not hasattr(self, key.lower()):
@@ -548,6 +548,8 @@ class ParallelConfig:
         self.do_profile: bool = False
         # Use internode_ll_two_stage or not
         self.use_internode_ll_two_stage: bool = False
+        # disable sequence parallel moe
+        self.disable_sequence_parallel_moe: bool = False
 
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
@@ -577,14 +579,14 @@ class ParallelConfig:
         else:
             self.pd_disaggregation_mode = "None"
 
-        # ep+tp strategy: "all_reduce" or "all_to_all"
-        # all_reduce: qkv_linear + attn + out_linear + allreduce
-        # all_to_all: allgather + qkv_linear + attn + all2all + out_linear
-        self.ep_tp_strategy = envs.FD_EP_TP_STRATEGY
-        assert self.ep_tp_strategy in [
-            "all_reduce",
-            "all_to_all",
-        ], f"FD_EP_TP_STRATEGY: '{self.ep_tp_strategy}' is not supported, only supports 'all_reduce' or 'all_to_all'."
+        # disable_sequence_parallel_moe: qkv_linear + attn + out_linear + allreduce
+        # use_sequence_parallel_moe: allgather + qkv_linear + attn + all2all + out_linear
+        self.use_sequence_parallel_moe = (
+            (not self.disable_sequence_parallel_moe)
+            and self.expert_parallel_size > 1
+            and self.tensor_parallel_size > 1
+        )
+        logger.info(f"use_sequence_parallel_moe: {self.use_sequence_parallel_moe}")
 
     def set_communicate_group(self):
         # different tp group id
@@ -1288,6 +1290,9 @@ class CacheConfig:
                 self.prefill_kvcache_block_num = self.total_block_num
             else:
                 self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
+            assert (
+                self.prefill_kvcache_block_num >= self.max_block_num_per_seq
+            ), f"current block number :{self.prefill_kvcache_block_num} should be greater than or equal to current model len needed minimum block number :{self.max_block_num_per_seq}"
         else:
             length = num_total_tokens // number_of_tasks
             block_num = (length + self.block_size - 1 + self.dec_token_num) // self.block_size
@@ -1308,6 +1313,9 @@ class CacheConfig:
             f"Reset block num, the total_block_num:{self.total_block_num},"
             f" prefill_kvcache_block_num:{self.prefill_kvcache_block_num}"
         )
+        assert (
+            self.prefill_kvcache_block_num >= self.max_block_num_per_seq
+        ), f"current block number :{self.prefill_kvcache_block_num} should be greater than or equal to current model len needed minimum block number :{self.max_block_num_per_seq}"
 
     def print(self):
         """
@@ -1583,8 +1591,8 @@ class FDConfig:
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.model_config.max_model_len * 0.04)
 
-        self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         self.cache_config.max_block_num_per_seq = int(self.model_config.max_model_len // self.cache_config.block_size)
+        self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.cache_config.enable_prefix_caching = False
 
