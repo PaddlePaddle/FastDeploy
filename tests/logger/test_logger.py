@@ -20,6 +20,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from fastdeploy.logger.handlers import LazyFileHandler
 from fastdeploy.logger.logger import FastDeployLogger
 
 
@@ -149,10 +150,10 @@ class LoggerTests(unittest.TestCase):
         # 验证新logger的handler数量（应该是2个：主日志和错误日志）
         self.assertEqual(len(logger.handlers), 2)
 
-    def test_log_file_name_handling(self):
+    def test_log_file_name_handling_error(self):
         """测试日志文件名处理逻辑"""
         test_cases = [
-            ("test", "test.log"),  # 不含点的情况
+            ("test", "test_error.log"),
         ]
 
         for input_name, expected_name in test_cases:
@@ -162,10 +163,9 @@ class LoggerTests(unittest.TestCase):
 
                 # 获取handler中的文件名
                 for handler in logger.handlers:
-                    if isinstance(handler, logging.FileHandler):
-                        actual_name = os.path.basename(handler.baseFilename)
-                        self.assertFalse(actual_name.endswith(expected_name))
-                        break
+                    if isinstance(handler, LazyFileHandler):
+                        actual_name = os.path.basename(handler.filename)
+                        self.assertTrue(actual_name.endswith(expected_name))
 
 
 if __name__ == "__main__":
