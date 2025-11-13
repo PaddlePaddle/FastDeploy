@@ -808,7 +808,20 @@ def init_bos_client():
 
 def download_from_bos(bos_client, bos_links, timeout=1):
     """
-    download from bos
+    Download pickled objects from Baidu Object Storage (BOS).
+
+    Args:
+        bos_client: BOS client instance
+        bos_links: Single link or list of BOS links in format "bos://bucket-name/path/to/object"
+        timeout: Currently unused (placeholder for future timeout functionality)
+
+    Yields:
+        tuple: (success: bool, data: np.ndarray | error_msg: str)
+            - On success: (True, deserialized_data)
+            - On failure: (False, error_message) and stops processing remaining links
+
+    Security Note:
+        Uses pickle deserialization. Only use with trusted data sources.
     """
     if not isinstance(bos_links, list):
         bos_links = [bos_links]

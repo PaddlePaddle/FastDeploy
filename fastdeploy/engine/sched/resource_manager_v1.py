@@ -312,7 +312,7 @@ class ResourceManagerV1(ResourceManager):
         with self.lock:
             scheduled_reqs: list[Request] = []
             preempted_reqs: list[Request] = []
-            error_reqs: list[str, str] = []
+            error_reqs: list[tuple[str, str]] = []
             token_budget = self.config.max_num_batched_tokens
 
             # First, schedule the RUNNING requests.
@@ -558,6 +558,17 @@ class ResourceManagerV1(ResourceManager):
             return False
 
     def _waiting_async_process(self, request: Request) -> None:
+        """
+        Check if async preprocessing is complete for a request.
+
+        Args:
+            request: The request to check
+
+        Returns:
+            None: If an error occurred during preprocessing
+            True: If preprocessing is still in progress (request should be skipped)
+            False: If preprocessing is complete (request can be scheduled)
+        """
         for future in request.async_process_futures:
             if future.done():
                 if request.get("error_message") is not None:
