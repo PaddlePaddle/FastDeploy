@@ -122,13 +122,13 @@ print(output)
 * 具体来说，当某个batch生成的token序列中包含用户指定的停止token_id时，将提前结束该batch的token生成过程。
 
 ### 使用说明
-启动服务前，设置下列环境比阿亮
+启动服务前，设置下列环境变量
 ```
 FD_STOP_TOKEN_IDS_MAX_LEN (表示支持停止stop_token_ids的最大长度，默认为8)
 ```
 在请求服务时，在请求中包含`stop_token_ids`字段，是`List[int]`。
 
-* 在线推理请求示例，请求时添加stop参数
+* 在线推理请求示例，请求时添加stop_token_ids参数
 ```
 # create a chat request with "stop_token_ids" parameter
 
