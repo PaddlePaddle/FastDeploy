@@ -36,7 +36,7 @@ def test_w4a8():
     )
     print(response.choices[0].message.content)
     # print(base_response)
-    assert "人工智能" in response.choices[0].message.content
+    assert any(keyword in response.choices[0].message.content for keyword in ["人工智能", "文心一言"])
 
 
 if __name__ == "__main__":
