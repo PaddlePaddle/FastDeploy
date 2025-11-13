@@ -330,8 +330,13 @@ class SplitwiseConnector:
         Parameters:
         port (int): Port number.
         """
+        if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+            address = ("0.0.0.0", int(port))
+        else:
+            address = f"/dev/shm/fd_task_queue_{port}.sock"
+
         self.connect_innode_instances[port] = EngineWorkerQueue(
-            address=("0.0.0.0", int(port)),
+            address=address,
             num_client=self.cfg.parallel_config.tensor_parallel_size,
             client_id=0,
         )

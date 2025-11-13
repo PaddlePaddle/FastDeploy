@@ -241,6 +241,11 @@ class TokenProcessor:
 
             task_id = task.request_id
             token_ids = stream_data.tokens  # numpy.array
+            if token_ids is not None and token_ids[-1] <= 0:
+                if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                    if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                        self.resource_manager.reschedule_preempt_task(task_id)
+                continue
 
             current_time = time.time()
             if self.tokens_counter[task_id] == 0:
@@ -285,6 +290,19 @@ class TokenProcessor:
                     finished=False,
                     metrics=metrics,
                 )
+                if self.use_logprobs:
+                    if getattr(stream_data, "logprobs", None) is not None:
+                        try:
+                            logprobs_list: LogprobsLists = stream_data.logprobs.tolists()
+                            result.outputs.logprob = float(logprobs_list.logprobs[0][0])
+                            result.outputs.top_logprobs = logprobs_list
+                        except Exception as e:
+                            llm_logger.warning(f"Failed to parse logprobs from StreamTransferData: {e}")
+                    if getattr(stream_data, "prompt_logprobs", None) is not None:
+                        try:
+                            result.prompt_logprobs_tensors = stream_data.prompt_logprobs
+                        except Exception as e:
+                            llm_logger.warning(f"Failed to parse prompt_logprobs from StreamTransferData: {e}")
                 if self.tokens_counter[task_id] == 0:
                     if task.messages is not None:
                         result.prompt = task.messages
@@ -306,8 +324,6 @@ class TokenProcessor:
         """
         if self.speculative_decoding:
             raise NotImplementedError("GET_SAVE_OUTPUT_V1 does not support speculative decoding")
-        if self.use_logprobs:
-            raise NotImplementedError("GET_SAVE_OUTPUT_V1 does not support use_logprobs")
         rank_id = self.cfg.parallel_config.local_data_parallel_id
         while True:
             try:
@@ -316,7 +332,8 @@ class TokenProcessor:
                 ) or (rank_id == 0):
                     receive_datas = self.zmq_server.recv_pyobj()
                     assert isinstance(receive_datas, list)
-                    llm_logger.debug(f"token_processor receive_data {receive_datas}")
+                    if envs.FD_DEBUG:
+                        llm_logger.debug(f"token_processor receive_data {receive_datas}")
 
                     self._reschedule_preempt_task_use_zmq(receive_datas)
 
@@ -830,7 +847,7 @@ class TokenProcessor:
     def clear_data(self):
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.resource_manager.clear_data()
-        for i in range(self.cfg.max_num_seqs):
+        for i in range(self.resource_manager.max_num_seqs):
             if self.resource_manager.stop_flags[i]:
                 continue
             task = self.resource_manager.tasks_list[i]
