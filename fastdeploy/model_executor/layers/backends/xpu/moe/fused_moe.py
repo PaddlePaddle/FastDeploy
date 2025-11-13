@@ -95,7 +95,7 @@ class XPUMoEMethod(MoEMethodBase):
                 {
                     "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0},
                     "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
-                    "weight_need_transpose": extra_weight_attrs.get("model_format") == "torch",
+                    "weight_need_transpose": not extra_weight_attrs.get("model_format") == "torch",
                     "tensor_track": TensorTracker(shape=layer.up_gate_proj_weight.shape, output_dim=False),
                 },
             )
@@ -104,7 +104,7 @@ class XPUMoEMethod(MoEMethodBase):
                 {
                     "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0},
                     "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
-                    "weight_need_transpose": extra_weight_attrs.get("model_format") == "torch",
+                    "weight_need_transpose": not extra_weight_attrs.get("model_format") == "torch",
                     "tensor_track": TensorTracker(shape=layer.down_proj_weight.shape, output_dim=True),
                 },
             )
@@ -126,7 +126,6 @@ class XPUMoEMethod(MoEMethodBase):
                         "weight_loader": extra_weight_attrs.get(
                             "weight_loader", default_weight_loader(layer.fd_config)
                         ),
-                        "model_format": extra_weight_attrs.get("model_format", ""),
                     },
                 )
                 set_weight_attrs(
@@ -135,7 +134,6 @@ class XPUMoEMethod(MoEMethodBase):
                         "weight_loader": extra_weight_attrs.get(
                             "weight_loader", default_weight_loader(layer.fd_config)
                         ),
-                        "model_format": extra_weight_attrs.get("model_format", ""),
                     },
                 )
             if self.moe_quant_type in ["weight_only_int8", "weight_only_int4"]:

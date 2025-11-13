@@ -76,12 +76,12 @@ jobs:
           DEVICES=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
           DEVICE_PORT=$(echo "$DEVICES" | cut -d',' -f1)
 
-          FLASK_PORT=$((42068 + DEVICE_PORT * 100))
-          FD_API_PORT=$((42088 + DEVICE_PORT * 100))
-          FD_ENGINE_QUEUE_PORT=$((42058 + DEVICE_PORT * 100))
-          FD_METRICS_PORT=$((42078 + DEVICE_PORT * 100))
-          FD_CACHE_QUEUE_PORT=$((42038 + DEVICE_PORT * 100))
-          FD_INFERENCE_MSG_QUEUE_ID=$(( 42048 + DEVICE_PORT * 100))
+          FLASK_PORT=$((8068 + DEVICE_PORT * 100))
+          FD_API_PORT=$((8088 + DEVICE_PORT * 100))
+          FD_ENGINE_QUEUE_PORT=$((8058 + DEVICE_PORT * 100))
+          FD_METRICS_PORT=$((8078 + DEVICE_PORT * 100))
+          FD_CACHE_QUEUE_PORT=$((8038 + DEVICE_PORT * 100))
+          FD_INFERENCE_MSG_QUEUE_ID=$(( 8048 + DEVICE_PORT * 100))
           echo "Test ENV Parameter:"
           echo "========================================================="
           echo "FLASK_PORT=${FLASK_PORT}"
