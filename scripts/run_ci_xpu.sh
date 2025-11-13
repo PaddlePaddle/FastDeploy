@@ -330,7 +330,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --engine-worker-queue-port $((port_num + 10)) \
     --metrics-port $((port_num + 2)) \
     --cache-queue-port $((port_num + 47873)) \
-    --disable_sequence_parallel_moe \
+    --disable-sequence-parallel-moe \
     --gpu-memory-utilization 0.9 \
     --load-choices "default" > server.log 2>&1 &
 
