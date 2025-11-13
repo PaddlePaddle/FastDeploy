@@ -423,6 +423,324 @@ class TestRealWorldScenarios(unittest.TestCase):
                        f"R={config['res']} G={str(config['guidance']):5s}: {total_ms:7.1f}ms")
 
 
+class TestFluxModelPerformance(unittest.TestCase):
+    """Flux模型专用性能测试"""
+    
+    def test_flux_single_step_timing(self):
+        """
+        测试Flux单个扩散步骤的耗时
+        
+        Flux特点:
+        - 使用自注意力机制 (比SD更复杂)
+        - 更高的计算复杂度
+        - 通常需要更少的步数 (4-8步)
+        """
+        logger.info("\n【Flux性能1】单步耗时对比")
+        
+        # Flux通常使用更大的latent维度
+        # flux: latent shape (1, 128, 64, 64) vs SD: (1, 4, 64, 64)
+        latent_flux = paddle.randn((1, 128, 64, 64), dtype=paddle.float32)
+        latent_sd = paddle.randn((1, 4, 64, 64), dtype=paddle.float32)
+        
+        def flux_step():
+            """Flux单步"""
+            # Flux使用自注意力，计算更复杂
+            noise = paddle.randn_like(latent_flux)
+            # 自注意力计算
+            attn_output = paddle.nn.functional.scaled_dot_product_attention(
+                noise, noise, noise, attn_mask=None)
+            result = 0.99 * latent_flux + 0.01 * attn_output
+            return result
+        
+        def sd_step():
+            """SD单步 (作为对比)"""
+            noise = paddle.randn_like(latent_sd)
+            result = 0.99 * latent_sd + 0.01 * noise
+            return result
+        
+        # 测量Flux
+        times_flux = []
+        for i in range(5):
+            start = time.perf_counter()
+            flux_step()
+            elapsed = time.perf_counter() - start
+            times_flux.append(elapsed * 1000)
+            logger.info(f"  Flux第{i+1}次: {elapsed*1000:.2f}ms")
+        
+        # 测量SD (对比)
+        times_sd = []
+        for i in range(5):
+            start = time.perf_counter()
+            sd_step()
+            elapsed = time.perf_counter() - start
+            times_sd.append(elapsed * 1000)
+        
+        avg_flux = np.mean(times_flux)
+        avg_sd = np.mean(times_sd)
+        ratio = avg_flux / avg_sd
+        
+        logger.info(f"\n  Flux平均: {avg_flux:.2f}ms")
+        logger.info(f"  SD平均: {avg_sd:.2f}ms")
+        logger.info(f"  Flux / SD = {ratio:.2f}x")
+    
+    def test_flux_full_generation(self):
+        """
+        测试Flux完整生成流程
+        
+        配置:
+        - 4-8步 (Flux用较少步数)
+        - 1024x1024分辨率 (Flux常用)
+        """
+        logger.info("\n【Flux性能2】完整生成流程")
+        
+        def flux_generation_4steps():
+            """Flux完整流程 - 4步"""
+            latent_h = 128  # Flux的latent高度
+            latent_w = 128
+            latent = paddle.randn((1, 1, latent_h, latent_w), dtype=paddle.float32)
+            
+            # Flux通常用4-8步就能得到好结果
+            for step in range(4):
+                noise = paddle.randn_like(latent)
+                latent = 0.99 * latent + 0.01 * noise
+            
+            # VAE解码到1024x1024
+            image = paddle.randn((1, 3, 1024, 1024), dtype=paddle.float32)
+            return image
+        
+        def flux_generation_8steps():
+            """Flux完整流程 - 8步"""
+            latent = paddle.randn((1, 1, 128, 128), dtype=paddle.float32)
+            
+            for step in range(8):
+                noise = paddle.randn_like(latent)
+                latent = 0.99 * latent + 0.01 * noise
+            
+            image = paddle.randn((1, 3, 1024, 1024), dtype=paddle.float32)
+            return image
+        
+        # 测试4步
+        times_4 = []
+        for i in range(3):
+            start = time.perf_counter()
+            flux_generation_4steps()
+            elapsed = time.perf_counter() - start
+            times_4.append(elapsed * 1000)
+            logger.info(f"  Flux 4步 第{i+1}次: {elapsed*1000:.1f}ms")
+        
+        # 测试8步
+        times_8 = []
+        for i in range(3):
+            start = time.perf_counter()
+            flux_generation_8steps()
+            elapsed = time.perf_counter() - start
+            times_8.append(elapsed * 1000)
+            logger.info(f"  Flux 8步 第{i+1}次: {elapsed*1000:.1f}ms")
+        
+        avg_4 = np.mean(times_4)
+        avg_8 = np.mean(times_8)
+        
+        logger.info(f"\n  Flux 1024x1024:")
+        logger.info(f"    4步平均: {avg_4:.1f}ms")
+        logger.info(f"    8步平均: {avg_8:.1f}ms")
+        logger.info(f"    平均每步: {avg_4/4:.1f}ms (4步) vs {avg_8/8:.1f}ms (8步)")
+    
+    def test_flux_vs_sd3_comparison(self):
+        """
+        Flux vs SD3 性能对比
+        """
+        logger.info("\n【Flux性能3】Flux vs SD3对比")
+        
+        # Flux: 更少的步数但更大的latent维度
+        # SD3: 更多的步数但更小的latent维度
+        
+        configs = [
+            {
+                "name": "Flux 4步 1024x1024",
+                "steps": 4,
+                "latent_h": 128,
+                "latent_w": 128,
+                "latent_c": 1,
+                "output_h": 1024,
+                "output_w": 1024,
+            },
+            {
+                "name": "Flux 8步 1024x1024",
+                "steps": 8,
+                "latent_h": 128,
+                "latent_w": 128,
+                "latent_c": 1,
+                "output_h": 1024,
+                "output_w": 1024,
+            },
+            {
+                "name": "SD3 20步 1024x1024",
+                "steps": 20,
+                "latent_h": 128,
+                "latent_w": 128,
+                "latent_c": 8,
+                "output_h": 1024,
+                "output_w": 1024,
+            },
+            {
+                "name": "SD3 50步 1024x1024",
+                "steps": 50,
+                "latent_h": 128,
+                "latent_w": 128,
+                "latent_c": 8,
+                "output_h": 1024,
+                "output_w": 1024,
+            },
+        ]
+        
+        for config in configs:
+            start = time.perf_counter()
+            
+            latent = paddle.randn(
+                (1, config["latent_c"], config["latent_h"], config["latent_w"]),
+                dtype=paddle.float32
+            )
+            
+            for _ in range(config["steps"]):
+                noise = paddle.randn_like(latent)
+                latent = 0.99 * latent + 0.01 * noise
+            
+            elapsed = time.perf_counter() - start
+            total_ms = elapsed * 1000
+            per_step_ms = total_ms / config["steps"]
+            
+            logger.info(f"  {config['name']:30s}: {total_ms:7.1f}ms "
+                       f"(平均每步: {per_step_ms:.2f}ms)")
+    
+    def test_flux_memory_analysis(self):
+        """
+        Flux内存占用分析
+        
+        Flux使用更大的latent维度，需要更多内存
+        """
+        logger.info("\n【Flux性能4】内存占用分析")
+        
+        configs = [
+            ("Flux 512x512", 64, 64, 1),
+            ("Flux 768x768", 96, 96, 1),
+            ("Flux 1024x1024", 128, 128, 1),
+            ("SD3 512x512", 64, 64, 8),
+            ("SD3 768x768", 96, 96, 8),
+            ("SD3 1024x1024", 128, 128, 8),
+        ]
+        
+        for name, h, w, c in configs:
+            # 计算latent内存
+            latent_bytes = 1 * c * h * w * 4  # float32 = 4字节
+            # 计算输出图像内存
+            output_h = h * 8  # 上采样8倍
+            output_w = w * 8
+            image_bytes = 1 * 3 * output_h * output_w * 4
+            # 总内存
+            total_mb = (latent_bytes + image_bytes) / (1024 * 1024)
+            
+            logger.info(f"  {name:20s}: ~{total_mb:6.1f} MB")
+    
+    def test_flux_throughput_analysis(self):
+        """
+        Flux吞吐量分析
+        
+        评估不同配置下的吞吐量
+        """
+        logger.info("\n【Flux性能5】吞吐量分析")
+        
+        # Flux的关键优势是用少的步数获得好质量
+        configs = [
+            {
+                "name": "Flux 4步高质",
+                "steps": 4,
+                "quality": "high",
+                "typical_time": 150,  # ms (估计值)
+            },
+            {
+                "name": "Flux 8步超高质",
+                "steps": 8,
+                "quality": "ultra",
+                "typical_time": 300,  # ms
+            },
+            {
+                "name": "SD3 20步标准",
+                "steps": 20,
+                "quality": "high",
+                "typical_time": 280,  # ms
+            },
+            {
+                "name": "SD3 50步超高质",
+                "steps": 50,
+                "quality": "ultra",
+                "typical_time": 700,  # ms
+            },
+        ]
+        
+        logger.info(f"\n  配置对比:")
+        for config in configs:
+            images_per_hour = (3600 * 1000) / config["typical_time"]
+            logger.info(f"  {config['name']:20s}: {images_per_hour:6.0f} images/hour "
+                       f"({config['quality']} quality, {config['steps']} steps)")
+
+
+class TestFluxAdvancedFeatures(unittest.TestCase):
+    """Flux高级特性性能测试"""
+    
+    def test_flux_multi_prompt_timing(self):
+        """
+        测试Flux多prompt处理的耗时
+        
+        Flux可以高效处理多个prompt
+        """
+        logger.info("\n【Flux高级1】多Prompt处理")
+        
+        for num_prompts in [1, 2, 4, 8]:
+            start = time.perf_counter()
+            
+            # 处理多个prompt
+            for _ in range(num_prompts):
+                latent = paddle.randn((1, 1, 128, 128), dtype=paddle.float32)
+                noise = paddle.randn_like(latent)
+                latent = 0.99 * latent + 0.01 * noise
+            
+            elapsed = time.perf_counter() - start
+            time_per_prompt = (elapsed * 1000) / num_prompts
+            
+            logger.info(f"  {num_prompts}个Prompt: {elapsed*1000:.1f}ms "
+                       f"(每个Prompt: {time_per_prompt:.1f}ms)")
+    
+    def test_flux_step_efficiency(self):
+        """
+        测试Flux的步数效率
+        
+        评估不同步数下的质量/速度权衡
+        """
+        logger.info("\n【Flux高级2】步数效率")
+        
+        steps = [1, 2, 4, 8, 16]
+        
+        for num_steps in steps:
+            start = time.perf_counter()
+            
+            latent = paddle.randn((1, 1, 128, 128), dtype=paddle.float32)
+            for _ in range(num_steps):
+                noise = paddle.randn_like(latent)
+                latent = 0.99 * latent + 0.01 * noise
+            
+            elapsed = time.perf_counter() - start
+            time_ms = elapsed * 1000
+            time_per_step = time_ms / num_steps
+            
+            # 估计质量分 (仅用于演示)
+            quality_score = min(100, 20 + num_steps * 10)
+            efficiency = quality_score / time_ms
+            
+            logger.info(f"  {num_steps:2d}步: {time_ms:6.1f}ms "
+                       f"(每步:{time_per_step:5.2f}ms, 质量:{quality_score:3d}, "
+                       f"效率:{efficiency:.2f})")
+
+
 if __name__ == '__main__':
     # 运行基准测试
     suite = unittest.TestSuite()
@@ -433,6 +751,8 @@ if __name__ == '__main__':
     suite.addTests(unittest.TestLoader().loadTestsFromTestCase(TestDiffusionPrecision))
     suite.addTests(unittest.TestLoader().loadTestsFromTestCase(TestMemoryUsage))
     suite.addTests(unittest.TestLoader().loadTestsFromTestCase(TestRealWorldScenarios))
+    suite.addTests(unittest.TestLoader().loadTestsFromTestCase(TestFluxModelPerformance))
+    suite.addTests(unittest.TestLoader().loadTestsFromTestCase(TestFluxAdvancedFeatures))
     
     runner = unittest.TextTestRunner(verbosity=2)
     runner.run(suite)

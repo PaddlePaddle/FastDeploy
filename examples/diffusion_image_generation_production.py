@@ -361,7 +361,7 @@ class DiffusionImageGenerator:
             latents: 潜在表示张量
         
         Returns:
-            解码后的图像 (numpy数组, 值域[0, 255])
+            解码后的图像 (numpy数组, RGB格式, 值域[0, 255])
         """
         logger.debug("Decoding latents with VAE")
         
@@ -382,6 +382,14 @@ class DiffusionImageGenerator:
         image = (image * 0.5 + 0.5) * 255  # 从[-1, 1]转换到[0, 255]
         image = np.clip(image, 0, 255).astype(np.uint8)
         
+        # 转换为 (H, W, C) 格式用于PIL
+        # 从 (B, C, H, W) -> (H, W, C)
+        if len(image.shape) == 4:
+            image = image[0]  # 取第一张
+        if image.shape[0] == 3:
+            # 从 (C, H, W) 转换到 (H, W, C)
+            image = np.transpose(image, (1, 2, 0))
+        
         return image
     
     def _save_image(self, image: np.ndarray, path: str) -> None:
@@ -389,41 +397,41 @@ class DiffusionImageGenerator:
         保存图像
         
         Args:
-            image: 图像数组
+            image: 图像数组 (H, W, C) 格式, RGB, uint8
             path: 保存路径
         """
         try:
             from PIL import Image as PILImage
             
-            # 处理批处理维度
-            if len(image.shape) == 4:
-                image = image[0]  # 取第一张图像
-            
-            # 确保图像格式正确
+            # 确保是uint8格式
             if image.dtype != np.uint8:
                 image = np.clip(image, 0, 255).astype(np.uint8)
             
-            # 处理通道顺序
-            if len(image.shape) == 3:
-                # 如果是(H, W, C)格式且C是RGB/RGBA
-                if image.shape[2] in [3, 4]:
-                    pil_image = PILImage.fromarray(image)
-                else:
-                    logger.warning(f"Unexpected image shape: {image.shape}, saving anyway")
-                    pil_image = PILImage.fromarray(image.astype(np.uint8))
-            else:
-                logger.warning(f"Unexpected image shape: {image.shape}, saving anyway")
-                pil_image = PILImage.fromarray(image.astype(np.uint8))
+            # 确保是(H, W, C)格式
+            if len(image.shape) == 2:
+                # 灰度图，转换为RGB
+                image = np.stack([image] * 3, axis=2)
+            elif len(image.shape) == 4:
+                # (B, H, W, C) 或其他格式
+                image = image[0] if image.shape[0] == 1 else image
+            
+            # 验证形状
+            if len(image.shape) != 3 or image.shape[2] not in [3, 4]:
+                logger.error(f"Invalid image shape: {image.shape}")
+                return
             
             # 创建目录
             os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
             
-            pil_image.save(path)
-            logger.info(f"Image saved to {path}")
+            # 保存为PNG
+            pil_image = PILImage.fromarray(image, mode='RGB' if image.shape[2] == 3 else 'RGBA')
+            pil_image.save(path, format='PNG')
+            logger.info(f"✅ 图像已保存: {path} (shape: {image.shape})")
+            
         except ImportError:
-            logger.warning("PIL not available, skipping image save")
+            logger.error("PIL库不可用，无法保存图像")
         except Exception as e:
-            logger.warning(f"Failed to save image: {e}, but generation succeeded")
+            logger.error(f"保存图像失败: {e}")
     
     def get_performance_summary(self) -> Dict[str, float]:
         """获取性能统计摘要"""
