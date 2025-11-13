@@ -18,8 +18,8 @@ import openai
 
 def test_45t():
     ip = "0.0.0.0"
-    gpu_id = int(os.getenv("GPU_ID", "0"))
-    service_http_port = 8188 + gpu_id * 100  # 服务配置的
+    xpu_id = int(os.getenv("XPU_ID", "0"))
+    service_http_port = 8188 + xpu_id * 100  # 服务配置的
     client = openai.Client(base_url=f"http://{ip}:{service_http_port}/v1", api_key="EMPTY_API_KEY")
     # base_response_110 = "你好！我是一个基于人工智能技术开发的助手，可以帮你解答问题、提供建议、聊天交流或者完成一些任务。无论是学习、工作还是生活中的疑问，都可以随时告诉我哦～😊 你有什么想聊的吗？"
     # base_response_104 = "你好！我是一个基于人工智能技术打造的助手，可以帮你解答问题、提供建议、分享知识，或者陪你聊聊天～😊 无论是学习、工作、生活还是娱乐相关的问题，都可以随时告诉我哦！你今天有什么想聊的吗？"
