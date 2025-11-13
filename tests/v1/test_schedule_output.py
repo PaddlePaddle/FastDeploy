@@ -90,7 +90,7 @@ def test_normal_schedule():
 
 def test_preempted_request():
     max_num_seqs = 2
-    engine_args = EngineArgs(max_num_seqs=max_num_seqs, num_gpu_blocks_override=52, max_num_batched_tokens=3200)
+    engine_args = EngineArgs(max_num_seqs=max_num_seqs, num_gpu_blocks_override=102, max_num_batched_tokens=3200)
     args = asdict(engine_args)
     cache_cfg = CacheConfig(args)
     model_cfg = SimpleNamespace(enable_mm=False)
@@ -127,22 +127,22 @@ def test_preempted_request():
     assert len(resource_manager_v1.waiting) == 1
     # step 2
     scheduler_reqs = resource_manager_v1.schedule()
-    assert len(scheduler_reqs) == 1
+    assert len(scheduler_reqs) == 2
     assert scheduler_reqs[0].request_id == "req1"
     assert len(scheduler_reqs[0].block_tables) == 52
     # step 3
     req1.output_token_ids.extend([1] * 128)
     scheduler_reqs = resource_manager_v1.schedule()
-    assert len(scheduler_reqs) == 1
-    assert scheduler_reqs[0].request_id == "req1"
-    assert len(resource_manager_v1.running) == 0
+    assert len(scheduler_reqs) == 2
+    assert scheduler_reqs[0].request_id == "req2"
+    assert len(resource_manager_v1.running) == 1
     # to be added into waiting queue
-    assert len(resource_manager_v1.waiting) == 1
+    assert len(resource_manager_v1.waiting) == 0
+    assert "req2" in resource_manager_v1.to_be_rescheduled_request_id_set
     # mock token_processor to add into waiting
-    resource_manager_v1.waiting.appendleft(req1)
+    resource_manager_v1.waiting.appendleft(req2)
     # step 4
     scheduler_reqs = resource_manager_v1.schedule()
-    assert len(scheduler_reqs) == 1
-    assert scheduler_reqs[0].request_id == "req1"
+    assert len(scheduler_reqs) == 0
     assert len(resource_manager_v1.running) == 1
     assert len(resource_manager_v1.waiting) == 1
