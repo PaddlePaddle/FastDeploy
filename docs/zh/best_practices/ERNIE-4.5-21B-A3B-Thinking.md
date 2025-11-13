@@ -29,18 +29,16 @@ ERNIE-4.5-21B-A3B 各量化精度，在下列硬件上部署所需要的最小�
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
        --model baidu/ERNIE-4.5-21B-A3B-Thinking \
-       --load-choices "default_v1" \
        --tensor-parallel-size 1 \
        --max-model-len 131072 \
        --quantization wint8 \
-       --reasoning-parser ernie_x1 \
-       --tool-call-parser ernie_x1 \
+       --reasoning-parser ernie-x1 \
+       --tool-call-parser ernie-x1 \
        --max-num-seqs 32
 ```
 其中：
 - `--quantization`: 表示模型采用的量化策略。不同量化策略，模型的性能和精度也会不同。可选值包括：`wint8` / `wint4` / `block_wise_fp8`(需要Hopper架构)。
 - `--max-model-len`：表示当前部署的服务所支持的最长Token数量。设置得越大，模型可支持的上下文长度也越大，但相应占用的显存也越多，可能影响并发数。
-- `--load-choices`: 表示loader的版本，"default_v1"表示启用v1版本的loader，具有更快的加载速度和更少的内存使用。
 - `--reasoning-parser` 、 `--tool-call-parser`: 表示对应调用的思考内容和工具调用解析器
 
 更多的参数含义与默认设置，请参见[FastDeploy参数说明](../parameters.md)。

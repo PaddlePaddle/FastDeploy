@@ -68,16 +68,19 @@ class EngineClient:
         tool_parser=None,
         enable_prefix_caching=None,
         splitwise_role=None,
+        max_processor_cache=0,
     ):
         model_config = ModelConfig({"model": model_name_or_path})
+        self.enable_mm = model_config.enable_mm
+        enable_processor_cache = self.enable_mm and max_processor_cache > 0
         input_processor = InputPreprocessor(
             model_config,
             reasoning_parser,
             limit_mm_per_prompt,
             mm_processor_kwargs,
             tool_parser,
+            enable_processor_cache,
         )
-        self.enable_mm = model_config.enable_mm
         self.enable_logprob = enable_logprob
         self.reasoning_parser = reasoning_parser
         self.data_processor = input_processor.create_processor()
@@ -232,7 +235,7 @@ class EngineClient:
 
         if "stop_seqs_len" in task:
             stop_seqs_len = task["stop_seqs_len"]
-            max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
+            max_stop_seqs_num = envs.FD_MAX_STOP_SEQS_NUM
             if len(stop_seqs_len) > max_stop_seqs_num:
                 error_msg = (
                     f"Length of stop ({stop_seqs_len}) exceeds the limit max_stop_seqs_num({max_stop_seqs_num})."
@@ -240,7 +243,7 @@ class EngineClient:
                 )
                 api_server_logger.error(error_msg)
                 raise EngineError(error_msg, error_code=400)
-            stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
+            stop_seqs_max_len = envs.FD_STOP_SEQS_MAX_LEN
             for single_stop_seq_len in stop_seqs_len:
                 if single_stop_seq_len > stop_seqs_max_len:
                     error_msg = (
@@ -301,7 +304,8 @@ class EngineClient:
                 api_server_logger.warning(
                     f"req_id: {data['request_id']}, reasoning_max_tokens exceeds max_tokens, the value of reasoning_max_tokens will be adjusted to match that of max_tokens"
                 )
-
+        if data.get("temperature") is not None and abs(data["temperature"]) < 1e-6:
+            data["temperature"] = 1e-6
         # logprobs
         logprobs = data.get("logprobs")
         top_logprobs = None

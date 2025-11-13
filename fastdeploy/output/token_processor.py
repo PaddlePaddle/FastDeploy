@@ -241,6 +241,11 @@ class TokenProcessor:
 
             task_id = task.request_id
             token_ids = stream_data.tokens  # numpy.array
+            if token_ids is not None and token_ids[-1] <= 0:
+                if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                    if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                        self.resource_manager.reschedule_preempt_task(task_id)
+                continue
 
             current_time = time.time()
             if self.tokens_counter[task_id] == 0:
@@ -285,10 +290,26 @@ class TokenProcessor:
                     finished=False,
                     metrics=metrics,
                 )
+                if self.use_logprobs:
+                    if getattr(stream_data, "logprobs", None) is not None:
+                        try:
+                            logprobs_list: LogprobsLists = stream_data.logprobs.tolists()
+                            result.outputs.logprob = float(logprobs_list.logprobs[0][0])
+                            result.outputs.top_logprobs = logprobs_list
+                        except Exception as e:
+                            llm_logger.warning(f"Failed to parse logprobs from StreamTransferData: {e}")
+                    if getattr(stream_data, "prompt_logprobs", None) is not None:
+                        try:
+                            result.prompt_logprobs_tensors = stream_data.prompt_logprobs
+                        except Exception as e:
+                            llm_logger.warning(f"Failed to parse prompt_logprobs from StreamTransferData: {e}")
                 if self.tokens_counter[task_id] == 0:
                     if task.messages is not None:
                         result.prompt = task.messages
                     result.num_cached_tokens = task.num_cached_tokens
+                    if task.get("multimodal_inputs", None):
+                        result.num_input_image_tokens = task.multimodal_inputs.get("num_input_image_tokens", 0)
+                        result.num_input_video_tokens = task.multimodal_inputs.get("num_input_video_tokens", 0)
 
                 is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
                 result = self._process_per_token(task, i, token_ids, result, is_prefill)
@@ -303,8 +324,6 @@ class TokenProcessor:
         """
         if self.speculative_decoding:
             raise NotImplementedError("GET_SAVE_OUTPUT_V1 does not support speculative decoding")
-        if self.use_logprobs:
-            raise NotImplementedError("GET_SAVE_OUTPUT_V1 does not support use_logprobs")
         rank_id = self.cfg.parallel_config.local_data_parallel_id
         while True:
             try:
@@ -313,7 +332,8 @@ class TokenProcessor:
                 ) or (rank_id == 0):
                     receive_datas = self.zmq_server.recv_pyobj()
                     assert isinstance(receive_datas, list)
-                    llm_logger.debug(f"token_processor receive_data {receive_datas}")
+                    if envs.FD_DEBUG:
+                        llm_logger.debug(f"token_processor receive_data {receive_datas}")
 
                     self._reschedule_preempt_task_use_zmq(receive_datas)
 
@@ -453,6 +473,7 @@ class TokenProcessor:
         recycle resources
         """
         if is_prefill:
+            start_time = time.time()
             while True:
                 finished_task_ids = self.engine_worker_queue.get_finished_req()
                 if len(finished_task_ids) > 0:
@@ -471,6 +492,9 @@ class TokenProcessor:
                     if self.prefill_result_status[task_id] != "finished":
                         result.error_code = 400
                         result.error_message = f"{task_id} failed to {self.prefill_result_status[task_id]}"
+                    llm_logger.info(
+                        f"wait for sending cache, request_id: {task_id}, cost seconds: {time.time()-start_time:.5f}"
+                    )
                     self.split_connector.send_first_token(task.disaggregate_info, [result])
                     break
                 else:
@@ -502,7 +526,7 @@ class TokenProcessor:
 
     def _compute_speculative_status(self):
         # TODO(liuzichang): Supplement more statistics
-        interval = 10
+        interval = 1
         if self.speculative_stats_step % interval == 0:
             accept_ratio = 1 - self.total_step * 1.0 / self.number_of_output_tokens
             spec_logger.info(
@@ -593,6 +617,9 @@ class TokenProcessor:
                         + accept_num[i]
                     ].tolist()
                     if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] <= 0):
+                        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                            if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                                self.resource_manager.reschedule_preempt_task(task_id)
                         continue
             else:
                 token_id = int(tokens[i, 0])
@@ -624,8 +651,10 @@ class TokenProcessor:
                     time_in_queue=task.schedule_start_time - task.preprocess_end_time,
                     preprocess_cost_time=task.preprocess_end_time - task.preprocess_start_time,
                     request_start_time=task.arrival_time,
+                    llm_engine_recv_req_timestamp=task.llm_engine_recv_req_timestamp,
+                    llm_engine_send_req_to_engine_timestamp=task.inference_start_time,
+                    llm_engine_recv_token_timestamp=time.time(),
                 )
-
                 self._record_first_token_metrics(task, current_time)
 
             else:
@@ -633,6 +662,9 @@ class TokenProcessor:
                     arrival_time=time.time(),
                     request_start_time=task.arrival_time,
                     model_execute_time=time.time() - task.inference_start_time,
+                    llm_engine_recv_req_timestamp=task.llm_engine_recv_req_timestamp,
+                    llm_engine_send_req_to_engine_timestamp=task.inference_start_time,
+                    llm_engine_recv_token_timestamp=time.time(),
                 )
             self.number_of_output_tokens += len(token_ids)
             self._record_metrics(task, current_time, token_ids)
@@ -652,6 +684,9 @@ class TokenProcessor:
                 if task.messages is not None:
                     result.prompt = task.messages
             result.num_cached_tokens = task.num_cached_tokens
+            if task.get("multimodal_inputs", None):
+                result.num_input_image_tokens = task.multimodal_inputs.get("num_input_image_tokens", 0)
+                result.num_input_video_tokens = task.multimodal_inputs.get("num_input_video_tokens", 0)
 
             is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
 
@@ -717,11 +752,10 @@ class TokenProcessor:
                         self._record_completion_metrics(task, current_time)
                     self._recycle_resources(task_id, i, task, result, is_prefill)
                     break
-            if (
-                not is_prefill
-                or self.cfg.scheduler_config.name == "splitwise"
-                or self.cfg.scheduler_config.name == "dp"
-            ):
+
+            if not (is_prefill and self.cfg.splitwise_version == "v0"):
+                # NOTE: prefill instance in v0 version does not return result to scheduler
+                llm_logger.debug(f"get response from infer: {result}")
                 batch_result.append(result)
 
         self.postprocess(batch_result, mtype)

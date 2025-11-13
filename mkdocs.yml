@@ -49,6 +49,7 @@ plugins:
             Installation: 安装
             Nvidia GPU: 英伟达 GPU
             KunlunXin XPU: 昆仑芯 XPU
+            Intel Gaudi: 英特尔 Gaudi
             HYGON DCU: 海光 DCU
             Enflame S60: 燧原 S60
             Iluvatar CoreX: 天数 CoreX
@@ -64,13 +65,20 @@ plugins:
             Scheduler: 调度器
             Graceful Shutdown: 服务优雅关闭
             Offline Inference: 离线推理
-            Best Practices: 最佳实践
-            ERNIE-4.5-0.3B: ERNIE-4.5-0.3B
+            CLI: CLI 使用说明
+            Chat: Chat命令
+            Complete: Complete命令
+            Server: Server命令
+            Bench: Bench命令
+            Collect Env: Collect Env命令
+            Run Batch: Run Batch命令
+            Tokenizer: Tokenizer命令
             ERNIE-4.5-21B-A3B: ERNIE-4.5-21B-A3B
             ERNIE-4.5-21B-A3B-Thinking: ERNIE-4.5-21B-A3B-Thinking
             ERNIE-4.5-300B-A47B: ERNIE-4.5-300B-A47B
             ERNIE-4.5-VL-28B-A3B: ERNIE-4.5-VL-28B-A3B
             ERNIE-4.5-VL-424B-A47B: ERNIE-4.5-VL-424B-A47B
+            PaddleOCR-VL-0.9B: PaddleOCR-VL-0.9B
             FAQ: 常见问题
             Quantization: 量化
             Overview: 概述
@@ -104,6 +112,7 @@ nav:
       - Installation:
           - Nvidia GPU: get_started/installation/nvidia_gpu.md
           - KunlunXin XPU: get_started/installation/kunlunxin_xpu.md
+          - Intel Gaudi: get_started/installation/intel_gaudi.md
           - HYGON DCU: get_started/installation/hygon_dcu.md
           - Enflame S60: get_started/installation/Enflame_gcu.md
           - Iluvatar CoreX: get_started/installation/iluvatar_gpu.md
@@ -126,6 +135,7 @@ nav:
       - ERNIE-4.5-21B-A3B-Thinking: best_practices/ERNIE-4.5-21B-A3B-Thinking.md
       - ERNIE-4.5-VL-28B-A3B: best_practices/ERNIE-4.5-VL-28B-A3B-Paddle.md
       - ERNIE-4.5-VL-424B-A47B: best_practices/ERNIE-4.5-VL-424B-A47B-Paddle.md
+      - PaddleOCR-VL-0.9B: best_practices/PaddleOCR-VL-0.9B.md
       - FAQ: best_practices/FAQ.md
   - Quantization:
       - Overview: quantization/README.md
@@ -152,3 +162,12 @@ nav:
       - Log Description: usage/log.md
       - Code Overview: usage/code_overview.md
       - Environment Variables: usage/environment_variables.md
+  - CLI:
+      - Overview: cli/README.md
+      - Chat: cli/chat.md
+      - Complete: cli/complete.md
+      - Server: cli/server.md
+      - Collect Env: cli/collect_env.md
+      - Bench: cli/bench.md
+      - Run Batch: cli/run_batch.md
+      - Tokenizer: cli/tokenizer.md

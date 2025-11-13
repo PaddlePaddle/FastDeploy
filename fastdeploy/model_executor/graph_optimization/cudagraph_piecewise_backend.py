@@ -171,7 +171,7 @@ class CudaGraphPiecewiseBackend:
             for n in range(entry.num_finished_warmup, self.warm_up_size):
                 entry.num_finished_warmup += 1
                 entry.runnable(**kwargs)
-                logger.debug(
+                logger.info(
                     f"[CUDA GRAPH][ID:{id(self)}] Warm up for real shape {padding_real_shape}, "
                     f"finished ({n + 1}/{entry.num_finished_warmup}) times"
                 )
@@ -207,7 +207,7 @@ class CudaGraphPiecewiseBackend:
 
             # For CUDAGraph debug
             # self._save_cudagrpah_dot_files(entry)
-            logger.debug(f"[CUDA GRAPH][ID:{id(self)}] CUDAGraph captured for real shape {padding_real_shape}")
+            logger.info(f"[CUDA GRAPH][ID:{id(self)}] CUDAGraph captured for real shape {padding_real_shape}")
 
         # Replay
         entry.cuda_graph.replay()
@@ -224,7 +224,7 @@ class CudaGraphPiecewiseBackend:
         for shape in self.cudagraph_capture_sizes:
             self.concrete_size_entries[shape] = ConcreteSizeEntry(real_shape=shape)
 
-        logger.debug(
+        logger.info(
             f"[CUDA GRAPH][ID:{id(self)}] CUDAGraph capture list {self.cudagraph_capture_sizes}, "
             "Created all real shape entry."
         )
@@ -254,3 +254,9 @@ class CudaGraphPiecewiseBackend:
                 f"{log_dir}/GraphDotFiles/backend{id(self)}_shape{entry.real_shape}",
                 1 << 0,
             )
+
+    def check_capture_successful(self):
+        """Check whether the shapes are captured or not"""
+        for shape, entry in self.concrete_size_entries.items():
+            if not entry.captured:
+                raise ValueError(f"[CUDA GRAPH][ID:{id(self)}] Shape {shape} capture failed.")
