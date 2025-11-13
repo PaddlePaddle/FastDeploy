@@ -847,7 +847,7 @@ class TokenProcessor:
     def clear_data(self):
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.resource_manager.clear_data()
-        for i in range(self.cfg.max_num_seqs):
+        for i in range(self.resource_manager.max_num_seqs):
             if self.resource_manager.stop_flags[i]:
                 continue
             task = self.resource_manager.tasks_list[i]
