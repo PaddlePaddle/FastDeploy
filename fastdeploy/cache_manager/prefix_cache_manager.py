@@ -278,6 +278,8 @@ class PrefixCacheManager:
                 + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                 + (" --create_cache_tensor" if create_cache_tensor else "")
+                + f" --kvcache_storage_backend {cache_config.kvcache_storage_backend}"
+                + f" --write_policy {cache_config.write_policy}"
                 + f" >{log_dir}/launch_cache_transfer_manager_{int(device_ids[i])}.log 2>&1"
             )
             logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
@@ -497,6 +499,7 @@ class PrefixCacheManager:
                 cpu_block_ids,
                 event_type,
                 transfer_task_id,
+                0
             )
         )
         if is_sync:
@@ -570,7 +573,7 @@ class PrefixCacheManager:
 
             while current_tokens < len(input_ids):
                 keys.append(
-                    self.cal_block_hash(input_ids[current_tokens : current_tokens + block_size], prefix_block_key)
+                    self.cal_block_hash(input_ids[current_tokens : current_tokens + block_size], [prefix_block_key])
                 )
                 current_tokens += block_size
 
@@ -613,11 +616,11 @@ class PrefixCacheManager:
         storage_block_ids = []
         if self.storage_backend is not None:
             keys = []
-            prefix_block_key = ""
+            prefix_block_key = []
             num_cached_tokens = 0
             if req_id in self.cache_info:
                 last_node, num_cached_tokens = self.cache_info[req_id]
-                prefix_block_key = last_node.hash_value
+                prefix_block_key = [last_node.hash_value]
             current_tokens = num_cached_tokens
             while current_tokens < len(input_ids):
                 keys.append(
@@ -967,6 +970,7 @@ class PrefixCacheManager:
         gpu_block_ids=None,
         cpu_block_ids=None,
         is_sync=True,
+        timeout=0.1
     ):
 
         self.task_write_back_event[task_id] = Event()
@@ -977,6 +981,7 @@ class PrefixCacheManager:
                 cpu_block_ids,
                 CacheStatus.GPU2STORAGE,
                 task_id,
+                timeout
             )
         )  # 发起数据传输任务
 
@@ -998,6 +1003,7 @@ class PrefixCacheManager:
         hash_keys,
         gpu_block_ids,
         is_sync=True,
+        timeout=0.1
     ):
         storage_block_ids = []
         self.task_prefetch_event[task_id] = Event()
@@ -1008,6 +1014,7 @@ class PrefixCacheManager:
                 None,
                 CacheStatus.STORAGE2GPU,
                 task_id,
+                timeout
             )
         )  # 发起数据传输任务
         if is_sync:
@@ -1450,6 +1457,7 @@ class PrefixCacheManager:
         matche_nodes = []
         has_modified_gpu_lru_leaf_heap = False
         has_modified_cpu_lru_leaf_heap = False
+        prefix_cache = []
 
         with self.cache_status_lock:
             while match_token_num < total_token_num:
@@ -1463,7 +1471,9 @@ class PrefixCacheManager:
                     end_idx=match_token_num + block_size,
                     mm_idx=mm_idx,
                 )
-                hash_value = self.cal_block_hash(token_block, extra_keys)
+                prefix_cache.extend(extra_keys)
+                hash_value = self.cal_block_hash(token_block, prefix_cache)
+                prefix_cache = [hash_value]
 
                 if hash_value in current_match_node.children:
                     child = current_match_node.children[hash_value]
@@ -1564,15 +1574,15 @@ class PrefixCacheManager:
         matche_nodes = []
         has_modified_gpu_lru_leaf_heap = False
         has_modified_cpu_lru_leaf_heap = False
-        prefix_block_key = ""
+        prefix_block_key = []
         with self.cache_status_lock:
             while match_token_num < total_token_num:
                 token_block = input_ids[match_token_num : match_token_num + block_size]
                 token_num = len(token_block)
                 if token_num != block_size:
                     break
-                hash_value = self.cal_block_hash(token_block, prefix_block_key=prefix_block_key)
-                prefix_block_key = hash_value
+                hash_value = self.cal_block_hash(token_block, prefix_block_key)
+                prefix_block_key = [hash_value]
                 if hash_value in current_match_node.children:
                     child = current_match_node.children[hash_value]
                     matche_nodes.append(child)
@@ -1667,8 +1677,9 @@ class PrefixCacheManager:
         has_unfilled_block = False
         current_time = time.time()
 
-        input_hash_value = self.cal_block_hash(input_ids, "")
+        input_hash_value = self.cal_block_hash(input_ids)
         gpu_block_ids = request.block_tables[num_cached_tokens // block_size :].copy()
+        prefix_cache = [last_node.hash_value]
         for i in range(num_cached_tokens, can_cache_computed_tokens, block_size):
             current_block = input_ids[i : i + block_size]
             current_block_size = len(current_block)  # 最后一个block可能没填满
@@ -1681,7 +1692,9 @@ class PrefixCacheManager:
                     end_idx=i + block_size,
                     mm_idx=mm_idx,
                 )
-                hash_value = self.cal_block_hash(current_block, extra_keys)
+                prefix_cache.extend(extra_keys)
+                hash_value = self.cal_block_hash(current_block, prefix_cache)
+                prefix_cache = [hash_value]
                 allocated_block_id = gpu_block_ids.pop(0)
                 node_id = self.node_id_pool.pop()
                 unique_node_ids.append(node_id)
@@ -1741,7 +1754,7 @@ class PrefixCacheManager:
         gpu_block_ids = gpu_block_ids.copy()
         node = last_node
         reverved_dec_block_ids = []
-        input_hash_value = self.cal_block_hash(input_ids, "")
+        input_hash_value = self.cal_block_hash(input_ids)
 
         token_num = len(left_input_ids)
         if token_num == 0:
@@ -1762,8 +1775,8 @@ class PrefixCacheManager:
             if current_block_size != block_size:
                 has_unfilled_block = True
             else:
-                hash_value = self.cal_block_hash(current_block, prefix_block_key=prefix_block_key)
-                prefix_block_key = hash_value
+                hash_value = self.cal_block_hash(current_block, [prefix_block_key])
+                prefix_block_key = [hash_value]
                 allocated_block_id = gpu_block_ids.pop(0)
                 node_id = self.node_id_pool.pop()
                 unique_node_ids.append(node_id)
