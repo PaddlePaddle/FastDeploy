@@ -50,6 +50,7 @@ from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_Attention
 from fastdeploy.model_executor.ops.gpu import get_padding_offset
 
+os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
 
 class TestAttentionPerformance(unittest.TestCase):
     def setUp(self):
