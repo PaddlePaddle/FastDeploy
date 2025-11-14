@@ -112,7 +112,7 @@ while true; do
     fi
 
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 2 "$ENDPOINT" || true)
-
+    echo -e "\r服务健康检查中... 已等待 ${ELAPSED} 秒，当前状态码：${HTTP_CODE}"
     if [ "$HTTP_CODE" = "200" ]; then
         echo -e "\n服务启动成功！耗时 ${ELAPSED} 秒"
         break
@@ -121,7 +121,6 @@ while true; do
     fi
 done
 
-cat server.log
 
 # 执行服务化推理
 python -m pytest tests/ci_use/XPU_45T/run_45T.py
@@ -131,6 +130,8 @@ echo kv_block_test_exit_code is ${kv_block_test_exit_code}
 stop_processes >kill.log 2>&1
 
 if [ ${kv_block_test_exit_code} -ne 0 ]; then
+    echo "server.log"
+    cat server.log
     echo "log/workerlog.0"
     cat log/workerlog.0
     echo "kv block相关测试失败，请检查pr代码"
@@ -187,7 +188,7 @@ while true; do
     fi
 
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 2 "$ENDPOINT" || true)
-
+    echo -e "\r服务健康检查中... 已等待 ${ELAPSED} 秒，当前状态码：${HTTP_CODE}"
     if [ "$HTTP_CODE" = "200" ]; then
         echo -e "\n服务启动成功！耗时 ${ELAPSED} 秒"
         break
@@ -196,7 +197,6 @@ while true; do
     fi
 done
 
-cat server.log
 
 # 执行服务化推理
 python -m pytest tests/ci_use/XPU_45T/run_w4a8.py
@@ -206,6 +206,8 @@ echo w4a8_test_exit_code is ${w4a8_test_exit_code}
 stop_processes >kill.log 2>&1
 
 if [ ${w4a8_test_exit_code} -ne 0 ]; then
+    echo "server.log"
+    cat server.log
     echo "log/workerlog.0"
     cat log/workerlog.0
     echo "w4a8 测试失败，请检查pr代码"
@@ -265,7 +267,7 @@ while true; do
     fi
 
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 2 "$ENDPOINT" || true)
-
+    echo -e "\r服务健康检查中... 已等待 ${ELAPSED} 秒，当前状态码：${HTTP_CODE}"
     if [ "$HTTP_CODE" = "200" ]; then
         echo -e "\n服务启动成功！耗时 ${ELAPSED} 秒"
         break
@@ -274,7 +276,6 @@ while true; do
     fi
 done
 
-cat server.log
 
 # 执行服务化推理
 python -m pytest tests/ci_use/XPU_45T/run_45vl.py
@@ -284,6 +285,8 @@ echo vl_test_exit_code is ${vl_test_exit_code}
 stop_processes >kill.log 2>&1
 
 if [ ${vl_test_exit_code} -ne 0 ]; then
+    echo "server.log"
+    cat server.log
     echo "log/workerlog.0"
     cat log/workerlog.0
     echo " vl模型 测试失败，请检查pr代码"
@@ -364,7 +367,6 @@ while true; do
     fi
 done
 
-cat server.log
 
 # 执行在线推理验证脚本
 python tests/ci_use/XPU_45T/run_ep_online.py
@@ -381,6 +383,8 @@ unset BKCL_RDMA_VERBS
 stop_processes >kill.log 2>&1
 
 if [ ${ep_online_exit_code} -ne 0 ]; then
+    echo "server.log"
+    cat server.log
     cat log/workerlog.0
     echo "EP4TP4 在线服务相关测试失败，请检查pr代码"
     exit 1
@@ -440,6 +444,7 @@ while true; do
         exit 1
     fi
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -m 2 "$ENDPOINT" || true)
+    echo -e "\r服务健康检查中... 已等待 ${ELAPSED} 秒，当前状态码：${HTTP_CODE}"
     if [ "$HTTP_CODE" = "200" ]; then
         echo -e "\n服务启动成功！耗时 ${ELAPSED} 秒"
         break
@@ -448,7 +453,6 @@ while true; do
     fi
 done
 
-cat server.log
 
 # 执行在线推理验证脚本
 python tests/ci_use/XPU_45T/run_ep_online.py
@@ -465,6 +469,8 @@ unset BKCL_RDMA_VERBS
 stop_processes >kill.log 2>&1
 
 if [ ${ep_online_exit_code} -ne 0 ]; then
+    echo "server.log"
+    cat server.log
     cat log/workerlog.0
     echo "EP4TP1 在线服务相关测试失败，请检查pr代码"
     exit 1
@@ -536,7 +542,6 @@ while true; do
     fi
 done
 
-cat server.log
 
 # 执行在线推理验证脚本
 python tests/ci_use/XPU_45T/run_ep_online.py
@@ -553,6 +558,8 @@ unset BKCL_RDMA_VERBS
 stop_processes >kill.log 2>&1
 
 if [ ${ep_online_exit_code} -ne 0 ]; then
+    echo "server.log"
+    cat server.log
     cat log/workerlog.0
     echo "EP4TP4 all2all 在线服务相关测试失败，请检查pr代码"
     exit 1
