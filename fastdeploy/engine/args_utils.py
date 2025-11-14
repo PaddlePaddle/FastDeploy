@@ -478,7 +478,7 @@ class EngineArgs:
             self.enable_prefix_caching = False
         if self.speculative_config is not None:
             self.enable_prefix_caching = False
-        if not current_platform.is_cuda() and not current_platform.is_xpu():
+        if not current_platform.is_cuda() and not current_platform.is_xpu() and not current_platform.is_intel_hpu():
             self.enable_prefix_caching = False
         # if self.dynamic_load_weight:
         #     self.enable_prefix_caching = False
