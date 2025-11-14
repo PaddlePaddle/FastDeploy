@@ -347,10 +347,10 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         query = self.q_a_layernorm(query)[0]
         query = self.q_b_proj(query)
-        query = query.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
+        query.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
         query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
 
-        key_pe = key_pe.reshape([-1, 1, self.qk_rope_head_dim])
+        key_pe.reshape_([-1, 1, self.qk_rope_head_dim])
         query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
 
         compressed_kv = self.kv_a_layernorm(compressed_kv)[0]
