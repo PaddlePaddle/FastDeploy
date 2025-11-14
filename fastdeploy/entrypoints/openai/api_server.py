@@ -543,7 +543,11 @@ def launch_api_server() -> None:
 
 metrics_app = FastAPI()
 
-if args.metrics_port is None or args.metrics_port == args.port:
+# Be tolerant to tests that monkeypatch/partially mock args.
+_metrics_port = getattr(args, "metrics_port", None)
+_main_port = getattr(args, "port", None)
+
+if _metrics_port is None or (_main_port is not None and _metrics_port == _main_port):
 
     @app.get("/metrics")
     async def metrics():
