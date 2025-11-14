@@ -588,19 +588,6 @@ class CacheMessagerV1:
                             self.idx_cache_task_dict[current_info["current_id"]] = current_info
 
                             # TODO: create connection in advance
-                            # task = current_info
-                            # if task["transfer_protocol"] == "rdma":
-                            #     target_ip = task["ip"]
-                            #     target_id = int(task["rdma_ports"][self.rank])
-
-                            #     # TODO: use is connected to check if the connection is still alive
-                            #     logger.debug(f"rdma, start connect decode, {target_ip}:{target_id}")
-                            #     status = self.messager[task["transfer_protocol"]].connect(target_ip, target_id)
-                            #     if status:
-                            #         logger.info(f"connect to {target_ip}:{target_id} success")
-                            #     else:
-                            #         logger.error(f"connect to {target_ip}:{target_id} failed")
-                            #         task["status"] = "connection error"
 
                         else:
                             logger.info(f"Get cache info from P: {info}")
@@ -1045,10 +1032,6 @@ def main():
                 gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"],
                 f"value_caches_{i}_rank{rank}.device{device}",
             )
-        set_data_ipc(
-            gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"],
-            f"value_caches_{i}_rank{rank}.device{device}",
-        )
 
     if args.splitwise_role == "decode" and args.splitwise_cache_buffer_block_num > 0:
         logger.info(f"[rank {rank}/{args.mp_num}] Initializing cpu buffer to receive cache from prefill.")

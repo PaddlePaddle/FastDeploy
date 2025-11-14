@@ -749,7 +749,7 @@ class EngineService:
                     for tmp_task in need_delete_tasks:
                         tasks.remove(tmp_task)
                         # release resource in P
-                        self.resource_manager.pre_recycle_resource(tmp_task)
+                        self.resource_manager.pre_recycle_resource(tmp_task.request_id)
                 if self.cfg.scheduler_config.splitwise_role == "prefill":
                     # to send cache info to cache messager
                     if tasks:
@@ -1078,13 +1078,16 @@ class EngineService:
                     # ensure the api_server and scheduler in decode have
                     # received the request sent by the client
                     waiting_request_outputs.append(req_output)
+                    continue
                 if (
                     self.cfg.cache_config.enable_splitwise_cache_buffer
                     and not self.resource_manager.has_resource_for_prefilled_req(req_output.request_id)
                 ):
                     waiting_request_outputs.append(req_output)
+                    continue
+
                 ready_request_outputs.append(req_output)
-                self.llm_logger.debug(f"there are enough resource for prefilled " f"request: {req_output.request_id}")
+                self.llm_logger.debug(f"there are enough resource for prefilled request: {req_output.request_id}")
 
             prefilled_request_ouputs = waiting_request_outputs
             if self.cfg.splitwise_version == "v1":

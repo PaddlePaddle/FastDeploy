@@ -38,7 +38,7 @@ ports=(
 )
 for port in "${ports[@]}"; do
     check_port "$port" || {
-        echo "❌ 请释放端口 $port 后再启动服务"
+        echo "❌ Please release port $port before starting the service"
         exit 1
     }
 done
@@ -103,7 +103,7 @@ curl -X POST "http://0.0.0.0:${ROUTER_PORT}/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [
-    {"role": "user", "content": "你好"}
+    {"role": "user", "content": "hello"}
   ],
   "max_tokens": 100,
   "stream": true

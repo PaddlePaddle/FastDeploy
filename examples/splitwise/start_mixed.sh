@@ -20,13 +20,13 @@ S2_PORT=52500
 ROUTER_PORT=52600
 
 ports=(
-    $P_PORT $((P_PORT + 1)) $((P_PORT + 2)) $((P_PORT + 3))
-    $D_PORT $((D_PORT + 1)) $((D_PORT + 2)) $((D_PORT + 3))
+    $S1_PORT $((S1_PORT + 1)) $((S1_PORT + 2)) $((S1_PORT + 3))
+    $S2_PORT $((S2_PORT + 1)) $((S2_PORT + 2)) $((S2_PORT + 3))
     $ROUTER_PORT
 )
 for port in "${ports[@]}"; do
     check_port "$port" || {
-        echo "❌ 请释放端口 $port 后再启动服务"
+        echo "❌ Please release port $port before starting the service"
         exit 1
     }
 done

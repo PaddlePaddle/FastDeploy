@@ -1012,7 +1012,7 @@ class EngineArgs:
             "--splitwise-cache-buffer-size",
             default=EngineArgs.splitwise_cache_buffer_size,
             type=float,
-            help="The size of cpu cache buffer compared to the size of gpu cache (use 0 to disable).",
+            help="The amount of CPU memory in decode to receive the cache from prefill (GB). Default is 0.",
         )
 
         # Router parameters group

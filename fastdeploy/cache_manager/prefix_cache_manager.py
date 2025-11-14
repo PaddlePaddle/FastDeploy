@@ -476,7 +476,7 @@ class PrefixCacheManager:
 
     def allocate_splitwise_blocks(self, num_blocks: int):
         """
-        Acclocate the block ids of splitwise cpu cache buffer.
+        Allocate the block ids of splitwise cpu cache buffer.
         """
         assert self.can_allocate_splitwise_blocks(
             num_blocks
@@ -492,7 +492,10 @@ class PrefixCacheManager:
         """
         Recycle the block ids of splitwise cpu cache buffer.
         """
-        logger.debug(f"recycle_cpu_blocks: {block_ids}, len(self.cpu_free_block_list) {len(self.cpu_free_block_list)}")
+        logger.debug(
+            f"recycle_splitwise_blocks: {block_ids}, "
+            f"len(self.recycle_splitwise_blocks): {len(self.recycle_splitwise_blocks)}"
+        )
         if isinstance(block_ids, list):
             for block_id in block_ids:
                 heapq.heappush(self.splitwise_cpu_free_block_list, block_id)

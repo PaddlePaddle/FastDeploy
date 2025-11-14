@@ -953,7 +953,7 @@ class ResourceManagerV1(ResourceManager):
                 if not success:
                     self._free_blocks(request)
                     return False
-                # consider for mtp, plus enc_dec_block_num
+
                 need_extra_prefill_blocks = need_prealloc_prefill_blocks - request.cache_info[0]
                 if self.cache_manager.can_allocate_gpu_blocks(need_extra_prefill_blocks):
                     request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(need_extra_prefill_blocks))

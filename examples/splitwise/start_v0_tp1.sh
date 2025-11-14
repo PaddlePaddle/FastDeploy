@@ -38,7 +38,7 @@ ports=(
 )
 for port in "${ports[@]}"; do
     check_port "$port" || {
-        echo "❌ 请释放端口 $port 后再启动服务"
+        echo "❌ Please release port $port before starting the service"
         exit 1
     }
 done

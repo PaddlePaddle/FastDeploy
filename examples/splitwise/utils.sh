@@ -3,10 +3,10 @@
 check_port() {
     local port=$1
     if ss -tuln | grep -q ":$port "; then
-        echo "❌ 端口 $port 已被占用"
+        echo "❌ $port is already in use"
         return 1
     else
-        echo "✅ 端口 $port 可用"
+        echo "✅ $port is available"
         return 0
     fi
 }
