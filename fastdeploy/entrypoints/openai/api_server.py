@@ -543,40 +543,75 @@ def launch_api_server() -> None:
 
 metrics_app = FastAPI()
 
+if args.metrics_port is None or args.metrics_port == args.port:
 
-@metrics_app.get("/metrics")
-async def metrics():
-    """
-    metrics
-    """
-    metrics_text = get_filtered_metrics(
-        EXCLUDE_LABELS,
-        extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=args.workers),
-    )
-    return Response(metrics_text, media_type=CONTENT_TYPE_LATEST)
+    @app.get("/metrics")
+    async def metrics():
+        """
+        metrics
+        """
+        metrics_text = get_filtered_metrics(
+            EXCLUDE_LABELS,
+            extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=args.workers),
+        )
+        return Response(metrics_text, media_type=CONTENT_TYPE_LATEST)
 
+    @app.get("/config-info")
+    def config_info() -> Response:
+        """
+        Get the current configuration of the API server.
+        """
+        global llm_engine
+        if llm_engine is None:
+            return Response("Engine not loaded", status_code=500)
+        cfg = llm_engine.cfg
 
-@metrics_app.get("/config-info")
-def config_info() -> Response:
-    """
-    Get the current configuration of the API server.
-    """
-    global llm_engine
-    if llm_engine is None:
-        return Response("Engine not loaded", status_code=500)
-    cfg = llm_engine.cfg
+        def process_object(obj):
+            if hasattr(obj, "__dict__"):
+                # 处理有__dict__属性的对象
+                return obj.__dict__
+            return None  # 或其他默认处理
 
-    def process_object(obj):
-        if hasattr(obj, "__dict__"):
-            # 处理有__dict__属性的对象
-            return obj.__dict__
-        return None  # 或其他默认处理
+        cfg_dict = {k: v for k, v in cfg.__dict__.items()}
+        env_dict = {k: v() for k, v in environment_variables.items()}
+        cfg_dict["env_config"] = env_dict
+        result_content = json.dumps(cfg_dict, default=process_object, ensure_ascii=False)
+        return Response(result_content, media_type="application/json")
 
-    cfg_dict = {k: v for k, v in cfg.__dict__.items()}
-    env_dict = {k: v() for k, v in environment_variables.items()}
-    cfg_dict["env_config"] = env_dict
-    result_content = json.dumps(cfg_dict, default=process_object, ensure_ascii=False)
-    return Response(result_content, media_type="application/json")
+else:
+
+    @metrics_app.get("/metrics")
+    async def metrics():
+        """
+        metrics
+        """
+        metrics_text = get_filtered_metrics(
+            EXCLUDE_LABELS,
+            extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=args.workers),
+        )
+        return Response(metrics_text, media_type=CONTENT_TYPE_LATEST)
+
+    @metrics_app.get("/config-info")
+    def config_info() -> Response:
+        """
+        Get the current configuration of the API server.
+        """
+        global llm_engine
+        if llm_engine is None:
+            return Response("Engine not loaded", status_code=500)
+        cfg = llm_engine.cfg
+
+        def process_object(obj):
+            if hasattr(obj, "__dict__"):
+                # 处理有__dict__属性的对象
+                return obj.__dict__
+            return None  # 或其他默认处理
+
+        cfg_dict = {k: v for k, v in cfg.__dict__.items()}
+        env_dict = {k: v() for k, v in environment_variables.items()}
+        cfg_dict["env_config"] = env_dict
+        result_content = json.dumps(cfg_dict, default=process_object, ensure_ascii=False)
+        return Response(result_content, media_type="application/json")
 
 
 def run_metrics_server():
@@ -597,6 +632,12 @@ def launch_metrics_server():
     metrics_server_thread = threading.Thread(target=run_metrics_server, daemon=True)
     metrics_server_thread.start()
     time.sleep(1)
+
+
+def setup_metrics_environment():
+    """Prepare Prometheus multiprocess directory before starting API workers."""
+    prom_dir = cleanup_prometheus_files(True)
+    os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
 
 
 controller_app = FastAPI()
@@ -707,13 +748,17 @@ def main():
         if not load_data_service():
             return
     api_server_logger.info("FastDeploy LLM engine initialized!\n")
-    console_logger.info(f"Launching metrics service at http://{args.host}:{args.metrics_port}/metrics")
+    if args.metrics_port is not None and args.metrics_port != args.port:
+        launch_metrics_server()
+        console_logger.info(f"Launching metrics service at http://{args.host}:{args.metrics_port}/metrics")
+    else:
+        setup_metrics_environment()
+        console_logger.info(f"Launching metrics service at http://{args.host}:{args.port}/metrics")
     console_logger.info(f"Launching chat completion service at http://{args.host}:{args.port}/v1/chat/completions")
     console_logger.info(f"Launching completion service at http://{args.host}:{args.port}/v1/completions")
 
     launch_worker_monitor()
     launch_controller_server()
-    launch_metrics_server()
     launch_api_server()
 
 
