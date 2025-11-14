@@ -184,12 +184,17 @@ class XGrammarBackend(BackendBase):
         try:
             tokenizer_info = TokenizerInfo.from_huggingface(self.hf_tokenizer, vocab_size=self.vocab_size)
             llm_logger.info(f"xgrammar_backend.py tokenzer_info={tokenizer_info.dump_metadata()}")
+            # Read configuration values, fallback to defaults if not set
+            xgrammar_cfg = getattr(fd_config, "xgrammar_config", {})
+            max_threads = getattr(xgrammar_cfg, "max_threads", 8)
+            cache_enabled = getattr(xgrammar_cfg, "cache_enabled", True)
+            cache_limit_bytes = getattr(xgrammar_cfg, "cache_limit_bytes", 4 * 1024 * 1024)
             self.grammar_compiler = GrammarCompiler(
                 tokenizer_info=tokenizer_info,
-                max_threads=8,
-                cache_enabled=True,
-                cache_limit_bytes=4 * 1024 * 1024,
-            )  # TODO cfg
+                max_threads=max_threads,
+                cache_enabled=cache_enabled,
+                cache_limit_bytes=cache_limit_bytes,
+            )
         except Exception as e:
             raise Exception(f"Failed to load XGrammar tokenizer: {e}")
 
