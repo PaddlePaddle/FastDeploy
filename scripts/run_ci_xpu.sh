@@ -123,7 +123,7 @@ done
 
 
 # 执行服务化推理
-python -m pytest tests/ci_use/XPU_45T/run_45T.py
+python -m pytest -s tests/ci_use/XPU_45T/run_45T.py
 kv_block_test_exit_code=$?
 echo kv_block_test_exit_code is ${kv_block_test_exit_code}
 
@@ -199,7 +199,7 @@ done
 
 
 # 执行服务化推理
-python -m pytest tests/ci_use/XPU_45T/run_w4a8.py
+python -m pytest -s tests/ci_use/XPU_45T/run_w4a8.py
 w4a8_test_exit_code=$?
 echo w4a8_test_exit_code is ${w4a8_test_exit_code}
 
@@ -278,7 +278,7 @@ done
 
 
 # 执行服务化推理
-python -m pytest tests/ci_use/XPU_45T/run_45vl.py
+python -m pytest -s tests/ci_use/XPU_45T/run_45vl.py
 vl_test_exit_code=$?
 echo vl_test_exit_code is ${vl_test_exit_code}
 
@@ -369,7 +369,7 @@ done
 
 
 # 执行在线推理验证脚本
-python tests/ci_use/XPU_45T/run_ep_online.py
+python -m pytest -s tests/ci_use/XPU_45T/run_ep_online.py
 ep_online_exit_code=$?
 echo ep_online_exit_code is ${ep_online_exit_code}
 
@@ -455,7 +455,7 @@ done
 
 
 # 执行在线推理验证脚本
-python tests/ci_use/XPU_45T/run_ep_online.py
+python -m pytest -s tests/ci_use/XPU_45T/run_ep_online.py
 ep_online_exit_code=$?
 echo ep_online_exit_code is ${ep_online_exit_code}
 
@@ -544,7 +544,7 @@ done
 
 
 # 执行在线推理验证脚本
-python tests/ci_use/XPU_45T/run_ep_online.py
+python -m pytest -s tests/ci_use/XPU_45T/run_ep_online.py
 ep_online_exit_code=$?
 echo ep_online_exit_code is ${ep_online_exit_code}
 
