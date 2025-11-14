@@ -114,7 +114,7 @@ class GuidedDecoding:
             idx (int): The index of the logits processor to check
 
         Returns:
-            bool: True if the idx requst bitmask should be filled
+            bool: True if the idx request bitmask should be filled
 
         """
         if self.reasoning_parser is not None:
@@ -396,9 +396,7 @@ class Sampler(nn.Layer):
         p_done_idxs: List[int] = [],
     ) -> SamplerOutput:
         """ """
-        # ts = time.time()
         logits = self.guided_decoding.apply_token_mask(logits, p_done_idxs)
-        # logger.info(f"apply_token_mask time_cost={time.time() - ts}")
 
         num_logprobs = sampling_metadata.max_num_logprobs
         if num_logprobs is not None:

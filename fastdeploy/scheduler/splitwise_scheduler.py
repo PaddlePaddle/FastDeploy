@@ -707,12 +707,12 @@ class InferScheduler:
         self.writers = []
 
     def check_redis_version(self):
-        # 获取Redis版本信息
+        # Get Redis version information
         redis_info = self.client.info()
         redis_version = redis_info.get("redis_version", "")
         version_parts = [int(x) for x in redis_version.split(".")]
 
-        # Redis 6.2及以上版本支持带count参数的RPOP
+        # Redis 6.2 and above versions support RPOP with count parameter
         assert (
             version_parts[0] >= 6
         ), f"Redis major version too low: {version_parts[0]}. Please upgrade to Redis 6.2+ to support batch RPOP operations."

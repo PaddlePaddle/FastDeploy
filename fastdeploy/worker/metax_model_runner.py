@@ -1760,8 +1760,8 @@ class MetaxModelRunner(ModelRunnerBase):
 
     def _get_p_done_idxs_gd(self, model_forward_batch: Optional[List[Request]], num_running_requests: int):
         """
-        idx for guided decoding
-        when Prefill is done, async compiled logits_processor must be joined
+        Get indices for guided decoding.
+        When Prefill is done, async compiled logits_processor must be joined.
         """
         if self.guided_backend is None:
             return []
@@ -1774,7 +1774,7 @@ class MetaxModelRunner(ModelRunnerBase):
         if self.cache_config.enable_chunked_prefill:
             if model_forward_batch is not None:
                 for task in model_forward_batch:
-                    # new Request with ChunkPrefill, unfinshed, store
+                    # new Request with ChunkPrefill, unfinished, store
                     if task.chunk_idx < len(task.prefill_chunk_info):
                         if task.request_id not in self.restore_chunked_prefill_request:
                             self.restore_chunked_prefill_request[task.request_id] = task
