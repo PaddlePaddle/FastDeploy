@@ -45,75 +45,6 @@ from fastdeploy.model_executor.utils import switch_config_context
 from fastdeploy.platforms import current_platform
 
 
-def reload_ep_checkpoint(model_path: str, fd_config: FDConfig, state_dict: dict, return_numpy: bool = False):
-    """
-    Reloads Mixture of Experts (MoE) expert parallel (EP) checkpoint weights for Dense Tensor Parallel (TP) models.
-    This function selectively reloads expert weights from safetensor files for the specified model layers and experts,
-    updating the provided `state_dict` in-place. It is designed for use in distributed training or inference scenarios
-    where expert parallelism is employed.
-    Parameters:
-        model_path (str): Path to the directory containing the model checkpoint and safetensor files.
-        fd_config (FDConfig): FastDeploy configuration object containing model and parallelism settings.
-        state_dict (dict): Dictionary of model weights to be updated with reloaded expert weights.
-        return_numpy (bool, optional): If True, weights are returned as NumPy arrays; if False (default), as Paddle tensors.
-    Returns:
-        dict: The updated state_dict containing the reloaded expert weights.
-    Notes:
-        - Only expert weights for the local rank are reloaded; other expert weights are removed from state_dict.
-        - This function is intended for use in Dense TP + MoE EP model architectures.
-    """
-    with open(os.path.join(model_path, "model.safetensors.index.json"), "r") as f:
-        weight_list = json.load(f)["weight_map"]
-    removed_map = {k: v for k, v in weight_list.items() if ".experts." in k}
-    # Remove all keys in removed_map from state_dict if present
-    for k in removed_map.keys():
-        if k in state_dict:
-            del state_dict[k]
-
-    num_local_ffn_keys = []
-    reloaded_map = {}
-
-    for i in range(fd_config.model_config.moe_layer_start_index, fd_config.model_config.num_hidden_layers):
-        for j in range(
-            fd_config.parallel_config.num_experts_start_offset,
-            fd_config.parallel_config.num_experts_start_offset + fd_config.parallel_config.num_experts_per_rank,
-        ):
-            ffn1_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight"
-            ffn2_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight"
-
-            ffn1_quant_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.quant_weight"
-            ffn2_quant_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.quant_weight"
-
-            ffn1_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight_scale"
-            ffn2_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight_scale"
-            num_local_ffn_keys.append(ffn1_key)
-            num_local_ffn_keys.append(ffn2_key)
-            num_local_ffn_keys.append(ffn1_quant_key)
-            num_local_ffn_keys.append(ffn2_quant_key)
-            num_local_ffn_keys.append(ffn1_scale_key)
-            num_local_ffn_keys.append(ffn2_scale_key)
-
-    for k in num_local_ffn_keys:
-        if k in weight_list:
-            reloaded_map[k] = weight_list[k]
-
-    # Get all safetensor file paths that need to be opened
-    safetensor_paths = set(reloaded_map.values())
-
-    # Open each safetensor file sequentially with progress bar
-    for safetensor_path in tqdm(safetensor_paths, desc="ReLoading safetensor files", unit="file"):
-        with safe_open(os.path.join(model_path, safetensor_path), framework="np", device="cpu") as f:
-            # Check if this file contains keys from reloaded_map
-            for k in reloaded_map:
-                if reloaded_map[k] == safetensor_path and k in f.keys():
-                    weight = f.get_tensor(k)
-                    if not return_numpy:
-                        weight = paddle.Tensor(weight, zero_copy=True)
-                        weight = weight._copy_to(paddle.framework._current_expected_place(), False)
-                    state_dict[k] = weight
-    return state_dict
-
-
 def pdparams_weight_iterator(paddle_file_list: list[str]):
     for pdparams_file in tqdm(
         paddle_file_list,
@@ -582,14 +513,6 @@ def load_composite_checkpoint(
             ):
                 state_dict = load_tp_checkpoint_v1(model_path, cls, fd_config, use_fastsafetensor=True)
                 deal_state_dict(state_dict)
-            elif (
-                fd_config.parallel_config.enable_dense_tp_and_moe_ep
-                and fd_config.parallel_config.tensor_parallel_size > 1
-            ):
-                state_dict = load_tp_checkpoint(
-                    model_path, cls, fd_config.model_config.pretrained_config, return_numpy=return_numpy
-                )
-                state_dict = reload_ep_checkpoint(model_path, fd_config, state_dict, return_numpy=True)
             else:
                 # NOTE: for very big model, cpu will be out of memory
                 state_dict = load_tp_checkpoint(

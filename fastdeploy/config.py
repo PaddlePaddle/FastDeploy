@@ -535,7 +535,6 @@ class ParallelConfig:
         self.expert_parallel_size = 1  # EP degree
         self.data_parallel_size = 1  # DP degree
         self.enable_expert_parallel = False
-        self.enable_dense_tp_and_moe_ep = False
         self.local_data_parallel_id = 0
         # Engine worker queue port
         self.engine_worker_queue_port: str = "9923"

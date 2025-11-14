@@ -286,11 +286,6 @@ class EngineArgs:
     Enable expert parallelism.
     """
 
-    enable_dense_tp_and_moe_ep: bool = False
-    """
-    Enable tensor parallelism for non-MoE and expert parallelism for MoE.
-    """
-
     cache_transfer_protocol: str = "ipc"
     """
     Protocol to use for cache transfer.
@@ -833,12 +828,6 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_expert_parallel,
             help="Enable expert parallelism.",
-        )
-        parallel_group.add_argument(
-            "--enable-dense-tp-and-moe-ep",
-            action="store_true",
-            default=EngineArgs.enable_dense_tp_and_moe_ep,
-            help="Enable tensor parallelism for non-MoE and expert parallelism for MoE.",
         )
 
         # Load group
