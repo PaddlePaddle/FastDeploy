@@ -682,6 +682,7 @@ class PrefixCacheManager:
             can_cache_computed_tokens = num_computed_tokens - num_computed_tokens % block_size
             if req_id in self.leaf_req_map[last_node]:  # delete old leaf record, update later
                 self.leaf_req_map[last_node].remove(req_id)
+            logger.debug(f"update_cache_blocks: req_id {req_id} can_cache_computed_tokens {can_cache_computed_tokens}")
 
             with self.request_release_lock:
                 leaf_node = self.mm_build_path(
@@ -879,7 +880,7 @@ class PrefixCacheManager:
                 gpu_build_path_block_ids = []
 
                 gpu_build_path_block_ids = gpu_extra_block_ids
-
+                logger.debug(f"request_block_ids: req_id {req_id} left_input_ids {len(left_input_ids)}")
                 leaf_node = self.build_path(
                     req_id,
                     current_time,
@@ -949,11 +950,15 @@ class PrefixCacheManager:
                     node = node.parent
 
                 # To-DO, 异步写入 + output 写入
-                if self.write_policy == "write_through" and keys:
-                    logger.info(f"write_through {req_id} {keys} {task.block_tables[:len(keys)]}")
-                    self.write_back_storage(
-                        task_id=req_id, hash_keys=keys, gpu_block_ids=task.block_tables[: len(keys)], is_sync=True
-                    )
+                if (
+                    self.cache_config.enable_hierarchical_kvcache
+                    and self.cache_config.kvcache_storage_backend is not None
+                ):
+                    if self.write_policy == "write_through" and keys:
+                        logger.info(f"write_through {req_id} {keys} {task.block_tables[:len(keys)]}")
+                        self.write_back_storage(
+                            task_id=req_id, hash_keys=keys, gpu_block_ids=task.block_tables[: len(keys)], is_sync=True
+                        )
 
                 if req_id in self.cache_info:
                     del self.cache_info[req_id]
@@ -1469,6 +1474,7 @@ class PrefixCacheManager:
                 )
                 prefix_cache.extend(extra_keys)
                 hash_value = self.cal_block_hash(token_block, prefix_cache)
+                logger.debug(f"match_block: req_id {request.request_id} hash_value: {hash_value}")
                 prefix_cache = [hash_value]
 
                 if hash_value in current_match_node.children:
@@ -1674,7 +1680,10 @@ class PrefixCacheManager:
 
         input_hash_value = self.cal_block_hash(input_ids)
         gpu_block_ids = request.block_tables[num_cached_tokens // block_size :].copy()
-        prefix_cache = [last_node.hash_value]
+        if last_node.hash_value is None:
+            prefix_cache = []
+        else:
+            prefix_cache = [last_node.hash_value]
         for i in range(num_cached_tokens, can_cache_computed_tokens, block_size):
             current_block = input_ids[i : i + block_size]
             current_block_size = len(current_block)  # 最后一个block可能没填满
