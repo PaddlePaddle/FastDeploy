@@ -183,7 +183,7 @@ class XGrammarBackend(BackendBase):
 
         try:
             tokenizer_info = TokenizerInfo.from_huggingface(self.hf_tokenizer, vocab_size=self.vocab_size)
-            llm_logger.info(f"xgrammar_backend.py tokenzer_info={tokenizer_info.dump_metadata()}")
+            llm_logger.info(f"xgrammar_backend.py tokenizer_info={tokenizer_info.dump_metadata()}")
             # Read configuration values, fallback to defaults if not set
             xgrammar_cfg = getattr(fd_config, "xgrammar_config", {})
             max_threads = getattr(xgrammar_cfg, "max_threads", 8)
