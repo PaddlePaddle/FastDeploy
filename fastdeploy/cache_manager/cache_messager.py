@@ -15,6 +15,7 @@
 """
 
 import argparse
+import concurrent.futures
 import json
 import math
 import queue
@@ -25,14 +26,21 @@ import traceback
 import numpy as np
 import paddle
 
+from fastdeploy.cache_manager.cache_data import CacheStatus
 from fastdeploy.cache_manager.transfer_factory import IPCCommManager, RDMACommManager
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.inter_communicator import (
+    EngineCacheQueue,
     EngineWorkerQueue,
     IPCSignal,
     shared_memory_exists,
 )
-from fastdeploy.model_executor.ops.gpu import get_output_kv_signal, set_data_ipc
+from fastdeploy.model_executor.ops.gpu import (
+    cuda_host_alloc,
+    get_output_kv_signal,
+    set_data_ipc,
+    swap_cache_all_layers,
+)
 from fastdeploy.utils import envs, get_logger
 
 logger = get_logger("cache_messager", "cache_messager.log")
@@ -72,11 +80,17 @@ def parse_args():
         help="engine worker queue port",
     )
     parser.add_argument(
-        "--cache_dtype",
+        "--splitwise_cache_buffer_block_num",
+        type=int,
+        default=0,
+        help="The block num of cpu buffer to receive cache from prefill",
+    )
+    parser.add_argument(
+        "--cache_saved_dtype",
         type=str,
         default="bfloat16",
         choices=["uint8", "bfloat16"],
-        help="cache dtype",
+        help="cache saved dtype",
     )
     parser.add_argument(
         "--speculative_config",
@@ -393,9 +407,13 @@ class CacheMessagerV1:
         splitwise_role,
         transfer_protocol,
         pod_ip,
+        cache_queue_port,
         engine_worker_queue_port,
         local_data_parallel_id,
         gpu_cache_kvs,
+        splitwise_cache_buffer_block_num,
+        splitwise_cache_buffer_ptrs,
+        bytes_per_block,
         rank,
         nranks,
         num_layers,
@@ -409,8 +427,14 @@ class CacheMessagerV1:
         Args:
             splitwise_role (str): splitwise_role only can be 'prefill' or 'decode'.
             transfer_protocol (str): support ipc and rdma
+            pod_ip (str): pod ip
+            cache_queue_port (int): cache_queue port
             engine_worker_queue_port (int): engine_worker_queue port
             gpu_cache_kvs (dict): GPU kv cache
+            splitwise_cache_buffer_block_num (int): number of blocks in each splitwise cpu buffer
+            splitwise_cache_buffer_ptrs (dict): tensor ptrs for splitwise cpu buffer.
+                                             If set, then use cpu buffer to receive cache from prefill.
+            bytes_per_block (int): bytes per block for cache kv
             rank (int): current rank
             nranks (int): global rank number
             num_layers (int): model layer number
@@ -424,6 +448,10 @@ class CacheMessagerV1:
         self.gpu_cache_kvs = gpu_cache_kvs
         self.rank = rank
         self.nranks = nranks
+        self.splitwise_cache_buffer_block_num = splitwise_cache_buffer_block_num
+        self.bytes_per_block = bytes_per_block
+        self.block_size = block_size
+
         if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
             address = (pod_ip, engine_worker_queue_port)
         else:
@@ -435,63 +463,65 @@ class CacheMessagerV1:
             client_id=self.rank,
             local_data_parallel_id=local_data_parallel_id,
         )
-        self.block_size = block_size
-        transfer_protocol = transfer_protocol.split(",")
-
-        logger.info(f"splitwise role: {splitwise_role}, {transfer_protocol}" f"rank: {rank}")
 
         # 1. initialize the cache_k_ptr_list and cache_v_ptr_list
         self.num_layers = num_layers
-        cache_k_ptr_list = []
-        cache_v_ptr_list = []
-        cache_k = []
-        cache_v = []
+        self.gpu_cache_k_tensors = []
+        self.gpu_cache_v_tensors = []
+        self.gpu_cache_k_ptrs = []
+        self.gpu_cache_v_ptrs = []
+        self.splitwise_cache_k_ptrs = []
+        self.splitwise_cache_v_ptrs = []
         self.messager = {}
+
         for layer_idx in range(self.num_layers):
             key_cache = self.gpu_cache_kvs[f"key_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
             val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
-            cache_k.append(key_cache)
-            cache_v.append(val_cache)
-            cache_k_ptr_list.append(key_cache.data_ptr())
-            cache_v_ptr_list.append(val_cache.data_ptr())
-        cache_k_ptr_list = np.array(cache_k_ptr_list)
-        cache_v_ptr_list = np.array(cache_v_ptr_list)
+            self.gpu_cache_k_tensors.append(key_cache)
+            self.gpu_cache_v_tensors.append(val_cache)
+            self.gpu_cache_k_ptrs.append(key_cache.data_ptr())
+            self.gpu_cache_v_ptrs.append(val_cache.data_ptr())
 
-        # 2. initialize the block_bytes
-        cache_shape = key_cache.shape
-        max_block_num = cache_shape[0]
-        block_bytes = math.prod(cache_shape[1:])
-        if key_cache.dtype == paddle.bfloat16:
-            block_bytes *= 2
-        logger.info(
-            f"layers {num_layers} cache_shape: {cache_shape}, max_block_num: {max_block_num}, "
-            f"block_bytes: {block_bytes}, dtype: {key_cache.dtype}"
-        )
-        self.block_bytes = block_bytes
+        if splitwise_cache_buffer_ptrs:
+            logger.debug("use cpu buffer to receive cache from prefill")
+            for layer_idx in range(self.num_layers):
+                k_ptr = splitwise_cache_buffer_ptrs[f"key_layer{layer_idx}"]
+                v_ptr = splitwise_cache_buffer_ptrs[f"value_layer{layer_idx}"]
+                self.splitwise_cache_k_ptrs.append(k_ptr)
+                self.splitwise_cache_v_ptrs.append(v_ptr)
 
-        # 3. initialize the messager
+        # 2. initialize the messager
+        transfer_protocol = transfer_protocol.split(",")
+        logger.info(f"splitwise role: {splitwise_role}, {transfer_protocol}, rank: {rank}")
         for protocol in transfer_protocol:
             if protocol == "ipc":
                 self.messager[protocol] = IPCCommManager(
                     self.rank,
                     gpu_id,
-                    cache_k,
-                    cache_v,
+                    self.gpu_cache_k_tensors,
+                    self.gpu_cache_v_tensors,
                 )
-                local_device_id = int(str(cache_k[0].place)[-2])
+                local_device_id = int(str(self.gpu_cache_k_tensors[0].place)[-2])
                 logger.info(f"done create ipc_comm with local_device_id:{local_device_id}, ")
 
             elif protocol == "rdma":
                 logger.info(f"splitwise_role rdma: {self.splitwise_role}, rank: {self.rank}, gpu_id: {gpu_id}")
-
+                if splitwise_cache_buffer_ptrs:
+                    register_k_ptrs = np.array(self.splitwise_cache_k_ptrs)
+                    register_v_ptrs = np.array(self.splitwise_cache_v_ptrs)
+                    register_blocks_num = splitwise_cache_buffer_block_num
+                else:
+                    register_k_ptrs = np.array(self.gpu_cache_k_ptrs)
+                    register_v_ptrs = np.array(self.gpu_cache_v_ptrs)
+                    register_blocks_num = self.gpu_cache_k_tensors[0].shape[0]
                 self.messager[protocol] = RDMACommManager(
                     splitwise_role,
                     rank,
                     gpu_id,
-                    cache_k_ptr_list,
-                    cache_v_ptr_list,
-                    max_block_num,
-                    block_bytes,
+                    register_k_ptrs,
+                    register_v_ptrs,
+                    register_blocks_num,
+                    bytes_per_block,
                     rdma_port,
                 )
 
@@ -509,6 +539,18 @@ class CacheMessagerV1:
             add_cache_task_thread = threading.Thread(target=self._add_cache_task_thread)
             add_cache_task_thread.daemon = True
             add_cache_task_thread.start()
+
+        if splitwise_role == "decode" and splitwise_cache_buffer_block_num > 0:
+            address = (pod_ip, cache_queue_port)
+            self.cache_task_queue = EngineCacheQueue(
+                address=address,
+                is_server=False,
+                num_client=nranks,
+                client_id=rank,
+                local_data_parallel_id=local_data_parallel_id,
+            )
+
+            threading.Thread(target=self._swap_splitwise_cpu_buffer_to_gpu, daemon=True).start()
 
         if self.splitwise_role != "mixed":
             connect_rdma_thread = threading.Thread(target=self._handle_connect_task)
@@ -541,11 +583,27 @@ class CacheMessagerV1:
                             current_info["sended_layer_id"] = -1
                             current_info["sended_block_num"] = current_info["decode_cached_tokens"] // self.block_size
                             current_info["status"] = "init"
-                            logger.info(f"Get cache info from P: finish add cache task: {current_info}")
+                            logger.info(f"Get cache info from D, finish add cache task: {current_info}")
                             self.cache_info[info["request_id"]] = current_info
                             self.idx_cache_task_dict[current_info["current_id"]] = current_info
+
+                            # TODO: create connection in advance
+                            # task = current_info
+                            # if task["transfer_protocol"] == "rdma":
+                            #     target_ip = task["ip"]
+                            #     target_id = int(task["rdma_ports"][self.rank])
+
+                            #     # TODO: use is connected to check if the connection is still alive
+                            #     logger.debug(f"rdma, start connect decode, {target_ip}:{target_id}")
+                            #     status = self.messager[task["transfer_protocol"]].connect(target_ip, target_id)
+                            #     if status:
+                            #         logger.info(f"connect to {target_ip}:{target_id} success")
+                            #     else:
+                            #         logger.error(f"connect to {target_ip}:{target_id} failed")
+                            #         task["status"] = "connection error"
+
                         else:
-                            logger.info(f"Get cache info from D: {info}")
+                            logger.info(f"Get cache info from P: {info}")
                             self.cache_info[info["request_id"]] = info
 
                     if finished_add_cache_task_req_ids:
@@ -661,7 +719,7 @@ class CacheMessagerV1:
                                 cost_time = tok - tic
                                 block_num = len(src_block_ids)
                                 avg_time_per_block = cost_time * 1000 / block_num  # ms
-                                send_cache_speed = block_num * self.block_bytes / 1073741824 / cost_time  # GB/s
+                                send_cache_speed = block_num * self.bytes_per_block / 1073741824 / cost_time  # GB/s
                                 logger.debug(
                                     f"finish write cache for a layer, {req_id}, {layer_idx}, {target_ip}, {target_id},"
                                     f"block_num: {block_num}, send_cache_speed(GB/s): {round(send_cache_speed, 5)},"
@@ -759,12 +817,167 @@ class CacheMessagerV1:
             except Exception as e:
                 logger.error(f"handle_connect_task has exception: {e}, {traceback.format_exc()}")
 
+    def _swap_splitwise_cpu_buffer_to_gpu(self):
+        """
+        Decode use cpu buffer to receive cache, so it needs to swap cpu buffer to gpu.
+        This function receives the task from cache_task_queue, and then swap cpu buffer to gpu.
+        """
+
+        def _do_swap_to_gpu_task(
+            swap_node_ids,
+            gpu_block_ids,
+            cpu_block_ids,
+            event_type,
+            transfer_task_id,
+        ):
+            self.cache_task_queue.swap_to_gpu_barrier1.wait()
+            if self.rank == 0:
+                self.cache_task_queue.swap_to_gpu_barrier1.reset()
+
+            logger.info(
+                f"start transfer data: transfer_task_id {transfer_task_id} event_type {event_type}: "
+                f"blocks_num {len(gpu_block_ids)} "
+            )
+            logger.debug(
+                f"transfer data: transfer_task_id {transfer_task_id}: swap_node_ids {swap_node_ids}"
+                + f"gpu_block_ids: {gpu_block_ids} cpu_block_ids: {cpu_block_ids} event_type {event_type}"
+            )
+            start_time = time.time()
+            try:
+                assert len(gpu_block_ids) == len(cpu_block_ids)
+                swap_cache_all_layers(
+                    self.gpu_cache_k_tensors,
+                    self.splitwise_cache_k_ptrs,
+                    self.splitwise_cache_buffer_block_num,
+                    gpu_block_ids,
+                    cpu_block_ids,
+                    self.gpu_id,
+                    1,
+                )
+                swap_cache_all_layers(
+                    self.gpu_cache_v_tensors,
+                    self.splitwise_cache_v_ptrs,
+                    self.splitwise_cache_buffer_block_num,
+                    gpu_block_ids,
+                    cpu_block_ids,
+                    self.gpu_id,
+                    1,
+                )
+            except Exception as e:
+                logger.error(f"transfer data: error: {e}")
+                raise e
+            end_time = time.time()
+            elasped_time = end_time - start_time
+            swap_speed = len(gpu_block_ids) * self.bytes_per_block / 1073741824 / elasped_time  # GB/s
+            logger.info(
+                f"finish transfer data: transfer_task_id {transfer_task_id}, blocks_num {len(gpu_block_ids)},"
+                + f"swap speed {swap_speed:.4f} GB/s, elapsed_time {elasped_time:.4f}"
+            )
+
+            result = (
+                swap_node_ids,
+                gpu_block_ids,
+                cpu_block_ids,
+                event_type,
+                transfer_task_id,
+            )
+
+            self.cache_task_queue.swap_to_gpu_barrier2.wait()
+            if self.rank == 0:
+                self.cache_task_queue.swap_to_gpu_barrier2.reset()
+                self.cache_task_queue.put_transfer_done_signal(result)
+                logger.debug(f"_do_swap_to_gpu_task: put_transfer_done_signal {result}")
+                logger.info(f"_do_swap_to_gpu_task: put_transfer_done_signal for transfer_task_id {transfer_task_id}")
+
+        consecutive_error_count = 0
+        max_errors = (
+            envs.FD_CACHE_PROC_ERROR_COUNT
+        )  # After this many consecutive errors, check if the worker process exists.
+        swap_to_gpu_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+        cache_task_broadcast_data = np.zeros(shape=[1], dtype=np.int32)
+        cache_task_broadcast_signal = IPCSignal(
+            name="cache_task_broadcast_signal",
+            array=cache_task_broadcast_data,
+            dtype=np.int32,
+            suffix=args.engine_pid,
+            create=False,
+        )
+
+        while True:
+            try:
+                time.sleep(0.002)
+
+                if self.rank == 0:
+                    if not self.cache_task_queue.empty():
+                        cache_task_broadcast_signal.value[0] = 1
+                if self.nranks > 1:
+                    self.cache_task_queue.barrier1.wait()
+                    if self.rank == 0:
+                        self.cache_task_queue.barrier1.reset()
+
+                if cache_task_broadcast_signal.value[0] != 1:
+                    if self.nranks > 1:
+                        self.cache_task_queue.barrier2.wait()
+                        if self.rank == 0:
+                            self.cache_task_queue.barrier2.reset()
+                    continue
+                else:
+                    data, read_finish = self.cache_task_queue.get_transfer_task()
+                    logger.debug(f"transfer data: get_transfer_task {data}")
+                    if read_finish:
+                        cache_task_broadcast_signal.value[0] = 0
+                    (
+                        swap_node_ids,
+                        gpu_block_ids,
+                        cpu_block_ids,
+                        event_type,
+                        transfer_task_id,
+                    ) = data
+                    assert event_type.value == CacheStatus.SPLITWISE_CPU2GPU.value
+
+                    swap_to_gpu_thread_pool.submit(
+                        _do_swap_to_gpu_task,
+                        swap_node_ids,
+                        gpu_block_ids,
+                        cpu_block_ids,
+                        event_type,
+                        transfer_task_id,
+                    )
+
+                if self.nranks > 1:
+                    self.cache_task_queue.barrier3.wait()
+                    if self.rank == 0:
+                        self.cache_task_queue.barrier3.reset()
+
+                consecutive_error_count = 0
+
+            except (BrokenPipeError, EOFError, ConnectionResetError) as e:
+                # When a cache_transfer_manager process remains, it keeps printing error logs and may exhaust disk space.
+                # Add a check to see if the worker process is alive; if it has ended, exit the loop to stop continuous logging.
+                logger.error(f"[CacheTransferManager] Connection broken: {e}")
+                consecutive_error_count += 1
+                if consecutive_error_count > max_errors:
+                    try:
+                        status, msg = self.check_work_status()
+                    except Exception:
+                        status = True
+                    if status is False:
+                        logger.critical(
+                            f"The Worker process has been inactive for over {envs.FD_CACHE_PROC_EXIT_TIMEOUT} seconds, and the Cache process will automatically terminate (the waiting timeout can be extended via FD_CACHE_PROC_EXIT_TIMEOUT)."
+                        )
+                        break
+                time.sleep(1)
+                continue
+            except Exception as e:
+                logger.info(f"_swap_cpu_buffer_to_gpu: error: {e}, {str(traceback.format_exc())}")
+
 
 def main():
     device = args.device_id
     rank = args.rank
     paddle.set_device(f"gpu:{device}")
-    cache_type = args.cache_dtype
+    cache_saved_dtype = args.cache_saved_dtype
     speculative_config = SpeculativeConfig(args.speculative_config)
     num_extra_layers = speculative_config.num_extra_cache_layer
     key_cache_shape_list = [int(i) for i in args.key_cache_shape.split(",")]
@@ -776,6 +989,15 @@ def main():
     gpu_cache_kvs = {}
     gpu_cache_k_tensors = []
     gpu_cache_v_tensors = []
+    splitwise_cache_buffer_ptrs = {}
+    bytes_per_block = None  # NOTE: key and value have the same shape and dtype
+
+    if args.cache_saved_dtype == "bfloat16":
+        byte_size = 2
+    elif args.cache_saved_dtype == "uint8":
+        byte_size = 1
+    else:
+        raise ValueError(f"Unsupported cache dtype: {args.cache_saved_dtype}")
 
     logger.info(f"[rank {rank}/{args.mp_num}] Initializing kv cache for all layers.")
     for i in range(args.num_layers + num_extra_layers):
@@ -798,10 +1020,13 @@ def main():
             f"[rank {rank}/{args.mp_num}] ..creating kv cache for layer {i}: {key_cache_shape} {value_cache_shape}"
         )
 
+        if bytes_per_block is None:
+            bytes_per_block = math.prod(key_cache_shape_list[1:]) * byte_size
+
         gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"] = paddle.full(
             shape=key_cache_shape,
             fill_value=0,
-            dtype=cache_type,
+            dtype=cache_saved_dtype,
         )
         gpu_cache_k_tensors.append(gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"])
         set_data_ipc(
@@ -812,7 +1037,7 @@ def main():
             gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"] = paddle.full(
                 shape=value_cache_shape,
                 fill_value=0,
-                dtype=cache_type,
+                dtype=cache_saved_dtype,
             )
             gpu_cache_v_tensors.append(gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"])
 
@@ -820,6 +1045,25 @@ def main():
                 gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"],
                 f"value_caches_{i}_rank{rank}.device{device}",
             )
+        set_data_ipc(
+            gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"],
+            f"value_caches_{i}_rank{rank}.device{device}",
+        )
+
+    if args.splitwise_role == "decode" and args.splitwise_cache_buffer_block_num > 0:
+        logger.info(f"[rank {rank}/{args.mp_num}] Initializing cpu buffer to receive cache from prefill.")
+        for i in range(args.num_layers + num_extra_layers):
+            # TODO: determine the num_blocks for extra_layer
+            num_blocks = args.splitwise_cache_buffer_block_num if i < args.num_layers else num_extra_layer_gpu_blocks
+            cache_shape = [num_blocks] + key_cache_shape_list[1:]
+            cache_bytes = num_blocks * bytes_per_block
+            logger.info(
+                f"[rank {rank}/{args.mp_num}] ..creating splitwise cpu buffer cache for layer {i}: "
+                f"shape: {cache_shape}, dtype: {cache_saved_dtype}, cache_bytes: {cache_bytes}"
+            )
+            splitwise_cache_buffer_ptrs[f"key_layer{i}"] = cuda_host_alloc(cache_bytes)
+            splitwise_cache_buffer_ptrs[f"value_layer{i}"] = cuda_host_alloc(cache_bytes)
+
     cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in gpu_cache_kvs.items()])
     logger.info(f"device :{device}")
     logger.info(f"cache_kv_size_byte : {cache_kv_size_byte}")
@@ -830,9 +1074,13 @@ def main():
             splitwise_role=args.splitwise_role,
             transfer_protocol=args.protocol,
             pod_ip=args.pod_ip,
+            cache_queue_port=args.cache_queue_port,
             engine_worker_queue_port=args.engine_worker_queue_port,
             local_data_parallel_id=args.local_data_parallel_id,
             gpu_cache_kvs=gpu_cache_kvs,
+            splitwise_cache_buffer_block_num=args.splitwise_cache_buffer_block_num,
+            splitwise_cache_buffer_ptrs=splitwise_cache_buffer_ptrs,
+            bytes_per_block=bytes_per_block,
             rank=rank,
             nranks=args.mp_num,
             num_layers=args.num_layers + num_extra_layers,
@@ -878,4 +1126,7 @@ if __name__ == "__main__":
 
     logger.info("create cache messager...")
     logger.info(f"{args}")
-    main()
+    try:
+        main()
+    except Exception as e:
+        logger.error(f"Exception occurred in cache messager. " f"error: {e}, traceback: {traceback.format_exc()}")

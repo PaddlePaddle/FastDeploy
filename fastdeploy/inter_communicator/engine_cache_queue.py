@@ -35,6 +35,10 @@ class EngineCacheQueue:
     """
     Multiprocessing manager for cache queue between Engine and Worker.
     Manages shared resources using multiprocessing managers for inter-process communication.
+
+    In mixed and prefill mode, this manager is responsible for the communication between
+    engine and cache_transfer_manager processes. In decode mode, this manager is responsible
+    for the communication between engine and cache_messager processes.
     """
 
     def __init__(

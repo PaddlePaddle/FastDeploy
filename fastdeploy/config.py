@@ -29,6 +29,7 @@ from typing_extensions import assert_never
 
 import fastdeploy
 from fastdeploy import envs
+from fastdeploy.cache_manager.utils import cache_byte_size, convert_to_saved_dtype
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfigBase
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
@@ -1193,6 +1194,8 @@ class CacheConfig:
             enable_prefix_caching (bool): Enable prefix caching.
             max_encoder_cache(int): Maximum number of tokens in the encoder cache.
             max_processor_cache(int): Maximum number of bytes in the processor cache.
+            splitwise_cache_buffer_size (float): The amount of CPU memory in decode to receive the cache from prefill (GB).
+                                                 In splitwise deployment, decode uses cpu buffer to receive the cache from prefill.
         """
         self.block_size = 64
         self.gpu_memory_utilization = 0.9
@@ -1215,6 +1218,9 @@ class CacheConfig:
         self.swap_space = None
         self.max_encoder_cache = None
         self.max_processor_cache = None
+        self.enable_splitwise_cache_buffer = False
+        self.splitwise_cache_buffer_size = 0
+        self.splitwise_cache_buffer_block_num = 0
         self.disable_chunked_mm_input = False
         for key, value in args.items():
             if hasattr(self, key):
@@ -1245,14 +1251,9 @@ class CacheConfig:
                 kv_num_head = self.model_cfg.num_attention_heads
             self.model_cfg.kv_num_head = kv_num_head
             # TODO check name
-            if "int4" in self.cache_dtype.lower() or "float4" in self.cache_dtype.lower():
-                byte_size = 0.5
-                self.cache_dtype = "uint8"
-            elif "int8" in self.cache_dtype.lower() or "float8" in self.cache_dtype.lower():
-                self.cache_dtype = "uint8"
-                byte_size = 1
-            else:
-                byte_size = 2
+            byte_size = cache_byte_size(self.cache_dtype)
+            self.cache_saved_dtype = convert_to_saved_dtype(self.cache_dtype)
+
             self.each_token_cache_space = int(
                 self.model_cfg.num_hidden_layers * kv_num_head * self.model_cfg.head_dim * byte_size
             )
@@ -1264,6 +1265,21 @@ class CacheConfig:
                 // args["tensor_parallel_size"]
                 * byte_size
             )
+
+            if self.splitwise_cache_buffer_size is not None:
+                block_num = int(self.splitwise_cache_buffer_size * 1024**3 / self.bytes_per_block)
+                if block_num > 0:
+                    self.enable_splitwise_cache_buffer = True
+                    self.splitwise_cache_buffer_block_num = block_num
+                    logger.info(
+                        f"splitwise_cache_buffer_size: {self.splitwise_cache_buffer_size} GB, "
+                        f"splitwise_cache_buffer_block_num: {self.splitwise_cache_buffer_block_num}"
+                    )
+                else:
+                    logger.warning(
+                        f"splitwise_cache_buffer_size ({self.splitwise_cache_buffer_size}) "
+                        "is too small, disable it!"
+                    )
 
         if self.swap_space is None:
             self.num_cpu_blocks = 0
@@ -1280,6 +1296,10 @@ class CacheConfig:
             raise ValueError("GPU memory utilization must be less than 1.0. Got " f"{self.gpu_memory_utilization}.")
         if self.kv_cache_ratio > 1.0:
             raise ValueError("KV cache ratio must be less than 1.0. Got " f"{self.kv_cache_ratio}.")
+        if self.splitwise_cache_buffer_size is not None and self.splitwise_cache_buffer_size < 0.0:
+            raise ValueError(
+                "splitwise_cache_buffer_size must be greater than 0.0. Got " f"{self.splitwise_cache_buffer_size}."
+            )
 
     def postprocess(self, num_total_tokens, number_of_tasks):
         """

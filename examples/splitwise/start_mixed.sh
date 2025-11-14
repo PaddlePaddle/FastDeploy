@@ -3,19 +3,6 @@ set -e
 
 # Test mixed server + router
 
-wait_for_health() {
-       local server_port=$1
-       while true; do
-       status_code=$(curl -s -o /dev/null -w "%{http_code}" "http://0.0.0.0:${server_port}/health" || echo "000")
-       if [ "$status_code" -eq 200 ]; then
-              break
-       else
-              echo "Service not ready. Retrying in 2s..."
-              sleep 2
-       fi
-       done
-}
-
 # prepare environment
 MODEL_NAME="PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
 
@@ -26,9 +13,23 @@ export KVCACHE_GDRCOPY_FLUSH_ENABLE=1
 unset http_proxy && unset https_proxy
 rm -rf log_*
 
+. ./utils.sh
+
 S1_PORT=52400
 S2_PORT=52500
 ROUTER_PORT=52600
+
+ports=(
+    $P_PORT $((P_PORT + 1)) $((P_PORT + 2)) $((P_PORT + 3))
+    $D_PORT $((D_PORT + 1)) $((D_PORT + 2)) $((D_PORT + 3))
+    $ROUTER_PORT
+)
+for port in "${ports[@]}"; do
+    check_port "$port" || {
+        echo "❌ 请释放端口 $port 后再启动服务"
+        exit 1
+    }
+done
 
 # start router
 export FD_LOG_DIR="log_router"
@@ -76,6 +77,7 @@ wait_for_health ${S2_PORT}
 
 # send request
 sleep 10  # make sure server is registered to router
+echo "send request..."
 curl -X POST "http://0.0.0.0:${ROUTER_PORT}/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{

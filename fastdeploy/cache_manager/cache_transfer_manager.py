@@ -60,7 +60,7 @@ def parse_args():
     parser.add_argument("--num_layers", type=int, default=1, help="model num layers")
     parser.add_argument("--mp_num", type=int, default=1, help="number of model parallel")
     parser.add_argument(
-        "--cache_dtype",
+        "--cache_saved_dtype",
         type=str,
         default="bfloat16",
         choices=["uint8", "bfloat16"],
@@ -227,17 +227,17 @@ class CacheTransferManager:
                 logger.info(
                     f"[rank {self.rank}/{self.n_ranks}] ..creating kv cache for layer {i}: {key_cache_shape} {value_cache_shape}"
                 )
-                key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=args.cache_dtype)
+                key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=args.cache_saved_dtype)
                 set_data_ipc(key_cache, key_name)
                 if self.value_cache_shape:
-                    val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=args.cache_dtype)
+                    val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=args.cache_saved_dtype)
                     set_data_ipc(val_cache, val_name)
             else:
                 logger.info(
                     f"[rank {self.rank}/{self.n_ranks}] ..attaching kv cache for layer {i}: {key_cache_shape} {value_cache_shape}"
                 )
-                key_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
-                val_cache = paddle.empty(shape=[], dtype=args.cache_dtype)
+                key_cache = paddle.empty(shape=[], dtype=args.cache_saved_dtype)
+                val_cache = paddle.empty(shape=[], dtype=args.cache_saved_dtype)
                 key_cache = share_external_data_(key_cache, key_name, key_cache_shape, True)
                 if self.value_cache_shape:
                     val_cache = share_external_data_(val_cache, val_name, value_cache_shape, True)
@@ -263,12 +263,12 @@ class CacheTransferManager:
             value_cache_size = self.value_cache_shape[1] * self.value_cache_shape[2] * self.value_cache_shape[3]
         else:
             value_cache_size = 0
-        if args.cache_dtype == "bfloat16":
+        if args.cache_saved_dtype == "bfloat16":
             cache_bytes = 2
-        elif args.cache_dtype == "uint8":
+        elif args.cache_saved_dtype == "uint8":
             cache_bytes = 1
         else:
-            raise ValueError(f"Unsupported cache dtype: {args.cache_dtype}")
+            raise ValueError(f"Unsupported cache dtype: {args.cache_saved_dtype}")
         key_need_to_allocate_bytes = args.num_cpu_blocks * cache_bytes * key_cache_size
         value_need_to_allocate_bytes = args.num_cpu_blocks * cache_bytes * value_cache_size
         logger.info(

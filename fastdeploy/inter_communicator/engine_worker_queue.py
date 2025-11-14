@@ -671,7 +671,7 @@ class EngineWorkerQueue:
         self.connect_task_response_lock.release()
         return task_response
 
-    def put_cache_info(self, cache_info) -> None:
+    def put_cache_info(self, cache_info: List[Any]) -> None:
         """
         Args:
             tasks: Tasks to be added to the queue

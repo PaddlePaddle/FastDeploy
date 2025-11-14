@@ -149,6 +149,10 @@ class EngineArgs:
     """
     Maximum number of bytes(in GiB) in the processor cache.
     """
+    splitwise_cache_buffer_size: Optional[float] = None
+    """
+    The amount of CPU memory in decode to receive the cache from prefill (GB).
+    """
     reasoning_parser: str = None
     """
     specifies the reasoning parser to use for extracting reasoning content from the model output
@@ -220,7 +224,7 @@ class EngineArgs:
 
     swap_space: float = None
     """
-    The amount of CPU memory to offload to.
+    The amount of CPU memory for saving swaped cache (GB).
     """
 
     cache_queue_port: str = "0"
@@ -526,6 +530,21 @@ class EngineArgs:
                     raise NotImplementedError(
                         "please set num_gpu_blocks_override for prefill " "instance using ENABLE_V1_KVCACHE_SCHEDULER."
                     )
+
+        if self.splitwise_cache_buffer_size is not None:
+            if self.splitwise_cache_buffer_size < 0:
+                raise ValueError("splitwise_cache_buffer_size should >= 0.")
+            if self.splitwise_role != "decode":
+                raise NotImplementedError("splitwise_cache_buffer_size params only support in decode mode now.")
+            if "ipc" in self.cache_transfer_protocol:
+                raise NotImplementedError(
+                    "Only support rdma cache transfer protocol when set splitwise_cache_buffer_size > 0 "
+                    "to enable cpu cache buffer in decode."
+                )
+            if envs.ENABLE_V1_KVCACHE_SCHEDULER == 0:
+                raise NotImplementedError(
+                    "splitwise_cache_buffer_size params only support when ENABLE_V1_KVCACHE_SCHEDULER=1"
+                )
 
         if not current_platform.is_cuda() and not current_platform.is_xpu():
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
@@ -988,6 +1007,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.disable_chunked_mm_input,
             help="Disable chunked mm input.",
+        )
+        model_group.add_argument(
+            "--splitwise-cache-buffer-size",
+            default=EngineArgs.splitwise_cache_buffer_size,
+            type=float,
+            help="The size of cpu cache buffer compared to the size of gpu cache (use 0 to disable).",
         )
 
         # Router parameters group

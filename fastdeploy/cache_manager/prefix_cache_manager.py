@@ -27,6 +27,7 @@ import uuid
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event, Lock
+from typing import List, Union
 
 import numpy as np
 
@@ -79,8 +80,14 @@ class PrefixCacheManager:
             self.cpu_free_block_list = list(range(self.num_cpu_blocks - 1, -1, -1))
         else:
             self.cpu_free_block_list = []
+        self.splitwise_cpu_free_block_list = []
+        if self.cache_config.splitwise_cache_buffer_block_num > 0:
+            self.splitwise_cpu_free_block_list = list(
+                range(self.cache_config.splitwise_cache_buffer_block_num - 1, -1, -1)
+            )
         heapq.heapify(self.gpu_free_block_list)
         heapq.heapify(self.cpu_free_block_list)
+        heapq.heapify(self.splitwise_cpu_free_block_list)
 
         self.key_cache_shape = []
         self.val_cache_shape = []
@@ -191,10 +198,6 @@ class PrefixCacheManager:
             local_data_parallel_id=self.local_data_parallel_id,
         )
 
-        current_dir_path = os.path.split(os.path.abspath(__file__))[0]
-        filename = "cache_transfer_manager.py"
-        py_path = os.path.join(current_dir_path, filename)
-
         cache_messager_processes = []
         key_cache_shape, val_cache_shape = self._get_kv_cache_shape(cache_config.total_block_num)
         key_cache_shape = ",".join([str(i) for i in key_cache_shape])
@@ -215,22 +218,6 @@ class PrefixCacheManager:
                 raise RuntimeError("Launch cache messager failed")
                 return []
 
-        cache_ready_signal_data = np.zeros(shape=[tensor_parallel_size], dtype=np.int32)
-        self.cache_ready_signal = IPCSignal(
-            name="cache_ready_signal",
-            array=cache_ready_signal_data,
-            dtype=np.int32,
-            suffix=engine_worker_queue_port,
-            create=False,
-        )
-        swap_space_ready_data = np.zeros(shape=[tensor_parallel_size], dtype=np.int32)
-        self.swap_space_ready_signal = IPCSignal(
-            name="swap_space_ready_signal",
-            array=swap_space_ready_data,
-            dtype=np.int32,
-            suffix=engine_worker_queue_port,
-            create=False,
-        )
         prefix_tree_status = np.zeros([1], dtype=np.int32)
         self.prefix_tree_status_signal = IPCSignal(
             name="prefix_tree_status",
@@ -240,61 +227,82 @@ class PrefixCacheManager:
             create=False,
         )
 
-        # Run command to launch cache transfer managers
-        log_dir = envs.FD_LOG_DIR
         cache_manager_processes = []
-        for i in range(tensor_parallel_size):
-            launch_cmd = (
-                "FLAGS_allocator_strategy=auto_growth CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7"
-                + " NCCL_MAX_NCHANNELS=1 NCCL_BUFFSIZE=0"
-                + f" FD_ENABLE_SWAP_SPACE_CLEARING={envs.FD_ENABLE_SWAP_SPACE_CLEARING}"
-                + f" {sys.executable} {py_path}"
-                + f" --device_id {int(device_ids[i])}"
-                + f" --rank {i}"
-                + f" --splitwise_role {self.splitwise_role}"
-                + f" --num_layers {cache_config.model_cfg.num_hidden_layers}"
-                + f" --mp_num {tensor_parallel_size}"
-                + f" --cache_dtype {cache_config.cache_dtype}"
-                + f" --key_cache_shape {key_cache_shape}"
-                + f" --value_cache_shape {val_cache_shape}"
-                + f" --cache_queue_port {cache_config.cache_queue_port}"
-                + f" --enable_splitwise {int(self.enable_splitwise)}"
-                + f" --pod_ip {pod_ip}"
-                + f" --engine_worker_queue_port {engine_worker_queue_port}"
-                + f" --num_cpu_blocks {cache_config.num_cpu_blocks}"
-                + f" --engine_pid {pid_suffix}"
-                + f" --protocol {cache_config.cache_transfer_protocol}"
-                + f" --local_data_parallel_id {self.local_data_parallel_id}"
-                + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"
-                + f" --speculative_config '{self.speculative_config.to_json_string()}'"
-                + (" --create_cache_tensor" if create_cache_tensor else "")
-                + f" >{log_dir}/launch_cache_transfer_manager_{int(device_ids[i])}.log 2>&1"
+        launch_cache_transfer_managers = (
+            self.splitwise_role != "prefill" and cache_config.enable_hierarchical_cache and self.num_cpu_blocks > 0
+        )
+        if launch_cache_transfer_managers:
+            current_dir_path = os.path.split(os.path.abspath(__file__))[0]
+            filename = "cache_transfer_manager.py"
+            py_path = os.path.join(current_dir_path, filename)
+
+            cache_ready_signal_data = np.zeros(shape=[tensor_parallel_size], dtype=np.int32)
+            self.cache_ready_signal = IPCSignal(
+                name="cache_ready_signal",
+                array=cache_ready_signal_data,
+                dtype=np.int32,
+                suffix=engine_worker_queue_port,
+                create=False,
             )
-            logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
-            cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
+            swap_space_ready_data = np.zeros(shape=[tensor_parallel_size], dtype=np.int32)
+            self.swap_space_ready_signal = IPCSignal(
+                name="swap_space_ready_signal",
+                array=swap_space_ready_data,
+                dtype=np.int32,
+                suffix=engine_worker_queue_port,
+                create=False,
+            )
 
-        logger.info("PrefixCacheManager is waiting for kv cache to be initialized.")
-        while np.sum(self.cache_ready_signal.value) != tensor_parallel_size:
-            time.sleep(1)
+            log_dir = envs.FD_LOG_DIR
+            for i in range(tensor_parallel_size):
+                launch_cmd = (
+                    "FLAGS_allocator_strategy=auto_growth CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7"
+                    + " NCCL_MAX_NCHANNELS=1 NCCL_BUFFSIZE=0"
+                    + f" FD_ENABLE_SWAP_SPACE_CLEARING={envs.FD_ENABLE_SWAP_SPACE_CLEARING}"
+                    + f" {sys.executable} {py_path}"
+                    + f" --device_id {int(device_ids[i])}"
+                    + f" --rank {i}"
+                    + f" --splitwise_role {self.splitwise_role}"
+                    + f" --num_layers {cache_config.model_cfg.num_hidden_layers}"
+                    + f" --mp_num {tensor_parallel_size}"
+                    + f" --cache_saved_dtype {cache_config.cache_saved_dtype}"
+                    + f" --key_cache_shape {key_cache_shape}"
+                    + f" --value_cache_shape {val_cache_shape}"
+                    + f" --cache_queue_port {cache_config.cache_queue_port}"
+                    + f" --enable_splitwise {int(self.enable_splitwise)}"
+                    + f" --pod_ip {pod_ip}"
+                    + f" --engine_worker_queue_port {engine_worker_queue_port}"
+                    + f" --num_cpu_blocks {cache_config.num_cpu_blocks}"
+                    + f" --engine_pid {pid_suffix}"
+                    + f" --protocol {cache_config.cache_transfer_protocol}"
+                    + f" --local_data_parallel_id {self.local_data_parallel_id}"
+                    + f" --rdma_port {cache_config.rdma_comm_ports[i] if cache_config.rdma_comm_ports is not None else '0'}"
+                    + f" --speculative_config '{self.speculative_config.to_json_string()}'"
+                    + (" --create_cache_tensor" if create_cache_tensor else "")
+                    + f" >{log_dir}/launch_cache_transfer_manager_{int(device_ids[i])}.log 2>&1"
+                )
+                logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
+                cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
 
-        if cache_config.enable_hierarchical_cache and self.num_cpu_blocks > 0:
+            logger.info("PrefixCacheManager is waiting for kv cache to be initialized.")
+            while np.sum(self.cache_ready_signal.value) != tensor_parallel_size:
+                time.sleep(1)
+
             while np.sum(self.swap_space_ready_signal.value) != tensor_parallel_size:
                 time.sleep(1)
 
-        exit_code = cache_manager_processes[-1].poll()
-        if exit_code is None:
-            logger.info("Launch cache transfer manager successful")
-        else:
-            logger.info(
-                "Launch cache transfer manager failed, see launch_cache_transfer_manager.log for more information"
-            )
+            exit_code = cache_manager_processes[-1].poll()
+            if exit_code is None:
+                logger.info("Launch cache transfer manager successful")
+            else:
+                logger.info(
+                    "Launch cache transfer manager failed, see launch_cache_transfer_manager.log for more information"
+                )
 
-        # Start additional threads
-        if cache_config.enable_hierarchical_cache and self.num_cpu_blocks > 0:
-            logger.info("Enable hierarchical cache.")
+        if launch_cache_transfer_managers or self.cache_config.splitwise_cache_buffer_block_num > 0:
             threading.Thread(target=self.recv_data_transfer_result).start()
-        if cache_config.enable_prefix_caching:
-            threading.Thread(target=self.clear_prefix_cache, daemon=True).start()
+
+        threading.Thread(target=self.clear_prefix_cache, daemon=True).start()
 
         all_cache_processes = cache_messager_processes + cache_manager_processes
         return all_cache_processes
@@ -338,12 +346,13 @@ class PrefixCacheManager:
                 + f" --splitwise_role {self.splitwise_role}"
                 + f" --num_layers {cache_config.model_cfg.num_hidden_layers}"
                 + f" --mp_num {tensor_parallel_size}"
-                + f" --cache_dtype {cache_config.cache_dtype}"
+                + f" --cache_saved_dtype {cache_config.cache_saved_dtype}"
                 + f" --key_cache_shape {key_cache_shape}"
                 + f" --value_cache_shape {value_cache_shape}"
                 + f" --pod_ip {pod_ip}"
                 + f" --cache_queue_port {cache_config.cache_queue_port}"
                 + f" --engine_worker_queue_port {engine_worker_queue_port}"
+                + f" --splitwise_cache_buffer_block_num {cache_config.splitwise_cache_buffer_block_num}"
                 + f" --protocol {cache_config.cache_transfer_protocol}"
                 + f" --local_data_parallel_id {self.local_data_parallel_id}"
                 + f" --engine_pid {pid_suffix}"
@@ -459,23 +468,66 @@ class PrefixCacheManager:
         else:
             heapq.heappush(self.cpu_free_block_list, cpu_block_ids)
 
+    def can_allocate_splitwise_blocks(self, num_blocks: int):
+        """
+        Check if num_blocks can be allocated on splitwise cpu buffer.
+        """
+        return num_blocks <= len(self.splitwise_cpu_free_block_list)
+
+    def allocate_splitwise_blocks(self, num_blocks: int):
+        """
+        Acclocate the block ids of splitwise cpu cache buffer.
+        """
+        assert self.can_allocate_splitwise_blocks(
+            num_blocks
+        ), f"splitwise cpu free block num: {len(self.splitwise_cpu_free_block_list)} < needed number {num_blocks}"
+        allocated_block_ids = [heapq.heappop(self.splitwise_cpu_free_block_list) for _ in range(num_blocks)]
+        logger.debug(
+            f"allocate_splitwise_cpu_blocks: {allocated_block_ids}, "
+            f"len(self.splitwise_cpu_free_block_list) {len(self.splitwise_cpu_free_block_list)}"
+        )
+        return allocated_block_ids
+
+    def recycle_splitwise_blocks(self, block_ids: Union[int, List[int]]):
+        """
+        Recycle the block ids of splitwise cpu cache buffer.
+        """
+        logger.debug(f"recycle_cpu_blocks: {block_ids}, len(self.cpu_free_block_list) {len(self.cpu_free_block_list)}")
+        if isinstance(block_ids, list):
+            for block_id in block_ids:
+                heapq.heappush(self.splitwise_cpu_free_block_list, block_id)
+        else:
+            heapq.heappush(self.splitwise_cpu_free_block_list, block_ids)
+
+    def issue_splitwise_buffer_swap_task(
+        self,
+        request_id: str,
+        gpu_block_ids: List[int],
+        cpu_block_ids: List[int],
+    ):
+        """
+        Swap splitwise cpu buffer to gpu cache.
+        # TODO: support async swap task
+        """
+        self.issue_swap_task(request_id, gpu_block_ids, cpu_block_ids, CacheStatus.SPLITWISE_CPU2GPU, is_sync=True)
+
     def issue_swap_task(
         self,
         transfer_task_id,
-        swap_node_ids,
         gpu_block_ids,
         cpu_block_ids,
         event_type,
+        swap_node_ids=None,
         is_sync=True,
     ):
         """
         start data swap task
         args:
             transfer_task_id: transfer task id
-            swap_node_ids:    to swap node id list
             gpu_block_ids:    to swap gpu block id list
             cpu_block_ids:    to swap cpu block id list
             event_type:       CacheStatus.SWAP2GPU or CacheStatus.SWAP2CPU
+            swap_node_ids:    to swap node id list
             is_sync:          bool, whether to wait for the result of the swap task
         """
 
@@ -536,10 +588,10 @@ class PrefixCacheManager:
         logger.info(f"request_block_ids: req_id {req_id} issue_swap_task transfer_task_id {transfer_task_id}")
         self.issue_swap_task(
             transfer_task_id,
-            swap_node_ids,
             need_transfer_task_gpu_block_ids,
             need_transfer_task_cpu_block_ids,
             CacheStatus.SWAP2GPU,
+            swap_node_ids,
             True,
         )
 
@@ -1003,10 +1055,10 @@ class PrefixCacheManager:
         )
         self.issue_swap_task(
             transfer_task_id,
-            swap_node_ids,
             need_transfer_task_gpu_block_ids,
             need_transfer_task_cpu_block_ids,
             CacheStatus.SWAP2CPU,
+            swap_node_ids,
             True,
         )
 
@@ -1740,6 +1792,8 @@ class PrefixCacheManager:
                 if data is None:
                     time.sleep(0.001)
                     continue
+
+                logger.debug(f"recv_data_transfer_result: start handling data {data}")
                 (
                     swap_node_ids,
                     task_gpu_block_id,
@@ -1747,14 +1801,15 @@ class PrefixCacheManager:
                     event_type,
                     transfer_task_id,
                 ) = data
-                length = len(task_gpu_block_id)
-                for i in range(length):
-                    self._handle_swap_result(
-                        swap_node_ids[i],
-                        task_gpu_block_id[i],
-                        task_cpu_block_id[i],
-                        event_type,
-                    )
+                if event_type.value != CacheStatus.SPLITWISE_CPU2GPU.value:
+                    length = len(task_gpu_block_id)
+                    for i in range(length):
+                        self._handle_swap_result(
+                            swap_node_ids[i],
+                            task_gpu_block_id[i],
+                            task_cpu_block_id[i],
+                            event_type,
+                        )
                 if transfer_task_id in self.task_swapping_event:
                     self.task_swapping_event[transfer_task_id].set()
                 logger.info(
