@@ -133,7 +133,5 @@ import paddle
 from paddle.jit.marker import unified
 # Verify GPU availability
 paddle.utils.run_check()
-# Verify FastDeploy custom operators compilation
-from fastdeploy.model_executor.ops.gpu import beam_search_softmax
 ```
 If the above code executes successfully, the environment is ready.
