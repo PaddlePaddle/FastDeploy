@@ -292,7 +292,7 @@ class Qwen3ForCausalLM(ModelForCasualLM):
                 for param_name, param in params_dict.items()
             }
 
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
 
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:
@@ -320,7 +320,7 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings and not is_pooling_model:
-            self.lm_head.load_state_dict({self.lm_head.weight_key: self.model.embed_tokens.embeddings.weight})
+            self.lm_head.linear.weight.set_value(self.model.embed_tokens.embeddings.weight)
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict):
