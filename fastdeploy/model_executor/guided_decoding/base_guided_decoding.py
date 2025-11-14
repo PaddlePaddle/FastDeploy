@@ -14,9 +14,10 @@
 # limitations under the License.
 """
 
+import multiprocessing
 import os
 import traceback
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 
 from fastdeploy.config import ErnieArchitectures, FDConfig
 from fastdeploy.engine.request import Request
@@ -135,9 +136,9 @@ class BackendBase:
     """
 
     def __init__(self, fd_config: FDConfig):
-        self.cache = {}
         self.fd_config = fd_config
-        self.executor = ThreadPoolExecutor()
+        max_workers = max(1, (multiprocessing.cpu_count() + 1) // 2)
+        self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self.max_cache_size = 2048
         self.reasoning_parser = None
 
@@ -263,7 +264,7 @@ class BackendBase:
         self,
         schemata_key: tuple[str, str],
         enable_thinking: bool = False,
-    ) -> tuple[LogitsProcessorBase, bool]:
+    ) -> Future[LogitsProcessorBase]:
         """
         get logits processor by key from cache or create new one.
 
@@ -275,13 +276,8 @@ class BackendBase:
                 - LogitsProcessorBase: The logits processor instance
                 - bool: True if processor was from cache, False if newly created
         """
-        value = self.cache.get(schemata_key, None)
-        if value:
-            value_copy = value.copy()
-            value_copy.enable_reasoning = enable_thinking
-            return value_copy, True
         value = self.executor.submit(self._init_logits_processor, schemata_key, enable_thinking)
-        return value, False
+        return value
 
     def _get_tokenizer_hf(self):
         """
@@ -303,7 +299,7 @@ class BackendBase:
 
                 tokenizer = AutoTokenizer.from_pretrained(
                     self.fd_config.model_config.model,
-                    use_fast=False,
+                    use_fast=True,
                 )
 
                 if not isinstance(tokenizer, PreTrainedTokenizerFast):
@@ -333,21 +329,6 @@ class BackendBase:
             return tokenizer
         except Exception as e:
             raise Exception(f"Fail to initialize hf tokenizer: {e}, {str(traceback.format_exc())}")
-
-    def add_cache(self, schemata_key: tuple[str, str], processor: LogitsProcessorBase) -> None:
-        """
-        add logits processor to cache.
-
-        Args:
-            schemata_key (tuple[str, str]): Tuple containing processor type and schema string
-            processor (LogitsProcessorBase): Logits processor instance to cache
-
-        Returns:
-            None: No return value
-        """
-        if len(self.cache) >= self.max_cache_size:
-            return
-        self.cache[schemata_key] = processor.copy()
 
 
 class BaseChecker:

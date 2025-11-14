@@ -12,15 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
+import os
 import time
 import unittest
 
 import numpy as np
 import paddle
 
+from fastdeploy.config import (
+    CacheConfig,
+    FDConfig,
+    GraphOptimizationConfig,
+    LoadConfig,
+    ModelConfig,
+    ParallelConfig,
+)
 from fastdeploy.engine.request import Request
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.model_executor.layers.sample.sampler import Sampler
+from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.worker.gpu_model_runner import GPUModelRunner
 
 
@@ -82,6 +93,53 @@ class FakeModel:
         return paddle.matmul(x.astype("float32"), self.weight)
 
 
+def build_config_json() -> str:
+    config_dict = {
+        "architectures": ["Qwen3MoeForCausalLM"],
+        "hidden_size": 7168,
+        "moe_intermediate_size": 1,
+        "moe_num_experts": 1,
+        "moe_k": 1,
+        "hidden_act": "silu",
+        "num_attention_heads": 64,
+        "dtype": "bfloat16",
+    }
+
+    tmp_dir = f"./tmpefef{paddle.distributed.get_rank()}"
+    os.makedirs(tmp_dir, exist_ok=True)
+    with open(f"./{tmp_dir}/config.json", "w") as f:
+        json.dump(config_dict, f)
+    model_name_or_path = os.path.join(os.getcwd(), tmp_dir)
+    print("model_name_or_path", model_name_or_path)
+    return model_name_or_path
+
+
+def get_fd_config(batch_size: int):
+    fd_config = FDConfig(
+        model_config=ModelConfig(
+            {
+                "model": build_config_json(),
+                "max_model_len": 2048,
+            }
+        ),
+        parallel_config=ParallelConfig(
+            {
+                "tensor_parallel_size": 1,
+                "expert_parallel_size": 1,
+                "expert_parallel_rank": 0,
+                "data_parallel_size": 1,
+            }
+        ),
+        # quant_config=BlockWiseFP8Config(weight_block_size=[128, 128]),
+        scheduler_config=SchedulerConfig({"max_num_seqs": batch_size}),
+        cache_config=CacheConfig({}),
+        graph_opt_config=GraphOptimizationConfig({}),
+        load_config=LoadConfig({}),
+        ips="0.0.0.0",
+    )
+    return fd_config
+
+
 class TestGPUPromptLogprobs(unittest.TestCase):
     def setup_model_runner(self):
         """Helper method to setup GPUModelRunner with different configurations"""
@@ -96,7 +154,7 @@ class TestGPUPromptLogprobs(unittest.TestCase):
         model_runner.ori_vocab_size = cfg.model_config.ori_vocab_size
         model_runner.share_inputs = {}
         model_runner.share_inputs["cu_seqlens_q"] = paddle.to_tensor([0, 1, 2, 3], dtype="int32")
-        model_runner.sampler = Sampler()
+        model_runner.sampler = Sampler(get_fd_config(batch_size=1))
 
         model_runner.model = FakeModel(cfg.model_config.vocab_size, cfg.model_config.hidden_size)
 

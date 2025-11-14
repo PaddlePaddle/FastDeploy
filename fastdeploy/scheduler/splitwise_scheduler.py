@@ -706,10 +706,30 @@ class InferScheduler:
         self.reqs_queue = deque()
         self.writers = []
 
+    def check_redis_version(self):
+        # Get Redis version information
+        redis_info = self.client.info()
+        redis_version = redis_info.get("redis_version", "")
+        version_parts = [int(x) for x in redis_version.split(".")]
+
+        # Redis 6.2 and above versions support RPOP with count parameter
+        assert (
+            version_parts[0] >= 6
+        ), f"Redis major version too low: {version_parts[0]}. Please upgrade to Redis 6.2+ to support batch RPOP operations."
+        assert (
+            version_parts[1] >= 2 if version_parts[0] == 6 else True
+        ), f"Redis version {redis_version} too low. Please upgrade to Redis 6.2+ to support batch RPOP operations."
+
+        logger.info(f"Redis version {redis_version} detected. Using native batch RPOP.")
+
     def start(self, role, host, disaggregated):
         """
         start backup threads
         """
+
+        # Check Redis version first
+        self.check_redis_version()
+
         for i in range(self.writer_parallel):
             writer = ResultWriter(self.client, i, self.writer_batch_size, self.ttl)
             writer.start()
