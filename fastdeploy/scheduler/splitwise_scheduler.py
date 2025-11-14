@@ -727,7 +727,7 @@ class InferScheduler:
         start backup threads
         """
 
-        # check redis version first
+        # Check Redis version first
         self.check_redis_version()
 
         for i in range(self.writer_parallel):
