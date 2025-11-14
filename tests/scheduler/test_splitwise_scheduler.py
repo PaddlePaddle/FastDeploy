@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -827,10 +826,14 @@ class SplitWiseSchedulerFacadeTest(SplitWiseSchedulerTestCase):
         facade.infer = types.SimpleNamespace(get_requests=lambda *args, **kwargs: ["should not reach"])
         facade.scheduler = types.SimpleNamespace()
 
-        result = facade.get_requests(available_blocks=1, block_size=1, reserved_output_blocks=2, max_num_batched_tokens=10)
+        result = facade.get_requests(
+            available_blocks=1, block_size=1, reserved_output_blocks=2, max_num_batched_tokens=10
+        )
         self.assertEqual(result, [])
 
-        result = facade.get_requests(available_blocks=10, block_size=1, reserved_output_blocks=2, max_num_batched_tokens=10, batch=0)
+        result = facade.get_requests(
+            available_blocks=10, block_size=1, reserved_output_blocks=2, max_num_batched_tokens=10, batch=0
+        )
         self.assertEqual(result, [])
 
     def test_start_uses_real_components(self) -> None:
@@ -960,17 +963,14 @@ class BackgroundWorkerTest(SplitWiseSchedulerTestCase):
         with self.assertRaises(SystemExit):
             infer.loop_get_reqs()
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--print-coverage-command", action="store_true")
     known_args, remaining = parser.parse_known_args()
 
     if known_args.print_coverage_command:
-        print(
-            "python -m coverage run -m unittest tests.scheduler.test_splitwise_scheduler"
-        )
-        print(
-            "python -m coverage report -m --include='fastdeploy/scheduler/splitwise_scheduler.py'"
-        )
+        print("python -m coverage run -m unittest tests.scheduler.test_splitwise_scheduler")
+        print("python -m coverage report -m --include='fastdeploy/scheduler/splitwise_scheduler.py'")
 
     unittest.main(argv=[sys.argv[0]] + remaining)
