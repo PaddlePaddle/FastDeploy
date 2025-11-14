@@ -464,9 +464,7 @@ class DataProcessorTestCase(unittest.TestCase):
         self.assertTrue(calls["normal"]["enable_thinking"])
 
     def test_update_stop_seq_excludes_eos(self):
-        stop_seqs, stop_len = self.processor.update_stop_seq(
-            ["stop", self.processor.tokenizer.eos_token_id]
-        )
+        stop_seqs, stop_len = self.processor.update_stop_seq(["stop", self.processor.tokenizer.eos_token_id])
         self.assertEqual(stop_seqs, [[4]])
         self.assertEqual(stop_len, [1])
 
@@ -547,9 +545,7 @@ class DataProcessorTestCase(unittest.TestCase):
         processor.tokenizer.tokenize = custom_tokenize
         processor.tokenizer.convert_tokens_to_ids = custom_convert
         self.addCleanup(lambda: setattr(processor.tokenizer, "tokenize", original_tokenize))
-        self.addCleanup(
-            lambda: setattr(processor.tokenizer, "convert_tokens_to_ids", original_convert)
-        )
+        self.addCleanup(lambda: setattr(processor.tokenizer, "convert_tokens_to_ids", original_convert))
 
         self.assertEqual(processor.update_bad_words(["combo", "oversize"], []), [])
 
