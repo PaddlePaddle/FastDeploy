@@ -34,6 +34,8 @@ if has_flashinfer():
     from flashinfer import fp4_quantize
     from flashinfer import mm_fp4 as fp4_gemm
     from flashinfer.fused_moe import cutlass_fused_moe as flashinfer_cutlass_fused_moe
+else:
+    logger.warning("FlashInfer is not installed. For nvFp4 inference, please install Flashinfer.")
 
 
 def swizzle_blockscale(scale: paddle.Tensor) -> paddle.Tensor:
@@ -47,7 +49,7 @@ def swizzle_blockscale(scale: paddle.Tensor) -> paddle.Tensor:
 
     Returns
     -------
-    torch.Tensor
+    paddle.Tensor
         The swizzled tensor with the same logical shape as *scale*.
     """
     assert scale.dtype == paddle.float8_e4m3fn, (
@@ -206,7 +208,7 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         if envs.FD_NVFP4_GEMM_BACKEND is None:
             if has_flashinfer():
                 self.backend = "flashinfer-cutlass"
-        elif envs.VLLM_NVFP4_GEMM_BACKEND.startswith("flashinfer-"):
+        elif envs.FD_NVFP4_GEMM_BACKEND.startswith("flashinfer-"):
             self.backend = envs.FD_NVFP4_GEMM_BACKEND
             assert has_flashinfer(), f"FlashInfer is required for {self.backend}"
 
@@ -378,7 +380,6 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
             x_scale_interleaved = x_scale_interleaved.view(paddle.uint8)
             w_scale_interleaved = w_scale_interleaved.view(paddle.uint8)
         out = fp4_gemm(x_fp4, w, x_scale_interleaved, w_scale_interleaved, layer.alpha, output_dtype, backend=backend)
-
         if layer.with_bias:
             out = paddle.add(out, layer.bias)
         return out.view(*output_shape)
@@ -400,6 +401,18 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
 
     def __init__(self, quant_config: ModelOptNvFp4Config):
         self.quant_config = quant_config
+        self.backend = "none"
+
+        if envs.FD_FLASHINFER_MOE_BACKEND is None:
+            # currently support flashinfer-cutlass and flashinfer-trtllm
+            if has_flashinfer():
+                self.backend = "flashinfer-cutlass"
+        elif envs.FD_FLASHINFER_MOE_BACKEND.startswith("flashinfer-"):
+            self.backend = envs.FD_FLASHINFER_MOE_BACKEND
+            assert has_flashinfer(), f"FlashInfer is required for MoE backend {self.backend}"
+
+        if self.backend == "none":
+            raise ValueError("No valid NVFP4 flashinfer MoE backend found. " "Please check your platform capability.")
 
     def create_weights(self, layer):
         pass
@@ -419,31 +432,35 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
 
         output_dtype = x.dtype
         x_sf = None
-
         output = paddle.empty_like(x)
-        # flashinfer cutlass
-        _ = flashinfer_cutlass_fused_moe(
-            input=x,
-            token_selected_experts=topk_ids.to(paddle.int),
-            token_final_scales=topk_weights,
-            fc1_expert_weights=layer.w13_weight.view(paddle.long),
-            fc2_expert_weights=layer.w2_weight.view(paddle.long),
-            output_dtype=output_dtype,
-            input_sf=x_sf,
-            quant_scales=[
-                layer.w13_input_scale_quant,
-                layer.w13_blockscale_swizzled.view(paddle.int32),
-                layer.g1_alphas,
-                layer.w2_input_scale_quant,
-                layer.w2_blockscale_swizzled.view(paddle.int32),
-                layer.g2_alphas,
-            ],
-            ep_size=layer.ep_size,
-            ep_rank=layer.ep_rank,
-            tp_size=layer.tp_size,
-            tp_rank=layer.tp_rank,
-            tune_max_num_tokens=next_power_of_2(x.shape[0]),
-            output=output,
-        )
 
+        if self.backend == "flashinfer-cutlass":
+            # flashinfer cutlass
+            _ = flashinfer_cutlass_fused_moe(
+                input=x,
+                token_selected_experts=topk_ids.to(paddle.int),
+                token_final_scales=topk_weights,
+                fc1_expert_weights=layer.w13_weight.view(paddle.long),
+                fc2_expert_weights=layer.w2_weight.view(paddle.long),
+                output_dtype=output_dtype,
+                input_sf=x_sf,
+                quant_scales=[
+                    layer.w13_input_scale_quant,
+                    layer.w13_blockscale_swizzled.view(paddle.int32),
+                    layer.g1_alphas,
+                    layer.w2_input_scale_quant,
+                    layer.w2_blockscale_swizzled.view(paddle.int32),
+                    layer.g2_alphas,
+                ],
+                ep_size=layer.ep_size,
+                ep_rank=layer.ep_rank,
+                tp_size=layer.tp_size,
+                tp_rank=layer.tp_rank,
+                tune_max_num_tokens=next_power_of_2(x.shape[0]),
+                output=output,
+            )
+
+            return output
+
+        # flashinfer-trtllm
         return output
