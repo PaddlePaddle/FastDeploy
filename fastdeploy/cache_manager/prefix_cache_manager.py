@@ -607,6 +607,7 @@ class PrefixCacheManager:
             gpu_extra_block_ids = self.allocate_gpu_blocks(gpu_extra_block_num)
 
         storage_block_ids = []
+        do_prefetch = False
         if self.storage_backend is not None:
             keys = []
             prefix_block_key = []
