@@ -12,6 +12,7 @@ from unittest import mock
 
 import numpy as np
 
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -120,7 +121,7 @@ class ParseArgsTest(unittest.TestCase):
             "--cache_dtype",
             "uint8",
             "--speculative_config",
-            '{"num_extra_cache_layer":1}',
+            "{\"num_extra_cache_layer\":1}",
             "--local_data_parallel_id",
             "7",
         ]
@@ -155,7 +156,9 @@ class _IPCCommManager:
         self.sync_targets = []
 
     def write_cache(self, target_ip, target_id, src_block_ids, dest_block_ids, layer_idx):
-        self.write_calls.append((target_ip, target_id, tuple(src_block_ids), tuple(dest_block_ids), layer_idx))
+        self.write_calls.append(
+            (target_ip, target_id, tuple(src_block_ids), tuple(dest_block_ids), layer_idx)
+        )
         return 0
 
     def write_block_by_sync(self, target_id):
@@ -386,8 +389,12 @@ def _load_cache_messager():
 def _make_cache_tensors(num_layers, dtype="bfloat16"):
     cache = {}
     for layer in range(num_layers):
-        cache[f"key_caches_{layer}_rank0_device0"] = _FakeTensor(np.zeros((2, 3, 4, 5)), dtype=dtype)
-        cache[f"value_caches_{layer}_rank0_device0"] = _FakeTensor(np.zeros((2, 3, 4, 5)), dtype=dtype)
+        cache[f"key_caches_{layer}_rank0_device0"] = _FakeTensor(
+            np.zeros((2, 3, 4, 5)), dtype=dtype
+        )
+        cache[f"value_caches_{layer}_rank0_device0"] = _FakeTensor(
+            np.zeros((2, 3, 4, 5)), dtype=dtype
+        )
     return cache
 
 
@@ -575,7 +582,6 @@ class CacheMessagerV1Test(unittest.TestCase):
         envs.ENABLE_V1_KVCACHE_SCHEDULER = True
 
         with mock.patch("threading.Thread") as thread_cls:
-
             def _fake_thread(*_args, **_kwargs):
                 return types.SimpleNamespace(start=lambda: None)
 
@@ -613,7 +619,6 @@ class CacheMessagerV1Test(unittest.TestCase):
         envs.ENABLE_V1_KVCACHE_SCHEDULER = True
 
         with mock.patch("threading.Thread") as thread_cls:
-
             def _fake_thread(*_args, **_kwargs):
                 return types.SimpleNamespace(start=lambda: None)
 
@@ -686,7 +691,6 @@ class CacheMessagerV1Test(unittest.TestCase):
         envs.ENABLE_V1_KVCACHE_SCHEDULER = True
 
         with mock.patch("threading.Thread") as thread_cls:
-
             def _fake_thread(*_args, **_kwargs):
                 return types.SimpleNamespace(start=lambda: None)
 
@@ -755,7 +759,6 @@ class CacheMessagerV1ConnectTest(unittest.TestCase):
     def test_handle_connect_task_rdma_paths(self):
         cache = _make_cache_tensors(num_layers=1)
         with mock.patch("threading.Thread") as thread_cls:
-
             def _fake_thread(*_args, **_kwargs):
                 return types.SimpleNamespace(start=lambda: None)
 
@@ -801,7 +804,6 @@ class CacheMessagerV1ConnectTest(unittest.TestCase):
                 {"task_id": 12, "success": False},
             ],
         )
-
 
 class MainEntryTest(unittest.TestCase):
     def setUp(self):

@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -187,7 +188,9 @@ class CheckTensorParallelPrerequisitesTest(unittest.TestCase):
         cfg = sys.modules["fastdeploy.config"].FDConfig(tensor_parallel_size=1, pretrained_config={})
         filtered = {}
 
-        _tp_utils.check_tensor_parallel_prerequisites(cfg, _tp_utils.PretrainedModel, filtered, safetensor_keys=[])
+        _tp_utils.check_tensor_parallel_prerequisites(
+            cfg, _tp_utils.PretrainedModel, filtered, safetensor_keys=[]
+        )
 
         self.assertEqual(filtered, {})
         self.assertEqual(_logger.errors, [])
@@ -318,7 +321,9 @@ class BuildExpandedKeysTest(unittest.TestCase):
 
     def test_moe_layer_and_expert_id(self):
         actions = {"moe.{moe_layer_id}.expert.{export_id}": "dispatch"}
-        expanded = _tp_utils.build_expanded_keys(actions, num_layers=4, start_layer=1, num_experts=2)
+        expanded = _tp_utils.build_expanded_keys(
+            actions, num_layers=4, start_layer=1, num_experts=2
+        )
         expected_keys = {
             "moe.1.expert.0",
             "moe.1.expert.1",
@@ -332,7 +337,9 @@ class BuildExpandedKeysTest(unittest.TestCase):
 
     def test_moe_layer_and_text_expert_id(self):
         actions = {"moe.{moe_layer_id}.text.{text_export_id}": "dispatch"}
-        expanded = _tp_utils.build_expanded_keys(actions, num_layers=3, start_layer=0, text_num_experts=2)
+        expanded = _tp_utils.build_expanded_keys(
+            actions, num_layers=3, start_layer=0, text_num_experts=2
+        )
         expected_keys = {
             "moe.0.text.0",
             "moe.0.text.1",
@@ -416,22 +423,30 @@ class GQATensorOpsTest(unittest.TestCase):
         weights = np.arange(16, dtype=np.float32).reshape(2, 8)
         shards = func(weights, is_column=False)
         self.assertEqual(len(shards), 2)
-        np.testing.assert_array_equal(shards[0], np.array([[0, 1, 2, 3, 4, 5, 6, 7]], dtype=np.float32))
+        np.testing.assert_array_equal(
+            shards[0], np.array([[0, 1, 2, 3, 4, 5, 6, 7]], dtype=np.float32)
+        )
 
     def test_gqa_merge_reconstructs_weights(self):
         weight_list = [
             np.array([0, 1, 4, 6], dtype=np.float32),
             np.array([2, 3, 5, 7], dtype=np.float32),
         ]
-        merge = _tp_utils.gqa_qkv_merge_func(num_attention_heads=4, num_key_value_heads=2, head_dim=1)
+        merge = _tp_utils.gqa_qkv_merge_func(
+            num_attention_heads=4, num_key_value_heads=2, head_dim=1
+        )
         merged = merge(weight_list, is_column=True)
         np.testing.assert_array_equal(merged, np.arange(8, dtype=np.float32))
 
     def test_split_or_merge_qkv_dispatch(self):
         weights = np.arange(8, dtype=np.float32)
-        split = _tp_utils.split_or_merge_qkv_func(True, 2, None, 4, 2, 1)
+        split = _tp_utils.split_or_merge_qkv_func(
+            True, 2, None, 4, 2, 1
+        )
         shards = split(weights, is_column=True)
-        merge = _tp_utils.split_or_merge_qkv_func(False, 2, None, 4, 2, 1)
+        merge = _tp_utils.split_or_merge_qkv_func(
+            False, 2, None, 4, 2, 1
+        )
         restored = merge(shards, is_column=True)
         np.testing.assert_array_equal(restored, weights)
 
@@ -468,7 +483,6 @@ class GQATensorOpsTest(unittest.TestCase):
         parts = [np.array([0, 1], dtype=np.float32), np.array([2, 3], dtype=np.float32)]
         merged = fn(parts, is_column=True, is_naive_2fuse=True)
         np.testing.assert_array_equal(merged, np.array([0, 1, 2, 3], dtype=np.float32))
-
 
 if __name__ == "__main__":  # pragma: no cover - entry point for python -m unittest
     unittest.main()
