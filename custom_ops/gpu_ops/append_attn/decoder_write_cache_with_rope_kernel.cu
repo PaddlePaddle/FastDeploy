@@ -111,7 +111,7 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
   GetNumBlocks<128>(pack_num, &grid_size);
   if (use_neox_style) {
     if (qkv_out_scales) {
-      append_decode_cache_T_neox_rope_kernel<T, PackSize>
+      append_decode_cache_T_quant_neox_rope_kernel<T, PackSize>
           <<<grid_size, blocksize, 0, stream>>>(
               reinterpret_cast<const int*>(qkv),
               key_cache,
@@ -135,53 +135,62 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
               rope_3d);
     } else {
       if (rotary_dim < dim_head) {
-        append_decode_cache_T_neox_partial_rope_kernel<T, PackSize>
-            <<<grid_size, blocksize, 0, stream>>>(
-                reinterpret_cast<const T*>(qkv),
-                key_cache,
-                value_cache,
-                qkv_out,
-                block_tables,
-                cu_seqlens_q,
-                seq_lens,
-                seq_lens_encoder,
-                cos_emb,
-                sin_emb,
-                max_seq_len,
-                max_blocks_per_seq,
-                num_heads,
-                dim_head,
-                rotary_dim,
-                block_size,
-                elem_nums,
-                kv_num_heads,
-                rope_3d);
+        auto* kernelFn =
+            append_decode_cache_T_neox_partial_rope_kernel<T, PackSize>;
+        launchWithPdlWhenEnabled(kernelFn,
+                                 grid_size,
+                                 blocksize,
+                                 0,
+                                 stream,
+                                 reinterpret_cast<const T*>(qkv),
+                                 key_cache,
+                                 value_cache,
+                                 qkv_out,
+                                 block_tables,
+                                 cu_seqlens_q,
+                                 seq_lens,
+                                 seq_lens_encoder,
+                                 cos_emb,
+                                 sin_emb,
+                                 max_seq_len,
+                                 max_blocks_per_seq,
+                                 num_heads,
+                                 dim_head,
+                                 rotary_dim,
+                                 block_size,
+                                 elem_nums,
+                                 kv_num_heads,
+                                 rope_3d);
       } else {
-        append_decode_cache_T_neox_rope_kernel<T, PackSize>
-            <<<grid_size, blocksize, 0, stream>>>(
-                reinterpret_cast<const T*>(qkv),
-                key_cache,
-                value_cache,
-                qkv_out,
-                block_tables,
-                cu_seqlens_q,
-                seq_lens,
-                seq_lens_encoder,
-                cos_emb,
-                sin_emb,
-                max_seq_len,
-                max_blocks_per_seq,
-                num_heads,
-                dim_head,
-                block_size,
-                elem_nums,
-                kv_num_heads,
-                rope_3d);
+        auto* kernelFn = append_decode_cache_T_neox_rope_kernel<T, PackSize>;
+        launchWithPdlWhenEnabled(kernelFn,
+                                 grid_size,
+                                 blocksize,
+                                 0,
+                                 stream,
+                                 reinterpret_cast<const T*>(qkv),
+                                 key_cache,
+                                 value_cache,
+                                 qkv_out,
+                                 block_tables,
+                                 cu_seqlens_q,
+                                 seq_lens,
+                                 seq_lens_encoder,
+                                 cos_emb,
+                                 sin_emb,
+                                 max_seq_len,
+                                 max_blocks_per_seq,
+                                 num_heads,
+                                 dim_head,
+                                 block_size,
+                                 elem_nums,
+                                 kv_num_heads,
+                                 rope_3d);
       }
     }
   } else {
     if (qkv_out_scales) {
-      append_decode_cache_T_rope_kernel<T, PackSize>
+      append_decode_cache_T_quant_rope_kernel<T, PackSize>
           <<<grid_size, blocksize, 0, stream>>>(
               reinterpret_cast<const int*>(qkv),
               key_cache,
@@ -204,25 +213,30 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
               kv_num_heads,
               rope_3d);
     } else {
-      append_decode_cache_T_rope_kernel<T, PackSize>
-          <<<grid_size, blocksize, 0, stream>>>(reinterpret_cast<const T*>(qkv),
-                                                key_cache,
-                                                value_cache,
-                                                qkv_out,
-                                                block_tables,
-                                                cu_seqlens_q,
-                                                seq_lens,
-                                                seq_lens_encoder,
-                                                cos_emb,
-                                                sin_emb,
-                                                max_seq_len,
-                                                max_blocks_per_seq,
-                                                num_heads,
-                                                dim_head,
-                                                block_size,
-                                                elem_nums,
-                                                kv_num_heads,
-                                                rope_3d);
+      auto* kernelFn = append_decode_cache_T_rope_kernel<T, PackSize>;
+      launchWithPdlWhenEnabled(kernelFn,
+                               grid_size,
+                               blocksize,
+                               0,
+                               stream,
+                               reinterpret_cast<const T*>(qkv),
+                               key_cache,
+                               value_cache,
+                               qkv_out,
+                               block_tables,
+                               cu_seqlens_q,
+                               seq_lens,
+                               seq_lens_encoder,
+                               cos_emb,
+                               sin_emb,
+                               max_seq_len,
+                               max_blocks_per_seq,
+                               num_heads,
+                               dim_head,
+                               block_size,
+                               elem_nums,
+                               kv_num_heads,
+                               rope_3d);
     }
   }
 }
