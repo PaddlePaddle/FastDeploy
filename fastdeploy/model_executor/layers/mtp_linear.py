@@ -76,7 +76,7 @@ class ParallelEHProjection(nn.Layer):
                 self.linear.weight,
                 {
                     "weight_loader": default_weight_loader(self.fd_config),
-                    "model_format": self.fd_config.model_config.model_format,
+                    "weight_need_transpose": self.fd_config.model_config.model_format == "torch",
                 },
             )
             if self.bias_key is not None:
@@ -100,7 +100,7 @@ class ParallelEHProjection(nn.Layer):
                 self.linear.weight,
                 {
                     "weight_loader": default_weight_loader(self.fd_config),
-                    "model_format": self.fd_config.model_config.model_format,
+                    "weight_need_transpose": self.fd_config.model_config.model_format == "torch",
                 },
             )
             if self.nranks > 1:
