@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import codecs
 import importlib
+import json
 import logging
 import os
 import random
@@ -757,10 +758,52 @@ class StatefulSemaphore:
         }
 
 
+def parse_quantization(value: str):
+    """
+    Parse a JSON string into a dictionary.
+    """
+    try:
+        return json.loads(value)
+    except ValueError:
+        return {"quantization": value}
+
+
 # 日志使用全局访问点（兼容原有使用方式）
 def get_logger(name, file_name=None, without_formater=False, print_to_console=False):
     """全局函数包装器，保持向后兼容"""
     return FastDeployLogger().get_logger(name, file_name, without_formater, print_to_console)
+
+
+def check_download_links(bos_client, links, timeout=1):
+    """
+    check bos download links
+    """
+    for link in links:
+        try:
+            if link.startswith("bos://"):
+                link = link.replace("bos://", "")
+
+            bucket_name = "/".join(link.split("/")[1:-1])
+            object_key = link.split("/")[-1]
+            response = bos_client.get_object_meta_data(bucket_name, object_key)
+            assert (
+                int(response.metadata.content_length) > 0
+            ), f"bos download length error, {response.metadata.content_length}"
+        except Exception as e:
+            return f"link {link} download error: {str(e)}"
+    return None
+
+
+def init_bos_client():
+    from baidubce.auth.bce_credentials import BceCredentials
+    from baidubce.bce_client_configuration import BceClientConfiguration
+    from baidubce.services.bos.bos_client import BosClient
+
+    cfg = BceClientConfiguration(
+        credentials=BceCredentials(envs.ENCODE_FEATURE_BOS_AK, envs.ENCODE_FEATURE_BOS_SK),
+        endpoint=envs.ENCODE_FEATURE_ENDPOINT,
+    )
+    return BosClient(cfg)
 
 
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")

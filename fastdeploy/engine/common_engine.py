@@ -33,6 +33,7 @@ from opentelemetry import trace
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
+from fastdeploy.eplb.utils import init_eplb_signals
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
     EngineCacheQueue,
@@ -47,7 +48,13 @@ from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.output.token_processor import TokenProcessor
 from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
-from fastdeploy.utils import EngineError, envs, llm_logger
+from fastdeploy.utils import (
+    EngineError,
+    check_download_links,
+    envs,
+    init_bos_client,
+    llm_logger,
+)
 
 
 class EngineSevice:
@@ -117,6 +124,7 @@ class EngineSevice:
                 * self.cfg.cache_config.block_size
             )
 
+        self.bos_client = None
         self.guided_decoding_checker = None
         if self.cfg.guided_decoding_backend != "off":
             self.guided_decoding_checker = schema_checker(
@@ -124,6 +132,12 @@ class EngineSevice:
                 disable_any_whitespace=self.cfg.disable_any_whitespace,
             )
         self._init_worker_monitor_signals()
+
+        if self.cfg.eplb_config.enable_eplb:
+            current_suffix = int(
+                self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+            )
+            init_eplb_signals(cfg, current_suffix)
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
@@ -643,6 +657,24 @@ class EngineSevice:
                             llm_logger.error(f"Receive request error: {err_msg}")
                             results.append((request.request_id, err_msg))
 
+                    if self._has_features_info(request) and err_msg is None:
+                        if self.bos_client is None:
+                            self.bos_client = init_bos_client()
+
+                        download_urls = []
+                        inputs = request.multimodal_inputs
+                        if inputs.get("video_feature_urls") is not None:
+                            download_urls.extend(inputs.get("video_feature_urls"))
+                        if inputs.get("image_feature_urls") is not None:
+                            download_urls.extend(inputs.get("image_feature_urls"))
+                        if inputs.get("audio_feature_urls") is not None:
+                            download_urls.extend(inputs.get("audio_feature_urls"))
+
+                        err_msg = check_download_links(self.bos_client, download_urls)
+                        if err_msg:
+                            llm_logger.error(f"Receive request {request.request_id} download error: {err_msg}")
+                            results.append((request.request_id, err_msg))
+
                     if err_msg is None:
                         insert_task.append(request)
 
@@ -693,6 +725,19 @@ class EngineSevice:
                 del self.data_processor.decode_status[req_id]
         return delta_text, token_ids
 
+    def _has_features_info(self, task):
+        inputs = task.multimodal_inputs
+        if inputs is None or len(inputs) == 0:
+            return False
+
+        if (
+            (inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0)
+            or (inputs.get("image_feature_urls") is not None and len(inputs["image_feature_urls"]) > 0)
+            or (inputs.get("audio_feature_urls") is not None and len(inputs["audio_feature_urls"]) > 0)
+        ):
+            return True
+        return False
+
     def _zmq_send_generated_tokens(self):
         """
         Recieve output for zmq
@@ -718,13 +763,15 @@ class EngineSevice:
                             content.outputs.token_ids = token_ids
                             content.outputs.text = delta_text
                             new_contents.append(content)
+                        elif content.finished:
+                            new_contents.append(content)
                         else:
                             llm_logger.warning(
                                 f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
                             )
 
                     if len(new_contents):
-                        llm_logger.info(f"Send response for request id: {request_id}")
+                        llm_logger.debug(f"Send response for request id: {request_id}")
                         self.send_response_server.send_response(request_id, new_contents)
 
             except Exception as e:

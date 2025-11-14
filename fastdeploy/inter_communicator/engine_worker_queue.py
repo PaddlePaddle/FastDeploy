@@ -27,7 +27,9 @@ from queue import Queue
 from typing import Any, List, Tuple
 
 import numpy as np
+import paddle
 
+from fastdeploy import envs
 from fastdeploy.utils import llm_logger
 
 
@@ -246,7 +248,7 @@ class EngineWorkerQueue:
             self.lock.release()
             time.sleep(0.001)
             self.lock.acquire()
-
+        EngineWorkerQueue.to_tensor(tasks)
         self.tasks[:] = list()
         self.client_read_flag[:] = [0] * self.num_client
         self.tasks.append(tasks)
@@ -268,6 +270,43 @@ class EngineWorkerQueue:
             self.tasks[:] = list()
         self.lock.release()
         return tasks, all_client_read
+
+    @staticmethod
+    def to_tensor(tasks):
+        """
+        Convert NumPy arrays in multimodal inputs to Paddle tensors.
+
+        Args:
+            tasks (tuple): ([request], bsz)
+        """
+        if not getattr(envs, "FD_ENABLE_E2W_TENSOR_CONVERT", False):
+            return
+
+        try:
+            batch_tasks, _ = tasks
+            for task in batch_tasks:
+                multimodal_inputs = getattr(task, "multimodal_inputs", None)
+                if not multimodal_inputs:
+                    continue
+
+                # tensor keys
+                tensor_keys = [
+                    "patch_idx",
+                    "token_type_ids",
+                    "position_ids",
+                    "attention_mask_offset",
+                ]
+
+                llm_logger.info(f"Converting multimodal inputs to tensor...{tensor_keys}")
+
+                for key in tensor_keys:
+                    value = multimodal_inputs.get(key)
+                    if value is None:
+                        continue
+                    if not isinstance(value, paddle.Tensor):
+                        multimodal_inputs[key] = paddle.to_tensor(value)
+        except Exception as e:
+            llm_logger.warning(f"Tensor conversion failed: {type(e).__name__}: {e}")
 
     def num_tasks(self) -> int:
         """

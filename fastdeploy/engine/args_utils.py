@@ -26,6 +26,7 @@ from fastdeploy import envs
 from fastdeploy.config import (
     CacheConfig,
     EarlyStopConfig,
+    EPLBConfig,
     FDConfig,
     GraphOptimizationConfig,
     LoadConfig,
@@ -41,6 +42,7 @@ from fastdeploy.utils import (
     DeprecatedOptionWarning,
     FlexibleArgumentParser,
     is_port_available,
+    parse_quantization,
 )
 
 
@@ -138,7 +140,7 @@ class EngineArgs:
     """
     dynamic load weight strategy
     """
-    quantization: str = None
+    quantization: Optional[Dict[str, Any]] = None
     guided_decoding_backend: str = "off"
     """
     Guided decoding backend.
@@ -386,6 +388,25 @@ class EngineArgs:
     Flag to specify the dtype of lm_head as FP32. Default is False (Using model default dtype).
     """
 
+    enable_attention_dp_balance: bool = False
+    """
+    Flag to enable attention dp balance
+    """
+
+    attention_dp_time_out_iters: int = 0
+    """
+    Max waiting steps to sync all dp for prefill tasks available
+    """
+
+    enable_eplb: bool = False
+    """
+    Flag to enable eplb
+    """
+    eplb_config: Optional[Dict[str, Any]] = None
+    """
+    Configuration for eplb.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -548,7 +569,7 @@ class EngineArgs:
         )
         model_group.add_argument(
             "--quantization",
-            type=str,
+            type=parse_quantization,
             default=EngineArgs.quantization,
             help="Quantization name for the model, currentlly support "
             "'wint8', 'wint4',"
@@ -682,6 +703,18 @@ class EngineArgs:
             default=EngineArgs.enable_expert_parallel,
             help="Enable expert parallelism.",
         )
+        parallel_group.add_argument(
+            "--enable-eplb",
+            action="store_true",
+            default=EngineArgs.enable_eplb,
+            help="Enable eplb.",
+        )
+        model_group.add_argument(
+            "--eplb-config",
+            type=json.loads,
+            default=EngineArgs.eplb_config,
+            help="Config of eplb.",
+        )
 
         # Load group
         load_group = parser.add_argument_group("Load Configuration")
@@ -808,6 +841,20 @@ class EngineArgs:
             type=lambda s: s.split(",") if s else None,
             default=EngineArgs.rdma_comm_ports,
             help="ports for rdma communication.",
+        )
+
+        perf_group.add_argument(
+            "--enable-attention-dp-balance",
+            action="store_true",
+            default=EngineArgs.enable_attention_dp_balance,
+            help="enable attention dp balance",
+        )
+
+        perf_group.add_argument(
+            "--attention-dp-time-out-iters",
+            type=int,
+            default=EngineArgs.attention_dp_time_out_iters,
+            help="max waiting steps to sync all dp for prefill tasks available",
         )
 
         # Scheduler parameters group
@@ -997,7 +1044,17 @@ class EngineArgs:
                 early_stop_args[k] = v
         return EarlyStopConfig(early_stop_args)
 
-    def create_engine_config(self) -> FDConfig:
+    def create_eplb_config(self) -> EPLBConfig:
+        """
+        Create and retuan an EPLBConfig object based on the current settings.
+        """
+        eplb_args = asdict(self)
+        if self.eplb_config is not None:
+            for k, v in self.eplb_config.items():
+                eplb_args[k] = v
+        return EPLBConfig(eplb_args)
+
+    def create_engine_config(self, port_availability_check: bool = True) -> FDConfig:
         """
         Create and return a Config object based on the current settings.
         """
@@ -1038,6 +1095,7 @@ class EngineArgs:
         graph_opt_cfg = self.create_graph_optimization_config()
         graph_opt_cfg.update_use_cudagraph(self.use_cudagraph)
         moba_attention_config = self.create_moba_attention_config()
+        eplb_cfg = self.create_eplb_config()
 
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
@@ -1047,9 +1105,10 @@ class EngineArgs:
         if isinstance(self.engine_worker_queue_port, str):
             self.engine_worker_queue_port = self.engine_worker_queue_port.split(",")
 
-        assert is_port_available(
-            "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
-        ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
+        if port_availability_check:
+            assert is_port_available(
+                "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
+            ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
 
         return FDConfig(
             model_config=model_cfg,
@@ -1059,6 +1118,7 @@ class EngineArgs:
             load_config=load_cfg,
             parallel_config=parallel_cfg,
             max_model_len=self.max_model_len,
+            eplb_config=eplb_cfg,
             max_num_seqs=self.max_num_seqs,
             speculative_config=speculative_cfg,
             max_num_batched_tokens=self.max_num_batched_tokens,
@@ -1079,4 +1139,6 @@ class EngineArgs:
             guided_decoding_backend=self.guided_decoding_backend,
             disable_any_whitespace=self.guided_decoding_disable_any_whitespace,
             early_stop_config=early_stop_cfg,
+            enable_attention_dp_balance=self.enable_attention_dp_balance,
+            attention_dp_time_out_iters=self.attention_dp_time_out_iters,
         )

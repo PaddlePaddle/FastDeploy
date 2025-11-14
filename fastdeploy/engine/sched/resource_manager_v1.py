@@ -28,6 +28,7 @@ import paddle
 
 from fastdeploy.engine.request import Request, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
+from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import llm_logger
 
@@ -126,8 +127,6 @@ class ResourceManagerV1(ResourceManager):
                 self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
                 preempted_reqs.append(preempted_req)
                 scheduled_reqs.append(self._prepare_preempt_task(preempted_req))
-                main_process_metrics.num_requests_waiting.inc(1)
-                main_process_metrics.num_requests_running.dec(1)
                 if preempted_req == request:
                     # No more request to preempt.
                     can_schedule = False
@@ -137,6 +136,26 @@ class ResourceManagerV1(ResourceManager):
                 can_schedule = True
                 break
         return can_schedule
+
+    def _is_mm_request(self, request):
+        inputs = request.multimodal_inputs
+        if inputs is None or len(inputs) == 0:
+            return False
+
+        if (
+            (inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0)
+            or (inputs.get("image_feature_urls") is not None and len(inputs["image_feature_urls"]) > 0)
+            or (inputs.get("audio_feature_urls") is not None and len(inputs["audio_feature_urls"]) > 0)
+        ):
+            return True
+        elif (
+            inputs.get("images", None) is not None
+            and inputs.get("image_patch_id", None) is not None
+            and inputs.get("grid_thw", None) is not None
+        ):
+            return True
+
+        return False
 
     def _get_num_new_tokens(self, request, token_budget):
         # TODO: set condition to new _get_num_new_tokens
@@ -153,6 +172,7 @@ class ResourceManagerV1(ResourceManager):
             new_end_idx = pre_end_idx + num_new_tokens
 
             prompt_token_ids_len = len(request.prompt_token_ids)
+
             assert prompt_token_ids_len == len(inputs["patch_idx"]), (prompt_token_ids_len, len(inputs["patch_idx"]))
 
             # start
@@ -178,8 +198,17 @@ class ResourceManagerV1(ResourceManager):
                     end_patch_idx -= 1
             end_patch_map = inputs["patch_map"][end_patch_idx]
             end_modal_id = end_patch_map["modal_id"]
-            if end_modal_id > 0:
+
+            if end_modal_id > 0 and end_modal_id != IDS_TYPE_FLAG["video"]:
                 new_end_idx = end_patch_map["end_idx"]  # 当前模态结束位置
+
+            if end_modal_id == IDS_TYPE_FLAG["video"]:
+                can_split_idx_list = inputs["can_split_idx_list"]
+                for i in range(len(can_split_idx_list)):
+                    if can_split_idx_list[i] >= new_end_idx:
+                        new_end_idx = can_split_idx_list[i]
+                        break
+
             num_new_tokens = new_end_idx - pre_end_idx
 
             request.image_end = end_patch_map["image_num"]
@@ -268,6 +297,12 @@ class ResourceManagerV1(ResourceManager):
                 return True
         return False
 
+    def exist_mm_prefill(self, scheduled_reqs):
+        for request in scheduled_reqs:
+            if request.task_type == RequestType.PREFILL and self._is_mm_request(request):
+                return True
+        return False
+
     def schedule(self):
         """
         Try to pull a batch of requests from the waiting queue and schedule them.
@@ -344,11 +379,13 @@ class ResourceManagerV1(ResourceManager):
                 while self.waiting and token_budget > 0:
                     if len(self.running) == self.max_num_seqs:
                         break
-                    if (self.config.model_config.enable_mm or paddle.is_compiled_with_xpu()) and self.exist_prefill(
-                        scheduled_reqs
+
+                    request = self.waiting[0]
+                    if (self._is_mm_request(request) and self.exist_mm_prefill(scheduled_reqs)) or (
+                        paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)
                     ):
                         break
-                    request = self.waiting[0]
+
                     if request.status == RequestStatus.WAITING:
                         # Enable prefix caching
                         if self.config.cache_config.enable_prefix_caching:
@@ -384,8 +421,6 @@ class ResourceManagerV1(ResourceManager):
                                     request, self.config.cache_config.block_size, request.num_computed_tokens
                                 )
                             request.status = RequestStatus.RUNNING
-                            main_process_metrics.num_requests_waiting.dec(1)
-                            main_process_metrics.num_requests_running.inc(1)
                             allocated_position = self.get_available_position()
                             request.idx = allocated_position
                             self.tasks_list[allocated_position] = request
@@ -429,8 +464,6 @@ class ResourceManagerV1(ResourceManager):
                                     request, self.config.cache_config.block_size, request.num_computed_tokens
                                 )
                             request.status = RequestStatus.RUNNING
-                            main_process_metrics.num_requests_waiting.dec(1)
-                            main_process_metrics.num_requests_running.inc(1)
                         else:
                             if self.config.cache_config.enable_prefix_caching:
                                 self._free_blocks(request)
@@ -438,11 +471,10 @@ class ResourceManagerV1(ResourceManager):
                     else:
                         llm_logger.error("Unknown request status type")
             if scheduled_reqs:
-                task_used_block_num = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
-                main_process_metrics.available_gpu_block_num.set(self.total_block_number() - task_used_block_num)
-                main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
-                main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
                 llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
+
+            self.update_metrics()
+
             return scheduled_reqs
 
     def get_available_position(self) -> int:
@@ -531,7 +563,10 @@ class ResourceManagerV1(ResourceManager):
                     if request in self.running:  # normally run and finished
                         self.running.remove(request)
                         request.status = RequestStatus.FINISHED
-                        self._free_blocks(request)
+                        try:
+                            self._free_blocks(request)
+                        except Exception as e:
+                            llm_logger.warning(f"release block failed {req_id}: {e}")
                     if (
                         request.request_id in self.to_be_rescheduled_request_id_set
                     ):  # finished after preempted, blocks have been recycled.
@@ -548,7 +583,19 @@ class ResourceManagerV1(ResourceManager):
                     del self.requests[req_id]
         except Exception as e:
             llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")
+        finally:
+            self.update_metrics()
 
     def clear_data(self):
         self.waiting: deque[Request] = deque()
         self.to_be_rescheduled_request_id_set = set()
+
+    def update_metrics(self):
+        # Update metrics
+        num_tasks = sum([1 if task else 0 for task in self.tasks_list])
+        num_blocks_used_by_tasks = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
+        main_process_metrics.available_gpu_block_num.set(self.total_block_number() - num_blocks_used_by_tasks)
+        main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
+        main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
+        main_process_metrics.num_requests_running.set(len(self.running))
+        main_process_metrics.num_requests_waiting.set(num_tasks - len(self.running))

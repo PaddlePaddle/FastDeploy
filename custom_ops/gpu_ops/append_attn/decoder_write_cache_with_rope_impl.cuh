@@ -629,7 +629,7 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
   }
 }
 
-template <typename T, int VecSize = 4, int RoundType = 0, int HeadDim = 128, bool is_scale_channel_wise=false, bool IsFP8=true>
+template <typename T, int VecSize = 4, int RoundType = 0, int HeadDim = 128, bool is_scale_channel_wise = false, bool IsFP8 = true, bool IsDynamic = true>
 __global__ void append_decode_cache_int8_rope_qk_norm_kernel(
     const T* __restrict__ quant_qkv,    // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
@@ -677,15 +677,6 @@ __global__ void append_decode_cache_int8_rope_qk_norm_kernel(
   block_table_now = block_tables + bid * max_blocks_per_seq;
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
-
-  int cache_offset;
-  if (head_idx < num_heads) {
-    cache_offset = 0;
-  } else if (head_idx < num_heads + 2 * kv_num_heads) {
-    cache_offset = block_idx * kv_num_heads * block_size + (head_idx - num_heads) % kv_num_heads * block_size + block_offset;
-  }
-  T *cache_k_scale_now = cache_k_scale + cache_offset;
-  T *cache_v_scale_now = cache_v_scale + cache_offset;
 
   float thread_m2 = 0.0f;
   float warp_m2 = 0.0f;
@@ -861,25 +852,40 @@ __global__ void append_decode_cache_int8_rope_qk_norm_kernel(
         }
       }
     }
-    // reduce max, 1 head per warp
-    T local_max = -INFINITY;
+    if constexpr (IsDynamic) {
+      // reduce max, 1 head per warp
+      T local_max = -INFINITY;
 #pragma unroll
-    for (int i = 0; i < HALF_K_VEC_SIZE; i++) {
-      local_max = __hmax(local_max, __habs(out_vec1[i]));
-      local_max = __hmax(local_max, __habs(out_vec2[i]));
-    }
+      for (int i = 0; i < HALF_K_VEC_SIZE; i++) {
+        local_max = __hmax(local_max, __habs(out_vec1[i]));
+        local_max = __hmax(local_max, __habs(out_vec2[i]));
+      }
 #pragma unroll
-    for (int m_offset = 16; m_offset > 0; m_offset /= 2) {
-      local_max = __hmax(local_max, __shfl_xor_sync(0xffffffff, local_max, m_offset));
-    }
+      for (int m_offset = 16; m_offset > 0; m_offset /= 2) {
+        local_max = __hmax(local_max, __shfl_xor_sync(0xffffffff, local_max, m_offset));
+      }
+      scale = __hdiv(448, local_max);
 
-    scale = __hdiv(448, local_max);
-
-    if (lane_id == 0) {
+      int cache_offset;
+      if (head_idx < num_heads) {
+        cache_offset = 0;
+      } else if (head_idx < num_heads + 2 * kv_num_heads) {
+        cache_offset = block_idx * kv_num_heads * block_size + (head_idx - num_heads) % kv_num_heads * block_size + block_offset;
+      }
+      T *cache_k_scale_now = cache_k_scale + cache_offset;
+      T *cache_v_scale_now = cache_v_scale + cache_offset;
+      if (lane_id == 0) {
+        if (head_idx < num_heads + kv_num_heads) {
+          cache_k_scale_now[0] = __hdiv(1, scale);
+        } else {
+          cache_v_scale_now[0] = __hdiv(1, scale);
+        }
+      }
+    } else {
       if (head_idx < num_heads + kv_num_heads) {
-        cache_k_scale_now[0] = __hdiv(1, scale);
+        scale = __ldg(&cache_k_scale[kv_head_idx]);
       } else {
-        cache_v_scale_now[0] = __hdiv(1, scale);
+        scale = __ldg(&cache_v_scale[kv_head_idx]);
       }
     }
 

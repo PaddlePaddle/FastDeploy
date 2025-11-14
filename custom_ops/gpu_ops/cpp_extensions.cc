@@ -570,6 +570,18 @@ std::vector<paddle::Tensor> NoauxTc(
       int topk,
       float routed_scaling_factor);
 
+std::vector<paddle::Tensor> NoauxTcRedundant(
+      paddle::Tensor& scores,
+      paddle::Tensor& scores_with_bias,
+      paddle::Tensor& expert_id_to_ep_rank_array,
+      paddle::Tensor& expert_in_rank_num_list,
+      paddle::Tensor& tokens_per_expert_stats_list,
+      int n_group,
+      int topk_group,
+      int topk,
+      float routed_scaling_factor,
+      int redundant_ep_rank_num_plus_one);
+
 #ifdef ENABLE_FP8
 paddle::Tensor cutlass_fp8_fp8_half_gemm_func(
     const paddle::Tensor& x,
@@ -667,6 +679,7 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
 
 
 void SpeculateVerify(
+    const paddle::Tensor &sampled_token_ids,
     const paddle::Tensor &accept_tokens, const paddle::Tensor &accept_num,
     const paddle::Tensor &step_idx, const paddle::Tensor &stop_flags,
     const paddle::Tensor &seq_lens_encoder,
@@ -700,7 +713,8 @@ void SpeculateUpdate(const paddle::Tensor &seq_lens_encoder,
                        const paddle::Tensor &stop_flags,
                        const paddle::Tensor &seq_lens_this_time,
                        const paddle::Tensor &is_block_step,
-                       const paddle::Tensor &stop_nums);
+                       const paddle::Tensor &stop_nums,
+                       const paddle::Tensor &mask_rollback);
 
 void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor &pre_ids_all,
                                     const paddle::Tensor &accept_tokens,
@@ -933,6 +947,17 @@ void SpeculateGetTargetLogits(const paddle::Tensor &target_logits,
                               const paddle::Tensor &seq_lens_this_time,
                               const paddle::Tensor &seq_lens_encoder,
                               const paddle::Tensor &accept_num);
+
+std::vector<paddle::Tensor> UpdateAttnMaskOffsets(const paddle::Tensor& ids_remove_padding,
+                    const paddle::Tensor& seq_lens_this_time,  // only on cpu
+                    const paddle::Tensor& seq_lens_encoder,
+                    const paddle::Tensor& seq_lens_decoder,
+                    const paddle::Tensor& cu_seqlens_q,
+                    const paddle::Tensor& attn_mask_offsets_full,
+                    const paddle::Tensor& attn_mask_offsets_decoder,
+                    const paddle::Tensor& is_block_step,
+                    const paddle::Tensor& decode_states,
+                    const paddle::Tensor& mask_rollback);
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
 
@@ -1238,6 +1263,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("noaux_tc",&NoauxTc, "noaux_tc for Deepseekv3 MoE compute");
 
+  m.def("noaux_tc_redunant",&NoauxTcRedundant, "noaux_tc_redundant for MoE compute");
+
 #ifdef ENABLE_FP8
   m.def("cutlass_fp8_fp8_half_gemm_fused", &cutlass_fp8_fp8_half_gemm_func,
         py::arg("x"), py::arg("y"), py::arg("bias"), py::arg("transpose_x"),
@@ -1328,4 +1355,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_insert_first_token", &SpeculateInsertFirstToken, "speculate_insert_first_token function");
 
   m.def("speculate_get_target_logits", &SpeculateGetTargetLogits, "speculate_get_target_logits function");
+
+  m.def("update_attn_mask_offsets", &UpdateAttnMaskOffsets, "update attention mask");
 }

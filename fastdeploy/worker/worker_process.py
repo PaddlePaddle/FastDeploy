@@ -30,6 +30,7 @@ from fastdeploy.config import (
     DecodingConfig,
     DeviceConfig,
     EarlyStopConfig,
+    EPLBConfig,
     ErnieArchitectures,
     FDConfig,
     GraphOptimizationConfig,
@@ -39,12 +40,20 @@ from fastdeploy.config import (
     ParallelConfig,
     SpeculativeConfig,
 )
+from fastdeploy.engine.request import RequestType
+from fastdeploy.eplb.async_expert_loader import (
+    MODEL_MAIN_NAME,
+    REARRANGE_EXPERT_MAGIC_NUM,
+    create_mmap,
+    load_tensor_from_shm_mem,
+)
+from fastdeploy.eplb.experts_manager import RedundantExpertManager
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
-from fastdeploy.inter_communicator import IPCSignal
+from fastdeploy.inter_communicator import IPCSignal, RearrangeExpertStatus
 from fastdeploy.model_executor.layers.quantization import get_quantization_config
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import get_logger
+from fastdeploy.utils import get_logger, parse_quantization
 from fastdeploy.worker.worker_base import WorkerBase
 
 logger = get_logger("worker_process", "worker_process.log")
@@ -150,6 +159,7 @@ class PaddleDisWorkerProc:
         self.fd_config = fd_config
         self.parallel_config = fd_config.parallel_config
         self.cache_config = fd_config.cache_config
+        self.eplb_config = fd_config.eplb_config
 
         # TODO(gongshaotian): Use worker factory to get worker
         self.worker = get_worker(fd_config=fd_config, local_rank=self.local_rank, rank=self.ranks)
@@ -248,6 +258,26 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
+    def update_weights_from_tensor(self, mmap_infos):
+        """
+        update_weights_from_tensor
+        """
+        import time
+
+        while True:
+            if self.experts_manager.tensor_infos is None:
+                time.sleep(0.1)
+            else:
+                break
+        state_dicts = load_tensor_from_shm_mem(self.experts_manager.tensor_infos, mmap_infos[MODEL_MAIN_NAME], logger)
+        rank_expert_list, logical_to_physical_map, expert_count = self.experts_manager.get_ep_rank_to_expert_id_list()
+        self.worker.get_model().ernie.redundant_table_manger.update_expert_rank_table(
+            rank_expert_list, logical_to_physical_map, expert_count
+        )
+        # TO BE FIXED
+        self.worker.get_model().ernie.update_state_dict(state_dicts)
+        self.experts_manager.tensor_infos = None
+
     def _broadcast_model_weights_signal(self, src: int, group) -> int:
         model_weights_signal_tensor = paddle.full(shape=[1], fill_value=self.model_weights_signal[0], dtype="int32")
         paddle.distributed.broadcast(model_weights_signal_tensor, src=src, group=group)
@@ -257,13 +287,113 @@ class PaddleDisWorkerProc:
         """Main event loop for Paddle Distrubuted Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
+        if self.eplb_config.enable_eplb:
+            self.last_dump_expert_workload_ts = 0
+            self.experts_manager = RedundantExpertManager(
+                rank=self.local_rank,
+                ep_size=self.ranks,
+                fd_config=self.fd_config,
+                ipc_signal_suffix=self.parallel_config.engine_worker_queue_port,
+            )
+            experts_token_stats = np.zeros(
+                (self.fd_config.model_config.num_hidden_layers, self.fd_config.model_config.moe_num_experts),
+                dtype=np.int32,
+            )
+            local_experts_token_stats_array = IPCSignal(
+                name="local_experts_token_stats",
+                array=experts_token_stats,
+                dtype=np.int32,
+                suffix=self.parallel_config.engine_worker_queue_port,
+                create=False,
+            )
+
+            clear_experts_token_stats = np.zeros([1], dtype=np.int32)
+            signal_clear_experts_token_stats = IPCSignal(
+                name="signal_clear_experts_token_stats",
+                array=clear_experts_token_stats,
+                dtype=np.int32,
+                suffix=self.parallel_config.engine_worker_queue_port,
+                create=False,
+            )
+
+            if self.local_rank == 0:
+                signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
+                signal_update_weight_from_tensor_array = IPCSignal(
+                    name="signal_update_weight_from_tensor",
+                    array=signal_update_weight_from_tensor,
+                    dtype=np.int32,
+                    suffix=self.parallel_config.engine_worker_queue_port,
+                    create=False,
+                )
+
+                rearrange_experts_status = np.zeros([1], dtype=np.int32)
+                rearrange_experts_signal = IPCSignal(
+                    name="rearrange_experts_status",
+                    array=rearrange_experts_status,
+                    dtype=np.int32,
+                    suffix=self.parallel_config.engine_worker_queue_port,
+                    create=False,
+                )
+
+            mmap_infos = create_mmap(
+                [MODEL_MAIN_NAME],
+                self.local_rank,
+                self.ranks,
+                shm_uuid=self.parallel_config.engine_worker_queue_port,
+                eplb_config=self.eplb_config,
+                logger=logger,
+            )
+
         # Currently, only support single node
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
         req_ids = []
         num_running_requests = 0
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
+        attention_dp_cached_prefill_tasks = []
+        attention_dp_wait_prefill_iters = 0
         while True:
+            if self.eplb_config.enable_eplb:
+                rearrange_time = time.time()
+                # 获取专家负载
+                if local_experts_token_stats_array.value is not None and (
+                    int(rearrange_time) - self.last_dump_expert_workload_ts
+                    > self.eplb_config.redundant_expert_dump_workload_interval
+                ):
+                    self.last_dump_expert_workload_ts = int(rearrange_time)
+                    clear_stat = False
+                    if signal_clear_experts_token_stats.value[0] == 1:
+                        clear_stat = True
+                        signal_clear_experts_token_stats.value[0] = 0
+                    (
+                        new_stats_array,
+                        _,
+                        _,
+                        _,
+                    ) = self.worker.get_model().ernie.redundant_table_manger.get_expert_tokens_stats(
+                        clear_stat=clear_stat
+                    )
+                    local_experts_token_stats_array.value[:] = new_stats_array[:]
+                elif local_experts_token_stats_array.value is None:
+                    logger.warning("redundant_expert: local_experts_token_stats not init")
+
+                # 所有DP同步更新权重
+                broadcast_value = 0
+                if self.local_rank == 0 and signal_update_weight_from_tensor_array.value[0] == 1:
+                    logger.info("redundant_expert: update_weight_from_tensor broadcast signal")
+                    signal_update_weight_from_tensor_array.value[0] = 0
+                    broadcast_value = REARRANGE_EXPERT_MAGIC_NUM
+                data = paddle.to_tensor([broadcast_value])
+                paddle.distributed.broadcast(data, 0)
+                if data[0] == REARRANGE_EXPERT_MAGIC_NUM:
+                    self.update_weights_from_tensor(mmap_infos)
+                    logger.info(
+                        f"redundant_expert: update_weight_from_tensor success, cost {(time.time() - rearrange_time)*1000}ms"
+                    )
+                    paddle.distributed.barrier()
+                    if self.local_rank == 0:
+                        rearrange_experts_signal.value[0] = RearrangeExpertStatus.DONE.value
+                    logger.info("redundant_expert: done")
             if local_rank == 0:
                 if self.model_weights_status.value[0] != 0:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
@@ -277,7 +407,6 @@ class PaddleDisWorkerProc:
                 )
 
             self.insert_step = False
-            req_dicts = None
             self.worker_healthy_live_signal.value[local_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
@@ -320,6 +449,7 @@ class PaddleDisWorkerProc:
                     self.model_weights_signal[0] = 0
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
 
+            req_dicts = []
             if self.exist_task_signal.value[0] == 1 or self.task_queue.read_finish_flag.get() == 1:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
                 self.insert_step = True
@@ -330,27 +460,63 @@ class PaddleDisWorkerProc:
                     self.exist_task_signal.value[0] = 0
                     self.task_queue.read_finish_flag.set(0)
 
-                req_dicts = []
+                # req_dicts = []
                 for req_dict, bsz in tasks:
                     num_running_requests = int(bsz)
                     req_dicts.extend(req_dict)
 
+            if (
+                envs.ENABLE_V1_KVCACHE_SCHEDULER
+                and self.fd_config.enable_attention_dp_balance
+                and self.parallel_config.splitwise_role == "mixed"
+            ):
+                exist_decode = self.worker.exist_decode()
+                exist_prefill = False
+                tmp_need_cached_prefills = []
+                if len(req_dicts) > 0:
+                    for request in req_dicts:
+                        if request.task_type.value == RequestType.PREFILL.value:
+                            tmp_need_cached_prefills.append(request)
+                if tmp_need_cached_prefills:
+                    attention_dp_cached_prefill_tasks.append(tmp_need_cached_prefills)
+                for request in tmp_need_cached_prefills:
+                    req_dicts.remove(request)
+                # judge whether all ranks have prefill tasks
+                if (len(attention_dp_cached_prefill_tasks) > 0) or (not exist_decode):
+                    exist_prefill = True
+                only_prefill_batch_list = []
+                paddle.distributed.all_gather_object(only_prefill_batch_list, exist_prefill)
+                if_only_prefill = all(only_prefill_batch_list)
+                if if_only_prefill:  # all ranks have prefill tasks
+                    # add a prefill task to current step
+                    if len(attention_dp_cached_prefill_tasks) > 0:
+                        req_dicts.extend(attention_dp_cached_prefill_tasks.pop(0))
+                    attention_dp_wait_prefill_iters = 0
+                else:
+                    # wait until all ranks have prefill tasks or reached timeout
+                    attention_dp_wait_prefill_iters += 1
+                    if attention_dp_wait_prefill_iters > self.fd_config.attention_dp_time_out_iters:
+                        if len(attention_dp_cached_prefill_tasks) > 0:
+                            req_dicts.extend(attention_dp_cached_prefill_tasks.pop(0))
+                        attention_dp_wait_prefill_iters = 0
+
+            if len(req_dicts) > 0:
                 req_ids = [req.request_id for req in req_dicts]
+                # Process prefill inputs
+                if self.fd_config.enable_attention_dp_balance:  # real_bsz may be different with scheduler's view
+                    self.worker.preprocess_new_task(req_dicts, None)
+                    num_running_requests = self.worker.get_real_bsz()
+                else:
+                    self.worker.preprocess_new_task(req_dicts, num_running_requests)
                 logger.info(
                     f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
                     f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
                 )
-
-                # Process prefill inputs
-                self.worker.preprocess_new_task(req_dicts, num_running_requests)
-
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
                 if self.ranks > 1:
                     paddle.distributed.barrier(self.parallel_config.tp_group)
-
                 time.sleep(0.001)
                 continue
-
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             self.worker.execute_model(req_dicts, num_running_requests)
@@ -577,8 +743,8 @@ def parse_args():
 
     parser.add_argument(
         "--quantization",
-        type=str,
-        default="None",
+        type=json.loads,
+        default=None,
         help="Quantization name for the model, currentlly support "
         "'wint4', 'wint8',"
         "default is None. The priority of this configuration "
@@ -654,6 +820,26 @@ def parse_args():
         help="Flag to specify dtype of lm_head as FP32",
     )
 
+    parser.add_argument(
+        "--enable_attention_dp_balance",
+        action="store_true",
+        help="enable attention dp balance",
+    )
+
+    parser.add_argument(
+        "--attention_dp_time_out_iters",
+        type=int,
+        default=0,
+        help="max waiting steps to sync all dp for prefill tasks available",
+    )
+
+    parser.add_argument(
+        "--eplb_config",
+        type=json.loads,
+        default=None,
+        help="EPLB Configuration.",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -667,6 +853,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     Returns:
         FDConfig: Initialized FastDeploy configuration object
     """
+    # RL rollout
+    if args.quantization is not None and isinstance(args.quantization, str):
+        args.quantization = parse_quantization(args.quantization)
     paddle.set_default_dtype(args.dtype)
     model_config = ModelConfig(vars(args))
     device_config = DeviceConfig(vars(args))
@@ -709,6 +898,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     early_stop_config = EarlyStopConfig(args.early_stop_config)
 
+    eplb_config = EPLBConfig(args.eplb_config)
+
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
     model_config.pretrained_config.tensor_parallel_degree = parallel_config.tensor_parallel_size
@@ -737,10 +928,14 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     if quantization_config is not None:
         quant_config_name = quantization_config["quantization"]
-    elif args.quantization != "None":
+    elif args.quantization is not None:
         quantization_config = {}
-        quant_config_name = args.quantization
-        quantization_config["quantization"] = quant_config_name
+        try:
+            quantization_config.update(args.quantization)
+            quant_config_name = quantization_config["quantization"]
+        except:
+            quant_config_name = args.quantization["quantization"]
+            quantization_config["quantization"] = quant_config_name
         # Only v1 loader sets is_checkpoint_bf16=True during dynamic quantization.
         if load_config.load_choices == "default_v1":
             quantization_config["is_checkpoint_bf16"] = True
@@ -784,7 +979,8 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     if parallel_config.guided_decoding_backend != "off":
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported guided_decoding.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-
+    logger.info(f"enable_attention_dp_balance:{args.enable_attention_dp_balance}")
+    logger.info(f"attention_dp_time_out_iters:{args.attention_dp_time_out_iters}")
     fd_config = FDConfig(
         model_config=model_config,
         parallel_config=parallel_config,
@@ -799,6 +995,9 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         engine_worker_queue_port=args.engine_worker_queue_port,
         ips=args.ips,
         moba_attention_config=moba_attention_config,
+        enable_attention_dp_balance=args.enable_attention_dp_balance,
+        attention_dp_time_out_iters=args.attention_dp_time_out_iters,
+        eplb_config=eplb_config,
     )
     update_fd_config_for_mm(fd_config)
 
