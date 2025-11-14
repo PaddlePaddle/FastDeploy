@@ -206,6 +206,7 @@ class PaddleDisWorkerProc:
         self.worker_ready_signal.value[self.local_rank % self.max_chips_per_node] = 1
         # init worker_healthy_live_signal
         workers_alive = np.zeros(shape=[array_size], dtype=np.int32)
+        workers_alive = np.zeros(shape=[min(array_size, self.parallel_config.tensor_parallel_size)], dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",
             array=workers_alive,
