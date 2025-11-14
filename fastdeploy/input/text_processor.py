@@ -245,7 +245,7 @@ class DataProcessor(BaseDataProcessor):
                 if chat_template_kwargs:
                     if isinstance(chat_template_kwargs, dict):
                         for k, v in chat_template_kwargs.items():
-                            if k not in task:
+                            if k not in task or task[k] is None:
                                 task[k] = v
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
@@ -550,7 +550,6 @@ class DataProcessor(BaseDataProcessor):
             tokenize=False,
             split_special_tokens=False,
             add_special_tokens=False,
-            return_tensors="pd",
             **kwargs,
         )
         request["prompt_tokens"] = spliced_message

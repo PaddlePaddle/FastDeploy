@@ -18,12 +18,12 @@ import json
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict
+from typing import Dict, List
 
 import zmq
 
 from fastdeploy import envs
-from fastdeploy.engine.request import CompletionOutput, Request, RequestOutput
+from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.inter_communicator import EngineWorkerQueue
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import get_logger
@@ -175,73 +175,7 @@ class SplitwiseConnector:
             self.push_sockets[addr].close()
             del self.push_sockets[addr]
 
-    def has_splitwise_tasks(self):
-        """
-        PD mode: check prefill empty
-        """
-        if self.cfg.innode_prefill_ports is None:
-            return True
-        else:
-            for port in self.cfg.innode_prefill_ports:
-                if port not in self.connect_innode_instances:
-                    self.create_connection(port)
-                if self.connect_innode_instances[port].available_prefill_instances.qsize() > 0:
-                    return False
-            return True
-
-    def dispatch_innode_splitwise_tasks(self, tasks, current_id):
-        """
-        Dispatch splitwise tasks .
-
-        Parameters:
-        tasks (list): List of tasks.
-        """
-        tasks_status = "mixed"
-        is_changable = envs.FD_PD_CHANGEABLE == "1"
-        while True:
-            for port in self.cfg.innode_prefill_ports:
-                current_port = -1
-                if port not in self.connect_innode_instances:
-                    self.create_connection(port)
-                if self.connect_innode_instances[port].get_prefill_instances() == 1:
-                    for task in tasks:
-                        task.disaggregate_info = {
-                            "role": "prefill",
-                            "transfer_protocol": "ipc",
-                            "cache_info": {
-                                "ipc": {
-                                    "ip": "0.0.0.0",
-                                    "port": self.cfg.parallel_config.engine_worker_queue_port[self.idx],
-                                    "current_id": current_id,
-                                },
-                            },
-                        }
-                    self.connect_innode_instances[port].put_disaggregated_tasks(("prefill", tasks))
-                    current_port = port
-
-                if current_port != -1:
-                    tasks_status = "decode"
-                    break
-            if current_port != -1 or is_changable:
-                break
-            else:
-                time.sleep(0.005)
-
-        if tasks_status == "decode":
-            for task in tasks:
-                task.disaggregate_info = {
-                    "role": tasks_status,
-                    "transfer_protocol": "ipc",
-                    "cache_info": {
-                        "ipc": {
-                            "ip": "0.0.0.0",
-                            "port": current_port,
-                            "current_id": current_id,
-                        },
-                    },
-                }
-
-    def send_splitwise_tasks(self, tasks, current_id):
+    def send_splitwise_tasks(self, tasks: List[Request], current_id):
         """
         Send splitwise tasks to all connected addresses.
 
@@ -249,10 +183,6 @@ class SplitwiseConnector:
         tasks (list): List of tasks.
         current_id (int): Current ID.
         """
-
-        if self.cfg.innode_prefill_ports is not None:
-            self.dispatch_innode_splitwise_tasks(tasks, current_id)
-            return
         addr = None
         decode_diagg = None
         for task in tasks:
@@ -275,6 +205,8 @@ class SplitwiseConnector:
                 decode_diagg = task.disaggregate_info["cache_info"]
                 task.disaggregate_info["cache_info"] = self.cfg.disaggregate_info["cache_info"]
                 task.disaggregate_info["cache_info"]["rdma"]["current_id"] = current_id
+                task.disaggregate_info["role"] = "decode"
+                self.logger.debug(f"send task to coupled instance, {addr}, {task}")
                 self._send_message(addr, "prefill", [task])
                 task.disaggregate_info["cache_info"] = decode_diagg
             task.disaggregate_info["role"] = "prefill"
@@ -310,7 +242,7 @@ class SplitwiseConnector:
         """
         if not isinstance(tasks_list, list):
             tasks_list = [tasks_list]
-        self.logger.info("send first token to port decode")
+        self.logger.info(f"send first token to decode, {[x.request_id for x in tasks_list]}")
         if prefill_msg["transfer_protocol"] == "ipc":
             port = prefill_msg["cache_info"]["ipc"]["port"]
             if port not in self.connect_innode_instances:
@@ -328,8 +260,13 @@ class SplitwiseConnector:
         Parameters:
         port (int): Port number.
         """
+        if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+            address = ("0.0.0.0", int(port))
+        else:
+            address = f"/dev/shm/fd_task_queue_{port}.sock"
+
         self.connect_innode_instances[port] = EngineWorkerQueue(
-            address=("0.0.0.0", int(port)),
+            address=address,
             num_client=self.cfg.parallel_config.tensor_parallel_size,
             client_id=0,
         )
@@ -354,7 +291,7 @@ class SplitwiseConnector:
         self.logger.error(f"Receive_decode_allocated error: {msg}")
         return False, msg
 
-    def send_cache_infos(self, tasks, current_id):
+    def send_cache_infos(self, tasks: List[Request], current_id):
         """
         Send cache information to specific port.
 
@@ -431,8 +368,10 @@ class SplitwiseConnector:
 
         if not is_decode and len(temp_cache_info):
             for k, v in temp_cache_info.items():
+                self.logger.debug(f"send cache info to cachemessager, {v}")
                 self.engine_worker_queue.put_cache_info(v)
         else:
+            self.logger.debug(f"send cache info to coupled instance, {temp_cache_info}")
             if len(temp_cache_info):
                 for k, v in temp_cache_info.items():
                     self.logger.info(f"{k} {v}")
@@ -489,7 +428,7 @@ class SplitwiseConnector:
         """
         Handle prefill tasks from other nodes.
         """
-
+        self.logger.debug(f"_handle_prefill function receive {tasks}")
         tasks_data = [Request.from_dict(task) for task in tasks]
         self.engine_worker_queue.put_disaggregated_tasks(("decode", tasks_data))
 
@@ -497,21 +436,9 @@ class SplitwiseConnector:
         """
         Handle decode tasks from other nodes.
         """
+        self.logger.debug(f"_handle_decode function receive {payload}")
         tasks = []
         for task in payload:
-            tasks.append(
-                RequestOutput(
-                    request_id=task["request_id"],
-                    outputs=CompletionOutput(
-                        index=task["outputs"]["index"],
-                        send_idx=0,
-                        token_ids=task["outputs"]["token_ids"],
-                        draft_token_ids=task["outputs"]["draft_token_ids"],
-                    ),
-                    finished=True,
-                    num_cached_tokens=task["num_cached_tokens"],
-                    error_code=task["error_code"],
-                    error_msg=task["error_msg"],
-                )
-            )
+            output = RequestOutput.from_dict(task)
+            tasks.append(output)
         self.engine_worker_queue.put_disaggregated_tasks(("decode", tasks))

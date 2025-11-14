@@ -63,7 +63,7 @@ class Ernie4_5_MTPPretrainedModel(PretrainedModel):
         """
         get_tensor_parallel_mappings
         """
-        logger.info("erine inference model _get_tensor_parallel_mappings")
+        logger.info("ernie inference model _get_tensor_parallel_mappings")
 
         from paddleformers.transformers.conversion_utils import split_or_merge_func
 
@@ -318,7 +318,7 @@ class Ernie4_5_MTPModel(nn.Layer):
         """
         inputs_embedding = self.embed_tokens(ids_remove_padding=ids_remove_padding)
         inputs_embedding = paddle.concat(
-            [self.enorm(inputs_embedding), self.hnorm(previous_hidden_states)],
+            [self.enorm(inputs_embedding)[0], self.hnorm(previous_hidden_states)[0]],
             axis=-1,
         )
         hidden_states = self.eh_proj(inputs_embedding)
@@ -326,9 +326,7 @@ class Ernie4_5_MTPModel(nn.Layer):
         for i in range(self.num_layers):
             hidden_states, residual = self.mtp_block[i](forward_meta, hidden_states, residual)
 
-        hidden_states = hidden_states + residual
-
-        hidden_states = self.norm(hidden_states)
+        hidden_states = self.norm(hidden_states, residual)[0]
 
         return hidden_states
 
@@ -405,7 +403,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
 
         params_dict = dict(self.named_parameters())
         shard_id = None
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, exp_id, shard_id in all_param_mapping:
                 if weight_name not in loaded_weight_name:

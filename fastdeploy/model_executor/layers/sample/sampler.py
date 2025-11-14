@@ -53,6 +53,14 @@ def top_p_normalize_probs_paddle(
     return paddle.zeros_like(probs_sort).put_along_axis_(indices=probs_idx, values=probs_sort, axis=-1)
 
 
+def padding_sampling_params(top_p, top_k, seq_lens_this_time, seq_lens_encoder):
+    real_bsz = seq_lens_this_time.shape[0]
+    repeats = paddle.where(seq_lens_encoder[:real_bsz] == 0, seq_lens_this_time, paddle.ones_like(seq_lens_this_time))
+    top_p_padding = paddle.repeat_interleave(top_p[:real_bsz], repeats).unsqueeze(1)
+    top_k_padding = paddle.repeat_interleave(top_k[:real_bsz], repeats).unsqueeze(1)
+    return top_p_padding, top_k_padding
+
+
 class GuidedDecoding:
     """
     processor for guided decoding.
@@ -247,9 +255,11 @@ class Sampler(nn.Layer):
     def compute_logprobs(
         self,
         logits: paddle.Tensor,
-        sampling_metadata: SamplingMetadata,
+        sampling_metadata: Optional[SamplingMetadata] = None,
     ) -> paddle.Tensor:
         """ """
+        if sampling_metadata is None:
+            return F.log_softmax(logits, axis=-1)
         last_logits = logits
         real_bsz = last_logits.shape[0]
         temp_scaled_logprobs = sampling_metadata.temp_scaled_logprobs
@@ -309,6 +319,8 @@ class Sampler(nn.Layer):
         assert token_ids.dtype == paddle.int64
         logprobs.clip_(min=paddle.finfo(logprobs.dtype).min)
         # Get with the logprob of the prompt or sampled token.
+        if len(token_ids.shape) < len(logprobs.shape):
+            token_ids = token_ids.unsqueeze(-1)
         token_logprobs = paddle.take_along_axis(logprobs, token_ids, axis=-1)
 
         # Compute the ranks of the actual token.
@@ -322,7 +334,9 @@ class Sampler(nn.Layer):
         else:
             indices = token_ids
             top_logprobs = token_logprobs
-
+        indices = indices.cpu()
+        top_logprobs = top_logprobs.cpu()
+        token_ranks = token_ranks.cpu()
         return LogprobsTensors(indices, top_logprobs, token_ranks)
 
     def forward_cuda(
@@ -480,7 +494,7 @@ class SpeculativeSampler(nn.Layer):
         share_inputs = sampling_metadata.share_inputs
         last_logits = logits
         real_bsz = share_inputs["seq_lens_this_time"].shape[0]
-        batch_token_num = share_inputs["batch_token_num"][:real_bsz]
+        batch_token_num = share_inputs["accept_num"][:real_bsz]
 
         temp_scaled_logprobs = sampling_metadata.temp_scaled_logprobs
         top_p_normalized_logprobs = sampling_metadata.top_p_normalized_logprobs
@@ -595,6 +609,14 @@ class SpeculativeSampler(nn.Layer):
 
         probs = F.softmax(logits)
 
+        top_p, top_k = padding_sampling_params(
+            sampling_metadata.top_p,
+            sampling_metadata.top_k,
+            share_inputs["seq_lens_this_time"],
+            share_inputs["seq_lens_encoder"],
+        )
+        _, sampled_token_ids = top_k_top_p_sampling(probs, top_p=top_p, top_k=top_k, seed=sampling_metadata.seed[0, 0])
+
         verify_scores, verify_tokens, actual_candidate_len = top_p_candidates(
             probs,
             sampling_metadata.top_p,
@@ -604,6 +626,7 @@ class SpeculativeSampler(nn.Layer):
         )
 
         speculate_verify(
+            sampled_token_ids,
             share_inputs["accept_tokens"],
             share_inputs["accept_num"],
             share_inputs["step_idx"],
@@ -637,7 +660,7 @@ class SpeculativeSampler(nn.Layer):
             batch_token_num = paddle.where(
                 share_inputs["seq_lens_encoder"][:real_bsz] != 0,
                 paddle.ones_like(share_inputs["seq_lens_encoder"][:real_bsz]),
-                share_inputs["accept_num"][:real_bsz].unsqueeze(1),
+                share_inputs["seq_lens_this_time"],
             ).squeeze(1)
             share_inputs["batch_token_num"] = batch_token_num
             ori_cu_batch_token_offset = paddle.concat([paddle.to_tensor([0]), paddle.cumsum(batch_token_num)]).astype(
@@ -647,11 +670,11 @@ class SpeculativeSampler(nn.Layer):
                 [paddle.to_tensor([0]), paddle.cumsum(share_inputs["accept_num"][:real_bsz])]
             ).astype("int32")
             share_inputs["cu_batch_token_offset"] = cu_batch_token_offset
-            target_logtis = paddle.empty(
+            target_logits = paddle.empty(
                 [share_inputs["accept_num"][:real_bsz].sum(), logits.shape[1]], dtype=logits.dtype
             )
             speculate_get_target_logits(
-                target_logtis,
+                target_logits,
                 logits,
                 cu_batch_token_offset,
                 ori_cu_batch_token_offset,
@@ -660,25 +683,22 @@ class SpeculativeSampler(nn.Layer):
                 share_inputs["accept_num"],
             )
             if self.logprobs_mode == "raw_logprobs":
-                raw_logprobs = self.compute_logprobs(target_logtis, sampling_metadata)
+                raw_logprobs = self.compute_logprobs(target_logits, sampling_metadata)
             elif self.logprobs_mode == "raw_logits":
-                raw_logprobs = target_logtis.clone()
+                raw_logprobs = target_logits.clone()
 
         logprobs_tensors = None
         token_ids = share_inputs["accept_tokens"]
         if num_logprobs is not None:
             token_ids = paddle.concat(
-                [
-                    share_inputs["accept_tokens"][i, : share_inputs["accept_num"][i]]
-                    for i in range(share_inputs["accept_num"][:real_bsz].shape[0])
-                ]
+                [share_inputs["accept_tokens"][i, : share_inputs["accept_num"][i]] for i in range(real_bsz)]
             )
             logprobs_tensors = self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=token_ids)
 
         sampler_output = SamplerOutput(
             sampled_token_ids=token_ids,
             logprobs_tensors=logprobs_tensors,
-            token_num_per_batch=batch_token_num,
+            token_num_per_batch=share_inputs["accept_num"],
             cu_batch_token_offset=share_inputs["cu_batch_token_offset"],
         )
 
@@ -852,9 +872,13 @@ class MTPSampler(nn.Layer):
         )
         probs = F.softmax(logits)
 
-        _, next_tokens = top_k_top_p_sampling(
-            probs, sampling_metadata.top_p, sampling_metadata.top_k, sampling_metadata.top_k_list
+        top_p, top_k = padding_sampling_params(
+            sampling_metadata.top_p,
+            sampling_metadata.top_k,
+            share_inputs["seq_lens_this_time"],
+            share_inputs["seq_lens_encoder"],
         )
+        _, next_tokens = top_k_top_p_sampling(probs, top_p=top_p, top_k=top_k, seed=sampling_metadata.seed[0, 0])
 
         token_ids = None
         logprobs_tensors = None
