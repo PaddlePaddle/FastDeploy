@@ -118,7 +118,7 @@ cd FastDeploy
 bash build.sh 1 python false [90] 1
 
 # 从指定 commitID 获取对应预编译算子
-bash build.sh 1 python false [90] 1 7dbd9412b0de47aacad9011e8ace492af7247620
+bash build.sh 1 python false [90] 1 8a9e7b53af4a98583cab65e4b44e3265a93e56d2
 ```
 
 下载的 whl 包在 `FastDeploy/pre_wheel`目录下。
