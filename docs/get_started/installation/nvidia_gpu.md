@@ -112,7 +112,7 @@ cd FastDeploy
 bash build.sh 1 python false [90] 1
 
 # Use precompiled wheel from a specific commit
-bash build.sh 1 python false [90] 1 7dbd9412b0de47aacad9011e8ace492af7247620
+bash build.sh 1 python false [90] 1 8a9e7b53af4a98583cab65e4b44e3265a93e56d2
 ```
 
 The downloaded wheel packages will be stored in the `FastDeploy/pre_wheel` directory.
