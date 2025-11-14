@@ -548,74 +548,42 @@ _metrics_port = getattr(args, "metrics_port", None)
 _main_port = getattr(args, "port", None)
 
 if _metrics_port is None or (_main_port is not None and _metrics_port == _main_port):
+    metrics_app = app
 
-    @app.get("/metrics")
-    async def metrics():
-        """
-        metrics
-        """
-        metrics_text = get_filtered_metrics(
-            EXCLUDE_LABELS,
-            extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=args.workers),
-        )
-        return Response(metrics_text, media_type=CONTENT_TYPE_LATEST)
 
-    @app.get("/config-info")
-    def config_info() -> Response:
-        """
-        Get the current configuration of the API server.
-        """
-        global llm_engine
-        if llm_engine is None:
-            return Response("Engine not loaded", status_code=500)
-        cfg = llm_engine.cfg
+@metrics_app.get("/metrics")
+async def metrics():
+    """
+    metrics
+    """
+    metrics_text = get_filtered_metrics(
+        EXCLUDE_LABELS,
+        extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=args.workers),
+    )
+    return Response(metrics_text, media_type=CONTENT_TYPE_LATEST)
 
-        def process_object(obj):
-            if hasattr(obj, "__dict__"):
-                # 处理有__dict__属性的对象
-                return obj.__dict__
-            return None  # 或其他默认处理
 
-        cfg_dict = {k: v for k, v in cfg.__dict__.items()}
-        env_dict = {k: v() for k, v in environment_variables.items()}
-        cfg_dict["env_config"] = env_dict
-        result_content = json.dumps(cfg_dict, default=process_object, ensure_ascii=False)
-        return Response(result_content, media_type="application/json")
+@metrics_app.get("/config-info")
+def config_info() -> Response:
+    """
+    Get the current configuration of the API server.
+    """
+    global llm_engine
+    if llm_engine is None:
+        return Response("Engine not loaded", status_code=500)
+    cfg = llm_engine.cfg
 
-else:
+    def process_object(obj):
+        if hasattr(obj, "__dict__"):
+            # 处理有__dict__属性的对象
+            return obj.__dict__
+        return None  # 或其他默认处理
 
-    @metrics_app.get("/metrics")
-    async def metrics():
-        """
-        metrics
-        """
-        metrics_text = get_filtered_metrics(
-            EXCLUDE_LABELS,
-            extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=args.workers),
-        )
-        return Response(metrics_text, media_type=CONTENT_TYPE_LATEST)
-
-    @metrics_app.get("/config-info")
-    def config_info() -> Response:
-        """
-        Get the current configuration of the API server.
-        """
-        global llm_engine
-        if llm_engine is None:
-            return Response("Engine not loaded", status_code=500)
-        cfg = llm_engine.cfg
-
-        def process_object(obj):
-            if hasattr(obj, "__dict__"):
-                # 处理有__dict__属性的对象
-                return obj.__dict__
-            return None  # 或其他默认处理
-
-        cfg_dict = {k: v for k, v in cfg.__dict__.items()}
-        env_dict = {k: v() for k, v in environment_variables.items()}
-        cfg_dict["env_config"] = env_dict
-        result_content = json.dumps(cfg_dict, default=process_object, ensure_ascii=False)
-        return Response(result_content, media_type="application/json")
+    cfg_dict = {k: v for k, v in cfg.__dict__.items()}
+    env_dict = {k: v() for k, v in environment_variables.items()}
+    cfg_dict["env_config"] = env_dict
+    result_content = json.dumps(cfg_dict, default=process_object, ensure_ascii=False)
+    return Response(result_content, media_type="application/json")
 
 
 def run_metrics_server():
