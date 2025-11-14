@@ -14,6 +14,9 @@
 
 #include "paddle/extension.h"
 
+#ifndef PD_BUILD_STATIC_OP
+#define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
+#endif
 // #define DEBUG_SPEC_STOP_SEQS
 
 __global__ void spec_set_value_by_stop_seqs(bool *stop_flags,
