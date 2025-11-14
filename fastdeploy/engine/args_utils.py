@@ -296,11 +296,6 @@ class EngineArgs:
     Port for splitwise communication.
     """
 
-    innode_prefill_ports: Optional[List[int]] = None
-    """
-    Ports for innode dispatch request.
-    """
-
     rdma_comm_ports: Optional[List[int]] = None
     """
     Ports for rdma communication.
@@ -500,8 +495,33 @@ class EngineArgs:
             if self.max_logprobs == -1 and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 raise NotImplementedError("Only ENABLE_V1_KVCACHE_SCHEDULER=1 support max_logprobs=-1")
 
-        if self.splitwise_role != "mixed" and self.cache_transfer_protocol != "rdma":
-            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+        if self.splitwise_role != "mixed":
+            if self.scheduler_name == "local" and self.router is None:
+                raise ValueError(
+                    f"When using {self.splitwise_role} role and the {self.scheduler_name} "
+                    f"scheduler, please provide --router argument."
+                )
+
+            if "rdma" in self.cache_transfer_protocol:
+                if self.rdma_comm_ports is None:
+                    raise ValueError(
+                        "Please set --rdma_comm_ports argument when using " "rdma cache transfer protocol."
+                    )
+                if len(self.rdma_comm_ports) != self.tensor_parallel_size:
+                    raise ValueError("The number of rdma comm ports must be equal to tensor parallel size.")
+
+            if envs.ENABLE_V1_KVCACHE_SCHEDULER == 1:
+                if "ipc" in self.cache_transfer_protocol:
+                    # FIXME: support ipc cache transfer protocol
+                    raise NotImplementedError(
+                        "only support rdma cache transfer protocol " "when using ENABLE_V1_KVCACHE_SCHEDULER."
+                    )
+                # FIXME: fix this bug
+                if self.splitwise_role == "prefill" and self.num_gpu_blocks_override is None:
+                    raise NotImplementedError(
+                        "please set num_gpu_blocks_override for prefill " "instance using ENABLE_V1_KVCACHE_SCHEDULER."
+                    )
+
         if not current_platform.is_cuda() and not current_platform.is_xpu():
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if self.guided_decoding_backend != "off":
@@ -932,13 +952,6 @@ class EngineArgs:
         )
 
         splitwise_group.add_argument(
-            "--innode-prefill-ports",
-            type=lambda s: s.split(",") if s else None,
-            default=EngineArgs.innode_prefill_ports,
-            help="port for innode prefill, only used in single machine splitwise deployment",
-        )
-
-        splitwise_group.add_argument(
             "--cache-transfer-protocol",
             type=str,
             default=EngineArgs.cache_transfer_protocol,
@@ -1233,7 +1246,6 @@ class EngineArgs:
             limit_mm_per_prompt=self.limit_mm_per_prompt,
             mm_processor_kwargs=self.mm_processor_kwargs,
             tool_parser=self.tool_call_parser,
-            innode_prefill_ports=self.innode_prefill_ports,
             max_num_partial_prefills=self.max_num_partial_prefills,
             max_long_partial_prefills=self.max_long_partial_prefills,
             long_prefill_token_threshold=self.long_prefill_token_threshold,
