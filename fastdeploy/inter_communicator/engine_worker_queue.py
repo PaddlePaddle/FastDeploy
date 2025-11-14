@@ -539,28 +539,30 @@ class EngineWorkerQueue:
         Args:
             tasks: List of tasks containing multimodal inputs.
         """
-        try:
-            if envs.FD_ENABLE_MAX_PREFILL:
-                for batch_tasks, _ in tasks:
-                    for task in batch_tasks:
-                        if not hasattr(task, "multimodal_inputs"):
-                            continue
-                        # images = task.multimodal_inputs.get("images", None)
-                        # if isinstance(images, paddle.Tensor):
-                        #     llm_logger.debug(f"Convert image to numpy, shape: {images.shape}")
-                        #     task.multimodal_inputs["images"] = images.numpy()
+        if (not envs.FD_ENABLE_MAX_PREFILL) and (not envs.FD_ENABLE_E2W_TENSOR_CONVERT):
+            return
 
-                        list_keys = [
-                            "image_features",
-                            "video_features",
-                            "audio_features",
-                        ]
-                        for key in list_keys:
-                            value = task.multimodal_inputs.get(key, None)
-                            if value is None:
-                                continue
-                            if isinstance(value, list):
-                                task.multimodal_inputs[key] = [v.numpy() for v in value]
+        try:
+            batch_tasks, _ = tasks
+            for task in batch_tasks:
+                if not hasattr(task, "multimodal_inputs"):
+                    continue
+                images = task.multimodal_inputs.get("images", None)
+                if isinstance(images, paddle.Tensor):
+                    llm_logger.debug(f"Convert image to numpy, shape: {images.shape}")
+                    task.multimodal_inputs["images"] = images.numpy()
+
+                list_keys = [
+                    "image_features",
+                    "video_features",
+                    "audio_features",
+                ]
+                for key in list_keys:
+                    value = task.multimodal_inputs.get(key, None)
+                    if value is None:
+                        continue
+                    if isinstance(value, list):
+                        task.multimodal_inputs[key] = [v.numpy() for v in value]
         except Exception as e:
             llm_logger.warning(f"Failed to convert to numpy: {e}")
 
