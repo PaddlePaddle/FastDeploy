@@ -2636,7 +2636,12 @@ void CascadeAppendWriteCacheKVQKV(
   const int blocksize = 128;
   int grid_size = 1;
   GetNumBlocks<128>(pack_num, &grid_size);
-  cache_kernel<T, PackSize><<<grid_size, blocksize, 0, stream>>>(
+  launchWithPdlWhenEnabled(
+      cache_kernel<T, PackSize>,
+      grid_size,
+      blocksize,
+      0,
+      stream,
       reinterpret_cast<T *>(const_cast<T *>(qkv.data<T>())),
       reinterpret_cast<T *>(key_cache_out->data<T>()),
       reinterpret_cast<T *>(value_cache_out->data<T>()),

@@ -2296,6 +2296,9 @@ __global__ void merge_multi_chunks_decoder_kernel(
   const int bid = blockIdx.x, hid = blockIdx.y;
   __shared__ T smem[bdy * HEAD_DIM];
   __shared__ float md_smem[bdy * 2];
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaGridDependencySynchronize();
+#endif
   const int start_token_idx = cu_seqlens_q[bid];
   const int seq_len_q = seq_lens_q[bid];
   if (seq_len_q == 0) return;
