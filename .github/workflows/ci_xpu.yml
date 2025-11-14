@@ -5,6 +5,9 @@ on:
     branches:
       - develop
       - 'release/*'
+    paths-ignore:
+      - '**.md'
+      - '**.txt'
   workflow_dispatch:
 
 concurrency:
@@ -61,9 +64,9 @@ jobs:
           last_char="${runner_name: -1}"
 
           if [[ "$last_char" == "1" ]]; then
-            gpu_id="4"
+            xpu_id="4"
           else
-            gpu_id="0"
+            xpu_id="0"
           fi
           PARENT_DIR=$(dirname "$WORKSPACE")
           echo "PARENT_DIR:$PARENT_DIR"
@@ -74,7 +77,7 @@ jobs:
           -e "http_proxy=$(git config --global --get http.proxy)" \
           -e "https_proxy=$(git config --global --get https.proxy)" \
           -e "no_proxy=bcebos.com,mirrors.tuna.tsinghua.edu.cn,127.0.0.1,localhost" \
-          -e "GPU_ID=${gpu_id}" \
+          -e "XPU_ID=${xpu_id}" \
            ${docker_image} /bin/bash -c "
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
