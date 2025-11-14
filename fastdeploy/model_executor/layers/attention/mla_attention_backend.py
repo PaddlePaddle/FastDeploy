@@ -242,12 +242,9 @@ class MLAAttentionBackend(AttentionBackend):
         """
         Calculate kv cache shape for MLA
         """
-        return (
-            max_num_blocks,
-            1,
-            self.block_size,
-            self.kv_lora_rank + self.qk_rope_head_dim,
-        )
+        key_cache_shape = [max_num_blocks, 1, self.block_size, self.kv_lora_rank + self.qk_rope_head_dim]
+        value_cache_shape = []
+        return key_cache_shape, value_cache_shape
 
     def forward_extend(
         self,

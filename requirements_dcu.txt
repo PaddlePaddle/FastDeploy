@@ -27,6 +27,7 @@ moviepy
 use-triton-in-paddle
 crcmod
 fastsafetensors==0.1.14
+safetensors==0.7.0rc0
 msgpack
 gunicorn
 opentelemetry-api>=1.24.0

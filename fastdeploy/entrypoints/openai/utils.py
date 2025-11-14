@@ -239,5 +239,7 @@ def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
         help="Workers silent for more than this many seconds are killed and restarted.Value is a positive number or 0. Setting it to 0 has the effect of infinite timeouts by disabling timeouts for all workers entirely.",
     )
 
+    parser.add_argument("--api-key", type=str, action="append", help="API_KEY required for service authentication")
+
     parser = EngineArgs.add_cli_args(parser)
     return parser
