@@ -460,7 +460,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
         if self.ep_size > 1:
             self.fd_config.parallel_config.ep_group = fleet.get_hybrid_communicate_group().get_model_parallel_group()
             self.fd_config.scheduler_config.splitwise_role = "mixed"
-            self.fd_config.model_config.moe_phase.phase = "decode"
+            self.fd_config.model_config.moe_phase.phase = "prefill"
 
         weight_key_map = {
             "gate_weight_key": f"{self.prefix}.gate.weight",
@@ -521,7 +521,7 @@ class TestFusedMoE(unittest.TestCase):
         self.architectures = ["Ernie4_5_MoeForCausalLM"]
         self.hidden_size = 7168
         self.moe_intermediate_size = 3584
-        self.moe_num_experts = 64
+        self.moe_num_experts = 384
         self.moe_k = 8
         self.hidden_act = "silu"
         self.num_attention_heads = 64
@@ -582,11 +582,16 @@ class TestFusedMoE(unittest.TestCase):
 
         moe_cuda_graphs = [None] * 100
         cache_hidden_states = [None] * 100
-        test_token_nums = [10, 20, 40, 60, 80, 100, 128, 160, 192, 256]
-        # test_token_nums = [1024 * i for i in [1,2,4,8,16,32]]
+        # test_token_nums = [10, 20, 40, 60, 80, 100, 128, 160, 192, 256]
+        test_token_nums = [1024 * i for i in [2]]
         for idx, num_tokens in enumerate(test_token_nums):
 
             cache_hidden_states[idx] = paddle.rand((num_tokens, self.model_config.hidden_size), dtype=paddle.bfloat16)
+
+
+            my_dict = fused_moe[0].fused_moe.quant_method.ep_prefill_runner.ep_engine.my_dict
+
+            import threading
 
             def fake_model_run():
                 for j in range(num_layers):
@@ -594,20 +599,32 @@ class TestFusedMoE(unittest.TestCase):
 
                 return out
 
-            moe_cuda_graphs[idx] = graphs.CUDAGraph()
-            moe_cuda_graphs[idx].capture_begin()
+            # moe_cuda_graphs[idx] = graphs.CUDAGraph()
+            # moe_cuda_graphs[idx].capture_begin()
 
-            fake_model_run()
+            # fake_model_run()
 
-            moe_cuda_graphs[idx].capture_end()
+            # moe_cuda_graphs[idx].capture_end()
 
-            num_tests = 20
+
+            import paddle.profiler as profiler
+            p = profiler.Profiler(
+                targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU], 
+                on_trace_ready=profiler.export_chrome_tracing('./profile_log'))
+
+            p.start()
+            p.step()
+
+
+            num_tests = 6
             start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
             end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
             for i in range(num_tests):
                 start_events[i].record()
 
-                moe_cuda_graphs[idx].replay()
+                #moe_cuda_graphs[idx].replay()
+                fake_model_run()
+
 
                 end_events[i].record()
             paddle.device.cuda.synchronize()
@@ -629,6 +646,8 @@ class TestFusedMoE(unittest.TestCase):
                 * num_layers
             )
             print(round(memory_GB / times[-1], 1), "TB/s")
+
+        p.stop()
 
         shutil.rmtree(self.model_name_or_path)
 

@@ -255,6 +255,14 @@ class DeepEPEngine:
         )
         self.buffer.create_buffer()
 
+
+        import threading
+        event0 = threading.Event()
+        event1 = threading.Event()
+        self.my_dict = {}
+        self.my_dict["thread0"] = [event0,event1]
+        self.my_dict["thread1"] = [event1,event0]
+
         # Register for global buffer management
         DeepEPBufferManager.set_engine(self)
 

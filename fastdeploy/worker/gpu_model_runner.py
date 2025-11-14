@@ -1266,6 +1266,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
         # NOTE: (changwenbin) Initialized to max_num_seq '-1' before copying, marking illegal positions
         self.share_inputs["batch_id_per_token"][:] = -1
+        self.share_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
         self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
         self.share_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
 
@@ -1279,7 +1280,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Initialize forward meta data
         self.initialize_forward_meta()
-        self.forward_meta.batch_id_per_token.copy_(batch_id_per_token, False)
+        
 
         # Get sampling metadata
         self.sampling_metadata = SamplingMetadata(
@@ -2060,25 +2061,76 @@ class GPUModelRunner(ModelRunnerBase):
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
         # when there is data on other runner, the current runner is required to execute part of the model.
-        if not self.not_need_stop():
-            self._execute_empty_input()
-            return None
+        # if not self.not_need_stop():
+        #     self._execute_empty_input()
+        #     self._execute_empty_input()
+        #     return None
 
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
 
-        # 3. Execute model
-        if self.enable_mm:
-            model_output = self.model(
-                self.share_inputs["ids_remove_padding"],
-                self.share_inputs["image_features"],
-                self.forward_meta,
-            )
-        else:
-            model_output = self.model(
-                ids_remove_padding=self.share_inputs["ids_remove_padding"],
-                forward_meta=self.forward_meta,
-            )
+
+        model_output = [None]
+        import threading
+
+        my_dict = self.model.ernie.layers[3].mlp.experts.quant_method.ep_prefill_runner.ep_engine.my_dict
+
+        def haha():
+
+            need = threading.current_thread().name in ["thread0", "thread1"]
+
+            if need:
+                my_dict[threading.current_thread().name][0].wait()
+                my_dict[threading.current_thread().name][0].clear()
+
+            if not self.not_need_stop():
+                self._execute_empty_input()
+                if need:
+                    my_dict["thread0"][0].set()
+                    my_dict["thread1"][0].set()
+
+                return None
+
+
+            # 3. Run model
+            if self.enable_mm:
+                model_output[0] = self.model(
+                    self.share_inputs["ids_remove_padding"],
+                    self.share_inputs["image_features"],
+                    self.forward_meta,
+                )
+            else:
+                model_output[0] = self.model(
+                    ids_remove_padding=self.share_inputs["ids_remove_padding"],
+                    forward_meta=self.forward_meta,
+                )
+            if need:
+                my_dict["thread0"][0].set()
+                my_dict["thread1"][0].set()
+
+            return model_output[0]
+
+        t0 = Thread(target=haha, name = "thread0")
+        t1 = Thread(target=haha, name = "thread1")
+
+        my_dict[t0.name][0].clear()
+        my_dict[t1.name][0].clear()
+
+        t0.start()
+        t1.start()
+
+        my_dict[t0.name][0].set()
+
+        t0.join()
+        t1.join()
+        
+        #haha()
+
+        if not self.not_need_stop():
+            return None
+
+        model_output = model_output[0]
+
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
 
