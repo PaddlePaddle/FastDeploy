@@ -2,11 +2,17 @@
 测试GuidedDecoding类的单元测试
 """
 
+import sys
 import unittest
 from concurrent.futures import Future
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import paddle
+
+mock_torch = MagicMock()
+mock_xgrammar = MagicMock()
+sys.modules["torch"] = mock_torch
+sys.modules["xgrammar"] = mock_xgrammar
 
 from fastdeploy.model_executor.guided_decoding import LogitsProcessorBase
 from fastdeploy.model_executor.layers.sample.sampler import GuidedDecoding
