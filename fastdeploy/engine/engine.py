@@ -690,8 +690,6 @@ class LLMEngine:
 
     def launch_components(self):
         if self.cfg.scheduler_config.splitwise_role != "mixed":
-            # 单机逻辑
-            self.engine.engine_worker_queue.available_prefill_instances.put(1)
             self.splitwise_receive_thread = threading.Thread(
                 target=self.engine.split_connector.start_receiver, args=()
             )
