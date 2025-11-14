@@ -730,7 +730,7 @@ class ResourceManagerV1(ResourceManager):
                                     // self.config.cache_config.block_size
                                 ):  # to prevent block allocation for matching in hierarchical cache and cause dead lock
                                     break
-                            success, prefix_hash_str = self.get_prefix_cached_blocks(request)
+                            success = self.get_prefix_cached_blocks(request)
                             if not success:
                                 self._free_blocks(request)
                                 break
