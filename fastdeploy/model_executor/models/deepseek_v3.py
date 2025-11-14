@@ -702,7 +702,7 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
             param_down_proj_name="experts.down_proj_",
         )
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             loaded_weight_name = loaded_weight_name.replace("deepseek_v3", "model")
 
@@ -759,7 +759,7 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         seq_lens_decoder = forward_meta.seq_lens_decoder
         seq_lens_this_time = forward_meta.seq_lens_this_time
 
-        current_total_tokens = paddle.sum(seq_lens_this_time)
+        current_total_tokens = forward_meta.ids_remove_padding.shape[0]
         position_ids = self.position_ids_buffer[:current_total_tokens]
         mask_encoder_batch = self.mask_encoder_batch_buffer[:current_total_tokens]
 

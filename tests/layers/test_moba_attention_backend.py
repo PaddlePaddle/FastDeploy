@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import unittest
 from unittest.mock import patch
 
@@ -92,16 +108,16 @@ class TestPlasAttentionBackend(unittest.TestCase):
         backend = PlasAttentionBackend(fd_config, kv_num_heads=2, num_heads=2, head_dim=8)
 
         # Default
-        shape = backend.get_kv_cache_shape(max_num_blocks=2)
-        self.assertEqual(shape, (2, 2, 4, 8))
+        key_shape, value_shape = backend.get_kv_cache_shape(max_num_blocks=2)
+        self.assertEqual(key_shape, [2, 2, 4, 8])
 
         # int4_zp quant
-        shape_int4 = backend.get_kv_cache_shape(max_num_blocks=2, kv_cache_quant_type="int4_zp")
-        self.assertEqual(shape_int4, (2, 2, 4, 4))
+        key_shape_int4, value_shape_int4 = backend.get_kv_cache_shape(max_num_blocks=2, kv_cache_quant_type="int4_zp")
+        self.assertEqual(key_shape_int4, [2, 2, 4, 4])
 
         # Other quant types
-        shape_other = backend.get_kv_cache_shape(max_num_blocks=2, kv_cache_quant_type="int8")
-        self.assertEqual(shape_other, (2, 2, 4, 8))
+        key_shape_other, value_shape_other = backend.get_kv_cache_shape(max_num_blocks=2, kv_cache_quant_type="int8")
+        self.assertEqual(key_shape_other, [2, 2, 4, 8])
 
     @patch(
         "fastdeploy.model_executor.layers.attention.moba_attention_backend.moba_attention",

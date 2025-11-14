@@ -444,6 +444,7 @@ class LLMEngine:
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
             "NCCL_ALGO": "Ring",
             "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 1024)),
+            "OMP_NUM_THREADS": int(os.getenv("OMP_NUM_THREADS", 3)),
         }
         # environment variables needed by Dy2St
         variables.update(
@@ -689,8 +690,6 @@ class LLMEngine:
 
     def launch_components(self):
         if self.cfg.scheduler_config.splitwise_role != "mixed":
-            # 单机逻辑
-            self.engine.engine_worker_queue.available_prefill_instances.put(1)
             self.splitwise_receive_thread = threading.Thread(
                 target=self.engine.split_connector.start_receiver, args=()
             )
