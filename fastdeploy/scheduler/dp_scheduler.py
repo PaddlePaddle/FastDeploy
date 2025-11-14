@@ -55,13 +55,13 @@ class DPLocalScheduler(LocalScheduler):
             results: List of RequestOutput objects containing results
         """
         responses: List[ScheduledResponse] = [ScheduledResponse(result) for result in results]
-        self.batch_responses_per_step.append([response.raw for response in responses])
 
         finished_responses = [response.request_id for response in responses if response.finished]
         if len(finished_responses) > 0:
             self.scheduler_logger.info(f"Scheduler has received some finished responses: {finished_responses}")
 
         with self.mutex:
+            self.batch_responses_per_step.append([response.raw for response in responses])
             for response in responses:
                 if response.request_id not in self.responses:
                     self.responses[response.request_id] = [response]
