@@ -210,9 +210,7 @@ class EngineService:
         )
 
         # worker_live_signal 用于engine感知各worker进程是否存活，记录每个step 时间
-        worker_healthy_live_recorded_time_array = np.zeros(
-            shape=[min(self.cfg.worker_num_per_node, self.cfg.parallel_config.tensor_parallel_size)], dtype=np.int32
-        )
+        worker_healthy_live_recorded_time_array = np.zeros(shape=[20], dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",
             array=worker_healthy_live_recorded_time_array,
