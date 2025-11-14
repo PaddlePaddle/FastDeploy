@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 from abc import abstractmethod
 from dataclasses import dataclass, field
@@ -37,6 +38,31 @@ if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import HPUForwardMeta
 
 from fastdeploy.model_executor.layers.linear import QKVParallelLinear, RowParallelLinear
+
+
+def get_attention_mask(seq_lens_encoder, seq_lens_decoder, batch_size, query_len):
+    max_context_len = int(paddle.max(seq_lens_decoder).item())
+    past_mask = paddle.arange(0, max_context_len, dtype=paddle.int32)
+    past_mask = paddle.greater_equal(
+        past_mask.reshape([1, -1]).expand([batch_size, -1]), seq_lens_decoder.reshape([-1, 1]).astype(paddle.int32)
+    )
+    past_mask = (
+        past_mask.reshape([batch_size, 1, -1])
+        .expand([batch_size, query_len, -1])
+        .reshape([batch_size, 1, query_len, -1])
+    )
+    len_mask = paddle.greater_equal(
+        paddle.arange(0, query_len, dtype=paddle.int32).reshape([1, query_len]),
+        seq_lens_encoder.unsqueeze(-1).astype(paddle.int32),
+    )
+    len_mask = len_mask.reshape([batch_size, 1, 1, query_len])
+    attn_mask = paddle.triu(paddle.ones((batch_size, 1, query_len, query_len), dtype=paddle.bool), diagonal=1)
+    mask = attn_mask.logical_or(len_mask)
+    mask = paddle.concat((past_mask, mask), axis=-1)
+    off_value = -math.inf
+    attn_mask = paddle.zeros_like(mask, dtype=paddle.bfloat16).masked_fill_(mask, off_value)
+    attn_mask = paddle.unsqueeze(attn_mask, axis=1)
+    return attn_mask
 
 
 class AttentionBackend_HPU(AttentionBackend):
@@ -254,16 +280,40 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         index_copy_(k_cache, forward_meta.block_indices, key_states, 0)
         index_copy_(v_cache, forward_meta.block_indices, value_states, 0)
 
-        out_linear_out = fused_sdpa_proj_t(
-            query_states,
-            key_value_states,
-            forward_meta.attn_mask,
-            None,
-            o_proj.weight,
-            scaling_factor=self.head_dim**-0.5,
-            causal=True,
-            softmax_mode=0,
-        )
+        if forward_meta.block_list.shape == forward_meta.block_indices.shape:
+            out_linear_out = fused_sdpa_proj_t(
+                query_states,
+                key_value_states,
+                forward_meta.attn_mask,
+                None,
+                o_proj.weight,
+                scaling_factor=self.head_dim**-0.5,
+                causal=True,
+                softmax_mode=0,
+            )
+        else:
+            key_states_with_context = k_cache.index_select(forward_meta.block_list)
+            val_states_with_context = v_cache.index_select(forward_meta.block_list)
+            key_value_states_with_context = paddle.stack(
+                [key_states_with_context, val_states_with_context], axis=0
+            ).reshape([kv, B, -1, M, H])
+            if forward_meta.attn_mask is None:
+                forward_meta.attn_mask = get_attention_mask(
+                    forward_meta.seq_lens_encoder[forward_meta.batch_ids],
+                    forward_meta.seq_lens_decoder[forward_meta.batch_ids],
+                    query_states.shape[0],
+                    query_states.shape[1],
+                )
+            out_linear_out = fused_sdpa_proj_t(
+                query_states,
+                key_value_states_with_context,
+                forward_meta.attn_mask,
+                None,
+                o_proj.weight,
+                scaling_factor=self.head_dim**-0.5,
+                causal=False,
+                softmax_mode=0,
+            )
 
         if self.nranks > 1:
             from fastdeploy.distributed.communication import (
@@ -297,11 +347,14 @@ class HPUAttentionBackend(AttentionBackend_HPU):
             qkv_proj.weight,
             qkv_proj.bias,
             o_proj.weight,
+            None,  # past_key: not used in decode mode
+            None,  # past_value: not used in decode mode
             self.head_dim,
             self.num_heads,
             scaling_factor=self.head_dim**-0.5,
             transpose=False,
             use_neox_style=layer.use_neox_rotary_style,
+            epsilon=1e-6,
         )
 
         # all_reduce
