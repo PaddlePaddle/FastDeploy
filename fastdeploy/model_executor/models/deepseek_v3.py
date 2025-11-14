@@ -370,8 +370,9 @@ class DeepseekV3MLAAttention(nn.Layer):
             key = paddle.empty_like(query)
             key[..., : self.qk_nope_head_dim] = key_nope
             key[..., self.qk_nope_head_dim :] = key_pe
-            value = paddle.nn.functional.pad(value, [0, self.qk_head_dim - self.v_head_dim], value=0)
 
+            # NOTE: (changwenbin) Flash-attn3 does not need to padding the head-dim of Value,
+            #  Flash-attn2 has already processed it when returning.
             fmha_out_prefill = self.mla_attn(
                 q=query,
                 k=key,
@@ -382,8 +383,6 @@ class DeepseekV3MLAAttention(nn.Layer):
                 forward_meta=forward_meta,
             )
 
-            fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
-            fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
             fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
             fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
 

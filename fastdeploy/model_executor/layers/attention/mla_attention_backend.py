@@ -136,6 +136,7 @@ class MLAAttentionBackend(AttentionBackend):
         self.kv_lora_rank: int = fd_config.model_config.kv_lora_rank
         self.qk_rope_head_dim: int = fd_config.model_config.qk_rope_head_dim
         self.qk_head_dim: int = fd_config.model_config.qk_nope_head_dim + fd_config.model_config.qk_rope_head_dim
+        self.v_head_dim: int = fd_config.model_config.v_head_dim
         self.attn_softmax_scale: float = self.qk_head_dim**-0.5
         if fd_config.model_config.rope_scaling:
             mscale_all_dim = fd_config.model_config.rope_scaling.get("mscale_all_dim", False)  # 1.0
@@ -439,6 +440,10 @@ class MLAAttentionBackend(AttentionBackend):
                 causal=self.causal,
                 **self.flash_attn_kwargs,
             )[0]
+
+            # NOTE: (changwenbin)If you use Flash-attn2, you need to cut off the padding part.
+            if self.flash_attn_func is flash_attn_unpadded:
+                fmha_out = fmha_out[:, :, : self.v_head_dim]
 
             return fmha_out
 
