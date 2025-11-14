@@ -899,8 +899,6 @@ class AsyncLLMEngine:
 
     def launch_components(self):
         if self.cfg.scheduler_config.splitwise_role != "mixed":
-            # 单机逻辑
-            self.engine_service.engine_worker_queue.available_prefill_instances.put(1)
             self.engine_service.split_mode_get_tasks()
             if self.cfg.scheduler_config.name == "splitwise":
                 self.splitwise_receive_thread = threading.Thread(

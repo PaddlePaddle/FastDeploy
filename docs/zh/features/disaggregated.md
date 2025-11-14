@@ -29,49 +29,6 @@
 
 ## 使用说明
 
-### 单机分离式部署
-
-#### 在线推理服务
-使用如下命令进行服务部署
-
-**prefill 实例**
-
-```bash
-export FD_LOG_DIR="log_prefill"
-export CUDA_VISIBLE_DEVICES=0,1,2,3
-python -m fastdeploy.entrypoints.openai.api_server \
-       --model ERNIE-4.5-300B-A47B-BF16 \
-       --port 8180 --metrics-port 8181 \
-       --engine-worker-queue-port 8182 \
-       --cache-queue-port 8183 \
-       --tensor-parallel-size 4 \
-       --quantization wint4 \
-       --splitwise-role "prefill"
-```
-
-**decode 实例**
-
-```bash
-export FD_LOG_DIR="log_decode"
-export CUDA_VISIBLE_DEVICES=4,5,6,7
-# 注意innode-prefill-ports指定为Prefill服务的engine-worker-queue-port
-python -m fastdeploy.entrypoints.openai.api_server \
-       --model ERNIE-4.5-300B-A47B-BF16 \
-       --port 8184 --metrics-port 8185 \
-       --engine-worker-queue-port 8186 \
-       --cache-queue-port 8187 \
-       --tensor-parallel-size 4 \
-       --quantization wint4 \
-       --innode-prefill-ports 8182 \
-       --splitwise-role "decode"
-```
-
-注意在请求单机PD分离服务时，**用户需请求Decode服务的端口**。
-
-#### 离线推理服务
-
-参考`fastdeploy/demo` 目录下 `offline_disaggregated_demo.py` 示例代码，进行离线推理服务部署
-
 ### 多机分离式部署
 
 #### 前置依赖 Redis
@@ -120,6 +77,7 @@ sudo systemctl start redis
 
 export FD_LOG_DIR="log_prefill"
 export CUDA_VISIBLE_DEVICES=0,1,2,3
+export ENABLE_V1_KVCACHE_SCHEDULER=0
 echo "set RDMA NICS"
 export $(bash scripts/get_rdma_nics.sh gpu)
 echo "KVCACHE_RDMA_NICS ${KVCACHE_RDMA_NICS}"
@@ -146,6 +104,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```bash
 export FD_LOG_DIR="log_decode"
 export CUDA_VISIBLE_DEVICES=4,5,6,7
+export ENABLE_V1_KVCACHE_SCHEDULER=0
 echo "set RDMA NICS"
 export $(bash scripts/get_rdma_nics.sh gpu)
 echo "KVCACHE_RDMA_NICS ${KVCACHE_RDMA_NICS}"

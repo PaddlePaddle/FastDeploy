@@ -20,7 +20,7 @@ import json
 import os
 from dataclasses import field
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, Literal, Optional, Union
 
 import paddle
 import paddle.distributed as dist
@@ -1453,7 +1453,6 @@ class FDConfig:
         use_warmup: bool = False,
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
         mm_processor_kwargs: Optional[Dict[str, Any]] = None,
-        innode_prefill_ports: Optional[List[int]] = None,
         max_num_partial_prefills: int = 1,
         max_long_partial_prefills: int = 1,
         long_prefill_token_threshold: int = 0,
@@ -1517,12 +1516,9 @@ class FDConfig:
         self.limit_mm_per_prompt = limit_mm_per_prompt
         self.mm_processor_kwargs = mm_processor_kwargs
         self.use_warmup = use_warmup
-        self.innode_prefill_ports = innode_prefill_ports
         self.max_num_partial_prefills = max_num_partial_prefills
         self.max_long_partial_prefills = max_long_partial_prefills
         self.long_prefill_token_threshold = long_prefill_token_threshold
-
-        self._str_to_list("innode_prefill_ports", int)
 
         if envs.FD_FOR_TORCH_MODEL_FORMAT:
             self.model_config.model_format = "torch"
@@ -1773,23 +1769,15 @@ class FDConfig:
         """
         initialize cache info
         """
-        # TODO: group the splitiwse params, remove code of v0
-        # v0 requires prefill and decode in one node and it uses local scheduler
-        # v1 supports prefill and decode in multi node and it uses splitwise or dp scheduler
-        # v2 supports prefill and decode in multi node and it uses router and local scheduler
+        # TODO: group the splitiwse params
+        # There are two methods for splitwise deployment:
+        # 1. v0 splitwise_scheduler or dp_scheduler
+        # 2. v1 local_scheduler + router
         self.splitwise_version = None
-        if self.scheduler_config.name == "local" and (self.router_config is None or self.router_config.router is None):
+        if self.scheduler_config.name in ("splitwise", "dp"):
             self.splitwise_version = "v0"
-        elif self.scheduler_config.name in ("splitwise", "dp"):
-            self.splitwise_version = "v1"
         elif self.scheduler_config.name == "local" and self.router_config and self.router_config.router:
-            self.splitwise_version = "v2"
-        else:
-            raise ValueError(
-                f"Unsupported scheduler mode, scheduler_name: {self.scheduler_config.name}, "
-                f"router_config: {self.router_config}"
-            )
-        logger.info(f"splitwise_version: {self.splitwise_version}")
+            self.splitwise_version = "v1"
 
         if isinstance(self.parallel_config.engine_worker_queue_port, (int, str)):
             engine_worker_queue_port = self.parallel_config.engine_worker_queue_port

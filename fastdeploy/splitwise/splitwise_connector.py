@@ -175,72 +175,6 @@ class SplitwiseConnector:
             self.push_sockets[addr].close()
             del self.push_sockets[addr]
 
-    def has_splitwise_tasks(self):
-        """
-        PD mode: check prefill empty
-        """
-        if self.cfg.innode_prefill_ports is None:
-            return True
-        else:
-            for port in self.cfg.innode_prefill_ports:
-                if port not in self.connect_innode_instances:
-                    self.create_connection(port)
-                if self.connect_innode_instances[port].available_prefill_instances.qsize() > 0:
-                    return False
-            return True
-
-    def dispatch_innode_splitwise_tasks(self, tasks, current_id):
-        """
-        Dispatch splitwise tasks .
-
-        Parameters:
-        tasks (list): List of tasks.
-        """
-        tasks_status = "mixed"
-        is_changable = envs.FD_PD_CHANGEABLE == "1"
-        while True:
-            for port in self.cfg.innode_prefill_ports:
-                current_port = -1
-                if port not in self.connect_innode_instances:
-                    self.create_connection(port)
-                if self.connect_innode_instances[port].get_prefill_instances() == 1:
-                    for task in tasks:
-                        task.disaggregate_info = {
-                            "role": "prefill",
-                            "transfer_protocol": "ipc",
-                            "cache_info": {
-                                "ipc": {
-                                    "ip": "0.0.0.0",
-                                    "port": self.cfg.parallel_config.engine_worker_queue_port[self.idx],
-                                    "current_id": current_id,
-                                },
-                            },
-                        }
-                    self.connect_innode_instances[port].put_disaggregated_tasks(("prefill", tasks))
-                    current_port = port
-
-                if current_port != -1:
-                    tasks_status = "decode"
-                    break
-            if current_port != -1 or is_changable:
-                break
-            else:
-                time.sleep(0.005)
-
-        if tasks_status == "decode":
-            for task in tasks:
-                task.disaggregate_info = {
-                    "role": tasks_status,
-                    "transfer_protocol": "ipc",
-                    "cache_info": {
-                        "ipc": {
-                            "ip": "0.0.0.0",
-                            "port": current_port,
-                            "current_id": current_id,
-                        },
-                    },
-                }
-
     def send_splitwise_tasks(self, tasks: List[Request], current_id):
         """
         Send splitwise tasks to all connected addresses.
@@ -249,10 +183,6 @@ class SplitwiseConnector:
         tasks (list): List of tasks.
         current_id (int): Current ID.
         """
-
-        if self.cfg.innode_prefill_ports is not None:
-            self.dispatch_innode_splitwise_tasks(tasks, current_id)
-            return
         addr = None
         decode_diagg = None
         for task in tasks:

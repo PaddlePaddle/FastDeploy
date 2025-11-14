@@ -51,7 +51,6 @@ class IPCConnector:
             self.remote_key_tensor_ptr_list.append(get_data_ptr_ipc(tmp, key_unique_name))
             self.remote_value_tensor_ptr_list.append(get_data_ptr_ipc(tmp, value_unique_name))
         self.write_stream = paddle.device.Stream(f"gpu:{self.local_gpu_id}")
-        self.finish_event = paddle.device.Event()
 
 
 class IPCCommManager:

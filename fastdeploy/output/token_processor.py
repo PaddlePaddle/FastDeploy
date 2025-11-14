@@ -498,6 +498,9 @@ class TokenProcessor:
                     self.split_connector.send_first_token(task.disaggregate_info, [result])
                     break
                 else:
+                    # TODO: Refine checking sending cache and do not keep waiting
+                    if time.time() - start_time > 30:
+                        llm_logger.warning(f"wait for sending cache, {task_id}")
                     time.sleep(0.002)
         else:
             if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -753,10 +756,8 @@ class TokenProcessor:
                     self._recycle_resources(task_id, i, task, result, is_prefill)
                     break
 
-            if not (is_prefill and self.cfg.splitwise_version == "v0"):
-                # NOTE: prefill instance in v0 version does not return result to scheduler
-                llm_logger.debug(f"get response from infer: {result}")
-                batch_result.append(result)
+            llm_logger.debug(f"get response from infer: {result}")
+            batch_result.append(result)
 
         self.postprocess(batch_result, mtype)
 
