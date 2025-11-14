@@ -52,6 +52,7 @@ from fastdeploy.model_executor.ops.gpu import get_padding_offset
 
 os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
 
+
 class TestAttentionPerformance(unittest.TestCase):
     def setUp(self):
         """
