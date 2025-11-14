@@ -35,9 +35,9 @@ from fastdeploy.utils import llm_logger, spec_logger
 from fastdeploy.worker.output import LogprobsLists
 
 RECOVERY_STOP_SIGNAL = -3
-MAX_BSZ = 512
+MAX_BSZ = 256
 K = 20
-MAX_DRAFT_TOKENS = 6
+MAX_DRAFT_TOKENS = 2
 SPECULATE_MAX_BSZ = 256
 
 
