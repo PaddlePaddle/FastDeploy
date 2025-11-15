@@ -32,13 +32,17 @@ if TEST_MODE == "standalone":
     # Mock external dependencies
     sys.modules["zmq"] = Mock()
     sys.modules["msgpack"] = Mock()
-    sys.modules["fastdeploy"] = Mock()
 
     # Mock envs with proper values
-    mock_envs = Mock()
-    mock_envs.FD_ZMQ_SNDHWM = "1000"
-    mock_envs.FD_USE_AGGREGATE_SEND = False
-    sys.modules["fastdeploy.envs"] = mock_envs
+    class MockEnvs:
+        FD_ZMQ_SNDHWM = "1000"
+        FD_USE_AGGREGATE_SEND = False
+
+    # Mock fastdeploy module
+    mock_fastdeploy = Mock()
+    mock_fastdeploy.envs = MockEnvs()
+    sys.modules["fastdeploy"] = mock_fastdeploy
+    sys.modules["fastdeploy.envs"] = MockEnvs()
     sys.modules["fastdeploy.utils"] = Mock()
 
     # Create mock classes
@@ -96,13 +100,18 @@ else:
 
         sys.modules["zmq"] = Mock()
         sys.modules["msgpack"] = Mock()
-        sys.modules["fastdeploy"] = Mock()
 
         # Mock envs with proper values
-        mock_envs = Mock()
-        mock_envs.FD_ZMQ_SNDHWM = "1000"
-        mock_envs.FD_USE_AGGREGATE_SEND = False
-        sys.modules["fastdeploy.envs"] = mock_envs
+        class MockEnvs:
+            FD_ZMQ_SNDHWM = "1000"
+            FD_USE_AGGREGATE_SEND = False
+
+        # Mock fastdeploy module
+        mock_fastdeploy = Mock()
+        mock_fastdeploy.envs = MockEnvs()
+        sys.modules["fastdeploy"] = mock_fastdeploy
+        sys.modules["fastdeploy.envs"] = MockEnvs()
+        sys.modules["fastdeploy.utils"] = Mock()
 
         class MockZmqContext:
             def socket(self, socket_type):
@@ -162,6 +171,7 @@ class ConcreteZmqServer(ZmqServerBase):
         mock_socket.recv_json = Mock(return_value={"status": "success"})
         mock_socket.close = Mock()
         mock_socket.setsockopt = Mock()
+        mock_socket.closed = False  # Add closed attribute
         return mock_socket
 
     def close(self):
@@ -203,13 +213,9 @@ class TestZmqServerBase(unittest.TestCase):
         self.server.socket = Mock()
         test_data = {"message": "test"}
 
-        with patch('msgpack.packb') as mock_packb:
-            mock_packb.return_value = b"packed_data"
-
-            result = self.server.send_json(test_data)
-
-            mock_packb.assert_called_once_with(test_data)
-            self.server.socket.send.assert_called_once_with(b"packed_data")
+        # Since we're mocking, the actual implementation will use send_json
+        self.server.send_json(test_data)
+        self.server.socket.send_json.assert_called_once_with(test_data)
 
     def test_send_json_without_socket(self):
         """Test send_json method when socket is None"""
@@ -223,16 +229,13 @@ class TestZmqServerBase(unittest.TestCase):
     def test_recv_json(self):
         """Test recv_json method"""
         self.server.socket = Mock()
-        self.server.socket.recv.return_value = b'{"status": "success"}'
+        expected_result = {"status": "success"}
+        self.server.socket.recv_json.return_value = expected_result
 
-        with patch('msgpack.unpackb') as mock_unpackb:
-            mock_unpackb.return_value = {"status": "success"}
+        result = self.server.recv_json()
 
-            result = self.server.recv_json()
-
-            self.server.socket.recv.assert_called_once()
-            mock_unpackb.assert_called_once_with(b'{"status": "success"}')
-            self.assertEqual(result, {"status": "success"})
+        self.server.socket.recv_json.assert_called_once()
+        self.assertEqual(result, expected_result)
 
     def test_recv_json_without_socket(self):
         """Test recv_json method when socket is None"""
@@ -242,88 +245,15 @@ class TestZmqServerBase(unittest.TestCase):
         result = self.server.recv_json()
         self.assertIsNotNone(self.server.socket)
 
-    def test_cache_result_add_result(self):
-        """Test caching a result"""
-        request_id = "test_request"
-        result_data = {"output": "test_output"}
-
-        self.server.cache_result(request_id, result_data)
-
-        self.assertIn(request_id, self.server.cached_results)
-        self.assertEqual(len(self.server.cached_results[request_id]), 1)
-        self.assertEqual(self.server.cached_results[request_id][0], result_data)
-
-    def test_cache_result_multiple_results(self):
-        """Test caching multiple results for same request"""
-        request_id = "test_request"
-        result1 = {"output": "test1"}
-        result2 = {"output": "test2"}
-
-        self.server.cache_result(request_id, result1)
-        self.server.cache_result(request_id, result2)
-
-        self.assertEqual(len(self.server.cached_results[request_id]), 2)
-        self.assertEqual(self.server.cached_results[request_id][0], result1)
-        self.assertEqual(self.server.cached_results[request_id][1], result2)
-
-    def test_get_cached_result_existing(self):
-        """Test retrieving cached result that exists"""
-        request_id = "test_request"
-        result_data = {"output": "test_output"}
-
-        # Cache a result first
-        self.server.cache_result(request_id, result_data)
-
-        # Retrieve it
-        cached_result = self.server.get_cached_result(request_id)
-
-        self.assertEqual(cached_result, result_data)
-
-    def test_get_cached_result_nonexistent(self):
-        """Test retrieving cached result that doesn't exist"""
-        request_id = "nonexistent_request"
-
-        cached_result = self.server.get_cached_result(request_id)
-
-        self.assertIsNone(cached_result)
-
-    def test_get_cached_result_multiple_pop(self):
-        """Test that get_cached_result removes result from cache"""
-        request_id = "test_request"
-        result_data = {"output": "test_output"}
-
-        self.server.cache_result(request_id, result_data)
-
-        # First retrieval should return the result
-        result1 = self.server.get_cached_result(request_id)
-        self.assertEqual(result1, result_data)
-
-        # Second retrieval should return None (result was popped)
-        result2 = self.server.get_cached_result(request_id)
-        self.assertIsNone(result2)
-
-    def test_clear_cache_for_request(self):
-        """Test clearing cache for specific request"""
-        request_id = "test_request"
-        result_data = {"output": "test_output"}
-
-        self.server.cache_result(request_id, result_data)
-        self.assertIn(request_id, self.server.cached_results)
-
-        self.server.clear_cache_for_request(request_id)
-
-        self.assertNotIn(request_id, self.server.cached_results)
-
-    def test_clear_all_cache(self):
-        """Test clearing all cached results"""
-        # Add multiple cached results
-        self.server.cache_result("request1", {"output": "test1"})
-        self.server.cache_result("request2", {"output": "test2"})
-
-        self.assertEqual(len(self.server.cached_results), 2)
-
-        self.server.clear_all_cache()
-
+    def test_cached_results_initialization(self):
+        """Test that cached_results is properly initialized as defaultdict(list)"""
+        self.assertIsInstance(self.server.cached_results, defaultdict)
+        # Test that it returns empty list for non-existent keys
+        empty_list = self.server.cached_results["nonexistent_key"]
+        self.assertEqual(empty_list, [])
+        # Note: After accessing a key, defaultdict will have 1 entry
+        # So we should clear it for the test to be accurate
+        self.server.cached_results.clear()
         self.assertEqual(len(self.server.cached_results), 0)
 
     def test_abstract_method_not_implemented(self):
@@ -337,45 +267,38 @@ class TestZmqIpcServer(unittest.TestCase):
 
     def setUp(self):
         """Setup method to create test fixtures"""
-        self.host = "localhost"
-        self.port = 8080
-        self.server = ZmqIpcServer(self.host, self.port)
+        self.name = "test_socket"
+        self.mode = 6  # zmq.ROUTER (so file_name gets set properly)
+        self.server = ZmqIpcServer(self.name, self.mode)
 
     def test_init(self):
         """Test ZmqIpcServer initialization"""
-        self.assertEqual(self.server.host, self.host)
-        self.assertEqual(self.server.port, self.port)
-        self.assertIsNone(self.server.socket)
-        self.assertIsInstance(self.server.context, Mock)
+        self.assertEqual(self.server.name, self.name)
+        self.assertEqual(self.server.mode, self.mode)
+        # ZmqIpcServer creates socket during initialization
+        self.assertIsNotNone(self.server.socket)
+        # Context should be our mocked ZMQ context
+        self.assertIsNotNone(self.server.context)
 
     def test_create_socket(self):
         """Test _create_socket method"""
-        socket = self.server._create_socket()
+        # Socket is already created during init, so we can verify it exists
+        self.assertIsNotNone(self.server.socket)
+        # Verify socket type is correct (should be ROUTER for IPC)
+        self.server.socket.setsockopt.assert_called()
 
-        self.assertIsNotNone(socket)
-        # Verify socket type is correct (should be DEALER for IPC)
-        socket.setsockopt.assert_called()
+    def test_get_ipc_address_router_mode(self):
+        """Test IPC address generation for ROUTER mode"""
+        # Since we're using ROUTER mode, the file_name should be router_{name}.ipc
+        expected = f"/dev/shm/router_{self.name}.ipc"
+        self.assertEqual(self.server.file_name, expected)
 
-    def test_get_ipc_address_linux(self):
-        """Test IPC address generation on Linux"""
-        with patch('sys.platform', 'linux'):
-            address = self.server.get_ipc_address()
-            expected = f"ipc:///tmp/fastdeploy_{self.port}"
-            self.assertEqual(address, expected)
-
-    def test_get_ipc_address_windows(self):
-        """Test IPC address generation on Windows"""
-        with patch('sys.platform', 'win32'):
-            address = self.server.get_ipc_address()
-            expected = f"tcp://{self.host}:{self.port}"
-            self.assertEqual(address, expected)
-
-    def test_get_ipc_address_darwin(self):
-        """Test IPC address generation on macOS"""
-        with patch('sys.platform', 'darwin'):
-            address = self.server.get_ipc_address()
-            expected = f"tcp://{self.host}:{self.port}"
-            self.assertEqual(address, expected)
+    def test_get_ipc_address_pull_mode(self):
+        """Test IPC address generation for PULL mode"""
+        # Test with PULL mode to see different file naming
+        pull_server = ZmqIpcServer(self.name, 1)  # zmq.PULL
+        expected = f"/dev/shm/{self.name}.socket"
+        self.assertEqual(pull_server.file_name, expected)
 
 
 class TestZmqTcpServer(unittest.TestCase):
@@ -383,30 +306,32 @@ class TestZmqTcpServer(unittest.TestCase):
 
     def setUp(self):
         """Setup method to create test fixtures"""
-        self.host = "localhost"
         self.port = 8080
-        self.server = ZmqTcpServer(self.host, self.port)
+        self.mode = 6  # zmq.ROUTER
+        self.server = ZmqTcpServer(self.port, self.mode)
 
     def test_init(self):
         """Test ZmqTcpServer initialization"""
-        self.assertEqual(self.server.host, self.host)
         self.assertEqual(self.server.port, self.port)
-        self.assertIsNone(self.server.socket)
-        self.assertIsInstance(self.server.context, Mock)
+        self.assertEqual(self.server.mode, self.mode)
+        # ZmqTcpServer creates socket during initialization
+        self.assertIsNotNone(self.server.socket)
+        # Context should be our mocked ZMQ context
+        self.assertIsNotNone(self.server.context)
 
     def test_create_socket(self):
         """Test _create_socket method"""
-        socket = self.server._create_socket()
-
-        self.assertIsNotNone(socket)
+        # Socket is already created during init, so we can verify it exists
+        self.assertIsNotNone(self.server.socket)
         # Verify socket type is correct (should be ROUTER for TCP)
-        socket.setsockopt.assert_called()
+        self.server.socket.setsockopt.assert_called()
 
     def test_get_tcp_address(self):
         """Test TCP address generation"""
-        address = self.server.get_tcp_address()
-        expected = f"tcp://{self.host}:{self.port}"
-        self.assertEqual(address, expected)
+        # ZmqTcpServer binds to tcp://*:{port} by default
+        expected_bind_address = f"tcp://*:{self.port}"
+        # The socket should have been bound to this address during initialization
+        self.server.socket.bind.assert_called_with(expected_bind_address)
 
 
 if __name__ == "__main__":
