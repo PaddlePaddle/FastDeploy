@@ -229,7 +229,8 @@ template void MoeFastHardamardWrapper<phi::dtype::bfloat16, int8_t>(
     int8_t *out,
     cudaStream_t &stream);
 
-template void MoeFastHardamardWrapper<phi::dtype::bfloat16, phi::dtype::float8_e4m3fn>(
+template void
+MoeFastHardamardWrapper<phi::dtype::bfloat16, phi::dtype::float8_e4m3fn>(
     const phi::dtype::bfloat16 *x_data,
     const int64_t *expert_idx_per_token,
     const int64_t *recv_expert_count,
