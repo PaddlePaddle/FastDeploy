@@ -12,48 +12,53 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import unittest
-import time
-import threading
-from unittest.mock import Mock, patch, MagicMock
-import sys
 import os
+import sys
+import threading
+import time
+import unittest
+from unittest.mock import Mock  # noqa: F401
 
 # Determine import method based on environment
 # Use environment variable FD_TEST_MODE=standalone for local testing
-TEST_MODE = os.environ.get('FD_TEST_MODE', 'normal')
+TEST_MODE = os.environ.get("FD_TEST_MODE", "normal")
 
-if TEST_MODE == 'standalone':
+
+# Define mock classes at module level to ensure availability in all contexts
+class MockRequest:
+    def __init__(self, request_id, prompt_token_ids=None):
+        self.request_id = request_id
+        self.prompt_token_ids = prompt_token_ids or []
+
+
+class MockRequestOutput:
+    def __init__(self, request_id, finished=False):
+        self.request_id = request_id
+        self.finished = finished
+        self.outputs = Mock()
+
+
+class MockScheduledRequest:
+    def __init__(self, request):
+        self.raw = request
+        self.request_id = request.request_id
+        self.prompt_tokens_ids_len = len(request.prompt_token_ids)
+        self.schedule_time = time.time()
+
+
+class MockScheduledResponse:
+    def __init__(self, response):
+        self.raw = response
+        self.request_id = response.request_id
+        self.finished = response.finished
+
+
+if TEST_MODE == "standalone":
     # Local testing mode - use dynamic import
     # Mock the logger to avoid import issues
     mock_scheduler_logger = Mock()
     mock_envs = Mock()
     mock_envs.FD_ENABLE_MAX_PREFILL = False
-
-    # Mock Request and RequestOutput classes
-    class MockRequest:
-        def __init__(self, request_id, prompt_token_ids=None):
-            self.request_id = request_id
-            self.prompt_token_ids = prompt_token_ids or []
-
-    class MockRequestOutput:
-        def __init__(self, request_id, finished=False):
-            self.request_id = request_id
-            self.finished = finished
-            self.outputs = Mock()
-
-    class MockScheduledRequest:
-        def __init__(self, request):
-            self.raw = request
-            self.request_id = request.request_id
-            self.prompt_tokens_ids_len = len(request.prompt_token_ids)
-            self.schedule_time = time.time()
-
-    class MockScheduledResponse:
-        def __init__(self, response):
-            self.raw = response
-            self.request_id = response.request_id
-            self.finished = response.finished
 
     # Create a mock module structure
     class MockEngine:
@@ -70,18 +75,18 @@ if TEST_MODE == 'standalone':
         scheduler_logger = mock_scheduler_logger
         envs = mock_envs
 
-    sys.modules['fastdeploy'] = Mock()
-    sys.modules['fastdeploy.utils'] = MockUtils()
-    sys.modules['fastdeploy.engine'] = MockEngine()
-    sys.modules['fastdeploy.engine.request'] = MockEngine.request
-    sys.modules['fastdeploy.scheduler'] = MockScheduler()
-    sys.modules['fastdeploy.scheduler.data'] = MockScheduler.data
+    sys.modules["fastdeploy"] = Mock()
+    sys.modules["fastdeploy.utils"] = MockUtils()
+    sys.modules["fastdeploy.engine"] = MockEngine()
+    sys.modules["fastdeploy.engine.request"] = MockEngine.request
+    sys.modules["fastdeploy.scheduler"] = MockScheduler()
+    sys.modules["fastdeploy.scheduler.data"] = MockScheduler.data
 
     # Import the local_scheduler module directly
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
-        "local_scheduler",
-        os.path.join(os.path.dirname(__file__), '../../fastdeploy/scheduler/local_scheduler.py')
+        "local_scheduler", os.path.join(os.path.dirname(__file__), "../../fastdeploy/scheduler/local_scheduler.py")
     )
     local_scheduler_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(local_scheduler_module)
@@ -90,43 +95,19 @@ else:
     # Normal mode - direct import (for CI/CD and production)
     try:
         from fastdeploy.scheduler.local_scheduler import LocalScheduler
-        from fastdeploy.engine.request import Request, RequestOutput
-        from fastdeploy.scheduler.data import ScheduledRequest, ScheduledResponse
+
         # If we can import directly, we don't need mocking
         mock_scheduler_logger = None
     except ImportError:
         # Fallback to standalone mode if direct import fails
         print("Warning: Direct import failed, falling back to standalone mode")
-        TEST_MODE = 'standalone'
+        TEST_MODE = "standalone"
         # Re-run the standalone setup
         mock_scheduler_logger = Mock()
         mock_envs = Mock()
         mock_envs.FD_ENABLE_MAX_PREFILL = False
 
-        class MockRequest:
-            def __init__(self, request_id, prompt_token_ids=None):
-                self.request_id = request_id
-                self.prompt_token_ids = prompt_token_ids or []
-
-        class MockRequestOutput:
-            def __init__(self, request_id, finished=False):
-                self.request_id = request_id
-                self.finished = finished
-                self.outputs = Mock()
-
-        class MockScheduledRequest:
-            def __init__(self, request):
-                self.raw = request
-                self.request_id = request.request_id
-                self.prompt_tokens_ids_len = len(request.prompt_token_ids)
-                self.schedule_time = time.time()
-
-        class MockScheduledResponse:
-            def __init__(self, response):
-                self.raw = response
-                self.request_id = response.request_id
-                self.finished = response.finished
-
+        # Create a mock module structure using module-level classes
         class MockEngine:
             class request:
                 Request = MockRequest
@@ -141,17 +122,17 @@ else:
             scheduler_logger = mock_scheduler_logger
             envs = mock_envs
 
-        sys.modules['fastdeploy'] = Mock()
-        sys.modules['fastdeploy.utils'] = MockUtils()
-        sys.modules['fastdeploy.engine'] = MockEngine()
-        sys.modules['fastdeploy.engine.request'] = MockEngine.request
-        sys.modules['fastdeploy.scheduler'] = MockScheduler()
-        sys.modules['fastdeploy.scheduler.data'] = MockScheduler.data
+        sys.modules["fastdeploy"] = Mock()
+        sys.modules["fastdeploy.utils"] = MockUtils()
+        sys.modules["fastdeploy.engine"] = MockEngine()
+        sys.modules["fastdeploy.engine.request"] = MockEngine.request
+        sys.modules["fastdeploy.scheduler"] = MockScheduler()
+        sys.modules["fastdeploy.scheduler.data"] = MockScheduler.data
 
         import importlib.util
+
         spec = importlib.util.spec_from_file_location(
-            "local_scheduler",
-            os.path.join(os.path.dirname(__file__), '../../fastdeploy/scheduler/local_scheduler.py')
+            "local_scheduler", os.path.join(os.path.dirname(__file__), "../../fastdeploy/scheduler/local_scheduler.py")
         )
         local_scheduler_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(local_scheduler_module)
@@ -176,7 +157,7 @@ class TestLocalScheduler(unittest.TestCase):
             enable_chunked_prefill=self.enable_chunked_prefill,
             max_num_partial_prefills=self.max_num_partial_prefills,
             max_long_partial_prefills=self.max_long_partial_prefills,
-            long_prefill_token_threshold=self.long_prefill_token_threshold
+            long_prefill_token_threshold=self.long_prefill_token_threshold,
         )
 
         # Create mock requests for testing
@@ -205,7 +186,7 @@ class TestLocalScheduler(unittest.TestCase):
             enable_chunked_prefill=False,
             max_num_partial_prefills=3,
             max_long_partial_prefills=1,
-            long_prefill_token_threshold=500
+            long_prefill_token_threshold=500,
         )
         self.assertEqual(scheduler.max_size, 0)
         self.assertEqual(scheduler.ttl, 30)
@@ -228,7 +209,7 @@ class TestLocalScheduler(unittest.TestCase):
 
     def test_reset_logs_message(self):
         """Test that reset logs appropriate message."""
-        if TEST_MODE != 'standalone':
+        if TEST_MODE != "standalone":
             self.skipTest("Logger mocking only available in standalone mode")
 
         mock_scheduler_logger.reset_mock()
@@ -297,7 +278,7 @@ class TestLocalScheduler(unittest.TestCase):
             enable_chunked_prefill=True,
             max_num_partial_prefills=5,
             max_long_partial_prefills=2,
-            long_prefill_token_threshold=1000
+            long_prefill_token_threshold=1000,
         )
 
         # Add first request (should succeed)
@@ -324,7 +305,7 @@ class TestLocalScheduler(unittest.TestCase):
             enable_chunked_prefill=True,
             max_num_partial_prefills=5,
             max_long_partial_prefills=2,
-            long_prefill_token_threshold=1000
+            long_prefill_token_threshold=1000,
         )
 
         # Add many requests
@@ -391,7 +372,7 @@ class TestLocalScheduler(unittest.TestCase):
             block_size=10,
             reserved_output_blocks=10,  # More than available
             max_num_batched_tokens=1000,
-            batch=1
+            batch=1,
         )
 
         self.assertEqual(len(requests), 0)
@@ -403,7 +384,7 @@ class TestLocalScheduler(unittest.TestCase):
             block_size=10,
             reserved_output_blocks=10,
             max_num_batched_tokens=1000,
-            batch=0  # Invalid batch size
+            batch=0,  # Invalid batch size
         )
 
         self.assertEqual(len(requests), 0)
@@ -411,11 +392,7 @@ class TestLocalScheduler(unittest.TestCase):
     def test_get_requests_no_available_requests(self):
         """Test get_requests when no requests are available."""
         requests = self.scheduler.get_requests(
-            available_blocks=100,
-            block_size=10,
-            reserved_output_blocks=10,
-            max_num_batched_tokens=1000,
-            batch=1
+            available_blocks=100, block_size=10, reserved_output_blocks=10, max_num_batched_tokens=1000, batch=1
         )
 
         self.assertEqual(len(requests), 0)
@@ -426,11 +403,7 @@ class TestLocalScheduler(unittest.TestCase):
         self.scheduler.put_requests([self.mock_request_1, self.mock_request_2])
 
         requests = self.scheduler.get_requests(
-            available_blocks=100,
-            block_size=10,
-            reserved_output_blocks=10,
-            max_num_batched_tokens=1000,
-            batch=2
+            available_blocks=100, block_size=10, reserved_output_blocks=10, max_num_batched_tokens=1000, batch=2
         )
 
         # Should return some requests (exact number depends on resource calculation)
@@ -443,11 +416,7 @@ class TestLocalScheduler(unittest.TestCase):
         self.scheduler.put_requests([long_request])
 
         requests = self.scheduler.get_requests(
-            available_blocks=500,
-            block_size=10,
-            reserved_output_blocks=10,
-            max_num_batched_tokens=1000,
-            batch=1
+            available_blocks=500, block_size=10, reserved_output_blocks=10, max_num_batched_tokens=1000, batch=1
         )
 
         # Behavior depends on chunked prefill logic
@@ -572,7 +541,7 @@ class TestLocalScheduler(unittest.TestCase):
             enable_chunked_prefill=True,
             max_num_partial_prefills=5,
             max_long_partial_prefills=2,
-            long_prefill_token_threshold=1000
+            long_prefill_token_threshold=1000,
         )
 
         # Add request
@@ -596,7 +565,7 @@ class TestLocalScheduler(unittest.TestCase):
             enable_chunked_prefill=True,
             max_num_partial_prefills=5,
             max_long_partial_prefills=2,
-            long_prefill_token_threshold=1000
+            long_prefill_token_threshold=1000,
         )
 
         # Add request
@@ -625,12 +594,12 @@ class TestLocalScheduler(unittest.TestCase):
         def get_requests():
             try:
                 for i in range(10):
-                    requests = self.scheduler.get_requests(
+                    _ = self.scheduler.get_requests(
                         available_blocks=100,
                         block_size=10,
                         reserved_output_blocks=10,
                         max_num_batched_tokens=100,
-                        batch=1
+                        batch=1,
                     )
                     time.sleep(0.001)  # Small delay
             except Exception as e:
@@ -651,7 +620,7 @@ class TestLocalScheduler(unittest.TestCase):
 
     def test_logging_put_requests(self):
         """Test that put_requests logs appropriate messages."""
-        if TEST_MODE != 'standalone':
+        if TEST_MODE != "standalone":
             self.skipTest("Logger mocking only available in standalone mode")
 
         mock_scheduler_logger.reset_mock()
@@ -664,7 +633,7 @@ class TestLocalScheduler(unittest.TestCase):
 
     def test_logging_put_results_finished(self):
         """Test that put_results logs finished responses."""
-        if TEST_MODE != 'standalone':
+        if TEST_MODE != "standalone":
             self.skipTest("Logger mocking only available in standalone mode")
 
         # Add request first
@@ -700,7 +669,7 @@ class TestLocalScheduler(unittest.TestCase):
             enable_chunked_prefill=True,
             max_num_partial_prefills=5,
             max_long_partial_prefills=2,
-            long_prefill_token_threshold=1000
+            long_prefill_token_threshold=1000,
         )
 
         # Add request
@@ -713,7 +682,7 @@ class TestLocalScheduler(unittest.TestCase):
 if __name__ == "__main__":
     # Print current test mode for clarity
     print(f"Running tests in {TEST_MODE} mode")
-    if TEST_MODE == 'standalone':
+    if TEST_MODE == "standalone":
         print("To run in normal mode, ensure fastdeploy is properly installed")
         print("Or set FD_TEST_MODE=normal environment variable")
     unittest.main(verbosity=2)
