@@ -52,8 +52,9 @@ class TestTritonUtils(unittest.TestCase):
 
         self.assertIsInstance(mock_kernel, KernelInterface)
 
+    @patch("builtins.open", new_callable=MagicMock)
     @patch("os.system")
-    def test_build_package(self, mock_system):
+    def test_build_package(self, mock_system, mock_open):
         generated_dir = "/tmp/generated"
         python_package_name = "test_package"
 
