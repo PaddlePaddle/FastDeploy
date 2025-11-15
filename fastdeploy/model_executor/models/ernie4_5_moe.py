@@ -569,8 +569,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         for loaded_weight_name, loaded_weight in weights_iterator:
             loaded_weight_name = loaded_weight_name.replace("model", "ernie")
             for param_name, weight_name, exp_id, shard_id, is_moe in all_param_mapping:
-                loaded_weight_name = checkpoint_to_fd_key_fn(loaded_weight_name, is_moe)
-                model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                model_param_name = checkpoint_to_fd_key_fn(loaded_weight_name, is_moe).replace(weight_name, param_name)
                 if model_param_name not in params_dict:
                     continue
                 param = params_dict[model_param_name]
@@ -580,8 +579,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             else:
                 expert_id = None
                 shard_id = None
-                loaded_weight_name = checkpoint_to_fd_key_fn(loaded_weight_name, is_moe=False)
-                model_param_name = loaded_weight_name
+                model_param_name = checkpoint_to_fd_key_fn(loaded_weight_name, is_moe=False)
                 if model_param_name not in params_dict.keys():
                     continue
                 param = params_dict[model_param_name]
