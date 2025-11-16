@@ -1786,13 +1786,13 @@ class GPUModelRunner(ModelRunnerBase):
             # 3. Run model
             if self.enable_mm:
                 model_output = self.model(
-                    self.share_inputs["ids_remove_padding"],
+                    self.forward_meta.ids_remove_padding,
                     self.share_inputs["image_features"],
                     self.forward_meta,
                 )
             else:
                 model_output = self.model(
-                    ids_remove_padding=self.share_inputs["ids_remove_padding"],
+                    self.forward_meta.ids_remove_padding,
                     forward_meta=self.forward_meta,
                 )
             if self.use_cudagraph:
@@ -2071,13 +2071,13 @@ class GPUModelRunner(ModelRunnerBase):
         # 3. Execute model
         if self.enable_mm:
             model_output = self.model(
-                self.share_inputs["ids_remove_padding"],
+                self.forward_meta.ids_remove_padding,
                 self.share_inputs["image_features"],
                 self.forward_meta,
             )
         else:
             model_output = self.model(
-                ids_remove_padding=self.share_inputs["ids_remove_padding"],
+                ids_remove_padding=self.forward_meta.ids_remove_padding,
                 forward_meta=self.forward_meta,
             )
         if self.use_cudagraph:
