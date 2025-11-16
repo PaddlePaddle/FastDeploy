@@ -1407,7 +1407,7 @@ template <typename T,
           int HeadDim = 128,
           bool is_scale_channel_wise = false,
           bool IsFP8 = false>
-__global__ void append_decode_cache_int8_rope_kernel(
+__global__ void int_append_decode_cache_int8_rope_kernel(
     const int* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
     uint8_t* __restrict__ key_cache,    // [num_blocks, kv_num_heads,
@@ -2033,7 +2033,7 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
 }
 
 template <typename T, int VecSize = 4, int RoundType = 0, int HeadDim = 128>
-__global__ void append_decode_cache_int8_neox_rope_kernel(
+__global__ void int_append_decode_cache_int8_neox_rope_kernel(
     const int* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
     uint8_t* __restrict__ key_cache,    // [num_blocks, kv_num_heads,
@@ -2714,7 +2714,7 @@ __global__ void append_decode_cache_int4_rope_kernel(
 }
 
 template <typename T, int VecSize = 4, int RoundType = 0, int HeadDim = 128>
-__global__ void append_decode_cache_int4_rope_kernel(
+__global__ void int_append_decode_cache_int4_rope_kernel(
     const int* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
     uint8_t* __restrict__ key_cache,    // [num_blocks, kv_num_heads,
@@ -3431,7 +3431,7 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
 }
 
 template <typename T, int VecSize = 4, int RoundType = 0, int HeadDim = 128>
-__global__ void append_decode_cache_int4_neox_rope_kernel(
+__global__ void int_append_decode_cache_int4_neox_rope_kernel(
     const int* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
     uint8_t* __restrict__ key_cache,    // [num_blocks, kv_num_heads,

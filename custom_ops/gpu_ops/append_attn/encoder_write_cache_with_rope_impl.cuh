@@ -19,7 +19,7 @@
 #include "utils.cuh"
 
 template <typename T, int VecSize = 1>
-__global__ void VariableLengthRotaryKernel(
+__global__ void IntVariableLengthRotaryKernel(
     const int *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
     const float *sin_emb,
@@ -181,7 +181,7 @@ __global__ void VariableLengthRotaryKernel(
 }
 
 template <typename T, int VecSize = 1>
-__global__ void NeoxVariableLengthRotaryKernel(
+__global__ void IntNeoxVariableLengthRotaryKernel(
     const int *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
     const float *sin_emb,
@@ -361,7 +361,7 @@ __global__ void NeoxVariableLengthRotaryKernel(
 }
 
 template <typename T, int VecSize = 1>
-__global__ void QuantGQAVariableLengthRotaryKernel(
+__global__ void IntGQAVariableLengthRotaryKernel(
     const int *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
     const float *sin_emb,
@@ -620,7 +620,7 @@ __global__ void GQAVariableLengthRotaryKernel(const T *qkv,
 }
 
 template <typename T, int VecSize = 1>
-__global__ void GQAVariableLengthRotaryQuantKVKernel(
+__global__ void IntGQAVariableLengthRotaryQuantKVKernel(
     const int *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
     const float *sin_emb,
@@ -833,7 +833,7 @@ __global__ void GQAVariableLengthRotaryQuantKVKernel(
 }
 
 template <typename T, int VecSize = 1>
-__global__ void QuantGQANeoxVariableLengthRotaryKernel(
+__global__ void IntGQANeoxVariableLengthRotaryKernel(
     const int *qkv,
     const float *cos_emb,  // [1, 1, seq_len, dim_head / 2]
     const float *sin_emb,
@@ -2222,7 +2222,7 @@ void rotary_qk_variable(
     const float *cos_emb = rotary_emb;
     const float *sin_emb = rotary_emb + input_output_len * dim_head / 2;
     if (qkv_out_scales) {
-      launchWithPdlWhenEnabled(VariableLengthRotaryKernel<T, PackSize>,
+      launchWithPdlWhenEnabled(IntVariableLengthRotaryKernel<T, PackSize>,
                                grid_size,
                                blocksize,
                                0,
@@ -2266,7 +2266,7 @@ void rotary_qk_variable(
     const float *cos_emb = rotary_emb;
     const float *sin_emb = rotary_emb + input_output_len * dim_head;
     if (qkv_out_scales) {
-      launchWithPdlWhenEnabled(NeoxVariableLengthRotaryKernel<T, PackSize>,
+      launchWithPdlWhenEnabled(IntNeoxVariableLengthRotaryKernel<T, PackSize>,
                                grid_size,
                                blocksize,
                                0,
@@ -2414,7 +2414,7 @@ void gqa_rotary_qk_variable(
     const float *cos_emb = rotary_emb;
     const float *sin_emb = rotary_emb + input_output_len * dim_head / 2;
     if (qkv_out_scales) {
-      launchWithPdlWhenEnabled(QuantGQAVariableLengthRotaryKernel<T, PackSize>,
+      launchWithPdlWhenEnabled(IntGQAVariableLengthRotaryKernel<T, PackSize>,
                                grid_size,
                                blocksize,
                                0,
@@ -2462,7 +2462,7 @@ void gqa_rotary_qk_variable(
     const float *sin_emb = rotary_emb + input_output_len * dim_head;
     if (qkv_out_scales) {
       launchWithPdlWhenEnabled(
-          QuantGQANeoxVariableLengthRotaryKernel<T, PackSize>,
+          IntGQANeoxVariableLengthRotaryKernel<T, PackSize>,
           grid_size,
           blocksize,
           0,
@@ -2584,7 +2584,7 @@ void gqa_rotary_qk_quant_variable(
   if (!use_neox_style) {
     if (qkv_out_scales) {
       launchWithPdlWhenEnabled(
-          GQAVariableLengthRotaryQuantKVKernel<T, PackSize>,
+          IntGQAVariableLengthRotaryQuantKVKernel<T, PackSize>,
           grid_size,
           blocksize,
           0,
