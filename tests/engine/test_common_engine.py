@@ -235,7 +235,14 @@ class TestEngineService(unittest.TestCase):
         mock_get_logger,
         mock_envs,
     ):
-        """Test all_tasks_finished method"""
+        """
+        Test the all_tasks_finished method of EngineService.
+
+        Verifies that all_tasks_finished returns True when all tasks are finished
+        (i.e., all stop_flags are True), and returns False when at least one task
+        is still running (i.e., at least one stop_flag is False). This is tested
+        by setting different stop_flags configurations in the resource manager.
+        """
         mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
         mock_envs.FD_ENABLE_CACHE_TASK = "0"
         mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
