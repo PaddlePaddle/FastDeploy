@@ -2058,13 +2058,6 @@ class GPUModelRunner(ModelRunnerBase):
         for proc in self.sampling_metadata.logits_processors:
             proc.update_state(self.share_inputs)
 
-        # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
-        # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
-        # when there is data on other runner, the current runner is required to execute part of the model.
-        if not self.not_need_stop():
-            self._execute_empty_input()
-            return None
-
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
 
@@ -2080,6 +2073,13 @@ class GPUModelRunner(ModelRunnerBase):
                 self.forward_meta.ids_remove_padding,
                 self.forward_meta,
             )
+
+        # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
+        # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
+        # when there is data on other runner, the current runner is required to execute part of the model.
+        if not self.not_need_stop():
+            return None
+
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
 
