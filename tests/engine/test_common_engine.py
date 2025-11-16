@@ -382,7 +382,14 @@ class TestEngineService(unittest.TestCase):
         mock_get_logger,
         mock_envs,
     ):
-        """Test clear_data method"""
+        """
+        Test clear_data method clears all internal data structures.
+
+        Verifies that:
+        - The token_processor and engine_worker_queue are properly cleared by calling their clear_data methods.
+        - The send_response_server and recv_request_server request dictionaries are reset.
+        - The clear_data method returns True on success.
+        """
         mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
         mock_envs.FD_ENABLE_CACHE_TASK = "0"
         mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
