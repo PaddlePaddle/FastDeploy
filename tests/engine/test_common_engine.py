@@ -287,7 +287,11 @@ class TestEngineService(unittest.TestCase):
         mock_get_logger,
         mock_envs,
     ):
-        """Test update_requests_chunk_size method"""
+        """
+        Test update_requests_chunk_size method with both chunked prefill enabled and disabled.
+        Verifies that when chunked prefill is enabled, chunk size information is properly calculated
+        and set on requests; when disabled, no chunk info is set.
+        """
         mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
         mock_envs.FD_ENABLE_CACHE_TASK = "0"
         mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
