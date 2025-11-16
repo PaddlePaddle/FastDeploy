@@ -147,7 +147,11 @@ class TestEngineService(unittest.TestCase):
         mock_get_logger,
         mock_envs,
     ):
-        """Test create_data_processor method"""
+        """
+        Test create_data_processor method creates InputPreprocessor and data_processor correctly.
+        Verifies that the processor is initialized with correct configuration parameters and
+        the data_processor attribute is set.
+        """
         mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
         mock_envs.FD_ENABLE_CACHE_TASK = "0"
         mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
