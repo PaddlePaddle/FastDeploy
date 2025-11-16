@@ -438,7 +438,13 @@ class TestEngineService(unittest.TestCase):
         mock_get_logger,
         mock_envs,
     ):
-        """Test _has_features_info method"""
+        """
+        Test _has_features_info method in EngineService.
+
+        Scenarios:
+        - Verifies that the method returns False when task.multimodal_inputs is None or empty.
+        - Verifies that the method returns True when image_feature_urls, video_feature_urls, or audio_feature_urls are present in task.multimodal_inputs.
+        """
         mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
         mock_envs.FD_ENABLE_CACHE_TASK = "0"
         mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
