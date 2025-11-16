@@ -50,6 +50,8 @@ from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_Attention
 from fastdeploy.model_executor.ops.gpu import get_padding_offset
 
+os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
+
 
 class TestAttentionPerformance(unittest.TestCase):
     def setUp(self):
@@ -115,12 +117,12 @@ class TestAttentionPerformance(unittest.TestCase):
         config_dict = {
             "architectures": ["Ernie4_5_MoeForCausalLM"],
             "dtype": "bfloat16",
-            "hidden_size": 4096,
+            "hidden_size": 1536,
             "max_position_embeddings": 131072,
-            "max_model_len": 9000,
-            "num_attention_heads": 32,
+            "max_model_len": 2 * (9000 + 128),
+            "num_attention_heads": 12,
             "num_key_value_heads": 4,
-            "num_hidden_layers": 46,
+            "num_hidden_layers": 39,
         }
         model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
         config_path = os.path.join(model_dir, "config.json")
@@ -291,7 +293,7 @@ class TestAttentionPerformance(unittest.TestCase):
         # Test parameters
         test_steps = 100
         prefill_batch_size = 1
-        decode_batch_size = 128  # This can be configured as needed
+        decode_batch_size = 100  # This can be configured as needed
         prefill_seq_len = 4096
         use_dynamic_quant = True
         act_tensor_dtype = paddle.bfloat16
@@ -324,21 +326,20 @@ class TestAttentionPerformance(unittest.TestCase):
         # p.start()
         # p.step()
 
-        # start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
-        # end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
-        # for i in range(test_steps):
-        #     start_events[i].record()
+        start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        for i in range(test_steps):
+            start_events[i].record()
 
-        #     self.attn_forward(forward_meta, prefill_hidden_states)
+            self.attn_forward(forward_meta, prefill_hidden_states)
 
-        #     end_events[i].record()
-        # paddle.device.synchronize()
+            end_events[i].record()
+        paddle.device.synchronize()
 
-        # times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
-        # print(times[-5:])
+        times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
+        print(times[-5:])
 
         # p.stop()
-        # exit(0)
 
         decode_hidden_states = paddle.randn(
             [decode_batch_size, self.fd_config.model_config.hidden_size], dtype=act_tensor_dtype
@@ -355,13 +356,13 @@ class TestAttentionPerformance(unittest.TestCase):
 
         self.attn_backend.init_attention_metadata(forward_meta)
 
-        # p = profiler.Profiler(
-        #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
-        #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
-        # )
+        p = profiler.Profiler(
+            targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
+            on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+        )
 
-        # p.start()
-        # p.step()
+        p.start()
+        p.step()
 
         paddle.device.synchronize()
 
@@ -381,7 +382,7 @@ class TestAttentionPerformance(unittest.TestCase):
             start_events[i].record()
 
             attn_cuda_graphs.replay()
-            #self.attn_forward(forward_meta, decode_hidden_states)
+            # self.attn_forward(forward_meta, decode_hidden_states)
 
             end_events[i].record()
         paddle.device.synchronize()
@@ -389,7 +390,7 @@ class TestAttentionPerformance(unittest.TestCase):
         times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
         print(times[-5:])
 
-        # p.stop()
+        p.stop()
 
 
 if __name__ == "__main__":

@@ -290,6 +290,19 @@ class TokenProcessor:
                     finished=False,
                     metrics=metrics,
                 )
+                if self.use_logprobs:
+                    if getattr(stream_data, "logprobs", None) is not None:
+                        try:
+                            logprobs_list: LogprobsLists = stream_data.logprobs.tolists()
+                            result.outputs.logprob = float(logprobs_list.logprobs[0][0])
+                            result.outputs.top_logprobs = logprobs_list
+                        except Exception as e:
+                            llm_logger.warning(f"Failed to parse logprobs from StreamTransferData: {e}")
+                    if getattr(stream_data, "prompt_logprobs", None) is not None:
+                        try:
+                            result.prompt_logprobs_tensors = stream_data.prompt_logprobs
+                        except Exception as e:
+                            llm_logger.warning(f"Failed to parse prompt_logprobs from StreamTransferData: {e}")
                 if self.tokens_counter[task_id] == 0:
                     if task.messages is not None:
                         result.prompt = task.messages
@@ -485,6 +498,9 @@ class TokenProcessor:
                     self.split_connector.send_first_token(task.disaggregate_info, [result])
                     break
                 else:
+                    # TODO: Refine checking sending cache and do not keep waiting
+                    if time.time() - start_time > 30:
+                        llm_logger.warning(f"wait for sending cache, {task_id}")
                     time.sleep(0.002)
         else:
             if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -740,10 +756,8 @@ class TokenProcessor:
                     self._recycle_resources(task_id, i, task, result, is_prefill)
                     break
 
-            if not (is_prefill and self.cfg.splitwise_version == "v0"):
-                # NOTE: prefill instance in v0 version does not return result to scheduler
-                llm_logger.debug(f"get response from infer: {result}")
-                batch_result.append(result)
+            llm_logger.debug(f"get response from infer: {result}")
+            batch_result.append(result)
 
         self.postprocess(batch_result, mtype)
 
@@ -834,7 +848,7 @@ class TokenProcessor:
     def clear_data(self):
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.resource_manager.clear_data()
-        for i in range(self.cfg.max_num_seqs):
+        for i in range(self.resource_manager.max_num_seqs):
             if self.resource_manager.stop_flags[i]:
                 continue
             task = self.resource_manager.tasks_list[i]
