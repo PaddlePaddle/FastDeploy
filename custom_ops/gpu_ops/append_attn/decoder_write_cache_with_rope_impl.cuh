@@ -442,6 +442,9 @@ __global__ void append_decode_cache_T_quant_rope_kernel(
       }
     }
   }
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaTriggerProgrammaticLaunchCompletion();
+#endif
 }
 
 template <typename T, int VecSize = 1>
@@ -583,6 +586,9 @@ __global__ void append_decode_cache_T_neox_partial_rope_kernel(
       }
     }
   }
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaTriggerProgrammaticLaunchCompletion();
+#endif
 }
 
 template <typename T, int VecSize = 1>

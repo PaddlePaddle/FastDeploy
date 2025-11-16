@@ -2222,77 +2222,89 @@ void rotary_qk_variable(
     const float *cos_emb = rotary_emb;
     const float *sin_emb = rotary_emb + input_output_len * dim_head / 2;
     if (qkv_out_scales) {
-      VariableLengthRotaryKernel<T, PackSize>
-          <<<grid_size, blocksize, 0, stream>>>(
-              reinterpret_cast<const int *>(qkv_input),
-              cos_emb,
-              sin_emb,
-              batch_id_per_token,
-              cu_seqlens_q,
-              seq_lens,
-              seq_lens_decoder,
-              qkv_out_scales,
-              qkv_bias,
-              qkv_out,
-              elem_nums,
-              head_num,
-              seq_len,
-              dim_head,
-              rope_3d);
+      launchWithPdlWhenEnabled(VariableLengthRotaryKernel<T, PackSize>,
+                               grid_size,
+                               blocksize,
+                               0,
+                               stream,
+                               reinterpret_cast<const int *>(qkv_input),
+                               cos_emb,
+                               sin_emb,
+                               batch_id_per_token,
+                               cu_seqlens_q,
+                               seq_lens,
+                               seq_lens_decoder,
+                               qkv_out_scales,
+                               qkv_bias,
+                               qkv_out,
+                               elem_nums,
+                               head_num,
+                               seq_len,
+                               dim_head,
+                               rope_3d);
     } else {
-      VariableLengthRotaryKernel<T, PackSize>
-          <<<grid_size, blocksize, 0, stream>>>(
-              reinterpret_cast<const T *>(qkv_input),
-              cos_emb,
-              sin_emb,
-              batch_id_per_token,
-              cu_seqlens_q,
-              seq_lens,
-              seq_lens_decoder,
-              qkv_out,
-              elem_nums,
-              head_num,
-              seq_len,
-              dim_head,
-              rope_3d);
+      launchWithPdlWhenEnabled(VariableLengthRotaryKernel<T, PackSize>,
+                               grid_size,
+                               blocksize,
+                               0,
+                               stream,
+                               reinterpret_cast<const T *>(qkv_input),
+                               cos_emb,
+                               sin_emb,
+                               batch_id_per_token,
+                               cu_seqlens_q,
+                               seq_lens,
+                               seq_lens_decoder,
+                               qkv_out,
+                               elem_nums,
+                               head_num,
+                               seq_len,
+                               dim_head,
+                               rope_3d);
     }
   } else {
     const float *cos_emb = rotary_emb;
     const float *sin_emb = rotary_emb + input_output_len * dim_head;
     if (qkv_out_scales) {
-      NeoxVariableLengthRotaryKernel<T, PackSize>
-          <<<grid_size, blocksize, 0, stream>>>(
-              reinterpret_cast<const int *>(qkv_input),
-              cos_emb,
-              sin_emb,
-              batch_id_per_token,
-              cu_seqlens_q,
-              seq_lens,
-              seq_lens_decoder,
-              qkv_out_scales,
-              qkv_bias,
-              qkv_out,
-              elem_nums,
-              head_num,
-              seq_len,
-              dim_head,
-              rope_3d);
+      launchWithPdlWhenEnabled(NeoxVariableLengthRotaryKernel<T, PackSize>,
+                               grid_size,
+                               blocksize,
+                               0,
+                               stream,
+                               reinterpret_cast<const int *>(qkv_input),
+                               cos_emb,
+                               sin_emb,
+                               batch_id_per_token,
+                               cu_seqlens_q,
+                               seq_lens,
+                               seq_lens_decoder,
+                               qkv_out_scales,
+                               qkv_bias,
+                               qkv_out,
+                               elem_nums,
+                               head_num,
+                               seq_len,
+                               dim_head,
+                               rope_3d);
     } else {
-      NeoxVariableLengthRotaryKernel<T, PackSize>
-          <<<grid_size, blocksize, 0, stream>>>(
-              reinterpret_cast<const T *>(qkv_input),
-              cos_emb,
-              sin_emb,
-              batch_id_per_token,
-              cu_seqlens_q,
-              seq_lens,
-              seq_lens_decoder,
-              qkv_out,
-              elem_nums,
-              head_num,
-              seq_len,
-              dim_head,
-              rope_3d);
+      launchWithPdlWhenEnabled(NeoxVariableLengthRotaryKernel<T, PackSize>,
+                               grid_size,
+                               blocksize,
+                               0,
+                               stream,
+                               reinterpret_cast<const T *>(qkv_input),
+                               cos_emb,
+                               sin_emb,
+                               batch_id_per_token,
+                               cu_seqlens_q,
+                               seq_lens,
+                               seq_lens_decoder,
+                               qkv_out,
+                               elem_nums,
+                               head_num,
+                               seq_len,
+                               dim_head,
+                               rope_3d);
     }
   }
 }
@@ -2339,26 +2351,28 @@ void gqa_rotary_qk_norm_variable(
 
   const float *cos_emb = rotary_emb;
   const float *sin_emb = rotary_emb + input_output_len * dim_head / 2;
-
-  GQAVariableLengthRotaryQKNormKernel<T, PackSize>
-      <<<grid_size, Block_Size, 0, stream>>>(
-          reinterpret_cast<const T *>(qkv_input),
-          cos_emb,
-          sin_emb,
-          batch_id_per_token,
-          cu_seqlens_q,
-          seq_lens,
-          seq_lens_decoder,
-          qkv_out,
-          elem_nums,
-          num_heads,
-          kv_num_heads,
-          seq_len,
-          dim_head,
-          rope_3d,
-          q_norm_weight,
-          k_norm_weight,
-          rms_norm_eps);
+  launchWithPdlWhenEnabled(GQAVariableLengthRotaryQKNormKernel<T, PackSize>,
+                           grid_size,
+                           Block_Size,
+                           0,
+                           stream,
+                           reinterpret_cast<const T *>(qkv_input),
+                           cos_emb,
+                           sin_emb,
+                           batch_id_per_token,
+                           cu_seqlens_q,
+                           seq_lens,
+                           seq_lens_decoder,
+                           qkv_out,
+                           elem_nums,
+                           num_heads,
+                           kv_num_heads,
+                           seq_len,
+                           dim_head,
+                           rope_3d,
+                           q_norm_weight,
+                           k_norm_weight,
+                           rms_norm_eps);
 }
 
 template <typename T, typename QKV_TYPE>
@@ -2400,24 +2414,27 @@ void gqa_rotary_qk_variable(
     const float *cos_emb = rotary_emb;
     const float *sin_emb = rotary_emb + input_output_len * dim_head / 2;
     if (qkv_out_scales) {
-      QuantGQAVariableLengthRotaryKernel<T, PackSize>
-          <<<grid_size, blocksize, 0, stream>>>(
-              reinterpret_cast<const int *>(qkv_input),
-              cos_emb,
-              sin_emb,
-              batch_id_per_token,
-              cu_seqlens_q,
-              seq_lens,
-              seq_lens_decoder,
-              qkv_out_scales,
-              qkv_bias,
-              qkv_out,
-              elem_nums,
-              num_heads,
-              kv_num_heads,
-              seq_len,
-              dim_head,
-              rope_3d);
+      launchWithPdlWhenEnabled(QuantGQAVariableLengthRotaryKernel<T, PackSize>,
+                               grid_size,
+                               blocksize,
+                               0,
+                               stream,
+                               reinterpret_cast<const int *>(qkv_input),
+                               cos_emb,
+                               sin_emb,
+                               batch_id_per_token,
+                               cu_seqlens_q,
+                               seq_lens,
+                               seq_lens_decoder,
+                               qkv_out_scales,
+                               qkv_bias,
+                               qkv_out,
+                               elem_nums,
+                               num_heads,
+                               kv_num_heads,
+                               seq_len,
+                               dim_head,
+                               rope_3d);
     } else {
       auto *kernelFn = GQAVariableLengthRotaryKernel<T, PackSize>;
       launchWithPdlWhenEnabled(kernelFn,
@@ -2444,24 +2461,28 @@ void gqa_rotary_qk_variable(
     const float *cos_emb = rotary_emb;
     const float *sin_emb = rotary_emb + input_output_len * dim_head;
     if (qkv_out_scales) {
-      QuantGQANeoxVariableLengthRotaryKernel<T, PackSize>
-          <<<grid_size, blocksize, 0, stream>>>(
-              reinterpret_cast<const int *>(qkv_input),
-              cos_emb,
-              sin_emb,
-              batch_id_per_token,
-              cu_seqlens_q,
-              seq_lens,
-              seq_lens_decoder,
-              qkv_out_scales,
-              qkv_bias,
-              qkv_out,
-              elem_nums,
-              num_heads,
-              kv_num_heads,
-              seq_len,
-              dim_head,
-              rope_3d);
+      launchWithPdlWhenEnabled(
+          QuantGQANeoxVariableLengthRotaryKernel<T, PackSize>,
+          grid_size,
+          blocksize,
+          0,
+          stream,
+          reinterpret_cast<const int *>(qkv_input),
+          cos_emb,
+          sin_emb,
+          batch_id_per_token,
+          cu_seqlens_q,
+          seq_lens,
+          seq_lens_decoder,
+          qkv_out_scales,
+          qkv_bias,
+          qkv_out,
+          elem_nums,
+          num_heads,
+          kv_num_heads,
+          seq_len,
+          dim_head,
+          rope_3d);
     } else {
       if (rotary_dim < dim_head) {
         PD_CHECK((rotary_dim / 2) % PackSize == 0);
@@ -2562,46 +2583,54 @@ void gqa_rotary_qk_quant_variable(
   const float *sin_emb = rotary_emb + input_output_len * dim_head / 2;
   if (!use_neox_style) {
     if (qkv_out_scales) {
-      GQAVariableLengthRotaryQuantKVKernel<T, PackSize>
-          <<<grid_size, blocksize, 0, stream>>>(
-              reinterpret_cast<const int *>(qkv_input),
-              cos_emb,
-              sin_emb,
-              qkv_out_scales,
-              batch_id_per_token,
-              cu_seqlens_q,
-              seq_lens,
-              seq_lens_decoder,
-              qkv_bias,
-              cache_k_scales,
-              cache_v_scales,
-              qkv_out,
-              elem_nums,
-              num_heads,
-              kv_num_heads,
-              seq_len,
-              dim_head,
-              rope_3d);
+      launchWithPdlWhenEnabled(
+          GQAVariableLengthRotaryQuantKVKernel<T, PackSize>,
+          grid_size,
+          blocksize,
+          0,
+          stream,
+          reinterpret_cast<const int *>(qkv_input),
+          cos_emb,
+          sin_emb,
+          qkv_out_scales,
+          batch_id_per_token,
+          cu_seqlens_q,
+          seq_lens,
+          seq_lens_decoder,
+          qkv_bias,
+          cache_k_scales,
+          cache_v_scales,
+          qkv_out,
+          elem_nums,
+          num_heads,
+          kv_num_heads,
+          seq_len,
+          dim_head,
+          rope_3d);
     } else {
-      GQAVariableLengthRotaryQuantKVKernel<T, PackSize>
-          <<<grid_size, blocksize, 0, stream>>>(
-              reinterpret_cast<const T *>(qkv_input),
-              cos_emb,
-              sin_emb,
-              batch_id_per_token,
-              cu_seqlens_q,
-              seq_lens,
-              seq_lens_decoder,
-              qkv_bias,
-              cache_k_scales,
-              cache_v_scales,
-              qkv_out,
-              elem_nums,
-              num_heads,
-              kv_num_heads,
-              seq_len,
-              dim_head,
-              rope_3d);
+      launchWithPdlWhenEnabled(
+          GQAVariableLengthRotaryQuantKVKernel<T, PackSize>,
+          grid_size,
+          blocksize,
+          0,
+          stream,
+          reinterpret_cast<const T *>(qkv_input),
+          cos_emb,
+          sin_emb,
+          batch_id_per_token,
+          cu_seqlens_q,
+          seq_lens,
+          seq_lens_decoder,
+          qkv_bias,
+          cache_k_scales,
+          cache_v_scales,
+          qkv_out,
+          elem_nums,
+          num_heads,
+          kv_num_heads,
+          seq_len,
+          dim_head,
+          rope_3d);
     }
   } else {
     PADDLE_THROW("Use_neox_style mode isn't implemented yet");
@@ -2731,22 +2760,27 @@ void CascadeAppendWriteCacheKVC8QKV(
     }
     cudaFuncSetAttribute(
         kernel_fn, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
-    kernel_fn<<<grids, blocks, 0, stream>>>(cache_k_out->data<uint8_t>(),
-                                            cache_v_out->data<uint8_t>(),
-                                            qkv.data<T>(),
-                                            cache_k_scale.data<T>(),
-                                            cache_v_scale.data<T>(),
-                                            batch_ids.data<int>(),
-                                            tile_ids_per_batch.data<int>(),
-                                            seq_lens_this_time.data<int>(),
-                                            seq_lens_decoder.data<int>(),
-                                            batch_id_per_token.data<int>(),
-                                            cu_seqlens_q.data<int>(),
-                                            block_table.data<int>(),
-                                            max_seq_len,
-                                            max_blocks_per_seq,
-                                            num_heads,
-                                            kv_num_heads);
+    launchWithPdlWhenEnabled(kernel_fn,
+                             grids,
+                             blocks,
+                             0,
+                             stream,
+                             cache_k_out->data<uint8_t>(),
+                             cache_v_out->data<uint8_t>(),
+                             qkv.data<T>(),
+                             cache_k_scale.data<T>(),
+                             cache_v_scale.data<T>(),
+                             batch_ids.data<int>(),
+                             tile_ids_per_batch.data<int>(),
+                             seq_lens_this_time.data<int>(),
+                             seq_lens_decoder.data<int>(),
+                             batch_id_per_token.data<int>(),
+                             cu_seqlens_q.data<int>(),
+                             block_table.data<int>(),
+                             max_seq_len,
+                             max_blocks_per_seq,
+                             num_heads,
+                             kv_num_heads);
   } else {
     auto kernel_fn = append_write_cache_kv_c8_qkv_dynamic<NV_TYPE,
                                                           num_frags_y,
@@ -2758,7 +2792,12 @@ void CascadeAppendWriteCacheKVC8QKV(
                                                           true>;
     cudaFuncSetAttribute(
         kernel_fn, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
-    kernel_fn<<<grids, blocks, 0, stream>>>(
+    launchWithPdlWhenEnabled(
+        kernel_fn,
+        grids,
+        blocks,
+        0,
+        stream,
         cache_k_out->data<uint8_t>(),
         cache_v_out->data<uint8_t>(),
         reinterpret_cast<const NV_TYPE *>(qkv.data<T>()),
@@ -2830,22 +2869,27 @@ void CascadeAppendWriteCacheKVC4QKV(
                                                 num_warps>;
   cudaFuncSetAttribute(
       kernel_fn, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
-  kernel_fn<<<grids, blocks, 0, stream>>>(cache_k_out->data<uint8_t>(),
-                                          cache_v_out->data<uint8_t>(),
-                                          qkv.data<T>(),
-                                          cache_k_scale.data<T>(),
-                                          cache_v_scale.data<T>(),
-                                          cache_k_zp.data<T>(),
-                                          cache_v_zp.data<T>(),
-                                          batch_ids.data<int>(),
-                                          tile_ids_per_batch.data<int>(),
-                                          seq_lens_this_time.data<int>(),
-                                          seq_lens_decoder.data<int>(),
-                                          batch_id_per_token.data<int>(),
-                                          cu_seqlens_q.data<int>(),
-                                          block_table.data<int>(),
-                                          max_seq_len,
-                                          max_blocks_per_seq,
-                                          num_heads,
-                                          kv_num_heads);
+  launchWithPdlWhenEnabled(kernel_fn,
+                           grids,
+                           blocks,
+                           0,
+                           stream,
+                           cache_k_out->data<uint8_t>(),
+                           cache_v_out->data<uint8_t>(),
+                           qkv.data<T>(),
+                           cache_k_scale.data<T>(),
+                           cache_v_scale.data<T>(),
+                           cache_k_zp.data<T>(),
+                           cache_v_zp.data<T>(),
+                           batch_ids.data<int>(),
+                           tile_ids_per_batch.data<int>(),
+                           seq_lens_this_time.data<int>(),
+                           seq_lens_decoder.data<int>(),
+                           batch_id_per_token.data<int>(),
+                           cu_seqlens_q.data<int>(),
+                           block_table.data<int>(),
+                           max_seq_len,
+                           max_blocks_per_seq,
+                           num_heads,
+                           kv_num_heads);
 }

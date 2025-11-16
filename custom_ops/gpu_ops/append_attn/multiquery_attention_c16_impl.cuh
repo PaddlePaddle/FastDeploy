@@ -1208,8 +1208,12 @@ void MultiQueryAppendAttention(
                              cudaFuncAttributeMaxDynamicSharedMemorySize,
                              smem_size);
       }
-
-      nosplit_kv_kernel<<<grids, blocks, smem_size, stream>>>(
+      launchWithPdlWhenEnabled(
+          nosplit_kv_kernel,
+          grids,
+          blocks,
+          smem_size,
+          stream,
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(qkv.data<T>())),
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_k.data<T>())),
           reinterpret_cast<NV_TYPE *>(const_cast<T *>(cache_v.data<T>())),
