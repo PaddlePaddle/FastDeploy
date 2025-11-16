@@ -90,7 +90,18 @@ class TestEngineService(unittest.TestCase):
         mock_get_logger,
         mock_envs,
     ):
-        """Test EngineService initialization"""
+        """
+        Test EngineService initialization with mocked dependencies.
+
+        Purpose:
+            Verify that EngineService can be initialized correctly when provided with a mocked configuration and all dependent components are mocked.
+        Scenario:
+            - All external dependencies (such as ResourceManager, EngineWorkerQueue, etc.) are mocked.
+            - The configuration object is a MagicMock with required attributes set.
+        Expected Behavior:
+            - EngineService instance is created successfully.
+            - The configuration of the created EngineService matches the provided mock configuration.
+        """
         mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
         mock_envs.FD_ENABLE_CACHE_TASK = "0"
         mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
