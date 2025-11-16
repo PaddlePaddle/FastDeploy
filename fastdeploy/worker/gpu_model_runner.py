@@ -2067,7 +2067,6 @@ class GPUModelRunner(ModelRunnerBase):
         # when there is data on other runner, the current runner is required to execute part of the model.
         # if not self.not_need_stop():
         #     self._execute_empty_input()
-        #     self._execute_empty_input()
         #     return None
 
         # 2. Padding inputs for cuda graph
@@ -2077,7 +2076,7 @@ class GPUModelRunner(ModelRunnerBase):
         model_output = [None]
         import threading
 
-        my_dict = self.model.ernie.layers[3].mlp.experts.quant_method.ep_prefill_runner.ep_engine.my_dict
+        my_dict = self.model.ernie.layers[-1].mlp.experts.quant_method.ep_prefill_runner.ep_engine.my_dict
 
         def haha():
 
