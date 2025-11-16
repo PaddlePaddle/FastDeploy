@@ -287,7 +287,8 @@ class TestEngineService(unittest.TestCase):
         mock_request.prompt_token_ids_len = 100
         requests = [mock_request]
         engine.update_requests_chunk_size(requests)
-        self.assertTrue(hasattr(mock_request, "prefill_chunk_info") or hasattr(mock_request, "get"))
+        self.assertTrue(hasattr(mock_request, "prefill_chunk_info"))
+        self.assertIsNotNone(mock_request.prefill_chunk_info)
 
     @patch("fastdeploy.engine.common_engine.envs")
     @patch("fastdeploy.engine.common_engine.get_logger")
