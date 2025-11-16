@@ -304,7 +304,6 @@ paddle::Tensor MoeExpertFFNFunc(
     const paddle::Tensor& tokens_expert_prefix_sum,
     const paddle::Tensor& up_gate_proj_weight,
     const paddle::Tensor& down_proj_weight,
-    const paddle::optional<paddle::Tensor>& up_proj_in_scale,
     const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
     const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_scale,
