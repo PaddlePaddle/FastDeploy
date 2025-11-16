@@ -77,27 +77,27 @@ function copy_ops(){
     WHEEL_MODERN_NAME="fastdeploy_ops"
     WHEEL_MODERN_CPU_NAME="fastdeploy_cpu_ops"
 
-    # Handle GPU ops directories (WHEEL_NAME and WHEEL_MODERN_NAME)
-    if [ -d "./${OPS_TMP_DIR}/${WHEEL_NAME}" ]; then
-        echo -e "${YELLOW}[Warning]${NONE} ${WHEEL_NAME} directory exists. This is a deprecated packaging and distribution method."
+    # Handle GPU ops directories (WHEEL_MODERN_NAME and WHEEL_NAME)
+    if [ -d "./${OPS_TMP_DIR}/${WHEEL_MODERN_NAME}" ]; then
+        echo -e "${GREEN}[Info]${NONE} Ready to copy ops from modern directory ${WHEEL_MODERN_NAME} to target directory"
+        # Set WHEEL_NAME to empty string to ignore the directory path
+        WHEEL_NAME=""
     else
-        # If deprecated directory doesn't exist, check for modern directory
-        if [ -d "./${OPS_TMP_DIR}/${WHEEL_MODERN_NAME}" ]; then
-            echo -e "${GREEN}[Info]${NONE} Copying ops from modern directory ${WHEEL_MODERN_NAME} to ${WHEEL_NAME}"
-            mkdir -p "./${OPS_TMP_DIR}/${WHEEL_NAME}"
-            cp -r "./${OPS_TMP_DIR}/${WHEEL_MODERN_NAME}" "./${OPS_TMP_DIR}/${WHEEL_NAME}/"
+        # If modern directory doesn't exist, check for deprecated directory
+        if [ -d "./${OPS_TMP_DIR}/${WHEEL_NAME}" ]; then
+            echo -e "${YELLOW}[Warning]${NONE} ${WHEEL_NAME} directory exists. This is a deprecated packaging and distribution method."
         fi
     fi
 
-    # Handle CPU ops directories (WHEEL_CPU_NAME and WHEEL_MODERN_CPU_NAME)
-    if [ -d "./${OPS_TMP_DIR}/${WHEEL_CPU_NAME}" ]; then
-        echo -e "${YELLOW}[Warning]${NONE} ${WHEEL_CPU_NAME} directory exists. This is a deprecated packaging and distribution method."
+    # Handle CPU ops directories (WHEEL_MODERN_CPU_NAME and WHEEL_CPU_NAME)
+    if [ -d "./${OPS_TMP_DIR}/${WHEEL_MODERN_CPU_NAME}" ]; then
+        echo -e "${GREEN}[Info]${NONE} Ready to copy ops from modern directory ${WHEEL_MODERN_CPU_NAME} to target directory"
+        # Set WHEEL_CPU_NAME to empty string to ignore the directory path
+        WHEEL_CPU_NAME=""
     else
-        # If deprecated directory doesn't exist, check for modern directory
-        if [ -d "./${OPS_TMP_DIR}/${WHEEL_MODERN_CPU_NAME}" ]; then
-            echo -e "${GREEN}[Info]${NONE} Copying ops from modern directory ${WHEEL_MODERN_CPU_NAME} to ${WHEEL_CPU_NAME}"
-            mkdir -p "./${OPS_TMP_DIR}/${WHEEL_CPU_NAME}"
-            cp -r "./${OPS_TMP_DIR}/${WHEEL_MODERN_CPU_NAME}" "./${OPS_TMP_DIR}/${WHEEL_CPU_NAME}/"
+        # If modern directory doesn't exist, check for deprecated directory
+        if [ -d "./${OPS_TMP_DIR}/${WHEEL_CPU_NAME}" ]; then
+            echo -e "${YELLOW}[Warning]${NONE} ${WHEEL_CPU_NAME} directory exists. This is a deprecated packaging and distribution method."
         fi
     fi
     is_rocm=`$python -c "import paddle; print(paddle.is_compiled_with_rocm())"`
