@@ -340,7 +340,10 @@ class TestEngineService(unittest.TestCase):
         mock_get_logger,
         mock_envs,
     ):
-        """Test check_and_free_block_tables method"""
+        """
+        Test that EngineService.check_and_free_block_tables delegates to ResourceManager.
+        Verifies that the method properly calls the resource manager's check_and_free_block_tables method exactly once.
+        """
         mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
         mock_envs.FD_ENABLE_CACHE_TASK = "0"
         mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
