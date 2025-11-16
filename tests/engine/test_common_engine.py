@@ -21,7 +21,7 @@ import numpy as np
 
 from fastdeploy.engine.common_engine import EngineService
 
-# Note: This test requires dependencies like paddleformers, paddle, etc.
+# Note: This test requires dependencies like paddlenlp, paddle, etc.
 # In CI environment, these should be available.
 # For local testing without dependencies, you may need to install them or use CI.
 
