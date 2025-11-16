@@ -195,7 +195,10 @@ class TestEngineService(unittest.TestCase):
         mock_get_logger,
         mock_envs,
     ):
-        """Test task_is_finished method"""
+        """
+        Test that task_is_finished correctly identifies finished and unfinished tasks
+        by checking the stop_flags array at the given index.
+        """
         mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
         mock_envs.FD_ENABLE_CACHE_TASK = "0"
         mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
