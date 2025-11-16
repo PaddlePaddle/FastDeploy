@@ -42,6 +42,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
 
+from fastdeploy.model_executor.debug_utils import full_debug_print
 
 @dataclass
 class AppendAttentionMetadata(AttentionMetadata):
@@ -137,6 +138,43 @@ class AppendAttentionBackend(AttentionBackend):
         metadata.rotary_embs = forward_meta.rotary_embs
         metadata.attn_mask = forward_meta.attn_mask
         metadata.pre_caches_length = forward_meta.pre_caches_length
+        
+        full_debug_print(None, "C++ OP get_block_shape_and_split_kv_block", header="OBSERVATION POINT 3: C++ OP CALL")
+        
+        # 打印C++ OP的所有输入
+        full_debug_print(forward_meta.seq_lens_encoder, "INPUT: seq_lens_encoder")
+        full_debug_print(forward_meta.seq_lens_decoder, "INPUT: seq_lens_decoder")
+        full_debug_print(forward_meta.seq_lens_this_time, "INPUT: seq_lens_this_time")
+        full_debug_print(self.encoder_block_shape_q, "ATTR: encoder_block_shape_q")
+        full_debug_print(self.decoder_block_shape_q, "ATTR: decoder_block_shape_q")
+        full_debug_print(self.group_size, "ATTR: group_size")
+        full_debug_print(self.block_size, "ATTR: block_size")
+
+        get_block_shape_and_split_kv_block(
+            forward_meta.seq_lens_encoder,
+            forward_meta.seq_lens_decoder,
+            forward_meta.seq_lens_this_time,
+            forward_meta.decoder_batch_ids,
+            forward_meta.decoder_tile_ids_per_batch,
+            forward_meta.decoder_num_blocks_cpu,
+            forward_meta.decoder_num_blocks_device,
+            forward_meta.decoder_chunk_size_device,
+            forward_meta.max_len_tensor_cpu,
+            forward_meta.encoder_batch_ids,
+            forward_meta.encoder_tile_ids_per_batch,
+            forward_meta.encoder_num_blocks_x_cpu,
+            forward_meta.kv_batch_ids,
+            forward_meta.kv_tile_ids_per_batch,
+            forward_meta.kv_num_blocks_x_cpu,
+            self.encoder_block_shape_q,
+            self.decoder_block_shape_q,
+            self.group_size,
+            self.block_size,
+            self.speculate_max_draft_token_num + 1,
+        )
+        # 打印C++ OP的所有输出 (修改后的值)
+        full_debug_print(forward_meta.encoder_num_blocks_x_cpu, "OUTPUT: encoder_num_blocks_x_cpu")
+        full_debug_print(forward_meta.max_len_tensor_cpu, "OUTPUT: max_len_tensor_cpu")
 
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
@@ -319,29 +357,43 @@ class AppendAttentionBackend(AttentionBackend):
             cache_k_scales = getattr(layer, "cache_k_scale", None)
             cache_v_scales = getattr(layer, "cache_v_scale", None)
 
-        if layer.layer_id == 0:
-            get_block_shape_and_split_kv_block(
-                forward_meta.seq_lens_encoder,
-                forward_meta.seq_lens_decoder,
-                forward_meta.seq_lens_this_time,
-                forward_meta.decoder_batch_ids,
-                forward_meta.decoder_tile_ids_per_batch,
-                forward_meta.decoder_num_blocks_cpu,
-                forward_meta.decoder_num_blocks_device,
-                forward_meta.decoder_chunk_size_device,
-                forward_meta.max_len_tensor_cpu,
-                forward_meta.encoder_batch_ids,
-                forward_meta.encoder_tile_ids_per_batch,
-                forward_meta.encoder_num_blocks_x_cpu,
-                forward_meta.kv_batch_ids,
-                forward_meta.kv_tile_ids_per_batch,
-                forward_meta.kv_num_blocks_x_cpu,
-                self.encoder_block_shape_q,
-                self.decoder_block_shape_q,
-                self.group_size,
-                self.block_size,
-                self.speculate_max_draft_token_num + 1,
-            )
+        # if layer.layer_id == 0:
+        #     full_debug_print(None, "C++ OP get_block_shape_and_split_kv_block", header="OBSERVATION POINT 3: C++ OP CALL")
+            
+        #     # 打印C++ OP的所有输入
+        #     full_debug_print(forward_meta.seq_lens_encoder, "INPUT: seq_lens_encoder")
+        #     full_debug_print(forward_meta.seq_lens_decoder, "INPUT: seq_lens_decoder")
+        #     full_debug_print(forward_meta.seq_lens_this_time, "INPUT: seq_lens_this_time")
+        #     full_debug_print(self.encoder_block_shape_q, "ATTR: encoder_block_shape_q")
+        #     full_debug_print(self.decoder_block_shape_q, "ATTR: decoder_block_shape_q")
+        #     full_debug_print(self.group_size, "ATTR: group_size")
+        #     full_debug_print(self.block_size, "ATTR: block_size")
+
+        #     get_block_shape_and_split_kv_block(
+        #         forward_meta.seq_lens_encoder,
+        #         forward_meta.seq_lens_decoder,
+        #         forward_meta.seq_lens_this_time,
+        #         forward_meta.decoder_batch_ids,
+        #         forward_meta.decoder_tile_ids_per_batch,
+        #         forward_meta.decoder_num_blocks_cpu,
+        #         forward_meta.decoder_num_blocks_device,
+        #         forward_meta.decoder_chunk_size_device,
+        #         forward_meta.max_len_tensor_cpu,
+        #         forward_meta.encoder_batch_ids,
+        #         forward_meta.encoder_tile_ids_per_batch,
+        #         forward_meta.encoder_num_blocks_x_cpu,
+        #         forward_meta.kv_batch_ids,
+        #         forward_meta.kv_tile_ids_per_batch,
+        #         forward_meta.kv_num_blocks_x_cpu,
+        #         self.encoder_block_shape_q,
+        #         self.decoder_block_shape_q,
+        #         self.group_size,
+        #         self.block_size,
+        #         self.speculate_max_draft_token_num + 1,
+        #     )
+        #     # 打印C++ OP的所有输出 (修改后的值)
+        #     full_debug_print(forward_meta.encoder_num_blocks_x_cpu, "OUTPUT: encoder_num_blocks_x_cpu")
+        #     full_debug_print(forward_meta.max_len_tensor_cpu, "OUTPUT: max_len_tensor_cpu")
 
         if self.use_output:
             quant_max_bound = getattr(layer, "quant_max_bound", 0.0)

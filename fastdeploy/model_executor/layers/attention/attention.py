@@ -37,6 +37,8 @@ from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import default_weight_loader
 
 
+from fastdeploy.model_executor.debug_utils import full_debug_print
+
 class Attention(nn.Layer):
     """
     The AttentionLayer.
@@ -248,7 +250,25 @@ class Attention(nn.Layer):
             compressed_kv: optional compressed key-value cache (for MLA)
             k_pe: optional key positional encoding (for MLA)
         """
-        return forward_meta.attn_backend.forward(
+        # return forward_meta.attn_backend.forward(
+        #     q,
+        #     k,
+        #     v,
+        #     qkv,
+        #     compressed_kv,
+        #     k_pe,
+        #     self,
+        #     forward_meta,
+        # )
+        
+        is_profile_run = forward_meta.step_use_cudagraph
+        if not is_profile_run and self.layer_id == 7: # 只打印我们关心的GQA层
+            full_debug_print(None, f"Attention Layer {self.layer_id} (GQA)", header="OBSERVATION POINT 4: ATTENTION FORWARD")
+            full_debug_print(qkv, f"L{self.layer_id}_Input_QKV_Combined")
+            full_debug_print(forward_meta.encoder_num_blocks_x_cpu, f"L{self.layer_id}_meta_encoder_num_blocks_x_cpu")
+            full_debug_print(forward_meta.block_tables, f"L{self.layer_id}_meta_block_tables")
+        
+        attn_output = forward_meta.attn_backend.forward(
             q,
             k,
             v,
@@ -258,3 +278,8 @@ class Attention(nn.Layer):
             self,
             forward_meta,
         )
+
+        if not is_profile_run and self.layer_id == 7:
+            full_debug_print(attn_output, f"L{self.layer_id}_Output_Attention")
+
+        return attn_output

@@ -243,18 +243,27 @@ class MiniMaxM1LinearAttention(nn.Layer):
             final_output_dummy = self.out_proj(gated_output_dummy)
             
             return final_output_dummy
-
+        
+        layer_id = self.layer_id
+        logger.info(f"\n{'='*20} [FD DEBUG] Entering LinearAttention Layer {layer_id} {'='*20}")
+        print_tensor_stats(hidden_states, f"L{layer_id}:0_InputHiddenStates")
 
         model_dtype = self.out_proj.weight.dtype
         total_tokens = hidden_states.shape[0]
 
         qkv = self.qkv_proj(hidden_states)
+        print_tensor_stats(qkv, f"L{layer_id}:1_AfterQKVProj")
         
         qkv_float32 = qkv.astype("float32")
         qkv_act = F.silu(qkv_float32)
+        print_tensor_stats(qkv_act, f"L{layer_id}:2_AfterSILU")
 
         qkv_reshaped = qkv_act.reshape((total_tokens, self.tp_heads, 3 * self.head_dim))
         q, k, v = qkv_reshaped.split([self.head_dim, self.head_dim, self.head_dim], axis=-1)
+        
+        print_tensor_stats(q, f"L{layer_id}:2a_Split_Q")
+        print_tensor_stats(k, f"L{layer_id}:2b_Split_K")
+        print_tensor_stats(v, f"L{layer_id}:2c_Split_V")
 
         prefill_token_num = int(paddle.sum(forward_meta.seq_lens_encoder).item())
         decode_token_num = total_tokens - prefill_token_num
@@ -309,10 +318,16 @@ class MiniMaxM1LinearAttention(nn.Layer):
         else:
             return paddle.zeros_like(hidden_states)
         
+        print_tensor_stats(output, f"L{layer_id}:3_AfterAttentionKernel")
+        
         output = self.norm(output)
+        print_tensor_stats(output, f"L{layer_id}:4_AfterRMSNormTP")
         gate = self.output_gate(hidden_states)
+        print_tensor_stats(gate, f"L{layer_id}:5_GateValue")
         output = F.sigmoid(gate) * output.cast(model_dtype)
+        print_tensor_stats(output, f"L{layer_id}:6_AfterGating")
         final_output = self.out_proj(output)
+        print_tensor_stats(final_output, f"L{layer_id}:7_FinalOutput")
 
         return final_output
 
@@ -453,6 +468,7 @@ class MiniMaxM1DecoderLayer(nn.Layer):
         """Forward pass for the decoder layer with FORCED full debugging."""
         is_profile_run = forward_meta.step_use_cudagraph
         layer_id = self.original_layer_id
+        print_tensor_stats(hidden_states, f"L{layer_id}:0a_Input_HiddenStates")
         
         # We print logs for ALL layers in INFERENCE mode
         if is_profile_run:
@@ -470,6 +486,7 @@ class MiniMaxM1DecoderLayer(nn.Layer):
 
 
         layernorm_output = self.input_layernorm(hidden_states)
+        print_tensor_stats(layernorm_output, f"L{layer_id}:1_After_InputLayernorm")
 
         residual_attn = layernorm_output if self.postnorm else hidden_states
 
@@ -527,17 +544,22 @@ class MiniMaxM1DecoderLayer(nn.Layer):
         print_tensor_stats(attn_output, f"FD_L{layer_id}:2_After_Attention")
 
         hidden_states_after_attn = (residual_attn * self.layernorm_attention_alpha) + (attn_output * self.layernorm_attention_beta)
+        print_tensor_stats(hidden_states_after_attn, f"L{layer_id}:3_After_Attn_Residual(alpha={self.layernorm_attention_alpha}, beta={self.layernorm_attention_beta})")
         layernorm_output_mlp = self.post_attention_layernorm(hidden_states_after_attn)
+        print_tensor_stats(layernorm_output_mlp, f"L{layer_id}:4_After_PostAttnLayernorm")
         residual_mlp = layernorm_output_mlp if self.postnorm else hidden_states_after_attn
         mlp_output = self.mlp(layernorm_output_mlp)
+        print_tensor_stats(mlp_output, f"L{layer_id}:5a_After_MoE_MLP")
         
         if self.shared_moe:
             shared_output = self.shared_mlp(layernorm_output_mlp)
             coef_logits = self.coefficient(layernorm_output_mlp.cast("float32"))
             coef = F.sigmoid(coef_logits)
             mlp_output = mlp_output.cast(coef.dtype) * (1 - coef) + shared_output.cast(coef.dtype) * coef
+            print_tensor_stats(mlp_output, f"L{layer_id}:5b_After_Shared_MLP_Merge")
 
         final_output = (residual_mlp * self.layernorm_mlp_alpha) + (mlp_output * self.layernorm_mlp_beta)
+        print_tensor_stats(final_output, f"L{layer_id}:6_FinalOutput(alpha={self.layernorm_mlp_alpha}, beta={self.layernorm_mlp_beta})")
         
         return final_output, None
 

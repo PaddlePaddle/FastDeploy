@@ -94,6 +94,7 @@ from fastdeploy.output.pooler import PoolerOutput
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelOutputData, ModelRunnerOutput
 
+from fastdeploy.model_executor.debug_utils import full_debug_print
 
 class GPUModelRunner(ModelRunnerBase):
     def __init__(
@@ -523,6 +524,7 @@ class GPUModelRunner(ModelRunnerBase):
         req_dict: A list of Request dict
         num_running_requests: batch_size
         """
+        full_debug_print(None, "V1 SCHEDULER PATH (insert_tasks_v1)", header="OBSERVATION POINT 1: TASK ENTRY")
         # NOTE(luotingdan): Lazy initialize kv cache
         if "caches" not in self.share_inputs:
             self.initialize_kv_cache()
@@ -692,6 +694,8 @@ class GPUModelRunner(ModelRunnerBase):
         num_running_requests: batch_size
         TODO(gongshaotian): Refactor this func
         """
+        full_debug_print(None, "V2 SCHEDULER PATH (insert_prefill_inputs)", header="OBSERVATION POINT 1: TASK ENTRY")
+        full_debug_print([r.__dict__ for r in req_dicts], "Raw Request Dictionary")
 
         # NOTE(luotingdan): Set environment variable of prefill node
         if req_dicts[-1].disaggregate_info is not None and req_dicts[-1].disaggregate_info["role"] == "prefill":
@@ -1256,6 +1260,10 @@ class GPUModelRunner(ModelRunnerBase):
                 self.cache_config.block_size,
                 self.speculative_config.num_speculative_tokens if self.speculative_decoding else 0,
             )
+            
+        full_debug_print(None, "Data to be pre-processed", header="OBSERVATION POINT 2: PRE-PROCESS INPUT")
+        full_debug_print(self.share_inputs["input_ids"], "input_ids")
+        full_debug_print(self.share_inputs["seq_lens_this_time"], "seq_lens_this_time")
 
         # Remove padding
         (
