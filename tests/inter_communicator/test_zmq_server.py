@@ -159,6 +159,9 @@ class ConcreteZmqServer(ZmqServerBase):
         """Initialize the concrete server"""
         super().__init__()
         self.socket = None
+        self.mutex = threading.Lock()
+        self.req_dict = dict()
+        self.aggregate_send = False
 
     def _create_socket(self):
         """Create a mock socket for testing"""
@@ -167,8 +170,10 @@ class ConcreteZmqServer(ZmqServerBase):
         mock_socket.connect = Mock()
         mock_socket.send = Mock()
         mock_socket.send_json = Mock()
+        mock_socket.send_multipart = Mock()
         mock_socket.recv = Mock(return_value=b"test_response")
         mock_socket.recv_json = Mock(return_value={"status": "success"})
+        mock_socket.recv_multipart = Mock(return_value=[b"client", b"", b"request_id"])
         mock_socket.close = Mock()
         mock_socket.setsockopt = Mock()
         mock_socket.closed = False  # Add closed attribute
@@ -179,6 +184,20 @@ class ConcreteZmqServer(ZmqServerBase):
         if self.socket:
             self.socket.close()
             self.socket = None
+
+
+class MockResponse:
+    """Mock response object for testing"""
+    def __init__(self, finished=False):
+        self.finished = finished
+
+    def add(self, other):
+        """Mock add method"""
+        return self
+
+    def to_dict(self):
+        """Mock to_dict method"""
+        return {"finished": self.finished}
 
 
 class TestZmqServerBase(unittest.TestCase):
@@ -256,6 +275,161 @@ class TestZmqServerBase(unittest.TestCase):
         self.server.cached_results.clear()
         self.assertEqual(len(self.server.cached_results), 0)
 
+    def test_send_pyobj(self):
+        """Test send_pyobj method"""
+        if TEST_MODE == "standalone":
+            self.skipTest("Skipping in standalone mode")
+
+        self.server.socket = Mock()
+        test_data = {"message": "test"}
+
+        # Mock ForkingPickler
+        with patch('fastdeploy.inter_communicator.zmq_server.ForkingPickler') as mock_pickler:
+            mock_pickler.dumps.return_value = b"pickled_data"
+            self.server.send_pyobj(test_data)
+            mock_pickler.dumps.assert_called_once_with(test_data)
+            self.server.socket.send.assert_called_once_with(b"pickled_data", copy=False)
+
+    def test_recv_pyobj(self):
+        """Test recv_pyobj method"""
+        if TEST_MODE == "standalone":
+            self.skipTest("Skipping in standalone mode")
+
+        self.server.socket = Mock()
+        expected_result = {"message": "test"}
+        self.server.socket.recv.return_value = b"pickled_data"
+
+        with patch('fastdeploy.inter_communicator.zmq_server.ForkingPickler') as mock_pickler:
+            mock_pickler.loads.return_value = expected_result
+            result = self.server.recv_pyobj()
+            mock_pickler.loads.assert_called_once_with(b"pickled_data")
+            self.assertEqual(result, expected_result)
+
+    def test_pack_aggregated_data(self):
+        """Test pack_aggregated_data method"""
+        if TEST_MODE == "standalone":
+            # Skip in standalone mode due to mocking complexity
+            self.skipTest("Skipping in standalone mode")
+
+        with patch('fastdeploy.inter_communicator.zmq_server.msgpack') as mock_msgpack:
+            mock_msgpack.packb.return_value = b"packed_data"
+
+            response1 = MockResponse(finished=False)
+            response2 = MockResponse(finished=True)
+
+            result = self.server.pack_aggregated_data([response1, response2])
+
+            # Verify msgpack.packb was called with aggregated response
+            mock_msgpack.packb.assert_called_once()
+            args = mock_msgpack.packb.call_args[0][0]
+            self.assertEqual(len(args), 1)
+            self.assertEqual(args[0]["finished"], True)  # Should be True after aggregation
+            self.assertEqual(result, b"packed_data")
+
+    def test_receive_json_once_success(self):
+        """Test receive_json_once successful case"""
+        if TEST_MODE == "standalone":
+            self.skipTest("Skipping in standalone mode")
+
+        self.server.socket = Mock()
+        expected_data = {"status": "success"}
+        self.server.socket.recv_json.return_value = expected_data
+
+        # Mock zmq.NOBLOCK
+        with patch('fastdeploy.inter_communicator.zmq_server.zmq') as mock_zmq:
+            mock_zmq.NOBLOCK = 1
+            error, result = self.server.receive_json_once(block=False)
+
+            self.assertIsNone(error)
+            self.assertEqual(result, expected_data)
+            self.server.socket.recv_json.assert_called_once_with(flags=mock_zmq.NOBLOCK)
+
+    def test_receive_json_once_no_data(self):
+        """Test receive_json_once when no data available"""
+        if TEST_MODE == "standalone":
+            self.skipTest("Skipping in standalone mode")
+
+        self.server.socket = Mock()
+        # Mock zmq.Again exception
+        with patch('fastdeploy.inter_communicator.zmq_server.zmq') as mock_zmq:
+            mock_zmq.Again = Exception
+            mock_zmq.NOBLOCK = 1
+            self.server.socket.recv_json.side_effect = mock_zmq.Again()
+
+            error, result = self.server.receive_json_once(block=False)
+
+            self.assertIsNone(error)
+            self.assertIsNone(result)
+
+    def test_receive_json_once_socket_closed(self):
+        """Test receive_json_once when socket is closed"""
+        self.server.socket = Mock()
+        self.server.socket.closed = True
+
+        error, result = self.server.receive_json_once(block=False)
+
+        self.assertEqual(error, "zmp socket has closed")
+        self.assertIsNone(result)
+
+    def test_receive_pyobj_once_success(self):
+        """Test receive_pyobj_once successful case"""
+        if TEST_MODE == "standalone":
+            self.skipTest("Skipping in standalone mode")
+
+        self.server.socket = Mock()
+        self.server.socket.recv.return_value = b"pickled_data"
+        expected_result = {"status": "success"}
+
+        with patch('fastdeploy.inter_communicator.zmq_server.ForkingPickler') as mock_pickler, \
+             patch('fastdeploy.inter_communicator.zmq_server.zmq') as mock_zmq:
+            mock_zmq.NOBLOCK = 1
+            mock_pickler.loads.return_value = expected_result
+            error, result = self.server.receive_pyobj_once(block=False)
+
+            self.assertIsNone(error)
+            self.assertEqual(result, expected_result)
+
+    def test_send_response_with_req_dict(self):
+        """Test send_response when req_id exists in req_dict"""
+        if TEST_MODE == "standalone":
+            self.skipTest("Skipping in standalone mode")
+
+        self.server.socket = Mock()
+        self.server.req_dict = {"test_req": b"client_identity"}
+        self.server.aggregate_send = False
+
+        # Use patch for msgpack
+        with patch('fastdeploy.inter_communicator.zmq_server.msgpack') as mock_msgpack, \
+             patch('fastdeploy.inter_communicator.zmq_server.zmq') as mock_zmq:
+            mock_zmq.NOBLOCK = 1
+            mock_msgpack.packb.return_value = b"packed_response"
+
+            response = MockResponse(finished=True)
+            self.server.send_response("test_req", [response])
+
+            # Verify response was sent
+            self.server.socket.send_multipart.assert_called_once()
+            args = self.server.socket.send_multipart.call_args[0]
+            self.assertEqual(args[0], b"client_identity")
+            self.assertEqual(args[1], b"")
+            self.assertEqual(args[2], b"packed_response")
+
+            # Verify req_id was removed since response was finished
+            self.assertNotIn("test_req", self.server.req_dict)
+
+    def test_send_response_without_req_dict(self):
+        """Test send_response when req_id doesn't exist in req_dict"""
+        self.server.socket = Mock()
+        self.server.req_dict = {}
+
+        response = MockResponse(finished=True)
+        self.server.send_response("test_req", [response])
+
+        # Verify response was cached
+        self.assertIn("test_req", self.server.cached_results)
+        # Socket should not be called since no req_dict entry
+        self.server.socket.send_multipart.assert_not_called()
+
     def test_abstract_method_not_implemented(self):
         """Test that ZmqServerBase cannot be instantiated directly"""
         with self.assertRaises(TypeError):
@@ -300,6 +474,57 @@ class TestZmqIpcServer(unittest.TestCase):
         expected = f"/dev/shm/{self.name}.socket"
         self.assertEqual(pull_server.file_name, expected)
 
+    def test_clear_ipc_file_exists(self):
+        """Test _clear_ipc method when file exists"""
+        test_file = "/tmp/test_socket_file"
+
+        # Create a test file
+        with open(test_file, 'w') as f:
+            f.write("test")
+
+        self.server._clear_ipc(test_file)
+
+        # File should be removed
+        self.assertFalse(os.path.exists(test_file))
+
+    def test_clear_ipc_file_not_exists(self):
+        """Test _clear_ipc method when file doesn't exist"""
+        non_existent_file = "/tmp/non_existent_file"
+
+        # Should not raise exception
+        self.server._clear_ipc(non_existent_file)
+
+    def test_close(self):
+        """Test close method"""
+        # Mock socket and context
+        self.server.socket = Mock()
+        self.server.socket.closed = False
+        self.server.context = Mock()
+        self.server.context.closed = False
+        self.server.running = True
+        self.server.file_name = "/tmp/test_socket"
+
+        # Create the file for cleanup
+        with open(self.server.file_name, 'w') as f:
+            f.write("test")
+
+        # Test close
+        self.server.close()
+
+        # Verify cleanup
+        self.assertFalse(self.server.running)
+        self.server.socket.close.assert_called_once()
+        self.server.context.term.assert_called_once()
+        self.assertFalse(os.path.exists(self.server.file_name))
+
+    def test_close_already_closed(self):
+        """Test close method when already closed"""
+        self.server.running = False
+
+        # Should not attempt to close again
+        self.server.close()
+        self.assertFalse(self.server.running)
+
 
 class TestZmqTcpServer(unittest.TestCase):
     """Test suite for ZmqTcpServer class"""
@@ -332,6 +557,97 @@ class TestZmqTcpServer(unittest.TestCase):
         expected_bind_address = f"tcp://*:{self.port}"
         # The socket should have been bound to this address during initialization
         self.server.socket.bind.assert_called_with(expected_bind_address)
+
+    def test_recv_control_cmd_success(self):
+        """Test recv_control_cmd successful case"""
+        if TEST_MODE == "standalone":
+            self.skipTest("Skipping in standalone mode")
+
+        test_task = {"task_id": "test_task_123", "command": "start"}
+        packed_task = b"packed_task"
+
+        self.server.socket = Mock()
+        self.server.socket.recv_multipart.return_value = [b"client", b"", packed_task]
+        self.server.req_dict = {}
+
+        with patch('fastdeploy.inter_communicator.zmq_server.msgpack') as mock_msgpack, \
+             patch('fastdeploy.inter_communicator.zmq_server.zmq') as mock_zmq:
+            mock_zmq.Again = Exception
+            mock_zmq.NOBLOCK = 1
+            mock_msgpack.unpackb.return_value = test_task
+
+            result = self.server.recv_control_cmd()
+
+            self.assertEqual(result, test_task)
+            self.assertIn("test_task_123", self.server.req_dict)
+            self.assertEqual(self.server.req_dict["test_task_123"], b"client")
+
+    def test_recv_control_cmd_no_data(self):
+        """Test recv_control_cmd when no data available"""
+        if TEST_MODE == "standalone":
+            self.skipTest("Skipping in standalone mode")
+
+        self.server.socket = Mock()
+        with patch('fastdeploy.inter_communicator.zmq_server.zmq') as mock_zmq:
+            mock_zmq.Again = Exception
+            mock_zmq.NOBLOCK = 1
+            self.server.socket.recv_multipart.side_effect = mock_zmq.Again()
+
+            result = self.server.recv_control_cmd()
+
+            self.assertIsNone(result)
+
+    def test_response_for_control_cmd(self):
+        """Test response_for_control_cmd method"""
+        if TEST_MODE == "standalone":
+            self.skipTest("Skipping in standalone mode")
+
+        test_task_id = "test_task_123"
+        test_result = {"status": "completed", "output": "success"}
+        packed_result = b"packed_result"
+
+        self.server.socket = Mock()
+        self.server.req_dict = {test_task_id: b"client_identity"}
+
+        with patch('fastdeploy.inter_communicator.zmq_server.msgpack') as mock_msgpack:
+            mock_msgpack.packb.return_value = packed_result
+
+            self.server.response_for_control_cmd(test_task_id, test_result)
+
+            # Verify response was sent
+            self.server.socket.send_multipart.assert_called_once()
+            args = self.server.socket.send_multipart.call_args[0]
+            self.assertEqual(args[0], b"client_identity")
+            self.assertEqual(args[1], b"")
+            self.assertEqual(args[2], packed_result)
+
+            # Verify task_id was removed from req_dict
+            self.assertNotIn(test_task_id, self.server.req_dict)
+
+    def test_close(self):
+        """Test close method"""
+        # Mock socket and context
+        self.server.socket = Mock()
+        self.server.socket.closed = False
+        self.server.context = Mock()
+        self.server.context.closed = False
+        self.server.running = True
+
+        # Test close
+        self.server.close()
+
+        # Verify cleanup
+        self.assertFalse(self.server.running)
+        self.server.socket.close.assert_called_once()
+        self.server.context.term.assert_called_once()
+
+    def test_close_already_closed(self):
+        """Test close method when already closed"""
+        self.server.running = False
+
+        # Should not attempt to close again
+        self.server.close()
+        self.assertFalse(self.server.running)
 
 
 if __name__ == "__main__":
