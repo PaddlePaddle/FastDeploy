@@ -580,7 +580,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
                 expert_id = None
                 shard_id = None
                 model_param_name = checkpoint_to_fd_key_fn(loaded_weight_name, is_moe=False)
-                if model_param_name not in params_dict.keys():
+                if model_param_name not in params_dict:
                     continue
                 param = params_dict[model_param_name]
 
