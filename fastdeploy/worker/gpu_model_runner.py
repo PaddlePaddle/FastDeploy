@@ -1793,7 +1793,7 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 model_output = self.model(
                     self.forward_meta.ids_remove_padding,
-                    forward_meta=self.forward_meta,
+                    self.forward_meta,
                 )
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
@@ -2077,8 +2077,8 @@ class GPUModelRunner(ModelRunnerBase):
             )
         else:
             model_output = self.model(
-                ids_remove_padding=self.forward_meta.ids_remove_padding,
-                forward_meta=self.forward_meta,
+                self.forward_meta.ids_remove_padding,
+                self.forward_meta,
             )
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
