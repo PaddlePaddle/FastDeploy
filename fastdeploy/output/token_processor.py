@@ -477,7 +477,8 @@ class TokenProcessor:
                 self.tokens_counter[task_id] += 1
                 if token_id != RECOVERY_STOP_SIGNAL:
                     result.outputs.token_ids.append(token_id)
-                    task.output_token_ids.append(token_id)
+                    if mtype == 3:  # target_tokens
+                        task.output_token_ids.append(token_id)
                     if self.use_logprobs:
                         if self.cfg.speculative_config.method:
                             result.outputs.logprob = float(scores[i, batch_token_index, 0])
