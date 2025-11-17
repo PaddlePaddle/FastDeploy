@@ -20,7 +20,7 @@ import math
 import os
 from abc import abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING, List, Optional
 
 import paddle
 
@@ -247,8 +247,8 @@ class HPUAttentionBackend(AttentionBackend_HPU):
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,
-        kv_cache_quant_type: str = None,
-    ) -> Tuple[list, list]:
+        kv_cache_quant_type: Optional[str] = None,
+    ):
         """
         Caculate kv cache shape
         """
