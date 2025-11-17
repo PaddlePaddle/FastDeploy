@@ -117,10 +117,10 @@ class TestAttentionPerformance(unittest.TestCase):
         config_dict = {
             "architectures": ["Ernie4_5_MoeForCausalLM"],
             "dtype": "bfloat16",
-            "hidden_size": 1536,
+            "hidden_size": 4096,
             "max_position_embeddings": 131072,
             "max_model_len": 2 * (9000 + 128),
-            "num_attention_heads": 12,
+            "num_attention_heads": 32,
             "num_key_value_heads": 4,
             "num_hidden_layers": 39,
         }
