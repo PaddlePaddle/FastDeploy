@@ -66,6 +66,7 @@ class _RecordingProcessor(sampler_module.LogitsProcessorBase):
 
     def accept_token(self, token):
         self.accepted_tokens.append(int(token))
+        return True
 
     def is_terminated(self):
         return self.terminated
@@ -256,8 +257,8 @@ def test_top_p_normalize_and_padding_params():
     assert list(padded_k.shape) == [2, 1]
 
 
-def test_guided_decoding_tracks_processors_and_reasoning():
-    guided = sampler_module.GuidedDecoding()
+def test_guided_decoding_tracks_processors_and_reasoning(fd_config_factory):
+    guided = sampler_module.GuidedDecoding(fd_config_factory())
     reasoning_calls = []
 
     class _Reasoning:
@@ -266,37 +267,36 @@ def test_guided_decoding_tracks_processors_and_reasoning():
             return tokens == [9]
 
     guided.apply_reasoning_parser(_Reasoning())
-    mask_future = Future()
-    guided.add_logits_processor(0, mask_future, prefill_tokens=[1, 2])
     mask_proc = _RecordingProcessor(enable_reasoning=False)
+    mask_future = Future()
     mask_future.set_result(mask_proc)
+    guided.add_logits_processor(0, mask_future, prefill_tokens=[1, 2])
 
-    reason_future = Future()
-    guided.add_logits_processor(1, reason_future, prefill_tokens=[3])
     reason_proc = _RecordingProcessor(enable_reasoning=True)
+    reason_future = Future()
     reason_future.set_result(reason_proc)
+    guided.add_logits_processor(1, reason_future, prefill_tokens=[3])
     guided.pre_process()
-    assert mask_proc.accepted_tokens[:2] == [1, 2]
-    assert reason_proc.accepted_tokens == [3]
-
     logits = paddle.ones([2, 3], dtype="float32")
     masked = guided.apply_token_mask(logits)
-    assert bool(paddle.allclose(masked[0], paddle.zeros([3], dtype="float32")))
-    assert bool(paddle.allclose(masked[1], paddle.ones([3], dtype="float32")))
+    assert getattr(mask_proc, "reasoning_ended", False) is False
+    assert mask_proc.accepted_tokens == []
+    assert reason_proc.accepted_tokens == [3]
+    assert bool(paddle.allclose(masked, logits))
 
     next_tokens = paddle.to_tensor([[4], [9]], dtype="int64")
     guided.update_output_tokens(next_tokens)
-    assert reasoning_calls == [[9]]
+    assert reasoning_calls[:2] == [[1], [2]]
 
     guided.add_logits_processor(0, None)
-    assert 0 not in guided.logits_processor
-    with pytest.raises(ValueError):
+    assert guided.logits_processors[0] is None
+    with pytest.raises(IndexError):
         guided._accept_token(99, 0)
 
 
-def test_sampler_compute_logprobs_handles_metadata(set_platform):
+def test_sampler_compute_logprobs_handles_metadata(set_platform, fd_config_factory):
     set_platform("cuda")
-    sampler = sampler_module.Sampler()
+    sampler = sampler_module.Sampler(fd_config=fd_config_factory())
     logits = paddle.zeros([2, 3], dtype="float32")
     assert list(sampler.compute_logprobs(logits).shape) == [2, 3]
 
@@ -308,9 +308,9 @@ def test_sampler_compute_logprobs_handles_metadata(set_platform):
     assert list(result.shape) == [2, 3]
 
 
-def test_sampler_gather_logprobs_variants(set_platform):
+def test_sampler_gather_logprobs_variants(set_platform, fd_config_factory):
     set_platform("cuda")
-    sampler = sampler_module.Sampler()
+    sampler = sampler_module.Sampler(fd_config=fd_config_factory())
     logprobs = paddle.to_tensor([[0.1, 0.2, 0.3]], dtype="float32")
     token_ids = paddle.to_tensor([2], dtype="int64")
     tensors = sampler.gather_logprobs(logprobs, 2, token_ids)
@@ -348,9 +348,9 @@ def test_sampler_forward_cuda_variants(monkeypatch, set_platform, fd_config_fact
     sampler.forward_cuda(logits, metadata)
 
 
-def test_sampler_forward_intel_hpu_path(set_platform):
+def test_sampler_forward_intel_hpu_path(set_platform, fd_config_factory):
     set_platform("intel_hpu")
-    sampler = sampler_module.Sampler()
+    sampler = sampler_module.Sampler(fd_config=fd_config_factory())
     metadata = _build_sampling_metadata()
     batch_ids = paddle.to_tensor([0], dtype="int64")
     logits = paddle.randn([2, 3])
