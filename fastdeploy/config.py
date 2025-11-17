@@ -1780,7 +1780,7 @@ class FDConfig:
         """
         initialize cache info
         """
-        # TODO: group the splitiwse params, remove code of v0
+        # TODO: group the splitwise params, remove code of v0
         # v0 requires prefill and decode in one node and it uses local scheduler
         # v1 supports prefill and decode in multi node and it uses splitwise or dp scheduler
         # v2 supports prefill and decode in multi node and it uses router and local scheduler
