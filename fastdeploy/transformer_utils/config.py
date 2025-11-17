@@ -12,9 +12,7 @@ from huggingface_hub.utils import (
     RevisionNotFoundError,
 )
 
-from fastdeploy.utils import get_logger
-
-logger = get_logger("transformer_config", "transformer_config.log")
+from fastdeploy.utils import llm_logger
 
 
 def file_or_path_exists(model, config_name):
@@ -80,10 +78,10 @@ def get_hf_file_to_dict(file_name: str, model: Union[str, Path], revision: Optio
         except huggingface_hub.errors.OfflineModeIsEnabled:
             return None
         except (RepositoryNotFoundError, RevisionNotFoundError, EntryNotFoundError, LocalEntryNotFoundError) as e:
-            logger.debug("File or repository not found in hf_hub_download", e)
+            llm_logger.debug("File or repository not found in hf_hub_download", e)
             return None
         except HfHubHTTPError as e:
-            logger.warning(
+            llm_logger.warning(
                 "Cannot connect to Hugging Face Hub. Skipping file " "download for '%s':", file_name, exc_info=e
             )
             return None

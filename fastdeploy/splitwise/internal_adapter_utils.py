@@ -25,8 +25,6 @@ from fastdeploy.inter_communicator import ZmqTcpServer
 from fastdeploy.metrics.metrics import get_filtered_metrics, main_process_metrics
 from fastdeploy.utils import envs, get_logger
 
-logger = get_logger("internal_adapter_utils", "internal_adapter_utils.log")
-
 
 class InternalAdapter:
     def __init__(self, cfg, engine, dp_rank):
@@ -40,6 +38,8 @@ class InternalAdapter:
             target=self._recv_external_module_control_instruct, daemon=True
         )
         self.recv_external_instruct_thread.start()
+        self.logger = get_logger("internal_adapter_utils", "internal_adapter_utils.log")
+
         if cfg.scheduler_config.splitwise_role != "mixed":
             self.response_external_instruct_thread = threading.Thread(
                 target=self._response_external_module_control_instruct, daemon=True
@@ -78,12 +78,12 @@ class InternalAdapter:
                 if task is None:
                     time.sleep(0.001)
                     continue
-                logger.info(f"dprank {self.dp_rank} Recieve control task: {task}")
+                self.logger.info(f"dprank {self.dp_rank} Recieve control task: {task}")
                 task_id_str = task["task_id"]
                 if task["cmd"] == "get_payload":
                     payload_info = self._get_current_server_info()
                     result = {"task_id": task_id_str, "result": payload_info}
-                    logger.debug(f"Response for task: {task_id_str}")
+                    self.logger.debug(f"Response for task: {task_id_str}")
                     with self.response_lock:
                         self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
 
@@ -93,14 +93,14 @@ class InternalAdapter:
                         extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=1),
                     )
                     result = {"task_id": task_id_str, "result": metrics_text}
-                    logger.debug(f"Response for task: {task_id_str}")
+                    self.logger.debug(f"Response for task: {task_id_str}")
                     with self.response_lock:
                         self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
                 elif task["cmd"] == "connect_rdma":
                     self.engine.engine_worker_queue.put_connect_rdma_task(task)
 
             except Exception as e:
-                logger.error(f"handle_control_cmd got error: {e}, {traceback.format_exc()!s}")
+                self.logger.error(f"handle_control_cmd got error: {e}, {traceback.format_exc()!s}")
 
     def _response_external_module_control_instruct(self):
         while True:
@@ -109,10 +109,10 @@ class InternalAdapter:
                 if result_data:
                     task_id_str = result_data["task_id"]
                     result = {"task_id": task_id_str, "result": result_data}
-                    logger.info(f"Response for task: {task_id_str}")
+                    self.logger.info(f"Response for task: {task_id_str}")
                     with self.response_lock:
                         self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
                 else:
                     time.sleep(0.001)
             except Exception as e:
-                logger.error(f"_handle_connect_rdma_results got error: {e}, {traceback.format_exc() !s}")
+                self.logger.error(f"_handle_connect_rdma_results got error: {e}, {traceback.format_exc() !s}")
