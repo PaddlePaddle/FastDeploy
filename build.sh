@@ -79,6 +79,34 @@ function copy_ops(){
     PROCESSOR_VERSION=`${python} -c "import platform; print(platform.processor())"`
     WHEEL_NAME="fastdeploy_ops-${OPS_VERSION}-${PY_VERSION}-${SYSTEM_VERSION}-${PROCESSOR_VERSION}.egg"
     WHEEL_CPU_NAME="fastdeploy_cpu_ops-${OPS_VERSION}-${PY_VERSION}-${SYSTEM_VERSION}-${PROCESSOR_VERSION}.egg"
+
+    # Add compatibility for modern python packaging methods
+    WHEEL_MODERN_NAME="fastdeploy_ops"
+    WHEEL_MODERN_CPU_NAME="fastdeploy_cpu_ops"
+
+    # Handle GPU ops directories (WHEEL_MODERN_NAME and WHEEL_NAME)
+    if [ -d "./${OPS_TMP_DIR}/${WHEEL_MODERN_NAME}" ]; then
+        echo -e "${GREEN}[Info]${NONE} Ready to copy ops from modern directory ${WHEEL_MODERN_NAME} to target directory"
+        # Set WHEEL_NAME to empty string to ignore the directory path
+        WHEEL_NAME=""
+    else
+        # If modern directory doesn't exist, check for deprecated directory
+        if [ -d "./${OPS_TMP_DIR}/${WHEEL_NAME}" ]; then
+            echo -e "${YELLOW}[Warning]${NONE} ${WHEEL_NAME} directory exists. This is a deprecated packaging and distribution method."
+        fi
+    fi
+
+    # Handle CPU ops directories (WHEEL_MODERN_CPU_NAME and WHEEL_CPU_NAME)
+    if [ -d "./${OPS_TMP_DIR}/${WHEEL_MODERN_CPU_NAME}" ]; then
+        echo -e "${GREEN}[Info]${NONE} Ready to copy ops from modern directory ${WHEEL_MODERN_CPU_NAME} to target directory"
+        # Set WHEEL_CPU_NAME to empty string to ignore the directory path
+        WHEEL_CPU_NAME=""
+    else
+        # If modern directory doesn't exist, check for deprecated directory
+        if [ -d "./${OPS_TMP_DIR}/${WHEEL_CPU_NAME}" ]; then
+            echo -e "${YELLOW}[Warning]${NONE} ${WHEEL_CPU_NAME} directory exists. This is a deprecated packaging and distribution method."
+        fi
+    fi
     is_rocm=`$python -c "import paddle; print(paddle.is_compiled_with_rocm())"`
     if [ "$is_rocm" = "True" ]; then
       DEVICE_TYPE="rocm"
