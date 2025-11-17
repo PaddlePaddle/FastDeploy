@@ -28,7 +28,6 @@ REPO_TEMPLATE = {
             "## Modifications",
             "## Usage or Command",
             "## Accuracy Tests",
-            "## Checklist",
         ]
     }
 }
@@ -65,27 +64,6 @@ def check_section_content(body, section_titles):
     return results
 
 
-def parse_checklist(section_content):
-    """
-    Parse a checklist section and return dict of items with checked status.
-    Example return:
-    {
-        'Add at least a tag in the PR title.': False,
-        'Format your code, run `pre-commit` before commit.': True,
-        ...
-    }
-    """
-    items = {}
-    lines = section_content.splitlines()
-    for line in lines:
-        match = re.match(r"- \[( |x|X)\] (.+)", line)
-        if match:
-            checked = match.group(1).lower() == "x"
-            item_text = match.group(2).strip()
-            items[item_text] = checked
-    return items
-
-
 def check_pr_template(repo, body):
     """Check whether a PR description follows the expected template."""
     body = remove_comments(body)
@@ -107,16 +85,6 @@ def check_pr_template(repo, body):
             messages.append("❌ Missing section: {}. Please complete it.".format(missing[0]))
         else:
             messages.append("❌ Missing sections: {}. Please complete them.".format(", ".join(missing)))
-
-    # Check Checklist items if present
-    checklist_content = results.get("## Checklist", "")
-    if checklist_content:
-        checklist_items = parse_checklist(checklist_content)
-        unchecked = [item for item, checked in checklist_items.items() if not checked]
-        if unchecked:
-            messages.append("❌ The following checklist items are not completed:")
-            for item in unchecked:
-                messages.append(f"   - [ ] {item}")
 
     if messages:
         messages.append(
