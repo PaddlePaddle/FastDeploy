@@ -16,7 +16,7 @@
 
 import paddle
 
-from fastdeploy.model_executor.ops.gpu import (
+from fastdeploy.cache_manager.ops import (
     get_data_ptr_ipc,
     ipc_sent_key_value_cache_by_remote_ptr,
     ipc_sent_key_value_cache_by_remote_ptr_block_sync,
