@@ -60,12 +60,23 @@ class ErrorInfo(BaseModel):
     code: Optional[str] = None
 
 
+class CompletionTokenUsageInfo(BaseModel):
+    """
+    completion token usage info.
+    """
+
+    reasoning_tokens: Optional[int] = None
+    image_tokens: Optional[int] = None
+
+
 class PromptTokenUsageInfo(BaseModel):
     """
     Prompt-related token usage info.
     """
 
     cached_tokens: Optional[int] = None
+    image_tokens: Optional[int] = None
+    video_tokens: Optional[int] = None
 
 
 class UsageInfo(BaseModel):
@@ -77,6 +88,7 @@ class UsageInfo(BaseModel):
     total_tokens: int = 0
     completion_tokens: Optional[int] = 0
     prompt_tokens_details: Optional[PromptTokenUsageInfo] = None
+    completion_tokens_details: Optional[CompletionTokenUsageInfo] = None
 
 
 class ModelPermission(BaseModel):
@@ -439,6 +451,8 @@ class CompletionRequest(BaseModel):
     temperature: Optional[float] = Field(default=None, ge=0)
     top_p: Optional[float] = Field(default=None, ge=0, le=1)
     user: Optional[str] = None
+    request_id: Optional[str] = None
+    disaggregate_info: Optional[dict] = None
 
     # doc: begin-completion-sampling-params
     top_k: Optional[int] = None
@@ -449,6 +463,7 @@ class CompletionRequest(BaseModel):
     include_stop_str_in_output: Optional[bool] = False
     bad_words: Optional[List[str]] = None
     bad_words_token_ids: Optional[List[int]] = None
+    logits_processors_args: Optional[Dict] = None
     # doc: end-completion-sampling-params
 
     # doc: start-completion-extra-params
@@ -461,6 +476,8 @@ class CompletionRequest(BaseModel):
     max_streaming_response_tokens: Optional[int] = None
     return_token_ids: Optional[bool] = None
     prompt_token_ids: Optional[Union[List[int], List[List[int]]]] = None
+
+    mm_hashes: Optional[list] = None
     # doc: end-completion-extra-params
 
     def to_dict_for_infer(self, request_id=None, prompt=None):
@@ -471,8 +488,6 @@ class CompletionRequest(BaseModel):
             dict: request parameters in dict format
         """
         req_dict = {}
-        if request_id is not None:
-            req_dict["request_id"] = request_id
 
         # parse request model into dict
         if self.suffix is not None:
@@ -482,6 +497,8 @@ class CompletionRequest(BaseModel):
             if value is not None:
                 req_dict[key] = value
 
+        if request_id is not None:
+            req_dict["request_id"] = request_id
         if prompt is not None:
             req_dict["prompt"] = prompt
 
@@ -518,6 +535,9 @@ class CompletionRequest(BaseModel):
             if item is not None:
                 req_dict[key] = item
 
+        if self.mm_hashes is not None and len(self.mm_hashes) > 0:
+            req_dict["mm_hashes"] = self.mm_hashes
+
         return req_dict
 
     @model_validator(mode="before")
@@ -543,6 +563,9 @@ class CompletionRequest(BaseModel):
                 "You can only use one kind of guided decoding "
                 "('guided_json', 'guided_regex', 'guided_choice', 'guided_grammar')."
             )
+
+        if data.get("mm_hashes", None):
+            assert isinstance(data["mm_hashes"], list), "`mm_hashes` must be a list."
 
         return data
 
@@ -583,6 +606,8 @@ class ChatCompletionRequest(BaseModel):
     user: Optional[str] = None
     metadata: Optional[dict] = None
     response_format: Optional[AnyResponseFormat] = None
+    request_id: Optional[str] = None
+    disaggregate_info: Optional[dict] = None
 
     # doc: begin-chat-completion-sampling-params
     top_k: Optional[int] = None
@@ -593,6 +618,7 @@ class ChatCompletionRequest(BaseModel):
     bad_words_token_ids: Optional[List[int]] = None
     repetition_penalty: Optional[float] = None
     stop_token_ids: Optional[List[int]] = Field(default_factory=list)
+    logits_processors_args: Optional[Dict] = None
     # doc: end-chat-completion-sampling-params
 
     # doc: start-chat-completion-extra-params
@@ -609,6 +635,8 @@ class ChatCompletionRequest(BaseModel):
     prompt_token_ids: Optional[List[int]] = None
     max_streaming_response_tokens: Optional[int] = None
     disable_chat_template: Optional[bool] = False
+
+    mm_hashes: Optional[list] = None
     completion_token_ids: Optional[List[int]] = None
     # doc: end-chat-completion-extra-params
 
@@ -620,8 +648,6 @@ class ChatCompletionRequest(BaseModel):
             dict: request parameters in dict format
         """
         req_dict = {}
-        if request_id is not None:
-            req_dict["request_id"] = request_id
 
         req_dict["max_tokens"] = self.max_completion_tokens or self.max_tokens
         req_dict["logprobs"] = self.top_logprobs if self.logprobs else None
@@ -641,6 +667,9 @@ class ChatCompletionRequest(BaseModel):
         for key, value in self.dict().items():
             if value is not None:
                 req_dict[key] = value
+
+        if request_id is not None:
+            req_dict["request_id"] = request_id
 
         if "prompt_token_ids" in req_dict:
             if "messages" in req_dict:
@@ -685,6 +714,9 @@ class ChatCompletionRequest(BaseModel):
             if item is not None:
                 req_dict[key] = item
 
+        if self.mm_hashes is not None and len(self.mm_hashes) > 0:
+            req_dict["mm_hashes"] = self.mm_hashes
+
         return req_dict
 
     @model_validator(mode="before")
@@ -711,6 +743,9 @@ class ChatCompletionRequest(BaseModel):
                 "You can only use one kind of guided decoding "
                 "('guided_json', 'guided_regex', 'guided_choice', 'guided_grammar', 'structural_tag')."
             )
+
+        if data.get("mm_hashes", None):
+            assert isinstance(data["mm_hashes"], list), "`mm_hashes` must be a list."
 
         return data
 
@@ -944,3 +979,89 @@ EmbeddingRequest = Union[EmbeddingCompletionRequest, EmbeddingChatRequest]
 
 PoolingCompletionRequest = EmbeddingCompletionRequest
 PoolingChatRequest = EmbeddingChatRequest
+
+
+class ChatRewardRequest(BaseModel):
+    model: Optional[str] = None  # 指定模型，例如 "default" 或支持 embedding 的 chat 模型
+    messages: Union[List[Any], List[int]]  # 聊天消息列表（必选）
+    user: Optional[str] = None  # 调用方标识符
+
+    dimensions: Optional[int] = None
+    truncate_prompt_tokens: Optional[Annotated[int, Field(ge=-1)]] = None
+
+    # --8<-- [start:chat-embedding-extra-params]
+    add_generation_prompt: bool = Field(
+        default=False,
+        description=(
+            "If true, the generation prompt will be added to the chat template. "
+            "This is a parameter used by chat template in tokenizer config of the "
+            "model."
+        ),
+    )
+
+    add_special_tokens: bool = Field(
+        default=False,
+        description=(
+            "If true, special tokens (e.g. BOS) will be added to the prompt "
+            "on top of what is added by the chat template. "
+            "For most models, the chat template takes care of adding the "
+            "special tokens so this should be set to false (as is the "
+            "default)."
+        ),
+    )
+    chat_template: Optional[str] = Field(
+        default=None,
+        description=(
+            "A Jinja template to use for this conversion. "
+            "As of transformers v4.44, default chat template is no longer "
+            "allowed, so you must provide a chat template if the tokenizer "
+            "does not define one."
+        ),
+    )
+    chat_template_kwargs: Optional[dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Additional keyword args to pass to the template renderer. " "Will be accessible by the chat template."
+        ),
+    )
+    mm_processor_kwargs: Optional[dict[str, Any]] = Field(
+        default=None,
+        description=("Additional kwargs to pass to the HF processor."),
+    )
+    priority: int = Field(
+        default=0,
+        description=(
+            "The priority of the request (lower means earlier handling; "
+            "default: 0). Any priority other than 0 will raise an error "
+            "if the served model does not use priority scheduling."
+        ),
+    )
+    request_id: str = Field(
+        default_factory=lambda: f"{uuid.uuid4().hex}",
+        description=(
+            "The request_id related to this request. If the caller does "
+            "not set it, a uuid.uuid4().hex will be generated. This id is used "
+            "through out the inference process and return in response."
+        ),
+    )
+    normalize: Optional[bool] = None
+
+    def to_pooling_params(self):
+        return PoolingParams(
+            truncate_prompt_tokens=self.truncate_prompt_tokens, dimensions=self.dimensions, normalize=self.normalize
+        )
+
+
+class ChatRewardData(BaseModel):
+    index: Optional[int] = None  # 数据索引（可选）
+    object: str = "reward"  # 固定为 "reward"
+    score: List[float]  # reward 分数（浮点数列表）
+
+
+class ChatRewardResponse(BaseModel):
+    id: str  # 响应 ID，例如 chat-reward-<uuid>
+    object: str = "object"  # 固定为 "object"
+    created: int  # 创建时间（Unix 时间戳）
+    model: str  # 使用的模型名
+    data: List[ChatRewardData]  # reward 结果列表
+    usage: Optional[UsageInfo] = None  # Token 使用情况

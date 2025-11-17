@@ -287,7 +287,7 @@ jobs:
         shell: bash
         env:
           docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
-          fd_archive_url: ${FASTDEPLOY_ARCHIVE_URL}
+          fd_archive_url: ${{ env.FASTDEPLOY_ARCHIVE_URL }}
         run: |
           set -x
           FULL_REPO="${{ github.repository }}"
@@ -377,5 +377,5 @@ jobs:
     with:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"

@@ -178,6 +178,14 @@ std::vector<paddle::Tensor> MoeExpertDispatch(
   auto permute_indices_per_token =
       GetEmptyTensor({moe_topk, num_rows}, paddle::DataType::INT32, place);
 
+  if (token_rows == 0) {
+    return {permute_input,
+            tokens_expert_prefix_sum,
+            permute_indices_per_token,
+            top_k_weight,
+            top_k_indices};
+  }
+
   switch (input_type) {
     case paddle::DataType::BFLOAT16:
       MoeDispatchKernel<paddle::DataType::BFLOAT16>(input,

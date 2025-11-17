@@ -17,6 +17,7 @@ import shutil
 import signal
 import socket
 import subprocess
+import time
 import traceback
 from multiprocessing import Process, Queue
 
@@ -70,6 +71,7 @@ def run_with_timeout(target, args, timeout=60 * 5):
     finally:
         result_queue.close()
         result_queue.join_thread()
+        clean_ports([FD_CACHE_QUEUE_PORT])
 
     return result
 
@@ -83,9 +85,7 @@ def form_model_get_output_topp0(
     max_tokens,
     quantization,
     load_choices,
-    engine_worker_queue_port,
     prompts,
-    cache_queue_port,
     result_queue,
 ):
     try:
@@ -96,8 +96,6 @@ def form_model_get_output_topp0(
             max_model_len=max_model_len,
             load_choices=load_choices,
             quantization=quantization,
-            engine_worker_queue_port=engine_worker_queue_port,
-            cache_queue_port=cache_queue_port,
         ) as fd_model:
             fd_outputs = fd_model.generate_topp0(prompts, max_tokens=max_tokens)
             result_queue.put(fd_outputs)
@@ -110,14 +108,53 @@ def form_model_get_output_topp0(
 def kill_process_on_port(port: int):
     """
     Kill processes that are listening on the given port.
-    Uses `lsof` to find process ids and sends SIGKILL.
+    Uses multiple methods to ensure thorough cleanup.
     """
+    current_pid = os.getpid()
+    parent_pid = os.getppid()
+
+    # Method 1: Use lsof to find processes
     try:
         output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
         for pid in output.splitlines():
-            os.kill(int(pid), signal.SIGKILL)
-            print(f"Killed process on port {port}, pid={pid}")
+            pid = int(pid)
+            if pid in (current_pid, parent_pid):
+                print(f"Skip killing current process (pid={pid}) on port {port}")
+                continue
+            try:
+                # First try SIGTERM for graceful shutdown
+                os.kill(pid, signal.SIGTERM)
+                time.sleep(1)
+                # Then SIGKILL if still running
+                os.kill(pid, signal.SIGKILL)
+                print(f"Killed process on port {port}, pid={pid}")
+            except ProcessLookupError:
+                pass  # Process already terminated
     except subprocess.CalledProcessError:
+        pass
+
+    # Method 2: Use netstat and fuser as backup
+    try:
+        # Find processes using netstat and awk
+        cmd = f"netstat -tulpn 2>/dev/null | grep :{port} | awk '{{print $7}}' | cut -d'/' -f1"
+        output = subprocess.check_output(cmd, shell=True).decode().strip()
+        for pid in output.splitlines():
+            if pid and pid.isdigit():
+                pid = int(pid)
+                if pid in (current_pid, parent_pid):
+                    continue
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                    print(f"Killed process (netstat) on port {port}, pid={pid}")
+                except ProcessLookupError:
+                    pass
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
+    # Method 3: Use fuser if available
+    try:
+        subprocess.run(f"fuser -k {port}/tcp", shell=True, timeout=5)
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
         pass
 
 
@@ -125,21 +162,17 @@ def clean_ports(ports_to_clean: list[int]):
     """
     Kill all processes occupying the ports listed in PORTS_TO_CLEAN.
     """
-    try:
-        result = subprocess.run(
-            f"ps -efww | grep {FD_CACHE_QUEUE_PORT} | grep -v grep", shell=True, capture_output=True, text=True
-        )
-        for line in result.stdout.strip().split("\n"):
-            if not line:
-                continue
-            parts = line.split()
-            pid = int(parts[1])
-            print(f"Killing PID: {pid}")
-            os.kill(pid, signal.SIGKILL)
-    except Exception as e:
-        print(f"Failed to kill cache manager process: {e}, {str(traceback.format_exc())}")
+    print(f"Cleaning ports: {ports_to_clean}")
     for port in ports_to_clean:
         kill_process_on_port(port)
+
+    # Double check and retry if ports are still in use
+    time.sleep(2)
+    for port in ports_to_clean:
+        if is_port_open("127.0.0.1", port, timeout=0.1):
+            print(f"Port {port} still in use, retrying cleanup...")
+            kill_process_on_port(port)
+            time.sleep(1)
 
 
 def is_port_open(host: str, port: int, timeout=1.0):

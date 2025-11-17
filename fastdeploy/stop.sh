@@ -1,10 +1,4 @@
 
-fastdeploy_inferernce_pids=$(ps auxww | grep "fastdeploy" | grep -v grep | awk '{print $2}')
-echo $fastdeploy_inferernce_pids
-for in_pid in ${fastdeploy_inferernce_pids[@]}; do
-    kill -9 ${in_pid}
-done
-echo 'end fastDeploy inference pids'
 
 api_server_pids=$(ps auxww | grep "api_server" | grep -v grep | awk '{print $2}')
 echo 'end api server pids:'
@@ -18,3 +12,11 @@ for pid in $api_server_pids; do
     done
     echo 'end uvicorn multi workers'
 done
+
+
+fastdeploy_inferernce_pids=$(ps auxww | grep "fastdeploy" | grep -v grep | awk '{print $2}')
+echo $fastdeploy_inferernce_pids
+for in_pid in ${fastdeploy_inferernce_pids[@]}; do
+    kill -9 ${in_pid}
+done
+echo 'end fastDeploy inference pids'

@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import random
 import time
 import unittest
@@ -46,11 +62,12 @@ class MockTask:
         self.disaggregate_info = None
         self.prefill_chunk_info = None
         self.prefill_chunk_num = 0
+        self.llm_engine_recv_req_timestamp = time.time()
 
     def get(self, key: str, default_value=None):
         if hasattr(self, key):
             return getattr(self, key)
-        elif hasattr(self.sampling_params, key):
+        elif hasattr(self, "sampling_params") and hasattr(self.sampling_params, key):
             return getattr(self.sampling_params, key)
         else:
             return default_value

@@ -15,6 +15,7 @@ __global__ void limit_thinking_content_length_kernel_v2(
     const int* max_think_lens,
     const int64_t* step_idx,
     int* limit_think_status,
+    const bool* stop_flags,
     const int64_t think_end_id,
     const int64_t line_break_id,
     const int bs) {
@@ -29,15 +30,17 @@ __global__ void limit_thinking_content_length_kernel_v2(
     int limit_think_status_lm;
     int64_t next_token_lm;
     int64_t step_idx_lm;
+    bool stop_flags_lm;
     GM2LM_ASYNC(next_tokens + i, &next_token_lm, sizeof(int64_t));
     GM2LM_ASYNC(step_idx + i, &step_idx_lm, sizeof(int64_t));
+    GM2LM_ASYNC(stop_flags + i, &stop_flags_lm, sizeof(bool));
     GM2LM_ASYNC(max_think_lens + i, &max_think_len_lm, sizeof(int));
     GM2LM(limit_think_status + i, &limit_think_status_lm, sizeof(int));
 
     // 如果该序列未启用思考功能，则直接返回，默认值为 -1，表示不限制思考长度
     if (max_think_len_lm < 0) continue;
     // 如果在回复阶段, 且已经触发停止标志, 则直接返回, 无需多余执行.
-    if (limit_think_status_lm == 3) continue;
+    if (limit_think_status_lm == 3 && stop_flags_lm) continue;
 
     // ======================= 思考阶段控制 =======================
     // 阶段 1: 仍在思考 (status == 0), 检查是否需要强制结束

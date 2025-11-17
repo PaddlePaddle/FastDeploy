@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import re
 from functools import partial
 from typing import Dict, Optional, Union
 
@@ -123,9 +124,7 @@ class Qwen2_5_VLModel(nn.Layer):
                 residual,
             )
 
-        hidden_states = hidden_states + residual
-
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual)[0]
 
         return out
 
@@ -183,6 +182,58 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         return "Qwen2_5_VLForConditionalGeneration"
 
     @paddle.no_grad()
+    def load_weights(self, weights_iterator) -> None:
+        """
+        Load model parameters from a given weights_iterator object.
+
+        Args:
+            weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
+        """
+
+        from fastdeploy.model_executor.utils import (
+            default_weight_loader,
+            process_weights_after_loading,
+        )
+
+        stacked_params_mapping = [
+            # (param_name, shard_name, shard_id)
+            # 参数变量名与权重key不同的要做映射
+            ("qkv_proj", "q_proj", "q"),
+            ("qkv_proj", "k_proj", "k"),
+            ("qkv_proj", "v_proj", "v"),
+            ("up_gate_proj", "gate_proj", "gate"),
+            ("up_gate_proj", "up_proj", "up"),
+            ("embed_tokens.embeddings", "embed_tokens", None),
+            ("lm_head.linear", "lm_head", None),
+        ]
+
+        params_dict = dict(self.named_parameters())
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
+        for loaded_weight_name, loaded_weight in weights_iterator:
+            for param_name, weight_name, shard_id in stacked_params_mapping:
+                if weight_name not in loaded_weight_name:
+                    continue
+                model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                if model_param_name not in params_dict:
+                    continue
+                param = params_dict[model_param_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                weight_loader(param, loaded_weight, shard_id)
+                break
+            else:
+                model_param_name = loaded_weight_name
+                if model_param_name not in params_dict:
+                    continue
+                param = params_dict[model_param_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                weight_loader(param, loaded_weight)
+            model_sublayer_name = re.sub(r"\.(weight)$", "", model_param_name)
+            process_weights_after_loading_fn(model_sublayer_name, param)
+
+        if self.tie_word_embeddings:
+            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight)
+
+    @paddle.no_grad()
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
         """
         Load model parameters from a given state dictionary.
@@ -206,21 +257,6 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
 
         return logits
 
-    def empty_input_forward(self):
-        """
-        empty_input_forward
-        """
-        fake_hidden_states = paddle.empty(
-            shape=[0, self.fd_config.model_config.hidden_size],
-            dtype=paddle.get_default_dtype(),
-        )
-        for i in range(
-            self.fd_config.model_config.moe_layer_start_index,
-            self.fd_config.model_config.num_hidden_layers,
-        ):
-            self.ernie.layers[i].mlp.text_fused_moe(fake_hidden_states)
-            self.ernie.layers[i].mlp.image_fused_moe(fake_hidden_states)
-
     def get_input_embeddings(
         self,
         ids_remove_padding: paddle.Tensor,
@@ -235,11 +271,12 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         video_mask = ids_remove_padding == self.model.video_token_id
         video_token_num = video_mask.sum()
 
-        # 由于框架只有 image_features，所以目前不支持图片和视频混合
-        # TODO(wangyafeng) 后续考虑支持传入 video_features
-        if image_token_num > 0:
+        # Due to the fact that the framework only has image_features,
+        # it currently does not support mixing images and videos
+        # TODO(wangyafeng) Consider supporting the input of video_features in the future
+        if image_token_num.item() > 0:
             input_embeddings[image_mask] = image_features.cast(self.model._dtype)
-        if video_token_num > 0:
+        if video_token_num.item() > 0:
             input_embeddings[video_mask] = image_features.cast(self.model._dtype)
 
         return input_embeddings
