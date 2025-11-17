@@ -210,14 +210,7 @@ class EngineClient:
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]
 
-            completion_token_len = len(task["completion_token_ids"]) if task.get("completion_token_ids") else 0
-            task["max_tokens"] = min(
-                self.max_model_len - input_ids_len, max(0, task.get("max_tokens") - completion_token_len)
-            )
-
-            if task.get("min_tokens") is not None:
-                task["min_tokens"] = max(1, task["min_tokens"] - completion_token_len)
-
+            task["max_tokens"] = min(self.max_model_len - input_ids_len, task.get("max_tokens"))
             min_tokens = task.get("min_tokens", 1)
             if "messages" in task:
                 del task["messages"]
