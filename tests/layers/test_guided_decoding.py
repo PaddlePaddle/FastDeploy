@@ -26,7 +26,11 @@ class TestGuidedDecoding(unittest.TestCase):
         """Setup for each test case."""
         # 创建一个基本的FDConfig对象
         self.fd_config = Mock()
+        self.fd_config.scheduler_config = Mock()
         self.fd_config.scheduler_config.max_num_seqs = 5
+
+        self.fd_config.structured_outputs_config = Mock()
+        self.fd_config.structured_outputs_config.fill_bitmask_parallel_batch_size = 4
 
         # 创建GuidedDecoding对象
         self.guided_decoding = GuidedDecoding(self.fd_config)

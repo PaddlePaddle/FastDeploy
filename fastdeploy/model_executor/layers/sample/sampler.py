@@ -70,7 +70,7 @@ class GuidedDecoding:
 
     def __init__(self, fd_config: FDConfig):
         self.token_bitmask = None
-        self.max_num_seqs: int = (
+        self.max_num_seqs: int = int(
             fd_config.scheduler_config.max_num_seqs if fd_config.scheduler_config is not None else 1
         )
         self.logits_processors: List[Any] = [None] * self.max_num_seqs
@@ -86,9 +86,10 @@ class GuidedDecoding:
             else 4
         )
         max_workers = max(
-            1, min(multiprocessing.cpu_count() // 2, self.max_num_seqs / self.fill_bitmask_parallel_batch_size)
+            1,
+            min(multiprocessing.cpu_count() // 2, int(self.max_num_seqs) / int(self.fill_bitmask_parallel_batch_size)),
         )
-        self.executor_for_fillmask = ThreadPoolExecutor(max_workers=max_workers)
+        self.executor_for_fillmask = ThreadPoolExecutor(max_workers=int(max_workers))
         self._fillmask_futures: List[Future] = [None] * self.max_num_seqs
         self.is_cuda_platform = current_platform.is_cuda()
         logger.info(
