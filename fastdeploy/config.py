@@ -1320,7 +1320,7 @@ class CacheConfig:
         if self.prefill_kvcache_block_num < self.max_block_num_per_seq:
             available_cache_tokens = self.prefill_kvcache_block_num * self.block_size
             console_logger.error(
-                f"The current KV Cache can only support caching {available_cache_tokens} tokens, which is less than the set max_model_len={self.model_cfg.max_model_len}. Please deploy this model under on GPUs with larger memory or reduce your `max_model_len` to {available_cache_tokens} or less."
+                f"The current KV Cache can only support caching {available_cache_tokens} tokens, which is less than the set max_model_len={self.model_cfg.max_model_len}. Please deploy this model on GPUs with larger memory or reduce your `max_model_len` to {available_cache_tokens} or less."
             )
             raise RuntimeError("Resource is not sufficient.")
 
