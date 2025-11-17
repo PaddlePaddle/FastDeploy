@@ -1418,6 +1418,8 @@ class StructuredOutputsConfig:
         self.disable_any_whitespace: bool = True
         self.logits_processors: Optional[list[str]] = None
 
+        # async fill_bitmask, batch_size per worker
+        self.fill_bitmask_parallel_batch_size = 4
         for key, value in args.items():
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
