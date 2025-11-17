@@ -710,7 +710,7 @@ class KernelInterface:
                     + f""" -s"{address_hint} {value_hint} {const_args}" """
                     + f"""  -g "{lanuch_grid}" """
                 )
-                all_tune_config = list(self.tune_config)
+                all_tune_config = [{key: value} for key, value in self.tune_config.items()]
                 if len(all_tune_config) == 0:
                     # when user do not specify config, we use const_hint_dict as config.
                     all_tune_config = [const_hint_dict]
