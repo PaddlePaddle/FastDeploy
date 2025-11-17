@@ -149,7 +149,8 @@ bool getEnvEnablePDL() {
   static bool enablePDL = false;
 
   std::call_once(flag, [&]() {
-    if (getSMVersion() >= 90) {
+    int sm_version = GetSMVersion();
+    if (sm_version >= 90) {
       enablePDL = getBoolEnv("FD_ENABLE_PDL");
     }
   });

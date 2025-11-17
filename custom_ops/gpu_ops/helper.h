@@ -717,17 +717,6 @@ inline bool getBoolEnv(char const *name) {
 
 bool getEnvEnablePDL();
 
-inline int getSMVersion() {
-  int device{-1};
-  cudaGetDevice(&device);
-  int sm_major = 0;
-  int sm_minor = 0;
-  cudaDeviceGetAttribute(&sm_major, cudaDevAttrComputeCapabilityMajor, device);
-  cudaDeviceGetAttribute(&sm_minor, cudaDevAttrComputeCapabilityMinor, device);
-  int sm = sm_major * 10 + sm_minor;
-  return sm;
-}
-
 template <typename KernelFn, typename... Args>
 inline void launchWithPdlWhenEnabled(KernelFn kernelFn,
                                      dim3 grid,
