@@ -18,8 +18,8 @@ import os
 import sys
 import threading
 import unittest
-from unittest.mock import MagicMock, Mock, patch
 from collections import defaultdict
+from unittest.mock import Mock, patch
 
 # Determine import method based on environment
 # Use environment variable FD_TEST_MODE=standalone for local testing
@@ -74,6 +74,7 @@ if TEST_MODE == "standalone":
 
     # Import the zmq_server module directly
     import importlib.util
+
     spec = importlib.util.spec_from_file_location(
         "zmq_server",
         os.path.join(os.path.dirname(__file__), "../../fastdeploy/inter_communicator/zmq_server.py"),
@@ -88,8 +89,8 @@ else:
     # Normal mode - direct import
     try:
         from fastdeploy.inter_communicator.zmq_server import (
-            ZmqServerBase,
             ZmqIpcServer,
+            ZmqServerBase,
             ZmqTcpServer,
         )
     except ImportError:
@@ -140,6 +141,7 @@ else:
         sys.modules["fastdeploy.utils"].llm_logger = mock_logger
 
         import importlib.util
+
         spec = importlib.util.spec_from_file_location(
             "zmq_server",
             os.path.join(os.path.dirname(__file__), "../../fastdeploy/inter_communicator/zmq_server.py"),
@@ -188,6 +190,7 @@ class ConcreteZmqServer(ZmqServerBase):
 
 class MockResponse:
     """Mock response object for testing"""
+
     def __init__(self, finished=False):
         self.finished = finished
 
@@ -242,7 +245,7 @@ class TestZmqServerBase(unittest.TestCase):
         test_data = {"message": "test"}
 
         # Should create socket first
-        result = self.server.send_json(test_data)
+        self.server.send_json(test_data)
         self.assertIsNotNone(self.server.socket)
 
     def test_recv_json(self):
@@ -261,7 +264,7 @@ class TestZmqServerBase(unittest.TestCase):
         self.server.socket = None
 
         # Should create socket first
-        result = self.server.recv_json()
+        self.server.recv_json()
         self.assertIsNotNone(self.server.socket)
 
     def test_cached_results_initialization(self):
@@ -284,7 +287,7 @@ class TestZmqServerBase(unittest.TestCase):
         test_data = {"message": "test"}
 
         # Mock ForkingPickler
-        with patch('fastdeploy.inter_communicator.zmq_server.ForkingPickler') as mock_pickler:
+        with patch("fastdeploy.inter_communicator.zmq_server.ForkingPickler") as mock_pickler:
             mock_pickler.dumps.return_value = b"pickled_data"
             self.server.send_pyobj(test_data)
             mock_pickler.dumps.assert_called_once_with(test_data)
@@ -299,7 +302,7 @@ class TestZmqServerBase(unittest.TestCase):
         expected_result = {"message": "test"}
         self.server.socket.recv.return_value = b"pickled_data"
 
-        with patch('fastdeploy.inter_communicator.zmq_server.ForkingPickler') as mock_pickler:
+        with patch("fastdeploy.inter_communicator.zmq_server.ForkingPickler") as mock_pickler:
             mock_pickler.loads.return_value = expected_result
             result = self.server.recv_pyobj()
             mock_pickler.loads.assert_called_once_with(b"pickled_data")
@@ -311,7 +314,7 @@ class TestZmqServerBase(unittest.TestCase):
             # Skip in standalone mode due to mocking complexity
             self.skipTest("Skipping in standalone mode")
 
-        with patch('fastdeploy.inter_communicator.zmq_server.msgpack') as mock_msgpack:
+        with patch("fastdeploy.inter_communicator.zmq_server.msgpack") as mock_msgpack:
             mock_msgpack.packb.return_value = b"packed_data"
 
             response1 = MockResponse(finished=False)
@@ -336,7 +339,7 @@ class TestZmqServerBase(unittest.TestCase):
         self.server.socket.recv_json.return_value = expected_data
 
         # Mock zmq.NOBLOCK
-        with patch('fastdeploy.inter_communicator.zmq_server.zmq') as mock_zmq:
+        with patch("fastdeploy.inter_communicator.zmq_server.zmq") as mock_zmq:
             mock_zmq.NOBLOCK = 1
             error, result = self.server.receive_json_once(block=False)
 
@@ -351,7 +354,7 @@ class TestZmqServerBase(unittest.TestCase):
 
         self.server.socket = Mock()
         # Mock zmq.Again exception
-        with patch('fastdeploy.inter_communicator.zmq_server.zmq') as mock_zmq:
+        with patch("fastdeploy.inter_communicator.zmq_server.zmq") as mock_zmq:
             mock_zmq.Again = Exception
             mock_zmq.NOBLOCK = 1
             self.server.socket.recv_json.side_effect = mock_zmq.Again()
@@ -380,8 +383,10 @@ class TestZmqServerBase(unittest.TestCase):
         self.server.socket.recv.return_value = b"pickled_data"
         expected_result = {"status": "success"}
 
-        with patch('fastdeploy.inter_communicator.zmq_server.ForkingPickler') as mock_pickler, \
-             patch('fastdeploy.inter_communicator.zmq_server.zmq') as mock_zmq:
+        with (
+            patch("fastdeploy.inter_communicator.zmq_server.ForkingPickler") as mock_pickler,
+            patch("fastdeploy.inter_communicator.zmq_server.zmq") as mock_zmq,
+        ):
             mock_zmq.NOBLOCK = 1
             mock_pickler.loads.return_value = expected_result
             error, result = self.server.receive_pyobj_once(block=False)
@@ -399,8 +404,10 @@ class TestZmqServerBase(unittest.TestCase):
         self.server.aggregate_send = False
 
         # Use patch for msgpack
-        with patch('fastdeploy.inter_communicator.zmq_server.msgpack') as mock_msgpack, \
-             patch('fastdeploy.inter_communicator.zmq_server.zmq') as mock_zmq:
+        with (
+            patch("fastdeploy.inter_communicator.zmq_server.msgpack") as mock_msgpack,
+            patch("fastdeploy.inter_communicator.zmq_server.zmq") as mock_zmq,
+        ):
             mock_zmq.NOBLOCK = 1
             mock_msgpack.packb.return_value = b"packed_response"
 
@@ -479,7 +486,7 @@ class TestZmqIpcServer(unittest.TestCase):
         test_file = "/tmp/test_socket_file"
 
         # Create a test file
-        with open(test_file, 'w') as f:
+        with open(test_file, "w") as f:
             f.write("test")
 
         self.server._clear_ipc(test_file)
@@ -505,7 +512,7 @@ class TestZmqIpcServer(unittest.TestCase):
         self.server.file_name = "/tmp/test_socket"
 
         # Create the file for cleanup
-        with open(self.server.file_name, 'w') as f:
+        with open(self.server.file_name, "w") as f:
             f.write("test")
 
         # Test close
@@ -570,8 +577,10 @@ class TestZmqTcpServer(unittest.TestCase):
         self.server.socket.recv_multipart.return_value = [b"client", b"", packed_task]
         self.server.req_dict = {}
 
-        with patch('fastdeploy.inter_communicator.zmq_server.msgpack') as mock_msgpack, \
-             patch('fastdeploy.inter_communicator.zmq_server.zmq') as mock_zmq:
+        with (
+            patch("fastdeploy.inter_communicator.zmq_server.msgpack") as mock_msgpack,
+            patch("fastdeploy.inter_communicator.zmq_server.zmq") as mock_zmq,
+        ):
             mock_zmq.Again = Exception
             mock_zmq.NOBLOCK = 1
             mock_msgpack.unpackb.return_value = test_task
@@ -588,7 +597,7 @@ class TestZmqTcpServer(unittest.TestCase):
             self.skipTest("Skipping in standalone mode")
 
         self.server.socket = Mock()
-        with patch('fastdeploy.inter_communicator.zmq_server.zmq') as mock_zmq:
+        with patch("fastdeploy.inter_communicator.zmq_server.zmq") as mock_zmq:
             mock_zmq.Again = Exception
             mock_zmq.NOBLOCK = 1
             self.server.socket.recv_multipart.side_effect = mock_zmq.Again()
@@ -609,7 +618,7 @@ class TestZmqTcpServer(unittest.TestCase):
         self.server.socket = Mock()
         self.server.req_dict = {test_task_id: b"client_identity"}
 
-        with patch('fastdeploy.inter_communicator.zmq_server.msgpack') as mock_msgpack:
+        with patch("fastdeploy.inter_communicator.zmq_server.msgpack") as mock_msgpack:
             mock_msgpack.packb.return_value = packed_result
 
             self.server.response_for_control_cmd(test_task_id, test_result)
