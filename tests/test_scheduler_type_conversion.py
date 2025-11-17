@@ -16,30 +16,35 @@
 Unit tests for scheduler-related data type conversion functionality in FastDeploy.
 """
 
-import unittest
-from unittest.mock import Mock
-
 # Copy the utility functions directly to avoid import dependency issues
 import argparse
+import unittest
 from typing import Callable, Optional, TypeVar
+from unittest.mock import Mock
 
 T = TypeVar("T")
 
+
 def parse_type(return_type: Callable[[str], T]) -> Callable[[str], T]:
     """Parse a string to the specified type."""
+
     def _parse_type(val: str) -> T:
         try:
             return return_type(val)
         except ValueError as e:
             raise argparse.ArgumentTypeError(f"Value {val} cannot be converted to {return_type}.") from e
+
     return _parse_type
+
 
 def optional_type(return_type: Callable[[str], T]) -> Callable[[str], Optional[T]]:
     """Parse a string to the specified type, allowing None values."""
+
     def _optional_type(val: str) -> Optional[T]:
         if val == "" or val == "None":
             return None
         return parse_type(return_type)(val)
+
     return _optional_type
 
 
@@ -76,6 +81,7 @@ class TestSchedulerConfigTypeConversion(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
+
         # Create a mock scheduler config class that mimics the expected behavior
         class MockSchedulerConfig:
             def __init__(self, max_num_seqs=128, max_total_tokens=8192, max_model_len=2048):
@@ -250,7 +256,7 @@ class TestPerformanceDataTypeConversion(unittest.TestCase):
         final_snapshot = tracemalloc.take_snapshot()
 
         # Calculate memory difference
-        top_stats = final_snapshot.compare_to(initial_snapshot, 'lineno')
+        top_stats = final_snapshot.compare_to(initial_snapshot, "lineno")
         total_memory_diff = sum(stat.size_diff for stat in top_stats if stat.size_diff > 0)
 
         # Memory increase should be reasonable (less than 1MB for this test)
