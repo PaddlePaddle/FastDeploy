@@ -328,7 +328,7 @@ class HPUModelRunner(ModelRunnerBase):
 
         #  Sampler
         if not self.speculative_decoding:
-            self.sampler = Sampler()
+            self.sampler = Sampler(fd_config)
         else:
             self.sampler = SpeculativeSampler(fd_config)
 
