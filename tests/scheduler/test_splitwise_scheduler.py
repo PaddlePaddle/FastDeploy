@@ -147,6 +147,14 @@ def _install_stub_modules() -> None:
         def pipeline(self) -> _FakePipeline:
             return _FakePipeline(self)
 
+        # Metadata required by InferScheduler.check_redis_version
+        def info(self) -> dict[str, str]:
+            return {"redis_version": "6.2.0"}
+
+        # Health check used by InferScheduler.start
+        def ping(self) -> bool:
+            return True
+
     redis_mod = types.ModuleType("redis")
     redis_mod.Redis = _FakeRedis  # type: ignore[attr-defined]
     sys.modules.setdefault("redis", redis_mod)
