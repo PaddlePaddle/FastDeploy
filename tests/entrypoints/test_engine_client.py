@@ -14,10 +14,12 @@
 # limitations under the License.
 """
 
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 
 from fastdeploy.entrypoints.engine_client import EngineClient
+from fastdeploy.utils import ParameterError
 
 
 class TestEngineClient(unittest.IsolatedAsyncioTestCase):
@@ -31,6 +33,9 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
         self.engine_client.zmq_client = MagicMock()
         self.engine_client.max_model_len = 1024
         self.engine_client.enable_mm = False
+        self.engine_client.max_logprobs = 20
+        self.engine_client.enable_logprob = True
+        self.engine_client.ori_vocab_size = 1000
 
     async def test_add_request(self):
         request = {
@@ -48,6 +53,322 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
         assert request["chat_template_kwargs"]["chat_template"] == "Hello"
         assert request["tools"] == [1]
         # assert request["chat_template_kwargs"]["tools"] == [1]
+
+
+class TestEngineClientValidParameters(unittest.TestCase):
+    """Test cases for EngineClient.valid_parameters method"""
+
+    def setUp(self):
+        """Set up test fixtures for valid_parameters tests"""
+        # Mock the dependencies
+        mock_tokenizer = MagicMock()
+        mock_tokenizer.sp_model = MagicMock()
+        mock_tokenizer.sp_model.__len__ = MagicMock(return_value=1000)
+        mock_tokenizer.vocab = MagicMock()
+        mock_tokenizer.vocab.__len__ = MagicMock(return_value=1000)
+
+        mock_data_processor = MagicMock()
+        mock_data_processor.tokenizer = mock_tokenizer
+
+        mock_model_config = MagicMock()
+        mock_model_config.enable_mm = False
+
+        # Mock IPCSignal to avoid file system dependencies
+        with patch("fastdeploy.entrypoints.engine_client.IPCSignal") as mock_ipcsignal:
+            mock_ipcsignal.return_value = MagicMock()
+
+            with patch("fastdeploy.entrypoints.engine_client.StatefulSemaphore") as mock_semaphore:
+                mock_semaphore.return_value = MagicMock()
+
+                with patch("fastdeploy.entrypoints.engine_client.DealerConnectionManager") as mock_connection_manager:
+                    mock_connection_manager.return_value = MagicMock()
+
+                    with patch("fastdeploy.entrypoints.engine_client.FileLock") as mock_filelock:
+                        mock_filelock.return_value = MagicMock()
+
+                        with patch("fastdeploy.entrypoints.engine_client.ModelConfig") as mock_model_config_class:
+                            mock_model_config_class.return_value = mock_model_config
+
+                            with patch(
+                                "fastdeploy.entrypoints.engine_client.InputPreprocessor"
+                            ) as mock_input_processor:
+                                mock_input_processor_instance = MagicMock()
+                                mock_input_processor_instance.create_processor.return_value = mock_data_processor
+                                mock_input_processor.return_value = mock_input_processor_instance
+
+                                # Create EngineClient with minimal required parameters
+                                self.engine_client = EngineClient(
+                                    model_name_or_path="test_model",
+                                    tokenizer=mock_tokenizer,
+                                    max_model_len=2048,
+                                    tensor_parallel_size=1,
+                                    pid=1234,
+                                    port=8080,
+                                    limit_mm_per_prompt=None,
+                                    mm_processor_kwargs=None,
+                                    enable_logprob=True,  # Enable logprob for testing
+                                    max_logprobs=20,
+                                )
+
+    def test_max_logprobs_valid_values(self):
+        """Test valid max_logprobs values"""
+        # Test positive max_logprobs
+        self.engine_client.max_logprobs = 20
+        data = {"request_id": "test"}
+        self.engine_client.valid_parameters(data)  # Should not raise
+
+        # Test -1 (unlimited)
+        self.engine_client.max_logprobs = -1
+        data = {"request_id": "test"}
+        self.engine_client.valid_parameters(data)  # Should not raise
+
+    def test_max_logprobs_invalid_values(self):
+        """Test invalid max_logprobs values"""
+        # Test negative value less than -1
+        self.engine_client.max_logprobs = -2
+        data = {"request_id": "test"}
+
+        with self.assertRaises(ValueError) as context:
+            self.engine_client.valid_parameters(data)
+
+        self.assertIn("max_logprobs", str(context.exception))
+        self.assertIn("must be >= -1", str(context.exception))
+
+    def test_prompt_logprobs_valid_values(self):
+        """Test valid prompt_logprobs values"""
+        self.engine_client.max_logprobs = 20
+        self.engine_client.enable_logprob = True
+
+        # Test valid positive value with FD_USE_GET_SAVE_OUTPUT_V1=1
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
+            data = {"prompt_logprobs": 10, "request_id": "test"}
+            self.engine_client.valid_parameters(data)  # Should not raise
+
+        # Test -1 (unlimited) with FD_USE_GET_SAVE_OUTPUT_V1=1
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
+            self.engine_client.max_logprobs = -1
+            data = {"prompt_logprobs": -1, "request_id": "test"}
+            self.engine_client.valid_parameters(data)  # Should not raise
+
+        # Test None (default)
+        data = {"request_id": "test"}
+        self.engine_client.valid_parameters(data)  # Should not raise
+
+    def test_prompt_logprobs_disabled_when_fd_use_get_save_output_v1_disabled(self):
+        """Test prompt_logprobs when FD_USE_GET_SAVE_OUTPUT_V1 is disabled"""
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "0"}):
+            data = {"prompt_logprobs": 10, "request_id": "test"}
+
+            with self.assertRaises(ParameterError) as context:
+                self.engine_client.valid_parameters(data)
+
+            self.assertIn(
+                "prompt_logprobs is not support when FD_USE_GET_SAVE_OUTPUT_V1 is disabled", str(context.exception)
+            )
+
+    def test_prompt_logprobs_disabled_logprob(self):
+        """Test prompt_logprobs when logprob is disabled"""
+        self.engine_client.enable_logprob = False
+        data = {"prompt_logprobs": 10, "request_id": "test"}
+
+        with self.assertRaises(ParameterError) as context:
+            self.engine_client.valid_parameters(data)
+
+        self.assertIn("disabled", str(context.exception))
+
+    def test_prompt_logprobs_invalid_values(self):
+        """Test invalid prompt_logprobs values"""
+        self.engine_client.enable_logprob = True
+
+        # Test negative value less than -1 with FD_USE_GET_SAVE_OUTPUT_V1=1
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
+            data = {"prompt_logprobs": -2, "request_id": "test"}
+
+            with self.assertRaises(ValueError) as context:
+                self.engine_client.valid_parameters(data)
+
+            self.assertIn("prompt_logprobs", str(context.exception))
+            self.assertIn("must be >= -1", str(context.exception))
+
+    def test_prompt_logprobs_exceeds_max_logprobs(self):
+        """Test prompt_logprobs exceeding max_logprobs"""
+        self.engine_client.max_logprobs = 10
+        self.engine_client.enable_logprob = True
+
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
+            data = {"prompt_logprobs": 15, "request_id": "test"}
+
+            with self.assertRaises(ValueError) as context:
+                self.engine_client.valid_parameters(data)
+
+            self.assertIn("prompt_logprobs", str(context.exception))
+            self.assertIn("exceeds maximum allowed value", str(context.exception))
+
+    def test_top_logprobs_valid_values(self):
+        """Test valid top_logprobs values"""
+        self.engine_client.max_logprobs = 20
+        self.engine_client.enable_logprob = True
+
+        # Test with logprobs=True and FD_USE_GET_SAVE_OUTPUT_V1=0
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "0"}):
+            data = {"logprobs": True, "top_logprobs": 10, "request_id": "test"}
+            self.engine_client.valid_parameters(data)  # Should not raise
+
+        # Test with logprobs=int and FD_USE_GET_SAVE_OUTPUT_V1=0
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "0"}):
+            data = {"logprobs": 10, "request_id": "test"}
+            self.engine_client.valid_parameters(data)  # Should not raise
+
+        # Test -1 (unlimited) with FD_USE_GET_SAVE_OUTPUT_V1=1
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
+            self.engine_client.max_logprobs = -1
+            data = {"logprobs": True, "top_logprobs": -1, "request_id": "test"}
+            self.engine_client.valid_parameters(data)  # Should not raise
+
+    def test_top_logprobs_disabled_logprob(self):
+        """Test top_logprobs when logprob is disabled"""
+        self.engine_client.enable_logprob = False
+        data = {"logprobs": True, "top_logprobs": 10, "request_id": "test"}
+
+        with self.assertRaises(ParameterError) as context:
+            self.engine_client.valid_parameters(data)
+
+        self.assertIn("disabled", str(context.exception))
+
+    def test_top_logprobs_invalid_type(self):
+        """Test top_logprobs with invalid type"""
+        self.engine_client.enable_logprob = True
+
+        # Test with string type
+        data = {"logprobs": True, "top_logprobs": "10", "request_id": "test"}
+
+        with self.assertRaises(ParameterError) as context:
+            self.engine_client.valid_parameters(data)
+
+        self.assertIn("top_logprobs", str(context.exception))
+        self.assertIn("Invalid type", str(context.exception))
+        self.assertIn("expected int", str(context.exception))
+
+    def test_top_logprobs_invalid_values_fd_use_get_save_output_v1_disabled(self):
+        """Test invalid top_logprobs values when FD_USE_GET_SAVE_OUTPUT_V1 is disabled"""
+        self.engine_client.enable_logprob = True
+
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "0"}):
+            # Test negative value
+            data = {"logprobs": True, "top_logprobs": -1, "request_id": "test"}
+
+            with self.assertRaises(ValueError) as context:
+                self.engine_client.valid_parameters(data)
+
+            self.assertIn("top_logprobs", str(context.exception))
+            self.assertIn("must be >= 0", str(context.exception))
+
+            # Test value > 20
+            data = {"logprobs": True, "top_logprobs": 25, "request_id": "test"}
+
+            with self.assertRaises(ValueError) as context:
+                self.engine_client.valid_parameters(data)
+
+            self.assertIn("top_logprobs", str(context.exception))
+            self.assertIn("must be <= 20", str(context.exception))
+
+    def test_top_logprobs_invalid_values_fd_use_get_save_output_v1_enabled(self):
+        """Test invalid top_logprobs values when FD_USE_GET_SAVE_OUTPUT_V1 is enabled"""
+        self.engine_client.enable_logprob = True
+
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
+            # Test negative value less than -1
+            data = {"logprobs": True, "top_logprobs": -2, "request_id": "test"}
+
+            with self.assertRaises(ValueError) as context:
+                self.engine_client.valid_parameters(data)
+
+            self.assertIn("top_logprobs", str(context.exception))
+            self.assertIn("must be >= -1", str(context.exception))
+
+            # Test value exceeding max_logprobs
+            self.engine_client.max_logprobs = 10
+            data = {"logprobs": True, "top_logprobs": 15, "request_id": "test"}
+
+            with self.assertRaises(ValueError) as context:
+                self.engine_client.valid_parameters(data)
+
+            self.assertIn("top_logprobs", str(context.exception))
+            self.assertIn("exceeds maximum allowed value", str(context.exception))
+
+    def test_top_logprobs_exceeds_max_logprobs(self):
+        """Test top_logprobs exceeding max_logprobs"""
+        self.engine_client.max_logprobs = 10
+        self.engine_client.enable_logprob = True
+
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
+            data = {"logprobs": True, "top_logprobs": 15, "request_id": "test"}
+
+            with self.assertRaises(ValueError) as context:
+                self.engine_client.valid_parameters(data)
+
+            self.assertIn("top_logprobs", str(context.exception))
+            self.assertIn("exceeds maximum allowed value", str(context.exception))
+
+    def test_logprobs_invalid_type(self):
+        """Test logprobs with invalid type"""
+        self.engine_client.enable_logprob = True
+
+        # Test with string type
+        data = {"logprobs": "true", "request_id": "test"}
+
+        with self.assertRaises(ParameterError) as context:
+            self.engine_client.valid_parameters(data)
+
+        self.assertIn("logprobs", str(context.exception))
+        self.assertIn("Invalid type", str(context.exception))
+
+    def test_logprobs_disabled(self):
+        """Test logprobs when logprob is disabled"""
+        self.engine_client.enable_logprob = False
+
+        # Test with logprobs=True
+        data = {"logprobs": True, "request_id": "test"}
+
+        with self.assertRaises(ParameterError) as context:
+            self.engine_client.valid_parameters(data)
+
+        self.assertIn("disabled", str(context.exception))
+
+    def test_unlimited_max_logprobs_with_prompt_logprobs(self):
+        """Test unlimited max_logprobs (-1) with prompt_logprobs"""
+        self.engine_client.max_logprobs = -1  # Unlimited
+        self.engine_client.enable_logprob = True
+
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
+            # Should allow any prompt_logprobs value
+            data = {"prompt_logprobs": 1000, "request_id": "test"}
+            self.engine_client.valid_parameters(data)  # Should not raise
+
+    def test_unlimited_max_logprobs_with_top_logprobs(self):
+        """Test unlimited max_logprobs (-1) with top_logprobs"""
+        self.engine_client.max_logprobs = -1  # Unlimited
+        self.engine_client.enable_logprob = True
+
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
+            # Should allow any top_logprobs value
+            data = {"logprobs": True, "top_logprobs": 1000, "request_id": "test"}
+            self.engine_client.valid_parameters(data)  # Should not raise
+
+    def test_edge_case_zero_values(self):
+        """Test edge cases with zero values"""
+        self.engine_client.max_logprobs = 20
+        self.engine_client.enable_logprob = True
+
+        # Test prompt_logprobs = 0 with FD_USE_GET_SAVE_OUTPUT_V1=1
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
+            data = {"prompt_logprobs": 0, "request_id": "test"}
+            self.engine_client.valid_parameters(data)  # Should not raise
+
+        # Test top_logprobs = 0 with FD_USE_GET_SAVE_OUTPUT_V1=0
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "0"}):
+            data = {"logprobs": True, "top_logprobs": 0, "request_id": "test"}
+            self.engine_client.valid_parameters(data)  # Should not raise
 
     def test_valid_parameters(self):
         request = {

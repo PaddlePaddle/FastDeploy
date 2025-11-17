@@ -531,6 +531,7 @@ class RequestOutput:
             f"prompt={self.prompt!r}, "
             f"prompt_token_ids={self.prompt_token_ids}, "
             f"prompt_logprobs={self.prompt_logprobs}, "
+            f"prompt_logprobs_tensors={self.prompt_logprobs_tensors}, "
             f"output_type={self.output_type}, "
             f"outputs={self.outputs}, "
             f"finished={self.finished}, "
@@ -557,6 +558,7 @@ class RequestOutput:
             "prompt": self.prompt,
             "prompt_token_ids": self.prompt_token_ids,
             "prompt_logprobs": self.prompt_logprobs,
+            "prompt_logprobs_tensors": self.prompt_logprobs_tensors,
             "output_type": self.output_type,
             "outputs": None if self.outputs is None else self.outputs.to_dict(),
             "metrics": None if self.metrics is None else self.metrics.to_dict(),

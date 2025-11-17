@@ -449,6 +449,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         num_input_image_tokens = [0, 0]
         num_input_video_tokens = [0, 0]
         num_image_tokens = [0, 0]
+        prompt_logprobs_res_list = [[], []]
 
         for idx, case in enumerate(test_cases):
             actual_choice = await self.chat_serving._create_chat_completion_choice(
@@ -463,6 +464,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 num_input_video_tokens=num_input_video_tokens,
                 num_image_tokens=num_image_tokens,
                 logprob_contents=logprob_contents,
+                prompt_logprobs_res_list=prompt_logprobs_res_list,
                 response_processor=mock_response_processor,
             )
 

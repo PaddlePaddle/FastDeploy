@@ -83,7 +83,7 @@ class ZmqServerBase(ABC):
         if len(data) > 1:
             for response in data[1:]:
                 result.add(response)
-        result = msgpack.packb([result.to_dict()])
+        result = ForkingPickler.dumps([result.to_dict()])
         return result
 
     def receive_json_once(self, block=False):
@@ -172,9 +172,9 @@ class ZmqServerBase(ABC):
                 if self.aggregate_send:
                     result = self.pack_aggregated_data(new_data)
                 else:
-                    result = msgpack.packb([response.to_dict() for response in new_data])
+                    result = ForkingPickler.dumps([response.to_dict() for response in new_data])
                 with self.response_token_lock:
-                    self.socket.send_multipart([self.req_dict[req_id], b"", result])
+                    self.socket.send_multipart([self.req_dict[req_id], b"", result], copy=False)
                 llm_logger.debug(
                     f"send_multipart result: {req_id} len {len(new_data)} elapse: {time.time()-start_send}"
                 )
