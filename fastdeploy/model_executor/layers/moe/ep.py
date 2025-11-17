@@ -295,7 +295,7 @@ class DeepEPEngine:
             use_fp8=use_fp8,
             async_finish=False,
             return_recv_hook=True,
-            num_per_channel=quant_group_size,
+            # num_per_channel=quant_group_size,
         )
 
         return packed_recv_x, recv_expert_count, handle, dispatch_hook
