@@ -45,7 +45,7 @@ class CubKeyValueSorter {
   size_t getWorkspaceSize(const size_t num_key_value_pairs,
                           bool descending = false) {
     num_key_value_pairs_ = num_key_value_pairs;
-    size_t required_storage = 0;
+    size_t required_storage = 1;
     int* null_int = nullptr;
     if (descending) {
       cub::DeviceRadixSort::SortPairsDescending(NULL,
