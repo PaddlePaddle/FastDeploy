@@ -33,7 +33,8 @@ from fastdeploy.utils import current_package_version, envs
 if envs.FD_DEBUG != 1:
     import logging
 
-    pf_logger.logger.setLevel(logging.ERROR)
+    # Set paddleformers logger to WARNING to suppress INFO logs but still show warnings and errors.
+    pf_logger.logger.setLevel(logging.WARNING)
     import warnings
 
     warnings.filterwarnings("ignore", module="paddleformers")
