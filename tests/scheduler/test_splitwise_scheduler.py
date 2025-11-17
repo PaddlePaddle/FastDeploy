@@ -147,6 +147,12 @@ def _install_stub_modules() -> None:
         def pipeline(self) -> _FakePipeline:
             return _FakePipeline(self)
 
+        def info(self) -> dict[str, str]:
+            return {"redis_version": "6.2.0"}
+
+        def ping(self) -> bool:
+            return True
+
     redis_mod = types.ModuleType("redis")
     redis_mod.Redis = _FakeRedis  # type: ignore[attr-defined]
     sys.modules.setdefault("redis", redis_mod)
