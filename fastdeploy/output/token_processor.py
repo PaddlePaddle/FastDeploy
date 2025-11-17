@@ -40,6 +40,8 @@ from fastdeploy.engine.request import (
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcServer
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
+from fastdeploy.trace.constants import LoggingEventName
+from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import llm_logger, spec_logger
 from fastdeploy.worker.output import LogprobsLists
 
@@ -498,6 +500,9 @@ class TokenProcessor:
                     self.split_connector.send_first_token(task.disaggregate_info, [result])
                     break
                 else:
+                    # TODO: Refine checking sending cache and do not keep waiting
+                    if time.time() - start_time > 30:
+                        llm_logger.warning(f"wait for sending cache, {task_id}")
                     time.sleep(0.002)
         else:
             if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -753,10 +758,8 @@ class TokenProcessor:
                     self._recycle_resources(task_id, i, task, result, is_prefill)
                     break
 
-            if not (is_prefill and self.cfg.splitwise_version == "v0"):
-                # NOTE: prefill instance in v0 version does not return result to scheduler
-                llm_logger.debug(f"get response from infer: {result}")
-                batch_result.append(result)
+            llm_logger.debug(f"get response from infer: {result}")
+            batch_result.append(result)
 
         self.postprocess(batch_result, mtype)
 
@@ -773,6 +776,8 @@ class TokenProcessor:
     def _record_first_token_metrics(self, task, current_time):
         """Record metrics for first token"""
         task.first_token_time = current_time
+        trace_print(LoggingEventName.FIRST_TOKEN_GENERATED, task.request_id, getattr(task, "user", ""))
+        trace_print(LoggingEventName.DECODE_START, task.request_id, getattr(task, "user", ""))
         main_process_metrics.first_token_latency.set(current_time - task.inference_start_time)
         main_process_metrics.time_to_first_token.observe(current_time - task.inference_start_time)
         main_process_metrics.request_queue_time.observe(task.schedule_start_time - task.preprocess_end_time)
@@ -782,7 +787,8 @@ class TokenProcessor:
         if hasattr(task, "first_token_time"):
             decode_time = current_time - task.first_token_time
             main_process_metrics.request_decode_time.observe(decode_time)
-
+        trace_print(LoggingEventName.INFERENCE_END, task.request_id, getattr(task, "user", ""))
+        trace_print(LoggingEventName.POSTPROCESSING_START, task.request_id, getattr(task, "user", ""))
         main_process_metrics.num_requests_running.dec(1)
         main_process_metrics.request_success_total.inc()
         main_process_metrics.infer_latency.set(current_time - task.inference_start_time)
@@ -847,7 +853,7 @@ class TokenProcessor:
     def clear_data(self):
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.resource_manager.clear_data()
-        for i in range(self.cfg.max_num_seqs):
+        for i in range(self.resource_manager.max_num_seqs):
             if self.resource_manager.stop_flags[i]:
                 continue
             task = self.resource_manager.tasks_list[i]
