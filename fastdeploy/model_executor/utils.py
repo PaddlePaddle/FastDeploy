@@ -189,6 +189,19 @@ def free_tensor(tensor):
     del tensor
 
 
+def create_parameter_and_copy(layer, name, weight):
+    setattr(
+        layer,
+        name,
+        layer.create_parameter(
+            shape=weight.shape,
+            dtype=weight.dtype,
+            default_initializer=paddle.nn.initializer.Constant(0),
+        ),
+    )
+    getattr(layer, name).copy_(weight, False)
+
+
 def default_weight_loader(fd_config: FDConfig = None) -> None:
     """Default weight loader"""
 
