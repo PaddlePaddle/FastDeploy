@@ -387,11 +387,36 @@ def _build_tasks_module() -> types.ModuleType:
 
 
 def _import_pooler_module():
+    pooler_path = PROJECT_ROOT / "fastdeploy" / "model_executor" / "layers" / "pooler.py"
+    spec = importlib.util.spec_from_file_location(
+        "fastdeploy.model_executor.layers.pooler",
+        pooler_path,
+    )
+    assert spec and spec.loader is not None
+
+    try:
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        return module, (lambda: None)
+    except Exception:
+        sys.modules.pop(spec.name, None)
+
     saved: Dict[str, Optional[types.ModuleType]] = {}
+    installed: List[str] = []
+
+    def _looks_real(module: types.ModuleType) -> bool:
+        return hasattr(module, "__file__") and module.__file__ is not None
 
     def _install(name: str, module: types.ModuleType):
-        saved[name] = sys.modules.get(name)
+        if name in sys.modules:
+            saved[name] = sys.modules[name]
+            if _looks_real(sys.modules[name]):
+                return
+        else:
+            saved[name] = None
         sys.modules[name] = module
+        installed.append(name)
 
     for name, builder in [
         ("paddle", _build_paddle_module),
@@ -404,23 +429,22 @@ def _import_pooler_module():
     ]:
         module = builder()
         _install(name, module)
-        if name == "paddle":
+        if name == "paddle" and name in installed:
             _install("paddle.nn", module.nn)
             _install("paddle.nn.functional", module.nn.functional)
 
-    fastdeploy_pkg = types.ModuleType("fastdeploy")
-    fastdeploy_pkg.__path__ = []
-    _install("fastdeploy", fastdeploy_pkg)
+    if "fastdeploy" not in sys.modules or not _looks_real(
+        sys.modules.get("fastdeploy", types.ModuleType("fastdeploy"))
+    ):
+        fastdeploy_pkg = types.ModuleType("fastdeploy")
+        fastdeploy_pkg.__path__ = []
+        _install("fastdeploy", fastdeploy_pkg)
     for pkg_name in ("fastdeploy.model_executor", "fastdeploy.model_executor.layers"):
-        pkg = types.ModuleType(pkg_name)
-        pkg.__path__ = []
-        _install(pkg_name, pkg)
+        if pkg_name not in sys.modules:
+            pkg = types.ModuleType(pkg_name)
+            pkg.__path__ = []
+            _install(pkg_name, pkg)
 
-    spec = importlib.util.spec_from_file_location(
-        "fastdeploy.model_executor.layers.pooler",
-        PROJECT_ROOT / "fastdeploy" / "model_executor" / "layers" / "pooler.py",
-    )
-    assert spec and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -431,13 +455,7 @@ def _import_pooler_module():
                 sys.modules.pop(name, None)
             else:
                 sys.modules[name] = original
-        for name in [
-            "fastdeploy.model_executor.layers.pooler",
-            "fastdeploy.model_executor.layers",
-            "fastdeploy.model_executor",
-            "fastdeploy",
-        ]:
-            sys.modules.pop(name, None)
+        sys.modules.pop("fastdeploy.model_executor.layers.pooler", None)
 
     return module, _cleanup
 
