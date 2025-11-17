@@ -232,7 +232,7 @@ class Ernie4_5Processor(BaseDataProcessor):
         if self.reasoning_parser and self.reasoning_parser.__class__.__name__ == "ErnieX1ReasoningParser":
             request["enable_thinking"] = True
 
-        data_processor_logger.info(f"Processed request dict: {request}")
+        data_processor_logger.info(f"Processed request dict: {request}, len(request.get('prompt_token_ids')): {len(request.get('prompt_token_ids'))}")
         return request
 
     def process_response(self, response_dict, **kwargs):
@@ -378,6 +378,7 @@ class Ernie4_5Processor(BaseDataProcessor):
         response_dict["outputs"]["text"] = delta_text
         if is_end:
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
+            data_processor_logger.info(f"req_id:{req_id}, len(output): {len(self.decode_status[req_id][2])}")
             del self.decode_status[req_id]
             if req_id in self.tool_parser_dict:
                 del self.tool_parser_dict[req_id]

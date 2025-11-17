@@ -807,7 +807,7 @@ class GraphOptimizationConfig:
         """
         self.sot_warmup_sizes: list[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 32, 64, 128]
         """  Number of warmup runs for SOT warmup. """
-        self.use_cudagraph: bool = True
+        self.use_cudagraph: bool = False
         """Sizes to capture cudagraph.
         - None (default): capture sizes are inferred from llm config.
         - list[int]: capture sizes are specified as given."""
@@ -850,10 +850,16 @@ class GraphOptimizationConfig:
         # CINN Config ...
         if args is not None:
             for key, value in args.items():
+                print(f"key is {key}")
+                print(f"value is {value}")
                 if hasattr(self, key):
                     setattr(self, key, value)
 
         self.check_legality_parameters()
+        import setting
+        print(f"setting.use_cuda_graph : {setting.use_cuda_graph}")
+        setting.use_cuda_graph = self.use_cudagraph
+        print(f"setting.use_cuda_graph : {setting.use_cuda_graph}")
 
     def init_with_cudagrpah_size(self, max_capture_size: int = 0) -> None:
         """

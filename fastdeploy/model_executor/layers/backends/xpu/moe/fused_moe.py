@@ -28,6 +28,7 @@ from fastdeploy.model_executor.ops.xpu import (
     moe_topk_select,
     weight_quantize_xpu,
     xpu_moe_layer,
+    f_ep_moe_expert_dispatch
 )
 from fastdeploy.model_executor.utils import (
     TensorTracker,
@@ -35,6 +36,7 @@ from fastdeploy.model_executor.utils import (
     free_tensor,
     set_weight_attrs,
 )
+import setting
 
 
 class XPUMoEMethod(MoEMethodBase):
@@ -277,21 +279,40 @@ class XPUMoEMethod(MoEMethodBase):
             True,
         )
         token_nums_per_expert_list = list(range(64))  # placeholder, not use
-        (
-            permute_input,
-            permute_indices_per_token,
-            token_num_lod,
-            dst_weights,
-            ffn1_act_scale_per_token,
-        ) = ep_moe_expert_dispatch(
-            x,
-            topk_idx,
-            topk_weights,
-            getattr(layer, self.added_in_scale_attrs[0], None),
-            token_nums_per_expert_list,
-            x.shape[0] * layer.top_k,
-            self.moe_quant_type,
-        )
+        if setting.use_cuda_graph:
+            print(f"调用ep_moe_expert_dispatch")
+            (
+                permute_input,
+                permute_indices_per_token,
+                token_num_lod,
+                dst_weights,
+                ffn1_act_scale_per_token,
+            ) = ep_moe_expert_dispatch(
+                x,
+                topk_idx,
+                topk_weights,
+                getattr(layer, self.added_in_scale_attrs[0], None),
+                token_nums_per_expert_list,
+                x.shape[0] * layer.top_k,
+                self.moe_quant_type,
+            )
+        else:
+            print(f"调用f_ep_moe_expert_dispatch")
+            (
+                permute_input,
+                permute_indices_per_token,
+                token_num_lod,
+                dst_weights,
+                ffn1_act_scale_per_token,
+            ) = f_ep_moe_expert_dispatch(
+                x,
+                topk_idx,
+                topk_weights,
+                getattr(layer, self.added_in_scale_attrs[0], None),
+                token_nums_per_expert_list,
+                x.shape[0] * layer.top_k,
+                self.moe_quant_type,
+            )
 
         if not hasattr(layer, self.added_in_scale_attrs[0]):
             ffn1_act_scale_per_token = None
