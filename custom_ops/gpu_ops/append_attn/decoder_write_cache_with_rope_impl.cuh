@@ -109,6 +109,9 @@ __global__ void append_decode_cache_T_rope_qk_norm_kernel(
 
   const int64_t hidden_size = (num_heads + 2 * kv_num_heads) * head_size;
   const int half_head_size = head_size / 2;
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaGridDependencySynchronize();
+#endif
   for (int gloabl_hi = global_warp_idx; gloabl_hi < all_head_dim;
        gloabl_hi += all_warp_num) {
     int64_t linear_index = gloabl_hi * head_size + threadIdx.x * VecSize;
@@ -198,6 +201,9 @@ __global__ void append_decode_cache_T_rope_qk_norm_kernel(
       }
     }
   }
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaTriggerProgrammaticLaunchCompletion();
+#endif
 }
 
 template <typename T, int VecSize = 1>
@@ -239,6 +245,9 @@ __global__ void append_decode_cache_T_rope_kernel(
   const int64_t hidden_size = (num_heads + 2 * kv_num_heads) * head_size;
   // const int64_t offset = 2 * hidden_size;
   const int half_head_size = head_size / 2;
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaGridDependencySynchronize();
+#endif
   for (int32_t linear_index = global_thread_idx * VecSize,
                step = gridDim.x * blockDim.x * VecSize;
        linear_index < elem_cnt;
@@ -305,10 +314,13 @@ __global__ void append_decode_cache_T_rope_kernel(
       }
     }
   }
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaTriggerProgrammaticLaunchCompletion();
+#endif
 }
 
 template <typename T, int VecSize = 1>
-__global__ void append_decode_cache_T_rope_kernel(
+__global__ void append_decode_cache_T_quant_rope_kernel(
     const int* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
     T* __restrict__ key_cache,    // [num_blocks, kv_num_heads, block_size,
@@ -352,6 +364,9 @@ __global__ void append_decode_cache_T_rope_kernel(
   const int64_t hidden_size = (num_heads + 2 * kv_num_heads) * head_size;
   // const int64_t offset = 2 * hidden_size;
   const int half_head_size = head_size / 2;
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaGridDependencySynchronize();
+#endif
   for (int32_t linear_index = global_thread_idx * VecSize,
                step = gridDim.x * blockDim.x * VecSize;
        linear_index < elem_cnt;
@@ -427,6 +442,9 @@ __global__ void append_decode_cache_T_rope_kernel(
       }
     }
   }
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaTriggerProgrammaticLaunchCompletion();
+#endif
 }
 
 template <typename T, int VecSize = 1>
@@ -473,7 +491,9 @@ __global__ void append_decode_cache_T_neox_partial_rope_kernel(
   const int64_t hidden_size = (num_heads + 2 * kv_num_heads) * head_size;
   const int64_t half_hidden_size = hidden_size / 2;
   // const int64_t offset = 2 * hidden_size;
-
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaGridDependencySynchronize();
+#endif
   for (int32_t linear_index = global_thread_idx * VecSize,
                step = gridDim.x * blockDim.x * VecSize;
        linear_index < elem_cnt;
@@ -566,6 +586,9 @@ __global__ void append_decode_cache_T_neox_partial_rope_kernel(
       }
     }
   }
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaTriggerProgrammaticLaunchCompletion();
+#endif
 }
 
 template <typename T, int VecSize = 1>
@@ -608,7 +631,9 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
   const int64_t hidden_size = (num_heads + 2 * kv_num_heads) * head_size;
   const int64_t half_hidden_size = hidden_size / 2;
   // const int64_t offset = 2 * hidden_size;
-
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaGridDependencySynchronize();
+#endif
   for (int32_t linear_index = global_thread_idx * VecSize,
                step = gridDim.x * blockDim.x * VecSize;
        linear_index < elem_cnt;
@@ -680,10 +705,13 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
       }
     }
   }
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaTriggerProgrammaticLaunchCompletion();
+#endif
 }
 
 template <typename T, int VecSize = 1>
-__global__ void append_decode_cache_T_neox_rope_kernel(
+__global__ void append_decode_cache_T_quant_neox_rope_kernel(
     const int* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
     T* __restrict__ key_cache,    // [num_blocks, kv_num_heads, block_size,
@@ -726,7 +754,9 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
   const int half_head_size = head_size / 2;
   const int64_t hidden_size = (num_heads + 2 * kv_num_heads) * head_size;
   const int64_t half_hidden_size = hidden_size / 2;
-
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaGridDependencySynchronize();
+#endif
   for (int32_t linear_index = global_thread_idx * VecSize,
                step = gridDim.x * blockDim.x * VecSize;
        linear_index < elem_cnt;
@@ -814,6 +844,9 @@ __global__ void append_decode_cache_T_neox_rope_kernel(
       }
     }
   }
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaTriggerProgrammaticLaunchCompletion();
+#endif
 }
 
 template <typename T,
@@ -872,7 +905,9 @@ __global__ void append_decode_cache_int8_rope_qk_norm_kernel(
 
   float thread_m2 = 0.0f;
   float warp_m2 = 0.0f;
-
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaGridDependencySynchronize();
+#endif
   if (head_idx < num_heads) {
     // q
     using LoadT = AlignedVector<T, VecSize>;
@@ -1118,6 +1153,9 @@ __global__ void append_decode_cache_int8_rope_qk_norm_kernel(
       value_cache[tgt_cache_idx4] = cache_vec[3];
     }
   }
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaTriggerProgrammaticLaunchCompletion();
+#endif
 }
 
 template <typename T,
@@ -1169,7 +1207,9 @@ __global__ void append_decode_cache_int8_rope_kernel(
   block_table_now = block_tables + bid * max_blocks_per_seq;
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
-
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaGridDependencySynchronize();
+#endif
   if (head_idx < num_heads) {
     // q
     const T* qkv_now =
@@ -1356,6 +1396,9 @@ __global__ void append_decode_cache_int8_rope_kernel(
       value_cache[tgt_cache_idx4] = cache_vec[3];
     }
   }
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaTriggerProgrammaticLaunchCompletion();
+#endif
 }
 
 template <typename T,
@@ -1364,7 +1407,7 @@ template <typename T,
           int HeadDim = 128,
           bool is_scale_channel_wise = false,
           bool IsFP8 = false>
-__global__ void append_decode_cache_int8_rope_kernel(
+__global__ void int_append_decode_cache_int8_rope_kernel(
     const int* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
     uint8_t* __restrict__ key_cache,    // [num_blocks, kv_num_heads,
@@ -1412,7 +1455,9 @@ __global__ void append_decode_cache_int8_rope_kernel(
   block_table_now = block_tables + bid * max_blocks_per_seq;
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
-
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaGridDependencySynchronize();
+#endif
   if (head_idx < num_heads) {
     // q
     using LoadT = AlignedVector<int, VecSize>;
@@ -1674,6 +1719,9 @@ __global__ void append_decode_cache_int8_rope_kernel(
       value_cache[tgt_cache_idx4] = cache_vec[3];
     }
   }
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaTriggerProgrammaticLaunchCompletion();
+#endif
 }
 
 template <typename T, int VecSize = 4, int RoundType = 0, int HeadDim = 128>
@@ -1721,7 +1769,9 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
   block_table_now = block_tables + bid * max_blocks_per_seq;
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
-
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaGridDependencySynchronize();
+#endif
   if (head_idx < num_heads) {
     // q
     using LoadT = AlignedVector<T, VecSize>;
@@ -1977,10 +2027,13 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
       value_cache[tgt_cache_idx4] = cache_vec[3];
     }
   }
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaTriggerProgrammaticLaunchCompletion();
+#endif
 }
 
 template <typename T, int VecSize = 4, int RoundType = 0, int HeadDim = 128>
-__global__ void append_decode_cache_int8_neox_rope_kernel(
+__global__ void int_append_decode_cache_int8_neox_rope_kernel(
     const int* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
     uint8_t* __restrict__ key_cache,    // [num_blocks, kv_num_heads,
@@ -2030,7 +2083,9 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
   block_table_now = block_tables + bid * max_blocks_per_seq;
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
-
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaGridDependencySynchronize();
+#endif
   if (head_idx < num_heads) {
     // q
     using LoadT = AlignedVector<int, VecSize>;
@@ -2374,6 +2429,9 @@ __global__ void append_decode_cache_int8_neox_rope_kernel(
       value_cache[tgt_cache_idx4] = cache_vec[3];
     }
   }
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaTriggerProgrammaticLaunchCompletion();
+#endif
 }
 
 template <typename T, int VecSize = 4, int RoundType = 0, int HeadDim = 128>
@@ -2424,7 +2482,9 @@ __global__ void append_decode_cache_int4_rope_kernel(
 
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
-
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaGridDependencySynchronize();
+#endif
   if (head_idx < num_heads) {
     // q
     const T* qkv_now =
@@ -2648,10 +2708,13 @@ __global__ void append_decode_cache_int4_rope_kernel(
           (uint_quant_value2 << 4) | (uint_quant_value1 & 0x0F);
     }
   }
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaTriggerProgrammaticLaunchCompletion();
+#endif
 }
 
 template <typename T, int VecSize = 4, int RoundType = 0, int HeadDim = 128>
-__global__ void append_decode_cache_int4_rope_kernel(
+__global__ void int_append_decode_cache_int4_rope_kernel(
     const int* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
     uint8_t* __restrict__ key_cache,    // [num_blocks, kv_num_heads,
@@ -2703,7 +2766,9 @@ __global__ void append_decode_cache_int4_rope_kernel(
 
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
-
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaGridDependencySynchronize();
+#endif
   if (head_idx < num_heads) {
     // q
     using LoadT = AlignedVector<int, VecSize>;
@@ -2981,6 +3046,9 @@ __global__ void append_decode_cache_int4_rope_kernel(
           (uint_quant_value2 << 4) | (uint_quant_value1 & 0x0F);
     }
   }
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaTriggerProgrammaticLaunchCompletion();
+#endif
 }
 
 template <typename T, int VecSize = 4, int RoundType = 0, int HeadDim = 128>
@@ -3031,7 +3099,9 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
 
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
-
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaGridDependencySynchronize();
+#endif
   if (head_idx < num_heads) {
     // q
     using LoadT = AlignedVector<T, VecSize>;
@@ -3355,10 +3425,13 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
           (uint_quant_value2 << 4) | (uint_quant_value1 & 0x0F);
     }
   }
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaTriggerProgrammaticLaunchCompletion();
+#endif
 }
 
 template <typename T, int VecSize = 4, int RoundType = 0, int HeadDim = 128>
-__global__ void append_decode_cache_int4_neox_rope_kernel(
+__global__ void int_append_decode_cache_int4_neox_rope_kernel(
     const int* __restrict__ quant_qkv,  // [bsz, num_heads + 2 * kv_num_heads,
                                         // head_size]
     uint8_t* __restrict__ key_cache,    // [num_blocks, kv_num_heads,
@@ -3410,7 +3483,9 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
 
   const int block_idx = __ldg(&block_table_now[write_seq_id / block_size]);
   const int block_offset = write_seq_id % block_size;
-
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaGridDependencySynchronize();
+#endif
   if (head_idx < num_heads) {
     // q
     using LoadT = AlignedVector<int, VecSize>;
@@ -3808,4 +3883,7 @@ __global__ void append_decode_cache_int4_neox_rope_kernel(
           (uint_quant_value2 << 4) | (uint_quant_value1 & 0x0F);
     }
   }
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  cudaTriggerProgrammaticLaunchCompletion();
+#endif
 }
