@@ -179,15 +179,10 @@ class PrefixCacheManager:
         """
         launch_cache_manager function used to initialize the cache manager.
         """
-        broadcast_cache_task_flag_array = np.zeros([1], dtype=np.int32)
-
-        self.shm_cache_task_flag_broadcast = IPCSignal(
-            name="cache_task_broadcast_signal",
-            array=broadcast_cache_task_flag_array,
-            dtype=np.int32,
-            suffix=engine_worker_queue_port,
-            create=True,
-        )
+        key_cache_shape, val_cache_shape = self._get_kv_cache_shape(cache_config.total_block_num)
+        key_cache_shape = ",".join([str(i) for i in key_cache_shape])
+        val_cache_shape = ",".join([str(i) for i in val_cache_shape])
+        logger.info(f"key_cache_shape {key_cache_shape} value_cache_shape {val_cache_shape}")
 
         self.cache_task_queue = EngineCacheQueue(
             address=(pod_ip, cache_config.cache_queue_port),
@@ -199,10 +194,6 @@ class PrefixCacheManager:
         )
 
         cache_messager_processes = []
-        key_cache_shape, val_cache_shape = self._get_kv_cache_shape(cache_config.total_block_num)
-        key_cache_shape = ",".join([str(i) for i in key_cache_shape])
-        val_cache_shape = ",".join([str(i) for i in val_cache_shape])
-        logger.info(f"key_cache_shape {key_cache_shape} value_cache_shape {val_cache_shape}")
         if self.enable_splitwise:
             cache_messager_processes = self.launch_cache_messager(
                 cache_config,
@@ -216,8 +207,15 @@ class PrefixCacheManager:
             )
             if cache_messager_processes is None:
                 raise RuntimeError("Launch cache messager failed")
-                return []
 
+        broadcast_cache_task_flag_array = np.zeros([1], dtype=np.int32)
+        self.shm_cache_task_flag_broadcast = IPCSignal(
+            name="cache_task_broadcast_signal",
+            array=broadcast_cache_task_flag_array,
+            dtype=np.int32,
+            suffix=engine_worker_queue_port,
+            create=True,
+        )
         prefix_tree_status = np.zeros([1], dtype=np.int32)
         self.prefix_tree_status_signal = IPCSignal(
             name="prefix_tree_status",
@@ -229,8 +227,8 @@ class PrefixCacheManager:
 
         cache_manager_processes = []
         launch_cache_transfer_managers = (
-            self.splitwise_role != "prefill" and cache_config.enable_hierarchical_cache and self.num_cpu_blocks > 0
-        )
+            self.splitwise_role != "decode" and cache_config.enable_hierarchical_cache and self.num_cpu_blocks > 0
+        ) or (self.splitwise_role == "decode" and cache_config.splitwise_cache_buffer_block_num > 0)
         if launch_cache_transfer_managers:
             current_dir_path = os.path.split(os.path.abspath(__file__))[0]
             filename = "cache_transfer_manager.py"
@@ -273,6 +271,7 @@ class PrefixCacheManager:
                     + f" --pod_ip {pod_ip}"
                     + f" --engine_worker_queue_port {engine_worker_queue_port}"
                     + f" --num_cpu_blocks {cache_config.num_cpu_blocks}"
+                    + f" --splitwise_cache_buffer_block_num {cache_config.splitwise_cache_buffer_block_num}"
                     + f" --engine_pid {pid_suffix}"
                     + f" --protocol {cache_config.cache_transfer_protocol}"
                     + f" --local_data_parallel_id {self.local_data_parallel_id}"
@@ -299,7 +298,6 @@ class PrefixCacheManager:
                     "Launch cache transfer manager failed, see launch_cache_transfer_manager.log for more information"
                 )
 
-        if launch_cache_transfer_managers or self.cache_config.splitwise_cache_buffer_block_num > 0:
             threading.Thread(target=self.recv_data_transfer_result).start()
 
         threading.Thread(target=self.clear_prefix_cache, daemon=True).start()
@@ -350,7 +348,6 @@ class PrefixCacheManager:
                 + f" --key_cache_shape {key_cache_shape}"
                 + f" --value_cache_shape {value_cache_shape}"
                 + f" --pod_ip {pod_ip}"
-                + f" --cache_queue_port {cache_config.cache_queue_port}"
                 + f" --engine_worker_queue_port {engine_worker_queue_port}"
                 + f" --splitwise_cache_buffer_block_num {cache_config.splitwise_cache_buffer_block_num}"
                 + f" --protocol {cache_config.cache_transfer_protocol}"
@@ -494,7 +491,7 @@ class PrefixCacheManager:
         """
         logger.debug(
             f"recycle_splitwise_blocks: {block_ids}, "
-            f"len(self.recycle_splitwise_blocks): {len(self.recycle_splitwise_blocks)}"
+            f"len(self.splitwise_cpu_free_block_list): {len(self.splitwise_cpu_free_block_list)}"
         )
         if isinstance(block_ids, list):
             for block_id in block_ids:
