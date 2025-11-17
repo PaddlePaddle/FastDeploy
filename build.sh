@@ -107,11 +107,28 @@ function copy_ops(){
             echo -e "${YELLOW}[Warning]${NONE} ${WHEEL_CPU_NAME} directory exists. This is a deprecated packaging and distribution method."
         fi
     fi
+    # Function to list files recursively
+    list_files_recursive() {
+      local dir=$1
+      if [ -d "$dir" ]; then
+        echo "Listing files in: $dir"
+        find "$dir" -type f | sort
+        echo ""
+      else
+        echo "Directory not found: $dir"
+      fi
+    }
+    
     is_rocm=`$python -c "import paddle; print(paddle.is_compiled_with_rocm())"`
     if [ "$is_rocm" = "True" ]; then
       DEVICE_TYPE="rocm"
       cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/gpu
       echo -e "ROCM ops have been copy to fastdeploy"
+      
+      # List files in both directories
+      list_files_recursive "./${OPS_TMP_DIR}/${WHEEL_NAME}"
+      list_files_recursive "../fastdeploy/model_executor/ops/gpu"
+      
       return
     fi
     is_cuda=`$python -c "import paddle; print(paddle.is_compiled_with_cuda())"`
@@ -119,6 +136,11 @@ function copy_ops(){
       DEVICE_TYPE="gpu"
       cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/gpu
       echo -e "CUDA ops have been copy to fastdeploy"
+      
+      # List files in both directories
+      list_files_recursive "./${OPS_TMP_DIR}/${WHEEL_NAME}"
+      list_files_recursive "../fastdeploy/model_executor/ops/gpu"
+      
       return
     fi
 
@@ -258,30 +280,30 @@ function extract_ops_from_precompiled_wheel() {
 }
 
 function build_and_install_ops() {
-#   # debug
-#   # Copy debug setuptools files to paddle installation directory
-#   python3 -c "
-# import os
-# import sys
-# import shutil
+  # debug
+  # Copy debug setuptools files to paddle installation directory
+  python3 -c "
+import os
+import sys
+import shutil
 
-# # Find paddle installation directory
-# import paddle
-# paddle_install_dir = os.path.dirname(paddle.__file__)
-# target_dir = os.path.join(paddle_install_dir, 'utils', 'cpp_extension')
+# Find paddle installation directory
+import paddle
+paddle_install_dir = os.path.dirname(paddle.__file__)
+target_dir = os.path.join(paddle_install_dir, 'utils', 'cpp_extension')
 
-# # Source directory with debug setuptools files
-# source_dir = os.path.join(os.getcwd(), 'custom_ops', 'debug_setuptools')
+# Source directory with debug setuptools files
+source_dir = os.path.join(os.getcwd(), 'custom_ops', 'debug_setuptools')
 
-# # Copy files from source to target
-# for filename in os.listdir(source_dir):
-#     source_path = os.path.join(source_dir, filename)
-#     if os.path.isfile(source_path):
-#         target_path = os.path.join(target_dir, filename)
-#         print(f'Copying {source_path} to {target_path}')
-#         shutil.copy2(source_path, target_path)
-#         print(f'Successfully copied {filename}')
-# "
+# Copy files from source to target
+for filename in os.listdir(source_dir):
+    source_path = os.path.join(source_dir, filename)
+    if os.path.isfile(source_path):
+        target_path = os.path.join(target_dir, filename)
+        print(f'Copying {source_path} to {target_path}')
+        shutil.copy2(source_path, target_path)
+        print(f'Successfully copied {filename}')
+"
 
 
   cd $OPS_SRC_DIR
