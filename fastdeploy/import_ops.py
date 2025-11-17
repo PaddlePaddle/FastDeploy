@@ -32,7 +32,13 @@ def import_custom_ops(package, module_name, global_ns):
     """
     try:
         module = importlib.import_module(module_name, package=package)
+
+        print(">"*20, module)
+
         functions = inspect.getmembers(module)
+
+        print(">"*20, functions)
+
         for func_name, func in functions:
             if func_name.startswith("__") or func_name == "_C_ops":
                 continue
