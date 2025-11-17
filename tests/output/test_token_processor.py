@@ -190,6 +190,23 @@ def _install_stub_modules():
     fastdeploy_pkg = _ensure_module("fastdeploy")
     fastdeploy_pkg.__path__ = []
     sys.modules["fastdeploy.output"] = _ensure_module("fastdeploy.output")
+    trace_module = _ensure_module("fastdeploy.trace")
+    trace_constants = _ensure_module("fastdeploy.trace.constants")
+    trace_logger = _ensure_module("fastdeploy.trace.trace_logger")
+
+    class _LoggingEventName:
+        FIRST_TOKEN_GENERATED = "FIRST_TOKEN_GENERATED"
+        DECODE_START = "DECODE_START"
+        INFERENCE_END = "INFERENCE_END"
+        POSTPROCESSING_START = "POSTPROCESSING_START"
+
+    def _trace_print(*_args, **_kwargs):  # pragma: no cover - simple stub
+        return None
+
+    trace_constants.LoggingEventName = _LoggingEventName
+    trace_logger.print = _trace_print
+    trace_module.constants = trace_constants
+    trace_module.trace_logger = trace_logger
     _ensure_module("fastdeploy.engine")
     request_module = _ensure_module("fastdeploy.engine.request")
     request_module.CompletionOutput = _CompletionOutput
