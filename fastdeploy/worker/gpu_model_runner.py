@@ -2074,7 +2074,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.forward_meta,
             )
 
-        # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
+        # NOTE(wufeisheng): If `not_need_stop` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
         # when there is data on other runner, the current runner is required to execute part of the model.
         if not self.not_need_stop():
