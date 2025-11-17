@@ -80,15 +80,20 @@ class GuidedDecoding:
         # for pd
         self._tokens_to_acc: List[None | List[int]] = [None] * self.max_num_seqs
 
-        max_workers = max(1, min(multiprocessing.cpu_count() // 2, 8))
-        self.executor_for_fillmask = ThreadPoolExecutor(max_workers=max_workers)
         self.fill_bitmask_parallel_batch_size: int = (
             fd_config.structured_outputs_config.fill_bitmask_parallel_batch_size
             if fd_config.structured_outputs_config is not None
             else 4
         )
+        max_workers = max(
+            1, min(multiprocessing.cpu_count() // 2, self.max_num_seqs / self.fill_bitmask_parallel_batch_size)
+        )
+        self.executor_for_fillmask = ThreadPoolExecutor(max_workers=max_workers)
         self._fillmask_futures: List[Future] = [None] * self.max_num_seqs
         self.is_cuda_platform = current_platform.is_cuda()
+        logger.info(
+            f"GuidedDecoding max_num_seqs={self.max_num_seqs} fill_bitmask_parallel_batch_size={self.fill_bitmask_parallel_batch_size} is_cuda_platform={self.is_cuda_platform} max_workers={max_workers}"
+        )
 
     def apply_reasoning_parser(self, reasoning_parser: Optional[ReasoningParser] = None):
         self.reasoning_parser = reasoning_parser
