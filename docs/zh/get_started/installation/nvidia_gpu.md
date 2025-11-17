@@ -140,8 +140,6 @@ import paddle
 from paddle.jit.marker import unified
 # 检查GPU卡的可用性
 paddle.utils.run_check()
-# 检查FastDeploy自定义算子编译成功与否
-from fastdeploy.model_executor.ops.gpu import beam_search_softmax
 ```
 
 如上代码执行成功，则认为环境可用。
