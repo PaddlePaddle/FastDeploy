@@ -510,13 +510,6 @@ class EngineArgs:
                 if len(self.rdma_comm_ports) != self.tensor_parallel_size:
                     raise ValueError("The number of rdma comm ports must be equal to tensor parallel size.")
 
-            if envs.ENABLE_V1_KVCACHE_SCHEDULER == 1:
-                if "ipc" in self.cache_transfer_protocol:
-                    # FIXME: support ipc cache transfer protocol
-                    raise NotImplementedError(
-                        "only support rdma cache transfer protocol " "when using ENABLE_V1_KVCACHE_SCHEDULER."
-                    )
-
         if not current_platform.is_cuda() and not current_platform.is_xpu():
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if self.guided_decoding_backend != "off":
