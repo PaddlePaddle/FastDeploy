@@ -165,7 +165,11 @@ def process_weights_after_loading(sublayers_dict: dict, fd_config: FDConfig):
             model_sublayer.process_weights_after_loading()
         if hasattr(model_sublayer, "quant_method"):
             quant_method = getattr(model_sublayer, "quant_method", None)
-            unquant_moe_cls = type(get_moe_method())
+            unquant_moe_layer = get_moe_method()
+            if unquant_moe_layer is None:
+                unquant_moe_cls = object
+            else:
+                unquant_moe_cls = type(unquant_moe_layer)
             if type(quant_method) is UnquantizedLinearMethod or type(quant_method) is unquant_moe_cls:
                 # skip unquantized linear
                 return
