@@ -40,6 +40,8 @@ from fastdeploy.engine.request import (
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcServer
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
+from fastdeploy.trace.constants import LoggingEventName
+from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import llm_logger, spec_logger
 from fastdeploy.worker.output import LogprobsLists
 
@@ -774,6 +776,8 @@ class TokenProcessor:
     def _record_first_token_metrics(self, task, current_time):
         """Record metrics for first token"""
         task.first_token_time = current_time
+        trace_print(LoggingEventName.FIRST_TOKEN_GENERATED, task.request_id, getattr(task, "user", ""))
+        trace_print(LoggingEventName.DECODE_START, task.request_id, getattr(task, "user", ""))
         main_process_metrics.first_token_latency.set(current_time - task.inference_start_time)
         main_process_metrics.time_to_first_token.observe(current_time - task.inference_start_time)
         main_process_metrics.request_queue_time.observe(task.schedule_start_time - task.preprocess_end_time)
@@ -783,7 +787,8 @@ class TokenProcessor:
         if hasattr(task, "first_token_time"):
             decode_time = current_time - task.first_token_time
             main_process_metrics.request_decode_time.observe(decode_time)
-
+        trace_print(LoggingEventName.INFERENCE_END, task.request_id, getattr(task, "user", ""))
+        trace_print(LoggingEventName.POSTPROCESSING_START, task.request_id, getattr(task, "user", ""))
         main_process_metrics.num_requests_running.dec(1)
         main_process_metrics.request_success_total.inc()
         main_process_metrics.infer_latency.set(current_time - task.inference_start_time)
