@@ -704,7 +704,10 @@ class TokenProcessor:
                 if token_id != RECOVERY_STOP_SIGNAL:
                     if not (envs.FD_ENABLE_INTERNAL_ADAPTER and token_id in task.eos_token_ids):
                         result.outputs.token_ids.append(token_id)
-                    task.output_token_ids.append(token_id)
+
+                    if mtype == 3:
+                        task.output_token_ids.append(token_id)
+
                     if self.use_logprobs:
                         if self.cfg.speculative_config.method:
                             result.outputs.logprob = float(scores[i, batch_token_index, 0])
