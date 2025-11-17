@@ -8,8 +8,7 @@ import types
 from pathlib import Path
 
 import pytest
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+from pytest import MonkeyPatch
 
 
 class _RecordingBufferConfig:
@@ -232,43 +231,34 @@ class _FakeLogger:
         self.warnings.append(message)
 
 
-def _ensure_module(name: str) -> types.ModuleType:
-    module = sys.modules.get(name)
-    if module is None:
+@pytest.fixture(scope="module")
+def _ep_env():
+    """Install scoped stubs required to import the ep module."""
+
+    monkeypatch = MonkeyPatch()
+
+    project_root = Path(__file__).resolve().parents[2]
+
+    def ensure_module(name: str, *, package: bool = False, path: str | None = None) -> types.ModuleType:
         module = types.ModuleType(name)
-        sys.modules[name] = module
-    return module
+        if package:
+            module.__path__ = [] if path is None else [path]
+        monkeypatch.setitem(sys.modules, name, module)
+        return module
 
-
-_STUBS_INSTALLED = False
-
-
-def _install_dependency_stubs():
-    global _STUBS_INSTALLED
-    if _STUBS_INSTALLED:
-        return
-
-    paddle = types.ModuleType("paddle")
+    paddle = ensure_module("paddle")
     paddle.__version__ = "3.0.0"
-
-    class _Tensor:
-        pass
-
-    paddle.Tensor = _Tensor
+    paddle.Tensor = type("Tensor", (), {})
     paddle.is_compiled_with_rocm = lambda: False
     paddle.is_compiled_with_cuda = lambda: False
     paddle.is_compiled_with_xpu = lambda: False
+    paddle.is_compiled_with_custom_device = lambda _name: False
 
-    def _is_compiled_with_custom_device(_name):
-        return False
-
-    paddle.is_compiled_with_custom_device = _is_compiled_with_custom_device
-    nn_module = types.ModuleType("paddle.nn")
+    nn_module = ensure_module("paddle.nn")
     nn_module.Layer = object
     paddle.nn = nn_module
-    sys.modules["paddle.nn"] = nn_module
 
-    dist_module = types.ModuleType("paddle.distributed")
+    dist_module = ensure_module("paddle.distributed")
 
     class _Group:
         def __init__(self, ranks):
@@ -276,80 +266,81 @@ def _install_dependency_stubs():
             self.ranks = tuple(ranks)
             self.world_size = max(len(ranks), 1)
 
-    def new_group(ranks):
-        return _Group(ranks)
-
-    dist_module.new_group = new_group
-    sys.modules["paddle.distributed"] = dist_module
+    dist_module.new_group = lambda ranks: _Group(ranks)
     paddle.distributed = dist_module
 
-    comm_module = types.ModuleType("paddle.distributed.communication")
-    sys.modules["paddle.distributed.communication"] = comm_module
-    deep_ep_module = types.ModuleType("paddle.distributed.communication.deep_ep")
+    comm_module = ensure_module("paddle.distributed.communication", package=True)
+    deep_ep_module = ensure_module("paddle.distributed.communication.deep_ep")
     deep_ep_module.Buffer = _RecordingBuffer
-    sys.modules["paddle.distributed.communication.deep_ep"] = deep_ep_module
     comm_module.deep_ep = deep_ep_module
+    dist_module.communication = comm_module
 
-    sys.modules["paddle"] = paddle
-
-    from importlib.machinery import ModuleSpec
-
-    paddleformers = types.ModuleType("paddleformers")
-    paddleformers.__path__ = []
-    paddleformers.__spec__ = ModuleSpec("paddleformers", loader=None, is_package=True)
-    sys.modules["paddleformers"] = paddleformers
-
-    pf_utils = types.ModuleType("paddleformers.utils")
-    pf_utils.__path__ = []
-    pf_utils.__spec__ = ModuleSpec("paddleformers.utils", loader=None, is_package=True)
-    sys.modules["paddleformers.utils"] = pf_utils
-    paddleformers.utils = pf_utils
-
-    log_module = types.ModuleType("paddleformers.utils.log")
-    log_module.__spec__ = ModuleSpec("paddleformers.utils.log", loader=None, is_package=False)
+    paddleformers = ensure_module("paddleformers", package=True)
+    pf_utils = ensure_module("paddleformers.utils", package=True)
+    log_module = ensure_module("paddleformers.utils.log")
     log_module.logger = _FakeLogger()
-    sys.modules["paddleformers.utils.log"] = log_module
     pf_utils.log = log_module
-
-    transformers = types.ModuleType("paddleformers.transformers")
-    transformers.__path__ = []
-    transformers.__spec__ = ModuleSpec("paddleformers.transformers", loader=None, is_package=True)
-    sys.modules["paddleformers.transformers"] = transformers
-    paddleformers.transformers = transformers
-
-    configuration_utils = types.ModuleType("paddleformers.transformers.configuration_utils")
-    configuration_utils.__spec__ = ModuleSpec(
-        "paddleformers.transformers.configuration_utils", loader=None, is_package=False
-    )
+    paddleformers.utils = pf_utils
+    transformers = ensure_module("paddleformers.transformers", package=True)
+    configuration_utils = ensure_module("paddleformers.transformers.configuration_utils")
 
     class PretrainedConfig:
         pass
 
     configuration_utils.PretrainedConfig = PretrainedConfig
-    sys.modules["paddleformers.transformers.configuration_utils"] = configuration_utils
     transformers.configuration_utils = configuration_utils
+    paddleformers.transformers = transformers
 
-    importlib.import_module("fastdeploy.model_executor")
-    fd_model_executor_pkg = sys.modules["fastdeploy.model_executor"]
+    fastdeploy_module = ensure_module("fastdeploy", package=True, path=str(project_root / "fastdeploy"))
+    utils_module = ensure_module("fastdeploy.utils")
 
-    # Stub the layers.moe package so we can attach a fake `moe` module
-    importlib.import_module("fastdeploy.model_executor.layers")
-    fd_layers_pkg = sys.modules["fastdeploy.model_executor.layers"]
-    moe_pkg_name = "fastdeploy.model_executor.layers.moe"
-    fd_moe_pkg = types.ModuleType(moe_pkg_name)
-    fd_moe_pkg.__path__ = [str(PROJECT_ROOT / "fastdeploy" / "model_executor" / "layers" / "moe")]
-    fd_moe_pkg.__spec__ = ModuleSpec(moe_pkg_name, loader=None, is_package=True)
-    sys.modules[moe_pkg_name] = fd_moe_pkg
-    fd_layers_pkg.moe = fd_moe_pkg
+    def singleton(cls):
+        return cls
 
-    ops_pkg_name = "fastdeploy.model_executor.ops"
-    fd_ops_pkg = types.ModuleType(ops_pkg_name)
-    fd_ops_pkg.__path__ = [str(PROJECT_ROOT / "fastdeploy" / "model_executor" / "ops")]
-    fd_ops_pkg.__spec__ = ModuleSpec(ops_pkg_name, loader=None, is_package=True)
-    sys.modules[ops_pkg_name] = fd_ops_pkg
-    fd_model_executor_pkg.ops = fd_ops_pkg
+    utils_module.singleton = singleton
+    fastdeploy_module.utils = utils_module
 
-    gpu_module = types.ModuleType("fastdeploy.model_executor.ops.gpu")
+    config_module = ensure_module("fastdeploy.config")
+
+    class MoEPhase:
+        """Simple stub mirroring the production API."""
+
+        def __init__(self, phase="prefill"):
+            self.phase = phase
+
+        @property
+        def phase(self):
+            return self._phase
+
+        @phase.setter
+        def phase(self, value):
+            if value not in ["prefill", "decode"]:
+                raise ValueError(f"The moe_phase is invalid, only support prefill and decode, but got {value}")
+            self._phase = value
+
+    config_module.MoEPhase = MoEPhase
+    fastdeploy_module.config = config_module
+
+    fd_model_executor = ensure_module(
+        "fastdeploy.model_executor", package=True, path=str(project_root / "fastdeploy" / "model_executor")
+    )
+    fd_layers = ensure_module(
+        "fastdeploy.model_executor.layers",
+        package=True,
+        path=str(project_root / "fastdeploy" / "model_executor" / "layers"),
+    )
+    fd_moe_pkg = ensure_module(
+        "fastdeploy.model_executor.layers.moe",
+        package=True,
+        path=str(project_root / "fastdeploy" / "model_executor" / "layers" / "moe"),
+    )
+    fd_ops_pkg = ensure_module(
+        "fastdeploy.model_executor.ops",
+        package=True,
+        path=str(project_root / "fastdeploy" / "model_executor" / "ops"),
+    )
+
+    gpu_module = ensure_module("fastdeploy.model_executor.ops.gpu")
     gpu_module.calls = {"redundant": [], "topk": []}
 
     def moe_redundant_topk_select(**kwargs):
@@ -362,10 +353,8 @@ def _install_dependency_stubs():
 
     gpu_module.moe_redundant_topk_select = moe_redundant_topk_select
     gpu_module.moe_topk_select = moe_topk_select
-    sys.modules[gpu_module.__name__] = gpu_module
-    fd_ops_pkg.gpu = gpu_module
 
-    moe_module = types.ModuleType("fastdeploy.model_executor.layers.moe.moe")
+    moe_module = ensure_module("fastdeploy.model_executor.layers.moe.moe")
     moe_module.calls = []
 
     def get_moe_scores(*args, **kwargs):
@@ -374,37 +363,45 @@ def _install_dependency_stubs():
         return ("score", "weights", "indices")
 
     moe_module.get_moe_scores = get_moe_scores
-    sys.modules[moe_module.__name__] = moe_module
+
+    fd_ops_pkg.gpu = gpu_module
     fd_moe_pkg.moe = moe_module
+    fd_layers.moe = fd_moe_pkg
+    fd_model_executor.layers = fd_layers
+    fd_model_executor.ops = fd_ops_pkg
+    fastdeploy_module.model_executor = fd_model_executor
 
-    _STUBS_INSTALLED = True
+    ep_module = importlib.import_module("fastdeploy.model_executor.layers.moe.ep")
+    ep_module = importlib.reload(ep_module)
 
-
-_install_dependency_stubs()
-
-import fastdeploy.model_executor.layers.moe.ep as _ep_module
-from fastdeploy.config import MoEPhase
-
-
-def _reload_ep_module():
-    return importlib.reload(_ep_module)
+    try:
+        yield {"ep_module": ep_module, "gpu_module": gpu_module, "moe_module": moe_module}
+    finally:
+        monkeypatch.undo()
 
 
 @pytest.fixture()
-def ep_module():
-    module = _reload_ep_module()
+def ep_module(_ep_env):
+    module = importlib.reload(_ep_env["ep_module"])
     module.DeepEPBufferManager._engine = None
     return module
 
 
 @pytest.fixture()
-def gpu_ops_module():
-    return sys.modules["fastdeploy.model_executor.ops.gpu"]
+def gpu_ops_module(_ep_env):
+    return _ep_env["gpu_module"]
 
 
 @pytest.fixture()
-def moe_scores_module():
-    return sys.modules["fastdeploy.model_executor.layers.moe.moe"]
+def moe_scores_module(_ep_env):
+    return _ep_env["moe_module"]
+
+
+@pytest.fixture()
+def moe_phase_cls(_ep_env):
+    from fastdeploy.config import MoEPhase
+
+    return MoEPhase
 
 
 @pytest.fixture(autouse=True)
@@ -417,8 +414,8 @@ def reset_recorders(gpu_ops_module, moe_scores_module):
     _RecordingBuffer.reset()
 
 
-def test_buffer_two_stage_allocations_and_cleanup(ep_module):
-    phase = MoEPhase("prefill")
+def test_buffer_two_stage_allocations_and_cleanup(ep_module, moe_phase_cls):
+    phase = moe_phase_cls("prefill")
     group = types.SimpleNamespace(world_size=2)
     buffer = ep_module.DeepEPBuffer(
         group=group,
@@ -463,8 +460,8 @@ def test_buffer_create_unknown_phase(ep_module):
         buffer.create_buffer()
 
 
-def test_low_latency_buffer_qps_scaling(ep_module):
-    phase = MoEPhase("decode")
+def test_low_latency_buffer_qps_scaling(ep_module, moe_phase_cls):
+    phase = moe_phase_cls("decode")
     buffer = ep_module.DeepEPBuffer(
         group=types.SimpleNamespace(world_size=4),
         hidden_size=32,
@@ -481,7 +478,7 @@ def test_low_latency_buffer_qps_scaling(ep_module):
     assert record["kwargs"]["num_qps_per_rank"] == 4
 
 
-def test_deepep_engine_low_latency_combine_rewrites_handle(ep_module):
+def test_deepep_engine_low_latency_combine_rewrites_handle(ep_module, moe_phase_cls):
     engine = ep_module.DeepEPEngine(
         num_max_dispatch_tokens_per_rank=4,
         hidden_size=32,
@@ -489,7 +486,7 @@ def test_deepep_engine_low_latency_combine_rewrites_handle(ep_module):
         ep_size=2,
         ep_rank=0,
         splitwise_role="prefill",
-        moe_phase=MoEPhase("decode"),
+        moe_phase=moe_phase_cls("decode"),
     )
     combined, hook = engine.low_latency_combine("ffn", "idx", "weights", ("src", "layout", 5, 7))
     call = engine.deepep_engine.low_latency_combine_calls[-1]
