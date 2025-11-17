@@ -280,46 +280,87 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
             )
-
-            (
-                permute_input,
-                token_nums_per_expert,
-                permute_indices_per_token,
-                topk_weights,
-                topk_idx,
-                expert_idx_per_token,
-                dequant_scale,
-            ) = moe_expert_dispatch(
-                x,
-                gate_out,
-                None,  # Use layer.gate_correction_bias in get_moe_scores.
+            if current_platform.is_iluvatar():
                 (
-                    layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None
-                ),  # if set, permute_input will be int8_t
-                layer.top_k,
-                False,
-                self.moe_quant_type,
-                topk_only_mode=True,
-            )
+                    permute_input,
+                    token_nums_per_expert,
+                    permute_indices_per_token,
+                    topk_weights,
+                    topk_idx,
+                    expert_idx_per_token,
+                ) = moe_expert_dispatch(
+                    x,
+                    gate_out,
+                    None,  # Use layer.gate_correction_bias in get_moe_scores.
+                    (
+                        layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None
+                    ),  # if set, permute_input will be int8_t
+                    layer.top_k,
+                    False,
+                    self.moe_quant_type,
+                    topk_only_mode=True,
+                )
+                dequant_scale = None
+            else:
+                (
+                    permute_input,
+                    token_nums_per_expert,
+                    permute_indices_per_token,
+                    topk_weights,
+                    topk_idx,
+                    expert_idx_per_token,
+                    dequant_scale,
+                ) = moe_expert_dispatch(
+                    x,
+                    gate_out,
+                    None,  # Use layer.gate_correction_bias in get_moe_scores.
+                    (
+                        layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None
+                    ),  # if set, permute_input will be int8_t
+                    layer.top_k,
+                    False,
+                    self.moe_quant_type,
+                    topk_only_mode=True,
+                )
         else:
-            (
-                permute_input,
-                token_nums_per_expert,
-                permute_indices_per_token,
-                topk_weights,
-                topk_idx,
-                expert_idx_per_token,
-                dequant_scale,
-            ) = moe_expert_dispatch(
-                x,
-                gate_out,
-                layer.gate_correction_bias,
-                (layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None),
-                layer.top_k,
-                False,
-                self.moe_quant_type,
-                topk_only_mode=False,
-            )
+            if current_platform.is_iluvatar():
+                (
+                    permute_input,
+                    token_nums_per_expert,
+                    permute_indices_per_token,
+                    topk_weights,
+                    topk_idx,
+                    expert_idx_per_token,
+                ) = moe_expert_dispatch(
+                    x,
+                    gate_out,
+                    layer.gate_correction_bias,
+                    (layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None),
+                    layer.top_k,
+                    False,
+                    self.moe_quant_type,
+                    topk_only_mode=False,
+                )
+                dequant_scale = None
+            else:
+                (
+                    permute_input,
+                    token_nums_per_expert,
+                    permute_indices_per_token,
+                    topk_weights,
+                    topk_idx,
+                    expert_idx_per_token,
+                    dequant_scale,
+                ) = moe_expert_dispatch(
+                    x,
+                    gate_out,
+                    layer.gate_correction_bias,
+                    (layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None),
+                    layer.top_k,
+                    False,
+                    self.moe_quant_type,
+                    topk_only_mode=False,
+                )
 
         if hasattr(layer, "up_gate_proj_in_scale"):
             dequant_scale = None
