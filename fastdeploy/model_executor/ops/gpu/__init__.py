@@ -14,6 +14,22 @@
 """fastdeploy gpu ops"""
 
 import sys
+import os
+
+
+def print_directory_files(directory):
+    """打印指定目录及其子目录中的所有文件"""
+    print(f"Files in directory: {directory}")
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            file_path = os.path.join(root, file)
+            print(f"  {file_path}")
+
+
+# 打印当前目录及其子目录的文件
+current_dir = os.path.dirname(os.path.abspath(__file__))
+print_directory_files(current_dir)
+
 
 from fastdeploy.import_ops import import_custom_ops
 
