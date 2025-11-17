@@ -40,6 +40,8 @@ from fastdeploy.entrypoints.openai.protocol import (
 )
 from fastdeploy.entrypoints.openai.response_processors import ChatResponseProcessor
 from fastdeploy.metrics.work_metrics import work_process_metrics
+from fastdeploy.trace.constants import LoggingEventName
+from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import (
     ErrorCode,
     ErrorType,
@@ -448,6 +450,7 @@ class OpenAIServingChat:
         finally:
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
+            trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             api_server_logger.info(f"release {request_id} {self.engine_client.semaphore.status()}")
             yield "data: [DONE]\n\n"
 
@@ -599,6 +602,7 @@ class OpenAIServingChat:
             choices=choices,
             usage=usage,
         )
+        trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
         api_server_logger.info(f"Chat response: {res.model_dump_json()}")
         return res
 

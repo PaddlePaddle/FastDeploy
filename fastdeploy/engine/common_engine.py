@@ -49,6 +49,8 @@ from fastdeploy.plugins.token_processor import load_token_processor_plugins
 from fastdeploy.router.utils import check_service_health
 from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
+from fastdeploy.trace.constants import LoggingEventName
+from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import (
     EngineError,
     check_download_links,
@@ -364,7 +366,7 @@ class EngineService:
 
         for item in tasks:
             item.schedule_start_time = time.time()
-
+            trace_print(LoggingEventName.RESOURCE_ALLOCATE_START, item.request_id, getattr(item, "user", ""))
         available_batch = np.sum(self.resource_manager.stop_flags)
         if len(tasks) > available_batch:
             self.llm_logger.error(f"Inserting batch:{len(tasks)} exceeds the available batch:{available_batch}.")
@@ -398,6 +400,9 @@ class EngineService:
             self.llm_logger.info(f"Tasks are sent to engine, req_ids={req_ids}")
             for task in tasks:
                 task.inference_start_time = time.time()
+                trace_print(LoggingEventName.RESOURCE_ALLOCATE_END, task.request_id, getattr(task, "user", ""))
+                trace_print(LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", ""))
+                trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
             if not is_prefill:
                 if not self.cfg.model_config.enable_mm:
                     self.update_requests_chunk_size(tasks)
@@ -636,7 +641,8 @@ class EngineService:
                     max_num_batched_tokens=self.cfg.scheduler_config.max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
-
+                for task in tasks:
+                    trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
                 if len(tasks) == 0:
                     time.sleep(0.001)
                     continue
@@ -689,6 +695,8 @@ class EngineService:
                     max_num_batched_tokens=max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
+                for task in tasks:
+                    trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
 
                 if self.cfg.scheduler_config.splitwise_role == "decode":
                     # Decode will instert the request sent by prefill to engine,
@@ -761,6 +769,10 @@ class EngineService:
                                 time.sleep(0.001)
                 # Fetch requests and add them to the scheduling queue
                 if tasks:
+                    for task in tasks:
+                        trace_print(
+                            LoggingEventName.RESOURCE_ALLOCATE_START, task.request_id, getattr(task, "user", "")
+                        )
                     if self.cfg.scheduler_config.splitwise_role == "prefill":
                         self.resource_manager.add_request_in_p(tasks)
                     else:
@@ -816,6 +828,10 @@ class EngineService:
                                     ]
                                 )
                     self.resource_manager.get_real_bsz()
+                    for task in tasks:
+                        trace_print(LoggingEventName.RESOURCE_ALLOCATE_END, task.request_id, getattr(task, "user", ""))
+                        trace_print(LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", ""))
+                        trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
                 else:
                     time.sleep(0.005)
@@ -877,6 +893,10 @@ class EngineService:
                         request.llm_engine_recv_req_timestamp = time.time()
                         start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
                         main_process_metrics.requests_number.inc()
+                        self.llm_logger.debug(f"Receive request: {request}")
+                        trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))
+                        trace_print(LoggingEventName.REQUEST_SCHEDULE_START, data["request_id"], data.get("user", ""))
+                        trace_print(LoggingEventName.REQUEST_QUEUE_START, data["request_id"], data.get("user", ""))
                         self.llm_logger.debug(f"Receive request from api server: {request}")
                     except Exception as e:
                         self.llm_logger.error(f"Receive request error: {e}, {traceback.format_exc()!s}")
