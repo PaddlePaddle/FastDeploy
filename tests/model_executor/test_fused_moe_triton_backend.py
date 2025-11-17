@@ -11,12 +11,19 @@ deterministic and CPU friendly.
 from __future__ import annotations
 
 import importlib
+import os
 import sys
 import types
 from dataclasses import dataclass
 
 import paddle
 import pytest
+
+# Ensure the repository root is importable for fastdeploy modules.
+TEST_ROOT = os.path.dirname(__file__)
+REPO_ROOT = os.path.abspath(os.path.join(TEST_ROOT, os.pardir, os.pardir))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
 
 if not hasattr(paddle, "float8_e4m3fn"):
     paddle.float8_e4m3fn = paddle.float16
@@ -142,28 +149,32 @@ class _DummyMoELayer(paddle.nn.Layer):
 
 @pytest.fixture(scope="module")
 def fused_backend_module():
+    patcher = pytest.MonkeyPatch()
+
     kernel = _RecordingKernel()
     kernels_mod = types.ModuleType("fastdeploy.model_executor.layers.moe.triton_moe_kernels")
     kernels_mod.fused_moe_kernel_paddle = kernel
-    sys.modules["fastdeploy.model_executor.layers.moe.triton_moe_kernels"] = kernels_mod
+    patcher.setitem(sys.modules, "fastdeploy.model_executor.layers.moe.triton_moe_kernels", kernels_mod)
 
     gpu_mod = types.ModuleType("fastdeploy.model_executor.ops.gpu")
     gpu_mod.tritonmoe_preprocess_func = _fake_preprocess
     gpu_mod.moe_topk_select = _fake_topk_select
     gpu_mod.per_token_quant = _fake_per_token_quant
     gpu_mod.moe_fused_hadamard_quant_fp8 = lambda tensor, **_kwargs: tensor
+    gpu_mod.get_padding_offset = lambda *_args, **_kwargs: None
+    gpu_mod.speculate_get_padding_offset = lambda *_args, **_kwargs: None
 
     def _dynamic_per_token_quant(output, input_tensor, scale_tensor, _scale_ub):
         output.set_value(input_tensor.astype(paddle.float16))
         scale_tensor.set_value(paddle.ones_like(scale_tensor))
 
     gpu_mod.dynamic_per_token_scaled_fp8_quant = _dynamic_per_token_quant
-    sys.modules["fastdeploy.model_executor.ops.gpu"] = gpu_mod
+    patcher.setitem(sys.modules, "fastdeploy.model_executor.ops.gpu", gpu_mod)
     ops_pkg = types.ModuleType("fastdeploy.model_executor.ops")
     ops_pkg.gpu = gpu_mod
-    sys.modules["fastdeploy.model_executor.ops"] = ops_pkg
+    patcher.setitem(sys.modules, "fastdeploy.model_executor.ops", ops_pkg)
     fastdeploy_executor = importlib.import_module("fastdeploy.model_executor")
-    setattr(fastdeploy_executor, "ops", ops_pkg)
+    patcher.setattr(fastdeploy_executor, "ops", ops_pkg, raising=False)
 
     if not hasattr(paddle, "incubate"):
         paddle.incubate = types.SimpleNamespace()
@@ -176,14 +187,14 @@ def fused_backend_module():
     module = importlib.import_module("fastdeploy.model_executor.layers.moe.fused_moe_triton_backend")
 
     quant_ops = importlib.import_module("fastdeploy.model_executor.layers.quantization.ops")
-    quant_ops.scaled_fp8_quant = _fake_scaled_fp8_quant
+    patcher.setattr(quant_ops, "scaled_fp8_quant", _fake_scaled_fp8_quant, raising=False)
 
-    module.get_moe_scores = _fake_get_moe_scores
-    module.tensor_model_parallel_all_reduce = lambda tensor: tensor
-    module.set_weight_attrs = lambda *_args, **_kwargs: None
-    module.process_weight_transpose = lambda *_args, **_kwargs: None
-    module.free_tensor = lambda *_args, **_kwargs: None
-    module.weight_fully_copied = lambda *_args, **_kwargs: True
+    patcher.setattr(module, "get_moe_scores", _fake_get_moe_scores, raising=False)
+    patcher.setattr(module, "tensor_model_parallel_all_reduce", lambda tensor: tensor, raising=False)
+    patcher.setattr(module, "set_weight_attrs", lambda *_args, **_kwargs: None, raising=False)
+    patcher.setattr(module, "process_weight_transpose", lambda *_args, **_kwargs: None, raising=False)
+    patcher.setattr(module, "free_tensor", lambda *_args, **_kwargs: None, raising=False)
+    patcher.setattr(module, "weight_fully_copied", lambda *_args, **_kwargs: True, raising=False)
 
     class _Tracker:
         def __init__(self, shape, output_dim=True):
@@ -192,7 +203,10 @@ def fused_backend_module():
 
     module.TensorTracker = _Tracker
 
-    return module, kernel
+    try:
+        yield module, kernel
+    finally:
+        patcher.undo()
 
 
 def _assert_tensor_contents(tensor, expected_shape):
