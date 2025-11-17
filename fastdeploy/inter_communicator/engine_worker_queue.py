@@ -287,12 +287,6 @@ class EngineWorkerQueue:
                 callable=lambda idx: self.disaggregate_requests[idx],
             )
 
-            self.available_prefill_instances = Queue()
-            QueueManager.register(
-                "get_available_prefill_instances",
-                callable=lambda: self.available_prefill_instances,
-            )
-
             QueueManager.register(
                 "get_finish_request_barrier",
                 callable=lambda idx: self.finish_request_barrier[idx],
@@ -351,7 +345,6 @@ class EngineWorkerQueue:
             QueueManager.register("get_client_read_info_flag")
             QueueManager.register("get_lock_info")
             QueueManager.register("get_disaggregate_requests")
-            QueueManager.register("get_available_prefill_instances")
             QueueManager.register("get_finish_request_barrier")
             QueueManager.register("get_finish_add_cache_task_barrier")
             QueueManager.register("get_connect_task_barrier")
@@ -390,7 +383,6 @@ class EngineWorkerQueue:
 
             # p/d 分离获取
             self.disaggregate_requests = self.manager.get_disaggregate_requests(self.local_data_parallel_id)
-            self.available_prefill_instances = self.manager.get_available_prefill_instances()
             self.finish_request_barrier = self.manager.get_finish_request_barrier(self.local_data_parallel_id)
             self.finish_add_cache_task_barrier = self.manager.get_finish_add_cache_task_barrier(
                 self.local_data_parallel_id
@@ -651,15 +643,6 @@ class EngineWorkerQueue:
         self.can_put_next_connect_task_response_flag.set(1)
         self.connect_task_response_lock.release()
         return task_response
-
-    def get_prefill_instances(self):
-        """
-        check if the prefill queue is empty
-        """
-        if self.available_prefill_instances.qsize() == 0:
-            return 0
-        else:
-            return self.available_prefill_instances.get()
 
     def put_cache_info(self, cache_info) -> None:
         """
