@@ -15,8 +15,6 @@ export FD_MODEL_SOURCE=AISTUDIO # "AISTUDIO", "MODELSCOPE" or "HUGGINGFACE"
 export FD_MODEL_CACHE=/ssd1/download_models
 ```
 
-> ⭐ **Note**: Models marked with an asterisk can directly use **HuggingFace Torch weights** and support **FP8/WINT8/WINT4** as well as **BF16**. When running inference, you need to enable **`--load-choices "default_v1"`**.
-
 > Example launch Command using baidu/ERNIE-4.5-21B-A3B-PT:
 ```
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -25,8 +23,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --metrics-port 8181 \
        --engine-worker-queue-port 8182 \
        --max-model-len 32768 \
-       --max-num-seqs 32 \
-       --load-choices "default_v1"
+       --max-num-seqs 32
 ```
 
 ## Large Language Models
@@ -50,7 +47,7 @@ These models accept multi-modal inputs (e.g., images and text).
 
 |Models|DataType|Example HF Model|
 |-|-|-|
-| ERNIE-VL  |BF16/WINT4/WINT8| baidu/ERNIE-4.5-VL-424B-A47B-Paddle<br>&emsp;[quick start](./get_started/ernie-4.5-vl.md) &emsp; [best practice](./best_practices/ERNIE-4.5-VL-424B-A47B-Paddle.md) ;<br>baidu/ERNIE-4.5-VL-28B-A3B-Paddle<br>&emsp;[quick start](./get_started/quick_start_vl.md) &emsp; [best practice](./best_practices/ERNIE-4.5-VL-28B-A3B-Paddle.md) ;|
+| ERNIE-VL  |BF16/WINT4/WINT8| baidu/ERNIE-4.5-VL-424B-A47B-Paddle<br>&emsp;[quick start](./get_started/ernie-4.5-vl.md) &emsp; [best practice](./best_practices/ERNIE-4.5-VL-424B-A47B-Paddle.md) ;<br>baidu/ERNIE-4.5-VL-28B-A3B-Paddle<br>&emsp;[quick start](./get_started/quick_start_vl.md) &emsp; [best practice](./best_practices/ERNIE-4.5-VL-28B-A3B-Paddle.md) ;<br>baidu/ERNIE-4.5-VL-28B-A3B-Thinking<br>&emsp;[quick start](./get_started/ernie-4.5-vl-thinking.md) &emsp; [best practice](./best_practices/ERNIE-4.5-VL-28B-A3B-Thinking.md);
 | PaddleOCR-VL  |BF16/WINT4/WINT8| PaddlePaddle/PaddleOCR-VL<br>&emsp; [best practice](./best_practices/PaddleOCR-VL-0.9B.md) ;|
 | QWEN-VL  |BF16/WINT4/FP8| Qwen/Qwen2.5-VL-72B-Instruct;<br>Qwen/Qwen2.5-VL-32B-Instruct;<br>Qwen/Qwen2.5-VL-7B-Instruct;<br>Qwen/Qwen2.5-VL-3B-Instruct|
 

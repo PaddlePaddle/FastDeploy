@@ -15,8 +15,6 @@ export FD_MODEL_SOURCE=AISTUDIO # "AISTUDIO", "MODELSCOPE" or "HUGGINGFACE"
 export FD_MODEL_CACHE=/ssd1/download_models
 ```
 
-> ⭐ **说明**：带星号的模型可直接使用 **HuggingFace Torch 权重**，支持 **FP8/WINT8/WINT4 动态量化** 和 **BF16 精度** 推理，推理时需启用 **`--load-choices "default_v1"`**。
-
 > 以baidu/ERNIE-4.5-21B-A3B-PT为例启动命令如下
 ```
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -25,8 +23,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --metrics-port 8181 \
        --engine-worker-queue-port 8182 \
        --max-model-len 32768 \
-       --max-num-seqs 32 \
-       --load-choices "default_v1"
+       --max-num-seqs 32
 ```
 
 ## 纯文本模型列表
@@ -48,7 +45,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 |模型|DataType|模型案例|
 |-|-|-|
-| ERNIE-VL  |BF16/WINT4/WINT8| baidu/ERNIE-4.5-VL-424B-A47B-Paddle<br>&emsp;[快速部署](./get_started/ernie-4.5-vl.md) &emsp; [最佳实践](./best_practices/ERNIE-4.5-VL-424B-A47B-Paddle.md) ;<br>baidu/ERNIE-4.5-VL-28B-A3B-Paddle<br>&emsp;[快速部署](./get_started/quick_start_vl.md) &emsp; [最佳实践](./best_practices/ERNIE-4.5-VL-28B-A3B-Paddle.md) ;|
+| ERNIE-VL  |BF16/WINT4/WINT8| baidu/ERNIE-4.5-VL-424B-A47B-Paddle<br>&emsp;[快速部署](./get_started/ernie-4.5-vl.md) &emsp; [最佳实践](./best_practices/ERNIE-4.5-VL-424B-A47B-Paddle.md) ;<br>baidu/ERNIE-4.5-VL-28B-A3B-Paddle<br>&emsp;[快速部署](./get_started/quick_start_vl.md) &emsp; [最佳实践](./best_practices/ERNIE-4.5-VL-28B-A3B-Paddle.md) ;<br>baidu/ERNIE-4.5-VL-28B-A3B-Thinking<br>&emsp;[快速部署](./get_started/ernie-4.5-vl-thinking.md)&emsp; [最佳实践](./best_practices/ERNIE-4.5-VL-28B-A3B-Thinking.md) ;
 | PaddleOCR-VL  |BF16/WINT4/WINT8| PaddlePaddle/PaddleOCR-VL<br>&emsp; [最佳实践](./best_practices/PaddleOCR-VL-0.9B.md) ;|
 | QWEN-VL  |BF16/WINT4/FP8| Qwen/Qwen2.5-VL-72B-Instruct;<br>Qwen/Qwen2.5-VL-32B-Instruct;<br>Qwen/Qwen2.5-VL-7B-Instruct;<br>Qwen/Qwen2.5-VL-3B-Instruct|
 

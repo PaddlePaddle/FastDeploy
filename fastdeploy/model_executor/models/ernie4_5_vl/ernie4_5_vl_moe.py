@@ -166,13 +166,7 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
             skip_quant=True,
             weight_dtype="float32",
             weight_key="weight" if moe_tag == "Text" else "weight_1",
-        )
-
-        # TODO(hehongyu): remove this after fix model network
-        setattr(
-            self.gate.weight,
-            "weight_need_transpose",
-            False,
+            model_format="",
         )
 
     def forward(self, hidden_states: paddle.Tensor):
@@ -683,7 +677,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         all_param_mapping = general_params_mapping + text_expert_params_mapping + image_expert_params_mapping
 
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         expert_id = None
         shard_id = None
         for loaded_weight_name, loaded_weight in weights_iterator:
@@ -724,10 +718,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             )
             process_weights_after_loading_fn(model_sublayer_name, param)
         if self.tie_word_embeddings:
-            # because we use lazy guard and is not initialized by default
-            if not self.lm_head.linear.weight._is_initialized():
-                self.lm_head.linear.weight.initialize()
-            self.lm_head.load_state_dict({self.lm_head.weight_key: self.ernie.embed_tokens.embeddings.weight})
+            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight)
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):

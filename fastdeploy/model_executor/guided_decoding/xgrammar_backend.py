@@ -29,6 +29,7 @@ from fastdeploy.model_executor.guided_decoding import (
     BaseChecker,
     LogitsProcessorBase,
 )
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import llm_logger
 
 try:
@@ -86,6 +87,8 @@ class XGrammarProcessor(LogitsProcessorBase):
             terminate_without_stop_token=terminate_without_stop_token,
             override_stop_tokens=override_stop_tokens,
         )
+        # when matcher accept eos_token_id, is_terminated = True
+        self.is_terminated: bool = False
 
     def allocate_token_bitmask(self) -> torch.Tensor:
         """
@@ -109,40 +112,6 @@ class XGrammarProcessor(LogitsProcessorBase):
         """
         self.matcher.fill_next_token_bitmask(token_bitmask, idx)
 
-    def apply_token_mask(
-        self,
-        logits: paddle.Tensor,
-        token_bitmask: torch.Tensor,
-        indices: Optional[List[int]] = None,
-    ) -> paddle.Tensor:
-        """
-        Apply the token mask to the logits, modifying probabilities of invalid tokens.
-
-        Args:
-            logits (paddle.Tensor): The logits tensor to modify
-            token_bitmask (torch.Tensor): The token bitmask indicating allowed tokens
-            indices (Optional[List[int]]): Optional list of batch indices to apply mask to
-
-        Returns:
-            paddle.Tensor: The modified logits tensor
-        """
-        origin_place = logits.place
-        origin_dtype = logits.dtype
-        logits = torch.from_numpy(logits.numpy())
-
-        logits = logits.float()  # cpu
-        apply_token_bitmask_inplace(
-            logits=logits,
-            bitmask=token_bitmask.to(logits.device, non_blocking=True),
-            indices=indices,
-        )
-
-        return paddle.to_tensor(
-            logits.numpy(),
-            dtype=origin_dtype,
-            place=origin_place,
-        )
-
     def reset(self) -> None:
         """
         Reset the grammar matcher state to initial conditions.
@@ -155,23 +124,21 @@ class XGrammarProcessor(LogitsProcessorBase):
     def accept_token(self, token: int) -> None:
         """
         Validate and accept a generated token against the grammar constraints.
+        when accept eos_token, is_terminated = True
 
         Args:
             token (int): The token ID to validate
 
-        Raises:
-            AssertionError: If token is not allowed by the grammar
         """
-        assert self.matcher.accept_token(token), f"Failed to accept token {token}"
-
-    def is_terminated(self) -> bool:
-        """
-        Check if the grammar matching process has terminated.
-
-        Returns:
-            bool: True if matching has terminated, False otherwise
-        """
-        return self.matcher.is_terminated()
+        if self.is_terminated or self.matcher.is_terminated():
+            self.is_terminated = True
+            return False
+        if not self.matcher.accept_token(token):
+            self.matcher.reset()
+            return False
+        if self.matcher.is_terminated():
+            self.is_terminated = True
+        return True
 
     def copy(self) -> "XGrammarProcessor":
         """
@@ -216,7 +183,18 @@ class XGrammarBackend(BackendBase):
 
         try:
             tokenizer_info = TokenizerInfo.from_huggingface(self.hf_tokenizer, vocab_size=self.vocab_size)
-            self.grammar_compiler = GrammarCompiler(tokenizer_info=tokenizer_info)
+            llm_logger.info(f"xgrammar_backend.py tokenizer_info={tokenizer_info.dump_metadata()}")
+            # Read configuration values, fallback to defaults if not set
+            xgrammar_cfg = getattr(fd_config, "xgrammar_config", {})
+            max_threads = getattr(xgrammar_cfg, "max_threads", 8)
+            cache_enabled = getattr(xgrammar_cfg, "cache_enabled", True)
+            cache_limit_bytes = getattr(xgrammar_cfg, "cache_limit_bytes", 4 * 1024 * 1024)
+            self.grammar_compiler = GrammarCompiler(
+                tokenizer_info=tokenizer_info,
+                max_threads=max_threads,
+                cache_enabled=cache_enabled,
+                cache_limit_bytes=cache_limit_bytes,
+            )
         except Exception as e:
             raise Exception(f"Failed to load XGrammar tokenizer: {e}")
 
@@ -467,3 +445,49 @@ class XGrammarChecker(BaseChecker):
         else:
             # regex is not format
             return request, None
+
+
+def apply_token_mask(
+    logits: paddle.Tensor,
+    token_bitmask: torch.Tensor,
+    indices: Optional[List[int]] = None,
+) -> paddle.Tensor:
+    """
+    Apply the token mask to the logits, modifying probabilities of invalid tokens.
+
+    Args:
+        logits (paddle.Tensor): The logits tensor to modify
+        token_bitmask (torch.Tensor): The token bitmask indicating allowed tokens
+        indices (Optional[List[int]]): Optional list of batch indices to apply mask to
+
+    Returns:
+        paddle.Tensor: The modified logits tensor
+    """
+
+    if current_platform.is_cuda():
+        dlpack = paddle.utils.dlpack.to_dlpack(logits)
+        t_logits = torch.from_dlpack(dlpack)
+        apply_token_bitmask_inplace(
+            logits=t_logits,
+            bitmask=token_bitmask.to(t_logits.device, non_blocking=True),
+            indices=indices,
+        )
+        dlpack2 = torch.utils.dlpack.to_dlpack(t_logits)
+        return paddle.utils.dlpack.from_dlpack(dlpack2)
+    else:
+        origin_place = logits.place
+        origin_dtype = logits.dtype
+        logits = torch.from_numpy(logits.numpy())
+
+        logits = logits.float()  # cpu
+        apply_token_bitmask_inplace(
+            logits=logits,
+            bitmask=token_bitmask.to(logits.device, non_blocking=True),
+            indices=indices,
+        )
+
+        return paddle.to_tensor(
+            logits.numpy(),
+            dtype=origin_dtype,
+            place=origin_place,
+        )
