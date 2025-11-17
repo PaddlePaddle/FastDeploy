@@ -336,8 +336,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --metrics-port $((port_num + 2)) \
     --cache-queue-port $((port_num + 47873)) \
     --disable-sequence-parallel-moe \
-    --gpu-memory-utilization 0.9 \
-    --load-choices "default" > server.log 2>&1 &
+    --gpu-memory-utilization 0.9 > server.log 2>&1 &
 
 sleep 60
 # 探活
@@ -424,8 +423,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --engine-worker-queue-port "$((port_num + 10)),$((port_num + 20)),$((port_num + 30)),$((port_num + 40))" \
     --metrics-port $((port_num + 2)) \
     --cache-queue-port $((port_num + 47873)) \
-    --gpu-memory-utilization 0.9 \
-    --load-choices "default" > server.log 2>&1 &
+    --gpu-memory-utilization 0.9 > server.log 2>&1 &
 
 sleep 60
 # 探活（同上）
@@ -511,8 +509,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --engine-worker-queue-port $((port_num + 10)) \
     --metrics-port $((port_num + 2)) \
     --cache-queue-port $((port_num + 47873)) \
-    --gpu-memory-utilization 0.9 \
-    --load-choices "default" > server.log 2>&1 &
+    --gpu-memory-utilization 0.9 > server.log 2>&1 &
 
 sleep 60
 # 探活
