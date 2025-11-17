@@ -97,13 +97,13 @@ jobs:
           DEVICES=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
           DEVICE_PORT=$(echo "$DEVICES" | cut -d',' -f1)
 
-          FLASK_PORT=$((42068 + DEVICE_PORT * 100))
-          FD_API_PORT=$((42088 + DEVICE_PORT * 100))
-          FD_ENGINE_QUEUE_PORT=$((42058 + DEVICE_PORT * 100))
-          FD_METRICS_PORT=$((42078 + DEVICE_PORT * 100))
-          FD_CACHE_QUEUE_PORT=$((42098 + DEVICE_PORT * 100))
-          FD_ROUTER_PORT=$((42048 + DEVICE_PORT * 100))
-          FD_CONNECTOR_PORT=$((42038 + DEVICE_PORT * 100))
+          FLASK_PORT=$((8068 + DEVICE_PORT * 100))
+          FD_API_PORT=$((8088 + DEVICE_PORT * 100))
+          FD_ENGINE_QUEUE_PORT=$((8058 + DEVICE_PORT * 100))
+          FD_METRICS_PORT=$((8078 + DEVICE_PORT * 100))
+          FD_CACHE_QUEUE_PORT=$((8098 + DEVICE_PORT * 100))
+          FD_ROUTER_PORT=$((8048 + DEVICE_PORT * 100))
+          FD_CONNECTOR_PORT=$((8038 + DEVICE_PORT * 100))
           echo "Test ENV Parameter:"
           echo "========================================================="
           echo "FLASK_PORT=${FLASK_PORT}"
@@ -173,7 +173,7 @@ jobs:
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
           git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
-          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install paddlepaddle-gpu==3.3.0.dev20251112 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
           pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
           python -m pip install -r scripts/unittest_requirement.txt

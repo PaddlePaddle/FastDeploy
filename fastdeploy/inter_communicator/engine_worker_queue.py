@@ -287,12 +287,6 @@ class EngineWorkerQueue:
                 callable=lambda idx: self.disaggregate_requests[idx],
             )
 
-            self.available_prefill_instances = Queue()
-            QueueManager.register(
-                "get_available_prefill_instances",
-                callable=lambda: self.available_prefill_instances,
-            )
-
             QueueManager.register(
                 "get_finish_request_barrier",
                 callable=lambda idx: self.finish_request_barrier[idx],
@@ -351,7 +345,6 @@ class EngineWorkerQueue:
             QueueManager.register("get_client_read_info_flag")
             QueueManager.register("get_lock_info")
             QueueManager.register("get_disaggregate_requests")
-            QueueManager.register("get_available_prefill_instances")
             QueueManager.register("get_finish_request_barrier")
             QueueManager.register("get_finish_add_cache_task_barrier")
             QueueManager.register("get_connect_task_barrier")
@@ -390,7 +383,6 @@ class EngineWorkerQueue:
 
             # p/d 分离获取
             self.disaggregate_requests = self.manager.get_disaggregate_requests(self.local_data_parallel_id)
-            self.available_prefill_instances = self.manager.get_available_prefill_instances()
             self.finish_request_barrier = self.manager.get_finish_request_barrier(self.local_data_parallel_id)
             self.finish_add_cache_task_barrier = self.manager.get_finish_add_cache_task_barrier(
                 self.local_data_parallel_id
@@ -485,24 +477,38 @@ class EngineWorkerQueue:
     @staticmethod
     def to_tensor(tasks):
         """
-        Convert NumPy arrays in multimodal inputs to PaddlePaddle tensors.
+        Convert NumPy arrays in multimodal inputs to Paddle tensors.
 
         Args:
-            tasks: List of tasks containing multimodal inputs.
+            tasks (tuple): ([request], bsz)
         """
+        if (not envs.FD_ENABLE_MAX_PREFILL) and (not envs.FD_ENABLE_E2W_TENSOR_CONVERT):
+            return
         try:
-            if envs.FD_ENABLE_MAX_PREFILL:
-                llm_logger.debug(f"Convert image to tensor, type: {type(tasks)}")
-                batch_tasks, _ = tasks
-                for task in batch_tasks:
-                    if not hasattr(task, "multimodal_inputs"):
+            batch_tasks, _ = tasks
+            for task in batch_tasks:
+                multimodal_inputs = getattr(task, "multimodal_inputs", None)
+                if not multimodal_inputs:
+                    continue
+                # tensor keys
+                tensor_keys = [
+                    "images",
+                    "patch_idx",
+                    "token_type_ids",
+                    "position_ids",
+                    "attention_mask_offset",
+                ]
+
+                llm_logger.debug(f"Converting multimodal inputs to tensor...{tensor_keys}")
+
+                for key in tensor_keys:
+                    value = multimodal_inputs.get(key)
+                    if value is None:
                         continue
-                    images = task.multimodal_inputs["images"]
-                    if isinstance(images, np.ndarray):
-                        llm_logger.debug(f"Convert image to tensor, shape: {images.shape}")
-                        task.multimodal_inputs["images"] = paddle.to_tensor(images)
+                    if not isinstance(value, paddle.Tensor):
+                        multimodal_inputs[key] = paddle.to_tensor(value)
         except Exception as e:
-            llm_logger.warning(f"Failed to convert to tensor: {e}")
+            llm_logger.warning(f"Tensor conversion failed: {type(e).__name__}: {e}")
 
     @staticmethod
     def to_numpy(tasks):
@@ -637,15 +643,6 @@ class EngineWorkerQueue:
         self.can_put_next_connect_task_response_flag.set(1)
         self.connect_task_response_lock.release()
         return task_response
-
-    def get_prefill_instances(self):
-        """
-        check if the prefill queue is empty
-        """
-        if self.available_prefill_instances.qsize() == 0:
-            return 0
-        else:
-            return self.available_prefill_instances.get()
 
     def put_cache_info(self, cache_info) -> None:
         """

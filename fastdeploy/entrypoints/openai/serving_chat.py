@@ -40,6 +40,8 @@ from fastdeploy.entrypoints.openai.protocol import (
 )
 from fastdeploy.entrypoints.openai.response_processors import ChatResponseProcessor
 from fastdeploy.metrics.work_metrics import work_process_metrics
+from fastdeploy.trace.constants import LoggingEventName
+from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import (
     ErrorCode,
     ErrorType,
@@ -196,6 +198,7 @@ class OpenAIServingChat:
         num_cached_tokens = 0
         num_image_tokens = [0] * num_choices
         tool_called = [False] * num_choices
+        inference_start_time = [0] * num_choices
         max_streaming_response_tokens = (
             request.max_streaming_response_tokens
             if request.max_streaming_response_tokens is not None
@@ -272,9 +275,9 @@ class OpenAIServingChat:
 
                     if res["metrics"]["first_token_time"] is not None:
                         arrival_time = res["metrics"]["first_token_time"]
-                        inference_start_time = res["metrics"]["inference_start_time"]
+                        inference_start_time[idx] = res["metrics"]["inference_start_time"]
                     else:
-                        arrival_time = res["metrics"]["arrival_time"] - inference_start_time
+                        arrival_time = res["metrics"]["arrival_time"] - inference_start_time[idx]
                     if first_iteration:
                         num_prompt_tokens = len(prompt_token_ids)
                         num_cached_tokens = res.get("num_cached_tokens", 0)
@@ -447,6 +450,7 @@ class OpenAIServingChat:
         finally:
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
+            trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             api_server_logger.info(f"release {request_id} {self.engine_client.semaphore.status()}")
             yield "data: [DONE]\n\n"
 
@@ -598,6 +602,7 @@ class OpenAIServingChat:
             choices=choices,
             usage=usage,
         )
+        trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
         api_server_logger.info(f"Chat response: {res.model_dump_json()}")
         return res
 

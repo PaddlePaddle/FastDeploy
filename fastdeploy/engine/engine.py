@@ -40,6 +40,7 @@ from fastdeploy.engine.expert_service import start_data_parallel_service
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
 
 
@@ -136,8 +137,9 @@ class LLMEngine:
 
         # If block numer is specified and model is deployed in mixed mode, start cache manager first
         if not self.do_profile and self.cfg.scheduler_config.splitwise_role != "mixed":
-            device_ids = self.cfg.parallel_config.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
+            if not current_platform.is_intel_hpu():
+                device_ids = self.cfg.parallel_config.device_ids.split(",")
+                self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
         # Start workers
         self.worker_proc = self._start_worker_service()
@@ -170,8 +172,9 @@ class LLMEngine:
         if self.do_profile:
             self._stop_profile()
         elif self.cfg.scheduler_config.splitwise_role == "mixed" and self.cfg.cache_config.enable_prefix_caching:
-            device_ids = self.cfg.parallel_config.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
+            if not current_platform.is_intel_hpu():
+                device_ids = self.cfg.parallel_config.device_ids.split(",")
+                self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
         # Launch components: scheduler, cache_manager, expert_service et.al.
         if self.cfg.scheduler_config.splitwise_role != "mixed":
@@ -286,7 +289,7 @@ class LLMEngine:
 
         if request.get("stop_seqs_len") is not None:
             stop_seqs_len = request.get("stop_seqs_len")
-            max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
+            max_stop_seqs_num = envs.FD_MAX_STOP_SEQS_NUM
             if len(stop_seqs_len) > max_stop_seqs_num:
                 error_msg = (
                     f"Length of stop ({stop_seqs_len}) exceeds the limit max_stop_seqs_num({max_stop_seqs_num})."
@@ -294,7 +297,7 @@ class LLMEngine:
                 )
                 llm_logger.error(error_msg)
                 raise EngineError(error_msg, error_code=400)
-            stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
+            stop_seqs_max_len = envs.FD_STOP_SEQS_MAX_LEN
             for single_stop_seq_len in stop_seqs_len:
                 if single_stop_seq_len > stop_seqs_max_len:
                     error_msg = (
@@ -444,6 +447,7 @@ class LLMEngine:
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
             "NCCL_ALGO": "Ring",
             "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 1024)),
+            "OMP_NUM_THREADS": int(os.getenv("OMP_NUM_THREADS", 3)),
         }
         # environment variables needed by Dy2St
         variables.update(
@@ -568,6 +572,7 @@ class LLMEngine:
             "disable_any_whitespace": self.cfg.structured_outputs_config.disable_any_whitespace,
             "disable_custom_all_reduce": self.cfg.parallel_config.disable_custom_all_reduce,
             "use_internode_ll_two_stage": self.cfg.parallel_config.use_internode_ll_two_stage,
+            "disable_sequence_parallel_moe": self.cfg.parallel_config.disable_sequence_parallel_moe,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
         }
@@ -671,8 +676,9 @@ class LLMEngine:
         self.cfg.cache_config.reset(num_gpu_blocks)
         self.engine.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
-            device_ids = self.cfg.parallel_config.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
+            if not current_platform.is_intel_hpu():
+                device_ids = self.cfg.parallel_config.device_ids.split(",")
+                self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
     def check_health(self, time_interval_threashold=30):
         """
@@ -688,8 +694,6 @@ class LLMEngine:
 
     def launch_components(self):
         if self.cfg.scheduler_config.splitwise_role != "mixed":
-            # 单机逻辑
-            self.engine.engine_worker_queue.available_prefill_instances.put(1)
             self.splitwise_receive_thread = threading.Thread(
                 target=self.engine.split_connector.start_receiver, args=()
             )
@@ -709,7 +713,9 @@ class LLMEngine:
             for i in range(self.cfg.parallel_config.data_parallel_size):
                 request_queues_for_dp_ipc.append(multiprocessing.Queue())
             self.engine.scheduler.start(
-                self.cfg.node_rank * self.cfg.worker_num_per_node, request_queues_for_dp_ipc, result_queue_for_dp_ipc
+                self.cfg.node_rank * self.cfg.worker_num_per_node % self.cfg.worker_num_per_node,
+                request_queues_for_dp_ipc,
+                result_queue_for_dp_ipc,
             )
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
@@ -721,10 +727,14 @@ class LLMEngine:
                     1,
                     self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
                 ):
-                    address = (
-                        self.cfg.master_ip,
-                        int(self.cfg.parallel_config.engine_worker_queue_port[i]),
-                    )
+                    if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+                        address = (
+                            self.cfg.master_ip,
+                            int(self.cfg.parallel_config.engine_worker_queue_port[i]),
+                        )
+                    else:
+                        address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[i]}.sock"
+
                     llm_logger.info(f"dp start queue service {address}")
                     self.dp_engine_worker_queue_server.append(
                         EngineWorkerQueue(
