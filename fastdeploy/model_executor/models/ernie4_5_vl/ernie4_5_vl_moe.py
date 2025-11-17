@@ -72,6 +72,7 @@ class VLMoEMeta:
     image_index: paddle.Tensor
     token_type_ids: paddle.Tensor
     image_token_num: paddle.Tensor
+    num_image_patch_id: paddle.Tensor
 
     def __str__(self):
         return (
@@ -165,13 +166,7 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
             skip_quant=True,
             weight_dtype="float32",
             weight_key="weight" if moe_tag == "Text" else "weight_1",
-        )
-
-        # TODO(hehongyu): remove this after fix model network
-        setattr(
-            self.gate.weight,
-            "model_format",
-            "",
+            model_format="",
         )
 
     def forward(self, hidden_states: paddle.Tensor):
@@ -357,6 +352,7 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
+            layer_id=layer_id,
         )
 
         self.post_attention_layernorm = RMSNorm(
@@ -364,6 +360,7 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
+            layer_id=layer_id,
         )
 
     def load_state_dict(self, state_dict):
@@ -379,11 +376,9 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
         residual: paddle.Tensor = None,
         vl_moe_meta: VLMoEMeta = None,
     ):
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
-        else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        hidden_states, residual = self.input_layernorm(
+            hidden_states, residual_input=residual, forward_meta=forward_meta
+        )
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
@@ -499,11 +494,13 @@ class Ernie4_5_VLModel(nn.Layer):
         ids_remove_padding: paddle.Tensor,
     ) -> VLMoEMeta:
 
-        image_mask = ids_remove_padding == self.im_patch_id
+        image_mask = ids_remove_padding >= self.im_patch_id
         token_type_ids = image_mask.cast("int32")
         image_token_num = image_mask.sum()
         token_num = ids_remove_padding.shape[0]
         text_token_num = paddle.maximum((token_num - image_token_num), paddle.ones([], dtype="int64"))
+        num_image_patch_id = ids_remove_padding == self.im_patch_id
+        num_image_patch_id = num_image_patch_id.cast("int32").sum()
 
         # The scenario requiring padding is CUDA graph, thus we only need to pad the maximum capture size.
         self._cuda_graph_buffers["token_type_ids"][: self.fd_config.graph_opt_config.max_capture_size].fill_(-1)
@@ -517,6 +514,7 @@ class Ernie4_5_VLModel(nn.Layer):
             image_index=self._cuda_graph_buffers["image_index"][:token_num],
             token_type_ids=self._cuda_graph_buffers["token_type_ids"][:token_num],
             image_token_num=self._cuda_graph_buffers["image_token_num"],
+            num_image_patch_id=num_image_patch_id,
         )
 
     def get_input_embeddings(self, ids_remove_padding: paddle.Tensor) -> paddle.Tensor:
@@ -542,8 +540,7 @@ class Ernie4_5_VLModel(nn.Layer):
                 vl_moe_meta,
             )
 
-        hidden_states = hidden_states + residual
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
         return out
 
@@ -680,7 +677,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         all_param_mapping = general_params_mapping + text_expert_params_mapping + image_expert_params_mapping
 
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         expert_id = None
         shard_id = None
         for loaded_weight_name, loaded_weight in weights_iterator:
@@ -721,10 +718,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             )
             process_weights_after_loading_fn(model_sublayer_name, param)
         if self.tie_word_embeddings:
-            # because we use lazy guard and is not initialized by default
-            if not self.lm_head.linear.weight._is_initialized():
-                self.lm_head.linear.weight.initialize()
-            self.lm_head.load_state_dict({self.lm_head.weight_key: self.ernie.embed_tokens.embeddings.weight})
+            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight)
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
@@ -787,7 +781,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         input_embeddings = self.get_input_embeddings(
             ids_remove_padding=ids_remove_padding,
             image_features=image_features,
-            image_token_num=vl_moe_meta.image_token_num.item(),
+            image_token_num=vl_moe_meta.num_image_patch_id.item(),
         )
         self._input_embeddings.copy_(input_embeddings, False)
 

@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import os
 import random
 from dataclasses import dataclass, fields
 from enum import Enum
@@ -97,6 +98,7 @@ class SamplingParams:
     reasoning_max_tokens: Optional[int] = None
     min_tokens: int = 1
     logprobs: Optional[int] = None
+    prompt_logprobs: Optional[int] = None
     # For logits and logprobs post processing
     temp_scaled_logprobs: bool = False
     top_p_normalized_logprobs: bool = False
@@ -134,6 +136,7 @@ class SamplingParams:
         reasoning_max_tokens=None,
         min_tokens=1,
         logprobs=None,
+        prompt_logprobs=None,
         bad_words=None,
         guided_decoding=None,
         bad_words_token_ids=None,
@@ -157,6 +160,7 @@ class SamplingParams:
             reasoning_max_tokens=reasoning_max_tokens,
             min_tokens=min_tokens,
             logprobs=logprobs,
+            prompt_logprobs=prompt_logprobs,
             bad_words=bad_words,
             guided_decoding=guided_decoding,
             bad_words_token_ids=bad_words_token_ids,
@@ -203,10 +207,12 @@ class SamplingParams:
             raise ValueError(
                 f"min_tokens must be less than or equal to " f"max_tokens={self.max_tokens}, got {self.min_tokens}."
             )
-        if self.logprobs is not None and self.logprobs < 0:
-            raise ValueError(f"logprobs must be non-negative, got {self.logprobs}.")
-        if self.logprobs is not None and self.logprobs > 20:
+        if self.logprobs is not None and self.logprobs < -1:
+            raise ValueError(f"logprobs must be greater than -1, got {self.logprobs}.")
+        if self.logprobs is not None and self.logprobs > 20 and os.getenv("FD_USE_GET_SAVE_OUTPUT_V1", "0") == "0":
             raise ValueError("Invalid value for 'top_logprobs': must be less than or equal to 20.")
+        if self.prompt_logprobs is not None and self.prompt_logprobs < -1:
+            raise ValueError(f"prompt_logprobs must be greater than or equal to -1, got {self.prompt_logprobs}.")
 
         if not 0 <= self.seed <= 922337203685477580:
             raise ValueError("seed must be in [0, 922337203685477580], got " f"{self.seed}.")

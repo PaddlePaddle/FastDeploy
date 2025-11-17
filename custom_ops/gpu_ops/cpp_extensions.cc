@@ -304,6 +304,7 @@ paddle::Tensor MoeExpertFFNFunc(
     const paddle::Tensor& tokens_expert_prefix_sum,
     const paddle::Tensor& up_gate_proj_weight,
     const paddle::Tensor& down_proj_weight,
+    const paddle::optional<paddle::Tensor>& up_proj_in_scale,
     const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
     const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_scale,
@@ -384,7 +385,6 @@ void GetBlockShapeAndSplitKVBlock(
     const int decoder_step_token_num);
 
 std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor& input_ids,
-                                             const paddle::Tensor& cum_offsets,
                                              const paddle::Tensor& token_num,
                                              const paddle::Tensor& seq_len);
 
@@ -782,7 +782,8 @@ void SpeculateUpdate(const paddle::Tensor& seq_lens_encoder,
                      const paddle::Tensor& stop_flags,
                      const paddle::Tensor& seq_lens_this_time,
                      const paddle::Tensor& is_block_step,
-                     const paddle::Tensor& stop_nums);
+                     const paddle::Tensor& stop_nums,
+                     const paddle::Tensor& mask_rollback);
 
 void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor& pre_ids_all,
                                     const paddle::Tensor& accept_tokens,
@@ -987,12 +988,15 @@ void LimitThinkingContentLengthV1(const paddle::Tensor& next_tokens,
                                   const paddle::Tensor& max_think_lens,
                                   const paddle::Tensor& step_idx,
                                   const paddle::Tensor& limit_think_status,
+                                  const paddle::Tensor& stop_flags,
+                                  const paddle::Tensor& eos_token_ids,
                                   const int64_t think_end_id);
 
 void LimitThinkingContentLengthV2(const paddle::Tensor& next_tokens,
                                   const paddle::Tensor& max_think_lens,
                                   const paddle::Tensor& step_idx,
                                   const paddle::Tensor& limit_think_status,
+                                  const paddle::Tensor& stop_flags,
                                   const int64_t think_end_id,
                                   const int64_t line_break_id);
 
@@ -1003,6 +1007,8 @@ void SpeculateLimitThinkingContentLengthV1(
     const paddle::Tensor& limit_think_status,
     const paddle::Tensor& accept_num,
     const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& stop_flags,
+    const paddle::Tensor& eos_token_ids,
     const int64_t think_end_id);
 
 void SpeculateLimitThinkingContentLengthV2(
@@ -1012,6 +1018,7 @@ void SpeculateLimitThinkingContentLengthV2(
     const paddle::Tensor& limit_think_status,
     const paddle::Tensor& accept_num,
     const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& stop_flags,
     const int64_t think_end_id,
     const int64_t line_break_id);
 
@@ -1040,6 +1047,27 @@ void SpeculateGetTargetLogits(const paddle::Tensor& target_logits,
                               const paddle::Tensor& seq_lens_this_time,
                               const paddle::Tensor& seq_lens_encoder,
                               const paddle::Tensor& accept_num);
+
+std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
+    const paddle::Tensor& ids_remove_padding,
+    const paddle::Tensor& seq_lens_this_time,  // only on cpu
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& attn_mask_offsets_full,
+    const paddle::Tensor& attn_mask_offsets_decoder,
+    const paddle::Tensor& is_block_step,
+    const paddle::Tensor& decode_states,
+    const paddle::Tensor& mask_rollback);
+
+std::vector<paddle::Tensor> FusedNeoxRopeEmbedding(
+    const paddle::Tensor& qkv,
+    const paddle::Tensor& cos_emb,
+    const paddle::Tensor& sin_emb,
+    const int num_heads,
+    const int head_dim);
+
+std::vector<paddle::Tensor> GeluTanh(paddle::Tensor& input);
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_expert_token_num",
@@ -1626,4 +1654,14 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_get_target_logits",
         &SpeculateGetTargetLogits,
         "speculate_get_target_logits function");
+
+  m.def("update_attn_mask_offsets",
+        &UpdateAttnMaskOffsets,
+        "update attention mask");
+
+  m.def("fused_neox_rope_embedding",
+        &FusedNeoxRopeEmbedding,
+        "fused_neox_rope_embedding function");
+
+  m.def("gelu_tanh", &GeluTanh, "gelu_tanh function");
 }

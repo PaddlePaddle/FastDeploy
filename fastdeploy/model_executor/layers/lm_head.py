@@ -28,6 +28,7 @@ from fastdeploy.model_executor.layers.utils import (
 )
 from fastdeploy.model_executor.utils import (
     default_weight_loader,
+    free_tensor,
     set_weight_attrs,
     temporary_dtype,
 )
@@ -69,6 +70,7 @@ class ParallelLMHead(nn.Layer):
             self.bias_key: Optional[str] = prefix + ".bias"
         else:
             self.bias_key: Optional[str] = None
+        self.embedding_dim = embedding_dim
         self.tp_group = fd_config.parallel_config.tp_group
         self.column_cut = True
         self.nranks = fd_config.parallel_config.tensor_parallel_size
@@ -77,34 +79,53 @@ class ParallelLMHead(nn.Layer):
 
         if num_embeddings % self.nranks != 0:
             num_embeddings = pad_vocab_size(num_embeddings, self.padding_size)
+        self.num_embeddings = num_embeddings
+        self.model_format = fd_config.model_config.model_format
 
         ColumnParallelLinear = fleet.meta_parallel.ColumnParallelLinear
         RowParallelLinear = fleet.meta_parallel.RowParallelLinear
         self.dtype = "float32" if fd_config.model_config.lm_head_fp32 else dtype
 
         self.tie_word_embeddings: bool = fd_config.model_config.tie_word_embeddings
+        self.need_gather = True
 
         with temporary_dtype(self.dtype):
-            if self.column_cut:
-                need_gather = True
-                self.linear = ColumnParallelLinear(
-                    embedding_dim,
+            if self.fd_config.load_config.load_choices == "default_v1" and (
+                self.model_format == "torch" or self.tie_word_embeddings
+            ):
+                self.linear = RowParallelLinear(
                     num_embeddings,
+                    embedding_dim,
                     mp_group=self.tp_group,
                     weight_attr=None,
                     has_bias=True if self.bias_key is not None else False,
-                    gather_output=need_gather,
+                    input_is_parallel=False,
                     fuse_matmul_bias=False,
                 )
                 set_weight_attrs(
                     self.linear.weight,
                     {
                         "weight_loader": default_weight_loader(self.fd_config),
-                        "weight_need_transpose": self.fd_config.model_config.model_format == "torch",
                     },
                 )
-                if self.nranks > 1:
-                    set_weight_attrs(self.linear.weight, {"output_dim": True})
+                set_weight_attrs(self.linear.weight, {"output_dim": False})
+            elif self.column_cut:
+                self.linear = ColumnParallelLinear(
+                    embedding_dim,
+                    num_embeddings,
+                    mp_group=self.tp_group,
+                    weight_attr=None,
+                    has_bias=True if self.bias_key is not None else False,
+                    gather_output=self.need_gather,
+                    fuse_matmul_bias=False,
+                )
+                set_weight_attrs(
+                    self.linear.weight,
+                    {
+                        "weight_loader": default_weight_loader(self.fd_config),
+                    },
+                )
+                set_weight_attrs(self.linear.weight, {"output_dim": True})
             else:
                 self.linear = RowParallelLinear(
                     embedding_dim,
@@ -119,12 +140,32 @@ class ParallelLMHead(nn.Layer):
                     self.linear.weight,
                     {
                         "weight_loader": default_weight_loader(self.fd_config),
-                        "weight_need_transpose": self.fd_config.model_config.model_format == "torch",
                     },
                 )
+                set_weight_attrs(self.linear.weight, {"output_dim": False})
 
-                if self.nranks > 1:
-                    set_weight_attrs(self.linear.weight, {"output_dim": False})
+    def process_weights_after_loading(self):
+        if not (
+            self.fd_config.load_config.load_choices == "default_v1"
+            and (self.model_format == "torch" or self.tie_word_embeddings)
+        ):
+            return
+        if not self.linear.weight._is_initialized():
+            self.linear.weight.initialize()
+        weight_transpose = self.linear.weight.transpose([1, 0])
+        with temporary_dtype(self.dtype):
+            linear = fleet.meta_parallel.ColumnParallelLinear(
+                self.embedding_dim,
+                self.num_embeddings,
+                mp_group=self.tp_group,
+                weight_attr=None,
+                has_bias=True if self.bias_key is not None else False,
+                gather_output=self.need_gather,
+                fuse_matmul_bias=False,
+            )
+        linear.weight.set_value(weight_transpose)
+        free_tensor(self.linear.weight)
+        self.linear = linear
 
     def load_state_dict(self, state_dict: Dict[str, paddle.Tensor | np.ndarray]):
         """

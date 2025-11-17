@@ -20,8 +20,8 @@ from fastdeploy.entrypoints.llm import LLM
 model_name_or_path = "/models/MiniMax/MiniMax-M1-80k/"
 
 # 超参设置
-sampling_params = SamplingParams(temperature=0.1, max_tokens=30)
-llm = LLM(model=model_name_or_path, tensor_parallel_size=4, load_choices="default_v1")
+sampling_params = SamplingParams(temperature=0.1, max_tokens=30, prompt_logprobs=100)
+llm = LLM(model=model_name_or_path, tensor_parallel_size=4, load_choices="default_v1", enable_prefix_caching=False)
 output = llm.generate(prompts="who are you？", use_tqdm=True, sampling_params=sampling_params)
 
 print(output)

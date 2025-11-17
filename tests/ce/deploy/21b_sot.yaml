@@ -1,9 +1,0 @@
-max_model_len: 32768
-max_num_seqs: 128
-tensor_parallel_size: 1
-quantization: wint4
-graph_optimization_config:
-  graph_opt_level: 1
-  sot_warmup_sizes: [2,16,32,64]
-  use_cudagraph: True
-  full_cuda_graph: False

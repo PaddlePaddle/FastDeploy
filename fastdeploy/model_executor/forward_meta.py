@@ -65,8 +65,6 @@ class ForwardMeta:
     ForwardMeta is used to store the global meta information of the model forward.
     """
 
-    # Input tokens IDs
-    input_ids: paddle.Tensor
     # Input tokens IDs of removed padding
     ids_remove_padding: paddle.Tensor
     # Rotation position embedding
@@ -270,7 +268,7 @@ class HPUForwardMeta(ForwardMeta):
     """
 
     #
-    input_ids: paddle.Tensor
+    input_ids: paddle.Tensor = None
 
     # attention meta
     forward_mode: ForwardMode = ForwardMode.MIXED
