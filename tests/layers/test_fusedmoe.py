@@ -535,12 +535,12 @@ class FuseMoEWrapper(paddle.nn.Layer):
 class TestFusedMoE(unittest.TestCase):
     def setUp(self) -> None:
         self.architectures = ["Ernie4_5_MoeForCausalLM"]
-        self.hidden_size = 7168
-        self.moe_intermediate_size = 3584
-        self.moe_num_experts = 64
+        self.hidden_size = 4096
+        self.moe_intermediate_size = 2048
+        self.moe_num_experts = 160
         self.moe_k = 8
-        self.hidden_act = "silu"
-        self.num_attention_heads = 64
+        self.num_layers = 46
+        self.num_attention_heads = -1
         self.model_config = self.build_model_config()
 
     def build_model_config(self) -> ModelConfig:
@@ -559,7 +559,6 @@ class TestFusedMoE(unittest.TestCase):
             "moe_intermediate_size": self.moe_intermediate_size,
             "moe_num_experts": self.moe_num_experts,
             "moe_k": self.moe_k,
-            "hidden_act": self.hidden_act,
             "num_attention_heads": self.num_attention_heads,
             "dtype": "bfloat16",
         }
@@ -590,8 +589,8 @@ class TestFusedMoE(unittest.TestCase):
         # 这行代码必须保留，否则影响均匀性！
         paddle.seed(ep_rank + 100)
 
-        num_layers = 80
-        real_weight_layers = 20
+        num_layers = self.num_layers
+        real_weight_layers = num_layers // 2
         fused_moe = [None] * real_weight_layers
         for i in range(real_weight_layers):
             fused_moe[i] = FuseMoEWrapper(self.model_config, tp_size, tp_rank, ep_size, ep_rank, nnodes=nnodes)
