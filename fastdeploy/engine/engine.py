@@ -448,6 +448,7 @@ class LLMEngine:
             "NCCL_ALGO": "Ring",
             "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 1024)),
             "OMP_NUM_THREADS": int(os.getenv("OMP_NUM_THREADS", 3)),
+            "FD_ENABLE_PDL": envs.FD_ENABLE_PDL,
         }
         # environment variables needed by Dy2St
         variables.update(
