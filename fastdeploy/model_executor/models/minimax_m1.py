@@ -88,6 +88,42 @@ def print_tensor_stats(tensor, name):
             stats["first_5_values"] = flat_data
         logger.info(f"\n--- [FD DEBUG] {name} ---\n{pprint.pformat(stats, indent=2)}\n--------------------------\n")
 
+
+# +++ 添加这个新的调试函数 +++
+def debug_decoder_layer_tensors(layer_instance, layernorm_output, qkv_out, attn_output, 
+                                hidden_states_after_attn, layernorm_output_mlp, mlp_output, final_output):
+    """
+    A dedicated function to print all tensors within a decoder layer, 
+    called only during real inference.
+    """
+    layer_id = layer_instance.original_layer_id
+    run_mode = "[INFERENCE]" # 我们只在推理时调用它
+
+    logger.info(f"\n{'='*20} {run_mode} [FD DEBUG] Entering DecoderLayer {layer_id} {'='*20}")
+    
+    # 对应老版本的打印点
+    print_tensor_stats(layer_instance.input_layernorm.weight, f"L{layer_id}: DEBUG_input_layernorm_weight") # 额外打印，检查权重
+    print_tensor_stats(layernorm_output, f"{run_mode} L{layer_id}:1_After_InputLayernorm")
+
+    if layer_instance.attn_type == 1: # GQA
+        print_tensor_stats(qkv_out, f"{run_mode} L{layer_id}:1b_After_QKV_Proj_Combined")
+        
+        q_size_tp = layer_instance.self_attn.num_heads * layer_instance.self_attn.head_dim
+        k_size_tp = layer_instance.self_attn.kv_num_heads * layer_instance.self_attn.head_dim
+
+        q_before_rope, k_before_rope, v_tensor = qkv_out.split([q_size_tp, k_size_tp, k_size_tp], axis=-1)
+        print_tensor_stats(q_before_rope, f"{run_mode} L{layer_id}:1c_Q_BeforeRoPE")
+        print_tensor_stats(k_before_rope, f"{run_mode} L{layer_id}:1d_K_BeforeRoPE")
+        print_tensor_stats(v_tensor,      f"{run_mode} L{layer_id}:1e_V_Tensor")
+
+    print_tensor_stats(attn_output, f"{run_mode} L{layer_id}:2_After_Attention")
+    print_tensor_stats(hidden_states_after_attn, f"{run_mode} L{layer_id}:3_After_Attn_Residual")
+    print_tensor_stats(layernorm_output_mlp, f"{run_mode} L{layer_id}:4_After_PostAttnLayernorm")
+    print_tensor_stats(mlp_output, f"{run_mode} L{layer_id}:5a_After_MoE_MLP")
+    print_tensor_stats(final_output, f"{run_mode} L{layer_id}:6_FinalOutput")
+
+    logger.info(f"{'='*20} [FD DEBUG] Exiting DecoderLayer {layer_id} {'='*20}\n")
+
 class RMSNormTP(nn.Layer):
     """
     RMSNorm with Tensor Parallel support.
@@ -464,104 +500,139 @@ class MiniMaxM1DecoderLayer(nn.Layer):
         self.layernorm_mlp_beta = config.layernorm_mlp_beta
     
     
-    def forward(self, forward_meta: ForwardMeta, hidden_states: paddle.Tensor, residual: Optional[paddle.Tensor]):
-        """Forward pass for the decoder layer with FORCED full debugging."""
-        is_profile_run = forward_meta.step_use_cudagraph
-        layer_id = self.original_layer_id
-        print_tensor_stats(hidden_states, f"L{layer_id}:0a_Input_HiddenStates")
+    # def forward(self, forward_meta: ForwardMeta, hidden_states: paddle.Tensor, residual: Optional[paddle.Tensor]):
+    #     """Forward pass for the decoder layer with FORCED full debugging."""
+    #     is_profile_run = forward_meta.step_use_cudagraph
+    #     layer_id = self.original_layer_id
+    #     print_tensor_stats(hidden_states, f"L{layer_id}:0a_Input_HiddenStates")
         
-        # We print logs for ALL layers in INFERENCE mode
+    #     # We print logs for ALL layers in INFERENCE mode
+    #     if is_profile_run:
+    #         # For profiling runs, just pass through to avoid log spam and errors
+    #         if self.attn_type == 1:
+    #             qkv_out = self.qkv_proj(self.input_layernorm(hidden_states))
+    #             attn_output = self.self_attn(qkv=qkv_out, forward_meta=forward_meta)
+    #             attn_output = self.o_proj(attn_output)
+    #         else:
+    #             attn_output = self.self_attn(self.input_layernorm(hidden_states), forward_meta)
+    #         # A simplified path for profiling, may not be numerically identical but avoids errors
+    #         hidden_states = hidden_states + attn_output 
+    #         hidden_states = hidden_states + self.mlp(self.post_attention_layernorm(hidden_states))
+    #         return hidden_states, None
+
+
+    #     layernorm_output = self.input_layernorm(hidden_states)
+    #     print_tensor_stats(layernorm_output, f"L{layer_id}:1_After_InputLayernorm")
+
+    #     residual_attn = layernorm_output if self.postnorm else hidden_states
+
+    #     attn_output = None
+    #     # GQA
+    #     if self.attn_type == 1:  
+    #         qkv_out = self.qkv_proj(layernorm_output)
+    #         print_tensor_stats(qkv_out, f"FD_L{layer_id}:1b_After_QKV_Proj_Combined")
+
+    #         q_size_tp = self.self_attn.num_heads * self.self_attn.head_dim
+    #         k_size_tp = self.self_attn.kv_num_heads * self.self_attn.head_dim
+
+    #         q_before_rope, k_before_rope, v_tensor = qkv_out.split([q_size_tp, k_size_tp, k_size_tp], axis=-1)
+    #         print_tensor_stats(q_before_rope, f"FD_L{layer_id}:1c_Q_BeforeRoPE")
+    #         print_tensor_stats(k_before_rope, f"FD_L{layer_id}:1d_K_BeforeRoPE")
+    #         print_tensor_stats(v_tensor,      f"FD_L{layer_id}:1e_V_Tensor")
+            
+            
+    #         attn_output = self.self_attn(qkv=qkv_out, forward_meta=forward_meta)
+    #         attn_output = self.o_proj(attn_output)
+    #     # Linear Attention
+    #     else:  
+    #         attn_output = self.self_attn(layernorm_output, forward_meta)
+    #     print_tensor_stats(attn_output, f"FD_L{layer_id}:2_After_Attention")
+
+    #     hidden_states_after_attn = (residual_attn * self.layernorm_attention_alpha) + (attn_output * self.layernorm_attention_beta)
+    #     print_tensor_stats(hidden_states_after_attn, f"L{layer_id}:3_After_Attn_Residual(alpha={self.layernorm_attention_alpha}, beta={self.layernorm_attention_beta})")
+    #     layernorm_output_mlp = self.post_attention_layernorm(hidden_states_after_attn)
+    #     print_tensor_stats(layernorm_output_mlp, f"L{layer_id}:4_After_PostAttnLayernorm")
+    #     residual_mlp = layernorm_output_mlp if self.postnorm else hidden_states_after_attn
+    #     mlp_output = self.mlp(layernorm_output_mlp)
+    #     print_tensor_stats(mlp_output, f"L{layer_id}:5a_After_MoE_MLP")
+        
+    #     if self.shared_moe:
+    #         shared_output = self.shared_mlp(layernorm_output_mlp)
+    #         coef_logits = self.coefficient(layernorm_output_mlp.cast("float32"))
+    #         coef = F.sigmoid(coef_logits)
+    #         mlp_output = mlp_output.cast(coef.dtype) * (1 - coef) + shared_output.cast(coef.dtype) * coef
+    #         print_tensor_stats(mlp_output, f"L{layer_id}:5b_After_Shared_MLP_Merge")
+
+    #     final_output = (residual_mlp * self.layernorm_mlp_alpha) + (mlp_output * self.layernorm_mlp_beta)
+    #     print_tensor_stats(final_output, f"L{layer_id}:6_FinalOutput(alpha={self.layernorm_mlp_alpha}, beta={self.layernorm_mlp_beta})")
+        
+    #     return final_output, None
+    
+    def forward(self, forward_meta: ForwardMeta, hidden_states: paddle.Tensor, residual: Optional[paddle.Tensor]):
+        is_profile_run = forward_meta.step_use_cudagraph
+
+        # ----- 路径 1: 预热/CUDAGraph捕获阶段 (无打印) -----
         if is_profile_run:
-            # For profiling runs, just pass through to avoid log spam and errors
-            if self.attn_type == 1:
-                qkv_out = self.qkv_proj(self.input_layernorm(hidden_states))
+            layernorm_output = self.input_layernorm(hidden_states)
+            
+            if self.attn_type == 1:  # GQA
+                qkv_out = self.qkv_proj(layernorm_output)
                 attn_output = self.self_attn(qkv=qkv_out, forward_meta=forward_meta)
                 attn_output = self.o_proj(attn_output)
-            else:
-                attn_output = self.self_attn(self.input_layernorm(hidden_states), forward_meta)
-            # A simplified path for profiling, may not be numerically identical but avoids errors
-            hidden_states = hidden_states + attn_output 
-            hidden_states = hidden_states + self.mlp(self.post_attention_layernorm(hidden_states))
-            return hidden_states, None
-
-
-        layernorm_output = self.input_layernorm(hidden_states)
-        print_tensor_stats(layernorm_output, f"L{layer_id}:1_After_InputLayernorm")
-
-        residual_attn = layernorm_output if self.postnorm else hidden_states
-
-        attn_output = None
-        # GQA
-        if self.attn_type == 1:  
-            qkv_out = self.qkv_proj(layernorm_output)
-            # print_tensor_stats(qkv_out, f"FD_L{layer_id}:1b_After_QKV_Proj_Combined")
-            logger.info(f"--- [FD DEBUG] PRE-ATTENTION DUMP FOR LAYER {layer_id} ---")
-            print_tensor_stats(hidden_states, f"FD_L{layer_id}:0_HiddenStates_Input")
-            print_tensor_stats(layernorm_output, f"FD_L{layer_id}:1a_After_InputLayernorm")
-            print_tensor_stats(qkv_out, f"FD_L{layer_id}:1b_After_QKV_Proj_Combined")
-
-
-            q_size_tp = self.self_attn.num_heads * self.self_attn.head_dim
-            k_size_tp = self.self_attn.kv_num_heads * self.self_attn.head_dim
-
-            q_before_rope, k_before_rope, v_tensor = qkv_out.split([q_size_tp, k_size_tp, k_size_tp], axis=-1)
-            print_tensor_stats(q_before_rope, f"FD_L{layer_id}:1c_Q_BeforeRoPE")
-            print_tensor_stats(k_before_rope, f"FD_L{layer_id}:1d_K_BeforeRoPE")
-            print_tensor_stats(v_tensor,      f"FD_L{layer_id}:1e_V_Tensor")
-            logger.info(f"--- [FD DEBUG] ForwardMeta DUMP FOR LAYER {layer_id} ---")
-            # 1. RoPE 缓存
-            # 我们需要知道它的形状，以确认是否正确生成
-            if forward_meta.rotary_embs is not None:
-                logger.info("--- [FD DEBUG] forward_meta.rotary_embs ---")
-                print_tensor_stats(forward_meta.rotary_embs, f"FD_L{layer_id}:meta_rotary_embs")
-                # 预期形状: [2, bsz, max_seq_len, 1, rotary_dim] or [2, bsz, max_seq_len, 1, rotary_dim/2]
-                # 对于 MiniMax-M1 (NEOX风格), 应该是 [2, 1, max_len, 1, 64]
-            else:
-                logger.info("--- [FD DEBUG] forward_meta.rotary_embs is None ---")
-
-            # 2. 序列长度信息
-            print_tensor_stats(forward_meta.seq_lens_encoder, f"FD_L{layer_id}:meta_seq_lens_encoder")
-            print_tensor_stats(forward_meta.seq_lens_decoder, f"FD_L{layer_id}:meta_seq_lens_decoder")
-            print_tensor_stats(forward_meta.seq_lens_this_time, f"FD_L{layer_id}:meta_seq_lens_this_time")
-
-            # 3. Padding 和索引信息
-            print_tensor_stats(forward_meta.ids_remove_padding, f"FD_L{layer_id}:meta_ids_remove_padding")
-            print_tensor_stats(forward_meta.batch_id_per_token, f"FD_L{layer_id}:meta_batch_id_per_token")
-            print_tensor_stats(forward_meta.cu_seqlens_q, f"FD_L{layer_id}:meta_cu_seqlens_q")
-            print_tensor_stats(forward_meta.cu_seqlens_k, f"FD_L{layer_id}:meta_cu_seqlens_k")
-
-            # 4. KV Cache 相关信息
-            print_tensor_stats(forward_meta.block_tables, f"FD_L{layer_id}:meta_block_tables")
-            logger.info(f"--- [FD DEBUG] END OF DUMP FOR LAYER {layer_id} ---\n")
-            # --- 日志打印结束 ---
+            else:  # Linear Attention
+                attn_output = self.self_attn(layernorm_output, forward_meta)
             
+            residual_attn = layernorm_output if self.postnorm else hidden_states
+            hidden_states_after_attn = (residual_attn * self.layernorm_attention_alpha) + (attn_output * self.layernorm_attention_beta)
             
-            attn_output = self.self_attn(qkv=qkv_out, forward_meta=forward_meta)
-            attn_output = self.o_proj(attn_output)
-        # Linear Attention
-        else:  
-            attn_output = self.self_attn(layernorm_output, forward_meta)
-        print_tensor_stats(attn_output, f"FD_L{layer_id}:2_After_Attention")
+            layernorm_output_mlp = self.post_attention_layernorm(hidden_states_after_attn)
+            mlp_output = self.mlp(layernorm_output_mlp)
 
-        hidden_states_after_attn = (residual_attn * self.layernorm_attention_alpha) + (attn_output * self.layernorm_attention_beta)
-        print_tensor_stats(hidden_states_after_attn, f"L{layer_id}:3_After_Attn_Residual(alpha={self.layernorm_attention_alpha}, beta={self.layernorm_attention_beta})")
-        layernorm_output_mlp = self.post_attention_layernorm(hidden_states_after_attn)
-        print_tensor_stats(layernorm_output_mlp, f"L{layer_id}:4_After_PostAttnLayernorm")
-        residual_mlp = layernorm_output_mlp if self.postnorm else hidden_states_after_attn
-        mlp_output = self.mlp(layernorm_output_mlp)
-        print_tensor_stats(mlp_output, f"L{layer_id}:5a_After_MoE_MLP")
-        
-        if self.shared_moe:
-            shared_output = self.shared_mlp(layernorm_output_mlp)
-            coef_logits = self.coefficient(layernorm_output_mlp.cast("float32"))
-            coef = F.sigmoid(coef_logits)
-            mlp_output = mlp_output.cast(coef.dtype) * (1 - coef) + shared_output.cast(coef.dtype) * coef
-            print_tensor_stats(mlp_output, f"L{layer_id}:5b_After_Shared_MLP_Merge")
+            if self.shared_moe:
+                shared_output = self.shared_mlp(layernorm_output_mlp)
+                coef_logits = self.coefficient(layernorm_output_mlp) # 在预热时不做类型转换
+                coef = F.sigmoid(coef_logits)
+                mlp_output = mlp_output * (1 - coef) + shared_output * coef
+            
+            residual_mlp = layernorm_output_mlp if self.postnorm else hidden_states_after_attn
+            final_output = (residual_mlp * self.layernorm_mlp_alpha) + (mlp_output * self.layernorm_mlp_beta)
+            
+            return final_output, None
 
-        final_output = (residual_mlp * self.layernorm_mlp_alpha) + (mlp_output * self.layernorm_mlp_beta)
-        print_tensor_stats(final_output, f"L{layer_id}:6_FinalOutput(alpha={self.layernorm_mlp_alpha}, beta={self.layernorm_mlp_beta})")
-        
-        return final_output, None
+        # ----- 路径 2: 真实推理阶段 (有打印) -----
+        else:
+            layernorm_output = self.input_layernorm(hidden_states)
+            residual_attn = layernorm_output if self.postnorm else hidden_states
+            
+            qkv_out_for_debug = None
+            if self.attn_type == 1:  # GQA
+                qkv_out = self.qkv_proj(layernorm_output)
+                qkv_out_for_debug = qkv_out
+                attn_output = self.self_attn(qkv=qkv_out, forward_meta=forward_meta)
+                attn_output = self.o_proj(attn_output)
+            else:  # Linear Attention
+                attn_output = self.self_attn(layernorm_output, forward_meta)
+            
+            hidden_states_after_attn = (residual_attn * self.layernorm_attention_alpha) + (attn_output * self.layernorm_attention_beta)
+            layernorm_output_mlp = self.post_attention_layernorm(hidden_states_after_attn)
+            residual_mlp = layernorm_output_mlp if self.postnorm else hidden_states_after_attn
+            mlp_output = self.mlp(layernorm_output_mlp)
+            
+            if self.shared_moe:
+                shared_output = self.shared_mlp(layernorm_output_mlp)
+                coef_logits = self.coefficient(layernorm_output_mlp.cast("float32"))
+                coef = F.sigmoid(coef_logits)
+                mlp_output = mlp_output.cast(coef.dtype) * (1 - coef) + shared_output.cast(coef.dtype) * coef
+            
+            final_output = (residual_mlp * self.layernorm_mlp_alpha) + (mlp_output * self.layernorm_mlp_beta)
+            
+            # --- 在所有计算完成后，统一调用调试函数 ---
+            debug_decoder_layer_tensors(
+                self, layernorm_output, qkv_out_for_debug, attn_output, 
+                hidden_states_after_attn, layernorm_output_mlp, mlp_output, final_output
+            )
+            
+            return final_output, None
 
 @support_graph_optimization
 class MiniMaxM1Model(nn.Layer):
@@ -592,15 +663,46 @@ class MiniMaxM1Model(nn.Layer):
             prefix=f"{prefix}.norm",
         )
 
+    # def forward(self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta):
+    #     hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+
+    #     for i in range(len(self.layers)):
+    #         layer = self.layers[str(i)]
+    #         hidden_states, _ = layer(forward_meta=forward_meta, hidden_states=hidden_states, residual=None)
+
+    #     out = self.norm(hidden_states)
+    #     return out
+
     def forward(self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta):
+        is_profile_run = forward_meta.step_use_cudagraph
+        run_mode = "[PROFILE]" if is_profile_run else "[INFERENCE]"
+        
+        if not is_profile_run:
+            paddle.framework.core._is_in_prim_api_log_guard = True
+            print_tensor_stats(ids_remove_padding, f"{run_mode} TOP:0_InputIDs")
+        
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        
+        if not is_profile_run:
+            print_tensor_stats(hidden_states, f"{run_mode} TOP:1_AfterEmbedding")
+            paddle.framework.core._is_in_prim_api_log_guard = False
 
         for i in range(len(self.layers)):
             layer = self.layers[str(i)]
             hidden_states, _ = layer(forward_meta=forward_meta, hidden_states=hidden_states, residual=None)
 
+        if not is_profile_run:
+            paddle.framework.core._is_in_prim_api_log_guard = True
+            
         out = self.norm(hidden_states)
+        
+        if not is_profile_run:
+            print_tensor_stats(out, f"{run_mode} TOP:3_FinalOutput")
+            paddle.framework.core._is_in_prim_api_log_guard = False
+            
         return out
+
+
 
 @ModelRegistry.register_model_class(
     architecture="MiniMaxM1ForCausalLM",
@@ -760,6 +862,21 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
 
             if not was_handled:
                 logger.warning(f"[LOADER_V2_DEBUG] Weight '{loaded_weight_name}' was NOT handled by any rule (final tried name: {param_name}).")
+                
+        # +++ 在 for 循环结束后，所有权重加载完毕时，打印最终的模型参数 +++
+        logger.warning(f"\n{'!'*20} FINAL WEIGHT CHECK AFTER LOADING {'!'*20}")
+        try:
+            # 打印第0层（线性Attention）的qkv权重
+            layer0_qkv_proj_weight = self.model.layers['0'].self_attn.qkv_proj.weight
+            print_tensor_stats(layer0_qkv_proj_weight, "  - L0 LinearAttn qkv_proj.weight IN MODEL")
+
+            # 打印第7层（GQA）的qkv权重
+            layer7_qkv_proj_weight = self.model.layers['7'].qkv_proj.weight
+            print_tensor_stats(layer7_qkv_proj_weight, "  - L7 GQA qkv_proj.weight IN MODEL")
+            
+        except Exception as e:
+            logger.error(f"Failed to access weights for debugging: {e}")
+        logger.warning("!"*70 + "\n")
         
     def set_state_dict(self, state_dict):
         raise NotImplementedError("MiniMax-M1 uses the `load_weights` method.")
