@@ -188,12 +188,8 @@ class FusedMoE(nn.Layer):
         moe_quant_config = fd_config.quant_config
         self.moe_quant_config = moe_quant_config
         self.moe_quant_type = None
-        if moe_quant_config and self.is_quantized:
-            self.quant_method = (
-                moe_quant_config.get_quant_method(self)
-                if moe_quant_config.get_quant_method(self)
-                else get_moe_method()
-            )
+        if moe_quant_config and self.is_quantized and moe_quant_config.get_quant_method(self):
+            self.quant_method = moe_quant_config.get_quant_method(self)
             self.moe_quant_type = moe_quant_config.name()
         else:
             self.quant_method = get_moe_method()

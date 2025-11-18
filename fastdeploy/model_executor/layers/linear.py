@@ -172,12 +172,8 @@ class LinearBase(nn.Layer):
             self.output_size,
         ]
 
-        if fd_config.quant_config and not skip_quant:
-            self.quant_method = (
-                fd_config.quant_config.get_quant_method(self)
-                if fd_config.quant_config.get_quant_method(self)
-                else UnquantizedLinearMethod()
-            )
+        if fd_config.quant_config and not skip_quant and fd_config.quant_config.get_quant_method(self):
+            self.quant_method = fd_config.quant_config.get_quant_method(self)
         else:
             self.quant_method: Optional[QuantMethodBase] = UnquantizedLinearMethod()
 
