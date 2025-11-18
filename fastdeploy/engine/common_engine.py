@@ -765,6 +765,7 @@ class EngineService:
                     try:
                         request = Request.from_dict(data)
                         start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
+                        main_process_metrics.inc_value("prompt_tokens_total", request.prompt_token_ids_len)
                         main_process_metrics.inc_value("requests_number", 1)
                         self.llm_logger.debug(f"Receive request: {request}")
                     except Exception as e:

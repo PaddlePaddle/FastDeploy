@@ -148,6 +148,7 @@ class MetricsManager(MetricsManagerInterface):
     request_queue_time: "Histogram"
     gpu_cache_usage_perc: "Gauge"
     generation_tokens_total: "Counter"
+    prompt_tokens_total: "Counter"
     request_prefill_time: "Histogram"
     request_decode_time: "Histogram"
     request_generation_tokens: "Histogram"
@@ -250,6 +251,12 @@ class MetricsManager(MetricsManagerInterface):
             "type": Gauge,
             "name": "fastdeploy:gpu_cache_usage_perc",
             "description": "GPU KV-cache usage. 1 means 100 percent usage",
+            "kwargs": {},
+        },
+        "prompt_tokens_total": {
+            "type": Counter,
+            "name": "fastdeploy:prompt_tokens_total",
+            "description": "Total number of prompt tokens processed",
             "kwargs": {},
         },
         "generation_tokens_total": {
@@ -504,7 +511,7 @@ class MetricsManager(MetricsManagerInterface):
         if workers == 1:
             registry.register(work_process_metrics.e2e_request_latency)
             registry.register(work_process_metrics.request_params_max_tokens)
-            registry.register(work_process_metrics.prompt_tokens_total)
+            # registry.register(work_process_metrics.prompt_tokens_total)
             registry.register(work_process_metrics.request_prompt_tokens)
         if hasattr(main_process_metrics, "spec_decode_draft_acceptance_rate"):
             self.register_speculative_metrics(registry)
