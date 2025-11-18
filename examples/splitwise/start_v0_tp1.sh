@@ -7,8 +7,7 @@ set -e
 # v1: using local_scheduler + router
 
 # prepare environment
-MODEL_NAME="PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
-
+export MODEL_NAME="PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
 export FD_DEBUG=1
 export ENABLE_V1_KVCACHE_SCHEDULER=1
 export KVCACHE_GDRCOPY_FLUSH_ENABLE=1
@@ -24,24 +23,21 @@ fi
 
 unset http_proxy && unset https_proxy
 rm -rf log_*
-
-. ./utils.sh
+source ./utils.sh
 
 P_PORT=52400
 D_PORT=52500
-REDIS_PORT=${REDIS_PORT:=56388}
+REDIS_PORT="${REDIS_PORT:-56388}"
 
 ports=(
     $P_PORT $((P_PORT + 1)) $((P_PORT + 2)) $((P_PORT + 3)) $((P_PORT + 4)) $((P_PORT + 5))
     $D_PORT $((D_PORT + 1)) $((D_PORT + 2)) $((D_PORT + 3)) $((D_PORT + 4)) $((D_PORT + 5))
     $REDIS_PORT
 )
-for port in "${ports[@]}"; do
-    check_port "$port" || {
-        echo "❌ Please release port $port before starting the service"
-        exit 1
-    }
-done
+check_ports "${ports[@]}" || {
+    echo "❌ Some ports are in use. Please release them."
+    exit 1
+}
 
 # start redis
 if ! redis-cli -p ${REDIS_PORT} ping &>/dev/null; then
@@ -113,5 +109,5 @@ curl -X POST "http://0.0.0.0:${D_PORT}/v1/chat/completions" \
     {"role": "user", "content": "hello"}
   ],
   "max_tokens": 20,
-  "stream": true
+  "stream": false
 }'

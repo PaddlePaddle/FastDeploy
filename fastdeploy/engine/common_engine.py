@@ -326,7 +326,7 @@ class EngineService:
 
     def insert_tasks(self, tasks: List[Request], current_id=-1):
         """
-        Mixed server and prefill server allocate resource and insert tasks to engine.
+        Allocate resource and insert tasks to engine.
         Used in v0_kvcache_scheduler.
         """
         if not isinstance(tasks, list):
@@ -390,6 +390,8 @@ class EngineService:
 
         if self.cfg.scheduler_config.splitwise_role == "prefill":
             self.split_connector.send_cache_info_to_messager(tasks, current_id)
+        elif self.cfg.scheduler_config.splitwise_role == "decode":
+            self.split_connector.send_cache_info_to_prefill(tasks)
 
         if not is_decode:
             self.llm_logger.info(f"Tasks are sent to engine, req_ids={req_ids}")
@@ -675,6 +677,8 @@ class EngineService:
             try:
                 nonlocal is_fetching
                 is_fetching = True
+
+                self.resource_manager.check_and_free_block_tables()
                 num_prefill_batch = min(
                     int(self.resource_manager.available_batch()),
                     self.cfg.max_prefill_batch,

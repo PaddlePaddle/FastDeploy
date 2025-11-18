@@ -7,8 +7,7 @@ set -e
 # v1: using local_scheduler + router
 
 # prepare environment
-MODEL_NAME="PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
-
+export MODEL_NAME="PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
 export FD_DEBUG=1
 export ENABLE_V1_KVCACHE_SCHEDULER=1
 export KVCACHE_GDRCOPY_FLUSH_ENABLE=1
@@ -24,8 +23,7 @@ fi
 
 unset http_proxy && unset https_proxy
 rm -rf log_*
-
-. ./utils.sh
+source ./utils.sh
 
 P_PORT=52400
 D_PORT=52500
@@ -36,12 +34,10 @@ ports=(
     $D_PORT $((D_PORT + 1)) $((D_PORT + 2)) $((D_PORT + 3)) $((D_PORT + 4)) $((D_PORT + 5))
     $ROUTER_PORT
 )
-for port in "${ports[@]}"; do
-    check_port "$port" || {
-        echo "❌ Please release port $port before starting the service"
-        exit 1
-    }
-done
+check_ports "${ports[@]}" || {
+    echo "❌ Some ports are in use. Please release them."
+    exit 1
+}
 
 # start router
 export FD_LOG_DIR="log_router"
@@ -51,7 +47,6 @@ nohup python -m fastdeploy.router.launch \
     --port ${ROUTER_PORT} \
     --splitwise \
     2>&1 >${FD_LOG_DIR}/nohup &
-sleep 1
 
 # start prefill
 export CUDA_VISIBLE_DEVICES=0
@@ -106,5 +101,5 @@ curl -X POST "http://0.0.0.0:${ROUTER_PORT}/v1/chat/completions" \
     {"role": "user", "content": "hello"}
   ],
   "max_tokens": 100,
-  "stream": true
+  "stream": false
 }'

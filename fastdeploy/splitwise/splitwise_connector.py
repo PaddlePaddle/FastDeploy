@@ -335,6 +335,7 @@ class SplitwiseConnector:
         for i in range(len(tasks)):
             dsg_info = tasks[i].disaggregate_info
             if dsg_info is None:
+                self.logger.debug(f"skip send_cache_infos_to_prefill, {tasks[i].request_id}")
                 continue
             self.logger.debug(f"send_cache_infos_to_prefill, {dsg_info}")
 

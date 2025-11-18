@@ -4,8 +4,10 @@ from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import (
+        create_pinned_shm,
         cuda_host_alloc,
         cuda_host_free,
+        open_pinned_shm,
         set_data_ipc,
         share_external_data,
         swap_cache_all_layers,
@@ -23,6 +25,8 @@ elif current_platform.is_xpu():
     )
 
     unset_data_ipc = None
+    open_pinned_shm = None
+    create_pinned_shm = None
     memory_allocated = paddle.device.xpu.memory_allocated
 
 else:
@@ -51,6 +55,8 @@ def share_external_data_(cache, cache_name, cache_shape, use_ipc):
 __all__ = [
     "cuda_host_alloc",
     "cuda_host_free",
+    "open_pinned_shm",
+    "create_pinned_shm",
     "set_data_ipc",
     "share_external_data_",
     "swap_cache_all_layers",

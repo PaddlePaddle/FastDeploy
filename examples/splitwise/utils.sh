@@ -1,14 +1,13 @@
 #!/bin/bash
 
-check_port() {
-    local port=$1
-    if ss -tuln | grep -q ":$port "; then
-        echo "❌ $port is already in use"
-        return 1
-    else
-        echo "✅ $port is available"
-        return 0
-    fi
+check_ports() {
+    for port in "$@"; do
+        if ss -tuln | grep -q ":$port "; then
+            echo "❌ Port $port is already in use"
+            return 1
+        fi
+    done
+    return 0
 }
 
 wait_for_health() {
@@ -18,8 +17,8 @@ wait_for_health() {
     if [ "$status_code" -eq 200 ]; then
             break
     else
-            echo "Service not ready. Retrying in 2s..."
-            sleep 2
+            echo "Service not ready. Retrying in 4s..."
+            sleep 4
     fi
     done
 }
