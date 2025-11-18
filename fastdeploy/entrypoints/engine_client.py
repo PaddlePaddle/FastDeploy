@@ -38,6 +38,8 @@ from fastdeploy.inter_communicator import (
 )
 from fastdeploy.metrics.work_metrics import work_process_metrics
 from fastdeploy.platforms import current_platform
+from fastdeploy.trace.constants import LoggingEventName
+from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import (
     EngineError,
     ParameterError,
@@ -185,6 +187,7 @@ class EngineClient:
         """
 
         task["preprocess_start_time"] = time.time()
+        trace_print(LoggingEventName.PREPROCESSING_START, task["request_id"], task.get("user", ""))
         try:
             chat_template_kwargs = task.get("chat_template_kwargs") or {}
             chat_template_kwargs.update({"chat_template": task.get("chat_template")})
@@ -206,6 +209,7 @@ class EngineClient:
 
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]
+
             task["max_tokens"] = min(self.max_model_len - input_ids_len, task.get("max_tokens"))
             min_tokens = task.get("min_tokens", 1)
             if "messages" in task:
@@ -235,7 +239,7 @@ class EngineClient:
 
         if "stop_seqs_len" in task:
             stop_seqs_len = task["stop_seqs_len"]
-            max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
+            max_stop_seqs_num = envs.FD_MAX_STOP_SEQS_NUM
             if len(stop_seqs_len) > max_stop_seqs_num:
                 error_msg = (
                     f"Length of stop ({stop_seqs_len}) exceeds the limit max_stop_seqs_num({max_stop_seqs_num})."
@@ -243,7 +247,7 @@ class EngineClient:
                 )
                 api_server_logger.error(error_msg)
                 raise EngineError(error_msg, error_code=400)
-            stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
+            stop_seqs_max_len = envs.FD_STOP_SEQS_MAX_LEN
             for single_stop_seq_len in stop_seqs_len:
                 if single_stop_seq_len > stop_seqs_max_len:
                     error_msg = (
@@ -304,7 +308,8 @@ class EngineClient:
                 api_server_logger.warning(
                     f"req_id: {data['request_id']}, reasoning_max_tokens exceeds max_tokens, the value of reasoning_max_tokens will be adjusted to match that of max_tokens"
                 )
-
+        if data.get("temperature") is not None and abs(data["temperature"]) < 1e-6:
+            data["temperature"] = 1e-6
         # logprobs
         logprobs = data.get("logprobs")
         top_logprobs = None

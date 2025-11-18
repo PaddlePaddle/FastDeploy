@@ -40,6 +40,8 @@ from fastdeploy.entrypoints.openai.protocol import (
 )
 from fastdeploy.entrypoints.openai.response_processors import ChatResponseProcessor
 from fastdeploy.metrics.work_metrics import work_process_metrics
+from fastdeploy.trace.constants import LoggingEventName
+from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import (
     ErrorCode,
     ErrorType,
@@ -114,7 +116,11 @@ class OpenAIServingChat:
                 await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
             api_server_logger.info(f"current {self.engine_client.semaphore.status()}")
 
-            if request.user is not None:
+            if request.request_id is not None:
+                request_id = request.request_id
+                if not request_id.startswith("chatcmpl-"):
+                    request_id = f"chatcmpl-{request_id}"
+            elif request.user is not None:
                 request_id = f"chatcmpl-{request.user}-{uuid.uuid4()}"
             else:
                 request_id = f"chatcmpl-{uuid.uuid4()}"
@@ -192,6 +198,7 @@ class OpenAIServingChat:
         num_cached_tokens = 0
         num_image_tokens = [0] * num_choices
         tool_called = [False] * num_choices
+        inference_start_time = [0] * num_choices
         max_streaming_response_tokens = (
             request.max_streaming_response_tokens
             if request.max_streaming_response_tokens is not None
@@ -200,9 +207,7 @@ class OpenAIServingChat:
 
         max_streaming_response_tokens = max(1, max_streaming_response_tokens)
 
-        enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
-        if enable_thinking is None:
-            enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
+        enable_thinking = self._get_thinking_status(request)
 
         include_stop_str_in_output = request.include_stop_str_in_output
 
@@ -270,9 +275,9 @@ class OpenAIServingChat:
 
                     if res["metrics"]["first_token_time"] is not None:
                         arrival_time = res["metrics"]["first_token_time"]
-                        inference_start_time = res["metrics"]["inference_start_time"]
+                        inference_start_time[idx] = res["metrics"]["inference_start_time"]
                     else:
-                        arrival_time = res["metrics"]["arrival_time"] - inference_start_time
+                        arrival_time = res["metrics"]["arrival_time"] - inference_start_time[idx]
                     if first_iteration:
                         num_prompt_tokens = len(prompt_token_ids)
                         num_cached_tokens = res.get("num_cached_tokens", 0)
@@ -445,6 +450,7 @@ class OpenAIServingChat:
         finally:
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
+            trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             api_server_logger.info(f"release {request_id} {self.engine_client.semaphore.status()}")
             yield "data: [DONE]\n\n"
 
@@ -461,9 +467,7 @@ class OpenAIServingChat:
         """
         created_time = int(time.time())
         num_choices = 1 if request.n is None else request.n
-        enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
-        if enable_thinking is None:
-            enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
+        enable_thinking = self._get_thinking_status(request)
 
         include_stop_str_in_output = request.include_stop_str_in_output
         try:
@@ -598,6 +602,7 @@ class OpenAIServingChat:
             choices=choices,
             usage=usage,
         )
+        trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
         api_server_logger.info(f"Chat response: {res.model_dump_json()}")
         return res
 
@@ -621,7 +626,7 @@ class OpenAIServingChat:
 
         if output is not None and output.get("metrics") and output["metrics"].get("request_start_time"):
             work_process_metrics.e2e_request_latency.observe(
-                time.time() - output.get("metrics").get("request_start_time")
+                time.time() - data.get("metrics").get("request_start_time")
             )
         message = ChatMessage(
             role="assistant",
@@ -655,7 +660,7 @@ class OpenAIServingChat:
                 finish_reason = "tool_calls"
         else:
             finish_reason = "length"
-        if output.get("error_msg") is not None and "Recover" in output["error_msg"]:
+        if data.get("error_msg") is not None and "Recover" in data["error_msg"]:
             finish_reason = "recover_stop"
 
         return ChatCompletionResponseChoice(
@@ -750,3 +755,20 @@ class OpenAIServingChat:
             error_msg = f"Error in _build_logprobs_response: {e}, {str(traceback.format_exc())}"
             api_server_logger.error(error_msg)
             return None
+
+    def _get_thinking_status(self, request: ChatCompletionRequest) -> bool:
+        """
+        Get the thinking status from the request.
+        """
+        enable_thinking = request.chat_template_kwargs.get("enable_thinking") if request.chat_template_kwargs else None
+        if enable_thinking is None:
+            enable_thinking = request.metadata.get("enable_thinking") if request.metadata else None
+        options = request.chat_template_kwargs.get("options") if request.chat_template_kwargs else None
+        if options:
+            thinking_mode = options.get("thinking_mode")
+            if thinking_mode:
+                if thinking_mode == "close" or thinking_mode == "false":
+                    enable_thinking = False
+                else:
+                    enable_thinking = True
+        return enable_thinking

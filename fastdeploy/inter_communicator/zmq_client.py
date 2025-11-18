@@ -15,6 +15,7 @@
 """
 
 from abc import ABC, abstractmethod
+from multiprocessing.reduction import ForkingPickler
 
 import zmq
 
@@ -37,7 +38,7 @@ class ZmqClientBase(ABC):
     def _ensure_socket(self):
         """Ensure the socket is created before use."""
         if self.socket is None:
-            self.socket = self._create_socket()
+            self.socket: zmq.Socket = self._create_socket()
 
     @abstractmethod
     def connect(self):
@@ -65,14 +66,14 @@ class ZmqClientBase(ABC):
         Send a Pickle-serializable object over the socket.
         """
         self._ensure_socket()
-        self.socket.send_pyobj(data)
+        self.socket.send(ForkingPickler.dumps(data), copy=False)
 
     def recv_pyobj(self):
         """
         Receive a Pickle-serializable object from the socket.
         """
         self._ensure_socket()
-        return self.socket.recv_pyobj()
+        return ForkingPickler.loads(self.socket.recv())
 
     @abstractmethod
     def close(self):

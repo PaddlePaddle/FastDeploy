@@ -36,6 +36,8 @@ from fastdeploy.entrypoints.openai.protocol import (
     PromptTokenUsageInfo,
     UsageInfo,
 )
+from fastdeploy.trace.constants import LoggingEventName
+from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import (
     ErrorCode,
     ErrorType,
@@ -85,7 +87,11 @@ class OpenAIServingCompletion:
                     error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
                 )
         created_time = int(time.time())
-        if request.user is not None:
+        if request.request_id is not None:
+            request_id = request.request_id
+            if not request_id.startswith("cmpl-"):
+                request_id = f"cmpl-{request_id}"
+        elif request.user is not None:
             request_id = f"cmpl-{request.user}-{uuid.uuid4()}"
         else:
             request_id = f"cmpl-{uuid.uuid4()}"
@@ -312,6 +318,7 @@ class OpenAIServingCompletion:
         except Exception as e:
             api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)
         finally:
+            trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             self.engine_client.semaphore.release()
             if dealer is not None:
                 await self.engine_client.connection_manager.cleanup_request(request_id)
@@ -547,6 +554,7 @@ class OpenAIServingCompletion:
             api_server_logger.error(f"Error in completion_stream_generator: {e}, {str(traceback.format_exc())}")
             yield f"data: {ErrorResponse(error=ErrorInfo(message=str(e), code='400', type=ErrorType.INTERNAL_ERROR)).model_dump_json(exclude_unset=True)}\n\n"
         finally:
+            trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             del request
             if dealer is not None:
                 await self.engine_client.connection_manager.cleanup_request(request_id)

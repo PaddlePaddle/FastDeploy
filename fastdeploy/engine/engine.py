@@ -40,6 +40,7 @@ from fastdeploy.engine.expert_service import start_data_parallel_service
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
 
 
@@ -101,6 +102,25 @@ class LLMEngine:
         Initializes the engine and starts its sub-services.
         If `api_server_pid` is defined, will launch a thread
         to keep getting request from zmq_server.
+
+        NOTE: To clarify the launch order of the components of the LLM engine:
+        1. First, launch splitwise scheduler (if necessary) and expert services (if necessary).
+        2. Then, launch common engine, which includes some background threads that inserts tasks and receives ouptuts.
+        3. Most importantly, launch workers and cache services. The launch order of them are listed as follows.
+
+            | Profile | Mixed | PrefixCache | Cache -> Worker | Worker -> Cache |
+            |---------|-------|-------------|-----------------|-----------------|
+            | 1       | 1     | 1           | 0               | 1               |
+            | 1       | 1     | 0           | 0               | 0               |
+            | 1       | 0     | 1           | 0               | 1               |
+            | 1       | 0     | 0           | 0               | 1               |
+            | 0       | 1     | 1           | 0               | 1               |
+            | 0       | 1     | 0           | 0               | 0               |
+            | 0       | 0     | 1           | 1               | 0               |
+            | 0       | 0     | 0           | 1               | 0               |
+
+        4. Finally, inform user the engine has successfully started.
+
         """
         assert not self.is_started, "The engine is already started."
         start_time = time.time()
@@ -109,7 +129,6 @@ class LLMEngine:
         self.ipc_signal_suffix = self.cfg.parallel_config.engine_worker_queue_port[0]
         self._init_worker_signals()
 
-        # Launch components: scheduler, cache_manager, expert_service et.al.
         self.launch_components()
 
         self.engine.start()
@@ -118,8 +137,9 @@ class LLMEngine:
 
         # If block numer is specified and model is deployed in mixed mode, start cache manager first
         if not self.do_profile and self.cfg.scheduler_config.splitwise_role != "mixed":
-            device_ids = self.cfg.parallel_config.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
+            if not current_platform.is_intel_hpu():
+                device_ids = self.cfg.parallel_config.device_ids.split(",")
+                self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
         # Start workers
         self.worker_proc = self._start_worker_service()
@@ -151,9 +171,10 @@ class LLMEngine:
         # and then start the cache manager
         if self.do_profile:
             self._stop_profile()
-        elif self.cfg.cache_config.enable_prefix_caching:
-            device_ids = self.cfg.parallel_config.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
+        elif self.cfg.scheduler_config.splitwise_role == "mixed" and self.cfg.cache_config.enable_prefix_caching:
+            if not current_platform.is_intel_hpu():
+                device_ids = self.cfg.parallel_config.device_ids.split(",")
+                self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
         # Launch components: scheduler, cache_manager, expert_service et.al.
         if self.cfg.scheduler_config.splitwise_role != "mixed":
@@ -231,8 +252,11 @@ class LLMEngine:
         if sampling_params is not None:
             task.update(asdict(sampling_params))
         request = Request.from_dict(task)
+        request.llm_engine_recv_req_timestamp = time.time()
         llm_logger.info(f"Receive request {request}")
         if sampling_params is not None:
+            if sampling_params.temperature is not None and abs(sampling_params.temperature) < 1e-06:
+                sampling_params.temperature = 1e-06
             request.sampling_params = sampling_params
         request.preprocess_start_time = time.time()
         chat_template_kwargs = kwargs.get("chat_template_kwargs") or {}
@@ -265,7 +289,7 @@ class LLMEngine:
 
         if request.get("stop_seqs_len") is not None:
             stop_seqs_len = request.get("stop_seqs_len")
-            max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
+            max_stop_seqs_num = envs.FD_MAX_STOP_SEQS_NUM
             if len(stop_seqs_len) > max_stop_seqs_num:
                 error_msg = (
                     f"Length of stop ({stop_seqs_len}) exceeds the limit max_stop_seqs_num({max_stop_seqs_num})."
@@ -273,7 +297,7 @@ class LLMEngine:
                 )
                 llm_logger.error(error_msg)
                 raise EngineError(error_msg, error_code=400)
-            stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
+            stop_seqs_max_len = envs.FD_STOP_SEQS_MAX_LEN
             for single_stop_seq_len in stop_seqs_len:
                 if single_stop_seq_len > stop_seqs_max_len:
                     error_msg = (
@@ -423,6 +447,8 @@ class LLMEngine:
             "PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION": "python",
             "NCCL_ALGO": "Ring",
             "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 1024)),
+            "OMP_NUM_THREADS": int(os.getenv("OMP_NUM_THREADS", 3)),
+            "FD_ENABLE_PDL": envs.FD_ENABLE_PDL,
         }
         # environment variables needed by Dy2St
         variables.update(
@@ -533,6 +559,7 @@ class LLMEngine:
             f" --convert {self.cfg.model_config.convert}"
             f" --override-pooler-config {self.cfg.model_config.override_pooler_config}"
             f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
+            f" --max_logprobs {self.cfg.model_config.max_logprobs}"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
@@ -545,6 +572,8 @@ class LLMEngine:
             "dynamic_load_weight": self.cfg.load_config.dynamic_load_weight,
             "disable_any_whitespace": self.cfg.structured_outputs_config.disable_any_whitespace,
             "disable_custom_all_reduce": self.cfg.parallel_config.disable_custom_all_reduce,
+            "use_internode_ll_two_stage": self.cfg.parallel_config.use_internode_ll_two_stage,
+            "disable_sequence_parallel_moe": self.cfg.parallel_config.disable_sequence_parallel_moe,
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
         }
@@ -648,8 +677,9 @@ class LLMEngine:
         self.cfg.cache_config.reset(num_gpu_blocks)
         self.engine.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
-            device_ids = self.cfg.parallel_config.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
+            if not current_platform.is_intel_hpu():
+                device_ids = self.cfg.parallel_config.device_ids.split(",")
+                self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
     def check_health(self, time_interval_threashold=30):
         """
@@ -665,15 +695,11 @@ class LLMEngine:
 
     def launch_components(self):
         if self.cfg.scheduler_config.splitwise_role != "mixed":
-            # 单机逻辑
-            self.engine.engine_worker_queue.available_prefill_instances.put(1)
             self.splitwise_receive_thread = threading.Thread(
                 target=self.engine.split_connector.start_receiver, args=()
             )
             self.splitwise_receive_thread.daemon = True
             self.splitwise_receive_thread.start()
-
-        self.cfg.init_cache_info()
 
         role = self.cfg.scheduler_config.splitwise_role
         host_ip = self.cfg.host_ip
@@ -688,7 +714,9 @@ class LLMEngine:
             for i in range(self.cfg.parallel_config.data_parallel_size):
                 request_queues_for_dp_ipc.append(multiprocessing.Queue())
             self.engine.scheduler.start(
-                self.cfg.node_rank * self.cfg.worker_num_per_node, request_queues_for_dp_ipc, result_queue_for_dp_ipc
+                self.cfg.node_rank * self.cfg.worker_num_per_node % self.cfg.worker_num_per_node,
+                request_queues_for_dp_ipc,
+                result_queue_for_dp_ipc,
             )
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
@@ -700,10 +728,14 @@ class LLMEngine:
                     1,
                     self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
                 ):
-                    address = (
-                        self.cfg.master_ip,
-                        int(self.cfg.parallel_config.engine_worker_queue_port[i]),
-                    )
+                    if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+                        address = (
+                            self.cfg.master_ip,
+                            int(self.cfg.parallel_config.engine_worker_queue_port[i]),
+                        )
+                    else:
+                        address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[i]}.sock"
+
                     llm_logger.info(f"dp start queue service {address}")
                     self.dp_engine_worker_queue_server.append(
                         EngineWorkerQueue(

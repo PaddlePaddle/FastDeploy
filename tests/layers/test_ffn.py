@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import json
 import os
 import shutil
@@ -125,7 +141,7 @@ class TestFusedMoE(unittest.TestCase):
 
         moe_cuda_graphs = [None] * 100
         cache_hidden_states = [None] * 100
-        for idx, num_tokens in enumerate([10, 20, 40, 60, 80, 100, 128, 160, 192, 256]):
+        for idx, num_tokens in enumerate([10, 20, 40, 60, 80, 100, 128, 160, 192, 256, 512, 1024, 2048, 4096]):
 
             cache_hidden_states[idx] = paddle.rand((num_tokens, self.model_config.hidden_size), dtype=paddle.bfloat16)
 
@@ -152,6 +168,14 @@ class TestFusedMoE(unittest.TestCase):
             times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
             print("num_tokens:", num_tokens)
             print(times[-5:])
+
+            flops = num_layers * 2 * num_tokens * self.model_config.hidden_size * ffn.intermediate_size * 3
+            memory = num_layers * self.model_config.hidden_size * ffn.intermediate_size * 3
+            # memory += (num_layers * num_tokens * ffn.intermediate_size * 2)
+
+            print(round(flops / times[-1] / (1024**3), 1), "TFLOPS")
+
+            print(round(memory / times[-1] / (1024**3), 1), "TB/s")
 
         shutil.rmtree(self.model_name_or_path)
         return out

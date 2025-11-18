@@ -24,6 +24,9 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
+from fastdeploy.model_executor.layers.quantization.kv_cache import (
+    KvCacheQuantzationTypes,
+)
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 
 if TYPE_CHECKING:
@@ -107,6 +110,12 @@ class Attention(nn.Layer):
 
         if fd_config.quant_config and hasattr(fd_config.quant_config, "kv_cache_quant_type"):
             self.quant_method: QuantMethodBase = fd_config.quant_config.get_quant_method(self)
+
+            # set for RL model, as RL do not need load state dict
+            if fd_config.quant_config.kv_cache_quant_type == KvCacheQuantzationTypes.BLOCK_WISE_FP8:
+                self.cache_quant_type_str = "block_wise_fp8"
+                self.quant_max_bound = 448.0
+                self.quant_min_bound = -448.0
         else:
             self.quant_method = None
 
