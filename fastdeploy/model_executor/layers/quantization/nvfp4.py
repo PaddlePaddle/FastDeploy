@@ -595,16 +595,24 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
             else swizzled_scale.reshape(B, M_padded, K_padded)
         )
 
+    @property
+    def load_up_proj_weight_first(self) -> bool:
+        # FlashInfer CUTLASS kernel assumes [Up, Gate] Proj as W13
+        # 目前默认给True
+        return True
+
     def process_weights_after_loading(self, layer):
         """ """
         up_gate_proj_weight_scale_2 = layer.up_gate_proj_weight_scale_2[:, 0]
         free_tensor(layer.up_gate_proj_weight_scale_2)
         create_parameter_and_copy(layer, name="up_gate_proj_weight_scale_2", weight=up_gate_proj_weight_scale_2)
         # conda1 = self.enable_flashinfer_cutlass_moe or self.enable_flashinfer_trtllm_moe
+        up_gate_proj_input_scale = paddle.max(layer.up_gate_proj_input_scale).cast("float32")
+        down_proj_input_scale = paddle.max(layer.down_proj_input_scale).cast("float32")
         # conda2 = self.enable_flashinfer_cutedsl_moe
         # conda3 only support now
-        up_gate_proj_input_scale = paddle.max(layer.up_gate_proj_input_scale, axis=1).cast("float32")
-        down_proj_input_scale = layer.down_proj_input_scale
+        # up_gate_proj_input_scale = paddle.max(layer.up_gate_proj_input_scale, axis=1).cast("float32")
+        # down_proj_input_scale = layer.down_proj_input_scale
 
         # Create shared parameters
         create_parameter_and_copy(
@@ -636,11 +644,13 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         # cultass
         up_gate_proj_blockscale_swizzled = self.swizzle_blockscale(layer.up_gate_proj_weight_scale)
         free_tensor(layer.up_gate_proj_weight_scale)
+        layer.up_gate_proj_weight_scale = None
         create_parameter_and_copy(
             layer, name="up_gate_proj_blockscale_swizzled", weight=up_gate_proj_blockscale_swizzled
         )
         down_proj_blockscale_swizzled = self.swizzle_blockscale(layer.down_proj_weight_scale)
         free_tensor(layer.down_proj_weight_scale)
+        layer.down_proj_weight_scale = None
         create_parameter_and_copy(layer, name="down_proj_blockscale_swizzled", weight=down_proj_blockscale_swizzled)
 
     def apply(self, layer, x, gate):

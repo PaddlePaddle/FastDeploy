@@ -271,10 +271,10 @@ class FusedMoE(nn.Layer):
         expert_param = param[expert_id - self.expert_id_offset]
         dim = -1 if shard_dim else 0
         param_shard_size = expert_param.shape[dim] // 2
-        if shard_id == "gate":
+        switch_w13 = getattr(self.quant_method, "load_up_proj_weight_first", False)
+        if (shard_id == "gate" and not switch_w13) or (shard_id == "up" and switch_w13):
             param_shard_offset = 0
         else:
-            # shard_id == "up":
             param_shard_offset = param_shard_size
         expert_param = slice_fn(
             expert_param, shard_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size
