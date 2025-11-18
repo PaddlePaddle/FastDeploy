@@ -63,7 +63,7 @@ def get_moe_method():
         )
 
         return MetaxCutlassUnquantizedFusedMoEMethod(None)
-    raise None
+    return None
 
 
 def get_moe_scores(
