@@ -341,6 +341,55 @@ class XPUModelRunner(ModelRunnerBase):
             position_ids.shape[0] + rope_3d_position_ids["position_ids_offset"][-1]
         )
         rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
+    def exist_decode(self):
+        """
+        单卡上的only decode判断
+        """
+        # 进入函数的已经不是空请求了
+        # # 空请求返回true，非空闲状态下的空请求，说明部分卡没有在计算而是在空跑
+        # if int(paddle.max(self.share_inputs["seq_lens_encoder"])) == 0 and int(paddle.max(self.share_inputs["seq_lens_decoder"])) == 0:
+        #     return 1
+        # if not self.not_need_stop():# 专家并行过程中，空的卡返回true
+        #     return 1
+        # 非空请求判断是否是decode only请求
+        if (
+            int(paddle.max(self.share_inputs["seq_lens_decoder"])) != 0
+            and int(paddle.max(self.share_inputs["seq_lens_encoder"])) == 0
+        ):
+            return 1
+        else:
+            return 0
+
+    def only_decode(self):
+        """
+        check whether decode only
+        """
+        # Update Batch type for if_only_decode
+        if_only_decode = True
+        decoder_exists = None
+        # 在ep场景下no_need_stop如果都是F，返回false，走prefill分支模型
+        # 否则，需要进一步判断
+        # mix ep in single node
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
+            no_need_stop_list = []
+            no_need_stops = self.not_need_stop()
+            paddle.distributed.all_gather_object(no_need_stop_list, not no_need_stops)
+            no_need_stop = all(no_need_stop_list)
+            if no_need_stop:
+                if_only_decode = False
+            else:
+                only_decode_batch_list = []
+                decoder_exists = self.exist_decode() or not self.not_need_stop()
+                paddle.distributed.all_gather_object(only_decode_batch_list, decoder_exists)
+                if_only_decode = all(only_decode_batch_list)
+
+                print(
+                    f"only_decode_batch_list {only_decode_batch_list} decoder_exists {decoder_exists} self.exist_decode() {self.exist_decode()} if_only_decode {if_only_decode}"
+                )
+
+        if_only_decode = if_only_decode and (decoder_exists if decoder_exists is not None else self.exist_decode())
+
+        return if_only_decode
 
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int):
         """
@@ -900,6 +949,19 @@ class XPUModelRunner(ModelRunnerBase):
         self.initialize_attention_backend()
         if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
             self.forward_meta.kv_signal_sender = self.kv_signal_sender
+        # if self.not_need_stop():
+        if True:  # 空闲状态的卡不进判断，忙碌卡的逻辑还是根据
+            print("********************** ", self.not_need_stop())
+            if_only_decode = self.only_decode()
+            # if if_only_decode:
+            #     print("it is only decode step!")
+            # else:
+            #     print("it is prefill step")
+
+            if self.fd_config.scheduler_config.splitwise_role == "mixed":
+                self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
+                print(f"moe_phase.phase {self.fd_config.model_config.moe_phase.phase}")
+
         # Get sampling metadata
         # TODU(lilujia): sync with GPU
         self.sampling_metadata = SamplingMetadata(
