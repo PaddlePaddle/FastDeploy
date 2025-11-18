@@ -50,7 +50,7 @@ from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_Attention
 from fastdeploy.model_executor.ops.gpu import get_padding_offset
 
-if "h20" in paddle.device.cuda.get_device_name().lower():
+if "nvidia graphics device" in paddle.device.cuda.get_device_name().lower():
     # (ZKK): CI machine.
     os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
 
