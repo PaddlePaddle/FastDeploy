@@ -50,7 +50,9 @@ from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_Attention
 from fastdeploy.model_executor.ops.gpu import get_padding_offset
 
-os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
+if "nvidia graphics device" in paddle.device.cuda.get_device_name().lower():
+    # (ZKK): CI machine.
+    os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
 
 
 class TestAttentionPerformance(unittest.TestCase):
@@ -119,10 +121,10 @@ class TestAttentionPerformance(unittest.TestCase):
             "dtype": "bfloat16",
             "hidden_size": 4096,
             "max_position_embeddings": 131072,
-            "max_model_len": 2 * (9000 + 128),
+            "max_model_len": 5500,
             "num_attention_heads": 32,
             "num_key_value_heads": 4,
-            "num_hidden_layers": 39,
+            "num_hidden_layers": 5,
         }
         model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
         config_path = os.path.join(model_dir, "config.json")
@@ -293,7 +295,6 @@ class TestAttentionPerformance(unittest.TestCase):
         # Test parameters
         test_steps = 100
         prefill_batch_size = 1
-        decode_batch_size = 100  # This can be configured as needed
         prefill_seq_len = 4096
         use_dynamic_quant = True
         act_tensor_dtype = paddle.bfloat16
@@ -317,8 +318,7 @@ class TestAttentionPerformance(unittest.TestCase):
 
         paddle.device.synchronize()
 
-        import paddle.profiler as profiler
-
+        # import paddle.profiler as profiler
         # p = profiler.Profiler(
         #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
         #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
@@ -341,56 +341,57 @@ class TestAttentionPerformance(unittest.TestCase):
 
         # p.stop()
 
-        decode_hidden_states = paddle.randn(
-            [decode_batch_size, self.fd_config.model_config.hidden_size], dtype=act_tensor_dtype
-        )
+        # p = profiler.Profiler(
+        #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
+        #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+        # )
 
-        forward_meta = self.create_forward_meta(
-            batch_size=decode_batch_size,
-            seq_len=5000,
-            mode=ForwardMode.DECODE,
-            fd_config=self.fd_config,
-            attn_backend=self.attn_backend,
-            use_dynamic_quant=use_dynamic_quant,
-        )
+        # p.start()
+        # p.step()
 
-        self.attn_backend.init_attention_metadata(forward_meta)
+        for decode_batch_size in [10, 20, 40, 60, 80, 100, 128]:
+            decode_hidden_states = paddle.randn(
+                [decode_batch_size, self.fd_config.model_config.hidden_size], dtype=act_tensor_dtype
+            )
 
-        p = profiler.Profiler(
-            targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
-            on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
-        )
+            forward_meta = self.create_forward_meta(
+                batch_size=decode_batch_size,
+                seq_len=5000,
+                mode=ForwardMode.DECODE,
+                fd_config=self.fd_config,
+                attn_backend=self.attn_backend,
+                use_dynamic_quant=use_dynamic_quant,
+            )
 
-        p.start()
-        p.step()
+            self.attn_backend.init_attention_metadata(forward_meta)
 
-        paddle.device.synchronize()
+            paddle.device.synchronize()
 
-        # 必须要先预热一次！因为预处理被放到了第一层再做了！
-        self.attn_forward(forward_meta, decode_hidden_states)
+            # 必须要先预热一次！因为预处理被放到了第一层再做了！
+            self.attn_forward(forward_meta, decode_hidden_states)
 
-        attn_cuda_graphs = graphs.CUDAGraph()
-        attn_cuda_graphs.capture_begin()
+            attn_cuda_graphs = graphs.CUDAGraph()
+            attn_cuda_graphs.capture_begin()
 
-        self.attn_forward(forward_meta, decode_hidden_states)
+            self.attn_forward(forward_meta, decode_hidden_states)
 
-        attn_cuda_graphs.capture_end()
+            attn_cuda_graphs.capture_end()
 
-        start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
-        end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
-        for i in range(test_steps):
-            start_events[i].record()
+            start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+            end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+            for i in range(test_steps):
+                start_events[i].record()
 
-            attn_cuda_graphs.replay()
-            # self.attn_forward(forward_meta, decode_hidden_states)
+                attn_cuda_graphs.replay()
+                # self.attn_forward(forward_meta, decode_hidden_states)
 
-            end_events[i].record()
-        paddle.device.synchronize()
+                end_events[i].record()
+            paddle.device.synchronize()
 
-        times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
-        print(times[-5:])
+            times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
+            print(times[-5:])
 
-        p.stop()
+        # p.stop()
 
 
 if __name__ == "__main__":
