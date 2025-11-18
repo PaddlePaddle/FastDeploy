@@ -29,7 +29,24 @@ WHEEL_NAME="fastdeploy_ops-${OPS_VERSION}-${PY_VERSION}-${SYSTEM_VERSION}-${PROC
 # Add compatibility for modern python packaging methods
 WHEEL_MODERN_NAME="fastdeploy_ops"
 
+# Function to list files recursively
+list_files_recursive() {
+    local dir=$1
+    if [ -d "$dir" ]; then
+    echo "Listing files in: $dir"
+    find "$dir" -type f | sort
+    echo ""
+    else
+    echo "Directory not found: $dir"
+    fi
+}
+
+list_files_recursive "./${OPS_TMP_DIR}"
+
 ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}
+
+list_files_recursive "./${OPS_TMP_DIR}"
+
 
 # Handle directory compatibility between modern and legacy naming
 if [ -d "./${OPS_TMP_DIR}/${WHEEL_MODERN_NAME}" ]; then
