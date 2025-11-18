@@ -95,7 +95,7 @@ class TestFusedMoE(unittest.TestCase):
     def setUp(self) -> None:
         self.architectures = ["Ernie4_5_MoeForCausalLM"]
         self.hidden_size = 4096
-        self.intermediate_size = 1408
+        self.intermediate_size = 2048
         self.num_layers = 46
         self.hidden_act = "silu"
         self.num_attention_heads = 64
@@ -138,7 +138,7 @@ class TestFusedMoE(unittest.TestCase):
 
         moe_cuda_graphs = [None] * 100
         cache_hidden_states = [None] * 100
-        for idx, num_tokens in enumerate([4096, 4096*2, 4096*4]):
+        for idx, num_tokens in enumerate([4096, 4096 * 2, 4096 * 4]):
 
             cache_hidden_states[idx] = paddle.rand((num_tokens, self.model_config.hidden_size), dtype=paddle.bfloat16)
 

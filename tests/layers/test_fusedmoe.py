@@ -539,7 +539,7 @@ class TestFusedMoE(unittest.TestCase):
         self.moe_intermediate_size = 2048
         self.moe_num_experts = 160
         self.moe_k = 8
-        self.num_layers = 46
+        self.num_layers = 1
         self.num_attention_heads = -1
         self.model_config = self.build_model_config()
 
@@ -597,8 +597,10 @@ class TestFusedMoE(unittest.TestCase):
 
         moe_cuda_graphs = [None] * 100
         cache_hidden_states = [None] * 100
-        test_token_nums = [10, 20, 40, 60, 80, 100, 128, 160, 192, 256]
-        # test_token_nums = [1024 * i for i in [1,2,4,8,16,32]]
+        is_decoder = fused_moe[0].fd_config.model_config.moe_phase.phase == "decode"
+        test_token_nums = [4096 * i for i in [1, 2, 4, 8, 16, 32]]
+        if is_decoder:
+            test_token_nums = [10, 20, 40, 60, 80, 100, 128, 160, 192, 256]
         for idx, num_tokens in enumerate(test_token_nums):
 
             cache_hidden_states[idx] = paddle.rand((num_tokens, self.model_config.hidden_size), dtype=paddle.bfloat16)
@@ -609,12 +611,14 @@ class TestFusedMoE(unittest.TestCase):
 
                 return out
 
-            moe_cuda_graphs[idx] = graphs.CUDAGraph()
-            moe_cuda_graphs[idx].capture_begin()
+            if is_decoder:
+                moe_cuda_graphs[idx] = graphs.CUDAGraph()
+                moe_cuda_graphs[idx].capture_begin()
 
             fake_model_run()
 
-            moe_cuda_graphs[idx].capture_end()
+            if is_decoder:
+                moe_cuda_graphs[idx].capture_end()
 
             num_tests = 20
             start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
@@ -622,7 +626,10 @@ class TestFusedMoE(unittest.TestCase):
             for i in range(num_tests):
                 start_events[i].record()
 
-                moe_cuda_graphs[idx].replay()
+                if is_decoder:
+                    moe_cuda_graphs[idx].replay()
+                else:
+                    fake_model_run()
 
                 end_events[i].record()
             paddle.device.cuda.synchronize()
