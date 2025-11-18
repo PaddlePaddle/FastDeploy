@@ -17,6 +17,7 @@
 import functools
 import importlib
 import importlib.util
+import os
 import shutil
 
 
@@ -25,6 +26,9 @@ def has_flashinfer() -> bool:
     """Return `True` if FlashInfer is available."""
     # Use find_spec to check if the module exists without importing it
     # This avoids potential CUDA initialization side effects
+    if os.environ.get("PADDLE_COMPATIBLE_API", "0").lower() not in ["1", "on", "true"]:
+        # currently must support by Paddle compatible API
+        return False
     if importlib.util.find_spec("flashinfer") is None:
         # logger.debug_once("FlashInfer unavailable since package was not found")
         return False

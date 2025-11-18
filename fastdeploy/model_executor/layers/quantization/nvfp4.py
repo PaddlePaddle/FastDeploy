@@ -42,49 +42,6 @@ else:
     logger.warning("FlashInfer is not installed. For nvFp4 inference, please install Flashinfer.")
 
 
-def swizzle_blockscale(scale: paddle.Tensor) -> paddle.Tensor:
-    """
-    Pad and block-interleave the FP4 block-scales so that they match the data
-    layout expected by the CUTLASS / FlashInfer kernels.
-
-    Parameters
-    ----------
-    scale: paddle.Tensor
-
-    Returns
-    -------
-    paddle.Tensor
-        The swizzled tensor with the same logical shape as *scale*.
-    """
-    assert scale.dtype == paddle.float8_e4m3fn, (
-        "swizzle_blockscale expects the input tensor to be in " "paddle.float8_e4m3fn format."
-    )
-
-    scale_ndim = scale.ndim
-    if scale_ndim == 2:
-        scale = scale.unsqueeze(0)  # (1, M, K)
-    assert scale.ndim == 3, "Expected a 2-D or 3-D tensor for block scales."
-
-    B, M, K = scale.shape
-
-    def _round_up(x: int, m: int) -> int:
-        return (x + m - 1) // m * m
-
-    M_padded = _round_up(M, 128)
-    K_padded = _round_up(K, 4)
-
-    padded = paddle.zeros((B, M_padded, K_padded), dtype=scale.dtype, device=scale.place)
-    padded[:B, :M, :K] = scale
-
-    # Reshape / permute to the layout required by the kernel.
-    padded = padded.reshape(B, M_padded // 128, 4, 32, K_padded // 4, 4)
-    swizzled = padded.permute(0, 1, 4, 3, 2, 5).contiguous().cuda()
-
-    if scale_ndim == 2:
-        return swizzled.reshape(M_padded, K_padded)
-    return swizzled.reshape(B, M_padded, K_padded)
-
-
 def next_power_of_2(n: int):
     return 1 << (n - 1).bit_length() if n > 0 else 1
 
@@ -606,13 +563,8 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         up_gate_proj_weight_scale_2 = layer.up_gate_proj_weight_scale_2[:, 0]
         free_tensor(layer.up_gate_proj_weight_scale_2)
         create_parameter_and_copy(layer, name="up_gate_proj_weight_scale_2", weight=up_gate_proj_weight_scale_2)
-        # conda1 = self.enable_flashinfer_cutlass_moe or self.enable_flashinfer_trtllm_moe
         up_gate_proj_input_scale = paddle.max(layer.up_gate_proj_input_scale).cast("float32")
         down_proj_input_scale = paddle.max(layer.down_proj_input_scale).cast("float32")
-        # conda2 = self.enable_flashinfer_cutedsl_moe
-        # conda3 only support now
-        # up_gate_proj_input_scale = paddle.max(layer.up_gate_proj_input_scale, axis=1).cast("float32")
-        # down_proj_input_scale = layer.down_proj_input_scale
 
         # Create shared parameters
         create_parameter_and_copy(
@@ -626,11 +578,6 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         )
         create_parameter_and_copy(layer, "down_proj_input_scale_quant", (1 / down_proj_input_scale).cast("float32"))
 
-        # update input_global_scale ?
-        # layer.dispatcher.set_quant_config(
-        #     {"input_global_scale": layer.w13_input_scale_quant}
-        # )
-
         for name, weight_scale in [
             ("up_gate", layer.up_gate_proj_weight_scale),
             ("down", layer.down_proj_weight_scale),
@@ -640,8 +587,6 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
                 weight_scale.dtype == paddle.float8_e4m3fn
             ), f"{name} Weight Blockscale must be represented as FP8-E4M3"
 
-        # trtllm
-        # cultass
         up_gate_proj_blockscale_swizzled = self.swizzle_blockscale(layer.up_gate_proj_weight_scale)
         free_tensor(layer.up_gate_proj_weight_scale)
         layer.up_gate_proj_weight_scale = None
@@ -676,16 +621,16 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
                 input=x,
                 token_selected_experts=topk_ids.to(paddle.int),
                 token_final_scales=topk_weights,
-                fc1_expert_weights=layer.w13_weight.view(paddle.long),
-                fc2_expert_weights=layer.w2_weight.view(paddle.long),
+                fc1_expert_weights=getattr(layer, self.added_weight_attrs[0]).view(paddle.long),
+                fc2_expert_weights=getattr(layer, self.added_weight_attrs[1]).view(paddle.long),
                 output_dtype=output_dtype,
                 input_sf=x_sf,
                 quant_scales=[
-                    layer.w13_input_scale_quant,
-                    layer.w13_blockscale_swizzled.view(paddle.int32),
+                    layer.up_gate_proj_input_scale_quant,
+                    layer.up_gate_proj_blockscale_swizzled.view(paddle.int32),
                     layer.g1_alphas,
-                    layer.w2_input_scale_quant,
-                    layer.w2_blockscale_swizzled.view(paddle.int32),
+                    layer.down_proj_input_scale_quant,
+                    layer.down_proj_blockscale_swizzled.view(paddle.int32),
                     layer.g2_alphas,
                 ],
                 ep_size=layer.ep_size,
