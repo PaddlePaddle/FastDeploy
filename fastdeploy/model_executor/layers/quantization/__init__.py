@@ -33,7 +33,6 @@ QUANTIZATION_METHODS: List[str] = [
     "mix_quant",
     "tensor_wise_fp8",
     "kvcache",
-    "w16a16",
 ]
 
 
