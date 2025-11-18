@@ -6,7 +6,7 @@ Refer to [NVIDIA CUDA GPU Installation](https://paddlepaddle.github.io/FastDeplo
 docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:2.3.0
 ```
 
-In the docker container, the [NVIDIA MLNX_OFED](https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/) and [Redis] (https://redis.io/) are pre-installed.
+In the docker container, the [NVIDIA MLNX_OFED](https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/) and [Redis](https://redis.io/) are pre-installed.
 
 ## Build and install FastDeploy
 
@@ -25,7 +25,7 @@ bash build.sh 1 python false [80,90]
 
 ## Run the Examples
 
-Run the shell scripts in this directory.
+Run the shell scripts in this directory, ```bash start_v0_tp1.sh``` or ```bash start_v1_tp1.sh```
 
 Note that, there are two methods for splitwise deployment:
 * v0: using splitwise_scheduler or dp_scheduler, in which the requests are scheduled in the engine.

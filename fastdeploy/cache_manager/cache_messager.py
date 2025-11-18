@@ -866,7 +866,10 @@ def main():
     if args.splitwise_role == "decode" and args.splitwise_cache_buffer_block_num > 0:
         logger.info(f"[rank {rank}/{args.mp_num}] Allocate splitwise cpu buffer for rdma register.")
         for i in range(args.num_layers + num_extra_layers):
-            num_blocks = args.splitwise_cache_buffer_block_num if i < args.num_layers else num_extra_layer_gpu_blocks
+            if i < args.num_layers:
+                num_blocks = args.splitwise_cache_buffer_block_num
+            else:
+                num_blocks = (num_extra_layer_gpu_blocks / total_gpu_blocks) * args.splitwise_cache_buffer_block_num
             cache_shape = [num_blocks] + key_cache_shape_list[1:]
             cache_bytes = num_blocks * bytes_per_block
             logger.info(

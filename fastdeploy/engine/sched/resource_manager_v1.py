@@ -1037,7 +1037,7 @@ class ResourceManagerV1(ResourceManager):
 
     def add_prefilled_request(self, request_output: RequestOutput):
         """
-        In P/D aggregated deployment, D should continue to decode after recieving first token and cache from P.
+        In P/D aggregated deployment, D should continue to decode after receiving first token and cache from P.
         NOTE: GPU resources should be checked in advance to ensure they are sufficient for the prefilled request.
         """
         assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"

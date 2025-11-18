@@ -538,8 +538,8 @@ class EngineArgs:
                 raise NotImplementedError("splitwise_cache_buffer_size params only support in decode mode now.")
             if "ipc" in self.cache_transfer_protocol:
                 raise NotImplementedError(
-                    "Only support rdma cache transfer protocol when set splitwise_cache_buffer_size > 0 "
-                    "to enable cpu cache buffer in decode."
+                    "CPU cache buffer (splitwise_cache_buffer_size > 0) is not compatible with IPC cache "
+                    "transfer protocol. Please use only RDMA protocol."
                 )
             if envs.ENABLE_V1_KVCACHE_SCHEDULER == 0:
                 raise NotImplementedError(
