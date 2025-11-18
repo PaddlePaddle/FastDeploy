@@ -595,6 +595,11 @@ class EngineService:
                     max_num_batched_tokens=self.cfg.max_model_len,
                     batch=num_prefill_batch,
                 )
+
+                for task in tasks:
+                    task.schedule_start_time = time.time()
+
+                self.llm_logger.debug(f"get tasks from scheduler: {tasks}")
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     need_delete_tasks = []
                     if envs.FD_OFFLINE_PERF_TEST_FOR_PD:
