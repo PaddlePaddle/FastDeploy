@@ -30,9 +30,6 @@ from fastdeploy.engine.request import Request
 # from fastdeploy.spec_decode import MTPProposer, NgramProposer
 from fastdeploy.model_executor.forward_meta import HPUForwardMeta
 from fastdeploy.model_executor.guided_decoding import get_guided_backend
-from fastdeploy.model_executor.guided_decoding.base_guided_decoding import (
-    LogitsProcessorBase,
-)
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
@@ -103,7 +100,9 @@ def recover_block_hpu(
     stop_flags,  # hpu
     seq_lens_this_time,  # hpu
     ori_seq_lens_encoder,  # cpu
+    ori_seq_lens_decoder,  # cpu
     seq_lens_encoder,  # hpu
+    seq_lens_decoder,  # hpu
     block_tables,  # cpu
     free_list,  # cpu
     free_list_len,  # cpu
@@ -119,6 +118,7 @@ def recover_block_hpu(
     for bid in range(recover_len.item()):
         recover_id = recover_block_list[bid].item()
         ori_seq_len_encoder = ori_seq_lens_encoder[recover_id].item()
+        ori_seq_len_decoder = ori_seq_lens_decoder[recover_id].item()
         step_idx_now = step_idx[recover_id].item()
         seq_len = ori_seq_len_encoder + step_idx_now
         encoder_block_len = encoder_block_lens[recover_id].item()
@@ -126,13 +126,13 @@ def recover_block_hpu(
 
         seq_lens_this_time[recover_id] = seq_len
         seq_lens_encoder[recover_id] = seq_len
+        seq_lens_decoder[recover_id] = ori_seq_len_decoder
         stop_flags[recover_id] = False
 
         ori_free_list_len = free_list_len[0]
-        free_list_len[0] -= decoder_used_len
-
         for i in range(decoder_used_len):
             block_tables[recover_id, encoder_block_len + i] = free_list[ori_free_list_len - i - 1]
+        free_list_len[0] -= decoder_used_len
 
         recover_block(input_ids, first_token_ids, pre_ids, next_tokens, recover_id, ori_seq_len_encoder, step_idx_now)
 
@@ -163,13 +163,16 @@ def step_intel_hpu(share_inputs: Dict[str, paddle.Tensor], block_size: int, max_
         max_model_len,
     )
     if share_inputs["recover_lens"].item() > 0:
+        logger.info("recover block hpu happening ...")
         recover_block_hpu(
             share_inputs["recover_block_list"],
             share_inputs["recover_lens"],
             share_inputs["stop_flags"],
             share_inputs["seq_lens_this_time"],
             share_inputs["ori_seq_lens_encoder"],
+            share_inputs["ori_seq_lens_decoder"],
             share_inputs["seq_lens_encoder"],
+            share_inputs["seq_lens_decoder"],
             share_inputs["block_tables"],
             share_inputs["free_list"],
             share_inputs["free_list_len"],
@@ -182,6 +185,7 @@ def step_intel_hpu(share_inputs: Dict[str, paddle.Tensor], block_size: int, max_
             share_inputs["first_token_ids"],
         )
         share_inputs["recover_lens"] = paddle.full([1], 0, dtype="int32").cpu()
+        share_inputs["not_need_stop"][0] = True
 
 
 # TODO: replace rebuild_padding_v3 in CustomDevice if we adopt this version pp optimization
@@ -324,7 +328,7 @@ class HPUModelRunner(ModelRunnerBase):
 
         #  Sampler
         if not self.speculative_decoding:
-            self.sampler = Sampler()
+            self.sampler = Sampler(fd_config)
         else:
             self.sampler = SpeculativeSampler(fd_config)
 
@@ -442,7 +446,7 @@ class HPUModelRunner(ModelRunnerBase):
                 or request.guided_grammar is not None
             ):
                 logits_info, schemata_key = self._init_logits_processor(request)
-                request.logits_processor, request.logits_cached = logits_info
+                request.logits_processor = logits_info
                 request.schemata_key = schemata_key
 
             # Is Decode Node
@@ -480,9 +484,11 @@ class HPUModelRunner(ModelRunnerBase):
                     self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = token_chunk_size
                     self.share_inputs["seq_lens_encoder"][idx : idx + 1] = token_chunk_size
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
+                    self.share_inputs["ori_seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
                     self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
                 else:
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
+                    self.share_inputs["ori_seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
                     self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
                     self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length
                     self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = length
@@ -618,6 +624,7 @@ class HPUModelRunner(ModelRunnerBase):
         self.share_inputs["infer_seed"] = paddle.full([max_num_seqs, 1], 0, dtype="int64").cpu()
         self.share_inputs["first_token_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
         self.share_inputs["ori_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32").cpu()
+        self.share_inputs["ori_seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32").cpu()
         self.share_inputs["system_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["system_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int32")
 
@@ -710,6 +717,7 @@ class HPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_decoder"],
             self.cache_config.block_size,
             self.model_config.dtype,
+            self.scheduler_config.max_num_batched_tokens,
         )
         is_prompt = is_prompt.item() == 1 if is_prompt.item() > 0 else None
         if is_prompt is True:
@@ -1026,7 +1034,18 @@ class HPUModelRunner(ModelRunnerBase):
         """ """
         pass
 
-    def update_warmup_inputs(self, requests, is_decode=False):
+    def update_warmup_inputs(self, requests, is_decode=False, context_len=0) -> None:
+        """
+        Update the shared input tensors for warmup requests.
+        Args:
+            requests (list): List of request dicts containing input data.
+            is_decode (bool, optional): If True, sets up inputs for decode phase. Defaults to False.
+            context_len (int, optional): The length of the context (prefix) to use for prefix caching during warmup.
+                If >0, this value is used to set the decoder sequence length for prefill (prefix caching).
+                Typically, set to the number of tokens in the prefix to be cached. Defaults to 0 (no prefix caching).
+        This parameter affects the warmup behavior for prefix caching by controlling how much of the input
+        is considered as context for the decoder during the prefill phase.
+        """
         for i in range(len(requests)):
             request = requests[i]
             idx = request["idx"]
@@ -1041,7 +1060,7 @@ class HPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_idx"][idx : idx + 1] = 1
             else:
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
-                self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
+                self.share_inputs["seq_lens_decoder"][idx : idx + 1] = context_len
                 self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length
                 self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = length
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = 0
@@ -1076,35 +1095,48 @@ class HPUModelRunner(ModelRunnerBase):
         self.share_inputs["not_need_stop"][0] = True
 
     def warm_up_bucket(self) -> None:
-        max_prefill_batch = 3  # Hard-Code in FastDeploy/fastdeploy/engine/config.py
+        max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "3"))
         warmup_max_model_len = min(int(os.environ.get("HPU_WARMUP_MODEL_LEN", 4096)), self.model_config.max_model_len)
         prefill_batchs = []
         prefill_batch_step = int(os.environ.get("BATCH_STEP_PREFILL", 1))
+        prefill_seq_step = int(os.environ.get("SEQUENCE_STEP_PREFILL", 128))
         current_prefill_batch = prefill_batch_step
         while current_prefill_batch <= max_prefill_batch:
             prefill_batchs.append(int(current_prefill_batch))
             current_prefill_batch += prefill_batch_step
 
         max_prefill_length = self.cache_config.block_size + warmup_max_model_len
+        prefill_context_block_step = int(os.environ.get("CONTEXT_BLOCK_STEP_PREFILL", 1))
         for prefill_batch in prefill_batchs:
-            for prefill_length in range(
-                self.cache_config.block_size, max_prefill_length, self.cache_config.block_size
+            for prefill_length_with_context in range(
+                self.cache_config.block_size, max_prefill_length, prefill_seq_step
             ):
-                if prefill_length * prefill_batch > self.scheduler_config.max_num_batched_tokens:
+                if prefill_length_with_context * prefill_batch > self.scheduler_config.max_num_batched_tokens:
                     continue
-                logger.info(f"Warmup prefill_batch: {prefill_batch}, prefill_length: {prefill_length} start")
-                requests = [
-                    {
-                        "idx": i,
-                        "input_ids": [5] * (prefill_length - 1),
-                        "block_tables": list(range(prefill_length // self.cache_config.block_size)),
-                        "eos_token_ids": [2],
-                    }
-                    for i in range(prefill_batch)
-                ]
-                self.update_warmup_inputs(requests, is_decode=False)
-                self.execute_model()
-                logger.info(f"warmup prefill_batch: {prefill_batch}, prefill_length: {prefill_length} done")
+                for context_len in range(
+                    0, prefill_length_with_context, self.cache_config.block_size * prefill_context_block_step
+                ):
+                    prefill_length = prefill_length_with_context - context_len
+                    logger.info(
+                        f"Warmup prefill_batch: {prefill_batch}, prefill_length: {prefill_length}, context_len: {context_len} start"
+                    )
+                    requests = [
+                        {
+                            "idx": i,
+                            "input_ids": [5] * (prefill_length_with_context - context_len - 1),
+                            "block_tables": list(range(prefill_length_with_context // self.cache_config.block_size)),
+                            "eos_token_ids": [2],
+                        }
+                        for i in range(prefill_batch)
+                    ]
+                    self.update_warmup_inputs(requests, is_decode=False, context_len=context_len)
+                    self.execute_model()
+                    logger.info(
+                        f"warmup prefill_batch: {prefill_batch}, prefill_length: {prefill_length}, context_len: {context_len} done"
+                    )
+                    # when disable prefix caching, only run context_len = 0 for each prefill_batch
+                    if not self.cache_config.enable_prefix_caching:
+                        break
 
         decode_batchs = []
         decode_batch_step = int(os.environ.get("BATCH_STEP_DECODE", 4))
@@ -1178,30 +1210,6 @@ class HPUModelRunner(ModelRunnerBase):
 
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
-
-    def _get_skip_idx(self, model_forward_batch):
-        """
-        Get the index of the request that needs to be skipped during execution.
-        Args:
-            model_forward_batch: A list of requests to be executed by this runner.
-        Returns:
-            A list of indices corresponding to the requests that need to be skipped.
-        """
-        skip_idx_list = []
-        if not self.parallel_config.enable_chunked_prefill or self.guided_backend is None:
-            return skip_idx_list
-
-        for task in model_forward_batch:
-            if task.get("prefill_chunk_info", None) is None or task.chunk_idx >= len(task.prefill_chunk_info):
-                continue
-            skip_idx_list.append(task.idx)
-
-        for task in self.restore_chunked_prefill_request.values():
-            if task.idx in skip_idx_list or task.chunk_idx >= len(task.prefill_chunk_info):
-                continue
-            skip_idx_list.append(task.idx)
-
-        return skip_idx_list
 
     def execute_model(
         self,
@@ -1332,29 +1340,10 @@ class HPUModelRunner(ModelRunnerBase):
         execution_time = (end_time - start_time) * 1000
         hpu_model_runner_profile_logger.info(f"StepPaddle execution time(ms): {execution_time}, BT={real_bs}")
         self._update_chunked_prefill(model_forward_batch)
-        self._add_cache(model_forward_batch)
 
         if int(os.environ.get("HABANA_PROFILE", 0)) == 1:
             self.prof.step()
         return None
-
-    def _add_cache(self, model_forward_batch) -> None:
-        """
-        Add cache for guided decoding.
-        """
-        if self.guided_backend is None:
-            return
-
-        for request in model_forward_batch:
-            logits_cached = request.get("logits_cached", None)
-            if logits_cached is None or logits_cached:
-                continue
-
-            request.logits_cached = True
-            if isinstance(request.logits_processor, LogitsProcessorBase):
-                self.guided_backend.add_cache(request.schemata_key, request.logits_processor)
-            else:
-                self.guided_backend.add_cache(request.schemata_key, request.logits_processor.result())
 
     def _execute_empty_input(self) -> None:
         """
