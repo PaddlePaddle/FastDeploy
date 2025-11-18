@@ -25,6 +25,7 @@ class Args:
     key_cache_shape = "1,1,1,1"
     value_cache_shape = ""
     create_cache_tensor = False
+    splitwise_cache_buffer_block_num = 0
 
 
 # ==========================
