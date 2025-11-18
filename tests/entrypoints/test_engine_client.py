@@ -113,8 +113,6 @@ else:
         sys.modules["fastdeploy.platforms"] = Mock()
         sys.modules["fastdeploy.platforms"].current_platform = Mock()
         sys.modules["fastdeploy.platforms"].current_platform.is_iluvatar = Mock(return_value=False)
-        sys.modules["fastdeploy.entrypoints"] = Mock()
-        sys.modules["fastdeploy.entrypoints.engine_client"] = Mock()
 
         from fastdeploy.entrypoints.engine_client import EngineClient
 
@@ -124,17 +122,45 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         """Set up test fixtures before each test method."""
+        # Create a proper ModelConfig mock with enable_mm attribute
+        mock_model_config = Mock()
+        mock_model_config.enable_mm = False
+
+        # Create mocks for all the external dependencies
+        mock_input_processor = Mock()
+        mock_processor = Mock()
+        mock_input_processor.create_processor.return_value = mock_processor
+
+        # Mock current platform
+        mock_platform = Mock()
+        mock_platform.is_iluvatar.return_value = False
+
+        # Create mock IPCSignal that behaves properly
+        mock_ipcsignal = Mock()
+        mock_signal_instance = Mock()
+        mock_signal_instance.value = np.array([0])
+        mock_ipcsignal.return_value = mock_signal_instance
+
+        # Mock envs for FD_SUPPORT_MAX_CONNECTIONS
+        mock_envs = Mock()
+        mock_envs.FD_SUPPORT_MAX_CONNECTIONS = 100
+
         # Mock all the dependencies and external components
-        with patch.multiple(
-            "fastdeploy.entrypoints.engine_client",
-            ModelConfig=Mock,
-            InputPreprocessor=Mock,
-            ZmqIpcClient=Mock,
-            IPCSignal=Mock,
-            StatefulSemaphore=Mock,
-            DealerConnectionManager=Mock,
-            FileLock=Mock,
-            work_process_metrics=Mock(),
+        with (
+            patch.multiple(
+                "fastdeploy.entrypoints.engine_client",
+                ModelConfig=Mock(return_value=mock_model_config),
+                InputPreprocessor=Mock(return_value=mock_input_processor),
+                ZmqIpcClient=Mock,
+                IPCSignal=mock_ipcsignal,
+                StatefulSemaphore=Mock,
+                DealerConnectionManager=Mock,
+                FileLock=Mock,
+                work_process_metrics=Mock(),
+                current_platform=mock_platform,
+                envs=mock_envs,
+            ),
+            patch("os.getenv", return_value="50"),
         ):
             # Create EngineClient instance with mocked dependencies
             self.engine_client = EngineClient(
@@ -186,34 +212,67 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
 
     async def test_init_basic_parameters(self):
         """Test EngineClient initialization with basic parameters."""
-        client = EngineClient(
-            model_name_or_path="test_model",
-            tokenizer=Mock(),
-            max_model_len=2048,
-            tensor_parallel_size=2,
-            pid=5678,
-            port=9090,
-            limit_mm_per_prompt=3,
-            mm_processor_kwargs={"test": "value"},
-            reasoning_parser=None,
-            data_parallel_size=1,
-            enable_logprob=False,
-            workers=2,
-            tool_parser=None,
-            enable_prefix_caching=True,
-            splitwise_role="master",
-            max_processor_cache=100,
-        )
+        # Create a proper ModelConfig mock with enable_mm attribute
+        mock_model_config = Mock()
+        mock_model_config.enable_mm = False
 
-        # Use flexible assertions to handle parameter validation and defaults
-        # The actual values may be adjusted by model constraints or internal logic
-        self.assertGreaterEqual(client.max_model_len, 1024)  # At least minimum expected value
-        self.assertIsNotNone(client.max_model_len)
+        # Create mocks for all the external dependencies
+        mock_input_processor = Mock()
+        mock_processor = Mock()
+        mock_input_processor.create_processor.return_value = mock_processor
 
-        # Verify boolean parameters are processed (allow for internal adjustments)
-        self.assertIsInstance(client.enable_logprob, bool)
-        self.assertIsInstance(client.enable_prefix_caching, bool)
-        self.assertIsInstance(client.enable_splitwise, bool)
+        # Mock current platform
+        mock_platform = Mock()
+        mock_platform.is_iluvatar.return_value = False
+
+        # Create mock IPCSignal that behaves properly
+        mock_ipcsignal = Mock()
+        mock_signal_instance = Mock()
+        mock_signal_instance.value = np.array([0])
+        mock_ipcsignal.return_value = mock_signal_instance
+
+        # Mock envs for FD_SUPPORT_MAX_CONNECTIONS
+        mock_envs = Mock()
+        mock_envs.FD_SUPPORT_MAX_CONNECTIONS = 100
+
+        with (
+            patch.multiple(
+                "fastdeploy.entrypoints.engine_client",
+                ModelConfig=Mock(return_value=mock_model_config),
+                InputPreprocessor=Mock(return_value=mock_input_processor),
+                current_platform=mock_platform,
+                IPCSignal=mock_ipcsignal,
+                StatefulSemaphore=Mock,
+                DealerConnectionManager=Mock,
+                FileLock=Mock,
+                work_process_metrics=Mock(),
+                envs=mock_envs,
+            ),
+            patch("os.getenv", return_value="50"),
+        ):
+            client = EngineClient(
+                model_name_or_path="test_model",
+                tokenizer=Mock(),
+                max_model_len=2048,
+                tensor_parallel_size=2,
+                pid=5678,
+                port=9090,
+                limit_mm_per_prompt=3,
+                mm_processor_kwargs={"test": "value"},
+                reasoning_parser=None,
+                data_parallel_size=1,
+                enable_logprob=False,
+                workers=2,
+                tool_parser=None,
+                enable_prefix_caching=True,
+                splitwise_role="master",
+                max_processor_cache=100,
+            )
+
+        self.assertEqual(client.max_model_len, 2048)
+        self.assertEqual(client.enable_logprob, False)
+        self.assertEqual(client.enable_prefix_caching, True)
+        self.assertEqual(client.enable_splitwise, True)
 
     async def test_format_and_add_data_without_request_id(self):
         """Test format_and_add_data adds request_id when missing."""
@@ -290,7 +349,7 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
 
     async def test_add_requests_with_coroutine_processor(self):
         """Test add_requests with async processor."""
-        task = {"request_id": "test-id", "prompt_token_ids": [1, 2, 3]}
+        task = {"request_id": "test-id", "prompt_token_ids": [1, 2, 3], "max_tokens": 100}
 
         async_mock = AsyncMock()
         self.engine_client.data_processor.process_request_dict = async_mock
@@ -339,7 +398,7 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
 
     async def test_add_requests_with_n_parameter_multiple_requests(self):
         """Test add_requests with n parameter for multiple requests."""
-        task = {"request_id": "test-id_1", "prompt_token_ids": [1, 2, 3], "n": 3}
+        task = {"request_id": "test-id_1", "prompt_token_ids": [1, 2, 3], "n": 3, "max_tokens": 100}
 
         with patch.object(self.engine_client, "_send_task") as mock_send:
             await self.engine_client.add_requests(task)
@@ -422,7 +481,7 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
     def test_valid_parameters_top_logprobs_disabled(self):
         """Test valid_parameters rejects top_logprobs when disabled."""
         self.engine_client.enable_logprob = False
-        data = {"top_logprobs": 5}
+        data = {"logprobs": True, "top_logprobs": 5}
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
@@ -430,7 +489,7 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
     def test_valid_parameters_top_logprobs_invalid_type(self):
         """Test valid_parameters rejects invalid top_logprobs type."""
         self.engine_client.enable_logprob = True
-        data = {"top_logprobs": "invalid"}
+        data = {"logprobs": True, "top_logprobs": "invalid"}
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
@@ -438,7 +497,7 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
     def test_valid_parameters_top_logprobs_negative(self):
         """Test valid_parameters rejects negative top_logprobs."""
         self.engine_client.enable_logprob = True
-        data = {"top_logprobs": -1}
+        data = {"logprobs": True, "top_logprobs": -1}
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
@@ -446,7 +505,7 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
     def test_valid_parameters_top_logprobs_too_large(self):
         """Test valid_parameters rejects top_logprobs > 20."""
         self.engine_client.enable_logprob = True
-        data = {"top_logprobs": 25}
+        data = {"logprobs": True, "top_logprobs": 25}
 
         with self.assertRaises(Exception):  # ParameterError
             self.engine_client.valid_parameters(data)
@@ -454,7 +513,7 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
     def test_valid_parameters_top_logprobs_valid(self):
         """Test valid_parameters accepts valid top_logprobs."""
         self.engine_client.enable_logprob = True
-        data = {"top_logprobs": 10}
+        data = {"logprobs": True, "top_logprobs": 10}
 
         # Should not raise exception
         self.engine_client.valid_parameters(data)
@@ -549,7 +608,8 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
                     mock_prefix_status.UPDATING = 1
 
                     self.engine_client.enable_prefix_caching = True
-                    self.engine_client.model_weights_status_signal.value = np.array([1])
+                    # Start with CLEARED status to enter the updating loop
+                    self.engine_client.model_weights_status_signal.value = np.array([-2])
                     self.engine_client.kv_cache_status_signal.value = np.array([1])
                     self.engine_client.prefix_tree_status_signal.value = np.array([1])
 
@@ -599,6 +659,7 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
         with patch("fastdeploy.entrypoints.engine_client.ModelWeightsStatus") as mock_status:
             with patch("fastdeploy.entrypoints.engine_client.KVCacheStatus") as mock_kv_status:
                 with patch("fastdeploy.entrypoints.engine_client.PrefixTreeStatus") as mock_prefix_status:
+                    mock_status.NORMAL = 0
                     mock_status.CLEARED = -2
                     mock_status.CLEARING = -1
                     mock_kv_status.CLEARED = -2
@@ -607,7 +668,8 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
                     mock_prefix_status.CLEARING = -1
 
                     self.engine_client.enable_prefix_caching = True
-                    self.engine_client.model_weights_status_signal.value = np.array([-1])
+                    # Start with NORMAL status to enter the clearing loop
+                    self.engine_client.model_weights_status_signal.value = np.array([0])
                     self.engine_client.kv_cache_status_signal.value = np.array([-1])
                     self.engine_client.prefix_tree_status_signal.value = np.array([-1])
 
