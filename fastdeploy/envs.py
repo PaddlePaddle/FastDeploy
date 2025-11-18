@@ -160,7 +160,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ENABLE_E2W_TENSOR_CONVERT": lambda: int(os.getenv("FD_ENABLE_E2W_TENSOR_CONVERT", "0")),
     "FD_ENGINE_TASK_QUEUE_WITH_SHM": lambda: int(os.getenv("FD_ENGINE_TASK_QUEUE_WITH_SHM", "0")),
     "FD_ENABLE_PDL": lambda: int(os.getenv("FD_ENABLE_PDL", "1")),
-    "DISABLE_ENGINE_WORKER_ASYNC_TASK_COMM": lambda: int(os.getenv("DISABLE_ENGINE_WORKER_ASYNC_TASK_COMM", 0)) == 1,
+    "DISABLE_ENGINE_WORKER_ASYNC_TASK_COMM": lambda: int(os.getenv("DISABLE_ENGINE_WORKER_ASYNC_TASK_COMM", "0")) == 1,
 }
 
 
