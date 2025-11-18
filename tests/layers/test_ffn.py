@@ -39,6 +39,7 @@ from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.worker.worker_process import init_distributed_environment
 
 paddle.set_default_dtype("bfloat16")
+os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
 
 
 class FFNWrapper(paddle.nn.Layer):
@@ -96,7 +97,7 @@ class TestFusedMoE(unittest.TestCase):
         self.architectures = ["Ernie4_5_MoeForCausalLM"]
         self.hidden_size = 4096
         self.intermediate_size = 2048
-        self.num_layers = 46
+        self.num_layers = 1
         self.hidden_act = "silu"
         self.num_attention_heads = 64
         self.model_config = self.build_model_config()
@@ -131,10 +132,6 @@ class TestFusedMoE(unittest.TestCase):
         init_distributed_environment()
 
         ffn = FFNWrapper(self.model_config)
-
-        # (ZKK): disable this test,
-        # CI machine does not support deepgemm blockwise_fp8, compilation error.
-        # return
 
         moe_cuda_graphs = [None] * 100
         cache_hidden_states = [None] * 100
