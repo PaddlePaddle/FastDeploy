@@ -76,7 +76,6 @@ class GuidedDecoding:
         self.logits_processors: List[Any] = [None] * self.max_num_seqs
         self.reasoning_parser = None
         self._prefill_done_idxs: List[bool] = [False] * self.max_num_seqs
-        self.is_cuda_platform: bool = current_platform.is_cuda()
         # for pd
         self._tokens_to_acc: List[None | List[int]] = [None] * self.max_num_seqs
 
@@ -182,7 +181,18 @@ class GuidedDecoding:
         self._async_batch_fill_token_bitmask(idxs)
 
     def batch_fill_token_bitmask(self, batch: List[int]):
-        """ """
+        """
+        Fills the token bitmask for a batch of logits processor indices.
+
+        This method is typically called asynchronously via a thread pool executor
+        to parallelize the bitmask filling operation. It is important that any
+        shared data structures accessed within this method (such as
+        `self.token_bitmask` and `self.logits_processors`) are thread-safe or
+        properly synchronized to avoid race conditions.
+
+        Args:
+            batch (List[int]): List of indices for which to fill the token bitmask.
+        """
         for idx in batch:
             self.logits_processors[idx].fill_token_bitmask(self.token_bitmask, idx)
 
@@ -203,9 +213,11 @@ class GuidedDecoding:
         """join all async fill futures"""
         for idx, furture in enumerate(self._fillmask_futures):
             if furture is not None:
-                furture.result()
+                try:
+                    furture.result()
+                except Exception as e:
+                    logger.error(f"Exception in async fillmask future at idx {idx}: {e}", exc_info=True)
                 self._fillmask_futures[idx] = None
-
     def accept_tokens_from_prefill_node(self, idx: int):
         """accept prefill token, not future"""
         if self._tokens_to_acc[idx] is not None:
