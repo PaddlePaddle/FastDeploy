@@ -21,7 +21,7 @@ jobs:
 
       - name: Code Checkout
         env:
-          docker_image: vault.habana.ai/gaudi-docker/1.22.0/ubuntu22.04/habanalabs/pytorch-installer-2.7.1:latest
+          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-hpu:latest
         run: |
           REPO="https://github.com/${{ github.repository }}.git"
           FULL_REPO="${{ github.repository }}"
@@ -52,7 +52,7 @@ jobs:
 
       - name: Run CI unittest
         env:
-          docker_image: vault.habana.ai/gaudi-docker/1.22.0/ubuntu22.04/habanalabs/pytorch-installer-2.7.1:latest
+          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-hpu:latest
         run: |
           runner_name="${{ runner.name }}"
           last_char="${runner_name: -1}"
