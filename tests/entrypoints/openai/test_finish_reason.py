@@ -10,6 +10,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     CompletionRequest,
     CompletionResponse,
     DeltaMessage,
+    UsageInfo,
 )
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
@@ -55,6 +56,15 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
         self.engine_client.enable_prefix_caching = False
         self.engine_client.max_model_len = 20
         self.engine_client.data_processor = self.multi_modal_processor
+
+        async def mock_add_data(current_req_dict):
+            if current_req_dict.get("max_tokens") is None:
+                current_req_dict["max_tokens"] = self.engine_client.max_model_len - 1
+            current_req_dict["max_tokens"] = min(
+                self.engine_client.max_model_len - 4, max(0, current_req_dict.get("max_tokens"))
+            )
+
+        self.engine_client.add_requests = AsyncMock(side_effect=mock_add_data)
 
         self.chat_serving = OpenAIServingChat(
             engine_client=self.engine_client,
@@ -246,6 +256,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                     "request_id": "test_chat_0",
                     "max_tokens": case["request"].max_tokens,
                 }
+                await self.engine_client.add_requests(request_dict)
                 processed_req = self.multi_modal_processor.process_request_dict(
                     request_dict, self.engine_client.max_model_len
                 )
@@ -320,6 +331,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                     "multimodal_data": {"image": ["xxx"]},
                     "max_tokens": case["request"].max_tokens,
                 }
+                await self.engine_client.add_requests(request_dict)
                 processed_req = self.multi_modal_processor.process_request_dict(
                     request_dict, self.engine_client.max_model_len
                 )
@@ -429,6 +441,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                     "request_id": "test_chat_stream_0",
                     "max_tokens": case["request"].max_tokens,
                 }
+                await self.engine_client.add_requests(request_dict)
                 processed_req = self.multi_modal_processor.process_request_dict(
                     request_dict, self.engine_client.max_model_len
                 )
@@ -518,6 +531,7 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                     "request_id": "test_completion_stream_0",
                     "max_tokens": case["request"].max_tokens,
                 }
+                await self.engine_client.add_requests(request_dict)
                 processed_req = self.multi_modal_processor.process_request_dict(
                     request_dict, self.engine_client.max_model_len
                 )
@@ -551,7 +565,6 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                         break
 
                 for chunk_str in chunks:
-                    print(chunk_str)
                     if chunk_str.startswith("data: ") and "[DONE]" not in chunk_str:
                         try:
                             json_part = chunk_str.strip().lstrip("data: ")
@@ -563,3 +576,73 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                             continue
 
                 self.assertEqual(final_finish_reason, case["expected_finish_reason"], f"场景 {case['name']} 失败")
+
+    @patch.object(data_processor_logger, "info")
+    @patch("fastdeploy.entrypoints.openai.serving_completion.api_server_logger")
+    async def test_completion_create_max_tokens_list_basic(self, mock_api_logger, mock_data_logger):
+        test_cases = [
+            {
+                "name": "单prompt → max_tokens_list长度1",
+                "request": CompletionRequest(
+                    request_id="test_single_prompt",
+                    model="ernie4.5-vl",
+                    prompt="请介绍人工智能的应用",
+                    stream=False,
+                    max_tokens=10,
+                ),
+                "mock_max_tokens": 8,
+                "expected_max_tokens_list_len": 1,
+                "expected_max_tokens_list": [8],
+            },
+            {
+                "name": "多prompt → max_tokens_list长度2",
+                "request": CompletionRequest(
+                    request_id="test_multi_prompt",
+                    model="ernie4.5-vl",
+                    prompt=["请介绍Python语言", "请说明机器学习的步骤"],
+                    stream=False,
+                    max_tokens=15,
+                ),
+                "mock_max_tokens": [12, 10],
+                "expected_max_tokens_list_len": 2,
+                "expected_max_tokens_list": [12, 10],
+            },
+        ]
+
+        async def mock_format_and_add_data(current_req_dict):
+            req_idx = int(current_req_dict["request_id"].split("_")[-1])
+            if isinstance(case["mock_max_tokens"], list):
+                current_req_dict["max_tokens"] = case["mock_max_tokens"][req_idx]
+            else:
+                current_req_dict["max_tokens"] = case["mock_max_tokens"]
+            return [101, 102, 103, 104]
+
+        self.engine_client.format_and_add_data = AsyncMock(side_effect=mock_format_and_add_data)
+
+        async def intercept_generator(**kwargs):
+            actual_max_tokens_list = kwargs["max_tokens_list"]
+            self.assertEqual(
+                len(actual_max_tokens_list),
+                case["expected_max_tokens_list_len"],
+                f"列表长度不匹配：实际{len(actual_max_tokens_list)}，预期{case['expected_max_tokens_list_len']}",
+            )
+            self.assertEqual(
+                actual_max_tokens_list,
+                case["expected_max_tokens_list"],
+                f"列表元素不匹配：实际{actual_max_tokens_list}，预期{case['expected_max_tokens_list']}",
+            )
+            return CompletionResponse(
+                id=kwargs["request_id"],
+                object="text_completion",
+                created=kwargs["created_time"],
+                model=kwargs["model_name"],
+                choices=[],
+                usage=UsageInfo(prompt_tokens=0, completion_tokens=0, total_tokens=0),
+            )
+
+        self.completion_serving.completion_full_generator = AsyncMock(side_effect=intercept_generator)
+
+        for case in test_cases:
+            with self.subTest(case=case["name"]):
+                result = await self.completion_serving.create_completion(request=case["request"])
+                self.assertIsInstance(result, CompletionResponse)
