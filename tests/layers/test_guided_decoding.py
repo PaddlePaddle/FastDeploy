@@ -29,9 +29,6 @@ class TestGuidedDecoding(unittest.TestCase):
         self.fd_config.scheduler_config = Mock()
         self.fd_config.scheduler_config.max_num_seqs = 5
 
-        self.fd_config.structured_outputs_config = Mock()
-        self.fd_config.structured_outputs_config.fill_bitmask_parallel_batch_size = 4
-
         # 创建GuidedDecoding对象
         self.guided_decoding = GuidedDecoding(self.fd_config)
 

@@ -15,6 +15,7 @@
 """
 
 import multiprocessing
+import os
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, List, Optional
@@ -79,11 +80,7 @@ class GuidedDecoding:
         # for pd
         self._tokens_to_acc: List[None | List[int]] = [None] * self.max_num_seqs
 
-        self.fill_bitmask_parallel_batch_size: int = (
-            fd_config.structured_outputs_config.fill_bitmask_parallel_batch_size
-            if fd_config.structured_outputs_config is not None
-            else 4
-        )
+        self.fill_bitmask_parallel_batch_size: int = int(os.getenv("FD_FILL_BITMASK_BATCH", "4"))
         max_workers = max(
             1,
             min(multiprocessing.cpu_count() // 2, int(self.max_num_seqs) / int(self.fill_bitmask_parallel_batch_size)),
@@ -218,6 +215,7 @@ class GuidedDecoding:
                 except Exception as e:
                     logger.error(f"Exception in async fillmask future at idx {idx}: {e}", exc_info=True)
                 self._fillmask_futures[idx] = None
+
     def accept_tokens_from_prefill_node(self, idx: int):
         """accept prefill token, not future"""
         if self._tokens_to_acc[idx] is not None:
