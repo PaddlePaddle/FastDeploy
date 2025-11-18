@@ -1926,7 +1926,12 @@ class GPUModelRunner(ModelRunnerBase):
                     else:
                         assert batch_size % 2 == 0
                         self._dummy_run(
-                            num_tokens=self.scheduler_config.max_num_batched_tokens,
+                            num_tokens=(
+                                self.scheduler_config.max_num_seqs
+                                * (self.speculative_config.num_speculative_tokens + 1)
+                                if self.scheduler_config.splitwise_role == "decode"
+                                else self.scheduler_config.max_num_batched_tokens
+                            ),
                             batch_size=int(batch_size / 2),
                             in_capturing=True,
                             expected_decode_len=1,
@@ -1943,7 +1948,11 @@ class GPUModelRunner(ModelRunnerBase):
                         else:
                             assert batch_size % 2 == 0
                             self._dummy_run(
-                                num_tokens=self.scheduler_config.max_num_batched_tokens,
+                                num_tokens=(
+                                    self.scheduler_config.max_num_seqs
+                                    if self.scheduler_config.splitwise_role == "decode"
+                                    else self.scheduler_config.max_num_batched_tokens
+                                ),
                                 batch_size=int(batch_size / 2),
                                 in_capturing=True,
                                 expected_decode_len=3,
@@ -1955,7 +1964,11 @@ class GPUModelRunner(ModelRunnerBase):
                     # Capture Draft Model with bsz 1
                     if 1 in capture_sizes:
                         self._dummy_run(
-                            num_tokens=self.scheduler_config.max_num_batched_tokens,
+                            num_tokens=(
+                                self.scheduler_config.max_num_seqs
+                                if self.scheduler_config.splitwise_role == "decode"
+                                else self.scheduler_config.max_num_batched_tokens
+                            ),
                             batch_size=int(1),
                             in_capturing=True,
                             expected_decode_len=3,
@@ -1968,7 +1981,11 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 for batch_size in sorted(capture_sizes, reverse=True):
                     self._dummy_run(
-                        num_tokens=self.scheduler_config.max_num_batched_tokens,
+                        num_tokens=(
+                            self.scheduler_config.max_num_seqs
+                            if self.scheduler_config.splitwise_role == "decode"
+                            else self.scheduler_config.max_num_batched_tokens
+                        ),
                         batch_size=batch_size,
                         in_capturing=True,
                         expected_decode_len=expected_decode_len,
@@ -2001,7 +2018,11 @@ class GPUModelRunner(ModelRunnerBase):
         start_time = time.perf_counter()
         for batch_size in self.sot_warmup_sizes:
             self._dummy_run(
-                num_tokens=self.scheduler_config.max_num_batched_tokens,
+                num_tokens=(
+                    self.scheduler_config.max_num_seqs
+                    if self.scheduler_config.splitwise_role == "decode"
+                    else self.scheduler_config.max_num_batched_tokens
+                ),
                 batch_size=batch_size,
             )
             logger.info(f"SOT warmup the model with the batch size:{batch_size}")

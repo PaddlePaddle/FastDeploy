@@ -252,9 +252,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 
-        completion_token_len = 0
         if request.get("completion_token_ids"):
-            completion_token_len = len(request.get("completion_token_ids"))
             self.append_completion_tokens(outputs, request["completion_token_ids"])
 
         outputs = self.pack_outputs(outputs)
@@ -271,9 +269,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
             tmp_max_tokens = request["max_tokens"]
         else:
-            tmp_max_tokens = min(
-                max_model_len - len(request["prompt_token_ids"]), max(0, request["max_tokens"] - completion_token_len)
-            )
+            request["max_tokens"] = min(max_model_len - len(request["prompt_token_ids"]), request["max_tokens"])
         if request.get("reasoning_max_tokens") is None:
             request["reasoning_max_tokens"] = max(int(tmp_max_tokens * 0.8), 1)
         data_processor_logger.info(f"Processed request {request}")
