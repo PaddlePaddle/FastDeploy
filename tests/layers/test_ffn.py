@@ -39,7 +39,9 @@ from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.worker.worker_process import init_distributed_environment
 
 paddle.set_default_dtype("bfloat16")
-os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
+if "h20" in paddle.device.cuda.get_device_name().lower():
+    # (ZKK): CI machine.
+    os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
 
 
 class FFNWrapper(paddle.nn.Layer):
