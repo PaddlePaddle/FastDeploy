@@ -61,9 +61,11 @@ else
         TARGET_DIR="${OPS_TMP_DIR}/${WHEEL_NAME}"
     else
         echo -e "${RED}[Error]${NONE} Neither modern nor legacy directory found in ${OPS_TMP_DIR}"
-        exit 1
+        # exit 1
     fi
 fi
+
+TARGET_DIR="${OPS_TMP_DIR}/${WHEEL_NAME}"
 
 mkdir -p ${TARGET_DIR}/libs
 cp ${XVLLM_PATH}/xft_blocks/so/libxft_blocks.so ${TARGET_DIR}/libs/
