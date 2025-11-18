@@ -78,7 +78,7 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         )
 
         async def mock_chat_completion_full_generator(
-            request, request_id, model_name, prompt_token_ids, prompt_tokens
+            request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens_list
         ):
             return prompt_token_ids
 
@@ -106,7 +106,7 @@ class TestLodChatTemplate(unittest.IsolatedAsyncioTestCase):
         )
 
         async def mock_chat_completion_full_generator(
-            request, request_id, model_name, prompt_token_ids, prompt_tokens
+            request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens_list
         ):
             return prompt_token_ids
 

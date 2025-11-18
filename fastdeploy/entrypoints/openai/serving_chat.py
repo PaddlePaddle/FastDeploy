@@ -126,6 +126,7 @@ class OpenAIServingChat:
                 request_id = f"chatcmpl-{uuid.uuid4()}"
             api_server_logger.info(f"create chat completion request: {request_id}")
             prompt_tokens = None
+            max_tokens = None
             try:
                 current_req_dict = request.to_dict_for_infer(f"{request_id}_0")
                 if "chat_template" not in current_req_dict:
@@ -134,6 +135,7 @@ class OpenAIServingChat:
                 # preprocess the req_dict
                 prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)
                 prompt_tokens = current_req_dict.get("prompt_tokens")
+                max_tokens = current_req_dict.get("max_tokens")
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
             except ParameterError as e:
@@ -151,12 +153,12 @@ class OpenAIServingChat:
 
             if request.stream:
                 return self.chat_completion_stream_generator(
-                    request, request_id, request.model, prompt_token_ids, prompt_tokens
+                    request, request_id, request.model, prompt_token_ids, prompt_tokens, max_tokens
                 )
             else:
                 try:
                     return await self.chat_completion_full_generator(
-                        request, request_id, request.model, prompt_token_ids, prompt_tokens
+                        request, request_id, request.model, prompt_token_ids, prompt_tokens, max_tokens
                     )
                 except Exception as e:
                     error_msg = f"request[{request_id}]full generator error: {str(e)}, {str(traceback.format_exc())}"
@@ -184,6 +186,7 @@ class OpenAIServingChat:
         model_name: str,
         prompt_token_ids: list(),
         prompt_tokens: str,
+        max_tokens: int,
     ):
         """
         Streaming chat completion generator.
@@ -382,9 +385,7 @@ class OpenAIServingChat:
                         work_process_metrics.e2e_request_latency.observe(
                             time.time() - res["metrics"]["request_start_time"]
                         )
-                        has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
-                        max_tokens = request.max_completion_tokens or request.max_tokens
-                        if has_no_token_limit or previous_num_tokens[idx] != max_tokens:
+                        if previous_num_tokens[idx] != max_tokens:
                             choice.finish_reason = "stop"
                             if tool_called[idx]:
                                 choice.finish_reason = "tool_calls"
@@ -461,6 +462,7 @@ class OpenAIServingChat:
         model_name: str,
         prompt_token_ids: list(),
         prompt_tokens: str,
+        max_tokens: int,
     ):
         """
         Full chat completion generator.
@@ -570,6 +572,7 @@ class OpenAIServingChat:
                             num_image_tokens=num_image_tokens,
                             logprob_contents=logprob_contents,
                             response_processor=response_processor,
+                            max_tokens=max_tokens,
                         )
                         choices.append(choice)
         finally:
@@ -620,6 +623,7 @@ class OpenAIServingChat:
         num_image_tokens: list,
         logprob_contents: list,
         response_processor: ChatResponseProcessor,
+        max_tokens: int,
     ) -> ChatCompletionResponseChoice:
         idx = int(data["request_id"].split("_")[-1])
         output = data["outputs"]
@@ -646,15 +650,13 @@ class OpenAIServingChat:
         if logprob_contents[idx]:
             logprobs_full_res = LogProbs(content=logprob_contents[idx])
 
-        has_no_token_limit = request.max_tokens is None and request.max_completion_tokens is None
-        max_tokens = request.max_completion_tokens or request.max_tokens
         num_cached_tokens[idx] = data.get("num_cached_tokens", 0)
         num_input_image_tokens[idx] = data.get("num_input_image_tokens", 0)
         num_input_video_tokens[idx] = data.get("num_input_video_tokens", 0)
         num_image_tokens[idx] = output.get("num_image_tokens", 0)
 
         finish_reason = "stop"
-        if has_no_token_limit or previous_num_tokens != max_tokens:
+        if previous_num_tokens != max_tokens:
             finish_reason = "stop"
             if output.get("tool_call"):
                 finish_reason = "tool_calls"

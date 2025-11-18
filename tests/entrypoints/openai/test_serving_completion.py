@@ -159,6 +159,7 @@ class TestOpenAIServingCompletion(unittest.TestCase):
             prompt_batched_token_ids=prompt_batched_token_ids,
             completion_batched_token_ids=completion_batched_token_ids,
             prompt_tokens_list=["1", "1"],
+            max_tokens_list=[10, 10],
         )
 
         assert completion_response.id == request_id
