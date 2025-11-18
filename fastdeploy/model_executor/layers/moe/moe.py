@@ -182,11 +182,18 @@ class FusedMoE(nn.Layer):
         self._dtype = self._helper.get_default_dtype()
         self.weight_dtype = self._dtype
 
+        self.is_quantized = fd_config.model_config.is_quantized and not (
+            fd_config.quant_config.name() == "mix_quant" and fd_config.quant_config.moe_quant_type is None
+        )
         moe_quant_config = fd_config.quant_config
         self.moe_quant_config = moe_quant_config
         self.moe_quant_type = None
-        if moe_quant_config:
-            self.quant_method = moe_quant_config.get_quant_method(self)
+        if moe_quant_config and self.is_quantized:
+            self.quant_method = (
+                moe_quant_config.get_quant_method(self)
+                if moe_quant_config.get_quant_method(self)
+                else get_moe_method()
+            )
             self.moe_quant_type = moe_quant_config.name()
         else:
             self.quant_method = get_moe_method()
@@ -559,10 +566,7 @@ class FusedMoE(nn.Layer):
         """
         load_state_dict function.
         """
-        if self.fd_config.model_config.is_quantized and not (
-            self.fd_config.quant_config.name() == "mix_quant"
-            and self.fd_config.quant_config.dense_quant_type == "w16a16"
-        ):
+        if self.is_quantized:
             if getattr(self.fd_config.quant_config, "is_permuted", True):
                 self.quant_method.process_prequanted_weights(self, state_dict, is_rearrange)
             else:

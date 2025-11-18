@@ -118,7 +118,6 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
     from .kv_cache import KvCacheQuantConfig
     from .mix_quant import MixQuantConfig
     from .tensor_wise_fp8 import TensorWiseFP8Config
-    from .unquantized import UnquantizedConfig
     from .w4a8 import W4A8Config
     from .w4afp8 import W4AFP8Config
     from .w8a8 import W8A8Config
@@ -139,7 +138,6 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
         "tensor_wise_fp8": TensorWiseFP8Config,
         "kvcache": KvCacheQuantConfig,
         "mix_quant": MixQuantConfig,
-        "w16a16": UnquantizedConfig,
     }
 
     return method_to_config[quantization]
