@@ -22,7 +22,7 @@
 #include "paddle/extension.h"
 
 #define MAX_BSZ 256
-#define MAX_DRAFT_TOKENS 6
+#define MAX_DRAFT_TOKENS 2
 
 // TODO: replace all msgdata in speculate-decoding
 struct speculate_msgdata {
