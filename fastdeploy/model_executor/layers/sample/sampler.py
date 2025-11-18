@@ -15,7 +15,6 @@
 """
 
 import multiprocessing
-import os
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, List, Optional
@@ -26,6 +25,7 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
+from fastdeploy.envs import FD_FILL_BITMASK_BATCH
 from fastdeploy.model_executor.guided_decoding import LogitsProcessorBase
 from fastdeploy.model_executor.layers.sample.early_stopper import (
     get_early_stopper_cls_from_stragegy,
@@ -80,7 +80,7 @@ class GuidedDecoding:
         # for pd
         self._tokens_to_acc: List[None | List[int]] = [None] * self.max_num_seqs
 
-        self.fill_bitmask_parallel_batch_size: int = int(os.getenv("FD_FILL_BITMASK_BATCH", "4"))
+        self.fill_bitmask_parallel_batch_size: int = FD_FILL_BITMASK_BATCH
         max_workers = max(
             1,
             min(multiprocessing.cpu_count() // 2, int(self.max_num_seqs) / int(self.fill_bitmask_parallel_batch_size)),
