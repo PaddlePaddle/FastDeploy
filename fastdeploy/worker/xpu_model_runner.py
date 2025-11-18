@@ -1124,7 +1124,6 @@ class XPUModelRunner(ModelRunnerBase):
         self._dummy_prefill_inputs(num_tokens, batch_size)
 
         while True:
-            return None
             self.execute_model(is_dummy_run=True)
 
             if int((self.share_inputs["seq_lens_this_time"] > 0).sum()) == 0:
