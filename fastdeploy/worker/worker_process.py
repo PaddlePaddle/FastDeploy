@@ -17,6 +17,7 @@
 import argparse
 import json
 import os
+import threading
 import time
 from multiprocessing import shared_memory
 from typing import Tuple
@@ -159,26 +160,48 @@ class PaddleDisWorkerProc:
 
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
 
-    def _exist_tasks_from_engine(self):
+        # synced requests from engine
+        self.local_synced_requests = None
+        # flag to determin if all tp process synced
+        self.all_local_tp_synced = False
+
+    def _exist_requests_from_engine(self):
         """
-        Check if there exists new tasks sent from engine process
+        Check if there exists new requests sent from engine process
         """
         if envs.DISABLE_ENGINE_WORKER_ASYNC_TASK_COMM:
             return self.task_queue.num_tasks() > 0
         else:
-            return self.local_synced_tasks is not None
+            return self.local_synced_requests is not None
 
-    def _get_tasks_from_engine(self):
+    def _get_requests_from_engine(self):
         """
-        Get new tasks that sent from engine process
+        Get new requests that sent from engine process
         """
         if envs.DISABLE_ENGINE_WORKER_ASYNC_TASK_COMM:
             return self.task_queue.get_tasks()
         else:
-            new_tasks, read_finished = self.local_synced_tasks, self.all_local_tp_synced
-            self.local_synced_tasks = None
+            new_requests, read_finished = self.local_synced_requests, self.all_local_tp_synced
+            self.local_synced_requests = None
             self.all_local_tp_synced = False
-            return new_tasks, read_finished
+            return new_requests, read_finished
+
+    def _sync_requests_from_engine_loop(self):
+        """
+        A thread that keeps sync all the new requests from engine process to worker process.
+        This function must be called in `event_loop_normal` since the `task_queue` is available
+        in that function.
+        """
+        try:
+            while True:
+                if self.local_synced_requests is None and self.task_queue.num_tasks() > 0:
+                    self.local_synced_requests, self.all_local_tp_synced = self.task_queue.get_tasks()
+        except Exception as e:
+            logger.error(
+                "There's unexcepted issue happend to get tasks from engine, this will cause the worker process cannot insert any new request! error={}".format(
+                    e
+                )
+            )
 
     def init_health_status(self) -> None:
         """
@@ -304,6 +327,8 @@ class PaddleDisWorkerProc:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
+        sync_request_thread = threading.Thread(target=self._sync_requests_from_engine_loop, daemon=True)
+        sync_request_thread.start()
         if self.eplb_config.enable_redundant_experts:
             self.last_dump_expert_workload_ts = 0
             self.experts_manager = RedundantExpertManager(
