@@ -59,10 +59,10 @@ def get_moe_method():
 
     elif current_platform.is_maca():
         from fastdeploy.model_executor.layers.backends import (
-            MetaxCutlassWeightOnlyMoEMethod,
+            MetaxCutlassUnquantizedFusedMoEMethod,
         )
 
-        return MetaxCutlassWeightOnlyMoEMethod(None)
+        return MetaxCutlassUnquantizedFusedMoEMethod(None)
     raise NotImplementedError
 
 
@@ -227,7 +227,7 @@ class FusedMoE(nn.Layer):
             return
         if hasattr(param, "SHARD_ID_TO_SHARDED_DIM"):
             SHARD_ID_TO_SHARDED_DIM = param.SHARD_ID_TO_SHARDED_DIM
-        elif current_platform.is_cuda() or current_platform.is_iluvatar():
+        elif current_platform.is_cuda() or current_platform.is_iluvatar() or current_platform.is_maca():
             SHARD_ID_TO_SHARDED_DIM = {"gate": 1, "down": 0, "up": 1}
         else:
             SHARD_ID_TO_SHARDED_DIM = {"gate": 0, "down": 1, "up": 0}
