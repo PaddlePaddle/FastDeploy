@@ -717,6 +717,7 @@ inline bool getBoolEnv(char const *name) {
 
 bool getEnvEnablePDL();
 
+#ifndef PADDLE_WITH_COREX
 template <typename KernelFn, typename... Args>
 inline void launchWithPdlWhenEnabled(KernelFn kernelFn,
                                      dim3 grid,
@@ -738,3 +739,4 @@ inline void launchWithPdlWhenEnabled(KernelFn kernelFn,
 
   cudaLaunchKernelEx(&kernelConfig, kernelFn, std::forward<Args>(args)...);
 }
+#endif
