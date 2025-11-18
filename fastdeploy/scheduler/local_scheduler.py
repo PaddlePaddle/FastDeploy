@@ -342,12 +342,16 @@ class LocalScheduler:
             batch_responses_per_step = self.batch_responses_per_step
             self.responses = dict()
             self.batch_responses_per_step = list()
+            if not responses:
+                return None  # No response yet
             return responses, batch_responses_per_step
 
         with self.responses_not_empty:
-            responses, batch_responses_per_step = self.responses_not_empty.wait_for(
-                _get_results, self.wait_response_timeout
-            )
+            wait_response_result = self.responses_not_empty.wait_for(_get_results, self.wait_response_timeout)
+            if wait_response_result is not None:
+                responses, batch_responses_per_step = wait_response_result
+            else:
+                responses, batch_responses_per_step = dict(), list()
 
             results = dict()
             for request_id, resps in responses.items():
