@@ -47,8 +47,14 @@ class TestMTPProposer(unittest.TestCase):
         self.mock_fd_config.speculative_config.model = "test_model"
         self.mock_fd_config.speculative_config.quantization = ""
         self.mock_fd_config.speculative_config.method = "mtp"
+        self.mock_fd_config.speculative_config.num_speculative_tokens = 8
+        self.mock_fd_config.speculative_config.num_model_steps = 4
+        self.mock_fd_config.speculative_config.max_ngram_size = 4
+        self.mock_fd_config.speculative_config.min_ngram_size = 2
         self.mock_fd_config.scheduler_config = MagicMock()
         self.mock_fd_config.scheduler_config.splitwise_role = "mixed"
+        self.mock_fd_config.scheduler_config.max_num_seqs = 8
+        self.mock_fd_config.scheduler_config.max_num_batched_tokens = 4096
         self.mock_fd_config.cache_config = MagicMock()
         self.mock_fd_config.cache_config.block_size = 16
         self.mock_fd_config.cache_config.enc_dec_block_num = 0
