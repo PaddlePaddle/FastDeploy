@@ -539,7 +539,7 @@ class TestFusedMoE(unittest.TestCase):
         self.moe_intermediate_size = 2048
         self.moe_num_experts = 160
         self.moe_k = 8
-        self.num_layers = 1
+        self.num_layers = 2
         self.num_attention_heads = -1
         self.model_config = self.build_model_config()
 
