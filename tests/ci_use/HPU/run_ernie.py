@@ -11,42 +11,36 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import os
 
 import openai
 
 
-def test_45vl():
+def test_hpu():
     ip = "0.0.0.0"
-    xpu_id = int(os.getenv("XPU_ID", "0"))
-    service_http_port = 8188 + xpu_id * 100  # 服务配置的
+    service_http_port = os.getenv("FD_API_PORT", "8388")  # service port
     client = openai.Client(base_url=f"http://{ip}:{service_http_port}/v1", api_key="EMPTY_API_KEY")
-    # 非流式对话
+
+    # chat
     response = client.chat.completions.create(
         model="default",
         messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg"
-                        },
-                    },
-                    {"type": "text", "text": "图片中的文物来自哪个时代？"},
-                ],
-            },
+            {"role": "user", "content": "The largest ocean is"},
         ],
         temperature=1,
         top_p=0,
-        max_tokens=70,
+        max_tokens=64,
         stream=False,
     )
-    print(response.choices[0].message.content)
-    # print(base_response)
-    assert any(keyword in response.choices[0].message.content for keyword in ["北魏", "北齐", "释迦牟尼"])
+    print(f"response is: {response}", flush=True)
+
+    generate_context = response.choices[0].message.content
+    print(f"\ngenerate_context is: {generate_context}", flush=True)
+
+    assert "pacific ocean" in generate_context.lower(), "The answer was incorrect!"
+    print("Test successfully!", flush=True)
 
 
 if __name__ == "__main__":
-    test_45vl()
+    test_hpu()
