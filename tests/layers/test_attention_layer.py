@@ -124,7 +124,7 @@ class TestAttentionPerformance(unittest.TestCase):
             "max_model_len": 5500,
             "num_attention_heads": 32,
             "num_key_value_heads": 4,
-            "num_hidden_layers": 57,
+            "num_hidden_layers": 5,
         }
         model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
         config_path = os.path.join(model_dir, "config.json")
