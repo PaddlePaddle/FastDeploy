@@ -166,8 +166,8 @@ nav:
       - Overview: cli/README.md
       - Chat: cli/chat.md
       - Complete: cli/complete.md
-      - Server: cli/server.md
-      - Collect Env: cli/collect_env.md
+      - Server: cli/serve.md
+      - Collect Env: cli/collect-env.md
       - Bench: cli/bench.md
-      - Run Batch: cli/run_batch.md
+      - Run Batch: cli/run-batch.md
       - Tokenizer: cli/tokenizer.md
