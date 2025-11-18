@@ -1,0 +1,108 @@
+name: Coverage Combine
+description: "Coverage Combine And Check"
+
+on:
+  workflow_call:
+    inputs:
+      GPU_COV_FILE_URL:
+        description: "URL of the compressed GPU Coverage Data archive."
+        required: true
+        type: string
+      XPU_COV_FILE_URL:
+        description: "URL of the compressed GPU Coverage Data archive."
+        required: true
+        type: string
+      CACHE_DIR:
+        description: "Cache Dir Use"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      github-token:
+        required: true
+
+
+jobs:
+  coverage_combine:
+    name: Coverage Combine And Check
+    env:
+      gpu_cov_file_url: ${{ inputs.GPU_COV_FILE_URL }}
+      xpu_cov_file_url: ${{ inputs.XPU_COV_FILE_URL }}
+      IS_PR: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone FastDeploy
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          submodules: recursive
+          fetch-depth: 0
+      - name: Fetch base branch
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1000
+          # 找到最后共同节点
+          MERGE_BASE=$(git merge-base origin/${{ github.event.pull_request.base.ref }} ${{ github.event.pull_request.head.sha }})
+          # 生成 diff 文件
+          git diff ${MERGE_BASE} ${{ github.event.pull_request.head.sha }} --unified=0 > diff.txt
+          cat diff.txt
+      - name: Python Setup
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: coverage file download and combine
+        shell: bash
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          git log -n 3
+          python -m pip install coverage diff-cover
+          mkdir coveragedata
+          if [ -z "${gpu_cov_file_url}" ]; then
+            echo "No diff coverage file URL provided."
+          else
+            wget -q ${gpu_cov_file_url}
+            gpu_cov_file=$(basename "$gpu_cov_file_url")
+            tar -xf ${gpu_cov_file} -C coveragedata
+          fi
+          if [ -z "${xpu_cov_file_url}" ]; then
+            echo "No diff coverage file URL provided."
+          else
+            wget -q ${xpu_cov_file_url}
+            xpu_cov_file=$(basename "$xpu_cov_file_url")
+            tar -xf ${xpu_cov_file} -C coveragedata
+          fi
+          export COVERAGE_FILE=coveragedata/.coverage
+          export COVERAGE_RCFILE=./scripts/.coveragerc
+          export COVERAGE_IGNORE_ERRORS=True
+          coverage combine coveragedata/
+          coverage report --ignore-errors
+          coverage xml -o python_coverage_all.xml --ignore-errors
+          COVERAGE_EXIT_CODE=0
+          set -x
+          if [[ "$IS_PR" == "true" ]]; then
+            diff-cover python_coverage_all.xml --diff-file=diff.txt --fail-under=80 --json-report diff_coverage.json || COVERAGE_EXIT_CODE=9
+            python scripts/generate_diff_coverage_xml.py diff.txt python_coverage_all.xml
+            filename=diff_coverage.json
+          else
+            echo "Not a PR, skipping diff-cover"
+          fi
+          if [[ -f diff_coverage.json ]]; then
+              echo "====== Diff Coverage JSON ======"
+              if command -v jq >/dev/null 2>&1; then
+                  jq . diff_coverage.json
+              else
+                  cat diff_coverage.json
+              fi
+              echo "================================"
+          fi
+          exit "$COVERAGE_EXIT_CODE"
+      - name: Upload diff coverage report
+        if: always() && hashFiles('diff_coverage.xml') != ''
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./diff_coverage.xml
+          codecov_yml_path: ./scripts/codecov.yml
+          name: python diff coverage
+          verbose: true
+          flags: diff

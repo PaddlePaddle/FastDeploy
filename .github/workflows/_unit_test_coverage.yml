@@ -27,6 +27,10 @@ on:
         required: false
         type: string
         default: ""
+    outputs:
+      gpu_cov_file_url:
+        description: "Output path of the GPU tests"
+        value: ${{ jobs.run_tests_with_coverage.outputs.gpu_cov_file_url }}
     secrets:
       github-token:
         required: true
@@ -44,9 +48,8 @@ jobs:
     timeout-minutes: 90
     needs: check_cov_skip
     outputs:
-      diff_cov_file_url: ${{ steps.cov_upload.outputs.diff_cov_file_url }}
+      gpu_cov_file_url: ${{ steps.cov_upload.outputs.gpu_cov_file_url }}
       unittest_failed_url: ${{ steps.cov_upload.outputs.unittest_failed_url }}
-      diff_cov_result_json_url: ${{ steps.cov_upload.outputs.diff_cov_result_json_url }}
     steps:
       - name: Code Prepare
         shell: bash
@@ -189,114 +192,47 @@ jobs:
           else
               echo "Warning: tests/plugins directory not found, skipping setup.py install"
           fi
-          export COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage
+          export COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage.gpu
           export COVERAGE_RCFILE=/workspace/FastDeploy/scripts/.coveragerc
           TEST_EXIT_CODE=0
           bash scripts/coverage_run.sh || TEST_EXIT_CODE=8
           echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> exit_code.env
+          tar -cvf gpu_coverage.tar -C coveragedata .
           coverage combine coveragedata/ || echo "No data to combine"
           coverage report
-          coverage xml -o python_coverage_all.xml
-          COVERAGE_EXIT_CODE=0
-          if [[ "$IS_PR" == "true" ]]; then
-            echo "Running diff coverage for PR..."
-            diff-cover python_coverage_all.xml --diff-file=diff.txt --fail-under=80 --json-report diff_coverage.json || COVERAGE_EXIT_CODE=9
-            python scripts/generate_diff_coverage_xml.py diff.txt python_coverage_all.xml
-          else
-            echo "Running full coverage"
-            coverage report -m > full_coverage_report.txt
-            python scripts/generate_full_coverage_csv.py full_coverage_report.txt full_coverage_report.csv
-          fi
-          echo "COVERAGE_EXIT_CODE=${COVERAGE_EXIT_CODE}" >> exit_code.env
           '
           if [ -f FastDeploy/exit_code.env ]; then
             cat FastDeploy/exit_code.env >> $GITHUB_ENV
           fi
-      - name: Upload coverage and unit test results to BOS
+
+      - name: Upload unit resule and diff coverage to bos
         id: cov_upload
         shell: bash
-        env:
-          IS_PR: ${{ github.event_name == 'pull_request' }}
-          GITHUB_SHA: ${{ github.sha }}
-          BRANCH: ${{ github.ref_name }}
-          PR_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           cd FastDeploy
-          python -m pip install -q bce-python-sdk==0.9.29
-          wget -q --no-proxy --no-check-certificate \
-            https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py \
-            -O bos_tools.py
+          commit_id=${{ github.event.pull_request.head.sha }}
+          pr_num=${{ github.event.pull_request.number }}
+          target_path=paddle-github-action/PR/FastDeploy/${pr_num}/${commit_id}/GPU
+          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py -O bos_tools.py
           push_file=$(realpath bos_tools.py)
-
-          if [[ "$IS_PR" == "true" ]]; then
-            commit_id=${PR_COMMIT_SHA}
-            pr_num=${PR_NUMBER}
-            target_path=paddle-github-action/PR/FastDeploy/${pr_num}/${commit_id}/SM${compile_arch//,/_}
-          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
-            commit_id=${{ github.sha }}
-            tag_name=${{ github.ref_name }}
-            target_path=paddle-github-action/TAG/FastDeploy/${tag_name}/${commit_id}/SM${compile_arch//,/_}
-            target_path_latest=paddle-github-action/TAG/FastDeploy/${tag_name}/latest/SM${compile_arch//,/_}
-            target_path_stripped_latest="${target_path_latest#paddle-github-action/}"
-          else
-            commit_id=${{ github.sha }}
-            branch_name=${{ github.ref_name }}
-            target_path=paddle-github-action/BRANCH/FastDeploy/${branch_name}/${commit_id}/SM${compile_arch//,/_}
-            target_path_latest=paddle-github-action/BRANCH/FastDeploy/${branch_name}/latest/SM${compile_arch//,/_}
-            target_path_stripped_latest="${target_path_latest#paddle-github-action/}"
+          python -m pip install bce-python-sdk==0.9.29
+          cov_file="gpu_coverage.tar"
+          if [ -f ${cov_file} ];then
+            python ${push_file} ${cov_file} ${target_path}/CoverageData
+            target_path_stripped="${target_path#paddle-github-action/}"
+            GPU_COV_FILE_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${cov_file}
+            echo "gpu_cov_file_url=${GPU_COV_FILE_URL}" >> $GITHUB_OUTPUT
           fi
 
-          target_path_stripped="${target_path#paddle-github-action/}"
-
-          if [[ "$IS_PR" == "true" ]]; then
-            diff_cov_file="diff_coverage.xml"
-            if [ -f ${diff_cov_file} ]; then
-              python ${push_file} ${diff_cov_file} ${target_path}/CoverageData
-              DIFF_COV_FILE_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${diff_cov_file}
-              echo "diff_cov_file_url=${DIFF_COV_FILE_URL}" >> $GITHUB_OUTPUT
-              echo "diff_cov_file_url=${DIFF_COV_FILE_URL}" >> $GITHUB_ENV
-            fi
-
-            diff_cov_result_json="diff_coverage.json"
-            if [ -f ${diff_cov_result_json} ]; then
-              python ${push_file} ${diff_cov_result_json} ${target_path}/CoverageData
-              DIFF_COV_JSON_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${diff_cov_result_json}
-              echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_OUTPUT
-              echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_ENV
-            fi
-          fi
-
-          HAS_FAILED_TESTS=false
           unittest_result="failed_tests.log"
-          if [ -s ${unittest_result} ]; then
-            HAS_FAILED_TESTS=true
+          if [ -s ${unittest_result} ];then
             python ${push_file} ${unittest_result} ${target_path}/UnitTestResult
+            target_path_stripped="${target_path#paddle-github-action/}"
             UNIT_TEST_RESULT_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/UnitTestResult/${unittest_result}
             echo "unittest_failed_url=${UNIT_TEST_RESULT_URL}" >> $GITHUB_OUTPUT
             echo "unittest_failed_url=${UNIT_TEST_RESULT_URL}" >> $GITHUB_ENV
           fi
 
-          if [[ "$IS_PR" != "true" ]]; then
-            full_cov_file="full_coverage_report.txt"
-            full_cov_csv="full_coverage_report.csv"
-
-            if [ -f ${full_cov_file} ]; then
-              python ${push_file} ${full_cov_file} ${target_path}/CoverageData
-              python ${push_file} ${full_cov_file} ${target_path_latest}/CoverageData
-              FULL_COV_FILE_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${full_cov_file}
-              echo "full_coverage_report_url=${FULL_COV_FILE_URL}" >> $GITHUB_OUTPUT
-              echo "full_coverage_report_url=${FULL_COV_FILE_URL}" >> $GITHUB_ENV
-            fi
-
-            if [ "$HAS_FAILED_TESTS" = false ] && [ -f ${full_cov_csv} ]; then
-              python ${push_file} ${full_cov_csv} ${target_path}/CoverageData
-              python ${push_file} ${full_cov_csv} ${target_path_latest}/CoverageData
-              FULL_COV_CSV_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${full_cov_csv}
-              echo "full_coverage_csv_url=${FULL_COV_CSV_URL}" >> $GITHUB_OUTPUT
-              echo "full_coverage_csv_url=${FULL_COV_CSV_URL}" >> $GITHUB_ENV
-            fi
-          fi
       - name: Check Unit Test Success
         shell: bash
         run: |
@@ -317,62 +253,3 @@ jobs:
             exit "$TEST_EXIT_CODE"
           fi
           echo "All tests passed"
-
-      - name: Verify Code Coverage Threshold (80%)
-        if: ${{ github.event_name == 'pull_request' && (needs.check_cov_skip.outputs['can-skip'] != 'true') }}
-        shell: bash
-        run: |
-          cd FastDeploy
-          if [ "$COVERAGE_EXIT_CODE" -eq 9 ]; then
-            echo "Coverage generation failed (exit code 9)"
-            filename=$(basename "$diff_cov_result_json_url")
-            if [ -z "${diff_cov_result_json_url}" ]; then
-              echo "No diff cov result file URL provided."
-            else
-              rm -rf "${filename}"
-              wget -O ${filename} ${diff_cov_result_json_url} || echo "Download cov json file failed, but continuing..."
-            fi
-            if [ -f "${filename}" ];then
-              echo "Failed test cases:"
-              if command -v jq >/dev/null 2>&1; then
-                  jq . "${filename}"
-              else
-                  cat "${filename}"
-              fi
-            fi
-            exit "$COVERAGE_EXIT_CODE"
-          fi
-          echo "coverage passed"
-          exit 0
-
-  diff_coverage_report:
-    needs: run_tests_with_coverage
-    if: always()
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
-    steps:
-      - name: coverage diff file download
-        shell: bash
-        env:
-          diff_cov_file_url: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url }}
-        run: |
-          wget -q --no-proxy ${fd_archive_url}
-          tar -xf FastDeploy.tar.gz
-          cd FastDeploy
-          if [ -z "${diff_cov_file_url}" ]; then
-            echo "No diff coverage file URL provided."
-            exit 0
-          fi
-          wget "${diff_cov_file_url}" -O ./diff_coverage.xml || echo "Download cov file failed, but continuing..."
-      - name: Upload diff coverage report
-        if: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url != null && needs.run_tests_with_coverage.outputs.diff_cov_file_url != '' }}
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./FastDeploy/diff_coverage.xml
-          name: python diff coverage
-          verbose: true
-          disable_search: true
-          commit_parent: false
-          flags: diff

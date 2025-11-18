@@ -1,0 +1,130 @@
+name: CI_XPU
+
+on:
+  workflow_call:
+    inputs:
+      DOCKER_IMAGE:
+        description: "Build Images"
+        required: true
+        type: string
+        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.1.0"
+      FASTDEPLOY_ARCHIVE_URL:
+        description: "URL of the compressed FastDeploy code archive."
+        required: true
+        type: string
+    outputs:
+      xpu_cov_file_url:
+        description: "Output path of the GPU tests"
+        value: ${{ jobs.CI_XPU.outputs.xpu_cov_file_url }}
+
+concurrency:
+  group: ${{ github.event.pull_request.number }}-xpu-ci
+  cancel-in-progress: true
+
+jobs:
+  CI_XPU:
+    runs-on: [self-hosted, XPU-P800-8Card]
+    outputs:
+      xpu_cov_file_url: ${{ steps.set_output.outputs.xpu_cov_file_url }}
+    steps:
+      - name: Print current runner name
+        run: |
+          echo "Current runner name: ${{ runner.name }}"
+      - name: Code Checkout
+        env:
+          docker_image: ${{ inputs.DOCKER_IMAGE }}
+          fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
+        run: |
+          REPO="https://github.com/${{ github.repository }}.git"
+          FULL_REPO="${{ github.repository }}"
+          REPO_NAME="${FULL_REPO##*/}"
+          BASE_BRANCH="${{ github.base_ref }}"
+          # Clean the repository directory before starting
+          docker run --rm --net=host -v $(pwd):/workspace -w /workspace \
+          -e "REPO_NAME=${REPO_NAME}" \
+          -e "BASE_BRANCH=${BASE_BRANCH}" \
+          -e "fd_archive_url=${fd_archive_url}" \
+          ${docker_image} /bin/bash -c '
+            if [ -d ${REPO_NAME} ]; then
+              echo "Directory ${REPO_NAME} exists, removing it..."
+              rm -rf ${REPO_NAME}
+            fi
+          wget -q ${fd_archive_url}
+          tar -xf FastDeploy.tar.gz
+          rm -rf FastDeploy.tar.gz
+          set -x
+          cd FastDeploy
+          git config --global --add safe.directory "$(pwd)"
+          git config --global user.name "FastDeployCI"
+          git config --global user.email "fastdeploy_ci@example.com"
+          git log -n 3 --oneline
+          '
+      - name: Run CI unittest
+        id: set_output
+        env:
+          docker_image: ${{ inputs.DOCKER_IMAGE }}
+          IS_PR: ${{ github.event_name == 'pull_request' }}
+        run: |
+          runner_name="${{ runner.name }}"
+          last_char="${runner_name: -1}"
+          if [[ "$last_char" == "1" ]]; then
+            xpu_id="4"
+          else
+            xpu_id="0"
+          fi
+          FD_API_PORT=$((8180 + xpu_id * 100))
+          FD_ENGINE_QUEUE_PORT=$((8150 + xpu_id * 100))
+          FD_METRICS_PORT=$((8170 + xpu_id * 100))
+          commit_id=${{ github.event.pull_request.head.sha }}
+          pr_num=${{ github.event.pull_request.number }}
+          PARENT_DIR=$(dirname "$WORKSPACE")
+          echo "PARENT_DIR:$PARENT_DIR"
+          docker run --rm --net=host --cap-add=SYS_PTRACE --privileged --shm-size=64G  \
+          -v $(pwd):/workspace -w /workspace \
+          -v "/ssd3:/ssd3" \
+          -e "MODEL_PATH=/ssd3/model" \
+          -e "http_proxy=$(git config --global --get http.proxy)" \
+          -e "https_proxy=$(git config --global --get https.proxy)" \
+          -e "no_proxy=bcebos.com,mirrors.tuna.tsinghua.edu.cn,127.0.0.1,localhost" \
+          -e "FD_API_PORT=${FD_API_PORT}" \
+          -e "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}" \
+          -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
+          -e "XPU_ID=${xpu_id}" \
+          -e "IS_PR=${IS_PR}" \
+          -e "commit_id=${commit_id}" \
+          -e "pr_num=${pr_num}" \
+           ${docker_image} /bin/bash -c '
+          git config --global --add safe.directory /workspace/FastDeploy
+          chown -R $(whoami) /workspace/FastDeploy
+          cd FastDeploy
+          python -m pip install coverage
+          export COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage.xpu
+          export COVERAGE_RCFILE=/workspace/FastDeploy/scripts/.coveragerc
+          TEST_EXIT_CODE=0
+          bash scripts/run_ci_xpu.sh || TEST_EXIT_CODE=8
+          echo "TEST_EXIT_CODE=${TEST_EXIT_CODE}" >> exit_code.env
+          cat exit_code.env
+          tar -cvf xpu_coverage.tar -C coveragedata .
+          coverage combine coveragedata/ || echo "No data to combine"
+          coverage report
+          # coverage data upload
+          target_path=paddle-github-action/PR/FastDeploy/${pr_num}/${commit_id}/XPU
+          wget  -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py -O bos_tools.py
+          push_file=$(realpath bos_tools.py)
+          python -m pip install bce-python-sdk==0.9.29
+          cov_file="xpu_coverage.tar"
+          if [ -f ${cov_file} ];then
+            python ${push_file} ${cov_file} ${target_path}/CoverageData
+            target_path_stripped="${target_path#paddle-github-action/}"
+            XPU_COV_FILE_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${cov_file}
+            echo "xpu_cov_file_url=${XPU_COV_FILE_URL}" >> github.output
+          fi
+          '
+          if [ -f FastDeploy/github.output ];then
+            cat FastDeploy/github.output >> $GITHUB_OUTPUT
+          fi
+          if [ -f FastDeploy/exit_code.env ]; then
+            cat FastDeploy/exit_code.env >> $GITHUB_ENV
+            source FastDeploy/exit_code.env
+          fi
+          exit "$TEST_EXIT_CODE"
