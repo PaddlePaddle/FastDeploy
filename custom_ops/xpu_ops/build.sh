@@ -41,9 +41,13 @@ list_files_recursive() {
     fi
 }
 
+echo ">>> 1"
+
 list_files_recursive "./${OPS_TMP_DIR}"
 
 ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}
+
+echo ">>> 2"
 
 list_files_recursive "./${OPS_TMP_DIR}"
 
@@ -66,6 +70,11 @@ else
 fi
 
 TARGET_DIR="${OPS_TMP_DIR}/${WHEEL_NAME}"
+
+echo ">>> 3"
+
+list_files_recursive "./${OPS_TMP_DIR}"
+
 
 mkdir -p ${TARGET_DIR}/libs
 cp ${XVLLM_PATH}/xft_blocks/so/libxft_blocks.so ${TARGET_DIR}/libs/
