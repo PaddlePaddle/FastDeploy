@@ -23,9 +23,9 @@
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
 
-#define MAX_BSZ 512
+#define MAX_BSZ 256
 #define K 20
-#define MAX_DRAFT_TOKEN_NUM 6
+#define MAX_DRAFT_TOKEN_NUM 2
 
 struct batch_msgdata {
     int tokens[MAX_DRAFT_TOKEN_NUM * (K + 1)];
@@ -156,7 +156,8 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
         }
     }
 #ifdef SPECULATE_SAVE_WITH_OUTPUT_DEBUG
-    std::cout << "msg data: " << std::endl;
+    std::cout << "msg data (size: " << sizeof(msg_sed) - sizeof(long)
+              << "): " << std::endl;
     std::cout << "stop_flag: " << msg_sed.meta[0]
               << ", message_flag: " << msg_sed.meta[1]
               << ", bsz: " << msg_sed.meta[2] << std::endl;

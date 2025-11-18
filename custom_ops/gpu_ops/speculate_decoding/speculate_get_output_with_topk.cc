@@ -23,9 +23,9 @@
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
 
-#define MAX_BSZ 512
+#define MAX_BSZ 256
 #define K 20
-#define MAX_DRAFT_TOKEN_NUM 6
+#define MAX_DRAFT_TOKEN_NUM 2
 
 struct batch_msgdata {
     int tokens[MAX_DRAFT_TOKEN_NUM * (K + 1)];
