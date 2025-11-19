@@ -278,7 +278,7 @@ class AppendAttentionBackend(AttentionBackend):
                 self.encoder_block_shape_q,
                 self.decoder_block_shape_q,
                 self.group_size,
-                self.block_size
+                self.block_size,
             )
 
         if self.use_output:

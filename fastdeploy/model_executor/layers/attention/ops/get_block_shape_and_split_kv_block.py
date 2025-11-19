@@ -68,7 +68,7 @@ def get_block_shape_and_split_kv_block(
             encoder_block_shape_q,
             decoder_block_shape_q,
             group_size,
-            block_size
+            block_size,
         )
 
     else:
