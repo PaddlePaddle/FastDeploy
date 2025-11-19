@@ -390,7 +390,10 @@ class EngineArgs:
 
     disable_chunked_mm_input: bool = False
     """
-    Disable chunked_mm_input for multi-model inference.
+    Disable chunked multimodal input processing. When enabled, prevents splitting
+    multimodal (e.g., image) inputs across multiple cache blocks, ensuring each
+    multimodal input is cached as a complete unit. This is required when using
+    prefix caching with multimodal models.
     """
 
     enable_attention_dp_balance: bool = False

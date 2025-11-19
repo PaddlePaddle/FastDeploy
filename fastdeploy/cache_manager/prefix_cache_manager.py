@@ -814,8 +814,8 @@ class PrefixCacheManager:
             del self.node_map[node.node_id]
         logger.info(f"free_block_ids_async: free node {node}")
 
-        self.recycle_gpu_blocks(node.reverved_dec_block_ids)
-        node.reverved_dec_block_ids = []
+        self.recycle_gpu_blocks(node.reserved_dec_block_ids)
+        node.reserved_dec_block_ids = []
         self.recycle_gpu_blocks(node.block_id)
 
     def _handle_free_gpu_node_with_cpu(
@@ -831,8 +831,8 @@ class PrefixCacheManager:
         GPU node eviction in hierarchical cache layers
         """
 
-        self.recycle_gpu_blocks(node.reverved_dec_block_ids)
-        node.reverved_dec_block_ids = []
+        self.recycle_gpu_blocks(node.reserved_dec_block_ids)
+        node.reserved_dec_block_ids = []
 
         need_recycle_gpu_block_ids.append(node.block_id)
         hash_value_gpu_block_ids_map[node.input_hash_value].append(node.block_id)
@@ -1171,7 +1171,8 @@ class PrefixCacheManager:
                     f"req_id {request.request_id} revert nodes error, revert_tokens: {revert_tokens}, nodes: {last_block_id}, "
                     f"match_gpu_block_ids: {match_gpu_block_ids}, match_cpu_block_ids: {match_cpu_block_ids}"
                 )
-        return gpu_match_token_num, cpu_match_token_num, matche_nodes[-1]
+        current_node = self.radix_tree_root if len(matche_nodes) == 0 else matche_nodes[-1]
+        return gpu_match_token_num, cpu_match_token_num, current_node
 
     def mm_match_block(self, request, block_size):
         """
@@ -1194,7 +1195,7 @@ class PrefixCacheManager:
             prompt_token_ids = request.prompt_token_ids
         input_ids = prompt_token_ids + request.output_token_ids
         total_token_num = len(input_ids)
-        current_match_node = self.radix_tree_root  # 从根节点开始搜
+        current_match_node = self.radix_tree_root  # Start searching from the root node
         match_gpu_block_ids = []
         match_cpu_block_ids = []
         match_node_ids = []
@@ -1411,7 +1412,7 @@ class PrefixCacheManager:
         gpu_block_ids = request.block_tables[num_cached_tokens // block_size :].copy()
         for i in range(num_cached_tokens, can_cache_computed_tokens, block_size):
             current_block = input_ids[i : i + block_size]
-            current_block_size = len(current_block)  # 最后一个block可能没填满
+            current_block_size = len(current_block)  # The last block may not be filled
             if current_block_size != block_size:
                 has_unfilled_block = True
             else:
@@ -1436,21 +1437,21 @@ class PrefixCacheManager:
                     current_time,
                     parent=node,
                     shared_count=1,
-                    reverved_dec_block_ids=[],
+                    reserved_dec_block_ids=[],
                 )
                 new_last_node.req_id_set.add(request.request_id)
                 self.node_map[node_id] = new_last_node
                 node.children[hash_value] = new_last_node
                 node = new_last_node
 
-        reverved_dec_block_ids = []
+        reserved_dec_block_ids = []
         if has_unfilled_block is True:
-            reverved_dec_block_ids.append(gpu_block_ids.pop(0))
+            reserved_dec_block_ids.append(gpu_block_ids.pop(0))
 
         if new_last_node == self.radix_tree_root:
-            self.unfilled_req_block_map[request.request_id] = reverved_dec_block_ids
+            self.unfilled_req_block_map[request.request_id] = reserved_dec_block_ids
         else:
-            new_last_node.reverved_dec_block_ids.extend(reverved_dec_block_ids)
+            new_last_node.reserved_dec_block_ids.extend(reserved_dec_block_ids)
         logger.info(f"build_path: allocate unique node ids {unique_node_ids} for req_id {request.request_id}")
         return new_last_node
 
@@ -1491,14 +1492,14 @@ class PrefixCacheManager:
         """
         gpu_block_ids = gpu_block_ids.copy()
         node = last_node
-        reverved_dec_block_ids = []
+        reserved_dec_block_ids = []
         input_hash_value = self.cal_block_hash(input_ids)
 
         token_num = len(left_input_ids)
         if token_num == 0:
             for i in range(reverved_dec_block_num):
-                reverved_dec_block_ids.append(gpu_block_ids.pop(0))
-            last_node.reverved_dec_block_ids.extend(reverved_dec_block_ids)
+                reserved_dec_block_ids.append(gpu_block_ids.pop(0))
+            last_node.reserved_dec_block_ids.extend(reserved_dec_block_ids)
             return last_node
         node = last_node
         unique_node_ids = []
@@ -1526,21 +1527,21 @@ class PrefixCacheManager:
                     current_time,
                     parent=node,
                     shared_count=1,
-                    reverved_dec_block_ids=[],
+                    reserved_dec_block_ids=[],
                 )
                 new_last_node.req_id_set.add(req_id)
                 self.node_map[node_id] = new_last_node
                 node.children[hash_value] = new_last_node
                 node = new_last_node
         if has_unfilled_block is True:
-            reverved_dec_block_ids.append(gpu_block_ids.pop(0))
+            reserved_dec_block_ids.append(gpu_block_ids.pop(0))
 
         for i in range(reverved_dec_block_num):
-            reverved_dec_block_ids.append(gpu_block_ids.pop(0))
+            reserved_dec_block_ids.append(gpu_block_ids.pop(0))
         if new_last_node == self.radix_tree_root:
-            self.unfilled_req_block_map[req_id] = reverved_dec_block_ids
+            self.unfilled_req_block_map[req_id] = reserved_dec_block_ids
         else:
-            new_last_node.reverved_dec_block_ids.extend(reverved_dec_block_ids)
+            new_last_node.reserved_dec_block_ids.extend(reserved_dec_block_ids)
         logger.info(f"build_path: allocate unique node ids {unique_node_ids} for req_id {req_id}")
         return new_last_node
 
