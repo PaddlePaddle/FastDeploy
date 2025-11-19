@@ -63,7 +63,7 @@ def get_moe_method():
         )
 
         return MetaxCutlassUnquantizedFusedMoEMethod(None)
-    raise NotImplementedError
+    return None
 
 
 def get_moe_scores(
@@ -189,7 +189,9 @@ class FusedMoE(nn.Layer):
             self.quant_method = moe_quant_config.get_quant_method(self)
             self.moe_quant_type = moe_quant_config.name()
         else:
+            # unquantized quant_method
             self.quant_method = get_moe_method()
+        assert self.quant_method is not None, "self.quant_method should not be None"
         self.redundant_table_manger = redundant_table_manger
         if self.ep_size > 1:
             self.quant_method.init_ep(self)
