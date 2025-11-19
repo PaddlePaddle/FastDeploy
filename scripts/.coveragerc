@@ -13,6 +13,16 @@ source =
     */fastdeploy
 
 [report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    @abstractmethod
+    @abc.abstractmethod
+
+ignore_errors = True
+
 omit =
     */site-packages/*/tests/*
     */site-packages/setuptools/*
@@ -22,3 +32,15 @@ omit =
     */fastdeploy/model_executor/graph_optimization/utils.py
     */fastdeploy/model_executor/ops/gpu/fastdeploy_ops.py
     */fastdeploy/model_executor/ops/gpu/deep_gemm/utils.py
+    */fastdeploy/**/dcu/*
+    */fastdeploy/worker/dcu*.py
+    */fastdeploy/**/gcu/*
+    */fastdeploy/worker/gcu*.py
+    */fastdeploy/**/intel_hpu/*
+    */fastdeploy/worker/hpu*.py
+    */fastdeploy/**/metax/*
+    */fastdeploy/worker/metax*.py
+    */fastdeploy/**/iluvatar/*
+    */fastdeploy/worker/iluvatar*.py
+    */fastdeploy/**/xpu/*
+    */fastdeploy/worker/xpu*.py
