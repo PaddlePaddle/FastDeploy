@@ -279,7 +279,7 @@ class DeepEPEngine:
     ):
         if self.deepep_engine is None:
             raise RuntimeError("DeepEP buffer not initialized!")
-
+        print("==========low_latency_dispatch==========")
         (
             packed_recv_x,
             recv_expert_count,
@@ -297,7 +297,7 @@ class DeepEPEngine:
             return_recv_hook=True,
             num_per_channel=quant_group_size,
         )
-
+        print("==========low_latency_dispatch end==========")
         return packed_recv_x, recv_expert_count, handle, dispatch_hook
 
     def low_latency_dispatch_two_stage(
@@ -310,7 +310,7 @@ class DeepEPEngine:
     ):
         if self.deepep_engine is None:
             raise RuntimeError("DeepEP buffer not initialized!")
-
+        print("==========low_latency_dispatch_two_stage==========")
         (
             packed_recv_x,
             packed_recv_count,
@@ -328,7 +328,7 @@ class DeepEPEngine:
             async_finish=False,
             return_recv_hook=True,
         )
-
+        print("==========low_latency_dispatch_two_stage end==========")
         return packed_recv_x, packed_recv_count, handle, dispatch_hook
 
     def low_latency_combine(
@@ -637,11 +637,13 @@ class EPDecoderRunner(EPRunner):
         quant_group_size = kwargs.get("quant_group_size", 128)
 
         if not self.use_internode_ll_two_stage:
+            print("========== not two stage ===============")
             recv_hidden_states, recv_expert_count, handle, dispatch_hook = self.ep_engine.low_latency_dispatch(
                 x, topk_idx, expertwise_scale, use_fp8, quant_group_size
             )
         else:
             # just supports dispatch_use_fp8 = True now!
+            print("================ two stage ================")
             assert use_fp8 is True
             recv_hidden_states, recv_expert_count, handle, dispatch_hook = (
                 self.ep_engine.low_latency_dispatch_two_stage(x, topk_idx, topk_weights, expertwise_scale, use_fp8)

@@ -67,11 +67,16 @@ class DeepEPEngine:
             group = paddle.distributed.new_group(range(ep_size))
         self.group = group
         self.num_local_experts = num_experts // ep_size
-        self.deepep_engine = None
+        self.deepep_engine = None  # deepep_engine只调用dispatch, combine
+        self.deepep_engine_low_latency = (
+            None  # deepep_engine_low_latency只调用low_latency_dispatch,low_latency_combine
+        )
         self.init_deepep_engine()
 
     def init_deepep_engine(self):
-        if self.splitwise_role == "mixed" or self.moe_phase.phase == "prefill":
+        if (
+            self.splitwise_role == "mixed" or self.moe_phase.phase == "prefill"
+        ):  # 集中式和分离式的P节点, 集中式的场景其实需要两种buffer并存，按需取用
             self.deepep_engine = deep_ep.Buffer(
                 self.group,
                 int(1e9),
@@ -80,7 +85,7 @@ class DeepEPEngine:
                 low_latency_mode=False,
                 num_qps_per_rank=1,
             )
-        elif self.moe_phase.phase == "decode":
+            # elif self.moe_phase.phase == "decode": # 分离式的D节点
             logger.info("Initializing Low Latency Buffer")
             self.get_low_latency_buffer()
         else:
@@ -105,20 +110,20 @@ class DeepEPEngine:
         )
         # Allocate a buffer if not existed or not enough buffer size
         if (
-            self.deepep_engine is None
-            or self.deepep_engine.group != self.group
-            or not self.deepep_engine.low_latency_mode
-            or self.deepep_engine.num_rdma_bytes < num_rdma_bytes
+            self.deepep_engine_low_latency is None
+            or self.deepep_engine_low_latency.group != self.group
+            or not self.deepep_engine_low_latency.low_latency_mode
+            or self.deepep_engine_low_latency.num_rdma_bytes < num_rdma_bytes
         ):
             # NOTES: for best performance, the QP number **must** be equal to the number of the local experts
             assert self.num_experts % self.ep_size == 0
-            self.deepep_engine = deep_ep.Buffer(
+            self.deepep_engine_low_latency = deep_ep.Buffer(
                 self.group,
                 0,
                 num_rdma_bytes,
                 self.num_experts,
                 low_latency_mode=True,
-                num_qps_per_rank=self.num_experts // self.num_ranks,
+                num_qps_per_rank=self.num_experts // self.ep_size,
             )
 
     def low_latency_dispatch(
@@ -151,7 +156,7 @@ class DeepEPEngine:
             handle,
             dispatch_hook,
             valid_token_num,
-        ) = self.deepep_engine.low_latency_dispatch(
+        ) = self.deepep_engine_low_latency.low_latency_dispatch(
             hidden_states,
             moe_in_w4a8_scale,
             topk_idx,
@@ -176,7 +181,7 @@ class DeepEPEngine:
         Return:
             combined_hidden_states: [num_tokens, hidden_size]
         """
-        combined_hidden_states, combine_hook = self.deepep_engine.low_latency_combine(
+        combined_hidden_states, combine_hook = self.deepep_engine_low_latency.low_latency_combine(
             hidden_states,
             topk_idx,
             topk_weights,
@@ -196,7 +201,14 @@ class DeepEPEngine:
         """
         barrier_all
         """
-        self.deepep_engine.barrier_all()
+        if self.deepep_engine is None and self.deepep_engine_low_latency is None:
+            raise ValueError("The DeepEP engine has not been initialized yet.")
+
+        if self.deepep_engine is not None:
+            self.deepep_engine.barrier_all()
+        if self.deepep_engine_low_latency is not None:
+            self.deepep_engine_low_latency.barrier_all()
+        # self.deepep_engine.barrier_all()
 
 
 class XPUEPRunner:
@@ -333,6 +345,7 @@ class XPUEPPrefillRunner(XPUEPRunner):
         *args,
         **kwargs,
     ):
+        # print("============XPUEPPrefillRunner dispatch==========")
         self.num_combined_tokens = x.shape[0]
         x_scale_tensor = kwargs.get("x_scale_tensor", None)
         dispatch_args = {
@@ -340,6 +353,7 @@ class XPUEPPrefillRunner(XPUEPRunner):
             "topk_idx": topk_idx,
             "topk_weights": topk_weights,
         }
+        # print("============XPUEPPrefillRunner dispatch end==========")
         return self.ep_engine.deepep_engine.dispatch(**dispatch_args)
 
     def combine(
@@ -397,6 +411,7 @@ class XPUEPDecoderRunner(XPUEPRunner):
         *args,
         **kwargs,
     ):
+        print("===========XPUEPDecoderRunner dispatch start===========")
         expertwise_scale = kwargs.get("expertwise_scale", None)
         use_fp8 = expertwise_scale is not None
 
@@ -410,8 +425,8 @@ class XPUEPDecoderRunner(XPUEPRunner):
         # no need to call dispatch_hook here, because it has already been done in xDeepEP
         # if dispatch_hook is not None:
         #     dispatch_hook()
-
-        return recv_hidden_states, recv_expert_count, handle, valid_token_num
+        print("===========XPUEPDecoderRunner dispatch end===========")
+        return recv_hidden_states, recv_expert_count, handle, dispatch_hook, valid_token_num
 
     def combine(self, ffn_out, topk_idx, topk_weights, handle):
         combined_hidden_states, combine_hook = self.ep_engine.low_latency_combine(
