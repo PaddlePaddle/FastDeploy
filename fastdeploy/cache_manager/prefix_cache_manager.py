@@ -1832,3 +1832,6 @@ class PrefixCacheManager:
                 prefix_tree_status_signal.value[0] = PrefixTreeStatus.NORMAL
                 logger.info("Prefix cache tree is updated.")
             time.sleep(0.01)
+            # debug
+            logger.info("DEBUG")
+            time.sleep(0.02)
