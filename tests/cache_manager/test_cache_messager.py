@@ -1,4 +1,16 @@
-"""Unit tests for the cache messager helpers."""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 from __future__ import annotations
 
@@ -258,7 +270,7 @@ class _EngineWorkerQueue:
         self.connect_responses.append(response)
 
 
-def _install_dependency_stubs():
+def _install_paddle_stubs():
     paddle = _ensure_module("paddle")
     paddle.Tensor = _FakeTensor
     paddle.bfloat16 = "bfloat16"
@@ -273,11 +285,7 @@ def _install_dependency_stubs():
 
     paddle.full = _full
     paddle.to_tensor = _to_tensor
-
-    def _set_device(_name):
-        return None
-
-    paddle.set_device = _set_device
+    paddle.set_device = lambda _name: None
 
     device_mod = types.ModuleType("paddle.device")
     device_mod.set_device = lambda _name: None
@@ -288,6 +296,8 @@ def _install_dependency_stubs():
     sys.modules["paddle.device"] = device_mod
     sys.modules["paddle.device.cuda"] = cuda_mod
 
+
+def _install_fastdeploy_core_stubs():
     fastdeploy_pkg = _ensure_module("fastdeploy")
     fastdeploy_pkg.__path__ = [str(PROJECT_ROOT / "fastdeploy")]
 
@@ -318,11 +328,16 @@ def _install_dependency_stubs():
     sys.modules["fastdeploy.utils.envs"] = envs_module
     fastdeploy_pkg.utils = utils_module
 
+
+def _install_transfer_factory_stubs():
     transfer_factory = types.ModuleType("fastdeploy.cache_manager.transfer_factory")
     transfer_factory.IPCCommManager = _IPCCommManager
     transfer_factory.RDMACommManager = _RDMACommManager
     sys.modules["fastdeploy.cache_manager.transfer_factory"] = transfer_factory
 
+
+def _install_config_stubs():
+    fastdeploy_pkg = _ensure_module("fastdeploy")
     config_module = types.ModuleType("fastdeploy.config")
 
     class _SpeculativeConfig:
@@ -334,12 +349,16 @@ def _install_dependency_stubs():
     sys.modules["fastdeploy.config"] = config_module
     fastdeploy_pkg.config = config_module
 
+
+def _install_inter_comm_stubs():
     inter_comm_module = types.ModuleType("fastdeploy.inter_communicator")
     inter_comm_module.EngineWorkerQueue = _EngineWorkerQueue
     inter_comm_module.IPCSignal = _IPCSignal
     inter_comm_module.shared_memory_exists = lambda _name: False
     sys.modules["fastdeploy.inter_communicator"] = inter_comm_module
 
+
+def _install_ops_gpu_stubs():
     ops_gpu_module = types.ModuleType("fastdeploy.model_executor.ops.gpu")
 
     def _get_output_kv_signal(buffer, rank_id, flag):  # pylint: disable=unused-argument
@@ -365,6 +384,15 @@ def _install_dependency_stubs():
     ops_gpu_module.get_output_kv_signal = _get_output_kv_signal
     ops_gpu_module.set_data_ipc = lambda *args, **kwargs: None
     sys.modules["fastdeploy.model_executor.ops.gpu"] = ops_gpu_module
+
+
+def _install_dependency_stubs():
+    _install_paddle_stubs()
+    _install_fastdeploy_core_stubs()
+    _install_transfer_factory_stubs()
+    _install_config_stubs()
+    _install_inter_comm_stubs()
+    _install_ops_gpu_stubs()
 
 
 def _load_cache_messager():
@@ -399,6 +427,9 @@ class CacheMessagerInitTest(unittest.TestCase):
         _IPCSignal.instances.clear()
         ops_gpu = sys.modules["fastdeploy.model_executor.ops.gpu"]
         ops_gpu.get_output_kv_signal.sequence = []
+
+    def tearDown(self):
+        _IPCSignal.instances.clear()
 
     def test_initializes_with_ipc_and_rdma(self):
         cache = _make_cache_tensors(num_layers=2)
@@ -453,6 +484,9 @@ class PrefillThreadTest(unittest.TestCase):
         _IPCSignal.instances.clear()
         ops_gpu = sys.modules["fastdeploy.model_executor.ops.gpu"]
         ops_gpu.get_output_kv_signal.sequence = []
+
+    def tearDown(self):
+        _IPCSignal.instances.clear()
 
     def test_prefill_thread_transfers_and_marks_finished(self):
         cache = _make_cache_tensors(num_layers=1)
@@ -514,6 +548,9 @@ class HandleConnectTaskTest(unittest.TestCase):
         ops_gpu = sys.modules["fastdeploy.model_executor.ops.gpu"]
         ops_gpu.get_output_kv_signal.sequence = []
 
+    def tearDown(self):
+        _IPCSignal.instances.clear()
+
     def test_handle_connect_task_success_and_failure(self):
         cache = _make_cache_tensors(num_layers=1)
         messager = self.module.CacheMessager(
@@ -568,6 +605,9 @@ class CacheMessagerV1Test(unittest.TestCase):
         _IPCSignal.instances.clear()
         ops_gpu = sys.modules["fastdeploy.model_executor.ops.gpu"]
         ops_gpu.get_output_kv_signal.sequence = []
+
+    def tearDown(self):
+        _IPCSignal.instances.clear()
 
     def test_consume_signals_populates_queue(self):
         cache = _make_cache_tensors(num_layers=1)
@@ -752,6 +792,9 @@ class CacheMessagerV1ConnectTest(unittest.TestCase):
         ops_gpu = sys.modules["fastdeploy.model_executor.ops.gpu"]
         ops_gpu.get_output_kv_signal.sequence = []
 
+    def tearDown(self):
+        _IPCSignal.instances.clear()
+
     def test_handle_connect_task_rdma_paths(self):
         cache = _make_cache_tensors(num_layers=1)
         with mock.patch("threading.Thread") as thread_cls:
@@ -812,6 +855,9 @@ class MainEntryTest(unittest.TestCase):
         _IPCSignal.instances.clear()
         ops_gpu = sys.modules["fastdeploy.model_executor.ops.gpu"]
         ops_gpu.get_output_kv_signal.sequence = []
+
+    def tearDown(self):
+        _IPCSignal.instances.clear()
 
     def test_main_initializes_and_triggers_prefill(self):
         args = types.SimpleNamespace(
