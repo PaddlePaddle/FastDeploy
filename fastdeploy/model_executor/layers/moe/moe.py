@@ -59,11 +59,11 @@ def get_moe_method():
 
     elif current_platform.is_maca():
         from fastdeploy.model_executor.layers.backends import (
-            MetaxCutlassWeightOnlyMoEMethod,
+            MetaxCutlassUnquantizedFusedMoEMethod,
         )
 
-        return MetaxCutlassWeightOnlyMoEMethod(None)
-    raise NotImplementedError
+        return MetaxCutlassUnquantizedFusedMoEMethod(None)
+    return None
 
 
 def get_moe_scores(
@@ -189,7 +189,9 @@ class FusedMoE(nn.Layer):
             self.quant_method = moe_quant_config.get_quant_method(self)
             self.moe_quant_type = moe_quant_config.name()
         else:
+            # unquantized quant_method
             self.quant_method = get_moe_method()
+        assert self.quant_method is not None, "self.quant_method should not be None"
         self.redundant_table_manger = redundant_table_manger
         if self.ep_size > 1:
             self.quant_method.init_ep(self)
@@ -227,7 +229,7 @@ class FusedMoE(nn.Layer):
             return
         if hasattr(param, "SHARD_ID_TO_SHARDED_DIM"):
             SHARD_ID_TO_SHARDED_DIM = param.SHARD_ID_TO_SHARDED_DIM
-        elif current_platform.is_cuda() or current_platform.is_iluvatar():
+        elif current_platform.is_cuda() or current_platform.is_iluvatar() or current_platform.is_maca():
             SHARD_ID_TO_SHARDED_DIM = {"gate": 1, "down": 0, "up": 1}
         else:
             SHARD_ID_TO_SHARDED_DIM = {"gate": 0, "down": 1, "up": 0}
