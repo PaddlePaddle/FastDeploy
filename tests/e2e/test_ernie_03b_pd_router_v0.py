@@ -111,7 +111,7 @@ def setup_and_run_server():
     env_prefill["CUDA_VISIBLE_DEVICES"] = "0"
     env_prefill["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
     env_prefill["FD_LOG_DIR"] = "log_prefill"
-    prefill_log_path = "server.log"
+    prefill_log_path = "prefill.log"
     prefill_cmd = [
         sys.executable,
         "-m",
@@ -161,7 +161,7 @@ def setup_and_run_server():
     env_decode["CUDA_VISIBLE_DEVICES"] = "1"
     env_decode["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
     env_decode["FD_LOG_DIR"] = "log_decode"
-    decode_log_path = "decode_server.log"
+    decode_log_path = "decode.log"
     decode_cmd = [
         sys.executable,
         "-m",

@@ -121,9 +121,8 @@ def setup_and_run_server():
     env_prefill["CUDA_VISIBLE_DEVICES"] = "0"
     env_prefill["FD_LOG_DIR"] = "log_prefill"
     env_prefill["KVCACHE_RDMA_NICS"] = rdma_nics
-    env_prefill["KVCACHE_GDRCOPY_FLUSH_ENABLE"] = "1"
 
-    prefill_log_path = "server.log"
+    prefill_log_path = "prefill.log"
     prefill_cmd = [
         sys.executable,
         "-m",
@@ -170,9 +169,9 @@ def setup_and_run_server():
     env_decode = os.environ.copy()
     env_decode["CUDA_VISIBLE_DEVICES"] = "1"
     env_decode["FD_LOG_DIR"] = "log_decode"
-    env_prefill["KVCACHE_RDMA_NICS"] = rdma_nics
-    env_prefill["KVCACHE_GDRCOPY_FLUSH_ENABLE"] = "1"
-    decode_log_path = "decode_server.log"
+    env_decode["KVCACHE_RDMA_NICS"] = rdma_nics
+
+    decode_log_path = "decode.log"
     decode_cmd = [
         sys.executable,
         "-m",
