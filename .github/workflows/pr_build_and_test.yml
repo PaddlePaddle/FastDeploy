@@ -34,8 +34,8 @@ jobs:
         run: |
           echo "The built wheel is located at: ${{ needs.build.outputs.wheel_path }}"
 
-  unittest_coverage:
-    name: Run FastDeploy Unit Tests and Coverage
+  gpu_unittest:
+    name: Run FastDeploy Unit Tests with Coverage
     needs: [clone,build]
     uses: ./.github/workflows/_unit_test_coverage.yml
     with:
@@ -75,3 +75,21 @@ jobs:
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+
+  xpu_unittest:
+    name: Run XPU Test with Coverage
+    needs: [ clone ]
+    uses: ./.github/workflows/_ci_xpu.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu-ci:latest
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+
+  coverage_combine:
+    name: Coverage Combine And Check
+    uses: ./.github/workflows/_coverage_combine.yml
+    needs: [ clone, gpu_unittest, xpu_unittest ]
+    with:
+      GPU_COV_FILE_URL: ${{ needs.gpu_unittest.outputs.gpu_cov_file_url }}
+      XPU_COV_FILE_URL: ${{ needs.xpu_unittest.outputs.xpu_cov_file_url }}
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}

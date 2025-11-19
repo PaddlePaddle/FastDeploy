@@ -2,6 +2,7 @@
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "$DIR"
 
+export COVERAGE_RCFILE=${COVERAGE_RCFILE:-$DIR/../scripts/.coveragerc}
 #安装lsof工具
 apt install -y lsof
 
@@ -50,6 +51,7 @@ export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
 export XVLLM_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xvllm
 bash build.sh || exit 1
 
+export PYTHONPATH=./:${PYTHONPATH}
 echo "pip others"
 python -m pip install openai -U
 python -m pip uninstall -y triton
@@ -75,7 +77,7 @@ else
     export XPU_VISIBLE_DEVICES="4,5,6,7"
 fi
 export port_num=$((8188 + XPU_ID * 100))
-python -m fastdeploy.entrypoints.openai.api_server \
+python -m coverage run -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle \
     --port $port_num \
     --engine-worker-queue-port $((port_num + 1)) \
@@ -122,7 +124,7 @@ done
 
 
 # 执行服务化推理
-python -m pytest -s tests/ci_use/XPU_45T/run_45T.py
+python -m coverage run -m pytest -s tests/ci_use/XPU_45T/run_45T.py
 kv_block_test_exit_code=$?
 echo kv_block_test_exit_code is ${kv_block_test_exit_code}
 
@@ -151,7 +153,7 @@ else
     export XPU_VISIBLE_DEVICES="4,5,6,7"
 fi
 export port_num=$((8188 + XPU_ID * 100))
-python -m fastdeploy.entrypoints.openai.api_server \
+python -m coverage run -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle \
     --port $port_num \
     --engine-worker-queue-port $((port_num + 1)) \
@@ -198,7 +200,7 @@ done
 
 
 # 执行服务化推理
-python -m pytest -s tests/ci_use/XPU_45T/run_w4a8.py
+python -m coverage run -m pytest -s tests/ci_use/XPU_45T/run_w4a8.py
 w4a8_test_exit_code=$?
 echo w4a8_test_exit_code is ${w4a8_test_exit_code}
 
@@ -227,7 +229,7 @@ else
     export XPU_VISIBLE_DEVICES="4,5,6,7"
 fi
 export port_num=$((8188 + XPU_ID * 100))
-python -m fastdeploy.entrypoints.openai.api_server \
+python -m coverage run -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_PATH}/ERNIE-4.5-VL-28B-A3B-Paddle \
     --port $port_num \
     --engine-worker-queue-port $((port_num + 1)) \
@@ -277,7 +279,7 @@ done
 
 
 # 执行服务化推理
-python -m pytest -s tests/ci_use/XPU_45T/run_45vl.py
+python -m coverage run -m pytest -s tests/ci_use/XPU_45T/run_45vl.py
 vl_test_exit_code=$?
 echo vl_test_exit_code is ${vl_test_exit_code}
 
@@ -322,7 +324,7 @@ cd -
 
 export port_num=$((8188 + XPU_ID * 100))
 # 启动服务
-python -m fastdeploy.entrypoints.openai.api_server \
+python -m coverage run -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle \
     --port $port_num \
     --tensor-parallel-size 4 \
@@ -368,7 +370,7 @@ done
 
 
 # 执行在线推理验证脚本
-python -m pytest -s tests/ci_use/XPU_45T/run_ep_online.py
+python -m coverage run -m pytest -s tests/ci_use/XPU_45T/run_ep_online.py
 ep_online_exit_code=$?
 echo ep_online_exit_code is ${ep_online_exit_code}
 
@@ -411,7 +413,7 @@ export BKCL_RDMA_VERBS=1
 
 export port_num=$((8188 + XPU_ID * 100))
 # 启动服务
-python -m fastdeploy.entrypoints.openai.api_server \
+python -m coverage run -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle \
     --port $port_num \
     --tensor-parallel-size 1 \
@@ -454,7 +456,7 @@ done
 
 
 # 执行在线推理验证脚本
-python -m pytest -s tests/ci_use/XPU_45T/run_ep_online.py
+python -m coverage run -m pytest -s tests/ci_use/XPU_45T/run_ep_online.py
 ep_online_exit_code=$?
 echo ep_online_exit_code is ${ep_online_exit_code}
 
@@ -498,7 +500,7 @@ export BKCL_RDMA_VERBS=1
 
 export port_num=$((8188 + XPU_ID * 100))
 # 启动服务
-python -m fastdeploy.entrypoints.openai.api_server \
+python -m coverage run -m fastdeploy.entrypoints.openai.api_server \
     --model ${MODEL_PATH}/ERNIE-4.5-300B-A47B-Paddle \
     --port $port_num \
     --tensor-parallel-size 4 \
@@ -543,7 +545,7 @@ done
 
 
 # 执行在线推理验证脚本
-python -m pytest -s tests/ci_use/XPU_45T/run_ep_online.py
+python -m coverage run -m pytest -s tests/ci_use/XPU_45T/run_ep_online.py
 ep_online_exit_code=$?
 echo ep_online_exit_code is ${ep_online_exit_code}
 
