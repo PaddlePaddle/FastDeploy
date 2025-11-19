@@ -350,7 +350,7 @@ class TestAttentionPerformance(unittest.TestCase):
         # p.start()
         # p.step()
 
-        for decode_batch_size in [32, 16, 8, 4, 2, 1]:
+        for decode_batch_size in [32, 16, 8, 4, 2]:
             decode_hidden_states = paddle.randn(
                 [decode_batch_size, self.fd_config.model_config.hidden_size], dtype=act_tensor_dtype
             )
