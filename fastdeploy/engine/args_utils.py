@@ -516,11 +516,6 @@ class EngineArgs:
                     raise NotImplementedError(
                         "only support rdma cache transfer protocol " "when using ENABLE_V1_KVCACHE_SCHEDULER."
                     )
-                # FIXME: fix this bug
-                if self.splitwise_role == "prefill" and self.num_gpu_blocks_override is None:
-                    raise NotImplementedError(
-                        "please set num_gpu_blocks_override for prefill " "instance using ENABLE_V1_KVCACHE_SCHEDULER."
-                    )
 
         if not current_platform.is_cuda() and not current_platform.is_xpu():
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0

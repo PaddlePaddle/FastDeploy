@@ -1228,7 +1228,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
-    def _prepare_inputs(self) -> None:
+    def _prepare_inputs(self, is_profiling=False) -> None:
         """Prepare the model inputs"""
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             recover_decode_task(
@@ -1278,7 +1278,7 @@ class GPUModelRunner(ModelRunnerBase):
         max_bad_tokens_len = np.max(self.share_inputs["bad_tokens_len"].numpy())
 
         # Initialize forward meta data
-        self.initialize_forward_meta()
+        self.initialize_forward_meta(is_profiling=is_profiling)
         self.forward_meta.batch_id_per_token.copy_(batch_id_per_token, False)
 
         # Get sampling metadata
@@ -1333,7 +1333,7 @@ class GPUModelRunner(ModelRunnerBase):
         """Get current model"""
         return self.model
 
-    def initialize_forward_meta(self):
+    def initialize_forward_meta(self, is_profiling=False):
         """
         Initialize forward meta and attention meta data
         """
@@ -1384,6 +1384,9 @@ class GPUModelRunner(ModelRunnerBase):
         self.forward_meta.step_use_cudagraph = (
             only_prefill_use_cudagraph if self.cudagraph_only_prefill else only_decode_use_cudagraph
         )
+
+        # Set forward_meta.is_profiling to True to skip init_kv_signal_per_query for attention backends
+        self.forward_meta.is_profiling = is_profiling
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:

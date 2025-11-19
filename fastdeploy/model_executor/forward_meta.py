@@ -140,6 +140,8 @@ class ForwardMeta:
     block_tables: Optional[paddle.Tensor] = None
     # KV caches
     caches: Optional[list[paddle.Tensor]] = None
+    # Flag of profile run 
+    is_profiling: bool = False
 
     def clear_caches(self):
         """Safely clean up the caches"""
