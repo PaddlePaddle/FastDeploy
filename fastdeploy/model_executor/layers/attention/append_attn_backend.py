@@ -54,9 +54,6 @@ class AppendAttentionMetadata(AttentionMetadata):
     _dtype: paddle.dtype = paddle.bfloat16
     encoder_max_partition_size: int = 32768
     max_partition_size: int = 32768
-    block_tables: Optional[paddle.Tensor] = None
-    rotary_embs: Optional[paddle.Tensor] = None
-    attn_mask: Optional[paddle.Tensor] = None
     _fuse_kernel_compute_dtype: str = "bf16"
 
     # pd_disaggregation
