@@ -41,6 +41,7 @@ class TestMTPProposer(unittest.TestCase):
         self.mock_fd_config.model_config.head_dim = 64
         self.mock_fd_config.model_config.rope_theta = 10000.0
         self.mock_fd_config.model_config.enable_logprob = False
+        self.mock_fd_config.model_config.dtype = "float16"
         self.mock_fd_config.speculative_config = MagicMock()
         self.mock_fd_config.speculative_config.mtp_strategy = "standard"
         self.mock_fd_config.speculative_config.num_gpu_block_expand_ratio = 1.0
@@ -318,6 +319,9 @@ class TestMTPProposer(unittest.TestCase):
         )
 
         with patch.object(proposer, "initialize_kv_cache") as mock_init_cache:
+            def side_effect(main_model_num_blocks):
+                proposer.num_gpu_blocks = int(main_model_num_blocks * proposer.speculative_config.num_gpu_block_expand_ratio)
+            mock_init_cache.side_effect = side_effect
             proposer.update_mtp_block_num(num_gpu_blocks=50)
             mock_init_cache.assert_called_once_with(main_model_num_blocks=50)
             self.assertEqual(proposer.main_model_num_gpu_blocks, 50)
@@ -348,7 +352,7 @@ class TestMTPProposer(unittest.TestCase):
             target_model_inputs=self.mock_target_model_inputs,
         )
 
-        proposer.share_inputs = MagicMock()
+        proposer.share_inputs = {}
         proposer.share_inputs["seq_lens_encoder"] = paddle.zeros([8], dtype="int32")
         result = proposer.exist_prefill()
         self.assertEqual(result, 0)
