@@ -59,10 +59,11 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
         self.head_dtype = paddle.bfloat16
 
         # Persistent buffers for CUDA graphs.
-        self._decoder_input_embeddings = paddle.zeros(
-            [fd_config.graph_opt_config.max_capture_size, fd_config.model_config.hidden_size],
-            dtype=fd_config.model_config.dtype,
-        )
+        if fd_config.graph_opt_config.use_cudagraph:
+            self._decoder_input_embeddings = paddle.zeros(
+                [fd_config.graph_opt_config.max_capture_size, fd_config.model_config.hidden_size],
+                dtype=fd_config.model_config.dtype,
+            )
 
         self.rm_head = nn.Sequential(
             (

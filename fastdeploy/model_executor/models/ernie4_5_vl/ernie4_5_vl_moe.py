@@ -570,10 +570,11 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         self.ernie = Ernie4_5_VLModel(fd_config=fd_config)
 
         # Persistent buffers for CUDA graphs.
-        self._decoder_input_embeddings = paddle.zeros(
-            [fd_config.graph_opt_config.max_capture_size, fd_config.model_config.hidden_size],
-            dtype=fd_config.model_config.dtype,
-        )
+        if fd_config.graph_opt_config.use_cudagraph:
+            self._decoder_input_embeddings = paddle.zeros(
+                [fd_config.graph_opt_config.max_capture_size, fd_config.model_config.hidden_size],
+                dtype=fd_config.model_config.dtype,
+            )
 
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 

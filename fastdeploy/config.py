@@ -1633,12 +1633,14 @@ class FDConfig:
             logger.info("Multi-modal models do not support prefix caching when using CUDAGraph!")
 
         if self.scheduler_config.splitwise_role == "mixed":
+            # Sequence parallel MoE is incompatible with CUDA graph now. It will hang.
             if self.graph_opt_config.use_cudagraph:
                 self.parallel_config.use_sequence_parallel_moe = False
             self.model_config.moe_phase = MoEPhase(phase="prefill")
         elif self.scheduler_config.splitwise_role == "prefill":
             self.model_config.moe_phase = MoEPhase(phase="prefill")
         elif self.scheduler_config.splitwise_role == "decode":
+            # Sequence parallel MoE is incompatible with CUDA graph now. It will hang.
             if self.graph_opt_config.use_cudagraph:
                 self.parallel_config.use_sequence_parallel_moe = False
             self.model_config.moe_phase = MoEPhase(phase="decode")

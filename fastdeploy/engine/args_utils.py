@@ -509,7 +509,7 @@ class EngineArgs:
                     )
                 if len(self.rdma_comm_ports) != self.tensor_parallel_size * self.data_parallel_size:
                     raise ValueError(
-                        f"The number of rdma comm ports must be equal to number of ranks(dp_size: {self.data_parallel_size} * tp_size: {self.tensor_parallel_size})."
+                        f"The number of rdma comm ports must be equal to number of ranks ({self.data_parallel_size=} * {self.tensor_parallel_size=} = {self.data_parallel_size * self.tensor_parallel_size}), but got {len(self.rdma_comm_ports)}."
                     )
 
             if envs.ENABLE_V1_KVCACHE_SCHEDULER == 1:
