@@ -172,7 +172,7 @@ class RedundantExpertManager:
         """
         listen_rearrange_expert_signal
         """
-        dp_ipc_signal_suffix = f"{self.ipc_signal_suffix}_dp{self.fd_config.parallel_config.data_parallel_rank}"
+        dp_ipc_signal_suffix = f"{self.ipc_signal_suffix}_dp{self.fd_config.parallel_config.local_data_parallel_id}"
         if self.local_rank == 0:
             rearrange_experts_ips_size_array = np.zeros([1], dtype=np.int32)
             rearrange_experts_ips_size_signal = IPCSignal(

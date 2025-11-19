@@ -298,7 +298,7 @@ class PaddleDisWorkerProc:
             )
 
             dp_ipc_signal_suffix = (
-                f"{self.parallel_config.engine_worker_queue_port}_dp{self.parallel_config.data_parallel_rank}"
+                f"{self.parallel_config.engine_worker_queue_port}_dp{self.parallel_config.local_data_parallel_id}"
             )
             if local_rank == 0:
                 signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
