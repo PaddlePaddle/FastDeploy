@@ -131,16 +131,24 @@ def slice_fn(weight_or_paramter, output_dim, start, end, step=1):
 def process_weight_transpose(layer, weight_name):
     weight = getattr(layer, weight_name)
     if len(weight.shape) == 2:
-        weight_transpose = weight.transpose([1, 0])
+        weight_shape = weight.shape[::-1]
     elif len(weight.shape) == 3:
-        weight_transpose = weight.transpose([0, 2, 1])
-
+        weight_shape = [weight.shape[0]] + list(weight.shape[1:][::-1])
     weight_tmp = layer.create_parameter(
-        shape=weight_transpose.shape,
-        dtype=weight_transpose.dtype,
+        shape=weight_shape,
+        dtype=weight.dtype,
         default_initializer=paddle.nn.initializer.Constant(0),
         is_bias=False,
     )
+    if layer.fd_config.load_config.dynamic_load_weight or layer.fd_config.model_config.enable_cache:
+        free_tensor(weight)
+        setattr(layer, weight_name, weight_tmp)
+        return
+
+    if len(weight.shape) == 2:
+        weight_transpose = weight.transpose([1, 0])
+    elif len(weight.shape) == 3:
+        weight_transpose = weight.transpose([0, 2, 1])
     weight_tmp.copy_(weight_transpose, False)
     free_tensor(weight)
     setattr(layer, weight_name, weight_tmp)
@@ -163,9 +171,16 @@ def process_weights_after_loading(sublayers_dict: dict, fd_config: FDConfig):
         model_sublayer = sublayers_dict[model_sublayer_name]
         if isinstance(model_sublayer, KVBatchLinear):
             model_sublayer.process_weights_after_loading()
+        if fd_config.quant_config and not fd_config.quant_config.is_checkpoint_bf16:
+            # skip for offline quantization
+            return
         if hasattr(model_sublayer, "quant_method"):
             quant_method = getattr(model_sublayer, "quant_method", None)
-            unquant_moe_cls = type(get_moe_method())
+            unquant_moe_layer = get_moe_method()
+            if unquant_moe_layer is None:
+                unquant_moe_cls = object
+            else:
+                unquant_moe_cls = type(unquant_moe_layer)
             if type(quant_method) is UnquantizedLinearMethod or type(quant_method) is unquant_moe_cls:
                 # skip unquantized linear
                 return
@@ -225,18 +240,23 @@ def process_final_after_loading(model, fd_config: FDConfig):
     from fastdeploy.model_executor.layers.moe.moe import get_moe_method
 
     for name, sublayer in model.named_sublayers():
-        quant_method = getattr(sublayer, "quant_method", None)
-        if quant_method is not None:
-            unquant_moe_cls = type(get_moe_method())
-            if not (type(quant_method) is UnquantizedLinearMethod or type(quant_method) is unquant_moe_cls):
-                continue
-            if hasattr(quant_method, "process_weights_after_loading"):
-                quant_method.process_weights_after_loading(sublayer)
         if isinstance(sublayer, KVBatchLinear):
             continue
+        quant_method = getattr(sublayer, "quant_method", None)
+        if quant_method is not None:
+            unquant_moe_layer = get_moe_method()
+            if unquant_moe_layer is None:
+                unquant_moe_cls = object
+            else:
+                unquant_moe_cls = type(unquant_moe_layer)
+            is_unquant_cls = type(quant_method) is UnquantizedLinearMethod or type(quant_method) is unquant_moe_cls
+            is_offline_quantized_ckpt = not (fd_config.quant_config and fd_config.quant_config.is_checkpoint_bf16)
+            if is_unquant_cls or is_offline_quantized_ckpt:
+                if hasattr(quant_method, "process_weights_after_loading"):
+                    quant_method.process_weights_after_loading(sublayer)
+                continue
         if not hasattr(sublayer, "process_weights_after_loading"):
             continue
-        # Only for specific layers, such as lmhead
         sublayer.process_weights_after_loading()
 
 
@@ -353,11 +373,23 @@ def h2d_copy(dst, src, blocking=True):
 def v1_loader_support(fd_config):
     _v1_no_support_archs = ["Qwen2VLForConditionalGeneration"]
 
+    def _get_unsupported_quant():
+        if current_platform.is_cuda():
+            return {"w4a8", "w4afp8", "wint2"}
+        elif current_platform.is_xpu():
+            return {"w4a8", "w8a8"}
+        return set()
+
     def _err_msg(msg: str) -> str:
         logger.info(msg + "; fallback to the v0 loader for model loading.")
 
-    if not (current_platform.is_cuda() or current_platform.is_xpu() or current_platform.is_iluvatar()):
-        _err_msg("v1loader currently only support backends gpu, xpu and iluvatar")
+    if not (
+        current_platform.is_cuda()
+        or current_platform.is_xpu()
+        or current_platform.is_iluvatar()
+        or current_platform.is_maca()
+    ):
+        _err_msg("v1loader currently only support backends gpu, xpu, iluvatar and maca")
         return False
 
     if is_pre_sliced_weight(fd_config.model_config.model):
@@ -375,7 +407,7 @@ def v1_loader_support(fd_config):
         else:
             moe_quant_type = fd_config.quant_config.name()
             dense_quant_type = fd_config.quant_config.name()
-        unsupported_quant = {"w4a8", "w4afp8", "wint2"}
+        unsupported_quant = _get_unsupported_quant()
 
         if unsupported_quant & {moe_quant_type, dense_quant_type}:
             _err_msg("v1 loader currently does not support w4a8/w4afp8/win2 quantization")
