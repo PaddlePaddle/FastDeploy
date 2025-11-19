@@ -301,9 +301,6 @@ void GetBlockShapeAndSplitKVBlock(
   int max_dec_len_this_time = max_len_cpu_ptr[2];
   int max_enc_dec_len_this_time = max_len_cpu_ptr[3];
   int max_just_dec_len_this_time = max_len_cpu_ptr[4];
-  int max_just_dec_merged_len_this_time = max_len_cpu_ptr[5];
-  int max_system_len = max_len_cpu_ptr[6];
-  int max_just_dec_len_without_system = max_len_cpu_ptr[7];
   int max_kv_len_this_time = max_len_cpu_ptr[8];
 
   const uint32_t decoder_batch_ele_num = decoder_batch_ids.shape()[0];
