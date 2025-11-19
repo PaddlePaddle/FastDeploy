@@ -370,7 +370,12 @@ class EngineClient:
 
         if data.get("max_tokens") is not None:
             if data["max_tokens"] < 1 or data["max_tokens"] >= self.max_model_len:
-                raise ValueError(f"max_tokens can be defined [1, {self.max_model_len}).")
+                api_server_logger.error(
+                    f"req_id:{data['request_id']}, max_tokens must be defined [1, {self.max_model_len}), but now it's {data['max_tokens']}."
+                )
+                raise ValueError(
+                    f"max_tokens can be defined [1, {self.max_model_len}), but now it's {data['max_tokens']}."
+                )
 
         if data.get("reasoning_max_tokens") is not None:
             if data["reasoning_max_tokens"] < 1:
@@ -378,7 +383,7 @@ class EngineClient:
             if data["reasoning_max_tokens"] > data["max_tokens"]:
                 data["reasoning_max_tokens"] = data["max_tokens"]
                 api_server_logger.warning(
-                    f"req_id: {data['request_id']}, reasoning_max_tokens exceeds max_tokens, the value of reasoning_max_tokens will be adjusted to match that of max_tokens"
+                    f"req_id: {data['request_id']}, reasoning_max_tokens exceeds max_tokens, the value of reasoning_max_tokens will be adjusted to {data['max_tokens']}"
                 )
 
         if data.get("top_p") is not None:
