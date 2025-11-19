@@ -143,11 +143,13 @@ class LinearBase(nn.Layer):
         self.with_bias = with_bias
         self.add_bias = add_bias
         self.prefix = prefix
-        self.is_quantized = fd_config.model_config.is_quantized
+        self.is_quantized = fd_config.model_config.is_quantized and not (
+            fd_config.quant_config.name() == "mix_quant" and fd_config.quant_config.dense_quant_type is None
+        )
         # key
         if weight_key:
             self.weight_key = f"{prefix}.{weight_key}"
-        elif fd_config.model_config.is_quantized and not skip_quant:
+        elif self.is_quantized and not skip_quant:
             self.weight_key = f"{prefix}.quant_weight"
             self.weight_scale_key = f"{prefix}.weight_scale"
             self.act_scale_key = f"{prefix}.activation_scale"
@@ -170,7 +172,7 @@ class LinearBase(nn.Layer):
             self.output_size,
         ]
 
-        if fd_config.quant_config and not skip_quant:
+        if fd_config.quant_config and not skip_quant and fd_config.quant_config.get_quant_method(self):
             self.quant_method = fd_config.quant_config.get_quant_method(self)
         else:
             self.quant_method: Optional[QuantMethodBase] = UnquantizedLinearMethod()
@@ -232,7 +234,7 @@ class LinearBase(nn.Layer):
         # weight
         self.state_dict = state_dict
         assert self.weight_key is not None, "weight_key should not be None."
-        if self.fd_config.model_config.is_quantized:
+        if self.is_quantized:
             self.load_prequant_weight(state_dict)
         else:
             self.load_weight(state_dict)
@@ -784,7 +786,7 @@ class QKVParallelLinear(ColumnParallelLinear):
         assert self.weight_key is not None, "weight_key should not be None."
         # qkv fused in disk
 
-        if self.fd_config.model_config.is_quantized:
+        if self.is_quantized:
             self.load_prequant_weight(state_dict)
         else:
             self.load_weight(state_dict)

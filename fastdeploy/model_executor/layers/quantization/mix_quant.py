@@ -66,8 +66,8 @@ class MixQuantConfig(QuantConfigBase):
     @classmethod
     def from_config(cls, config: dict) -> "MixQuantConfig":
         return cls(
-            config["dense_quant_type"],
-            config["moe_quant_type"],
+            config.get("dense_quant_type", None),
+            config.get("moe_quant_type", None),
             config.get("kv_cache_quant_type", None),
             config.get("image_moe_quant_type", None),
             config.get("is_channel_wise", False),
@@ -81,29 +81,35 @@ class MixQuantConfig(QuantConfigBase):
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if isinstance(layer, FusedMoE):
             if layer.moe_tag == "Image":
-                return (
-                    get_quantization_config(self.image_moe_quant_type)
-                    .from_config(
-                        {
-                            "is_permuted": self.is_permuted,
-                            "is_quantized": not self.is_checkpoint_bf16,
-                            "hadamard_block_size": self.hadamard_block_size,
-                        }
+                if self.image_moe_quant_type is not None:
+                    return (
+                        get_quantization_config(self.image_moe_quant_type)
+                        .from_config(
+                            {
+                                "is_permuted": self.is_permuted,
+                                "is_quantized": not self.is_checkpoint_bf16,
+                                "hadamard_block_size": self.hadamard_block_size,
+                            }
+                        )
+                        .get_quant_method(layer)
                     )
-                    .get_quant_method(layer)
-                )
+                else:
+                    return None
             else:
-                return (
-                    get_quantization_config(self.moe_quant_type)
-                    .from_config(
-                        {
-                            "is_permuted": self.is_permuted,
-                            "is_quantized": not self.is_checkpoint_bf16,
-                            "hadamard_block_size": self.hadamard_block_size,
-                        }
+                if self.moe_quant_type is not None:
+                    return (
+                        get_quantization_config(self.moe_quant_type)
+                        .from_config(
+                            {
+                                "is_permuted": self.is_permuted,
+                                "is_quantized": not self.is_checkpoint_bf16,
+                                "hadamard_block_size": self.hadamard_block_size,
+                            }
+                        )
+                        .get_quant_method(layer)
                     )
-                    .get_quant_method(layer)
-                )
+                else:
+                    return None
         elif isinstance(layer, Attention):
             if self.kv_cache_quant_type is not None:
                 return (
@@ -114,8 +120,11 @@ class MixQuantConfig(QuantConfigBase):
             else:
                 return None
         else:
-            return (
-                get_quantization_config(self.dense_quant_type)
-                .from_config({"is_quantized": not self.is_checkpoint_bf16})
-                .get_quant_method(layer)
-            )
+            if self.dense_quant_type is not None:
+                return (
+                    get_quantization_config(self.dense_quant_type)
+                    .from_config({"is_quantized": not self.is_checkpoint_bf16})
+                    .get_quant_method(layer)
+                )
+            else:
+                return None
