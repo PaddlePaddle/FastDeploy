@@ -29,6 +29,7 @@ from fastdeploy.model_executor.load_weight_utils import (
 from fastdeploy.model_executor.model_loader.base_loader import BaseModelLoader
 from fastdeploy.model_executor.models.adapters import as_embedding_model
 from fastdeploy.model_executor.models.model_base import ModelRegistry
+from fastdeploy.model_executor.utils import process_final_after_loading
 from fastdeploy.platforms import current_platform
 
 
@@ -43,8 +44,8 @@ class DefaultModelLoaderV1(BaseModelLoader):
 
     def clean_memory_fragments(self) -> None:
         """clean_memory_fragments"""
-        if current_platform.is_cuda():
-            paddle.device.cuda.empty_cache()
+        if current_platform.is_cuda() or current_platform.is_maca():
+            paddle.device.empty_cache()
             paddle.device.synchronize()
 
     @save_model()
@@ -55,6 +56,8 @@ class DefaultModelLoaderV1(BaseModelLoader):
             load_weights_from_cache(model, weights_iterator)
         else:
             model.load_weights(weights_iterator)
+        if fd_config.speculative_config.model_type != "mtp":
+            process_final_after_loading(model, fd_config)
 
         self.clean_memory_fragments()
 
@@ -65,9 +68,15 @@ class DefaultModelLoaderV1(BaseModelLoader):
             # register rl model
             import fastdeploy.rl  # noqa
 
+            if fd_config.speculative_config.model_type != "mtp":
+                architectures = architectures.replace("Ernie5ForCausalLM", "Ernie5MoeForCausalLM")
+            else:
+                architectures = architectures.replace("Ernie5ForCausalLM", "Ernie5MTPForCausalLM")
+
             architectures = architectures + "RL"
 
         enable_cache, _, weight_cache_context = is_weight_cache_enabled(fd_config)
+        fd_config.model_config.enable_cache = enable_cache
         with weight_cache_context:
             with context:
                 model_cls = ModelRegistry.get_class(architectures)
@@ -80,6 +89,8 @@ class DefaultModelLoaderV1(BaseModelLoader):
                     assert_never(convert_type)
 
                 model = model_cls(fd_config)
+                if fd_config.load_config.dynamic_load_weight or fd_config.model_config.enable_cache:
+                    process_final_after_loading(model, fd_config)
 
         model.eval()
         # RL model not need set_state_dict

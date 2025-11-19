@@ -30,10 +30,14 @@ from fastdeploy.entrypoints.openai.protocol import (
     CompletionResponseChoice,
     CompletionResponseStreamChoice,
     CompletionStreamResponse,
+    CompletionTokenUsageInfo,
     ErrorInfo,
     ErrorResponse,
+    PromptTokenUsageInfo,
     UsageInfo,
 )
+from fastdeploy.trace.constants import LoggingEventName
+from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import (
     ErrorCode,
     ErrorType,
@@ -83,7 +87,11 @@ class OpenAIServingCompletion:
                     error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
                 )
         created_time = int(time.time())
-        if request.user is not None:
+        if request.request_id is not None:
+            request_id = request.request_id
+            if not request_id.startswith("cmpl-"):
+                request_id = f"cmpl-{request_id}"
+        elif request.user is not None:
             request_id = f"cmpl-{request.user}-{uuid.uuid4()}"
         else:
             request_id = f"cmpl-{uuid.uuid4()}"
@@ -133,6 +141,7 @@ class OpenAIServingCompletion:
         api_server_logger.info(f"Start preprocessing request: req_id={request_id}), num_choices={num_choices}")
         prompt_batched_token_ids = []
         prompt_tokens_list = []
+        max_tokens_list = []
         try:
             if self.max_waiting_time < 0:
                 await self.engine_client.semaphore.acquire()
@@ -159,6 +168,7 @@ class OpenAIServingCompletion:
                         prompt_token_ids = prompt_token_ids.tolist()
                     prompt_tokens_list.append(current_req_dict.get("prompt_tokens"))
                     prompt_batched_token_ids.append(prompt_token_ids)
+                    max_tokens_list.append(current_req_dict.get("max_tokens"))
                     del current_req_dict
             except ParameterError as e:
                 api_server_logger.error(f"OpenAIServingCompletion format error: {e}, {e.message}")
@@ -183,6 +193,7 @@ class OpenAIServingCompletion:
                     model_name=request.model,
                     prompt_batched_token_ids=prompt_batched_token_ids,
                     prompt_tokens_list=prompt_tokens_list,
+                    max_tokens_list=max_tokens_list,
                 )
             else:
                 try:
@@ -194,6 +205,7 @@ class OpenAIServingCompletion:
                         model_name=request.model,
                         prompt_batched_token_ids=prompt_batched_token_ids,
                         prompt_tokens_list=prompt_tokens_list,
+                        max_tokens_list=max_tokens_list,
                     )
                 except Exception as e:
                     error_msg = (
@@ -216,6 +228,7 @@ class OpenAIServingCompletion:
         model_name: str,
         prompt_batched_token_ids: list(),
         prompt_tokens_list: list(),
+        max_tokens_list: list(),
     ):
         """
         Process the full completion request with multiple choices.
@@ -304,12 +317,14 @@ class OpenAIServingCompletion:
                 prompt_batched_token_ids=prompt_batched_token_ids,
                 completion_batched_token_ids=completion_batched_token_ids,
                 prompt_tokens_list=prompt_tokens_list,
+                max_tokens_list=max_tokens_list,
             )
             api_server_logger.info(f"Completion response: {res.model_dump_json()}")
             return res
         except Exception as e:
             api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)
         finally:
+            trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             self.engine_client.semaphore.release()
             if dealer is not None:
                 await self.engine_client.connection_manager.cleanup_request(request_id)
@@ -356,6 +371,7 @@ class OpenAIServingCompletion:
         model_name: str,
         prompt_batched_token_ids: list(),
         prompt_tokens_list: list(),
+        max_tokens_list: list(),
     ):
         """
         Process the stream completion request.
@@ -369,7 +385,10 @@ class OpenAIServingCompletion:
                 req_id = f"{request_id}_{i}"
                 dealer.write([b"", req_id.encode("utf-8")])  # 发送多路请求
             output_tokens = [0] * num_choices
+            num_cache_tokens = [0] * num_choices
+            num_image_tokens = [0] * num_choices
             inference_start_time = [0] * num_choices
+            reasoning_tokens = [0] * num_choices
             first_iteration = [True] * num_choices
             tool_called = [False] * num_choices
             max_streaming_response_tokens = (
@@ -457,7 +476,12 @@ class OpenAIServingCompletion:
                             draft_logprobs_res = self._create_completion_logprobs(
                                 output_draft_top_logprobs, request.logprobs, 0
                             )
-                    output_tokens[idx] += 1
+                    output_tokens[idx] += len(output.get("token_ids", [])) or 0
+                    num_cache_tokens[idx] += output.get("num_cache_tokens") or 0
+                    if output.get("num_image_tokens"):
+                        output_tokens[idx] += output.get("num_image_tokens")
+                        num_image_tokens[idx] += output.get("num_image_tokens")
+                    reasoning_tokens[idx] += output.get("reasoning_token_num", 0)
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
                         text=output["text"],
@@ -484,7 +508,10 @@ class OpenAIServingCompletion:
 
                     if res["finished"]:
                         choices[-1].finish_reason = self.calc_finish_reason(
-                            request.max_tokens, output_tokens[idx], output, tool_called[idx]
+                            max_tokens_list[idx // (1 if request.n is None else request.n)],
+                            output_tokens[idx],
+                            output,
+                            tool_called[idx],
                         )
 
                     send_idx = output.get("send_idx")
@@ -524,6 +551,10 @@ class OpenAIServingCompletion:
                                         prompt_batched_token_ids[idx // (1 if request.n is None else request.n)]
                                     )
                                     + output_tokens[idx],
+                                    prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cache_tokens[idx]),
+                                    completion_tokens_details=CompletionTokenUsageInfo(
+                                        image_tokens=num_image_tokens[idx], reasoning_tokens=reasoning_tokens[idx]
+                                    ),
                                 ),
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
@@ -533,6 +564,7 @@ class OpenAIServingCompletion:
             api_server_logger.error(f"Error in completion_stream_generator: {e}, {str(traceback.format_exc())}")
             yield f"data: {ErrorResponse(error=ErrorInfo(message=str(e), code='400', type=ErrorType.INTERNAL_ERROR)).model_dump_json(exclude_unset=True)}\n\n"
         finally:
+            trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             del request
             if dealer is not None:
                 await self.engine_client.connection_manager.cleanup_request(request_id)
@@ -549,10 +581,14 @@ class OpenAIServingCompletion:
         prompt_batched_token_ids: list(),
         completion_batched_token_ids: list(),
         prompt_tokens_list: list(),
+        max_tokens_list: list(),
     ) -> CompletionResponse:
         choices: List[CompletionResponseChoice] = []
         num_prompt_tokens = 0
         num_generated_tokens = 0
+        num_cache_tokens = 0
+        num_image_tokens = 0
+        num_reasoning_tokens = 0
 
         for idx in range(len(final_res_batch)):
             final_res = final_res_batch[idx]
@@ -582,7 +618,12 @@ class OpenAIServingCompletion:
             else:
                 token_ids = output["token_ids"]
                 output_text = output["text"]
-            finish_reason = self.calc_finish_reason(request.max_tokens, final_res["output_token_ids"], output, False)
+            finish_reason = self.calc_finish_reason(
+                max_tokens_list[idx // (1 if request.n is None else request.n)],
+                final_res["output_token_ids"],
+                output,
+                False,
+            )
 
             choice_data = CompletionResponseChoice(
                 token_ids=token_ids,
@@ -607,12 +648,22 @@ class OpenAIServingCompletion:
             num_generated_tokens += final_res["output_token_ids"]
 
             num_prompt_tokens += len(prompt_token_ids)
+            num_cache_tokens += output.get("num_cache_tokens") or 0
+            if output.get("num_image_tokens"):
+                num_generated_tokens += output.get("num_image_tokens")
+                num_image_tokens += output.get("num_image_tokens")
+
+            num_reasoning_tokens += output.get("reasoning_token_num", 0)
 
         num_prompt_tokens = num_prompt_tokens // (1 if request.n is None else request.n)
         usage = UsageInfo(
             prompt_tokens=num_prompt_tokens,
             completion_tokens=num_generated_tokens,
             total_tokens=num_prompt_tokens + num_generated_tokens,
+            prompt_tokens_details=PromptTokenUsageInfo(cached_tokens=num_cache_tokens),
+            completion_tokens_details=CompletionTokenUsageInfo(
+                reasoning_tokens=num_reasoning_tokens, image_tokens=num_image_tokens
+            ),
         )
         del request
 

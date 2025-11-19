@@ -20,7 +20,7 @@ from typing import Dict, List, Optional, Tuple
 
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.scheduler.data import ScheduledRequest, ScheduledResponse
-from fastdeploy.utils import scheduler_logger
+from fastdeploy.utils import envs, scheduler_logger
 
 
 class LocalScheduler:
@@ -195,6 +195,20 @@ class LocalScheduler:
         results += [(request_id, "duplicated request_id") for request_id in duplicated_ids]
         return results
 
+    def has_request(self, request_id: str) -> bool:
+        """
+        Check if there are any pending requests in the scheduler.
+
+        Args:
+            request_id: Optional specific request ID to check.
+                        If None, checks whether there are any pending requests.
+
+        Returns:
+            True if there are pending requests, False otherwise.
+        """
+        with self.mutex:
+            return request_id in self.requests
+
     def calc_required_blocks(self, token_num, block_size):
         """
         Calculate the number of blocks needed for a given number of tokens.
@@ -246,9 +260,9 @@ class LocalScheduler:
                 self.wait_request_timeout,
             )
 
+            requests: List[Request] = []
             required_total_blocks = 0
             current_prefill_tokens = 0
-            requests: List[Request] = []
             long_partial_requests, short_partial_requests = 0, 0
             for request_id in batch_ids:
                 request = self.requests[request_id]
@@ -258,22 +272,23 @@ class LocalScheduler:
                 if required_total_blocks > available_blocks:
                     break
 
-                if self.enable_chunked_prefill:
-                    if request.prompt_tokens_ids_len > self.long_prefill_token_threshold:
-                        # 长请求
-                        long_partial_requests += 1
-                        if long_partial_requests > self.max_long_partial_prefills:
+                if not envs.FD_ENABLE_MAX_PREFILL:
+                    if self.enable_chunked_prefill:
+                        if request.prompt_tokens_ids_len > self.long_prefill_token_threshold:
+                            # 长请求
+                            long_partial_requests += 1
+                            if long_partial_requests > self.max_long_partial_prefills:
+                                break
+                        else:
+                            short_partial_requests += 1
+
+                        if short_partial_requests + long_partial_requests > self.max_num_partial_prefills:
                             break
                     else:
-                        short_partial_requests += 1
-
-                    if short_partial_requests + long_partial_requests > self.max_num_partial_prefills:
-                        break
-                else:
-                    if current_prefill_tokens > max_num_batched_tokens:
-                        break
-
+                        if current_prefill_tokens > max_num_batched_tokens:
+                            break
                 requests.append(request.raw)
+
             self.ids_read_cursor += len(requests)
 
         if len(batch_ids) > 0 and len(requests) == 0:
@@ -291,6 +306,7 @@ class LocalScheduler:
         Args:
             results: List of RequestOutput objects containing results
         """
+        scheduler_logger.debug(f"put results: {results}")
         responses: List[ScheduledResponse] = [ScheduledResponse(result) for result in results]
 
         finished_responses = [response.request_id for response in responses if response.finished]
@@ -353,4 +369,8 @@ class LocalScheduler:
                 if finished:
                     self._recycle(request_id)
                     scheduler_logger.info(f"Scheduler has pulled a finished response: {[request_id]}")
+
+            if results:
+                scheduler_logger.debug(f"get responses, {results}")
+
             return results

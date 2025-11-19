@@ -55,7 +55,7 @@ from fastdeploy.model_executor.models.model_base import (
 )
 from fastdeploy.platforms import current_platform
 
-if current_platform.is_cuda():
+if current_platform.is_cuda() or current_platform.is_maca():
     from fastdeploy.model_executor.ops.gpu import (
         get_position_ids_and_mask_encoder_batch,
     )
@@ -271,6 +271,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             input_size=self.num_attention_heads * self.v_head_dim,
             output_size=self.hidden_size,
             with_bias=False,
+            layer_id=layer_id,
         )
 
         self.kv_b_proj_bmm = KVBatchLinear(
@@ -344,19 +345,19 @@ class DeepseekV3MLAAttention(nn.Layer):
             [self.q_lora_rank, self.kv_lora_rank, self.qk_rope_head_dim], axis=-1
         )
 
-        query = self.q_a_layernorm(query)
+        query = self.q_a_layernorm(query)[0]
         query = self.q_b_proj(query)
-        query = query.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
+        query.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
         query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
 
-        key_pe = key_pe.reshape([-1, 1, self.qk_rope_head_dim])
-        compressed_kv = self.kv_a_layernorm(compressed_kv)
-
+        key_pe.reshape_([-1, 1, self.qk_rope_head_dim])
         query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
+
+        compressed_kv = self.kv_a_layernorm(compressed_kv)[0]
 
         if forward_meta.max_len_tensor_cpu[1]:  # max_enc_len_this_time
             key_value = self.kv_b_proj(compressed_kv)
-            key_value = key_value.reshape(
+            key_value.reshape_(
                 [
                     -1,
                     self.num_attention_heads_tp,
@@ -381,9 +382,9 @@ class DeepseekV3MLAAttention(nn.Layer):
                 forward_meta=forward_meta,
             )
 
-            fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
+            fmha_out_prefill.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
             fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
-            fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
+            fmha_out_prefill.reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
             fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
 
             fmha_out = fmha_out_prefill
@@ -392,7 +393,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
 
             q_input = paddle.concat([q_nope_out, query_pe], axis=-1)
-            q_input = q_input.reshape(
+            q_input.reshape_(
                 [
                     -1,
                     self.num_attention_heads_tp * (self.kv_lora_rank + self.qk_rope_head_dim),
@@ -479,6 +480,7 @@ class DeepSeekV3DecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
+            layer_id=layer_id,
         )
 
         self.post_attention_layernorm = RMSNorm(
@@ -486,6 +488,7 @@ class DeepSeekV3DecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
+            layer_id=layer_id,
         )
 
     def load_state_dict(self, state_dict):
@@ -504,11 +507,9 @@ class DeepSeekV3DecoderLayer(nn.Layer):
         mask_encoder_batch: paddle.Tensor,
     ):
         """ """
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
-        else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        hidden_states, residual = self.input_layernorm(
+            hidden_states, residual_input=residual, forward_meta=forward_meta
+        )
 
         hidden_states = self.self_attn(forward_meta, hidden_states, position_ids, mask_encoder_batch)
 
@@ -588,8 +589,7 @@ class DeepSeekV3Model(nn.Layer):
                 position_ids,
                 mask_encoder_batch,
             )
-        hidden_states = hidden_states + residual
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
         return out
 
@@ -671,7 +671,7 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
             param_down_proj_name="experts.down_proj_",
         )
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             loaded_weight_name = loaded_weight_name.replace("deepseek_v3", "model")
 
@@ -728,7 +728,7 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         seq_lens_decoder = forward_meta.seq_lens_decoder
         seq_lens_this_time = forward_meta.seq_lens_this_time
 
-        current_total_tokens = paddle.sum(seq_lens_this_time)
+        current_total_tokens = forward_meta.ids_remove_padding.shape[0]
         position_ids = self.position_ids_buffer[:current_total_tokens]
         mask_encoder_batch = self.mask_encoder_batch_buffer[:current_total_tokens]
 

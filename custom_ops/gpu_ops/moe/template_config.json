@@ -1,0 +1,27 @@
+{
+  "moe_fast_hardamard_impl": {
+    "name": "moe_fast_hardamard_impl",
+    "function_name": "MoeFastHardamardImplWrapper",
+    "impl_file": "moe_fast_hardamard_impl.cuh",
+    "template_params": [
+      "T",
+      "OutT",
+      "kLogN",
+      "VecSize",
+      "kNChunks",
+      "kThreads",
+      "UseDiagonalBlockMatrix"
+    ],
+    "dispatch_params": {},
+    "data_types": [
+      ["phi::dtype::float16", "phi::dtype::float16", "float16_float16"],
+      ["phi::dtype::float16", "int8_t", "float16_int8"],
+      ["phi::dtype::bfloat16", "phi::dtype::bfloat16", "bfloat16_bfloat16"],
+      ["phi::dtype::bfloat16", "int8_t", "bfloat16_int8"],
+      ["phi::dtype::bfloat16", "phi::dtype::float8_e4m3fn", "bfloat16_fp8"]
+    ],
+    "max_instances_per_file": 16,
+    "file_prefix": "moe_fast_hardamard_impl_",
+    "function_signature": "template void {function_name}{template_args}(\n    const T *x,\n    const int64_t *expert_idx_per_token,\n    const int64_t *recv_expert_count,\n    const T *shift,\n    const T *smooth,\n    const float* quant_scales,\n    const int quant_round_type,\n    const float quant_max_bound,\n    const float quant_min_bound,\n    const int64_t token_num,\n    const int64_t dim,\n    const int num_max_tokens_per_expert,\n    bool used_in_ep_low_latency,\n    OutT* out,\n    cudaStream_t stream);\n\n"
+  }
+}

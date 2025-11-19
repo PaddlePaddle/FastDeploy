@@ -73,9 +73,9 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         self.assertTrue(serving_completion._check_master())
 
     def test_calc_finish_reason_tool_calls(self):
-        # 创建一个模拟的engine_client，并设置reasoning_parser为"ernie_x1"
+        # 创建一个模拟的engine_client，并设置reasoning_parser为"ernie-x1"
         engine_client = Mock()
-        engine_client.reasoning_parser = "ernie_x1"
+        engine_client.reasoning_parser = "ernie-x1"
         # 创建一个OpenAIServingCompletion实例
         serving_completion = OpenAIServingCompletion(engine_client, None, "pid", "ips", 360)
         # 创建一个模拟的output，并设置finish_reason为"tool_call"
@@ -86,9 +86,9 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         assert result == "tool_calls"
 
     def test_calc_finish_reason_stop(self):
-        # 创建一个模拟的engine_client，并设置reasoning_parser为"ernie_x1"
+        # 创建一个模拟的engine_client，并设置reasoning_parser为"ernie-x1"
         engine_client = Mock()
-        engine_client.reasoning_parser = "ernie_x1"
+        engine_client.reasoning_parser = "ernie-x1"
         # 创建一个OpenAIServingCompletion实例
         serving_completion = OpenAIServingCompletion(engine_client, None, "pid", "ips", 360)
         # 创建一个模拟的output，并设置finish_reason为其他值
@@ -123,6 +123,7 @@ class TestOpenAIServingCompletion(unittest.TestCase):
                         "a": 0.1,
                         "b": 0.2,
                     },
+                    "reasoning_token_num": 10,
                 },
                 "output_token_ids": 3,
             },
@@ -134,6 +135,7 @@ class TestOpenAIServingCompletion(unittest.TestCase):
                         "a": 0.3,
                         "b": 0.4,
                     },
+                    "reasoning_token_num": 20,
                 },
                 "output_token_ids": 3,
             },
@@ -157,6 +159,7 @@ class TestOpenAIServingCompletion(unittest.TestCase):
             prompt_batched_token_ids=prompt_batched_token_ids,
             completion_batched_token_ids=completion_batched_token_ids,
             prompt_tokens_list=["1", "1"],
+            max_tokens_list=[10, 10],
         )
 
         assert completion_response.id == request_id
@@ -167,6 +170,8 @@ class TestOpenAIServingCompletion(unittest.TestCase):
         # 验证 choices 的 text 属性
         assert completion_response.choices[0].text == "Hello, world! world!"
         assert completion_response.choices[1].text == "Hello, world! world!"
+
+        assert completion_response.usage.completion_tokens_details.reasoning_tokens == 30
 
 
 if __name__ == "__main__":

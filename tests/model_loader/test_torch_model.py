@@ -22,15 +22,14 @@ project_root = os.path.abspath(os.path.join(current_dir, ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+os.environ["FD_USE_MACHETE"] = "0"
+
 from tests.model_loader.utils import (
     calculate_diff_rate,
     form_model_get_output_topp0,
     get_torch_model_path,
     run_with_timeout,
 )
-
-FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
-FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 
 prompts = ["北京天安门在哪里?"]
 
@@ -132,9 +131,7 @@ def test_model_against_baseline(
             max_tokens,
             quantization,
             "default_v1",
-            FD_ENGINE_QUEUE_PORT,
             prompts,
-            FD_CACHE_QUEUE_PORT,
         ),
     )
 

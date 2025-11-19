@@ -91,17 +91,18 @@ class TestQwenVLProcessor(unittest.TestCase):
         config.vision_config.tokens_per_second = 2
 
         self.patcher_parse_image = patch(
-            "fastdeploy.entrypoints.chat_utils.MultiModalPartParser.parse_image", return_value=mock_pil_image(480, 640)
+            "fastdeploy.entrypoints.chat_utils.MultimodalPartParser.parse_image", return_value=mock_pil_image(480, 640)
         )
         self.patcher_parse_image.start()
 
         self.patcher_parse_video = patch(
-            "fastdeploy.entrypoints.chat_utils.MultiModalPartParser.parse_video", return_value=b"123"
+            "fastdeploy.entrypoints.chat_utils.MultimodalPartParser.parse_video", return_value=b"123"
         )
         self.patcher_parse_video.start()
 
         self.patcher_read_frames = patch(
-            "fastdeploy.input.qwen_vl_processor.process.read_frames", return_value=mock_read_frames(480, 640, 5, 2)
+            "fastdeploy.input.qwen_vl_processor.process.DataProcessor._load_and_process_video",
+            return_value=mock_read_frames(480, 640, 5, 2),
         )
         self.patcher_read_frames.start()
 
@@ -163,8 +164,6 @@ class TestQwenVLProcessor(unittest.TestCase):
         self.assertEqual(
             result.multimodal_inputs["image_type_ids"].shape[0], result.multimodal_inputs["grid_thw"][:, 0].sum()
         )
-        self.assertEqual(result.multimodal_inputs["pic_cnt"], 1)
-        self.assertEqual(result.multimodal_inputs["video_cnt"], 1)
 
     def test_process_request_dict(self):
         """
@@ -204,8 +203,26 @@ class TestQwenVLProcessor(unittest.TestCase):
         self.assertEqual(
             result["multimodal_inputs"]["image_type_ids"].shape[0], result["multimodal_inputs"]["grid_thw"][:, 0].sum()
         )
-        self.assertEqual(result["multimodal_inputs"]["pic_cnt"], 1)
-        self.assertEqual(result["multimodal_inputs"]["video_cnt"], 1)
+
+    def test_process_request_dict_enable_thinking(self):
+        num_completion_token_ids = 10
+        request = {
+            "request_id": "12345",
+            "completion_token_ids": [1] * num_completion_token_ids,
+            "stop": ["stop", "eof"],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Hello"},
+                    ],
+                }
+            ],
+            "chat_template_kwargs": {"enable_thinking": True},
+        }
+
+        result = self.processor.process_request_dict(request, 100)
+        self.assertEqual(result.get("enable_thinking"), False)
 
     def test_prompt(self):
         """
@@ -240,8 +257,6 @@ class TestQwenVLProcessor(unittest.TestCase):
         self.assertEqual(
             result.multimodal_inputs["image_type_ids"].shape[0], result.multimodal_inputs["grid_thw"][:, 0].sum()
         )
-        self.assertEqual(result.multimodal_inputs["pic_cnt"], 1)
-        self.assertEqual(result.multimodal_inputs["video_cnt"], 1)
 
     def test_message_and_prompt(self):
         """

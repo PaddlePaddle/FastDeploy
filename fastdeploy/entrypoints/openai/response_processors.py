@@ -16,6 +16,7 @@
 
 from typing import Any, List, Optional
 
+from fastdeploy.entrypoints.openai.usage_calculator import count_tokens
 from fastdeploy.input.tokenzier_client import AsyncTokenizerClient, ImageDecodeRequest
 from fastdeploy.utils import api_server_logger
 
@@ -99,10 +100,12 @@ class ChatResponseProcessor:
                                 image_ret = await self.decoder_client.decode_image(
                                     request=ImageDecodeRequest(req_id=req_id, data=all_tokens)
                                 )
-                                image["url"] = image_ret["http_url"]
+                                if image_ret is not None:
+                                    image["url"] = image_ret["http_url"]
                             image_output = self._end_image_code_request_output
                             image_output["outputs"]["multipart"] = [image]
                             image_output["outputs"]["token_ids"] = all_tokens
+                            image_output["outputs"]["num_image_tokens"] = count_tokens(all_tokens)
                             yield image_output
 
                     self.data_processor.process_response_dict(
@@ -123,6 +126,7 @@ class ChatResponseProcessor:
                 token_ids = request_output["outputs"]["token_ids"]
                 if token_ids[-1] == self.eos_token_id:
                     multipart = []
+                    num_image_tokens = 0
                     for part in self._multipart_buffer:
                         if part["decode_type"] == 0:
                             self.data_processor.process_response_dict(
@@ -138,12 +142,17 @@ class ChatResponseProcessor:
                             if self.decoder_client:
                                 req_id = part["request_output"]["request_id"]
                                 all_tokens = part["request_output"]["outputs"]["token_ids"]
+                                num_image_tokens += count_tokens(all_tokens)
+
                                 image_ret = await self.decoder_client.decode_image(
                                     request=ImageDecodeRequest(req_id=req_id, data=all_tokens)
                                 )
-                                image["url"] = image_ret["http_url"]
+
+                                if image_ret is not None:
+                                    image["url"] = image_ret["http_url"]
                             multipart.append(image)
 
                     lasrt_request_output = self._multipart_buffer[-1]["request_output"]
                     lasrt_request_output["outputs"]["multipart"] = multipart
+                    lasrt_request_output["outputs"]["num_image_tokens"] = num_image_tokens
                     yield lasrt_request_output

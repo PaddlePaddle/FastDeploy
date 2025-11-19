@@ -17,7 +17,6 @@ import os
 import re
 import shutil
 import signal
-import socket
 import subprocess
 import sys
 import time
@@ -25,56 +24,16 @@ import time
 import openai
 import pytest
 import requests
+from utils.serving_utils import (
+    FD_API_PORT,
+    FD_CACHE_QUEUE_PORT,
+    FD_ENGINE_QUEUE_PORT,
+    FD_METRICS_PORT,
+    clean_ports,
+    is_port_open,
+)
 
-# Read ports from environment variables; use default values if not set
-FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
-FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8133))
-FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
-FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
-
-# List of ports to clean before and after tests
-PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT]
-
-
-def is_port_open(host: str, port: int, timeout=1.0):
-    """
-    Check if a TCP port is open on the given host.
-    Returns True if connection succeeds, False otherwise.
-    """
-    try:
-        with socket.create_connection((host, port), timeout):
-            return True
-    except Exception:
-        return False
-
-
-def kill_process_on_port(port: int):
-    """
-    Kill processes that are listening on the given port.
-    Uses `lsof` to find process ids and sends SIGKILL.
-    """
-    try:
-        output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
-        current_pid = os.getpid()
-        parent_pid = os.getppid()
-        for pid in output.splitlines():
-            pid = int(pid)
-            if pid in (current_pid, parent_pid):
-                print(f"Skip killing current process (pid={pid}) on port {port}")
-                continue
-            os.kill(pid, signal.SIGKILL)
-            print(f"Killed process on port {port}, pid={pid}")
-    except subprocess.CalledProcessError:
-        pass
-
-
-def clean_ports():
-    """
-    Kill all processes occupying the ports listed in PORTS_TO_CLEAN.
-    """
-    for port in PORTS_TO_CLEAN:
-        kill_process_on_port(port)
-    time.sleep(2)
+os.environ["FD_USE_MACHETE"] = "0"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -245,9 +204,9 @@ def test_consistency_between_runs(api_url, headers, consistent_payload):
     # base result
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2-fp32")
+        base_file = os.path.join(base_path, "ernie-4_5-vl-base-tp2-dev")
     else:
-        base_file = "ernie-4_5-vl-base-tp2-fp32"
+        base_file = "ernie-4_5-vl-base-tp2-dev"
     with open(base_file, "r") as f:
         content2 = f.read()
 
@@ -314,6 +273,9 @@ def test_non_streaming_chat(openai_client):
     assert len(response.choices) > 0
     assert hasattr(response.choices[0], "message")
     assert hasattr(response.choices[0].message, "content")
+    assert hasattr(response, "usage")
+    assert hasattr(response.usage, "completion_tokens_details")
+    assert hasattr(response.usage.completion_tokens_details, "reasoning_tokens")
 
 
 # Streaming test
@@ -348,13 +310,64 @@ def test_streaming_chat(openai_client, capsys):
         temperature=1,
         max_tokens=512,
         stream=True,
+        stream_options={"include_usage": True, "continuous_usage_stats": True},
     )
 
     output = []
     for chunk in response:
+        assert hasattr(chunk, "usage")
+        assert hasattr(chunk.usage, "completion_tokens_details")
+        assert hasattr(chunk.usage.completion_tokens_details, "reasoning_tokens")
+        if hasattr(chunk, "choices") and len(chunk.choices) == 0:
+            continue
         if hasattr(chunk.choices[0], "delta") and hasattr(chunk.choices[0].delta, "content"):
             output.append(chunk.choices[0].delta.content)
     assert len(output) > 2
+
+
+def test_non_streaming_completion(openai_client):
+    """Test non-streaming completion functionality with the local service"""
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello world",
+        temperature=1,
+        max_tokens=53,
+        stream=False,
+    )
+
+    assert hasattr(response, "choices")
+    assert len(response.choices) > 0
+    assert hasattr(response.choices[0], "text")
+    assert hasattr(response, "usage")
+    assert hasattr(response.usage, "completion_tokens_details")
+    assert hasattr(response.usage.completion_tokens_details, "reasoning_tokens")
+    assert hasattr(response.usage, "completion_tokens")
+    assert response.usage.completion_tokens >= response.usage.completion_tokens_details.reasoning_tokens
+
+
+def test_streaming_completion(openai_client):
+    """Test streaming completion functionality with the local service"""
+    response = openai_client.completions.create(
+        model="default",
+        prompt="Hello world",
+        temperature=1,
+        max_tokens=512,
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+
+    output = []
+    for chunk in response:
+        if hasattr(chunk, "choices") and len(chunk.choices) == 0:
+            assert hasattr(chunk, "usage")
+            assert hasattr(chunk.usage, "completion_tokens_details")
+            assert hasattr(chunk.usage.completion_tokens_details, "reasoning_tokens")
+            assert hasattr(chunk.usage, "completion_tokens")
+            assert chunk.usage.completion_tokens >= chunk.usage.completion_tokens_details.reasoning_tokens
+            continue
+        if hasattr(chunk.choices[0], "text"):
+            output.append(chunk.choices[0].text)
+    assert len(output) > 0
 
 
 # ==========================

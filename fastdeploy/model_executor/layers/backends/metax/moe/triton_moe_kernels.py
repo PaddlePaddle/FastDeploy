@@ -16,7 +16,7 @@ import triton
 import triton.language as tl
 
 
-@triton.jit
+@triton.jit()
 def fused_moe_kernel_paddle(
     a_ptr,
     b_ptr,
@@ -30,20 +30,20 @@ def fused_moe_kernel_paddle(
     # Matrix dimensions
     max_possible_num_post_padded,
     num_valid_tokens,
-    N,
-    K,
-    stride_am,
-    stride_ak,
-    stride_be,
-    stride_bk,
-    stride_bn,
-    stride_cm,
-    stride_cn,
-    stride_asm,
-    stride_ask,
-    stride_bse,
-    stride_bsk,
-    stride_bsn,
+    N: tl.constexpr,
+    K: tl.constexpr,
+    stride_am: tl.constexpr,
+    stride_ak: tl.constexpr,
+    stride_be: tl.constexpr,
+    stride_bk: tl.constexpr,
+    stride_bn: tl.constexpr,
+    stride_cm: tl.constexpr,
+    stride_cn: tl.constexpr,
+    stride_asm: tl.constexpr,
+    stride_ask: tl.constexpr,
+    stride_bse: tl.constexpr,
+    stride_bsk: tl.constexpr,
+    stride_bsn: tl.constexpr,
     # Block size for block-wise fp8 quantization
     group_n: tl.constexpr,
     group_k: tl.constexpr,
@@ -57,6 +57,7 @@ def fused_moe_kernel_paddle(
     compute_type_enum: tl.constexpr,
     use_fp8_w8a8: tl.constexpr,
     use_int8_w8a16: tl.constexpr,
+    per_channel_quant: tl.constexpr,
     even_Ks: tl.constexpr,
 ):
     """
@@ -119,6 +120,13 @@ def fused_moe_kernel_paddle(
             a_scale_ptrs = a_scale_ptr + (offs_token // top_k) * stride_asm
             offs_bsn = offs_bn // group_n
             b_scale_ptrs = b_scale_ptr + off_experts * stride_bse + offs_bsn * stride_bsn
+        # channel-wise
+        elif per_channel_quant:
+            b_scale_ptrs = b_scale_ptr + off_experts * stride_bse + offs_bn[None, :] * stride_bsn
+            b_scale = tl.load(b_scale_ptrs)
+            # Load per-token scale for activations
+            a_scale_ptrs = a_scale_ptr + (offs_token // top_k) * stride_asm
+            a_scale = tl.load(a_scale_ptrs, mask=token_mask, other=0.0)[:, None]
         else:
             # (Zkk): every expert has one activation scale and weight scale.
             a_scale = tl.load(a_scale_ptr + off_experts)

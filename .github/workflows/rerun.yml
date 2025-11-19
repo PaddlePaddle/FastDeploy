@@ -1,0 +1,167 @@
+name: Re-run
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  re-run:
+    if: ${{ github.event.issue.pull_request && contains(github.event.comment.body, '/re-run') && github.event.comment.user.login == github.event.issue.user.login }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
+
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Rerun all failed jobs
+        if: ${{ contains(github.event.comment.body, 'all-failed') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'all-failed'
+
+      - name: Rerun Approval
+        if: ${{ contains(github.event.comment.body, 'approval') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'Approval'
+
+      - name: Rerun CI_ILUVATAR
+        if: ${{ contains(github.event.comment.body, 'ci_iluvatar') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'CI_ILUVATAR'
+
+      - name: Rerun CI_XPU
+        if: ${{ contains(github.event.comment.body, 'ci_xpu') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'CI_XPU'
+
+      - name: Rerun Check PR Template
+        if: ${{ contains(github.event.comment.body, 'check_pr_template') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'Check PR Template'
+
+      - name: Rerun Codestyle-check
+        if: ${{ contains(github.event.comment.body, 'codestyle') || contains(github.event.comment.body, 'pre_commit') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'Pre Commit'
+
+      - name: Rerun Clone
+        if: ${{ contains(github.event.comment.body, 'clone') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'FD-Clone-Linux / code-clone'
+
+      - name: Rerun Build
+        if: ${{ contains(github.event.comment.body, 'build') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'FD-Build-Linux / fd-build'
+
+      - name: Rerun run_ce_cases
+        if: ${{ contains(github.event.comment.body, 'run_ce_cases') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'Extracted partial CE model tasks to run in CI. / run_ce_cases'
+
+      - name: Rerun accuracy_tests
+        if: ${{ contains(github.event.comment.body, 'accuracy_tests') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'Run Accuracy Tests / accuracy_tests'
+
+      - name: Rerun base_tests
+        if: ${{ contains(github.event.comment.body, 'base_tests') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'Run Base Tests / base_tests'
+
+      - name: Rerun run_tests_logprob
+        if: ${{ contains(github.event.comment.body, 'run_tests_logprob') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'Run FastDeploy LogProb Tests / run_tests_logprob'
+
+      - name: Rerun run_tests_with_coverage
+        if: ${{ contains(github.event.comment.body, 'run_tests_with_coverage') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'Run FastDeploy Unit Tests and Coverage / run_tests_with_coverage'
+
+      - name: Rerun diff_coverage_report
+        if: ${{ contains(github.event.comment.body, 'diff_coverage_report') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'Run FastDeploy Unit Tests and Coverage / diff_coverage_report'
+
+      - name: Rerun stable_tests
+        if: ${{ contains(github.event.comment.body, 'stable_tests') }}
+        uses: ./.github/actions/rerun-workflow
+        with:
+          PR_ID: ${{ github.event.issue.number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          JOB_NAME: 'Run Stable Tests / stable_tests'

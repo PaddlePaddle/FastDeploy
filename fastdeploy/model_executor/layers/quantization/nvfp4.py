@@ -185,18 +185,6 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         layer,
         **extra_weight_attrs,
     ):
-
-        # if not self.quant_config.is_checkpoint_nvfp4_serialized:
-        #     raise ValueError("NVFP4 quantization was selected, " " dynamic quantization is not supported.")
-
-        # input_size = layer.weight_shape[0]
-        # output_size = layer.weight_shape[1]
-        # if input_size % 16 != 0:
-        #     raise ValueError("Unsupported model when in features size is not multiple of 16")
-        # Weight
-        # 2 fp4 items are packed in the input dimension
-        # weight_scale_shape = [layer.weight_shape[1]]
-        # layer.weight_shape.reverse()
         extra_weight_attrs["output_dim"] = not extra_weight_attrs["output_dim"]
         weight_shape = layer.weight_shape[::-1]
         weight_shape[1] = weight_shape[1] // 2
@@ -303,25 +291,25 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         free_tensor(layer.weight_scale_2)
 
         layer.weight_scale_2 = layer.create_parameter(
-            shape=weight_scale_2.shape,  # output_size
+            shape=weight_scale_2.shape,
             dtype=weight_scale_2.dtype,
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
         layer.input_scale = layer.create_parameter(
-            shape=input_scale_2.shape,  # output_size
+            shape=input_scale_2.shape,
             dtype=input_scale_2.dtype,
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
         layer.alpha = layer.create_parameter(
-            shape=alpha.shape,  # output_size
+            shape=alpha.shape,
             dtype=alpha.dtype,
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
         )
         layer.input_scale_inv = layer.create_parameter(
-            shape=input_scale_inv.shape,  # output_size
+            shape=input_scale_inv.shape,
             dtype=input_scale_inv.dtype,
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
