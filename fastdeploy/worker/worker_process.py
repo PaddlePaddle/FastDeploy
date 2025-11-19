@@ -726,7 +726,7 @@ def parse_args():
     )
     parser.add_argument(
         "--disable_any_whitespace",
-        action="store_false",
+        action="store_true",
         help="Disable any whitespace for guided decoding.",
     )
     parser.add_argument(

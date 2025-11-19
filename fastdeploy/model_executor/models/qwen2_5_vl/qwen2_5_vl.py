@@ -231,7 +231,7 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
             process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings:
-            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight)
+            self.lm_head.linear.weight.set_value(self.model.embed_tokens.embeddings.weight.transpose([1, 0]))
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
