@@ -60,7 +60,7 @@ class BlockNode:
         last_used_time,
         parent=None,
         shared_count=1,
-        reverved_dec_block_ids=[],
+        reserved_dec_block_ids=[],
         cache_status=CacheStatus.GPU,
         is_persistent=False,
         persistent_shared_count=0,
@@ -93,7 +93,7 @@ class BlockNode:
         self.shared_count = shared_count
         self.last_used_time = last_used_time
         self.block_id = block_id
-        self.reverved_dec_block_ids = reverved_dec_block_ids
+        self.reserved_dec_block_ids = reserved_dec_block_ids
         self.cache_status = cache_status
         self.is_persistent = is_persistent
         self.persistent_shared_count = persistent_shared_count
