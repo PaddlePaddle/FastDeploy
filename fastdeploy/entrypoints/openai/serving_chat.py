@@ -298,7 +298,7 @@ class OpenAIServingChat:
                         num_input_video_tokens = res.get("num_input_video_tokens", 0)
                         for i in range(num_choices):
                             prompt_logprobs_res: Optional[PromptLogprobs] = None
-                            prompt_logprobs_tensors = res.get("prompt_logprobs_tensors", None)
+                            prompt_logprobs_tensors = res.get("prompt_logprobs", None)
                             if request.prompt_logprobs and prompt_logprobs_tensors is not None:
                                 num_prompt_logprobs = (
                                     request.prompt_logprobs
@@ -582,7 +582,7 @@ class OpenAIServingChat:
                             )
                             if draft_logprobs_res and draft_logprobs_res.content is not None:
                                 draft_logprob_contents[idx].extend(draft_logprobs_res.content)
-                    prompt_logprobs_tensors = data.get("prompt_logprobs_tensors", None)
+                    prompt_logprobs_tensors = data.get("prompt_logprobs", None)
                     if request.prompt_logprobs and prompt_logprobs_tensors is not None:
                         num_prompt_logprobs = (
                             request.prompt_logprobs
@@ -847,7 +847,7 @@ class OpenAIServingChat:
         prompt_token_ranks = ranks.tolist()
         prompt_logprobs = logprobs.tolist()
         token_ids = token_ids.tolist()
-        result: Optional[PromptLogprobs] = []
+        result: Optional[PromptLogprobs] = [None]
         # Make Logprob for each position.
         for pos in range(num_prompt_tokens):
             # Handle flattening.

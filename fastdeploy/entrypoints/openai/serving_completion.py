@@ -304,7 +304,7 @@ class OpenAIServingCompletion:
                             aggregated_draft_top_logprobs[rid][1].extend(output_draft_top_logprobs[1])
                             aggregated_draft_top_logprobs[rid][2].extend(output_draft_top_logprobs[2])
 
-                    output_prompt_logprobs_tensors = data.get("prompt_logprobs_tensors") or None
+                    output_prompt_logprobs_tensors = data.get("prompt_logprobs") or None
                     if output_prompt_logprobs_tensors is not None:
                         aggregated_prompt_logprobs_tensors[rid] = output_prompt_logprobs_tensors
 
@@ -444,7 +444,7 @@ class OpenAIServingCompletion:
                         raise ValueError("{}".format(res["error_msg"]))
                     prompt_logprobs_res: Optional[PromptLogprobs] = None
                     if first_iteration[idx]:
-                        prompt_logprobs_tensors = res.get("prompt_logprobs_tensors", None)
+                        prompt_logprobs_tensors = res.get("prompt_logprobs", None)
                         if request.prompt_logprobs and prompt_logprobs_tensors is not None:
                             num_prompt_logprobs = (
                                 request.prompt_logprobs
@@ -837,7 +837,7 @@ class OpenAIServingCompletion:
         prompt_token_ranks = ranks.tolist()
         prompt_logprobs = logprobs.tolist()
         token_ids = token_ids.tolist()
-        result: Optional[PromptLogprobs] = []
+        result: Optional[PromptLogprobs] = [None]
         # Make Logprob for each position.
         for pos in range(num_prompt_tokens):
             # Handle flattening.

@@ -21,7 +21,14 @@ import time
 import uuid
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.worker.output import PromptLogprobs
@@ -215,6 +222,7 @@ class ChatCompletionResponseChoice(BaseModel):
     Chat completion response choice.
     """
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     index: int
     message: ChatMessage
     logprobs: Optional[LogProbs] = None
@@ -277,6 +285,7 @@ class ChatCompletionResponseStreamChoice(BaseModel):
     Chat completion response choice for stream response.
     """
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     index: int
     delta: DeltaMessage
     logprobs: Optional[LogProbs] = None
@@ -304,6 +313,7 @@ class CompletionResponseChoice(BaseModel):
     Completion response choice.
     """
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     index: int
     text: str
     prompt_token_ids: Optional[List[int]] = None
@@ -348,6 +358,7 @@ class CompletionResponseStreamChoice(BaseModel):
     Completion response choice for stream response.
     """
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     index: int
     text: str
     arrival_time: float = None

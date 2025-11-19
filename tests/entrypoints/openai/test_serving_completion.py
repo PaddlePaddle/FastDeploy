@@ -210,11 +210,12 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
             result = self.serving_completion._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs)
 
-            # Verify result structure
-            self.assertEqual(len(result), num_prompt_tokens)
+            # Verify result structure (first element is None, then actual results)
+            self.assertEqual(len(result), num_prompt_tokens + 1)
+            self.assertIsNone(result[0])
 
-            # Check first position
-            first_pos_result = result[0]
+            # Check first position (index 1 since index 0 is None)
+            first_pos_result = result[1]
             self.assertEqual(len(first_pos_result), num_logprobs)
 
             # Check token IDs and logprobs for first position
@@ -247,8 +248,9 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
             result = self.serving_completion._build_prompt_logprobs(prompt_logprobs_tensors, -1)
 
-            self.assertEqual(len(result), num_prompt_tokens)
-            first_pos_result = result[0]
+            self.assertEqual(len(result), num_prompt_tokens + 1)
+            self.assertIsNone(result[0])
+            first_pos_result = result[1]
             self.assertEqual(len(first_pos_result), num_logprobs)
 
             # Verify all logprobs are included when num_prompt_logprobs=-1
@@ -273,8 +275,9 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
             result = self.serving_completion._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs)
 
-            self.assertEqual(len(result), num_prompt_tokens)
-            first_pos_result = result[0]
+            self.assertEqual(len(result), num_prompt_tokens + 1)
+            self.assertIsNone(result[0])
+            first_pos_result = result[1]
             self.assertEqual(len(first_pos_result), num_logprobs)
 
             # Check the single token
@@ -301,11 +304,12 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
             result = self.serving_completion._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs)
 
-            self.assertEqual(len(result), num_prompt_tokens)
+            self.assertEqual(len(result), num_prompt_tokens + 1)
+            self.assertIsNone(result[0])
 
-            # Check each position
+            # Check each position (index + 1 since index 0 is None)
             for pos in range(num_prompt_tokens):
-                pos_result = result[pos]
+                pos_result = result[pos + 1]
                 self.assertEqual(len(pos_result), num_logprobs)
 
                 # Verify token IDs and their properties
@@ -334,7 +338,8 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         result = self.serving_completion._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs)
 
-        self.assertEqual(len(result), num_prompt_tokens)
+        self.assertEqual(len(result), num_prompt_tokens + 1)
+        self.assertIsNone(result[0])
 
     def test_make_logprob_dict(self):
         """Test the static method _make_logprob_dict"""
@@ -448,7 +453,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             {
                 "request_id": "test_request_0",
                 "error_code": 200,
-                "prompt_logprobs_tensors": LogprobsTensors(
+                "prompt_logprobs": LogprobsTensors(
                     logprob_token_ids=paddle.to_tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=paddle.int64),
                     logprobs=paddle.to_tensor(
                         [[-0.1, -0.2, -0.3], [-0.4, -0.5, -0.6], [-0.7, -0.8, -0.9]], dtype=paddle.float32
@@ -504,6 +509,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             model_name="test_model",
             prompt_batched_token_ids=[[1, 2, 3]],
             prompt_tokens_list=["hello", "world"],
+            max_tokens_list=[100],
         )
 
         # Collect results
@@ -596,6 +602,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             model_name="test_model",
             prompt_batched_token_ids=[[1, 2, 3]],
             prompt_tokens_list=["hello", "world"],
+            max_tokens_list=[100],
         )
 
         # Collect results
@@ -637,7 +644,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             {
                 "request_id": "test_request_0",
                 "error_code": 200,
-                "prompt_logprobs_tensors": LogprobsTensors(
+                "prompt_logprobs": LogprobsTensors(
                     logprob_token_ids=paddle.to_tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=paddle.int64),
                     logprobs=paddle.to_tensor(
                         [[-0.1, -0.2, -0.3], [-0.4, -0.5, -0.6], [-0.7, -0.8, -0.9]], dtype=paddle.float32
@@ -697,6 +704,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             model_name="test_model",
             prompt_batched_token_ids=[[1, 2, 3]],
             prompt_tokens_list=["hello", "world"],
+            max_tokens_list=[100],
         )
 
         # Collect results
@@ -790,6 +798,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             model_name="test_model",
             prompt_batched_token_ids=[[1, 2, 3]],
             prompt_tokens_list=["hello", "world"],
+            max_tokens_list=[100],
         )
 
         # Collect results
@@ -873,7 +882,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             {
                 "request_id": "test_request_0",
                 "error_code": 200,
-                "prompt_logprobs_tensors": LogprobsTensors(
+                "prompt_logprobs": LogprobsTensors(
                     logprob_token_ids=paddle.to_tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=paddle.int64),
                     logprobs=paddle.to_tensor(
                         [[-0.1, -0.2, -0.3], [-0.4, -0.5, -0.6], [-0.7, -0.8, -0.9]], dtype=paddle.float32
@@ -926,13 +935,15 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             model_name="test_model",
             prompt_batched_token_ids=[[1, 2, 3]],
             prompt_tokens_list=["hello", "world"],
+            max_tokens_list=[100],
         )
 
         # Verify results
         self.assertIsNotNone(result)
         # Check that the response contains prompt_logprobs
         self.assertIsNotNone(result.choices[0].prompt_logprobs)
-        self.assertEqual(len(result.choices[0].prompt_logprobs), 3)  # 3 prompt tokens
+        self.assertEqual(len(result.choices[0].prompt_logprobs), 4)  # 3 prompt tokens + 1 None element
+        self.assertIsNone(result.choices[0].prompt_logprobs[0])  # First element should be None
 
     async def test_completion_full_generator_with_logprobs(self):
         """Test completion_full_generator with logprobs enabled"""
@@ -1012,6 +1023,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             model_name="test_model",
             prompt_batched_token_ids=[[1, 2, 3]],
             prompt_tokens_list=["hello", "world"],
+            max_tokens_list=[100],
         )
 
         # Verify results
@@ -1049,7 +1061,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             {
                 "request_id": "test_request_0",
                 "error_code": 200,
-                "prompt_logprobs_tensors": LogprobsTensors(
+                "prompt_logprobs": LogprobsTensors(
                     logprob_token_ids=paddle.to_tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=paddle.int64),
                     logprobs=paddle.to_tensor(
                         [[-0.1, -0.2, -0.3], [-0.4, -0.5, -0.6], [-0.7, -0.8, -0.9]], dtype=paddle.float32
@@ -1106,6 +1118,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             model_name="test_model",
             prompt_batched_token_ids=[[1, 2, 3]],
             prompt_tokens_list=["hello", "world"],
+            max_tokens_list=[100],
         )
 
         # Verify results
@@ -1113,7 +1126,8 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         # Check that the response contains both prompt_logprobs and logprobs
         self.assertIsNotNone(result.choices[0].prompt_logprobs)
         self.assertIsNotNone(result.choices[0].logprobs)
-        self.assertEqual(len(result.choices[0].prompt_logprobs), 3)  # 3 prompt tokens
+        self.assertEqual(len(result.choices[0].prompt_logprobs), 4)  # 3 prompt tokens + 1 None element
+        self.assertIsNone(result.choices[0].prompt_logprobs[0])  # First element should be None
         self.assertEqual(len(result.choices[0].logprobs.tokens), 1)  # 1 completion token
 
     async def test_completion_full_generator_without_logprobs(self):
@@ -1191,6 +1205,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             model_name="test_model",
             prompt_batched_token_ids=[[1, 2, 3]],
             prompt_tokens_list=["hello", "world"],
+            max_tokens_list=[100],
         )
 
         # Verify results

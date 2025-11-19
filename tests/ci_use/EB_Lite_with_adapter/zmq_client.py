@@ -1,6 +1,7 @@
 import threading
 import time
 import uuid
+from multiprocessing.reduction import ForkingPickler
 from threading import Event
 
 import msgpack
@@ -44,7 +45,7 @@ class LLMReqClient:
                     time.sleep(0.001)
                     continue
                 data = frames[-1]
-                response = msgpack.unpackb(data)
+                response = ForkingPickler.loads(data)
                 # print(f"get result data {response}")
                 result_queue.put(response)
                 if self.need_exit:

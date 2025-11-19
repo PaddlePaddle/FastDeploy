@@ -339,17 +339,21 @@ class EngineClient:
             err_msg = f"Invalid 'max_logprobs': must be >= -1, got {max_logprobs}."
             api_server_logger.error(err_msg)
             raise ValueError("max_logprobs", err_msg)
+        if max_logprobs > self.ori_vocab_size:
+            err_msg = f"Invalid 'max_logprobs': must be <= vocab_size {self.ori_vocab_size}, got {max_logprobs}."
+            api_server_logger.error(err_msg)
+            raise ValueError("max_logprobs", err_msg)
 
         prompt_logprobs = data.get("prompt_logprobs", None)
 
         if prompt_logprobs is not None:
-            if not self.enable_logprob:
-                err_msg = "Logprobs is disabled, please enable it in startup config."
-                api_server_logger.error(err_msg)
-                raise ParameterError("logprobs", err_msg)
-
             if os.getenv("FD_USE_GET_SAVE_OUTPUT_V1", "0") == "0":
                 err_msg = "prompt_logprobs is not support when FD_USE_GET_SAVE_OUTPUT_V1 is disabled."
+                api_server_logger.error(err_msg)
+                raise ParameterError("prompt_logprobs", err_msg)
+
+            if self.enable_prefix_caching:
+                err_msg = "prompt_logprobs is not support when prefix caching is enabled."
                 api_server_logger.error(err_msg)
                 raise ParameterError("prompt_logprobs", err_msg)
 
@@ -362,7 +366,7 @@ class EngineClient:
                 raise ValueError("prompt_logprobs", err_msg)
 
             if prompt_logprobs > max_logprobs:
-                err_msg = "Number of prompt_logprobs requested ({prompt_logprobs}) exceeds maximum allowed value ({max_logprobs})."
+                err_msg = f"Number of prompt_logprobs requested ({prompt_logprobs}) exceeds maximum allowed value ({max_logprobs})."
                 api_server_logger.error(err_msg)
                 raise ValueError("prompt_logprobs", err_msg)
 

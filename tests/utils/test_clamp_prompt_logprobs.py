@@ -22,17 +22,17 @@ from fastdeploy.worker.output import Logprob
 
 class TestClampPromptLogprobs(unittest.TestCase):
     def test_none_input(self):
-        """测试输入为None的情况"""
+        """Test case when input is None"""
         result = clamp_prompt_logprobs(None)
         self.assertIsNone(result)
 
     def test_empty_list(self):
-        """测试空列表输入"""
+        """Test empty list input"""
         result = clamp_prompt_logprobs([])
         self.assertEqual(result, [])
 
     def test_normal_logprobs(self):
-        """测试正常的logprobs值（不包含-inf）"""
+        """Test normal logprobs values (without -inf)"""
         logprob_dict = {
             1: Logprob(logprob=-2.5, rank=1, decoded_token="hello"),
             2: Logprob(logprob=-1.0, rank=2, decoded_token="world"),
@@ -41,26 +41,26 @@ class TestClampPromptLogprobs(unittest.TestCase):
 
         result = clamp_prompt_logprobs(prompt_logprobs)
 
-        # 原始值应该保持不变
+        # Original values should remain unchanged
         self.assertEqual(result[0][1].logprob, -2.5)
         self.assertEqual(result[0][2].logprob, -1.0)
 
     def test_negative_inf_logprobs_raises_error(self):
-        """测试包含-inf的logprobs值会抛出AttributeError"""
+        """Test that logprobs containing -inf raises AttributeError"""
         logprob_dict = {
             1: Logprob(logprob=float("-inf"), rank=1, decoded_token="hello"),
             2: Logprob(logprob=-1.0, rank=2, decoded_token="world"),
         }
         prompt_logprobs = [logprob_dict]
 
-        # 由于Logprob是NamedTuple，无法修改其字段，应该抛出AttributeError
+        # Since Logprob is a NamedTuple, its fields cannot be modified, should raise AttributeError
         with self.assertRaises(AttributeError) as context:
             clamp_prompt_logprobs(prompt_logprobs)
 
         self.assertIn("can't set attribute", str(context.exception))
 
     def test_multiple_negative_inf_raises_error(self):
-        """测试多个-inf的logprobs值会抛出AttributeError"""
+        """Test that multiple -inf logprobs values raise AttributeError"""
         logprob_dict = {
             1: Logprob(logprob=float("-inf"), rank=1, decoded_token="hello"),
             2: Logprob(logprob=float("-inf"), rank=2, decoded_token="world"),
@@ -68,21 +68,21 @@ class TestClampPromptLogprobs(unittest.TestCase):
         }
         prompt_logprobs = [logprob_dict]
 
-        # 由于Logprob是NamedTuple，无法修改其字段，应该抛出AttributeError
+        # Since Logprob is a NamedTuple, its fields cannot be modified, should raise AttributeError
         with self.assertRaises(AttributeError):
             clamp_prompt_logprobs(prompt_logprobs)
 
     def test_none_dict_in_list(self):
-        """测试列表中包含None的情况"""
+        """Test case when list contains None"""
         prompt_logprobs = [None]
 
         result = clamp_prompt_logprobs(prompt_logprobs)
 
-        # None应该被跳过
+        # None should be skipped
         self.assertIsNone(result[0])
 
     def test_multiple_dicts_normal_values(self):
-        """测试多个字典的情况（不包含-inf）"""
+        """Test multiple dictionaries case (without -inf)"""
         logprob_dict1 = {
             1: Logprob(logprob=-2.0, rank=1, decoded_token="hello"),
         }
@@ -93,12 +93,12 @@ class TestClampPromptLogprobs(unittest.TestCase):
 
         result = clamp_prompt_logprobs(prompt_logprobs)
 
-        # 应该正常返回，值保持不变
+        # Should return normally, values remain unchanged
         self.assertEqual(result[0][1].logprob, -2.0)
         self.assertEqual(result[1][2].logprob, -2.0)
 
     def test_mixed_values_without_inf(self):
-        """测试混合各种值的情况（不包含-inf）"""
+        """Test mixed values case (without -inf)"""
         logprob_dict = {
             1: Logprob(logprob=-9999.0, rank=1, decoded_token="hello"),
             2: Logprob(logprob=-9999.0, rank=2, decoded_token="world"),
@@ -109,14 +109,14 @@ class TestClampPromptLogprobs(unittest.TestCase):
 
         result = clamp_prompt_logprobs(prompt_logprobs)
 
-        # 所有值应该保持不变
+        # All values should remain unchanged
         self.assertEqual(result[0][1].logprob, -9999.0)
         self.assertEqual(result[0][2].logprob, -9999.0)
         self.assertEqual(result[0][3].logprob, 0.0)
         self.assertEqual(result[0][4].logprob, -1.5)
 
     def test_return_same_object(self):
-        """测试函数返回的是同一个对象（原地修改尝试）"""
+        """Test that function returns the same object (in-place modification attempt)"""
         logprob_dict = {
             1: Logprob(logprob=-2.0, rank=1, decoded_token="hello"),
         }
@@ -124,7 +124,7 @@ class TestClampPromptLogprobs(unittest.TestCase):
 
         result = clamp_prompt_logprobs(prompt_logprobs)
 
-        # 应该返回同一个对象（函数尝试原地修改）
+        # Should return the same object (function attempts in-place modification)
         self.assertIs(result, prompt_logprobs)
         self.assertIs(result[0], prompt_logprobs[0])
 

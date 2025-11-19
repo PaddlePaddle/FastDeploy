@@ -91,11 +91,12 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
             result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs)
 
-            # Verify result structure
-            self.assertEqual(len(result), num_prompt_tokens)
+            # Verify result structure (first element is None, then actual results)
+            self.assertEqual(len(result), num_prompt_tokens + 1)
+            self.assertIsNone(result[0])
 
-            # Check first position
-            first_pos_result = result[0]
+            # Check first position (index 1 since index 0 is None)
+            first_pos_result = result[1]
             self.assertEqual(len(first_pos_result), num_logprobs)
 
             # Check token IDs and logprobs for first position
@@ -128,8 +129,9 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
             result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, -1)
 
-            self.assertEqual(len(result), num_prompt_tokens)
-            first_pos_result = result[0]
+            self.assertEqual(len(result), num_prompt_tokens + 1)
+            self.assertIsNone(result[0])
+            first_pos_result = result[1]
             self.assertEqual(len(first_pos_result), num_logprobs)
 
             # Verify all logprobs are included when num_prompt_logprobs=-1
@@ -154,8 +156,9 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
             result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs)
 
-            self.assertEqual(len(result), num_prompt_tokens)
-            first_pos_result = result[0]
+            self.assertEqual(len(result), num_prompt_tokens + 1)
+            self.assertIsNone(result[0])
+            first_pos_result = result[1]
             self.assertEqual(len(first_pos_result), num_logprobs)
 
             # Check the single token
@@ -182,11 +185,12 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
             result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs)
 
-            self.assertEqual(len(result), num_prompt_tokens)
+            self.assertEqual(len(result), num_prompt_tokens + 1)
+            self.assertIsNone(result[0])
 
-            # Check each position
+            # Check each position (index + 1 since index 0 is None)
             for pos in range(num_prompt_tokens):
-                pos_result = result[pos]
+                pos_result = result[pos + 1]
                 self.assertEqual(len(pos_result), num_logprobs)
 
                 # Verify token IDs and their properties
@@ -215,7 +219,8 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         result = self.chat_completion_handler._build_prompt_logprobs(prompt_logprobs_tensors, num_logprobs)
 
-        self.assertEqual(len(result), num_prompt_tokens)
+        self.assertEqual(len(result), num_prompt_tokens + 1)
+        self.assertIsNone(result[0])
 
     def test_make_logprob_dict(self):
         """Test the static method _make_logprob_dict"""
@@ -315,7 +320,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 "arrival_time": 1234567890,
                 "request_start_time": 1234567870,
             },
-            "prompt_logprobs_tensors": LogprobsTensors(
+            "prompt_logprobs": LogprobsTensors(
                 logprob_token_ids=paddle.to_tensor([[1, 2, 3, 4]], dtype=paddle.int64),
                 logprobs=paddle.to_tensor([[-0.1, -0.2, -0.3, -0.4]], dtype=paddle.float32),
                 selected_token_ranks=paddle.to_tensor([1], dtype=paddle.int64),
@@ -371,7 +376,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 # Execute the generator
                 results = []
                 async for chunk in self.chat_completion_handler.chat_completion_stream_generator(
-                    request, request_id, model_name, prompt_token_ids, prompt_tokens
+                    request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens=100
                 ):
                     results.append(chunk)
 
@@ -422,7 +427,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 "arrival_time": 1234567890,
                 "request_start_time": 1234567870,
             },
-            "prompt_logprobs_tensors": None,
+            "prompt_logprobs": None,
             "outputs": {
                 "token_ids": [5],
                 "text": "Hi",
@@ -479,7 +484,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 # Execute the generator
                 results = []
                 async for chunk in self.chat_completion_handler.chat_completion_stream_generator(
-                    request, request_id, model_name, prompt_token_ids, prompt_tokens
+                    request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens=100
                 ):
                     results.append(chunk)
 
@@ -532,7 +537,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 "arrival_time": 1234567890,
                 "request_start_time": 1234567870,
             },
-            "prompt_logprobs_tensors": LogprobsTensors(
+            "prompt_logprobs": LogprobsTensors(
                 logprob_token_ids=paddle.to_tensor([[1, 2, 3]], dtype=paddle.int64),
                 logprobs=paddle.to_tensor([[-0.1, -0.2, -0.3]], dtype=paddle.float32),
                 selected_token_ranks=paddle.to_tensor([1], dtype=paddle.int64),
@@ -592,7 +597,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 # Execute the generator
                 results = []
                 async for chunk in self.chat_completion_handler.chat_completion_stream_generator(
-                    request, request_id, model_name, prompt_token_ids, prompt_tokens
+                    request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens=100
                 ):
                     results.append(chunk)
 
@@ -647,7 +652,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 "arrival_time": 1234567890,
                 "request_start_time": 1234567870,
             },
-            "prompt_logprobs_tensors": None,
+            "prompt_logprobs": None,
             "outputs": {
                 "token_ids": [5],
                 "text": "Hi",
@@ -694,7 +699,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             # Execute the generator
             results = []
             async for chunk in self.chat_completion_handler.chat_completion_stream_generator(
-                request, request_id, model_name, prompt_token_ids, prompt_tokens
+                request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens=100
             ):
                 results.append(chunk)
 
@@ -740,7 +745,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 "arrival_time": 1234567890,
                 "request_start_time": 1234567870,
             },
-            "prompt_logprobs_tensors": LogprobsTensors(
+            "prompt_logprobs": LogprobsTensors(
                 logprob_token_ids=paddle.to_tensor([[1, 2, 3, 4]], dtype=paddle.int64),
                 logprobs=paddle.to_tensor([[-0.1, -0.2, -0.3, -0.4]], dtype=paddle.float32),
                 selected_token_ranks=paddle.to_tensor([1], dtype=paddle.int64),
@@ -795,7 +800,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
                 # Execute the generator
                 result = await self.chat_completion_handler.chat_completion_full_generator(
-                    request, request_id, model_name, prompt_token_ids, prompt_tokens
+                    request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens=100
                 )
 
                 # Verify that prompt_logprobs are included in the response
@@ -842,7 +847,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 "arrival_time": 1234567890,
                 "request_start_time": 1234567870,
             },
-            "prompt_logprobs_tensors": None,
+            "prompt_logprobs": None,
             "outputs": {
                 "token_ids": [5],
                 "text": "Hi",
@@ -898,7 +903,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
                 # Execute the generator
                 result = await self.chat_completion_handler.chat_completion_full_generator(
-                    request, request_id, model_name, prompt_token_ids, prompt_tokens
+                    request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens=100
                 )
 
                 # Verify that logprobs are included in the response
@@ -940,7 +945,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 "arrival_time": 1234567890,
                 "request_start_time": 1234567870,
             },
-            "prompt_logprobs_tensors": LogprobsTensors(
+            "prompt_logprobs": LogprobsTensors(
                 logprob_token_ids=paddle.to_tensor([[1, 2, 3]], dtype=paddle.int64),
                 logprobs=paddle.to_tensor([[-0.1, -0.2, -0.3]], dtype=paddle.float32),
                 selected_token_ranks=paddle.to_tensor([1], dtype=paddle.int64),
@@ -999,7 +1004,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
                 # Execute the generator
                 result = await self.chat_completion_handler.chat_completion_full_generator(
-                    request, request_id, model_name, prompt_token_ids, prompt_tokens
+                    request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens=100
                 )
 
                 # Verify that both types of logprobs are included
@@ -1043,7 +1048,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 "arrival_time": 1234567890,
                 "request_start_time": 1234567870,
             },
-            "prompt_logprobs_tensors": None,
+            "prompt_logprobs": None,
             "outputs": {
                 "token_ids": [5],
                 "text": "Hi",
@@ -1089,7 +1094,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         ):
             # Execute the generator
             result = await self.chat_completion_handler.chat_completion_full_generator(
-                request, request_id, model_name, prompt_token_ids, prompt_tokens
+                request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens=100
             )
 
             # Verify that logprobs are not included in the response

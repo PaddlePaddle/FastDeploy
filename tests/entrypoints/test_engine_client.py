@@ -134,6 +134,31 @@ class TestEngineClientValidParameters(unittest.TestCase):
         self.assertIn("max_logprobs", str(context.exception))
         self.assertIn("must be >= -1", str(context.exception))
 
+    def test_max_logprobs_exceeds_vocab_size(self):
+        """Test max_logprobs exceeding vocab_size"""
+        self.engine_client.max_logprobs = 1500
+        self.engine_client.ori_vocab_size = 1000
+        data = {"request_id": "test"}
+
+        with self.assertRaises(ValueError) as context:
+            self.engine_client.valid_parameters(data)
+
+        self.assertIn("max_logprobs", str(context.exception))
+        self.assertIn("must be <= vocab_size", str(context.exception))
+        self.assertIn("1000", str(context.exception))
+        self.assertIn("1500", str(context.exception))
+
+    def test_max_logprobs_unlimited(self):
+        """Test max_logprobs = -1 (unlimited) sets to ori_vocab_size"""
+        self.engine_client.max_logprobs = -1
+        self.engine_client.ori_vocab_size = 1000
+        data = {"request_id": "test"}
+
+        # This should not raise and internally max_logprobs should be set to ori_vocab_size
+        self.engine_client.valid_parameters(data)  # Should not raise
+        # The actual max_logprobs value should be set to ori_vocab_size internally
+        self.assertEqual(self.engine_client.max_logprobs, -1)  # Original value remains unchanged
+
     def test_prompt_logprobs_valid_values(self):
         """Test valid prompt_logprobs values"""
         self.engine_client.max_logprobs = 20
@@ -153,6 +178,17 @@ class TestEngineClientValidParameters(unittest.TestCase):
         # Test None (default)
         data = {"request_id": "test"}
         self.engine_client.valid_parameters(data)  # Should not raise
+
+    def test_prompt_logprobs_unlimited_sets_to_vocab_size(self):
+        """Test prompt_logprobs = -1 sets to ori_vocab_size"""
+        self.engine_client.max_logprobs = -1  # Set to unlimited to allow prompt_logprobs = -1
+        self.engine_client.enable_logprob = True
+        self.engine_client.ori_vocab_size = 1000
+
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
+            data = {"prompt_logprobs": -1, "request_id": "test"}
+            self.engine_client.valid_parameters(data)  # Should not raise
+            # prompt_logprobs should be set to ori_vocab_size internally
 
     def test_prompt_logprobs_disabled_when_fd_use_get_save_output_v1_disabled(self):
         """Test prompt_logprobs when FD_USE_GET_SAVE_OUTPUT_V1 is disabled"""
@@ -175,6 +211,19 @@ class TestEngineClientValidParameters(unittest.TestCase):
             self.engine_client.valid_parameters(data)
 
         self.assertIn("disabled", str(context.exception))
+
+    def test_prompt_logprobs_disabled_when_prefix_caching_enabled(self):
+        """Test prompt_logprobs when prefix caching is enabled"""
+        self.engine_client.enable_prefix_caching = True
+        self.engine_client.enable_logprob = True
+
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
+            data = {"prompt_logprobs": 10, "request_id": "test"}
+
+            with self.assertRaises(ParameterError) as context:
+                self.engine_client.valid_parameters(data)
+
+            self.assertIn("prompt_logprobs is not support when prefix caching is enabled", str(context.exception))
 
     def test_prompt_logprobs_invalid_values(self):
         """Test invalid prompt_logprobs values"""
@@ -204,25 +253,56 @@ class TestEngineClientValidParameters(unittest.TestCase):
             self.assertIn("prompt_logprobs", str(context.exception))
             self.assertIn("exceeds maximum allowed value", str(context.exception))
 
-    def test_top_logprobs_valid_values(self):
-        """Test valid top_logprobs values"""
+    def test_top_logprobs_validation_with_fd_use_get_save_output_v1_enabled(self):
+        """Test top_logprobs validation when FD_USE_GET_SAVE_OUTPUT_V1 is enabled"""
         self.engine_client.max_logprobs = 20
         self.engine_client.enable_logprob = True
 
-        # Test with logprobs=True and FD_USE_GET_SAVE_OUTPUT_V1=0
-        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "0"}):
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
+            # Test -1 (unlimited) - should set to ori_vocab_size, but need max_logprobs also to be -1
+            self.engine_client.max_logprobs = -1  # Set to unlimited to allow top_logprobs = -1
+            data = {"logprobs": True, "top_logprobs": -1, "request_id": "test"}
+            self.engine_client.valid_parameters(data)  # Should not raise
+
+            # Reset max_logprobs for other tests
+            self.engine_client.max_logprobs = 20
+
+            # Test valid positive value
             data = {"logprobs": True, "top_logprobs": 10, "request_id": "test"}
             self.engine_client.valid_parameters(data)  # Should not raise
 
-        # Test with logprobs=int and FD_USE_GET_SAVE_OUTPUT_V1=0
-        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "0"}):
-            data = {"logprobs": 10, "request_id": "test"}
-            self.engine_client.valid_parameters(data)  # Should not raise
+            # Test value less than -1 - should raise ValueError
+            data = {"logprobs": True, "top_logprobs": -2, "request_id": "test"}
+            with self.assertRaises(ValueError) as context:
+                self.engine_client.valid_parameters(data)
+            self.assertIn("must be >= -1", str(context.exception))
 
-        # Test -1 (unlimited) with FD_USE_GET_SAVE_OUTPUT_V1=1
-        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
-            self.engine_client.max_logprobs = -1
+            # Test value exceeding max_logprobs - should raise ValueError
+            data = {"logprobs": True, "top_logprobs": 25, "request_id": "test"}
+            with self.assertRaises(ValueError) as context:
+                self.engine_client.valid_parameters(data)
+            self.assertIn("exceeds maximum allowed value", str(context.exception))
+
+    def test_top_logprobs_validation_with_fd_use_get_save_output_v1_disabled(self):
+        """Test top_logprobs validation when FD_USE_GET_SAVE_OUTPUT_V1 is disabled"""
+        self.engine_client.max_logprobs = 20
+        self.engine_client.enable_logprob = True
+
+        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "0"}):
+            # Test negative value - should raise ValueError
             data = {"logprobs": True, "top_logprobs": -1, "request_id": "test"}
+            with self.assertRaises(ValueError) as context:
+                self.engine_client.valid_parameters(data)
+            self.assertIn("must be >= 0", str(context.exception))
+
+            # Test value > 20 - should raise ValueError
+            data = {"logprobs": True, "top_logprobs": 25, "request_id": "test"}
+            with self.assertRaises(ValueError) as context:
+                self.engine_client.valid_parameters(data)
+            self.assertIn("must be <= 20", str(context.exception))
+
+            # Test valid value
+            data = {"logprobs": True, "top_logprobs": 10, "request_id": "test"}
             self.engine_client.valid_parameters(data)  # Should not raise
 
     def test_top_logprobs_disabled_logprob(self):
@@ -248,67 +328,6 @@ class TestEngineClientValidParameters(unittest.TestCase):
         self.assertIn("top_logprobs", str(context.exception))
         self.assertIn("Invalid type", str(context.exception))
         self.assertIn("expected int", str(context.exception))
-
-    def test_top_logprobs_invalid_values_fd_use_get_save_output_v1_disabled(self):
-        """Test invalid top_logprobs values when FD_USE_GET_SAVE_OUTPUT_V1 is disabled"""
-        self.engine_client.enable_logprob = True
-
-        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "0"}):
-            # Test negative value
-            data = {"logprobs": True, "top_logprobs": -1, "request_id": "test"}
-
-            with self.assertRaises(ValueError) as context:
-                self.engine_client.valid_parameters(data)
-
-            self.assertIn("top_logprobs", str(context.exception))
-            self.assertIn("must be >= 0", str(context.exception))
-
-            # Test value > 20
-            data = {"logprobs": True, "top_logprobs": 25, "request_id": "test"}
-
-            with self.assertRaises(ValueError) as context:
-                self.engine_client.valid_parameters(data)
-
-            self.assertIn("top_logprobs", str(context.exception))
-            self.assertIn("must be <= 20", str(context.exception))
-
-    def test_top_logprobs_invalid_values_fd_use_get_save_output_v1_enabled(self):
-        """Test invalid top_logprobs values when FD_USE_GET_SAVE_OUTPUT_V1 is enabled"""
-        self.engine_client.enable_logprob = True
-
-        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
-            # Test negative value less than -1
-            data = {"logprobs": True, "top_logprobs": -2, "request_id": "test"}
-
-            with self.assertRaises(ValueError) as context:
-                self.engine_client.valid_parameters(data)
-
-            self.assertIn("top_logprobs", str(context.exception))
-            self.assertIn("must be >= -1", str(context.exception))
-
-            # Test value exceeding max_logprobs
-            self.engine_client.max_logprobs = 10
-            data = {"logprobs": True, "top_logprobs": 15, "request_id": "test"}
-
-            with self.assertRaises(ValueError) as context:
-                self.engine_client.valid_parameters(data)
-
-            self.assertIn("top_logprobs", str(context.exception))
-            self.assertIn("exceeds maximum allowed value", str(context.exception))
-
-    def test_top_logprobs_exceeds_max_logprobs(self):
-        """Test top_logprobs exceeding max_logprobs"""
-        self.engine_client.max_logprobs = 10
-        self.engine_client.enable_logprob = True
-
-        with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
-            data = {"logprobs": True, "top_logprobs": 15, "request_id": "test"}
-
-            with self.assertRaises(ValueError) as context:
-                self.engine_client.valid_parameters(data)
-
-            self.assertIn("top_logprobs", str(context.exception))
-            self.assertIn("exceeds maximum allowed value", str(context.exception))
 
     def test_logprobs_invalid_type(self):
         """Test logprobs with invalid type"""
