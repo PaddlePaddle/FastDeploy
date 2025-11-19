@@ -287,6 +287,7 @@ class PaddleDisWorkerProc:
         """Main event loop for Paddle Distrubuted Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
+        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
         if self.eplb_config.enable_eplb:
             self.last_dump_expert_workload_ts = 0
             self.experts_manager = RedundantExpertManager(
@@ -295,34 +296,17 @@ class PaddleDisWorkerProc:
                 fd_config=self.fd_config,
                 ipc_signal_suffix=self.parallel_config.engine_worker_queue_port,
             )
-            experts_token_stats = np.zeros(
-                (self.fd_config.model_config.num_hidden_layers, self.fd_config.model_config.moe_num_experts),
-                dtype=np.int32,
-            )
-            local_experts_token_stats_array = IPCSignal(
-                name="local_experts_token_stats",
-                array=experts_token_stats,
-                dtype=np.int32,
-                suffix=self.parallel_config.engine_worker_queue_port,
-                create=False,
-            )
 
-            clear_experts_token_stats = np.zeros([1], dtype=np.int32)
-            signal_clear_experts_token_stats = IPCSignal(
-                name="signal_clear_experts_token_stats",
-                array=clear_experts_token_stats,
-                dtype=np.int32,
-                suffix=self.parallel_config.engine_worker_queue_port,
-                create=False,
+            dp_ipc_signal_suffix = (
+                f"{self.parallel_config.engine_worker_queue_port}_dp{self.parallel_config.data_parallel_rank}"
             )
-
-            if self.local_rank == 0:
+            if local_rank == 0:
                 signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
                 signal_update_weight_from_tensor_array = IPCSignal(
                     name="signal_update_weight_from_tensor",
                     array=signal_update_weight_from_tensor,
                     dtype=np.int32,
-                    suffix=self.parallel_config.engine_worker_queue_port,
+                    suffix=dp_ipc_signal_suffix,
                     create=False,
                 )
 
@@ -331,9 +315,31 @@ class PaddleDisWorkerProc:
                     name="rearrange_experts_status",
                     array=rearrange_experts_status,
                     dtype=np.int32,
-                    suffix=self.parallel_config.engine_worker_queue_port,
+                    suffix=dp_ipc_signal_suffix,
                     create=False,
                 )
+
+            tp_ipc_signal_suffix = f"{dp_ipc_signal_suffix}_tp{local_rank}"
+            experts_token_stats = np.zeros(
+                (self.fd_config.model_config.num_hidden_layers, self.fd_config.model_config.moe_num_experts),
+                dtype=np.int32,
+            )
+            local_experts_token_stats_array = IPCSignal(
+                name="local_experts_token_stats",
+                array=experts_token_stats,
+                dtype=np.int32,
+                suffix=tp_ipc_signal_suffix,
+                create=False,
+            )
+
+            clear_experts_token_stats = np.zeros([1], dtype=np.int32)
+            signal_clear_experts_token_stats = IPCSignal(
+                name="signal_clear_experts_token_stats",
+                array=clear_experts_token_stats,
+                dtype=np.int32,
+                suffix=tp_ipc_signal_suffix,
+                create=False,
+            )
 
             mmap_infos = create_mmap(
                 [MODEL_MAIN_NAME],
@@ -348,7 +354,6 @@ class PaddleDisWorkerProc:
         self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
         req_ids = []
         num_running_requests = 0
-        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         attention_dp_cached_prefill_tasks = []
         attention_dp_wait_prefill_iters = 0
@@ -379,7 +384,7 @@ class PaddleDisWorkerProc:
 
                 # 所有DP同步更新权重
                 broadcast_value = 0
-                if self.local_rank == 0 and signal_update_weight_from_tensor_array.value[0] == 1:
+                if local_rank == 0 and signal_update_weight_from_tensor_array.value[0] == 1:
                     logger.info("redundant_expert: update_weight_from_tensor broadcast signal")
                     signal_update_weight_from_tensor_array.value[0] = 0
                     broadcast_value = REARRANGE_EXPERT_MAGIC_NUM
@@ -391,7 +396,7 @@ class PaddleDisWorkerProc:
                         f"redundant_expert: update_weight_from_tensor success, cost {(time.time() - rearrange_time)*1000}ms"
                     )
                     paddle.distributed.barrier()
-                    if self.local_rank == 0:
+                    if local_rank == 0:
                         rearrange_experts_signal.value[0] = RearrangeExpertStatus.DONE.value
                     logger.info("redundant_expert: done")
             if local_rank == 0:
