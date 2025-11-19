@@ -1417,7 +1417,6 @@ class StructuredOutputsConfig:
         # disable any whitespace for guided decoding
         self.disable_any_whitespace: bool = True
         self.logits_processors: Optional[list[str]] = None
-
         for key, value in args.items():
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
