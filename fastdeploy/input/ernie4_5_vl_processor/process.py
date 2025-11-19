@@ -362,7 +362,7 @@ class DataProcessor:
                 outputs["position_ids"].append([i] * 3)
             outputs["cur_position"] += prompt_token_ids_len
             return outputs
-        images, videos, image_uuid, video_uuid, dealer = self.extract_mm_items(request)
+        images, videos, image_uuid, video_uuid, dealer, _, _ = self.extract_mm_items(request)
         st, image_idx, video_idx = 0, 0, 0
         mm_id_set = {
             self.image_start_id,
@@ -376,7 +376,7 @@ class DataProcessor:
             if cur_token_id not in mm_id_set:
                 outputs["input_ids"].extend([cur_token_id])
                 outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]])
-                outputs["position_ids"].extend([outputs["cur_position"]] * 3)
+                outputs["position_ids"].append([outputs["cur_position"]] * 3)
                 outputs["cur_position"] += 1
                 st += 1
                 continue
@@ -386,7 +386,7 @@ class DataProcessor:
                 # append image_start_id
                 outputs["input_ids"].extend([cur_token_id])
                 outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]])
-                outputs["position_ids"].extend([outputs["cur_position"]] * 3)
+                outputs["position_ids"].append([outputs["cur_position"]] * 3)
                 outputs["cur_position"] += 1
                 st += 1
                 # process placeholder token ids
@@ -405,7 +405,7 @@ class DataProcessor:
                 # append image_end_id
                 outputs["input_ids"].extend([prompt_token_ids[cur_idx]])
                 outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]])
-                outputs["position_ids"].extend([outputs["cur_position"]] * 3)
+                outputs["position_ids"].append([outputs["cur_position"]] * 3)
                 outputs["cur_position"] += 1
                 st = cur_idx + 1
             elif cur_token_id == self.video_start_id:
@@ -414,7 +414,7 @@ class DataProcessor:
                 # append video_start_id
                 outputs["input_ids"].extend([cur_token_id])
                 outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]])
-                outputs["position_ids"].extend([outputs["cur_position"]] * 3)
+                outputs["position_ids"].append([outputs["cur_position"]] * 3)
                 outputs["cur_position"] += 1
                 st += 1
                 # process placeholder token ids
@@ -437,7 +437,7 @@ class DataProcessor:
                 # append video_end_id
                 outputs["input_ids"].extend([prompt_token_ids[cur_idx]])
                 outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]])
-                outputs["position_ids"].extend([outputs["cur_position"]] * 3)
+                outputs["position_ids"].append([outputs["cur_position"]] * 3)
                 outputs["cur_position"] += 1
                 st = cur_idx + 1
         if image_idx != len(images):
@@ -477,8 +477,8 @@ class DataProcessor:
         patches_h, patches_w = self.image_preprocessor.get_smarted_resize(
             img.height if img else frames[0].height,
             img.width if img else frames[0].width,
-            min_pixels=self.image_min_pixels,
-            max_pixels=self.image_max_pixels,
+            min_pixels=self.image_min_pixels if img else self.video_min_pixels,
+            max_pixels=self.image_max_pixels if img else self.video_max_pixels,
         )[1]
 
         if img:
