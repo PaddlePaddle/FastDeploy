@@ -311,6 +311,7 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
         prefix: str = "",
     ) -> None:
         super().__init__()
+        paddle.set_printoptions(precision=8, threshold=100, edgeitems=10, linewidth=200, sci_mode=False)
         layer_id = int(prefix.split(sep=".")[-1])
 
         moe_layer_start_index = fd_config.model_config.moe_layer_start_index
@@ -357,6 +358,7 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
+            dtype="float32",
         )
 
         self.post_attention_layernorm = RMSNorm(
@@ -364,6 +366,7 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
+            dtype="float32",
         )
 
     def load_state_dict(self, state_dict):
@@ -383,19 +386,33 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
             residual = hidden_states
             hidden_states = self.input_layernorm(hidden_states)
         else:
+            print("input_layernorm前面hidden_states", hidden_states)
+            print("input_layernorm前面residual", residual)
             hidden_states, residual = self.input_layernorm(hidden_states, residual)
+            print("input_layenorm后面hidden_states", hidden_states)
+            print("input_layernorm后面的residual", residual)
 
-        hidden_states = self.self_attn(
-            hidden_states=hidden_states,
-            forward_meta=forward_meta,
-        )
-
+        if hasattr(self.input_layernorm, "weight") and self.input_layernorm.weight is not None:
+            hidden_states = self.self_attn(
+                hidden_states=hidden_states,
+                forward_meta=forward_meta,
+            )
+        #     print("self_attn的hidden_states",hidden_states)
+        # print("post_attention_layernorm输入hidden_states",hidden_states)
+        # print("post_attention_layernorm输入residual",residual)
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
+        print("post_attention_layernorm输出的hidden_states", hidden_states)
+        print("post_attention_layernorm输出的residual", residual)
 
         if isinstance(self.mlp, Ernie4_5_VLMoE):
+            # print("mlp前的hidden_states",hidden_states)
+            # print("vl_moe_meta",vl_moe_meta)
             hidden_states = self.mlp(hidden_states, vl_moe_meta)
+            # print("mlp后的hidden_states",hidden_states)
         else:
+            # print("mlp前的hidden_states",hidden_states)
             hidden_states = self.mlp(hidden_states)
+            print("mlp后的hidden_states", hidden_states)
 
         return hidden_states, residual
 
@@ -543,9 +560,18 @@ class Ernie4_5_VLModel(nn.Layer):
             )
 
         hidden_states = hidden_states + residual
-        out = self.norm(hidden_states)
+        # print("加起来的hidden_states",hidden_states)
+        # print(f"hidden_states类型 (type): {type(hidden_states)}")
+        # if isinstance(hidden_states,tuple):
+        #     hidden_states = hidden_states[0]
+        #     print("属于hidden_states了吗?",hidden_states)
+        # hidden_states = hidden_states[0]
 
-        return out
+        # hidden_states = hidden_states.cast("float32")
+        # out = self.norm(hidden_states)
+        # print("经过norm后的out",out)
+
+        return hidden_states
 
 
 @ModelRegistry.register_model_class(
@@ -653,6 +679,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             ("qkv_proj", "v_proj", None, "v"),
             ("up_gate_proj", "gate_proj", None, "gate"),
             ("up_gate_proj", "up_proj", None, "up"),
+            ("norm.weight", "ernie.norm.weight", None, None),
         ]
 
         text_expert_params_mapping = []
@@ -784,11 +811,13 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         forward_meta: ForwardMeta,
     ):
         vl_moe_meta = self.ernie.prepare_vl_moe_meta(ids_remove_padding=ids_remove_padding)
+        print("ids_remove_padding", ids_remove_padding)
         input_embeddings = self.get_input_embeddings(
             ids_remove_padding=ids_remove_padding,
             image_features=image_features,
             image_token_num=vl_moe_meta.image_token_num.item(),
         )
+        print("input_embeddings", input_embeddings)
         self._input_embeddings.copy_(input_embeddings, False)
 
         hidden_states = self.ernie(

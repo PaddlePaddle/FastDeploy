@@ -96,9 +96,16 @@ class Ernie4_5_MLP(nn.Layer):
         self.down_proj.load_state_dict(state_dict)
 
     def forward(self, hidden_states: paddle.Tensor):
+        print("mlp输入的hidden_states", hidden_states)
         gate_up_out = self.up_gate_proj(hidden_states)
+        print("gate_up_out对齐了", gate_up_out)
         act_out = self.act_fn(gate_up_out)
+        # print("self.act_fn.weight",self.act_fn.weight)
+        # print("self.act_fn.weight_scale",self.act_fn.weight_scale)
+        print("act_out对到这里了,对应的", act_out)
+
         down_out = self.down_proj(act_out)
+        print("down_out", down_out)
         return down_out
 
 
@@ -255,6 +262,8 @@ class Ernie4_5_Attention(nn.Layer):
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str) -> None:
         super().__init__()
 
+        paddle.set_printoptions(precision=8, threshold=100, edgeitems=10, linewidth=200, sci_mode=False)
+
         self.qkv_proj = QKVParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.qkv_proj",
@@ -265,7 +274,9 @@ class Ernie4_5_Attention(nn.Layer):
             prefix=f"{prefix}.o_proj",
             input_size=fd_config.model_config.head_dim * fd_config.model_config.num_attention_heads,
             output_size=fd_config.model_config.hidden_size,
+            # reduce_results=False,
         )
+
         self.attn = Attention(
             fd_config=fd_config,
             layer_id=layer_id,
@@ -283,14 +294,22 @@ class Ernie4_5_Attention(nn.Layer):
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
     ):
-        qkv_out = self.qkv_proj(hidden_states)
 
+        print("qkv前面的hidden_states", hidden_states)
+        qkv_out = self.qkv_proj(hidden_states)
+        print("qkv_out", qkv_out)
+
+        print("attn的输入", qkv_out)
         attn_out = self.attn(
             qkv=qkv_out,
             forward_meta=forward_meta,
         )
+        print("attn_out", attn_out)
 
+        # print("self.o_proj.weight",self.o_proj.weight)
+        # print("self.o_proj.weight_scale",self.o_proj.weight_scale)
         output = self.o_proj(attn_out)
+        print("self.o_proj的输出outout", output)
 
         return output
 

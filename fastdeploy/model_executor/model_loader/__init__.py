@@ -25,6 +25,7 @@ from fastdeploy.model_executor.model_loader.default_loader_v1 import (
 def get_model_loader(load_config: LoadConfig) -> BaseModelLoader:
     """get_model_loader"""
 
+    print("load_config.load_choices", load_config.load_choices)
     if load_config.load_choices == LoadChoices.DEFAULT_V1:
         return DefaultModelLoaderV1(load_config)
 

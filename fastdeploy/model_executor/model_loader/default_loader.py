@@ -61,7 +61,19 @@ class DefaultModelLoader(BaseModelLoader):
             fd_config,
             return_numpy=True,
         )
+        # save_dir = "./saved_weights"
+        # os.makedirs(save_dir, exist_ok=True)
 
+        # if fd_config.parallel_config.tensor_parallel_rank ==0:
+        # # ---- 单独遍历，绝对不要在循环里修改 state_dict ----
+        #     for key, value in state_dict.items():
+        #         # print("key", key)
+        #         value = get_tensor(value)
+        #         # print("value", value)
+
+        #         np.save(os.path.join(save_dir, f"{key}.npy"), value)
+
+        # print(f"所有权重已保存到 {save_dir}")
         model.set_state_dict(state_dict)
         self.clean_memory_fragments(state_dict)
 

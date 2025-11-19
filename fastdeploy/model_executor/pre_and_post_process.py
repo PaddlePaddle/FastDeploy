@@ -855,6 +855,7 @@ def post_process_pooling(
                 block_size,
             )
 
+    print("pooler_output.output", pooler_output.outputs)
     if not skip_save_output:
         if save_each_rank or model_output.mp_rank == 0:
             output = _build_stream_transfer_data(output_tokens=None, pooler_outputs=pooler_output.outputs)

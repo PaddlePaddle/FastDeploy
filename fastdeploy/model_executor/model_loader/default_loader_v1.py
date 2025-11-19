@@ -91,4 +91,7 @@ class DefaultModelLoaderV1(BaseModelLoader):
         if fd_config.load_config.dynamic_load_weight:
             return model
         self.load_weights(model, fd_config, enable_cache)
+        # for key,value in enumerate(model.named_parameters()):
+        #     print("key",key)
+        #     print("value",value)
         return model

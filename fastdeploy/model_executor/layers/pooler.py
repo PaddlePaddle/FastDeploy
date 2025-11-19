@@ -368,6 +368,8 @@ class LastPool(PoolingMethod):
         pooling_cursor: PoolingCursor,
     ) -> Union[list[paddle.Tensor], paddle.Tensor]:
         print(f"====>LastPool, {hidden_states}, ==pooling_cursor=>{pooling_cursor}")
+        print("hidden_states", hidden_states)
+        print("最后返回", hidden_states[pooling_cursor.last_token_indices_gpu])
         return hidden_states[pooling_cursor.last_token_indices_gpu]
 
 

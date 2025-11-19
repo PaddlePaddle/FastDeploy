@@ -295,7 +295,6 @@ class GPUModelRunner(ModelRunnerBase):
         elif request.structural_tag is not None:
             schemata_key = ("structural_tag", request.structural_tag)
 
-        print("init_logits_processor前面的request", request)
         return (
             self.guided_backend.get_logits_processor(
                 schemata_key=schemata_key,
@@ -400,7 +399,6 @@ class GPUModelRunner(ModelRunnerBase):
             - add image_features, extract and cache vision features from model
             - add rope_emb, rotate position embeddings
         """
-        print("self.encoder_cache", self.encoder_cache)
         if self.encoder_cache:
             evict_mm_hashes = request.get("evict_mm_hashes", None)
             if evict_mm_hashes:
@@ -408,8 +406,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self.encoder_cache.pop(mm_hash, None)
 
         inputs = request.multimodal_inputs
-        print("inputs", inputs)
-        print("request.with_image", request.with_image)
+
         if request.with_image:
             if envs.FD_ENABLE_MAX_PREFILL:
                 multi_vision_inputs["images_lst"].append(
@@ -477,9 +474,6 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["image_features"] = image_features[-actual_image_token_num:]
 
         position_ids = request.multimodal_inputs["position_ids"]
-        print("position_ids", position_ids)
-        print("position_ids.shape[0]", position_ids.shape[0])
-        print("rope_3d_position_ids[position_ids_offset]", rope_3d_position_ids["position_ids_offset"][-1])
         rope_3d_position_ids["position_ids_idx"].append(request.idx)
         rope_3d_position_ids["position_ids_lst"].append(position_ids)
         rope_3d_position_ids["position_ids_offset"].append(
@@ -489,8 +483,6 @@ class GPUModelRunner(ModelRunnerBase):
             rope_3d_position_ids["max_tokens_lst"].append(0)
         else:
             rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
-
-        print("rope_3d_position_ids", rope_3d_position_ids)
 
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int = None):
         """
@@ -518,7 +510,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         for i in range(req_len):
             request = req_dicts[i]
-            print("从req_dict得到的request", request)
+            # print("从req_dict得到的request", request)
             idx = request.idx
 
             if hasattr(request, "pooling_params") and request.pooling_params is not None:
@@ -530,9 +522,9 @@ class GPUModelRunner(ModelRunnerBase):
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
                 if self.enable_mm:
-                    print("request", request)
-                    print("multi_visio_inputs", multi_vision_inputs)
-                    print("rope_3d_position_ids", rope_3d_position_ids)
+                    # print("request", request)
+                    # print("multi_visio_inputs", multi_vision_inputs)
+                    # print("rope_3d_position_ids", rope_3d_position_ids)
                     self._apply_mm_inputs(request, multi_vision_inputs, rope_3d_position_ids)
 
                 if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
@@ -560,6 +552,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(
                     input_ids[prefill_start_index:prefill_end_index]
                 )
+                print("input_ids", self.share_inputs["input_ids"])
                 encoder_block_num = len(request.block_tables)
                 self.share_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
@@ -703,7 +696,7 @@ class GPUModelRunner(ModelRunnerBase):
                 or request.guided_grammar is not None
             ):
                 logits_info, schemata_key = self._init_logits_processor(request)
-                print("init_logits_processor后request", request)
+                # print("init_logits_processor后request", request)
                 request.logits_processor, request.logits_cached = logits_info
                 request.schemata_key = schemata_key
 
@@ -732,6 +725,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 self.share_inputs["step_idx"][idx : idx + 1] = 0
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
+                print("input_ids", self.share_inputs["input_ids"])
                 self.share_inputs["prompt_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
 
                 # Use chunked prefill
@@ -2092,12 +2086,15 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 3. Execute model
         if self.enable_mm:
+            print("ids_remove_padding", self.share_inputs["ids_remove_padding"])
+            print("self.model", self.model)
             model_output = self.model(
                 self.share_inputs["ids_remove_padding"],
                 self.share_inputs["image_features"],
                 self.forward_meta,
             )
         else:
+
             model_output = self.model(
                 ids_remove_padding=self.share_inputs["ids_remove_padding"],
                 forward_meta=self.forward_meta,
@@ -2164,7 +2161,6 @@ class GPUModelRunner(ModelRunnerBase):
                 (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
                 self.model_config.max_model_len,
             )
-
             # 4. Compute logits, Sample
             logits = self.model.compute_logits(hidden_states)
 
@@ -2316,13 +2312,12 @@ class GPUModelRunner(ModelRunnerBase):
             self.seq_lens_this_time_buffer[:num_running_requests].copy_(
                 self.share_inputs["seq_lens_this_time"][:num_running_requests], False
             )
-            print("execute_model的seq_lens_this_time", self.share_inputs["seq_lens_this_time"])
+            # print("execute_model的seq_lens_this_time", self.share_inputs["seq_lens_this_time"])
             return None
 
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
 
         num_scheduled_tokens = int(self.share_inputs["seq_lens_this_time"][:num_running_requests].sum())
-
         hidden_states = hidden_states[:num_scheduled_tokens]
 
         prompt_lens = self.share_inputs["prompt_lens"][:num_running_requests]
