@@ -230,6 +230,15 @@ class RedundantExpertManager:
             create=False,
         )
 
+        result_update_weight_from_disk = np.zeros([1], dtype=np.int32)
+        self.update_weight_from_disk_result = IPCSignal(
+            name="result_update_weight_from_disk",
+            array=result_update_weight_from_disk,
+            dtype=np.int32,
+            suffix=tp_ipc_signal_suffix,
+            create=False,
+        )
+
         while True:
             if self.local_rank == 0:
                 now = int(time.time())
@@ -316,15 +325,7 @@ class RedundantExpertManager:
         update_weight_from_disk
         """
         begin_time = time.time()
-        result_update_weight_from_disk = np.zeros([1], dtype=np.int32)
-        update_weight_from_disk_result = IPCSignal(
-            name="result_update_weight_from_disk",
-            array=result_update_weight_from_disk,
-            dtype=np.int32,
-            suffix=self.ipc_signal_suffix,
-            create=False,
-        )
-        update_weight_from_disk_result.value[0] = 0
+        self.update_weight_from_disk_result.value[0] = 0
 
         self.logger.info(f"redundant_expert: update_weight_from_disk send to async process, rank {self.rank}")
         self.parent_mg_conn.send(
@@ -338,7 +339,7 @@ class RedundantExpertManager:
         self.tensor_infos = response["weights"]
 
         # 更新权重加载结果
-        update_weight_from_disk_result.value[0] = 1 if response["result"] else -1
+        self.update_weight_from_disk_result.value[0] = 1 if response["result"] else -1
         self.logger.info(
             "redundant_expert: update_weight_from_disk end, rank"
             + f" {self.rank} {response['result']}, cost {int(time.time() - begin_time)}s"
