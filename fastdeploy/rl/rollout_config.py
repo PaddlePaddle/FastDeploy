@@ -66,6 +66,7 @@ class RolloutModelConfig:
         num_nextn_predict_layers: int = 0,
         enable_attention_dp_balance: bool = False,
         attention_dp_time_out_iters: int = 0,
+        eplb_config: str = {},
     ):
         # Required parameters
         self.model = model_name_or_path
@@ -115,6 +116,7 @@ class RolloutModelConfig:
         self.num_nextn_predict_layers = num_nextn_predict_layers
         self.enable_attention_dp_balance = enable_attention_dp_balance
         self.attention_dp_time_out_iters = attention_dp_time_out_iters
+        self.eplb_config = eplb_config
 
     def __str__(self):
         return "\n".join(f"{k}: {v}" for k, v in self.__dict__.items())

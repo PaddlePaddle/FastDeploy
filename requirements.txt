@@ -40,3 +40,5 @@ opentelemetry-exporter-otlp
 opentelemetry-instrumentation-fastapi
 partial_json_parser
 einops
+cuda-python==12.8
+setproctitle

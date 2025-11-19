@@ -14,20 +14,13 @@
 # limitations under the License.
 """
 
-from .engine_cache_queue import EngineCacheQueue
-from .engine_worker_queue import EngineWorkerQueue
-from .ipc_signal import IPCSignal, shared_memory_exists
-from .ipc_signal_const import RearrangeExpertStatus
-from .zmq_client import ZmqIpcClient
-from .zmq_server import ZmqIpcServer, ZmqTcpServer
+from dataclasses import dataclass
+from enum import Enum
 
-__all__ = [
-    "ZmqIpcClient",
-    "IPCSignal",
-    "EngineWorkerQueue",
-    "EngineCacheQueue",
-    "ZmqTcpServer",
-    "ZmqIpcServer",
-    "shared_memory_exists",
-    "RearrangeExpertStatus",
-]
+
+@dataclass
+class RearrangeExpertStatus(Enum):
+    FREE = 0
+    DOING = 1
+    LOAD_SUCC = 2  # load weight from disk success
+    DONE = 3
