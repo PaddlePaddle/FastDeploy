@@ -239,6 +239,7 @@ class GPUModelRunner(ModelRunnerBase):
         has_prefill_task = False
         has_decode_task = False
         has_preempted_task = False
+        self.share_inputs["image_features"] = None
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
@@ -268,8 +269,6 @@ class GPUModelRunner(ModelRunnerBase):
                             inputs["grid_thw"][request.num_image_start : request.num_image_end], dtype="int64"
                         )
                         self.share_inputs["image_features"] = self.extract_vision_features(vision_inputs)
-                    else:
-                        self.share_inputs["image_features"] = None
 
                     if inputs["position_ids"] is not None:
                         position_ids = paddle.to_tensor(

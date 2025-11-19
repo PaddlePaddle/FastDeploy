@@ -241,10 +241,9 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 
-        metadata = request.get("metadata")
-        # 如果metadata包含之前输出的token，将这些token添加到input_ids末尾
-        if metadata and metadata.get("generated_token_ids"):
-            self.append_generated_tokens(outputs, metadata["generated_token_ids"])
+        if request.get("completion_token_ids"):
+            self.append_completion_tokens(outputs, request["completion_token_ids"])
+
         outputs = self.pack_outputs(outputs)
         request["prompt_token_ids"] = outputs["input_ids"].tolist()
         request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
@@ -253,6 +252,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         # 截断超过长度限制的prompt
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
         else:
@@ -263,11 +263,11 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
 
         return request
 
-    def append_generated_tokens(self, multimodal_inputs, generated_token_ids):
-        "append already generated tokens"
+    def append_completion_tokens(self, multimodal_inputs, completion_token_ids):
+        "append already completion tokens"
 
-        num_tokens = len(generated_token_ids)
-        multimodal_inputs["input_ids"].extend(generated_token_ids)
+        num_tokens = len(completion_token_ids)
+        multimodal_inputs["input_ids"].extend(completion_token_ids)
         multimodal_inputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * num_tokens)
 
         start = multimodal_inputs["cur_position"]

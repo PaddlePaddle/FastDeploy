@@ -28,8 +28,9 @@ import paddle
 
 from fastdeploy.engine.request import Request, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
+from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.metrics.metrics import main_process_metrics
-from fastdeploy.utils import llm_logger
+from fastdeploy.utils import download_from_bos, init_bos_client, llm_logger
 
 
 @dataclass
@@ -79,6 +80,8 @@ class ResourceManagerV1(ResourceManager):
         self.lock = threading.Lock()
         self.to_be_rescheduled_request_id_set = set()
         main_process_metrics.max_batch_size.set(max_num_seqs)
+        self.bos_client = None
+        self.async_preprocess_pool = ThreadPoolExecutor(max_workers=4)
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
@@ -136,6 +139,26 @@ class ResourceManagerV1(ResourceManager):
                 break
         return can_schedule
 
+    def _is_mm_request(self, request):
+        inputs = request.multimodal_inputs
+        if inputs is None or len(inputs) == 0:
+            return False
+
+        if (
+            (inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0)
+            or (inputs.get("image_feature_urls") is not None and len(inputs["image_feature_urls"]) > 0)
+            or (inputs.get("audio_feature_urls") is not None and len(inputs["audio_feature_urls"]) > 0)
+        ):
+            return True
+        elif (
+            inputs.get("images", None) is not None
+            and inputs.get("image_patch_id", None) is not None
+            and inputs.get("grid_thw", None) is not None
+        ):
+            return True
+
+        return False
+
     def _get_num_new_tokens(self, request, token_budget):
         # TODO: set condition to new _get_num_new_tokens
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
@@ -151,6 +174,7 @@ class ResourceManagerV1(ResourceManager):
             new_end_idx = pre_end_idx + num_new_tokens
 
             prompt_token_ids_len = len(request.prompt_token_ids)
+
             assert prompt_token_ids_len == len(inputs["patch_idx"]), (prompt_token_ids_len, len(inputs["patch_idx"]))
 
             # start
@@ -176,8 +200,17 @@ class ResourceManagerV1(ResourceManager):
                     end_patch_idx -= 1
             end_patch_map = inputs["patch_map"][end_patch_idx]
             end_modal_id = end_patch_map["modal_id"]
-            if end_modal_id > 0:
+
+            if end_modal_id > 0 and end_modal_id != IDS_TYPE_FLAG["video"]:
                 new_end_idx = end_patch_map["end_idx"]  # 当前模态结束位置
+
+            if end_modal_id == IDS_TYPE_FLAG["video"]:
+                can_split_idx_list = inputs["can_split_idx_list"]
+                for i in range(len(can_split_idx_list)):
+                    if can_split_idx_list[i] >= new_end_idx:
+                        new_end_idx = can_split_idx_list[i]
+                        break
+
             num_new_tokens = new_end_idx - pre_end_idx
 
             request.image_end = end_patch_map["image_num"]
@@ -266,6 +299,12 @@ class ResourceManagerV1(ResourceManager):
                 return True
         return False
 
+    def exist_mm_prefill(self, scheduled_reqs):
+        for request in scheduled_reqs:
+            if request.task_type == RequestType.PREFILL and self._is_mm_request(request):
+                return True
+        return False
+
     def schedule(self):
         """
         Try to pull a batch of requests from the waiting queue and schedule them.
@@ -273,6 +312,7 @@ class ResourceManagerV1(ResourceManager):
         with self.lock:
             scheduled_reqs: list[Request] = []
             preempted_reqs: list[Request] = []
+            error_reqs: list[tuple[str, str]] = []
             token_budget = self.config.max_num_batched_tokens
 
             # First, schedule the RUNNING requests.
@@ -339,15 +379,29 @@ class ResourceManagerV1(ResourceManager):
                 req_index += 1
             # schedule the WAITING requests.
             if not preempted_reqs:
-                while self.waiting and token_budget > 0:
+                skip_requests: list[Request] = []
+                while len(self.waiting) > 0 and token_budget > 0:
                     if len(self.running) == self.max_num_seqs:
                         break
-                    if (self.config.model_config.enable_mm or paddle.is_compiled_with_xpu()) and self.exist_prefill(
-                        scheduled_reqs
+
+                    request = self.waiting[0]
+                    if (self._is_mm_request(request) and self.exist_mm_prefill(scheduled_reqs)) or (
+                        paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)
                     ):
                         break
-                    request = self.waiting[0]
+
                     if request.status == RequestStatus.WAITING:
+                        result = self._waiting_async_process(request)
+                        if result is None:
+                            error_reqs.append((request.request_id, request.error_message))
+                            self.waiting.popleft()
+                            continue
+                        elif result is True:
+                            # skip current request, try next request
+                            skip_requests.append(request)
+                            self.waiting.popleft()
+                            continue
+
                         # Enable prefix caching
                         if self.config.cache_config.enable_prefix_caching:
                             if (
@@ -431,19 +485,16 @@ class ResourceManagerV1(ResourceManager):
                             break
                     else:
                         llm_logger.error("Unknown request status type")
+
+                for req in skip_requests:
+                    # move waiting request to end of the deque
+                    self.waiting.append(req)
             if scheduled_reqs:
                 llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
 
-            # Update metrics
-            num_tasks = sum([1 if task else 0 for task in self.tasks_list])
-            num_blocks_used_by_tasks = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
-            main_process_metrics.available_gpu_block_num.set(self.total_block_number() - num_blocks_used_by_tasks)
-            main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
-            main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
-            main_process_metrics.num_requests_running.set(len(self.running))
-            main_process_metrics.num_requests_waiting.set(num_tasks - len(self.running))
+            self.update_metrics()
 
-            return scheduled_reqs
+            return scheduled_reqs, error_reqs
 
     def get_available_position(self) -> int:
         position = 0
@@ -499,8 +550,98 @@ class ResourceManagerV1(ResourceManager):
             llm_logger.error(f"prefix match blocks error: {e}, {str(traceback.format_exc())} waiting reschedule...")
             return False
 
+    def _waiting_async_process(self, request: Request) -> None:
+        """
+        Check if async preprocessing is complete for a request.
+
+        Args:
+            request: The request to check
+
+        Returns:
+            None: If an error occurred during preprocessing
+            True: If preprocessing is still in progress (request should be skipped)
+            False: If preprocessing is complete (request can be scheduled)
+        """
+        for future in request.async_process_futures:
+            if future.done():
+                if request.get("error_message") is not None:
+                    return None
+            else:
+                return True
+        request.async_process_futures = []
+        return False
+
+    def _apply_async_preprocess(self, request: Request) -> None:
+        request.async_process_futures.append(self.async_preprocess_pool.submit(self._download_features, request))
+
+    def _has_features_info(self, task):
+        inputs = task.multimodal_inputs
+        if inputs is None or len(inputs) == 0:
+            return False
+
+        if (
+            (inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0)
+            or (inputs.get("image_feature_urls") is not None and len(inputs["image_feature_urls"]) > 0)
+            or (inputs.get("audio_feature_urls") is not None and len(inputs["audio_feature_urls"]) > 0)
+        ):
+            return True
+        return False
+
+    def _download_features(self, request: Request) -> None:
+        """
+        download multimodal features from bos
+        Note:
+            1. this function will be add features for request.multimodal_inputs
+            2. this function maybe update request.error_message and request.error_code
+
+        Args:
+            request (Request): request object
+        """
+
+        def download_bos_features(bos_client, features_urls):
+            result_list = []
+            for status, feature in download_from_bos(self.bos_client, features_urls):
+                if status:
+                    llm_logger.info(f"request {request.request_id} async download feature: {feature.shape}")
+                    result_list.append(feature)
+                else:
+                    error_msg = f"request {request.request_id} download features error: {feature}"
+                    llm_logger.error(error_msg)
+                    return error_msg
+            return result_list
+
+        if not self.config.parallel_config.enable_async_download_features or not self._has_features_info(request):
+            return None
+
+        if self.bos_client is None:
+            self.bos_client = init_bos_client()
+
+        inputs = request.multimodal_inputs
+        if inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0:
+            result = download_bos_features(self.bos_client, inputs["video_feature_urls"])
+            if isinstance(result, str):  # download error
+                request.error_message = result
+                request.error_code = 530
+                return None
+            inputs["video_features"] = result
+        if inputs.get("image_feature_urls") is not None and len(inputs["image_feature_urls"]) > 0:
+            result = download_bos_features(self.bos_client, inputs["image_feature_urls"])
+            if isinstance(result, str):  # download error
+                request.error_message = result
+                request.error_code = 530
+                return None
+            inputs["image_features"] = result
+        if inputs.get("audio_feature_urls") is not None and len(inputs["audio_feature_urls"]) > 0:
+            result = download_bos_features(self.bos_client, inputs["audio_feature_urls"])
+            if isinstance(result, str):  # download error
+                request.error_message = result
+                request.error_code = 530
+                return None
+            inputs["audio_features"] = result
+
     def add_request(self, request: Request) -> None:
         with self.lock:
+            self._apply_async_preprocess(request)
             self.waiting.append(request)
             self.requests[request.request_id] = request
 
@@ -531,7 +672,10 @@ class ResourceManagerV1(ResourceManager):
                     if request in self.running:  # normally run and finished
                         self.running.remove(request)
                         request.status = RequestStatus.FINISHED
-                        self._free_blocks(request)
+                        try:
+                            self._free_blocks(request)
+                        except Exception as e:
+                            llm_logger.warning(f"release block failed {req_id}: {e}")
                     if (
                         request.request_id in self.to_be_rescheduled_request_id_set
                     ):  # finished after preempted, blocks have been recycled.
@@ -548,7 +692,19 @@ class ResourceManagerV1(ResourceManager):
                     del self.requests[req_id]
         except Exception as e:
             llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")
+        finally:
+            self.update_metrics()
 
     def clear_data(self):
         self.waiting: deque[Request] = deque()
         self.to_be_rescheduled_request_id_set = set()
+
+    def update_metrics(self):
+        # Update metrics
+        num_tasks = sum([1 if task else 0 for task in self.tasks_list])
+        num_blocks_used_by_tasks = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
+        main_process_metrics.available_gpu_block_num.set(self.total_block_number() - num_blocks_used_by_tasks)
+        main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
+        main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
+        main_process_metrics.num_requests_running.set(len(self.running))
+        main_process_metrics.num_requests_waiting.set(num_tasks - len(self.running))

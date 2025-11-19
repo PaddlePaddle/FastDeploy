@@ -27,7 +27,9 @@ from queue import Queue
 from typing import Any, List, Tuple
 
 import numpy as np
+import paddle
 
+from fastdeploy import envs
 from fastdeploy.utils import llm_logger
 
 
@@ -246,7 +248,7 @@ class EngineWorkerQueue:
             self.lock.release()
             time.sleep(0.001)
             self.lock.acquire()
-
+        EngineWorkerQueue.to_tensor(tasks)
         self.tasks[:] = list()
         self.client_read_flag[:] = [0] * self.num_client
         self.tasks.append(tasks)
@@ -262,12 +264,101 @@ class EngineWorkerQueue:
         tasks: List[Any] = list()
         self.lock.acquire()
         tasks.extend(self.tasks)
+
+        EngineWorkerQueue.to_numpy(tasks)
         self.client_read_flag[self.client_id] = 1
         all_client_read: bool = np.sum(self.client_read_flag) == self.num_client
         if all_client_read:
             self.tasks[:] = list()
         self.lock.release()
         return tasks, all_client_read
+
+    @staticmethod
+    def to_tensor(tasks):
+        """
+        Convert NumPy arrays in multimodal inputs to Paddle tensors.
+
+        Args:
+            tasks (tuple): ([request], bsz)
+        """
+        if not getattr(envs, "FD_ENABLE_E2W_TENSOR_CONVERT", False):
+            return
+
+        try:
+            batch_tasks, _ = tasks
+            for task in batch_tasks:
+                multimodal_inputs = getattr(task, "multimodal_inputs", None)
+                if not multimodal_inputs:
+                    continue
+
+                # tensor keys
+                tensor_keys = [
+                    "patch_idx",
+                    "token_type_ids",
+                    "position_ids",
+                    "attention_mask_offset",
+                ]
+                list_keys = [
+                    "image_features",
+                    "video_features",
+                    "audio_features",
+                ]
+
+                llm_logger.info(f"Converting multimodal inputs to tensor...{tensor_keys + list_keys}")
+
+                for key in tensor_keys:
+                    value = multimodal_inputs.get(key)
+                    if value is None:
+                        continue
+                    if isinstance(value, list):
+                        multimodal_inputs[key] = [paddle.to_tensor(v) for v in value]
+                    elif not isinstance(value, paddle.Tensor):
+                        multimodal_inputs[key] = paddle.to_tensor(value)
+
+                for key in list_keys:
+                    value = multimodal_inputs.get(key)
+                    if value is None:
+                        continue
+                    if isinstance(value, list):
+                        multimodal_inputs[key] = [paddle.to_tensor(v) for v in value]
+        except Exception as e:
+            llm_logger.warning(f"Tensor conversion failed: {type(e).__name__}: {e}")
+
+    @staticmethod
+    def to_numpy(tasks):
+        """
+        Convert PaddlePaddle tensors in multimodal inputs to NumPy arrays.
+
+        Args:
+            tasks: List of tasks containing multimodal inputs.
+        """
+        if not getattr(envs, "FD_ENABLE_E2W_TENSOR_CONVERT", False):
+            return
+
+        try:
+            for batch_tasks, _ in tasks:
+                for task in batch_tasks:
+                    if not hasattr(task, "multimodal_inputs"):
+                        continue
+
+                    tensor_keys = [
+                        "image_features",
+                        "video_features",
+                        "audio_features",
+                    ]
+
+                    llm_logger.debug(f"Convert image to numpy, tensor_keys: {tensor_keys}")
+
+                    for key in tensor_keys:
+                        value = task.multimodal_inputs.get(key, None)
+                        if value is None:
+                            continue
+                        if isinstance(value, list):
+                            task.multimodal_inputs[key] = [v.numpy() for v in value]
+                        elif not isinstance(value, np.ndarray):
+                            task.multimodal_inputs[key] = value.numpy()
+        except Exception as e:
+            llm_logger.warning(f"Failed to convert to numpy: {e}")
 
     def num_tasks(self) -> int:
         """

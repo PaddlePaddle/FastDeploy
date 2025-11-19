@@ -33,6 +33,7 @@ from opentelemetry import trace
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
+from fastdeploy.eplb.utils import init_eplb_signals
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
     EngineCacheQueue,
@@ -117,6 +118,7 @@ class EngineSevice:
                 * self.cfg.cache_config.block_size
             )
 
+        self.bos_client = None
         self.guided_decoding_checker = None
         if self.cfg.guided_decoding_backend != "off":
             self.guided_decoding_checker = schema_checker(
@@ -124,6 +126,12 @@ class EngineSevice:
                 disable_any_whitespace=self.cfg.disable_any_whitespace,
             )
         self._init_worker_monitor_signals()
+
+        if self.cfg.eplb_config.enable_eplb:
+            current_suffix = int(
+                self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+            )
+            init_eplb_signals(cfg, current_suffix)
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
@@ -567,12 +575,20 @@ class EngineSevice:
                 ):
                     get_request_pool.submit(_fetch_request)
                 # 2. Schedule requests
-                tasks = self.resource_manager.schedule()
+                tasks, error_tasks = self.resource_manager.schedule()
                 # 3. Send to engine
                 if tasks:
                     self.resource_manager.get_real_bsz()
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
-                else:
+                # 4. Response error tasks
+                if error_tasks:
+                    for request_id, failed in error_tasks:
+                        if failed is None:
+                            llm_logger.warning(f"Request {request_id} has no error, skip sending error response.")
+                            continue
+                        self._send_error_response(request_id, failed)
+
+                if not tasks and not error_tasks:
                     time.sleep(0.005)
 
             except Exception as e:
@@ -658,15 +674,7 @@ class EngineSevice:
                         main_process_metrics.num_requests_waiting.inc(1)
                         continue
 
-                    error_result = RequestOutput(
-                        request_id=request_id,
-                        finished=True,
-                        error_code=500,
-                        error_msg=failed,
-                    )
-                    # Since the request is not in scheduler
-                    # Send result by zmq directly
-                    self.send_response_server.send_response(request_id, [error_result])
+                    self._send_error_response(request_id, failed)
             except Exception as e:
                 llm_logger.error(
                     f"Error happend while receving new request from zmq, details={e}, "
@@ -686,6 +694,18 @@ class EngineSevice:
             if is_end:
                 del self.data_processor.decode_status[req_id]
         return delta_text, token_ids
+
+    def _send_error_response(self, request_id, error_msg):
+        llm_logger.error(f"Send error response to client, request_id: {request_id}, error_msg: {error_msg}")
+        error_result = RequestOutput(
+            request_id=request_id,
+            finished=True,
+            error_code=500,
+            error_msg=error_msg,
+        )
+        # Since the request is not in scheduler
+        # Send result by zmq directly
+        self.send_response_server.send_response(request_id, [error_result])
 
     def _zmq_send_generated_tokens(self):
         """
@@ -720,7 +740,7 @@ class EngineSevice:
                             )
 
                     if len(new_contents):
-                        llm_logger.info(f"Send response for request id: {request_id}")
+                        llm_logger.debug(f"Send response for request id: {request_id}")
                         self.send_response_server.send_response(request_id, new_contents)
 
             except Exception as e:

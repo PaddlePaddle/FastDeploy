@@ -148,6 +148,10 @@ class Request:
         self.idx = None
         self.need_prefill_tokens = self.prompt_token_ids_len
 
+        self.async_process_futures = []
+        self.error_message = None
+        self.error_code = None
+
     @classmethod
     def from_dict(cls, d: dict):
         data_processor_logger.debug(f"{d}")
