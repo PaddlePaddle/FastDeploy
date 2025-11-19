@@ -33,15 +33,6 @@ from fastdeploy import envs
 from fastdeploy.utils import llm_logger
 
 
-class QueueManager(BaseManager):
-    """
-    Custom QueueManager for proxy object registration.
-    This needs to be at module level to be pickleable for multiprocessing.
-    """
-
-    pass
-
-
 class EngineWorkerQueue:
     """
     Cross-machine and cross-process communication queue between Engine and Worker.
@@ -75,6 +66,13 @@ class EngineWorkerQueue:
         self.client_id: int = client_id
         self.local_data_parallel_size = local_data_parallel_size
         self.local_data_parallel_id = local_data_parallel_id
+
+        class QueueManager(BaseManager):
+            """
+            Custom QueueManager for proxy object registration.
+            """
+
+            pass
 
         if is_server:
             # Server-side initialization for shared resources
