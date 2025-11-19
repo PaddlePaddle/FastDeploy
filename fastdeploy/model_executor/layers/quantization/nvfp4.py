@@ -57,6 +57,7 @@ class ModelOptNvFp4Config(QuantConfigBase):
         kv_cache_quant_algo: str | None,
         exclude_modules: list[str],
         group_size: int = 16,
+        is_checkpoint_bf16: bool = False,
     ) -> None:
         self.is_checkpoint_nvfp4_serialized = is_checkpoint_nvfp4_serialized
         if is_checkpoint_nvfp4_serialized:
@@ -72,6 +73,7 @@ class ModelOptNvFp4Config(QuantConfigBase):
         self.quant_max_bound = 6
         self.quant_min_bound = -6
         self.quant_round_type = 1
+        self.is_checkpoint_bf16 = is_checkpoint_bf16
 
     def name(self) -> str:
         return "modelopt_fp4"
@@ -405,6 +407,8 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
 
         if self.backend == "none":
             raise ValueError("No valid NVFP4 flashinfer MoE backend found. " "Please check your platform capability.")
+
+        logger.info(f"Using {self.backend} for NVFP4 FusedMoE")
 
     def create_weights(self, layer, **extra_weight_attrs):
         """

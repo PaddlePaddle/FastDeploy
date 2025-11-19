@@ -371,6 +371,8 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         # Can be extended to other offline quantization suffixes if needed.
         if (is_moe and moe_quant_type == "block_wise_fp8") or (not is_moe and dense_quant_type == "block_wise_fp8"):
             fd_suffix_map = fp8_suffix_map
+        else:
+            fd_suffix_map = {}
         for ckpt_suffix, fd_suffix in fd_suffix_map.items():
             if re.search(rf"{ckpt_suffix}$", loaded_weight_name):
                 loaded_weight_name = loaded_weight_name.replace(ckpt_suffix, fd_suffix)
