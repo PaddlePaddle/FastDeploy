@@ -900,6 +900,12 @@ class GraphOptimizationConfig:
         draft_capture_sizes.append(max_capture_size)
         self.cudagraph_capture_sizes = sorted(draft_capture_sizes)
 
+    def filter_capture_size(self, tp_size: int = 1):
+        """When TSP is used, capture size must be divisible by tp size."""
+        self.cudagraph_capture_sizes = [
+            draft_size for draft_size in self.cudagraph_capture_sizes if (draft_size % tp_size == 0)
+        ]
+
     def to_json_string(self):
         """
         Convert speculative_config to json string.
@@ -1617,6 +1623,8 @@ class FDConfig:
             self.cache_config.max_encoder_cache = 0
 
         # Adjustment GraphOptConfig
+        if self.parallel_config.use_sequence_parallel_moe:
+            self.graph_opt_config.filter_capture_size(tp_size=self.parallel_config.tensor_parallel_size)
         if self.scheduler_config is not None and self.scheduler_config.splitwise_role == "prefill":
             self.graph_opt_config.use_cudagraph = self.graph_opt_config.cudagraph_only_prefill
         if self.load_config is not None and self.load_config.dynamic_load_weight is True:
@@ -1633,16 +1641,10 @@ class FDConfig:
             logger.info("Multi-modal models do not support prefix caching when using CUDAGraph!")
 
         if self.scheduler_config.splitwise_role == "mixed":
-            # Sequence parallel MoE is incompatible with CUDA graph now. It will hang.
-            if self.graph_opt_config.use_cudagraph:
-                self.parallel_config.use_sequence_parallel_moe = False
             self.model_config.moe_phase = MoEPhase(phase="prefill")
         elif self.scheduler_config.splitwise_role == "prefill":
             self.model_config.moe_phase = MoEPhase(phase="prefill")
         elif self.scheduler_config.splitwise_role == "decode":
-            # Sequence parallel MoE is incompatible with CUDA graph now. It will hang.
-            if self.graph_opt_config.use_cudagraph:
-                self.parallel_config.use_sequence_parallel_moe = False
             self.model_config.moe_phase = MoEPhase(phase="decode")
         else:
             raise NotImplementedError

@@ -180,6 +180,11 @@ def get_device_type():
         return "cpu"
 
 
+def rdma_comm_supported():
+    device_type = get_device_type()
+    return device_type in ["gpu", "xpu"]
+
+
 def get_name():
     """get package name"""
     return "fastdeploy-" + get_device_type()
@@ -237,8 +242,10 @@ setup(
                 version=None,
             )
         ]
+        if rdma_comm_supported()
+        else []
     ),
-    cmdclass=cmdclass_dict,
+    cmdclass=cmdclass_dict if rdma_comm_supported() else {},
     zip_safe=False,
     classifiers=[
         "Programming Language :: Python :: 3",
