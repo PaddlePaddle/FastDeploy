@@ -20,6 +20,7 @@ import numpy as np
 import paddle
 
 from fastdeploy import envs
+from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator.engine_worker_queue import EngineWorkerQueue
 
 
@@ -80,7 +81,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
         # 构造 paddle.Tensor 输入
         tensor_images = paddle.randn([2, 3, 224, 224])
         task = DummyTask(tensor_images)
-        tasks = [([task], 1)]
+        tasks = ([task], 1)
 
         EngineWorkerQueue.to_numpy(tasks)
 
@@ -94,7 +95,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
         tensor_images = paddle.randn([2, 3, 224, 224])
         # 创建模拟任务
         task = DummyTask(tensor_images)
-        tasks = [([task], 1)]
+        tasks = ([task], 1)
 
         # 调用转换方法(预期不会转换)
         EngineWorkerQueue.to_numpy(tasks)
@@ -107,7 +108,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
             pass
 
         task = NoMMTask()
-        tasks = [([task], 1)]
+        tasks = ([task], 1)
 
         # 不应抛异常
         try:
@@ -119,7 +120,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
         envs.FD_ENABLE_MAX_PREFILL = 1
         np_images = np.random.randn(2, 3, 224, 224)
         task = DummyTask(np_images)
-        tasks = [([task], 1)]
+        tasks = ([task], 1)
 
         EngineWorkerQueue.to_numpy(tasks)
 
@@ -135,12 +136,48 @@ class TestEngineWorkerQueue(unittest.TestCase):
                 raise RuntimeError("mock error")
 
         bad_task = DummyTask(images=BadTensor())
-        bad_tasks = [([bad_task], 1)]
+        bad_tasks = ([bad_task], 1)
 
         try:
             EngineWorkerQueue.to_numpy(bad_tasks)
         except Exception as e:
             self.fail(f"Exception should be handled internally, but got: {e}")
+
+    def test_features_info_to_tensor(self):
+        envs.FD_ENABLE_MAX_PREFILL = 1
+        np_feature = paddle.randn([2, 3, 224, 224]).numpy()
+        multimodal_inputs = {
+            "image_features": [np_feature, np_feature],
+        }
+        req_dict = {
+            "request_id": "req1",
+            "multimodal_inputs": multimodal_inputs,
+        }
+        task = Request.from_dict(req_dict)
+        EngineWorkerQueue.to_tensor(([task], 1))
+
+        # 验证已转换为tensor
+        self.assertEqual(len(task.multimodal_inputs["image_features"]), 2)
+        self.assertIsInstance(task.multimodal_inputs["image_features"][0], paddle.Tensor)
+        self.assertIsInstance(task.multimodal_inputs["image_features"][1], paddle.Tensor)
+
+    def test_features_info_to_numpy(self):
+        envs.FD_ENABLE_MAX_PREFILL = 1
+        tensor_feature = paddle.randn([2, 3, 224, 224])
+        multimodal_inputs = {
+            "video_features": [tensor_feature, tensor_feature],
+        }
+        req_dict = {
+            "request_id": "req1",
+            "multimodal_inputs": multimodal_inputs,
+        }
+        task = Request.from_dict(req_dict)
+        EngineWorkerQueue.to_numpy(([task], 1))
+
+        # 验证已转换为ndarray
+        self.assertEqual(len(task.multimodal_inputs["video_features"]), 2)
+        self.assertIsInstance(task.multimodal_inputs["video_features"][0], np.ndarray)
+        self.assertIsInstance(task.multimodal_inputs["video_features"][1], np.ndarray)
 
 
 if __name__ == "__main__":

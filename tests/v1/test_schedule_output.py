@@ -55,7 +55,7 @@ def test_normal_schedule():
     resource_manager_v1.add_request(req3)
     # step 1
     assert len(resource_manager_v1.waiting) == 3
-    scheduler_reqs = resource_manager_v1.schedule()
+    scheduler_reqs, _ = resource_manager_v1.schedule()
     assert len(scheduler_reqs) == 2
     assert scheduler_reqs[0].request_id == "req1"
     assert scheduler_reqs[1].request_id == "req2"
@@ -66,7 +66,7 @@ def test_normal_schedule():
     assert len(resource_manager_v1.running) == 2
     assert len(resource_manager_v1.waiting) == 1
     # step 2
-    scheduler_reqs = resource_manager_v1.schedule()
+    scheduler_reqs, _ = resource_manager_v1.schedule()
     assert len(scheduler_reqs) == 2
     assert scheduler_reqs[0].request_id == "req1"
     assert len(scheduler_reqs[0].block_tables) == 52
@@ -76,7 +76,7 @@ def test_normal_schedule():
     assert len(resource_manager_v1.running) == 2
     assert len(resource_manager_v1.waiting) == 1
     # step 3
-    scheduler_reqs = resource_manager_v1.schedule()
+    scheduler_reqs, _ = resource_manager_v1.schedule()
     assert len(scheduler_reqs) == 2
     assert scheduler_reqs[0].request_id == "req2"
     assert scheduler_reqs[0].prefill_start_index == 3200
@@ -118,7 +118,7 @@ def test_preempted_request():
     resource_manager_v1.add_request(req2)
     # step 1
     assert len(resource_manager_v1.waiting) == 2
-    scheduler_reqs = resource_manager_v1.schedule()
+    scheduler_reqs, _ = resource_manager_v1.schedule()
     assert len(scheduler_reqs) == 1
     assert scheduler_reqs[0].request_id == "req1"
     assert scheduler_reqs[0].prefill_start_index == 0
@@ -126,13 +126,13 @@ def test_preempted_request():
     assert len(resource_manager_v1.running) == 1
     assert len(resource_manager_v1.waiting) == 1
     # step 2
-    scheduler_reqs = resource_manager_v1.schedule()
+    scheduler_reqs, _ = resource_manager_v1.schedule()
     assert len(scheduler_reqs) == 2
     assert scheduler_reqs[0].request_id == "req1"
     assert len(scheduler_reqs[0].block_tables) == 52
     # step 3
     req1.output_token_ids.extend([1] * 128)
-    scheduler_reqs = resource_manager_v1.schedule()
+    scheduler_reqs, _ = resource_manager_v1.schedule()
     assert len(scheduler_reqs) == 2
     assert scheduler_reqs[0].request_id == "req2"
     assert len(resource_manager_v1.running) == 1
@@ -142,7 +142,7 @@ def test_preempted_request():
     # mock token_processor to add into waiting
     resource_manager_v1.waiting.appendleft(req2)
     # step 4
-    scheduler_reqs = resource_manager_v1.schedule()
+    scheduler_reqs, _ = resource_manager_v1.schedule()
     assert len(scheduler_reqs) == 0
     assert len(resource_manager_v1.running) == 1
     assert len(resource_manager_v1.waiting) == 1
