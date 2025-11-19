@@ -81,7 +81,7 @@ class MixQuantConfig(QuantConfigBase):
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if isinstance(layer, FusedMoE):
             if layer.moe_tag == "Image":
-                if self.kv_cache_quant_type is not None:
+                if self.image_moe_quant_type is not None:
                     return (
                         get_quantization_config(self.image_moe_quant_type)
                         .from_config(
