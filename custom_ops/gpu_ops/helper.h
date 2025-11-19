@@ -725,6 +725,10 @@ inline void launchWithPdlWhenEnabled(KernelFn kernelFn,
                                      size_t dynamicShmSize,
                                      cudaStream_t stream,
                                      Args &&...args) {
+#ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
+  (*kernelFn)<<<grid, block, dynamicShmSize, stream>>>(
+      std::forward<Args>(args)...);
+#else
   cudaLaunchConfig_t kernelConfig;
   kernelConfig.gridDim = grid;
   kernelConfig.blockDim = block;
@@ -738,5 +742,6 @@ inline void launchWithPdlWhenEnabled(KernelFn kernelFn,
   kernelConfig.numAttrs = 1;
 
   cudaLaunchKernelEx(&kernelConfig, kernelFn, std::forward<Args>(args)...);
+#endif
 }
 #endif
