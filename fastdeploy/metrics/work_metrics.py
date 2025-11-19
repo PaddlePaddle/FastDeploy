@@ -72,11 +72,11 @@ class WorkMetricsManager(MetricsManagerInterface):
             buckets=build_1_2_5_buckets(33792),
             labelnames=LABEL_NAMES,
         )
-        self.prompt_tokens_total = Counter(
-            name="fastdeploy:prompt_tokens_total",
-            documentation="Total number of prompt tokens processed",
-            labelnames=LABEL_NAMES,
-        )
+        # self.prompt_tokens_total = Counter(
+        #     name="fastdeploy:prompt_tokens_total",
+        #     documentation="Total number of prompt tokens processed",
+        #     labelnames=LABEL_NAMES,
+        # )
         self.request_prompt_tokens = Histogram(
             name="fastdeploy:request_prompt_tokens",
             documentation="Number of prefill tokens processed.",

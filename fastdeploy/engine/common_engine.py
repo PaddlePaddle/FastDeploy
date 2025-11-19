@@ -562,6 +562,8 @@ class EngineService:
                 else:
                     continue
 
+                for task in tasks:
+                    main_process_metrics.inc_value("prompt_tokens_total", task.prompt_token_ids_len)
                 main_process_metrics.dec_value("num_requests_waiting", len(tasks))
                 main_process_metrics.inc_value("num_requests_running", len(tasks))
             except Exception as e:
@@ -597,6 +599,7 @@ class EngineService:
                 )
 
                 for task in tasks:
+                    main_process_metrics.inc_value("prompt_tokens_total", task.prompt_token_ids_len)
                     task.schedule_start_time = time.time()
 
                 self.llm_logger.debug(f"get tasks from scheduler: {tasks}")
