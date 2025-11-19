@@ -41,7 +41,13 @@ from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
+from fastdeploy.utils import (
+    EngineError,
+    console_logger,
+    envs,
+    is_port_available,
+    llm_logger,
+)
 
 
 class LLMEngine:
@@ -728,13 +734,16 @@ class LLMEngine:
                     1,
                     self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
                 ):
+                    master_ip = self.cfg.master_ip
+                    engine_worker_queue_port = self.cfg.parallel_config.engine_worker_queue_port[i]
                     if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
-                        address = (
-                            self.cfg.master_ip,
-                            int(self.cfg.parallel_config.engine_worker_queue_port[i]),
-                        )
+                        if not is_port_available(master_ip, engine_worker_queue_port):
+                            raise Exception(
+                                f"The parameter `engine_worker_queue_port`:{engine_worker_queue_port} is already in use."
+                            )
+                        address = (master_ip, int(engine_worker_queue_port))
                     else:
-                        address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[i]}.sock"
+                        address = f"/dev/shm/fd_task_queue_{engine_worker_queue_port}.sock"
 
                     llm_logger.info(f"dp start queue service {address}")
                     self.dp_engine_worker_queue_server.append(

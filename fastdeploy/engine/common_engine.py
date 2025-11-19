@@ -57,6 +57,7 @@ from fastdeploy.utils import (
     envs,
     get_logger,
     init_bos_client,
+    is_port_available,
     llm_logger,
 )
 
@@ -272,16 +273,18 @@ class EngineService:
         """
         start queue service for engine worker communication
         """
-
+        master_ip = self.cfg.master_ip
+        engine_worker_queue_port = self.cfg.parallel_config.engine_worker_queue_port[
+            self.cfg.parallel_config.local_data_parallel_id
+        ]
         if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
-            address = (
-                self.cfg.master_ip,
-                int(
-                    self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
-                ),
-            )
+            if not is_port_available(master_ip, engine_worker_queue_port):
+                raise Exception(
+                    f"The parameter `engine_worker_queue_port`:{engine_worker_queue_port} is already in use."
+                )
+            address = (master_ip, int(engine_worker_queue_port))
         else:
-            address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]}.sock"
+            address = f"/dev/shm/fd_task_queue_{engine_worker_queue_port}.sock"
 
         if start_queue and (self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0"):
             self.llm_logger.info(f"Starting engine worker queue server service at {address}")
@@ -293,24 +296,18 @@ class EngineService:
             )
             # Dynamically updates the port value if an anonymous port is used
             if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+                engine_worker_queue_port = str(self.engine_worker_queue_server.get_server_port())
+                address = (master_ip, int(engine_worker_queue_port))
                 self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id] = (
-                    str(self.engine_worker_queue_server.get_server_port())
-                )
-                address = (
-                    self.cfg.master_ip,
-                    int(
-                        self.cfg.parallel_config.engine_worker_queue_port[
-                            self.cfg.parallel_config.local_data_parallel_id
-                        ]
-                    ),
+                    engine_worker_queue_port
                 )
 
             if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
+                cache_queue_port = self.cfg.cache_config.cache_queue_port
+                if not is_port_available(master_ip, cache_queue_port):
+                    raise Exception(f"The parameter `cache_queue_port`:{engine_worker_queue_port} is already in use.")
                 self.cache_task_queue = EngineCacheQueue(
-                    address=(
-                        self.cfg.master_ip,
-                        self.cfg.cache_config.cache_queue_port,
-                    ),
+                    address=(master_ip, int(cache_queue_port)),
                     authkey=b"cache_queue_service",
                     is_server=True,
                     num_client=self.cfg.parallel_config.tensor_parallel_size,

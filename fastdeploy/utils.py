@@ -609,6 +609,8 @@ def is_port_available(host, port):
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
+            if isinstance(port, str):
+                port = int(port)
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind((host, port))
             return True
