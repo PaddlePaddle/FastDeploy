@@ -1,5 +1,4 @@
-"""
-# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+"""# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"
 # you may not use this file except in compliance with the License.
@@ -38,6 +37,7 @@ from fastdeploy.engine.engine import LLMEngine
 from fastdeploy.engine.expert_service import ExpertService
 from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.engine_client import EngineClient
+from fastdeploy.entrypoints.openai.middleware import AuthenticationMiddleware
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -264,6 +264,12 @@ app = FastAPI(lifespan=lifespan)
 app.add_exception_handler(RequestValidationError, ExceptionHandler.handle_request_validation_exception)
 app.add_exception_handler(Exception, ExceptionHandler.handle_exception)
 instrument(app)
+
+
+env_api_key_func = environment_variables.get("FD_API_KEY")
+env_tokens = env_api_key_func() if env_api_key_func else []
+if tokens := [key for key in (args.api_key or env_tokens) if key]:
+    app.add_middleware(AuthenticationMiddleware, tokens)
 
 
 @asynccontextmanager
@@ -537,6 +543,13 @@ def launch_api_server() -> None:
 
 metrics_app = FastAPI()
 
+# Be tolerant to tests that monkeypatch/partially mock args.
+_metrics_port = getattr(args, "metrics_port", None)
+_main_port = getattr(args, "port", None)
+
+if _metrics_port is None or (_main_port is not None and _metrics_port == _main_port):
+    metrics_app = app
+
 
 @metrics_app.get("/metrics")
 async def metrics():
@@ -591,6 +604,12 @@ def launch_metrics_server():
     metrics_server_thread = threading.Thread(target=run_metrics_server, daemon=True)
     metrics_server_thread.start()
     time.sleep(1)
+
+
+def setup_metrics_environment():
+    """Prepare Prometheus multiprocess directory before starting API workers."""
+    prom_dir = cleanup_prometheus_files(True)
+    os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
 
 
 controller_app = FastAPI()
@@ -701,13 +720,17 @@ def main():
         if not load_data_service():
             return
     api_server_logger.info("FastDeploy LLM engine initialized!\n")
-    console_logger.info(f"Launching metrics service at http://{args.host}:{args.metrics_port}/metrics")
+    if args.metrics_port is not None and args.metrics_port != args.port:
+        launch_metrics_server()
+        console_logger.info(f"Launching metrics service at http://{args.host}:{args.metrics_port}/metrics")
+    else:
+        setup_metrics_environment()
+        console_logger.info(f"Launching metrics service at http://{args.host}:{args.port}/metrics")
     console_logger.info(f"Launching chat completion service at http://{args.host}:{args.port}/v1/chat/completions")
     console_logger.info(f"Launching completion service at http://{args.host}:{args.port}/v1/completions")
 
     launch_worker_monitor()
     launch_controller_server()
-    launch_metrics_server()
     launch_api_server()
 
 

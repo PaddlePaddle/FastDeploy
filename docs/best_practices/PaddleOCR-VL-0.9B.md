@@ -5,8 +5,8 @@
 ## 1. Environment Preparation
 ### 1.1 Support Status
 Recommended Hardware Configuration:
-- GPU Memory: 24GB or more
-- Shared Memory: 2GB or more
+- GPU Memory: 8GB or more
+- Shared Memory: 4GB or more
 
 ### 1.2 Install Fastdeploy
 
@@ -14,29 +14,43 @@ Installation process reference documentation [FastDeploy GPU Install](../get_sta
 
 ## 2.How to Use
 ### 2.1 Basic: Launching the Service
-**Example 1:** Deploying a 16K Context Service on a Single RTX 4090 GPU
+**Example 1:** Deploying a 16K Context Service on a Single RTX 3060 GPU
 ```shell
 python -m fastdeploy.entrypoints.openai.api_server \
     --model PaddlePaddle/PaddleOCR-VL \
-    --port 8180 \
-    --metrics-port 8181 \
-    --engine-worker-queue-port 8182 \
+    --port 8185 \
+    --metrics-port 8186 \
+    --engine-worker-queue-port 8187 \
     --max-model-len 16384 \
     --max-num-batched-tokens 16384 \
     --gpu-memory-utilization 0.8 \
-    --max-num-seqs 128 \
+    --max-num-seqs 256
 ```
-**Example 2:** Deploying a 16K Context Service on a Single A100 GPU
+
+**Example 2:** Deploying a 16K Context Service on a Single RTX 4090 GPU
 ```shell
 python -m fastdeploy.entrypoints.openai.api_server \
     --model PaddlePaddle/PaddleOCR-VL \
-    --port 8180 \
-    --metrics-port 8181 \
-    --engine-worker-queue-port 8182 \
+    --port 8185 \
+    --metrics-port 8186 \
+    --engine-worker-queue-port 8187 \
     --max-model-len 16384 \
     --max-num-batched-tokens 16384 \
-    --gpu-memory-utilization 0.8 \
-    --max-num-seqs 256 \
+    --gpu-memory-utilization 0.7 \
+    --max-num-seqs 256
+```
+
+**Example 3:** Deploying a 16K Context Service on a Single A100 GPU
+```shell
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/PaddleOCR-VL \
+    --port 8185 \
+    --metrics-port 8186 \
+    --engine-worker-queue-port 8187 \
+    --max-model-len 16384 \
+    --max-num-batched-tokens 16384 \
+    --gpu-memory-utilization 0.7 \
+    --max-num-seqs 256
 ```
 
 An example is a set of configurations that can run stably while also delivering relatively good performance. If you have further requirements for precision or performance, please continue reading the content below.
@@ -57,7 +71,7 @@ An example is a set of configurations that can run stably while also delivering 
 > **Available GPU memory ratio during initialization**
 - **Parameters：** `--gpu-memory-utilization`
 - **Description：** Controls the available GPU memory for FastDeploy service initialization. The default value is 0.9, meaning 10% of the memory is reserved for backup.
-- **Recommendation：** It is recommended to use 0.8. If an "out of memory" error occurs during stress testing, you may attempt to reduce this value.
+- **Recommendation：** It is recommended to use 0.7. If an "out of memory" error occurs during stress testing, you may attempt to reduce this value.
 
 #### 2.2.2 Chunked Prefill
 - **Parameters：** `--max-num-batched-tokens`

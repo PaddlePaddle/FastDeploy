@@ -48,6 +48,7 @@ def topp_sampling_kernel(candidate_ids, candidate_scores, curand_value, candidat
 
 
 def speculate_verify_ref(
+    sampled_token_ids,
     accept_tokens,
     accept_num,
     step_idx,
@@ -264,6 +265,7 @@ def gen_speculate_verify_inputs(
     seq_lens_this_time = rng.integers(1, max_seq_len + 1, size=real_bsz, dtype=np.int32)
     sum_seq_this_time = int(np.sum(seq_lens_this_time))
 
+    sampled_token_ids = rng.integers(0, 1000, size=(sum_seq_this_time, 1), dtype=np.int64)
     verify_tokens = rng.integers(0, 1000, size=(sum_seq_this_time, max_candidate_len), dtype=np.int64)
     verify_scores = rng.random(size=(sum_seq_this_time, max_candidate_len)).astype(np.float32)
 
@@ -291,6 +293,7 @@ def gen_speculate_verify_inputs(
     stop_flags = np.zeros(real_bsz, dtype=bool)
 
     return {
+        "sampled_token_ids": sampled_token_ids,
         "accept_tokens": accept_tokens,
         "accept_num": accept_num,
         "step_idx": step_idx,
@@ -395,7 +398,7 @@ class TestSpeculateVerify(unittest.TestCase):
         paddle_inputs = {k: v if isinstance(v, (int, bool)) else paddle.to_tensor(v) for k, v in inputs.items()}
         inputs_gpu = list(paddle_inputs.values())
         speculate_verify(*inputs_gpu)
-        out_gpu = [inputs_gpu[0], inputs_gpu[1], inputs_gpu[2], inputs_gpu[3]]
+        out_gpu = [inputs_gpu[1], inputs_gpu[2], inputs_gpu[3], inputs_gpu[4]]
 
         paddle_inputs_ref = {k: v if isinstance(v, (int, bool)) else paddle.to_tensor(v) for k, v in inputs.items()}
         out_ref = speculate_verify_ref(**paddle_inputs_ref)
