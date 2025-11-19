@@ -237,10 +237,8 @@ setup(
                 version=None,
             )
         ]
-        if os.getenv("ENABLE_FD_RDMA", "0") == "1"
-        else []
     ),
-    cmdclass=cmdclass_dict if os.getenv("ENABLE_FD_RDMA", "0") == "1" else {},
+    cmdclass=cmdclass_dict,
     zip_safe=False,
     classifiers=[
         "Programming Language :: Python :: 3",
