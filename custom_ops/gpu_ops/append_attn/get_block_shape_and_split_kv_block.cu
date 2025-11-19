@@ -273,8 +273,7 @@ void GetBlockShapeAndSplitKVBlock(
     const int encoder_block_shape_q,
     const int decoder_block_shape_q,
     const int group_size,
-    const int block_size,
-    const int decoder_step_token_num) {
+    const int block_size) {
   auto stream = seq_lens_encoder.stream();
   int bsz = seq_lens_this_time.shape()[0];
 
@@ -343,15 +342,7 @@ void GetBlockShapeAndSplitKVBlock(
           decoder_chunk_size_device.copy_to(paddle::CPUPlace(), false);
       const int chunk_size = decoder_chunk_size_cpu.data<int>()[0];
 
-      //  NOTE: (changwenbin) When using auto_chunk,
-      // decode_max_tile_size must take into account the maximum case, where *
-      // 1024 can cover 128K. const uint32_t decoder_batch_shape =
-      // seq_lens_decoder.dims()[0] * 1024;
-
-      const uint32_t decoder_max_tile_size_per_bs_q =
-          div_up((decoder_step_token_num * group_size), decoder_block_shape_q);
-      const uint32_t decoder_batch_shape =
-          bsz * 1024 * decoder_max_tile_size_per_bs_q;
+      const uint32_t decoder_batch_shape = decoder_batch_ids.shape()[0];
 
       PADDLE_ENFORCE_GPU_SUCCESS(
           cudaMemsetAsync(decoder_batch_ids.data<int>(),
@@ -374,12 +365,7 @@ void GetBlockShapeAndSplitKVBlock(
           chunk_size);
 
     } else {
-      // Note:(changwenbin)In order to adapt to cudagraph, the maximum value
-      // should be taken here
-      const uint32_t decoder_max_tile_size_per_bs_q =
-          div_up((decoder_step_token_num * group_size), decoder_block_shape_q);
-      const uint32_t decoder_batch_shape =
-          bsz * 1024 * decoder_max_tile_size_per_bs_q;
+      const uint32_t decoder_batch_shape = decoder_batch_ids.shape()[0];
 
       PADDLE_ENFORCE_GPU_SUCCESS(
           cudaMemsetAsync(decoder_batch_ids.data<int>(),
@@ -486,8 +472,7 @@ std::vector<std::vector<int64_t>> GetBlockShapeAndSplitKVBlockInferShape(
     const int encoder_block_shape_q,
     const int decoder_block_shape_q,
     const int group_size,
-    const int block_size,
-    const int decoder_step_token_num) {
+    const int block_size) {
   return {};
 }
 
@@ -498,8 +483,7 @@ std::vector<paddle::DataType> GetBlockShapeAndSplitKVBlockInferDtype(
     const int encoder_block_shape_q,
     const int decoder_block_shape_q,
     const int group_size,
-    const int block_size,
-    const int decoder_step_token_num) {
+    const int block_size) {
   return {};
 }
 
@@ -527,8 +511,7 @@ PD_BUILD_STATIC_OP(get_block_shape_and_split_kv_block)
     .Attrs({"encoder_block_shape_q: int",
             "decoder_block_shape_q: int",
             "group_size: int",
-            "block_size: int",
-            "decoder_step_token_num: int"})
+            "block_size: int"})
     .SetKernelFn(PD_KERNEL(GetBlockShapeAndSplitKVBlock))
     .SetInferShapeFn(PD_INFER_SHAPE(GetBlockShapeAndSplitKVBlockInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(GetBlockShapeAndSplitKVBlockInferDtype));
