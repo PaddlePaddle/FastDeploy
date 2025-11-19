@@ -71,6 +71,7 @@ def xpu_pre_process(
     draft_tokens: Optional[paddle.Tensor] = None,
     seq_lens_encoder: Optional[paddle.Tensor] = None,
     seq_lens_decoder: Optional[paddle.Tensor] = None,
+    is_profiling: bool = False,
 ) -> XPUForwardMeta:
     """ """
     max_len = input_ids.shape[1]
@@ -155,6 +156,8 @@ def xpu_pre_process(
 
     share_inputs["ids_remove_padding"] = adjusted_input
     xpu_forward_meta.ids_remove_padding = adjusted_input
+    # Set forward_meta.is_profiling to True to skip init_kv_signal_per_query for attention backends
+    xpu_forward_meta.is_profiling = is_profiling
     return xpu_forward_meta
 
 
@@ -924,6 +927,7 @@ class XPUModelRunner(ModelRunnerBase):
             draft_tokens=None,
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+            is_profiling=is_dummy_run,
         )
         # Update bad tokens len
         max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
@@ -1188,7 +1192,6 @@ class XPUModelRunner(ModelRunnerBase):
             self.kv_signal_sender = create_kv_signal_sender()
         # 1. Prepare inputs of model and decoder.
         self._prepare_inputs(is_dummy_run=is_dummy_run)
-
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
         # when there is data on other runner, the current runner is required to execute part of the model.

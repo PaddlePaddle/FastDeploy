@@ -204,7 +204,7 @@ class CacheTransferManager:
             logger.info(f"[rank {self.rank}/{self.n_ranks}] OK! Stop waiting.")
 
         logger.info(f"[rank {self.rank}/{self.n_ranks}] Initializing kv cache for all layers.")
-        set_device(self.rank)
+        set_device(self.device)
         for i in range(args.num_layers + self.num_extra_layers):
             num_gpu_blocks = self.num_gpu_blocks if i < args.num_layers else self.num_extra_layer_gpu_blocks
             key_name = f"key_caches_{i}_rank{self.rank}.device{self.device}"
@@ -569,7 +569,7 @@ class CacheTransferManager:
                             time.sleep(0.1)
 
                     # clear gpu caches
-                    set_device(self.rank)
+                    set_device(self.device)
                     for name, tensor in self.gpu_cache_kvs.items():
                         unset_data_ipc(tensor, name, True, False)
                     self.gpu_cache_kvs.clear()
@@ -640,5 +640,5 @@ if __name__ == "__main__":
     args = parse_args()
     rank_id = args.rank + args.local_data_parallel_id * args.mp_num
     logger = get_logger("cache_transfer_manager", f"cache_transfer_manager_rank{rank_id}.log")
-    set_device(rank_id)
+    set_device(args.device_id)
     main()

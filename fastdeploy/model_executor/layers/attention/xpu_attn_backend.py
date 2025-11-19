@@ -91,6 +91,7 @@ class XPUAttentionBackend(AttentionBackend):
         )
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
+        self.num_layers_draft_model: int = int(fd_config.speculative_config.method in ["mtp"])
 
         self.kv_num_heads: int = kv_num_heads
         self.num_heads: int = num_heads
@@ -122,7 +123,7 @@ class XPUAttentionBackend(AttentionBackend):
 
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
-        if self.pd_disaggregation_mode == "per_chunk":
+        if self.pd_disaggregation_mode == "per_chunk" and not forward_meta.is_profiling:
             if not self.keep_pd_step_flag:
                 init_kv_signal_per_query(
                     forward_meta.seq_lens_encoder,

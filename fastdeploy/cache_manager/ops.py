@@ -67,6 +67,13 @@ def share_external_data_(cache, cache_name, cache_shape, use_ipc):
     return cache
 
 
+def get_all_visible_devices():
+    if current_platform.is_xpu():
+        return "XPU_VISIBLE_DEVICES=0,1,2,3,4,5,6,7"
+    else:
+        return "CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7"
+
+
 __all__ = [
     "cuda_host_alloc",
     "cuda_host_free",
@@ -81,4 +88,5 @@ __all__ = [
     "ipc_sent_key_value_cache_by_remote_ptr",
     "ipc_sent_key_value_cache_by_remote_ptr_block_sync",
     "get_peer_mem_addr",
+    "get_all_visible_devices",
 ]

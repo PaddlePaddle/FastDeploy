@@ -161,9 +161,6 @@ class CacheMessager:
         for layer_idx in range(self.num_layers):
             key_cache = self.gpu_cache_kvs[f"key_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
             val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
-            logger.info(
-                f"[key_cache: {hex(key_cache.data_ptr())}],[key_cache_mem: {hex(get_peer_mem_addr(key_cache.data_ptr()))}]"
-            )
             cache_k.append(key_cache)
             cache_v.append(val_cache)
             if paddle.is_compiled_with_xpu():
@@ -465,8 +462,12 @@ class CacheMessagerV1:
             val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
             cache_k.append(key_cache)
             cache_v.append(val_cache)
-            cache_k_ptr_list.append(key_cache.data_ptr())
-            cache_v_ptr_list.append(val_cache.data_ptr())
+            if paddle.is_compiled_with_xpu():
+                cache_k_ptr_list.append(get_peer_mem_addr(key_cache.data_ptr()))
+                cache_v_ptr_list.append(get_peer_mem_addr(val_cache.data_ptr()))
+            else:
+                cache_k_ptr_list.append(key_cache.data_ptr())
+                cache_v_ptr_list.append(val_cache.data_ptr())
         cache_k_ptr_list = np.array(cache_k_ptr_list)
         cache_v_ptr_list = np.array(cache_v_ptr_list)
 
@@ -771,7 +772,7 @@ class CacheMessagerV1:
 def main():
     device = args.device_id
     rank = args.rank
-    set_device(args.rank)
+    set_device(device)
     cache_type = args.cache_dtype
     speculative_config = SpeculativeConfig(args.speculative_config)
     num_extra_layers = speculative_config.num_extra_cache_layer
@@ -883,7 +884,6 @@ if __name__ == "__main__":
     args = parse_args()
     rank_id = args.rank + args.local_data_parallel_id * args.mp_num
     logger = get_logger("cache_messager", f"cache_messager_rank{rank_id}.log")
-
     logger.info("create cache messager...")
     logger.info(f"{args}")
     main()
