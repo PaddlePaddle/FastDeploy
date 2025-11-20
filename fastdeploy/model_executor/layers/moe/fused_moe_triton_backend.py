@@ -1422,13 +1422,6 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 down_proj_weight_name = self.added_weight_attrs[1]
                 up_gate_proj_scale_name = self.added_scale_attrs[0]
                 down_proj_scale_name = self.added_scale_attrs[1]
-                if (
-                    not weight_fully_copied(getattr(layer, up_gate_proj_weight_name))
-                    or not weight_fully_copied(getattr(layer, down_proj_weight_name))
-                    or not weight_fully_copied(getattr(layer, up_gate_proj_scale_name))
-                    or not weight_fully_copied(getattr(layer, down_proj_scale_name))
-                ):
-                    return
                 process_weight_transpose(layer, up_gate_proj_weight_name)
                 process_weight_transpose(layer, down_proj_weight_name)
                 process_weight_transpose(layer, up_gate_proj_scale_name)
