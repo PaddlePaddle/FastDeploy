@@ -380,7 +380,7 @@ jobs:
         shell: bash
         run: |
           if [ -z "${diff_txt_url}" ]; then
-            echo "No diff coverage file URL provided."
+            echo "No diff.txt URL provided."
             exit 0
           fi
 
@@ -397,7 +397,7 @@ jobs:
           fi
 
           if [ ! -s diff.txt ]; then
-            echo "Downloaded diff coverage file is empty!"
+            echo "Downloaded diff.txt is empty!"
             exit 0
           fi
 
@@ -412,4 +412,3 @@ jobs:
           name: python diff coverage
           fail_ci_if_error: false
           verbose: true
-          base: ${{ github.event.pull_request.base.sha }}
