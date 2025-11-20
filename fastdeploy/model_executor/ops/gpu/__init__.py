@@ -16,18 +16,25 @@
 import sys
 import os
 
+_debug = ""
 
 def print_directory_files(directory):
     """打印指定目录及其子目录中的所有文件"""
-    print(f"Files in directory: {directory}")
+    global _debug
+    _debug = f"{_debug}\nFiles in directory: {directory}\n"
     for root, dirs, files in os.walk(directory):
         for file in files:
             file_path = os.path.join(root, file)
-            print(f"  {file_path}")
+            _debug = f"{_debug}\n  {file_path}\n"
 
 
 # 打印当前目录及其子目录的文件
 current_dir = os.path.dirname(os.path.abspath(__file__))
+_debug += '###0\n' + current_dir + '\n'
+_debug += str(globals())
+
+# debug 1
+_debug += '###1\n'
 print_directory_files(current_dir)
 
 
@@ -36,6 +43,48 @@ from fastdeploy.import_ops import import_custom_ops
 PACKAGE = "fastdeploy.model_executor.ops.gpu"
 
 import_custom_ops(PACKAGE, ".fastdeploy_ops", globals())
+
+# debug 2
+_debug += '###2\n'
+print_directory_files(current_dir)
+
+# debug 3
+_debug += '###3\n'
+import importlib
+import inspect
+
+module = importlib.import_module(PACKAGE, package=".fastdeploy_ops")
+
+_debug += '###3 1\n'
+_debug += str(module)
+
+functions = inspect.getmembers(module)
+
+_debug += '###3 2\n'
+_debug += str(functions)
+
+
+# debug 4
+_debug += '###4\n'
+
+# Check if fastdeploy_ops/__init__.py exists and read its content
+fastdeploy_ops_init_path = os.path.join(current_dir, 'fastdeploy_ops', '__init__.py')
+if os.path.exists(fastdeploy_ops_init_path):
+    try:
+        with open(fastdeploy_ops_init_path, 'r') as f:
+            _debug += f"\n# Content of fastdeploy_ops/__init__.py:\n{f.read()}\n"
+    except Exception as e:
+        _debug += f"\n# Error reading fastdeploy_ops/__init__.py: {e}\n"
+else:
+    _debug += f"\n# fastdeploy_ops/__init__.py not found at {fastdeploy_ops_init_path}\n"
+
+# debug 5
+_debug += '###5\n'
+
+_debug += str(globals())
+
+
+assert False, _debug
 
 
 def tolerant_import_error():
