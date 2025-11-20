@@ -121,10 +121,10 @@ class TestAttentionPerformance(unittest.TestCase):
             "dtype": "bfloat16",
             "hidden_size": 4096,
             "max_position_embeddings": 131072,
-            "max_model_len": 5500,
+            "max_model_len": 36 * 1024 + 1024,
             "num_attention_heads": 32,
             "num_key_value_heads": 4,
-            "num_hidden_layers": 5,
+            "num_hidden_layers": 57,
         }
         model_dir = tempfile.mkdtemp(prefix="tmp_model_config_")
         config_path = os.path.join(model_dir, "config.json")
@@ -223,7 +223,7 @@ class TestAttentionPerformance(unittest.TestCase):
             max_model_len=fd_config.model_config.max_model_len,
             encoder_block_shape_q=64,
             decoder_block_shape_q=16,
-            decoder_step_token_num=1,
+            decoder_step_token_num=fd_config.speculative_config.num_speculative_tokens + 1,
             num_heads=fd_config.model_config.num_attention_heads,
             kv_num_heads=fd_config.model_config.num_key_value_heads,
             block_size=fd_config.cache_config.block_size,
@@ -294,29 +294,30 @@ class TestAttentionPerformance(unittest.TestCase):
     def test_decode_performance_with_prefill(self):
         # Test parameters
         test_steps = 100
-        prefill_batch_size = 1
-        prefill_seq_len = 4096
         use_dynamic_quant = True
         act_tensor_dtype = paddle.bfloat16
 
-        prefill_hidden_states = paddle.randn(
-            [prefill_batch_size * prefill_seq_len, self.fd_config.model_config.hidden_size],
-            dtype=act_tensor_dtype,
-        )
+        # prefill_batch_size = 1
+        # prefill_seq_len = 4096
 
-        forward_meta = self.create_forward_meta(
-            batch_size=prefill_batch_size,
-            seq_len=prefill_seq_len,
-            mode=ForwardMode.EXTEND,
-            fd_config=self.fd_config,
-            attn_backend=self.attn_backend,
-            use_dynamic_quant=use_dynamic_quant,
-        )
+        # prefill_hidden_states = paddle.randn(
+        #     [prefill_batch_size * prefill_seq_len, self.fd_config.model_config.hidden_size],
+        #     dtype=act_tensor_dtype,
+        # )
 
-        self.attn_backend.init_attention_metadata(forward_meta)
-        self.attn_forward(forward_meta, prefill_hidden_states)
+        # forward_meta = self.create_forward_meta(
+        #     batch_size=prefill_batch_size,
+        #     seq_len=prefill_seq_len,
+        #     mode=ForwardMode.EXTEND,
+        #     fd_config=self.fd_config,
+        #     attn_backend=self.attn_backend,
+        #     use_dynamic_quant=use_dynamic_quant,
+        # )
 
-        paddle.device.synchronize()
+        # self.attn_backend.init_attention_metadata(forward_meta)
+        # self.attn_forward(forward_meta, prefill_hidden_states)
+
+        # paddle.device.synchronize()
 
         # import paddle.profiler as profiler
         # p = profiler.Profiler(
@@ -326,18 +327,18 @@ class TestAttentionPerformance(unittest.TestCase):
         # p.start()
         # p.step()
 
-        start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
-        end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
-        for i in range(test_steps):
-            start_events[i].record()
+        # start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        # end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
+        # for i in range(test_steps):
+        #     start_events[i].record()
 
-            self.attn_forward(forward_meta, prefill_hidden_states)
+        #     self.attn_forward(forward_meta, prefill_hidden_states)
 
-            end_events[i].record()
-        paddle.device.synchronize()
+        #     end_events[i].record()
+        # paddle.device.synchronize()
 
-        times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
-        print(times[-5:])
+        # times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
+        # print(times[-5:])
 
         # p.stop()
 
@@ -349,14 +350,14 @@ class TestAttentionPerformance(unittest.TestCase):
         # p.start()
         # p.step()
 
-        for decode_batch_size in [10, 20, 40, 60, 80, 100, 128]:
+        for decode_batch_size in [32, 16, 8, 4, 2]:
             decode_hidden_states = paddle.randn(
                 [decode_batch_size, self.fd_config.model_config.hidden_size], dtype=act_tensor_dtype
             )
 
             forward_meta = self.create_forward_meta(
                 batch_size=decode_batch_size,
-                seq_len=5000,
+                seq_len=36 * 1024,
                 mode=ForwardMode.DECODE,
                 fd_config=self.fd_config,
                 attn_backend=self.attn_backend,
@@ -383,13 +384,14 @@ class TestAttentionPerformance(unittest.TestCase):
                 start_events[i].record()
 
                 attn_cuda_graphs.replay()
-                # self.attn_forward(forward_meta, decode_hidden_states)
 
                 end_events[i].record()
             paddle.device.synchronize()
 
             times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
             print(times[-5:])
+
+            del forward_meta
 
         # p.stop()
 

@@ -54,9 +54,6 @@ class AppendAttentionMetadata(AttentionMetadata):
     _dtype: paddle.dtype = paddle.bfloat16
     encoder_max_partition_size: int = 32768
     max_partition_size: int = 32768
-    block_tables: Optional[paddle.Tensor] = None
-    rotary_embs: Optional[paddle.Tensor] = None
-    attn_mask: Optional[paddle.Tensor] = None
     _fuse_kernel_compute_dtype: str = "bf16"
 
     # pd_disaggregation
@@ -101,7 +98,6 @@ def allocate_launch_related_buffer(
     res["kv_batch_ids"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
     res["kv_tile_ids_per_batch"] = paddle.full([int(kv_max_tile_size)], 0, dtype="int32")
     res["kv_num_blocks_x_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
-
     return res
 
 
@@ -175,10 +171,6 @@ class AppendAttentionBackend(AttentionBackend):
             metadata._fuse_kernel_compute_dtype = "fp16"
         elif metadata._dtype == "float32":
             metadata._fuse_kernel_compute_dtype = "fp32"
-        metadata.block_tables = forward_meta.block_tables
-        metadata.rotary_embs = forward_meta.rotary_embs
-        metadata.attn_mask = forward_meta.attn_mask
-        metadata.pre_caches_length = forward_meta.pre_caches_length
 
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
@@ -263,6 +255,7 @@ class AppendAttentionBackend(AttentionBackend):
             cache_v_scales = getattr(layer, "cache_v_scale", None)
 
         if layer.layer_id == 0:
+            # print(forward_meta.seq_lens_this_time)
             get_block_shape_and_split_kv_block(
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
@@ -283,7 +276,6 @@ class AppendAttentionBackend(AttentionBackend):
                 self.decoder_block_shape_q,
                 self.group_size,
                 self.block_size,
-                self.speculate_max_draft_token_num + 1,
             )
 
         if self.use_output:
@@ -330,7 +322,7 @@ class AppendAttentionBackend(AttentionBackend):
                 forward_meta.seq_lens_this_time,
                 forward_meta.batch_id_per_token,
                 forward_meta.cu_seqlens_q,
-                metadata.block_tables,
+                forward_meta.block_tables,
                 forward_meta.encoder_batch_ids,
                 forward_meta.encoder_tile_ids_per_batch,
                 forward_meta.encoder_num_blocks_x_cpu,
@@ -342,8 +334,8 @@ class AppendAttentionBackend(AttentionBackend):
                 forward_meta.decoder_num_blocks_cpu,
                 forward_meta.max_len_tensor_cpu,
                 res,
-                metadata.rotary_embs,
-                metadata.attn_mask,
+                forward_meta.rotary_embs,
+                forward_meta.attn_mask,
                 layer.qkv_bias,
                 layer.qkv_scale,
                 cache_k_scales,
@@ -387,7 +379,7 @@ class AppendAttentionBackend(AttentionBackend):
                 forward_meta.seq_lens_this_time,
                 forward_meta.batch_id_per_token,
                 forward_meta.cu_seqlens_q,
-                metadata.block_tables,
+                forward_meta.block_tables,
                 forward_meta.encoder_batch_ids,
                 forward_meta.encoder_tile_ids_per_batch,
                 forward_meta.encoder_num_blocks_x_cpu,
@@ -398,8 +390,8 @@ class AppendAttentionBackend(AttentionBackend):
                 forward_meta.decoder_tile_ids_per_batch,
                 forward_meta.decoder_num_blocks_cpu,
                 forward_meta.max_len_tensor_cpu,
-                metadata.rotary_embs,
-                metadata.attn_mask,
+                forward_meta.rotary_embs,
+                forward_meta.attn_mask,
                 layer.qkv_bias,
                 layer.qkv_scale,
                 cache_k_scales,

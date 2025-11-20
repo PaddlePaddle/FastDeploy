@@ -213,7 +213,6 @@ class FlashAttentionBackend(AttentionBackend):
             self.decoder_block_shape_q,
             self.group_size,
             self.block_size,
-            self.speculate_max_draft_token_num + 1,
         )
 
         (
