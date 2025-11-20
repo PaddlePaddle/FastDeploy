@@ -44,7 +44,7 @@ from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import llm_logger
+from fastdeploy.utils import download_from_bos, init_bos_client, llm_logger
 
 
 @dataclass
@@ -194,6 +194,9 @@ class ResourceManagerV1(ResourceManager):
         if config.model_config.enable_mm and config.cache_config.max_processor_cache > 0:
             max_processor_cache_in_bytes = int(config.cache_config.max_processor_cache * 1024 * 1024 * 1024)
             self.processor_cache = ProcessorCacheManager(max_processor_cache_in_bytes)
+
+        self.bos_client = None
+        self.async_preprocess_pool = ThreadPoolExecutor(max_workers=4)
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
@@ -500,6 +503,7 @@ class ResourceManagerV1(ResourceManager):
         with self.lock:
             scheduled_reqs: list[Request] = []
             preempted_reqs: list[Request] = []
+            error_reqs: list[tuple[str, str]] = []
             token_budget = self.config.scheduler_config.max_num_batched_tokens
 
             # First, schedule the RUNNING requests.
@@ -629,6 +633,7 @@ class ResourceManagerV1(ResourceManager):
                 req_index += 1
             # schedule the WAITING requests.
             if not preempted_reqs:
+                skip_requests: list[Request] = []
                 while self.waiting and token_budget > 0:
                     if len(self.running) == self.max_num_seqs:
                         break
@@ -639,6 +644,17 @@ class ResourceManagerV1(ResourceManager):
                     ):
                         break
                     if request.status == RequestStatus.WAITING:
+                        result = self._waiting_async_process(request)
+                        if result is None:
+                            error_reqs.append((request.request_id, request.error_message))
+                            self.waiting.popleft()
+                            continue
+                        elif result is True:
+                            # skip current request, try next request
+                            skip_requests.append(request)
+                            self.waiting.popleft()
+                            continue
+
                         self._update_mm_hashes(request)
                         # Enable prefix caching
                         if self.config.cache_config.enable_prefix_caching:
@@ -725,12 +741,102 @@ class ResourceManagerV1(ResourceManager):
                     else:
                         llm_logger.error("Unknown request status type")
 
+                for req in skip_requests:
+                    # move waiting request to end of the deque
+                    self.waiting.append(req)
+
             if scheduled_reqs:
                 llm_logger.debug(f"schedued_reqs: {scheduled_reqs}")
 
             self.update_metrics()
 
-            return scheduled_reqs
+            return scheduled_reqs, error_reqs
+
+    def _waiting_async_process(self, request: Request) -> None:
+        """
+        Check if async preprocessing is complete for a request.
+        Args:
+            request: The request to check
+        Returns:
+            None: If an error occurred during preprocessing
+            True: If preprocessing is still in progress (request should be skipped)
+            False: If preprocessing is complete (request can be scheduled)
+        """
+        for future in request.async_process_futures:
+            if future.done():
+                if request.get("error_message") is not None:
+                    return None
+            else:
+                return True
+        request.async_process_futures = []
+        return False
+
+    def _apply_async_preprocess(self, request: Request) -> None:
+        request.async_process_futures.append(self.async_preprocess_pool.submit(self._download_features, request))
+
+    def _has_features_info(self, task):
+        inputs = task.multimodal_inputs
+        if inputs is None or len(inputs) == 0:
+            return False
+
+        if (
+            (inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0)
+            or (inputs.get("image_feature_urls") is not None and len(inputs["image_feature_urls"]) > 0)
+            or (inputs.get("audio_feature_urls") is not None and len(inputs["audio_feature_urls"]) > 0)
+        ):
+            return True
+        return False
+
+    def _download_features(self, request: Request) -> None:
+        """
+        download multimodal features from bos
+        Note:
+            1. this function will be add features for request.multimodal_inputs
+            2. this function maybe update request.error_message and request.error_code
+        Args:
+            request (Request): request object
+        """
+
+        def download_bos_features(bos_client, features_urls):
+            result_list = []
+            for status, feature in download_from_bos(self.bos_client, features_urls):
+                if status:
+                    llm_logger.info(f"request {request.request_id} async download feature: {feature.shape}")
+                    result_list.append(feature)
+                else:
+                    error_msg = f"request {request.request_id} download features error: {feature}"
+                    llm_logger.error(error_msg)
+                    return error_msg
+            return result_list
+
+        if not self.config.parallel_config.enable_async_download_features or not self._has_features_info(request):
+            return None
+
+        if self.bos_client is None:
+            self.bos_client = init_bos_client()
+
+        inputs = request.multimodal_inputs
+        if inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0:
+            result = download_bos_features(self.bos_client, inputs["video_feature_urls"])
+            if isinstance(result, str):  # download error
+                request.error_message = result
+                request.error_code = 530
+                return None
+            inputs["video_features"] = result
+        if inputs.get("image_feature_urls") is not None and len(inputs["image_feature_urls"]) > 0:
+            result = download_bos_features(self.bos_client, inputs["image_feature_urls"])
+            if isinstance(result, str):  # download error
+                request.error_message = result
+                request.error_code = 530
+                return None
+            inputs["image_features"] = result
+        if inputs.get("audio_feature_urls") is not None and len(inputs["audio_feature_urls"]) > 0:
+            result = download_bos_features(self.bos_client, inputs["audio_feature_urls"])
+            if isinstance(result, str):  # download error
+                request.error_message = result
+                request.error_code = 530
+                return None
+            inputs["audio_features"] = result
 
     def get_available_position(self) -> int:
         position = 0
@@ -788,6 +894,7 @@ class ResourceManagerV1(ResourceManager):
 
     def add_request(self, request: Request) -> None:
         with self.lock:
+            self._apply_async_preprocess(request)
             self.waiting.append(request)
             self.requests[request.request_id] = request
 
