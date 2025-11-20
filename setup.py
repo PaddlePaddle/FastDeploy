@@ -244,10 +244,6 @@ def rdma_comm_supported():
     return supported
 
 
-rdma_comm_supported()
-breakpoint()
-
-
 def get_name():
     """get package name"""
     return "fastdeploy-" + get_device_type()
