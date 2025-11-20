@@ -73,6 +73,7 @@ class ErnieX1ReasoningParser:
         previous_token_ids,
         all_token_ids,
         delta_token_ids,
+        model_status,
     ):
         """Return a simple object with reasoning_content to cover reasoning branch."""
 
