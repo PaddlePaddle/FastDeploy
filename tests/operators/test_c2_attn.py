@@ -62,7 +62,7 @@ class TestC2Attnention(unittest.TestCase):
             dtype="float16",
         )
         self.rotary_embs = paddle.ones([2, self.max_seq_len, self.head_dim // 2], dtype="float32")
-
+        self.rotary_embs[1] = 0
         cu_seqlens_k, qk_token_num = get_qk_tokens_num(
             self.seq_lens_encoder, self.seq_lens_this_time, self.seq_lens_decoder
         )
