@@ -550,6 +550,8 @@ class ParallelConfig:
         self.use_internode_ll_two_stage: bool = False
         # disable sequence parallel moe
         self.disable_sequence_parallel_moe: bool = False
+        # enable async download features
+        self.enable_async_download_features: bool = False
 
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
@@ -1423,7 +1425,6 @@ class StructuredOutputsConfig:
         # disable any whitespace for guided decoding
         self.disable_any_whitespace: bool = True
         self.logits_processors: Optional[list[str]] = None
-
         for key, value in args.items():
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)

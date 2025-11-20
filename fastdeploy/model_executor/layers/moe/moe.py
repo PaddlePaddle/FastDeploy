@@ -59,11 +59,11 @@ def get_moe_method():
 
     elif current_platform.is_maca():
         from fastdeploy.model_executor.layers.backends import (
-            MetaxCutlassWeightOnlyMoEMethod,
+            MetaxCutlassUnquantizedFusedMoEMethod,
         )
 
-        return MetaxCutlassWeightOnlyMoEMethod(None)
-    raise NotImplementedError
+        return MetaxCutlassUnquantizedFusedMoEMethod(None)
+    return None
 
 
 def get_moe_scores(
@@ -182,14 +182,19 @@ class FusedMoE(nn.Layer):
         self._dtype = self._helper.get_default_dtype()
         self.weight_dtype = self._dtype
 
+        self.is_quantized = fd_config.model_config.is_quantized and not (
+            fd_config.quant_config.name() == "mix_quant" and fd_config.quant_config.moe_quant_type is None
+        )
         moe_quant_config = fd_config.quant_config
         self.moe_quant_config = moe_quant_config
         self.moe_quant_type = None
-        if moe_quant_config:
+        if moe_quant_config and moe_quant_config.get_quant_method(self):
             self.quant_method = moe_quant_config.get_quant_method(self)
             self.moe_quant_type = moe_quant_config.name()
         else:
+            # unquantized quant_method
             self.quant_method = get_moe_method()
+        assert self.quant_method is not None, "self.quant_method should not be None"
         self.redundant_table_manger = redundant_table_manger
         if self.ep_size > 1:
             self.quant_method.init_ep(self)
@@ -227,7 +232,7 @@ class FusedMoE(nn.Layer):
             return
         if hasattr(param, "SHARD_ID_TO_SHARDED_DIM"):
             SHARD_ID_TO_SHARDED_DIM = param.SHARD_ID_TO_SHARDED_DIM
-        elif current_platform.is_cuda() or current_platform.is_iluvatar():
+        elif current_platform.is_cuda() or current_platform.is_iluvatar() or current_platform.is_maca():
             SHARD_ID_TO_SHARDED_DIM = {"gate": 1, "down": 0, "up": 1}
         else:
             SHARD_ID_TO_SHARDED_DIM = {"gate": 0, "down": 1, "up": 0}
@@ -559,7 +564,7 @@ class FusedMoE(nn.Layer):
         """
         load_state_dict function.
         """
-        if self.fd_config.model_config.is_quantized:
+        if self.is_quantized:
             if getattr(self.fd_config.quant_config, "is_permuted", True):
                 self.quant_method.process_prequanted_weights(self, state_dict, is_rearrange)
             else:
