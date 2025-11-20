@@ -74,9 +74,7 @@ class DeepEPEngine:
         self.init_deepep_engine()
 
     def init_deepep_engine(self):
-        if (
-            self.splitwise_role == "mixed" or self.moe_phase.phase == "prefill"
-        ):  # 集中式和分离式的P节点, 集中式的场景其实需要两种buffer并存，按需取用
+        if self.splitwise_role == "mixed":  # 集中式场景需要初始化两种buffer，按需取用
             self.deepep_engine = deep_ep.Buffer(
                 self.group,
                 int(1e9),
@@ -85,7 +83,18 @@ class DeepEPEngine:
                 low_latency_mode=False,
                 num_qps_per_rank=1,
             )
-            # elif self.moe_phase.phase == "decode": # 分离式的D节点
+            logger.info("Initializing Low Latency Buffer")
+            self.get_low_latency_buffer()
+        elif self.moe_phase.phase == "prefill":  # 分离式的P节点
+            self.deepep_engine = deep_ep.Buffer(
+                self.group,
+                int(1e9),
+                0,
+                num_experts=self.num_experts,
+                low_latency_mode=False,
+                num_qps_per_rank=1,
+            )
+        elif self.moe_phase.phase == "decode":  # 分离式的D节点
             logger.info("Initializing Low Latency Buffer")
             self.get_low_latency_buffer()
         else:
