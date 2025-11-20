@@ -224,7 +224,7 @@ class Ernie4_5_MoE(nn.Layer):
             forward_meta=forward_meta,
         )
         if self.num_shared_experts > 0:
-            s_x = self.shared_experts(hidden_states)
+            s_x = self.shared_experts(hidden_states, forward_meta)
             out = out + s_x
         return out
 
@@ -353,8 +353,8 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         )
 
         hidden_states = self.mlp(
-            forward_meta=forward_meta,
             hidden_states=hidden_states,
+            forward_meta=forward_meta,
         )
 
         return hidden_states, residual

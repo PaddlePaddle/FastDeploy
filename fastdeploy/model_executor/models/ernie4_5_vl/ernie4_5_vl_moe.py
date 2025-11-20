@@ -272,7 +272,7 @@ class Ernie4_5_VLMoE(nn.Layer):
 
     def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta, vl_moe_meta: VLMoEMeta):
         if self.num_shared_experts > 0:
-            shared_experts_out = self.shared_experts(hidden_states)
+            shared_experts_out = self.shared_experts(hidden_states, forward_meta)
         hidden_states, text_input, image_input = text_image_gather_scatter(
             hidden_states,
             vl_moe_meta.text_input,

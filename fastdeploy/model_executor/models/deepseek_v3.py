@@ -189,8 +189,8 @@ class DeepSeekV3MoE(nn.Layer):
 
     def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta):
         """ """
-        shared_experts_out = self.shared_experts(hidden_states)
-        moe_out = self.experts(hidden_states, self.gate)
+        shared_experts_out = self.shared_experts(hidden_states, forward_meta)
+        moe_out = self.experts(hidden_states, self.gate, forward_meta)
         moe_out = moe_out + shared_experts_out
         # We do to TP all reduce after the sum of experts.
         if self.tp_size > 1:
