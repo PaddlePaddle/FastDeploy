@@ -80,4 +80,3 @@ mkdir -p ${TARGET_DIR}/libs
 cp ${XVLLM_PATH}/xft_blocks/so/libxft_blocks.so ${TARGET_DIR}/libs/
 cp ${XVLLM_PATH}/infer_ops/so/libapiinfer.so ${TARGET_DIR}/libs/
 patchelf --set-rpath '$ORIGIN/libs' ${TARGET_DIR}/fastdeploy_ops_pd_.so
-
