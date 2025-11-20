@@ -535,11 +535,11 @@ class FuseMoEWrapper(paddle.nn.Layer):
 class TestFusedMoE(unittest.TestCase):
     def setUp(self) -> None:
         self.architectures = ["Ernie4_5_MoeForCausalLM"]
-        self.hidden_size = 4096
-        self.moe_intermediate_size = 2048
-        self.moe_num_experts = 160
+        self.hidden_size = 7168
+        self.moe_intermediate_size = 3584
+        self.moe_num_experts = 384
         self.moe_k = 8
-        self.num_layers = 2
+        self.num_layers = 5
         self.num_attention_heads = -1
         self.model_config = self.build_model_config()
 
@@ -598,7 +598,7 @@ class TestFusedMoE(unittest.TestCase):
         moe_cuda_graphs = [None] * 100
         cache_hidden_states = [None] * 100
         is_decoder = fused_moe[0].fd_config.model_config.moe_phase.phase == "decode"
-        test_token_nums = [4096 * i for i in [1, 2, 4, 8]]
+        test_token_nums = [4096 * i for i in [2]]
         if is_decoder:
             test_token_nums = [10, 20, 40, 60, 80, 100, 128, 160, 192, 256]
         for idx, num_tokens in enumerate(test_token_nums):
@@ -606,11 +606,20 @@ class TestFusedMoE(unittest.TestCase):
             cache_hidden_states[idx] = paddle.rand((num_tokens, self.model_config.hidden_size), dtype=paddle.bfloat16)
 
 
-            my_dict = fused_moe[0].fused_moe.quant_method.ep_prefill_runner.ep_engine.my_dict
 
+            from fastdeploy.model_executor.layers.moe.ep import GLOBAL_THREAD_INFO
+            from threading import Thread
             import threading
 
             def fake_model_run():
+
+                is_tbo_thread = threading.current_thread().name in GLOBAL_THREAD_INFO.keys()
+
+                if is_tbo_thread:
+                    GLOBAL_THREAD_INFO[threading.current_thread().name][0].wait()
+                    GLOBAL_THREAD_INFO[threading.current_thread().name][0].clear()
+                
+                a = paddle.randn([10000])
                 for j in range(num_layers):
                     out = fused_moe[j % real_weight_layers].fused_moe(cache_hidden_states[idx], gating)
 
@@ -641,10 +650,22 @@ class TestFusedMoE(unittest.TestCase):
             for i in range(num_tests):
                 start_events[i].record()
 
-                if is_decoder:
-                    moe_cuda_graphs[idx].replay()
-                else:
-                    fake_model_run()
+                t0 = Thread(target=fake_model_run, name="thread0")
+                t1 = Thread(target=fake_model_run, name="thread1")
+
+                GLOBAL_THREAD_INFO[t0.name][0].clear()
+                GLOBAL_THREAD_INFO[t1.name][0].clear()
+
+                t0.start()
+                t1.start()
+
+                GLOBAL_THREAD_INFO[t0.name][0].set()
+
+                t0.join()
+                GLOBAL_THREAD_INFO[t0.name][1].set()
+                t1.join()
+
+                # fake_model_run()
 
                 end_events[i].record()
             paddle.device.cuda.synchronize()
@@ -667,7 +688,7 @@ class TestFusedMoE(unittest.TestCase):
             )
             print(round(memory_GB / times[-1], 1), "TB/s")
 
-        p.stop()
+            p.stop()
 
         shutil.rmtree(self.model_name_or_path)
 

@@ -2121,9 +2121,6 @@ class GPUModelRunner(ModelRunnerBase):
                     ids_remove_padding=self.share_inputs["ids_remove_padding"],
                     forward_meta=self.forward_meta,
                 )
-            if is_tbo_thread:
-                for key in GLOBAL_THREAD_INFO:
-                    GLOBAL_THREAD_INFO[key][0].set()
 
             return model_output[0]
 
@@ -2135,10 +2132,13 @@ class GPUModelRunner(ModelRunnerBase):
 
         t0.start()
         t1.start()
-
+        
+        # 主线程记得先让t0跑起来跑！
         GLOBAL_THREAD_INFO[t0.name][0].set()
 
         t0.join()
+        # to先结束，他结束完了的话要记得让t1可以结束！
+        GLOBAL_THREAD_INFO[t0.name][1].set()
         t1.join()
 
         # haha()
