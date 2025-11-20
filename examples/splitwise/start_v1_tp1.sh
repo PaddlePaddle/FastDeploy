@@ -68,7 +68,6 @@ nohup python -m fastdeploy.entrypoints.openai.api_server \
        --cache-transfer-protocol "rdma" \
        --rdma-comm-ports "$((P_PORT + 4))" \
        --pd-comm-port "$((P_PORT + 5))" \
-       --num-gpu-blocks-override 2000 \
        --router "0.0.0.0:${ROUTER_PORT}" \
        2>&1 >${FD_LOG_DIR}/nohup &
 
