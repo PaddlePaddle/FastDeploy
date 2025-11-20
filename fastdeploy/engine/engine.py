@@ -739,13 +739,15 @@ class LLMEngine:
                     if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
                         if not is_port_available(master_ip, engine_worker_queue_port):
                             raise Exception(
-                                f"The parameter `engine_worker_queue_port`:{engine_worker_queue_port} is already in use."
+                                f"The parameter `dp[{i}].engine_worker_queue_port`:{engine_worker_queue_port} is already in use."
                             )
                         address = (master_ip, int(engine_worker_queue_port))
                     else:
                         address = f"/dev/shm/fd_task_queue_{engine_worker_queue_port}.sock"
 
                     llm_logger.info(f"dp start queue service {address}")
+
+                    print(f"=====address:{i}={address}")
                     self.dp_engine_worker_queue_server.append(
                         EngineWorkerQueue(
                             address=address,

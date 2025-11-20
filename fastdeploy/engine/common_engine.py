@@ -278,16 +278,17 @@ class EngineService:
             self.cfg.parallel_config.local_data_parallel_id
         ]
         if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
-            if not is_port_available(master_ip, engine_worker_queue_port):
-                raise Exception(
-                    f"The parameter `engine_worker_queue_port`:{engine_worker_queue_port} is already in use."
-                )
             address = (master_ip, int(engine_worker_queue_port))
         else:
             address = f"/dev/shm/fd_task_queue_{engine_worker_queue_port}.sock"
 
         if start_queue and (self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0"):
             self.llm_logger.info(f"Starting engine worker queue server service at {address}")
+            if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+                if not is_port_available(master_ip, engine_worker_queue_port):
+                    raise Exception(
+                        f"The parameter `engine_worker_queue_port`:{engine_worker_queue_port} is already in use."
+                    )
             self.engine_worker_queue_server = EngineWorkerQueue(
                 address=address,
                 is_server=True,
