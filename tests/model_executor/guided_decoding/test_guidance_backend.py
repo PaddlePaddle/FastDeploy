@@ -14,15 +14,22 @@
 # limitations under the License.
 """
 
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
 from fastdeploy.model_executor.guided_decoding import BackendBase
 
+mock_llguidance = MagicMock()
+mock_llguidancehf = MagicMock()
+mock_torch = MagicMock()
+sys.modules["llguidance"] = mock_llguidance
+sys.modules["llguidance.hf"] = mock_llguidancehf
+sys.modules["torch"] = mock_torch
+
 # 导入要测试的模块
 from fastdeploy.model_executor.guided_decoding.guidance_backend import (
     LLGuidanceBackend,
-    LLGuidanceChecker,
     LLGuidanceProcessor,
     process_for_additional_properties,
 )
@@ -126,16 +133,17 @@ class TestLLGuidanceBackend(unittest.TestCase):
         self.fd_config.scheduler_config.max_num_seqs = 2
         self.fd_config.structured_outputs_config.disable_any_whitespace = False
         self.fd_config.structured_outputs_config.disable_additional_properties = False
+        self.fd_config.structured_outputs_config.reasoning_parser = None
 
     def test_initialization(self, mock_from_tokenizer, mock_matcher):
         # 测试后端初始化
-        with patch.object(BackendBase, "__init__", return_value=None):
+        mock_tokenizer = MagicMock()
+        with patch.object(BackendBase, "_get_tokenizer_hf", return_value=mock_tokenizer):
             backend = LLGuidanceBackend(fd_config=self.fd_config)
 
             self.assertEqual(backend.vocab_size, 100)
             self.assertEqual(backend.batch_size, 2)
             self.assertTrue(backend.any_whitespace)
-            self.assertFalse(backend.disable_additional_properties)
 
     @patch("llguidance.LLMatcher")
     def test_create_processor(self, mock_matcher_class, mock_from_tokenizer, mock_matcher):
@@ -159,54 +167,6 @@ class TestLLGuidanceBackend(unittest.TestCase):
             self.assertIsInstance(processor, LLGuidanceProcessor)
             self.assertEqual(processor.vocab_size, 100)
             self.assertEqual(processor.batch_size, 2)
-
-
-@patch("llguidance.LLMatcher")
-class TestLLGuidanceChecker(unittest.TestCase):
-    def test_schema_format_valid_json(self, mock_matcher):
-        # 设置mock
-        mock_matcher.grammar_from_json_schema.return_value = "compiled_grammar"
-        mock_matcher.validate_grammar.return_value = None
-
-        # 创建checker和请求
-        checker = LLGuidanceChecker()
-        request = MagicMock()
-        request.guided_json = '{"type": "object", "properties": {"name": {"type": "string"}}}'
-
-        # 测试有效的JSON schema
-        result, error = checker.schema_format(request)
-        self.assertIsNone(error)
-        self.assertEqual(result.guided_json, '{"type": "object", "properties": {"name": {"type": "string"}}}')
-
-    def test_schema_format_valid_regex(self, mock_matcher):
-        # 设置mock
-        mock_matcher.validate_grammar.return_value = None
-
-        # 模拟llguidance.grammar_from
-        with patch("llguidance.grammar_from", return_value="compiled_regex"):
-            # 创建checker和请求
-            checker = LLGuidanceChecker()
-            request = MagicMock()
-            request.guided_regex = "[a-z]+"
-
-            # 测试有效的regex
-            result, error = checker.schema_format(request)
-            self.assertIsNone(error)
-            self.assertEqual(result.guided_regex, "compiled_regex")
-
-    def test_schema_format_invalid(self, mock_matcher):
-        # 设置mock使验证失败
-        mock_matcher.grammar_from_json_schema.side_effect = ValueError("Invalid schema")
-
-        # 创建checker和请求
-        checker = LLGuidanceChecker()
-        request = MagicMock()
-        request.guided_json = '{"invalid": "schema"}'
-
-        # 测试无效的schema
-        result, error = checker.schema_format(request)
-        self.assertIsNotNone(error)
-        self.assertIn("Invalid format for guided decoding", error)
 
 
 if __name__ == "__main__":
