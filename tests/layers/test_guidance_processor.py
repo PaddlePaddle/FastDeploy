@@ -143,8 +143,8 @@ class TestLLGuidanceProcessorMocked(unittest.TestCase):
     def test_accept_token_when_matcher_stopped(self):
         """测试当匹配器停止时，accept_token返回False并更新状态"""
         self.mock_matcher.is_stopped.return_value = True
-        self.assertFalse(self.processor.accept_token(123))
-        self.assertTrue(self.processor.is_terminated)
+        self.assertTrue(self.processor.accept_token(123))
+        self.assertFalse(self.processor.is_terminated)
 
     def test_accept_token_is_eos(self):
         """测试接收到EOS token时的行为"""

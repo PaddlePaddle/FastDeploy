@@ -1601,18 +1601,19 @@ class FDConfig:
             elif self.structured_outputs_config.guided_decoding_backend in ["auto", "xgrammar"]:
                 self.structured_outputs_config.guided_decoding_backend = "xgrammar"
             elif self.structured_outputs_config.guided_decoding_backend == "guidance":
-                pass
-                # try:
-                #    import llguidance
-                #    import llguidance.hf
-                #    import llguidance.torch
-                # except ImportError:
-                #    raise ImportError(
-                #        "The 'xgrammar' package is required for using xgrammar as the guided decoding backend. "
-                #        "Please install it with 'pip install xgrammar'."
-                #    )
+                try:
+                    import llguidance.torch
+
+                    llguidance.torch
+                except ImportError:
+                    raise ImportError(
+                        "The 'llguidance' package is required for using guidance as the guided decoding backend. "
+                        "Please install it via the appropriate method."
+                    )
             else:
-                raise NotImplementedError(f"{self.structured_outputs_config.guided_decoding_backend}")
+                raise NotImplementedError(
+                    f"Guided decoding backend '{self.structured_outputs_config.guided_decoding_backend}' is not implemented. [auto, xgrammar, guidance, off]"
+                )
 
         if self.model_config.enable_mm:
             if self.cache_config.max_encoder_cache is None or self.cache_config.max_encoder_cache < 0:

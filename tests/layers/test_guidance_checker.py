@@ -1,10 +1,25 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import json
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from fastdeploy.model_executor.guided_decoding.guidance_backend import LLGuidanceChecker
 
 # 检查是否可以导入llguidance
 HAS_LLGUIDANCE = False
@@ -14,7 +29,10 @@ try:
     llguidance
     HAS_LLGUIDANCE = True
 except ImportError:
-    pass
+    mock_llguidance = MagicMock()
+    mock_torch = MagicMock()
+    sys.modules["llguidance"] = mock_llguidance
+    sys.modules["torch"] = mock_torch
 
 
 @pytest.fixture
@@ -27,6 +45,9 @@ def llguidance_checker():
 def llguidance_checker_with_options():
     """返回一个配置了特定选项的LLGuidanceChecker实例"""
     return LLGuidanceChecker(disable_any_whitespace=True)
+
+
+from fastdeploy.model_executor.guided_decoding.guidance_backend import LLGuidanceChecker
 
 
 def MockRequest():
