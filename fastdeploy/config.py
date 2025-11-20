@@ -362,6 +362,7 @@ class ParallelConfig:
         self.guided_decoding_backend: str = None
         # disable any whitespace for guided decoding
         self.disable_any_whitespace: bool = True
+
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
         self.disable_custom_all_reduce: bool = False
@@ -972,6 +973,7 @@ class CacheConfig:
         self.cache_dtype = "bfloat16"
         self.model_cfg = None
         self.enable_chunked_prefill = False
+        self.disable_chunked_mm_input = False
         self.rdma_comm_ports = None
         self.cache_transfer_protocol = None
         self.pd_comm_port = None
