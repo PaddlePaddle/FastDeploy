@@ -788,7 +788,7 @@ class ChatCompletionRequest(BaseModel):
             if top_logprobs < -1:
                 raise ValueError("`top_logprobs` must be a greater than -1.")
 
-            if top_logprobs > 0 and not data.get("logprobs"):
+            if not data.get("logprobs"):
                 raise ValueError("when using `top_logprobs`, `logprobs` must be set to true.")
 
         if (prompt_logprobs := data.get("prompt_logprobs")) is not None:

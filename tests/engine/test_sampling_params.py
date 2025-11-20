@@ -61,7 +61,7 @@ class TestSamplingParamsVerification(unittest.TestCase):
                 params = SamplingParams(logprobs=-2)
                 params._verify_args()
 
-            self.assertIn("logprobs must be greater than -1", str(cm.exception))
+            self.assertIn("logprobs must be a non-negative value or -1", str(cm.exception))
             self.assertIn("got -2", str(cm.exception))
 
     def test_logprobs_invalid_less_than_zero(self):
@@ -71,8 +71,7 @@ class TestSamplingParamsVerification(unittest.TestCase):
                 params = SamplingParams(logprobs=-1)
                 params._verify_args()
 
-            self.assertIn("logprobs must be greater than 0", str(cm.exception))
-            self.assertIn("got -1", str(cm.exception))
+            self.assertIn("Invalid value for 'top_logprobs': must be between 0 and 20", str(cm.exception))
 
     def test_logprobs_greater_than_20_with_v1_disabled(self):
         """Test logprobs greater than 20 when FD_USE_GET_SAVE_OUTPUT_V1 is disabled"""
@@ -81,7 +80,7 @@ class TestSamplingParamsVerification(unittest.TestCase):
                 params = SamplingParams(logprobs=21)
                 params._verify_args()
 
-            self.assertEqual("Invalid value for 'top_logprobs': must be less than or equal to 20.", str(cm.exception))
+            self.assertEqual("Invalid value for 'top_logprobs': must be between 0 and 20.", str(cm.exception))
 
     def test_logprobs_greater_than_20_with_v1_enabled(self):
         """Test logprobs greater than 20 when FD_USE_GET_SAVE_OUTPUT_V1 is enabled"""
@@ -127,7 +126,7 @@ class TestSamplingParamsVerification(unittest.TestCase):
                 params = SamplingParams(prompt_logprobs=-2)
                 params._verify_args()
 
-            self.assertIn("prompt_logprobs must be greater than or equal to -1", str(cm.exception))
+            self.assertIn("prompt_logprobs a must be non-negative value or -1", str(cm.exception))
             self.assertIn("got -2", str(cm.exception))
 
     def test_combined_logprobs_and_prompt_logprobs(self):
@@ -234,7 +233,7 @@ class TestSamplingParamsVerification(unittest.TestCase):
                 params._verify_args()
 
             error_msg = str(cm.exception)
-            self.assertIn("logprobs must be greater than -1", error_msg)
+            self.assertIn("logprobs must be a non-negative value or -1", error_msg)
             self.assertIn("got -5", error_msg)
 
         # Test logprobs error message when FD_USE_GET_SAVE_OUTPUT_V1 is "0"
@@ -244,8 +243,7 @@ class TestSamplingParamsVerification(unittest.TestCase):
                 params._verify_args()
 
             error_msg = str(cm.exception)
-            self.assertIn("logprobs must be greater than 0", error_msg)
-            self.assertIn("got -1", error_msg)
+            self.assertIn("Invalid value for 'top_logprobs': must be between 0 and 20", error_msg)
 
         # Test prompt_logprobs error message when FD_USE_GET_SAVE_OUTPUT_V1 is "1"
         with patch.dict(os.environ, {"FD_USE_GET_SAVE_OUTPUT_V1": "1"}):
@@ -254,7 +252,7 @@ class TestSamplingParamsVerification(unittest.TestCase):
                 params._verify_args()
 
             error_msg = str(cm.exception)
-            self.assertIn("prompt_logprobs must be greater than or equal to -1", error_msg)
+            self.assertIn("prompt_logprobs a must be non-negative value or -1", error_msg)
             self.assertIn("got -10", error_msg)
 
         # Test prompt_logprobs not supported error message when FD_USE_GET_SAVE_OUTPUT_V1 is "0"

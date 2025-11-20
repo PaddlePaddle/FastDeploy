@@ -133,6 +133,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
         self.assertIn("max_logprobs", str(context.exception))
         self.assertIn("must be >= -1", str(context.exception))
+        self.assertIn("got -2", str(context.exception))
 
     def test_max_logprobs_exceeds_vocab_size(self):
         """Test max_logprobs exceeding vocab_size"""
@@ -146,7 +147,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
         self.assertIn("max_logprobs", str(context.exception))
         self.assertIn("must be <= vocab_size", str(context.exception))
         self.assertIn("1000", str(context.exception))
-        self.assertIn("1500", str(context.exception))
+        self.assertIn("got 1500", str(context.exception))
 
     def test_max_logprobs_unlimited(self):
         """Test max_logprobs = -1 (unlimited) sets to ori_vocab_size"""
@@ -237,7 +238,8 @@ class TestEngineClientValidParameters(unittest.TestCase):
                 self.engine_client.valid_parameters(data)
 
             self.assertIn("prompt_logprobs", str(context.exception))
-            self.assertIn("must be >= -1", str(context.exception))
+            self.assertIn("must be a non-negative value or -1", str(context.exception))
+            self.assertIn("current value is -2", str(context.exception))
 
     def test_prompt_logprobs_exceeds_max_logprobs(self):
         """Test prompt_logprobs exceeding max_logprobs"""
@@ -252,6 +254,8 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
             self.assertIn("prompt_logprobs", str(context.exception))
             self.assertIn("exceeds maximum allowed value", str(context.exception))
+            self.assertIn("15", str(context.exception))
+            self.assertIn("10", str(context.exception))
 
     def test_top_logprobs_validation_with_fd_use_get_save_output_v1_enabled(self):
         """Test top_logprobs validation when FD_USE_GET_SAVE_OUTPUT_V1 is enabled"""
@@ -275,7 +279,8 @@ class TestEngineClientValidParameters(unittest.TestCase):
             data = {"logprobs": True, "top_logprobs": -2, "request_id": "test"}
             with self.assertRaises(ValueError) as context:
                 self.engine_client.valid_parameters(data)
-            self.assertIn("must be >= -1", str(context.exception))
+            self.assertIn("must be a non-negative value or -1", str(context.exception))
+            self.assertIn("current value is -2", str(context.exception))
 
             # Test value exceeding max_logprobs - should raise ValueError
             data = {"logprobs": True, "top_logprobs": 25, "request_id": "test"}
@@ -293,13 +298,15 @@ class TestEngineClientValidParameters(unittest.TestCase):
             data = {"logprobs": True, "top_logprobs": -1, "request_id": "test"}
             with self.assertRaises(ValueError) as context:
                 self.engine_client.valid_parameters(data)
-            self.assertIn("must be >= 0", str(context.exception))
+            self.assertIn("top_logprobs must be between 0 and 20", str(context.exception))
+            self.assertIn("current value is -1", str(context.exception))
 
             # Test value > 20 - should raise ValueError
             data = {"logprobs": True, "top_logprobs": 25, "request_id": "test"}
             with self.assertRaises(ValueError) as context:
                 self.engine_client.valid_parameters(data)
-            self.assertIn("must be <= 20", str(context.exception))
+            self.assertIn("top_logprobs must be between 0 and 20", str(context.exception))
+            self.assertIn("current value is 25", str(context.exception))
 
             # Test valid value
             data = {"logprobs": True, "top_logprobs": 10, "request_id": "test"}

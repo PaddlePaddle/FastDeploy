@@ -351,8 +351,10 @@ class LLM:
 
             if current_sampling_params.logprobs is not None:
                 num_logprobs = current_sampling_params.logprobs
-                if num_logprobs == -1:
-                    num_logprobs = ori_vocab_size
+                if num_logprobs == -1 and ori_vocab_size > max_logprobs:
+                    raise ValueError(
+                        f"Number of logprobs(-1) requested ({ori_vocab_size}) exceeds maximum allowed value ({max_logprobs})."
+                    )
                 if num_logprobs > max_logprobs:
                     raise ValueError(
                         f"Number of logprobs requested ({num_logprobs}) exceeds maximum allowed value ({max_logprobs})."
@@ -363,8 +365,10 @@ class LLM:
                 if kwargs.get("stream"):
                     raise ValueError("prompt_logprobs is not supported with streaming.")
                 num_prompt_logprobs = current_sampling_params.prompt_logprobs
-                if num_prompt_logprobs == -1:
-                    num_prompt_logprobs = ori_vocab_size
+                if num_prompt_logprobs == -1 and ori_vocab_size > max_logprobs:
+                    raise ValueError(
+                        f"Number of prompt_logprobs(-1) requested ({ori_vocab_size}) exceeds maximum allowed value ({max_logprobs})."
+                    )
                 if num_prompt_logprobs > max_logprobs:
                     raise ValueError(
                         f"Number of logprobs requested ({num_prompt_logprobs}) exceeds maximum allowed value ({max_logprobs})."
@@ -561,7 +565,7 @@ class LLM:
                         result.outputs.logprobs = self._build_sample_logprobs(
                             result.outputs.top_logprobs, topk_logprobs
                         )
-                    if result.prompt_logprobs and num_prompt_logprobs:
+                    if result.prompt_logprobs is not None and num_prompt_logprobs is not None:
                         if num_prompt_logprobs == -1:
                             num_prompt_logprobs = self.llm_engine.cfg.model_config.ori_vocab_size
                         result.prompt_logprobs = self._build_prompt_logprobs(

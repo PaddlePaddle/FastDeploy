@@ -299,7 +299,7 @@ class OpenAIServingChat:
                         for i in range(num_choices):
                             prompt_logprobs_res: Optional[PromptLogprobs] = None
                             prompt_logprobs_tensors = res.get("prompt_logprobs", None)
-                            if request.prompt_logprobs and prompt_logprobs_tensors is not None:
+                            if request.prompt_logprobs is not None and prompt_logprobs_tensors is not None:
                                 num_prompt_logprobs = (
                                     request.prompt_logprobs
                                     if request.prompt_logprobs != -1
@@ -583,7 +583,7 @@ class OpenAIServingChat:
                             if draft_logprobs_res and draft_logprobs_res.content is not None:
                                 draft_logprob_contents[idx].extend(draft_logprobs_res.content)
                     prompt_logprobs_tensors = data.get("prompt_logprobs", None)
-                    if request.prompt_logprobs and prompt_logprobs_tensors is not None:
+                    if request.prompt_logprobs is not None and prompt_logprobs_tensors is not None:
                         num_prompt_logprobs = (
                             request.prompt_logprobs
                             if request.prompt_logprobs != -1
@@ -610,6 +610,7 @@ class OpenAIServingChat:
                             num_input_video_tokens=num_input_video_tokens,
                             num_image_tokens=num_image_tokens,
                             logprob_contents=logprob_contents,
+                            draft_logprob_contents=draft_logprob_contents,
                             response_processor=response_processor,
                             prompt_logprobs_res_list=prompt_logprobs_res_list,
                             max_tokens=max_tokens,
@@ -662,6 +663,7 @@ class OpenAIServingChat:
         num_input_video_tokens: list,
         num_image_tokens: list,
         logprob_contents: list,
+        draft_logprob_contents: list,
         prompt_logprobs_res_list: list,
         response_processor: ChatResponseProcessor,
         max_tokens: int,
@@ -688,9 +690,12 @@ class OpenAIServingChat:
             message.content = output["text"]
 
         logprobs_full_res = None
+        draft_logprobs_full_res = None
         prompt_logprobs_full_res = None
         if logprob_contents[idx]:
             logprobs_full_res = LogProbs(content=logprob_contents[idx])
+        if draft_logprob_contents[idx]:
+            draft_logprobs_full_res = LogProbs(content=draft_logprob_contents[idx])
         if prompt_logprobs_res_list[idx]:
             prompt_logprobs_full_res = prompt_logprobs_res_list[idx]
 
@@ -713,6 +718,7 @@ class OpenAIServingChat:
             index=idx,
             message=message,
             logprobs=logprobs_full_res,
+            draft_logprobs=draft_logprobs_full_res,
             prompt_logprobs=prompt_logprobs_full_res,
             finish_reason=finish_reason,
         )

@@ -445,7 +445,7 @@ class OpenAIServingCompletion:
                     prompt_logprobs_res: Optional[PromptLogprobs] = None
                     if first_iteration[idx]:
                         prompt_logprobs_tensors = res.get("prompt_logprobs", None)
-                        if request.prompt_logprobs and prompt_logprobs_tensors is not None:
+                        if request.prompt_logprobs is not None and prompt_logprobs_tensors is not None:
                             num_prompt_logprobs = (
                                 request.prompt_logprobs
                                 if request.prompt_logprobs != -1
@@ -495,7 +495,7 @@ class OpenAIServingCompletion:
                     output_draft_top_logprobs = output["draft_top_logprobs"]
                     logprobs_res: Optional[CompletionLogprobs] = None
                     draft_logprobs_res: Optional[CompletionLogprobs] = None
-                    if request.logprobs and output_top_logprobs is not None:
+                    if request.logprobs is not None and output_top_logprobs is not None:
                         num_logprobs = (
                             request.logprobs if request.logprobs != -1 else self.engine_client.ori_vocab_size
                         )
@@ -644,7 +644,7 @@ class OpenAIServingCompletion:
                 )
             prompt_logprobs_res: Optional[PromptLogprobs] = None
             prompt_logprobs_tensors = final_res.get("prompt_logprobs_tensors", None)
-            if request.prompt_logprobs and prompt_logprobs_tensors is not None:
+            if request.prompt_logprobs is not None and prompt_logprobs_tensors is not None:
                 num_prompt_logprobs = (
                     request.prompt_logprobs if request.prompt_logprobs != -1 else self.engine_client.ori_vocab_size
                 )

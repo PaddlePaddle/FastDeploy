@@ -357,11 +357,15 @@ class EngineClient:
                 api_server_logger.error(err_msg)
                 raise ParameterError("prompt_logprobs", err_msg)
 
-            if prompt_logprobs == -1:
-                prompt_logprobs = self.ori_vocab_size
+            if prompt_logprobs == -1 and self.ori_vocab_size > max_logprobs:
+                err_msg = f"The requested value of ({self.ori_vocab_size}) for prompt_logprobs (-1) exceeds the maximum allowed value of ({max_logprobs})"
+                api_server_logger.error(err_msg)
+                raise ValueError("prompt_logprobs", err_msg)
 
             if prompt_logprobs < -1:
-                err_msg = f"Invalid 'prompt_logprobs': must be >= -1, got {prompt_logprobs}."
+                err_msg = (
+                    f"prompt_logprobs must be a non-negative value or -1; the current value is {prompt_logprobs}."
+                )
                 api_server_logger.error(err_msg)
                 raise ValueError("prompt_logprobs", err_msg)
 
@@ -384,19 +388,18 @@ class EngineClient:
                 raise ParameterError("top_logprobs", err_msg)
 
             if os.getenv("FD_USE_GET_SAVE_OUTPUT_V1", "0") == "0":
-                if top_logprobs < 0:
-                    err_msg = "Invalid value for 'top_logprobs': must be >= 0."
-                    raise ValueError("top_logprobs", err_msg)
-
-                if top_logprobs > 20:
-                    err_msg = "Invalid value for 'top_logprobs': must be <= 20."
+                if top_logprobs < 0 or top_logprobs > 20:
+                    err_msg = f"top_logprobs must be between 0 and 20; the current value is {top_logprobs}."
+                    api_server_logger.error(err_msg)
                     raise ValueError("top_logprobs", err_msg)
             else:
-                if top_logprobs == -1:
-                    top_logprobs = self.ori_vocab_size
+                if top_logprobs == -1 and self.ori_vocab_size > max_logprobs:
+                    err_msg = f"The requested value of ({self.ori_vocab_size}) for top_logprobs (-1) exceeds the maximum allowed value of ({max_logprobs})"
+                    api_server_logger.error(err_msg)
+                    raise ValueError("top_logprobs", err_msg)
 
                 if top_logprobs < -1:
-                    err_msg = f"Invalid 'top_logprobs': must be >= -1, got {top_logprobs}."
+                    err_msg = f"top_logprobs must be a non-negative value or -1; the current value is {top_logprobs}."
                     api_server_logger.error(err_msg)
                     raise ValueError("top_logprobs", err_msg)
 
