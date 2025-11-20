@@ -104,6 +104,7 @@ class MTPProposer(Proposer):
         self.model_config.num_hidden_layers = 1
         self.model_config.model = self.speculative_config.model
         self.model_config.pretrained_config.prefix_name = "ernie.mtp_block"
+        self.model_config.prefix_layer_name = "mtp_block"
         if self.speculative_config.quantization != "":
             self.model_config.quantization = self.speculative_config.quantization
         self.model_config.start_layer_index = self.num_main_model_layers
