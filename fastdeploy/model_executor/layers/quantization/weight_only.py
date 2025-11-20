@@ -237,6 +237,8 @@ class WeightOnlyLinearMethod(QuantMethodBase):
     def create_weights(self, layer, **extra_weight_attrs):
         # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
         self.model_format = extra_weight_attrs.get("model_format")
+        if "split_axis" in extra_weight_attrs and hasattr(layer, "nranks") and layer.nranks > 0:
+            extra_weight_attrs = {**extra_weight_attrs, "is_distributed": True}
         if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
             weight_shape = layer.weight_shape[::-1] if self.model_format == "torch" else layer.weight_shape
             layer.weight = layer.create_parameter(
