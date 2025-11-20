@@ -362,7 +362,7 @@ class DataProcessor:
                 outputs["position_ids"].append([i] * 3)
             outputs["cur_position"] += prompt_token_ids_len
             return outputs
-        images, videos, image_uuid, video_uuid, dealer, _, _ = self.extract_mm_items(request)
+        images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = self.extract_mm_items(request)
         st, image_idx, video_idx = 0, 0, 0
         mm_id_set = {
             self.image_start_id,
@@ -452,6 +452,20 @@ class DataProcessor:
         for idx in range(prompt_token_ids_len):
             if outputs["input_ids"][idx] != prompt_token_ids[idx]:
                 raise ValueError("token ids does not match")
+
+        if self.enable_processor_cache:
+            missing_idx = set(missing_idx)
+            hashes_to_cache, items_to_cache = [], []
+            for idx in range(len(mm_items)):
+                if idx in missing_idx:
+                    continue
+                meta = {}
+                t, h, w = outputs["grid_thw"][idx][0]
+                meta["thw"] = (t, h, w)
+                hashes_to_cache.append(outputs["mm_hashes"][idx])
+                items_to_cache.append((outputs["images"][idx], meta))
+            self.update_processor_cache(dealer, hashes_to_cache, items_to_cache)
+
         return outputs
 
     def _add_special_token(self, token: Union[str, int], outputs: Dict) -> None:
