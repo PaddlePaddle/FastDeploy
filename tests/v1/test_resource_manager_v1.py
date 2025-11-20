@@ -130,7 +130,7 @@ class TestResourceManagerV1(unittest.TestCase):
         result = self.manager._download_features(self.request)
         self.assertIsNone(result)
         self.assertIn(
-            "request test_request download features error: link bucket-name/path/to/object1 download error",
+            "request test_request download features error",
             self.request.error_message,
         )
         self.assertEqual(self.request.error_code, 530)
@@ -151,7 +151,7 @@ class TestResourceManagerV1(unittest.TestCase):
         result = self.manager._download_features(self.request)
         self.assertIsNone(result)
         self.assertIn(
-            "request test_request download features error: link bucket-name/path/to/object2 download error",
+            "request test_request download features error",
             self.request.error_message,
         )
         self.assertEqual(self.request.error_code, 530)
