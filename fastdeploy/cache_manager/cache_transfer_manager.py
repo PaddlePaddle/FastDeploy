@@ -241,16 +241,15 @@ class CacheTransferManager:
     def _init_storage_buffer(self):
         total_layers = args.num_layers + self.num_extra_layers
         need_to_allocate_bytes = (
-            args.max_model_length * args.bytes_per_layer_per_block * total_layers // args.block_size
+            args.max_model_length * self.key_cache_shape[1] * self.key_cache_shape[3]  * total_layers * 2
         )
-        self.cache_stride = args.bytes_per_layer_per_block * total_layers
+        self.cache_stride = self.key_cache_shape[1] * self.key_cache_shape[2] * self.key_cache_shape[3] * total_layers
         logger.info(
             f"[rank {self.rank}/{self.n_ranks}] ..creating cpu cache for alllayers {total_layers}: {2 * need_to_allocate_bytes / 1024 ** 3:.2f}GB"
         )
         self.key_register_buffer = cuda_host_alloc(need_to_allocate_bytes * 2)
         self.val_register_buffer = self.key_register_buffer + need_to_allocate_bytes
         self.storage_backend.register_buffer(self.key_register_buffer, need_to_allocate_bytes * 2)
-        self.max_transfer_block_number = self.storage_backend.config.local_buffer_size // self.cache_stride
 
     def _init_gpu_cache(self, args):
 
@@ -438,12 +437,11 @@ class CacheTransferManager:
         self.storage_backend.get(keys, target_location=target_location, target_sizes=target_sizes)
 
         swap_cache_layout(
-            self.gpu_cache_k_tensors, self.key_register_buffer, gpu_block_ids, self.rank, 0  # gpu ==> cpu
+            self.gpu_cache_k_tensors, self.key_register_buffer, self.key_cache_shape, gpu_block_ids, self.device, 1  # cpu ==> gpu
         )
-        swap_cache_layout(self.gpu_cache_v_tensors, self.val_register_buffer, gpu_block_ids, self.rank, 0)
+        swap_cache_layout(self.gpu_cache_v_tensors, self.val_register_buffer, self.value_cache_shape, gpu_block_ids, self.device, 1)
 
     def load_storage_task(self, task_id, hash_keys, gpu_block_ids, timeout=0.1):
-        logger.info(f"[rank {self.rank}/{self.n_ranks}] {hash_keys} {task_id} {gpu_block_ids} load_storage_task")
         keys = [f"{key}_key_{self.rank}" for key in hash_keys]
         results = self.storage_backend.exists(keys)
         current_number = 0
@@ -470,45 +468,46 @@ class CacheTransferManager:
                 loop.run_until_complete(
                     asyncio.wait_for(self._run_async_load(hash_keys, gpu_block_ids), timeout=timeout)
                 )
-            except asyncio.TimeoutError:
-                logger.warning(
-                    f"[rank {self.rank}/{self.n_ranks}] Timeout error occurred while waiting for load_storage_task."
-                )
-                gpu_block_ids = []
             except Exception as e:
-                logger.error(f"[rank {self.rank}/{self.n_ranks}] An error occurred: {e}")
+                logger.error(f"[rank {self.rank}/{self.n_ranks}] An error occurred: {task_id} {e}")
                 gpu_block_ids = []
 
         result = (hash_keys, gpu_block_ids, [], CacheStatus.STORAGE2GPU, task_id)
         self.cache_task_queue.swap_storage_to_gpu_barrier.wait()
         if self.rank == 0:
-            logger.info(
-                f"[rank {self.rank}/{self.n_ranks}] {current_number} data found in storage for task {task_id}, finish loading."
-            )
+            if current_number > 0:
+                logger.info(
+                    f"[rank {self.rank}/{self.n_ranks}] {current_number} data found in storage for task {task_id}, finish loading."
+                )
             self.cache_task_queue.swap_storage_to_gpu_barrier.reset()
             self.cache_task_queue.put_transfer_done_signal(result)
 
     async def _run_async_write(self, uncached_keys_k, uncached_keys_v, uncached_block_ids):
-        swap_cache_layout(
-            self.gpu_cache_k_tensors, self.key_register_buffer, uncached_block_ids, self.rank, 1  # gpu ==> cpu
-        )
-        swap_cache_layout(
-            self.gpu_cache_v_tensors, self.val_register_buffer, uncached_block_ids, self.rank, 1  # gpu ==> cpu
-        )
+        try:
+            # logger.info(f"[rank {self.rank}/{self.n_ranks}] write cache to storage {uncached_keys_k} {uncached_block_ids}")
+            key_cache_size = [self.key_cache_shape[0], self.key_cache_shape[1], self.key_cache_shape[2], self.key_cache_shape[3]]
+            swap_cache_layout(
+                self.gpu_cache_k_tensors, self.key_register_buffer, key_cache_size, uncached_block_ids, self.device, 0  # gpu ==> cpu
+            )
+            swap_cache_layout(
+                self.gpu_cache_v_tensors, self.val_register_buffer, key_cache_size, uncached_block_ids, self.device, 0  # gpu ==> cpu
+            )
 
-        # Prepare locations
-        target_location_k = [self.key_register_buffer + i * self.cache_stride for i in range(len(uncached_block_ids))]
-        target_location_v = [self.val_register_buffer + i * self.cache_stride for i in range(len(uncached_block_ids))]
+            # Prepare locations
+            target_location_k = [self.key_register_buffer + i * self.cache_stride for i in range(len(uncached_block_ids))]
+            target_location_v = [self.val_register_buffer + i * self.cache_stride for i in range(len(uncached_block_ids))]
 
-        target_sizes = [self.cache_stride] * len(uncached_block_ids) * 2
-        target_location = target_location_k + target_location_v
+            target_sizes = [self.cache_stride] * len(uncached_block_ids) * 2
+            target_location = target_location_k + target_location_v
 
-        logger.info(f"write cache to storage {uncached_keys_k + uncached_keys_v} {target_location} {target_sizes}")
+            logger.info(f"write cache to storage {uncached_keys_k + uncached_keys_v} {target_location} {target_sizes}")
 
-        # Execute storage set operation
-        self.storage_backend.set(
-            uncached_keys_k + uncached_keys_v, target_location=target_location, target_sizes=target_sizes
-        )
+            # Execute storage set operation
+            self.storage_backend.set(
+                uncached_keys_k + uncached_keys_v, target_location=target_location, target_sizes=target_sizes
+            )
+        except Exception as e:
+            logger.error(f"An error occurred during writing to storage: {e}")
 
     def write_back_storage_task(self, keys, gpu_block_ids, transfer_task_id, timeout=0.1):
         """
@@ -701,7 +700,7 @@ class CacheTransferManager:
                             timeout,
                         )
                     elif event_type.value == CacheStatus.GPU2STORAGE.value:
-                        logger.info(f"GPU2STORAGE {swap_node_ids} {gpu_block_id} {transfer_task_id}")
+                        # logger.info(f"GPU2STORAGE {swap_node_ids} {gpu_block_id} {transfer_task_id}")
                         self.write_to_storage_thread_pool.submit(
                             self.write_back_storage_task,
                             swap_node_ids,

@@ -35,15 +35,15 @@ def test_store_basic_function():
     assert isinstance(result, dict)
     assert "test_key_0" in result
     print(result)
-    assert result["test_key_0"] is True
-    assert result["non_existent_key"] is False
+    assert result["test_key_0"] == 1
+    assert result["non_existent_key"] == 0
 
     res = store.delete("test_key_0", timeout=10)
     assert res == 0
 
     new_result = store.exists(["test_key_0"])
     print(new_result)
-    assert new_result["test_key_0"] is False
+    assert new_result["test_key_0"] == 0
 
 
 if __name__ == "__main__":
