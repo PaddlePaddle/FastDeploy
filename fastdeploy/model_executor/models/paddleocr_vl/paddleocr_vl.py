@@ -132,10 +132,11 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         )
 
         # Persistent buffers for CUDA graphs.
-        self._decoder_input_embeddings = paddle.zeros(
-            [fd_config.scheduler_config.max_num_seqs, fd_config.model_config.hidden_size],
-            dtype=fd_config.model_config.dtype,
-        )
+        if fd_config.graph_opt_config.use_cudagraph:
+            self._decoder_input_embeddings = paddle.zeros(
+                [fd_config.graph_opt_config.max_capture_size, fd_config.model_config.hidden_size],
+                dtype=fd_config.model_config.dtype,
+            )
 
     @paddle.no_grad()
     def load_weights(self, weights_iterator) -> None:
@@ -242,15 +243,11 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
 
         if forward_meta.step_use_cudagraph:
             self._decoder_input_embeddings.copy_(input_embeddings, False)
+            input_embeddings = self._decoder_input_embeddings
 
-            hidden_states = self.model(
-                input_embeddings=self._decoder_input_embeddings,
-                forward_meta=forward_meta,
-            )
-        else:
-            hidden_states = self.model(
-                input_embeddings=input_embeddings,
-                forward_meta=forward_meta,
-            )
+        hidden_states = self.model(
+            input_embeddings=input_embeddings,
+            forward_meta=forward_meta,
+        )
 
         return hidden_states
