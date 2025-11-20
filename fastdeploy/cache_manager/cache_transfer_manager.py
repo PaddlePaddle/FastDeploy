@@ -241,7 +241,7 @@ class CacheTransferManager:
     def _init_storage_buffer(self):
         total_layers = args.num_layers + self.num_extra_layers
         need_to_allocate_bytes = (
-            args.max_model_length * self.key_cache_shape[1] * self.key_cache_shape[3]  * total_layers * 2
+            args.max_model_length * self.key_cache_shape[1] * self.key_cache_shape[3] * total_layers * 2
         )
         self.cache_stride = self.key_cache_shape[1] * self.key_cache_shape[2] * self.key_cache_shape[3] * total_layers
         logger.info(
@@ -437,9 +437,16 @@ class CacheTransferManager:
         self.storage_backend.get(keys, target_location=target_location, target_sizes=target_sizes)
 
         swap_cache_layout(
-            self.gpu_cache_k_tensors, self.key_register_buffer, self.key_cache_shape, gpu_block_ids, self.device, 1  # cpu ==> gpu
+            self.gpu_cache_k_tensors,
+            self.key_register_buffer,
+            self.key_cache_shape,
+            gpu_block_ids,
+            self.device,
+            1,  # cpu ==> gpu
         )
-        swap_cache_layout(self.gpu_cache_v_tensors, self.val_register_buffer, self.value_cache_shape, gpu_block_ids, self.device, 1)
+        swap_cache_layout(
+            self.gpu_cache_v_tensors, self.val_register_buffer, self.value_cache_shape, gpu_block_ids, self.device, 1
+        )
 
     def load_storage_task(self, task_id, hash_keys, gpu_block_ids, timeout=0.1):
         keys = [f"{key}_key_{self.rank}" for key in hash_keys]
@@ -485,17 +492,36 @@ class CacheTransferManager:
     async def _run_async_write(self, uncached_keys_k, uncached_keys_v, uncached_block_ids):
         try:
             # logger.info(f"[rank {self.rank}/{self.n_ranks}] write cache to storage {uncached_keys_k} {uncached_block_ids}")
-            key_cache_size = [self.key_cache_shape[0], self.key_cache_shape[1], self.key_cache_shape[2], self.key_cache_shape[3]]
+            key_cache_size = [
+                self.key_cache_shape[0],
+                self.key_cache_shape[1],
+                self.key_cache_shape[2],
+                self.key_cache_shape[3],
+            ]
             swap_cache_layout(
-                self.gpu_cache_k_tensors, self.key_register_buffer, key_cache_size, uncached_block_ids, self.device, 0  # gpu ==> cpu
+                self.gpu_cache_k_tensors,
+                self.key_register_buffer,
+                key_cache_size,
+                uncached_block_ids,
+                self.device,
+                0,  # gpu ==> cpu
             )
             swap_cache_layout(
-                self.gpu_cache_v_tensors, self.val_register_buffer, key_cache_size, uncached_block_ids, self.device, 0  # gpu ==> cpu
+                self.gpu_cache_v_tensors,
+                self.val_register_buffer,
+                key_cache_size,
+                uncached_block_ids,
+                self.device,
+                0,  # gpu ==> cpu
             )
 
             # Prepare locations
-            target_location_k = [self.key_register_buffer + i * self.cache_stride for i in range(len(uncached_block_ids))]
-            target_location_v = [self.val_register_buffer + i * self.cache_stride for i in range(len(uncached_block_ids))]
+            target_location_k = [
+                self.key_register_buffer + i * self.cache_stride for i in range(len(uncached_block_ids))
+            ]
+            target_location_v = [
+                self.val_register_buffer + i * self.cache_stride for i in range(len(uncached_block_ids))
+            ]
 
             target_sizes = [self.cache_stride] * len(uncached_block_ids) * 2
             target_location = target_location_k + target_location_v
