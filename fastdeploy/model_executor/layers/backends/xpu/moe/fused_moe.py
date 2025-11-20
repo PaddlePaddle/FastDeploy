@@ -446,9 +446,7 @@ class XPUMoEMethod(MoEMethodBase):
         """
         Apply the EP decoder method.
         """
-        print("Apply the EP decoder method.")
         gate_out = gate(x.cast("float32"))
-        print("Select topk experts and weights")
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
         print("Dispatch")
@@ -459,7 +457,6 @@ class XPUMoEMethod(MoEMethodBase):
             permute_input,
             token_nums_per_expert,
             handle,
-            hook,
             valid_token_num,
         ) = self.ep_decoder_runner.dispatch(
             x,
@@ -468,8 +465,6 @@ class XPUMoEMethod(MoEMethodBase):
             expertwise_scale=expertwise_scale,
             use_fp8=use_fp8,
         )
-        print(valid_token_num)
-        print("Compute ffn")
         # 3. Compute ffn
         ffn_out = self.compute_ffn(
             layer,
@@ -477,7 +472,6 @@ class XPUMoEMethod(MoEMethodBase):
             token_nums_per_expert,
             max(1, valid_token_num),
         )  # 确保空跑时也不为0
-        print("EP combine")
         # 4. EP combine
         return self.ep_decoder_runner.combine(
             ffn_out,

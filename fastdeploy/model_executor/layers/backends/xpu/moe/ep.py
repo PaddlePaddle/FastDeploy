@@ -426,7 +426,7 @@ class XPUEPDecoderRunner(XPUEPRunner):
         # if dispatch_hook is not None:
         #     dispatch_hook()
         print("===========XPUEPDecoderRunner dispatch end===========")
-        return recv_hidden_states, recv_expert_count, handle, dispatch_hook, valid_token_num
+        return recv_hidden_states, recv_expert_count, handle, valid_token_num
 
     def combine(self, ffn_out, topk_idx, topk_weights, handle):
         combined_hidden_states, combine_hook = self.ep_engine.low_latency_combine(
