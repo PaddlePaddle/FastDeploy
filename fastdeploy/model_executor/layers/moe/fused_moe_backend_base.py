@@ -19,7 +19,6 @@ from abc import abstractmethod
 import paddle
 from paddle import nn
 
-from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.utils import (
     TensorTracker,
     default_weight_loader,
@@ -199,14 +198,13 @@ class MoEMethodBase(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
-        forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
         """
         if layer.ep_size > 1:
             is_moe_start_layer = layer.layer_idx == layer.fd_config.model_config.moe_layer_start_index
-            if forward_meta.moe_phase.phase == "prefill":
+            if layer.fd_config.model_config.moe_phase.phase == "prefill":
                 if layer.fd_config.scheduler_config.splitwise_role == "mixed" and is_moe_start_layer:
                     self.ep_prefill_runner.clean_low_latency_buffer()
                 return self.apply_ep_prefill(layer, x, gate)
