@@ -33,13 +33,16 @@ def import_custom_ops(package, module_name, global_ns):
     try:
         module = importlib.import_module(module_name, package=package)
 
-        print(">"*20, module)
+        print(">1"*20, module)
 
         functions = inspect.getmembers(module)
 
-        print(">"*20, functions)
+        print(">2"*20, functions)
 
         for func_name, func in functions:
+
+            print(">3"*20, func_name)
+
             if func_name.startswith("__") or func_name == "_C_ops":
                 continue
             logger.debug(f"Import {func_name} from {package}")
@@ -117,3 +120,5 @@ def preprocess_static_op(global_ns):
         original_cpp_ext_op = global_ns[op_name]
         original_custom_op = global_ns[static_op_name]
         global_ns[op_name] = wrap_unified_op(original_cpp_ext_op, original_custom_op)
+
+    assert False, global_ns
