@@ -188,7 +188,7 @@ struct Softmax {
   using TensorT = decltype(make_tensor<float>(Shape<Int<kNRows>>{}));
   TensorT row_max, row_sum;
 
-  CUTLASS_DEVICE Softmax() {};
+  CUTLASS_DEVICE Softmax(){};
 
   template <bool Is_first, bool Check_inf = false, typename Tensor0>
   __forceinline__ __device__ TensorT max(Tensor0 &acc_s,
