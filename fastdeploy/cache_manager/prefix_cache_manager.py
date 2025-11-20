@@ -291,6 +291,7 @@ class PrefixCacheManager:
             while np.sum(self.cache_ready_signal.value) != tensor_parallel_size:
                 time.sleep(1)
 
+            logger.info("PrefixCacheManager is waiting for swap kv cache to be initialized.")
             while np.sum(self.swap_space_ready_signal.value) != tensor_parallel_size:
                 time.sleep(1)
 

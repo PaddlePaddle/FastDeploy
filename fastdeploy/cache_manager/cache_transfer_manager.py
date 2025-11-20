@@ -176,8 +176,7 @@ class CacheTransferManager:
         )
 
         self._init_gpu_cache(args)
-        if self.num_cpu_blocks > 0 or self.splitwise_cache_buffer_block_num > 0:
-            self._init_cpu_cache(args)
+        self._init_cpu_cache(args)
 
         cache_task_broadcast_data = np.zeros(shape=[1], dtype=np.int32)
         self.cache_task_broadcast_signal = IPCSignal(
