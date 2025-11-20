@@ -55,7 +55,7 @@ class RouterArgs:
         )
         parser.add_argument(
             "--port",
-            type=int,
+            type=str,
             default=RouterArgs.port,
             help="Port number to bind the router server",
         )

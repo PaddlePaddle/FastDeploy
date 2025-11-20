@@ -1032,6 +1032,9 @@ class ResourceManagerV1(ResourceManager):
         NOTE: GPU resources should be checked in advance to ensure they are sufficient for the prefilled request.
         """
         assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
+        if request_output.request_id not in self.requests:
+            self.logger.error(f"Request {request_output.request_id} not found in requests")
+            return
         request = self.requests[request_output.request_id]
 
         # update request and insert to running
