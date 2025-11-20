@@ -140,10 +140,16 @@ function copy_ops(){
       # List files in both directories
       list_files_recursive "./${OPS_TMP_DIR}/${WHEEL_NAME}"
       list_files_recursive "../fastdeploy/model_executor/ops/gpu"
-      
-      # Display content of __init__.py file
-      echo "Content of ../fastdeploy/model_executor/ops/gpu/fastdeploy_ops/__init__.py:"
-      cat "../fastdeploy/model_executor/ops/gpu/fastdeploy_ops/__init__.py"
+
+      if [ -d "./${OPS_TMP_DIR}/${WHEEL_MODERN_NAME}" ]; then
+        # Display content of __init__.py file
+        echo "Content of ../fastdeploy/model_executor/ops/gpu/fastdeploy_ops/__init__.py:"
+        cat "../fastdeploy/model_executor/ops/gpu/fastdeploy_ops/__init__.py"
+      else
+        echo "Content of ../fastdeploy/model_executor/ops/gpu/fastdeploy_ops.py:"
+        cat "../fastdeploy/model_executor/ops/gpu/fastdeploy_ops.py"
+      fi
+
       
       return
     fi
@@ -284,30 +290,30 @@ function extract_ops_from_precompiled_wheel() {
 }
 
 function build_and_install_ops() {
-  # debug
-  # Copy debug setuptools files to paddle installation directory
-  python3 -c "
-import os
-import sys
-import shutil
+#   # debug
+#   # Copy debug setuptools files to paddle installation directory
+#   python3 -c "
+# import os
+# import sys
+# import shutil
 
-# Find paddle installation directory
-import paddle
-paddle_install_dir = os.path.dirname(paddle.__file__)
-target_dir = os.path.join(paddle_install_dir, 'utils', 'cpp_extension')
+# # Find paddle installation directory
+# import paddle
+# paddle_install_dir = os.path.dirname(paddle.__file__)
+# target_dir = os.path.join(paddle_install_dir, 'utils', 'cpp_extension')
 
-# Source directory with debug setuptools files
-source_dir = os.path.join(os.getcwd(), 'custom_ops', 'debug_setuptools')
+# # Source directory with debug setuptools files
+# source_dir = os.path.join(os.getcwd(), 'custom_ops', 'debug_setuptools')
 
-# Copy files from source to target
-for filename in os.listdir(source_dir):
-    source_path = os.path.join(source_dir, filename)
-    if os.path.isfile(source_path):
-        target_path = os.path.join(target_dir, filename)
-        print(f'Copying {source_path} to {target_path}')
-        shutil.copy2(source_path, target_path)
-        print(f'Successfully copied {filename}')
-"
+# # Copy files from source to target
+# for filename in os.listdir(source_dir):
+#     source_path = os.path.join(source_dir, filename)
+#     if os.path.isfile(source_path):
+#         target_path = os.path.join(target_dir, filename)
+#         print(f'Copying {source_path} to {target_path}')
+#         shutil.copy2(source_path, target_path)
+#         print(f'Successfully copied {filename}')
+# "
 
   cd $OPS_SRC_DIR
   export no_proxy=bcebos.com,paddlepaddle.org.cn,${no_proxy}
