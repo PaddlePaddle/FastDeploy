@@ -397,10 +397,11 @@ class DataProcessor:
                     raise ValueError("image token ids not complete")
                 image = images[image_idx]
                 uuid = image_uuid[image_idx] if image_uuid else None
+                token_len = cur_idx - st
                 if not isinstance(image, tuple):
-                    self._add_image_from_token_ids(image, outputs, uuid, cur_idx - st)
+                    self._add_image(image, outputs, uuid, token_len)
                 else:
-                    self._add_processed_image_from_token_ids(image, outputs, uuid, cur_idx - st)
+                    self._add_processed_image(image, outputs, uuid, token_len)
                 image_idx += 1
                 # append image_end_id
                 outputs["input_ids"].extend([prompt_token_ids[cur_idx]])
@@ -425,14 +426,15 @@ class DataProcessor:
                     raise ValueError("video token ids not complete")
                 video = videos[video_idx]
                 uuid = video_uuid[video_idx] if video_uuid else None
+                token_len = cur_idx - st
                 if not isinstance(video, tuple):
                     if isinstance(video, dict):
                         frames = self._load_and_process_video(video["video"], video)
                     else:
                         frames = self._load_and_process_video(video, {})
-                    self._add_video_from_token_ids(frames, outputs, uuid, cur_idx - st)
+                    self._add_video(frames, outputs, uuid, token_len)
                 else:
-                    self._add_processed_video_from_token_ids(video, outputs, uuid, cur_idx - st)
+                    self._add_processed_video(video, outputs, uuid, token_len)
                 video_idx += 1
                 # append video_end_id
                 outputs["input_ids"].extend([prompt_token_ids[cur_idx]])
@@ -471,83 +473,83 @@ class DataProcessor:
             outputs["position_ids"].append([start + i] * 3)
         outputs["cur_position"] += len(tokens)
 
-    def _preprocess_raw_image(self, img=None, frames=None):
-        if img is None and frames is None:
-            raise ValueError("image and frames cannot be None at the same time")
-        patches_h, patches_w = self.image_preprocessor.get_smarted_resize(
-            img.height if img else frames[0].height,
-            img.width if img else frames[0].width,
-            min_pixels=self.image_min_pixels if img else self.video_min_pixels,
-            max_pixels=self.image_max_pixels if img else self.video_max_pixels,
-        )[1]
+    # def _preprocess_raw_image(self, img=None, frames=None):
+    #     if img is None and frames is None:
+    #         raise ValueError("image and frames cannot be None at the same time")
+    #     patches_h, patches_w = self.image_preprocessor.get_smarted_resize(
+    #         img.height if img else frames[0].height,
+    #         img.width if img else frames[0].width,
+    #         min_pixels=self.image_min_pixels if img else self.video_min_pixels,
+    #         max_pixels=self.image_max_pixels if img else self.video_max_pixels,
+    #     )[1]
 
-        if img:
-            ret = self.image_preprocessor.preprocess(
-                images=[img.convert("RGB")],
-                do_normalize=False,
-                do_rescale=False,
-                predetermined_grid_thw=np.array([[patches_h, patches_w]]),
-                do_convert_rgb=True,
-                input_data_format=ChannelDimension.LAST,
-            )
-        else:
-            pixel_stack = np.stack([np.array(f.convert("RGB")) for f in frames], axis=0)
-            ret = self.image_preprocessor.preprocess(
-                images=None,
-                videos=pixel_stack,
-                do_normalize=False,
-                do_rescale=False,
-                predetermined_grid_thw=np.array([[patches_h, patches_w]] * len(frames)),
-                do_convert_rgb=True,
-                input_data_format=ChannelDimension.LAST,
-            )
-        return patches_h, patches_w, ret
+    #     if img:
+    #         ret = self.image_preprocessor.preprocess(
+    #             images=[img.convert("RGB")],
+    #             do_normalize=False,
+    #             do_rescale=False,
+    #             predetermined_grid_thw=np.array([[patches_h, patches_w]]),
+    #             do_convert_rgb=True,
+    #             input_data_format=ChannelDimension.LAST,
+    #         )
+    #     else:
+    #         pixel_stack = np.stack([np.array(f.convert("RGB")) for f in frames], axis=0)
+    #         ret = self.image_preprocessor.preprocess(
+    #             images=None,
+    #             videos=pixel_stack,
+    #             do_normalize=False,
+    #             do_rescale=False,
+    #             predetermined_grid_thw=np.array([[patches_h, patches_w]] * len(frames)),
+    #             do_convert_rgb=True,
+    #             input_data_format=ChannelDimension.LAST,
+    #         )
+    #     return patches_h, patches_w, ret
 
-    def _add_image_from_token_ids(self, img, outputs: Dict, uuid: Optional[str], token_len: int):
-        patches_h, patches_w, ret = self._preprocess_raw_image(img=img)
-        num_tokens = (patches_h * patches_w) // (self.spatial_conv_size**2)
-        if num_tokens != token_len:
-            raise ValueError("image tokens num not match the size")
-        outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
-        outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
-        outputs["num_input_image_tokens"] += num_tokens
+    # def _add_image_from_token_ids(self, img, outputs: Dict, uuid: Optional[str], token_len: int):
+    #     patches_h, patches_w, ret = self._preprocess_raw_image(img=img)
+    #     num_tokens = (patches_h * patches_w) // (self.spatial_conv_size**2)
+    #     if num_tokens != token_len:
+    #         raise ValueError("image tokens num not match the size")
+    #     outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
+    #     outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
+    #     outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
+    #     outputs["num_input_image_tokens"] += num_tokens
 
-        pos_ids = self._compute_3d_positions(1, patches_h, patches_w, outputs["cur_position"])
-        outputs["position_ids"].extend(pos_ids)
-        outputs["cur_position"] = np.max(pos_ids) + 1
+    #     pos_ids = self._compute_3d_positions(1, patches_h, patches_w, outputs["cur_position"])
+    #     outputs["position_ids"].extend(pos_ids)
+    #     outputs["cur_position"] = np.max(pos_ids) + 1
 
-        outputs["images"].append(ret["pixel_values"])
-        if not uuid:
-            outputs["mm_hashes"].append(MultimodalHasher.hash_features(ret["pixel_values"]))
-        else:
-            outputs["mm_hashes"].append(uuid)
-        outputs["grid_thw"].append(ret["image_grid_thw"])
-        outputs["image_type_ids"].append(0)
+    #     outputs["images"].append(ret["pixel_values"])
+    #     if not uuid:
+    #         outputs["mm_hashes"].append(MultimodalHasher.hash_features(ret["pixel_values"]))
+    #     else:
+    #         outputs["mm_hashes"].append(uuid)
+    #     outputs["grid_thw"].append(ret["image_grid_thw"])
+    #     outputs["image_type_ids"].append(0)
 
-    def _add_processed_image_from_token_ids(
-        self, img_cache: Tuple[np.ndarray, dict], outputs: Dict, uuid: Optional[str], token_len: int
-    ):
-        img, meta = img_cache
-        num_tokens = img.shape[0] // (self.spatial_conv_size**2)
-        if num_tokens != token_len:
-            raise ValueError("image tokens num not match the size")
+    # def _add_processed_image_from_token_ids(
+    #     self, img_cache: Tuple[np.ndarray, dict], outputs: Dict, uuid: Optional[str], token_len: int
+    # ):
+    #     img, meta = img_cache
+    #     num_tokens = img.shape[0] // (self.spatial_conv_size**2)
+    #     if num_tokens != token_len:
+    #         raise ValueError("image tokens num not match the size")
 
-        outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
-        outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
+    #     outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
+    #     outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
+    #     outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
 
-        _, h, w = meta["thw"]
-        pos_ids = self._compute_3d_positions(1, h, w, outputs["cur_position"])
-        outputs["position_ids"].extend(pos_ids)
-        outputs["cur_position"] = np.max(pos_ids) + 1
+    #     _, h, w = meta["thw"]
+    #     pos_ids = self._compute_3d_positions(1, h, w, outputs["cur_position"])
+    #     outputs["position_ids"].extend(pos_ids)
+    #     outputs["cur_position"] = np.max(pos_ids) + 1
 
-        outputs["images"].append(img)
-        outputs["mm_hashes"].append(uuid)
-        outputs["grid_thw"].append(np.array([[1, h, w]]))
-        outputs["image_type_ids"].append(0)
+    #     outputs["images"].append(img)
+    #     outputs["mm_hashes"].append(uuid)
+    #     outputs["grid_thw"].append(np.array([[1, h, w]]))
+    #     outputs["image_type_ids"].append(0)
 
-    def _add_image(self, img, outputs: Dict, uuid: Optional[str]) -> None:
+    def _add_image(self, img, outputs: Dict, uuid: Optional[str], token_len=None) -> None:
         patches_h, patches_w = self.image_preprocessor.get_smarted_resize(
             img.height,
             img.width,
@@ -555,6 +557,8 @@ class DataProcessor:
             max_pixels=self.image_max_pixels,
         )[1]
         num_tokens = (patches_h * patches_w) // (self.spatial_conv_size**2)
+        if token_len and token_len != num_tokens:
+            raise ValueError("image tokens num not match the size")
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
         outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
@@ -582,9 +586,13 @@ class DataProcessor:
         outputs["grid_thw"].append(ret["image_grid_thw"])
         outputs["image_type_ids"].append(0)
 
-    def _add_processed_image(self, img_cache: Tuple[np.ndarray, dict], outputs: Dict, uuid: str) -> None:
+    def _add_processed_image(
+        self, img_cache: Tuple[np.ndarray, dict], outputs: Dict, uuid: str, token_len=None
+    ) -> None:
         img, meta = img_cache
         num_tokens = img.shape[0] // (self.spatial_conv_size**2)
+        if token_len and num_tokens != token_len:
+            raise ValueError("image tokens num not match the size")
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
         outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
@@ -600,30 +608,30 @@ class DataProcessor:
         outputs["grid_thw"].append(np.array([[1, h, w]]))
         outputs["image_type_ids"].append(0)
 
-    def _add_video_from_token_ids(self, frames, outputs: Dict, uuid: Optional[str], token_len: int):
-        patches_h, patches_w, ret = self._preprocess_raw_image(frames=frames)
-        num_frames = len(frames)
-        num_tokens = (num_frames * patches_h * patches_w) // (self.spatial_conv_size**2 * self.temporal_conv_size)
-        if num_tokens != token_len:
-            raise ValueError("video tokens num not match the size")
-        outputs["images"].append(ret["pixel_values_videos"])
-        if not uuid:
-            outputs["mm_hashes"].append(MultimodalHasher.hash_features(ret["pixel_values_videos"]))
-        else:
-            outputs["mm_hashes"].append(uuid)
-        outputs["grid_thw"].append(ret["video_grid_thw"])
-        outputs["image_type_ids"].extend([1] * num_frames)
+    # def _add_video_from_token_ids(self, frames, outputs: Dict, uuid: Optional[str], token_len: int):
+    #     patches_h, patches_w, ret = self._preprocess_raw_image(frames=frames)
+    #     num_frames = len(frames)
+    #     num_tokens = (num_frames * patches_h * patches_w) // (self.spatial_conv_size**2 * self.temporal_conv_size)
+    #     if num_tokens != token_len:
+    #         raise ValueError("video tokens num not match the size")
+    #     outputs["images"].append(ret["pixel_values_videos"])
+    #     if not uuid:
+    #         outputs["mm_hashes"].append(MultimodalHasher.hash_features(ret["pixel_values_videos"]))
+    #     else:
+    #         outputs["mm_hashes"].append(uuid)
+    #     outputs["grid_thw"].append(ret["video_grid_thw"])
+    #     outputs["image_type_ids"].extend([1] * num_frames)
 
-        outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
-        outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
-        outputs["num_input_video_tokens"] += num_tokens
+    #     outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
+    #     outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
+    #     outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
+    #     outputs["num_input_video_tokens"] += num_tokens
 
-        pos_ids = self._compute_3d_positions(num_frames, patches_h, patches_w, outputs["cur_position"])
-        outputs["position_ids"].extend(pos_ids)
-        outputs["cur_position"] = np.max(pos_ids) + 1
+    #     pos_ids = self._compute_3d_positions(num_frames, patches_h, patches_w, outputs["cur_position"])
+    #     outputs["position_ids"].extend(pos_ids)
+    #     outputs["cur_position"] = np.max(pos_ids) + 1
 
-    def _add_video(self, frames, outputs: Dict, uuid: Optional[str]) -> None:
+    def _add_video(self, frames, outputs: Dict, uuid: Optional[str], token_len=None) -> None:
         patches_h, patches_w = self.image_preprocessor.get_smarted_resize(
             frames[0].height,
             frames[0].width,
@@ -632,6 +640,8 @@ class DataProcessor:
         )[1]
         num_frames = len(frames)
         num_tokens = (num_frames * patches_h * patches_w) // (self.spatial_conv_size**2 * self.temporal_conv_size)
+        if token_len and num_tokens != token_len:
+            raise ValueError("video tokens num not match the size")
 
         pixel_stack = np.stack([np.array(f.convert("RGB")) for f in frames], axis=0)
         ret = self.image_preprocessor.preprocess(
@@ -660,31 +670,35 @@ class DataProcessor:
         outputs["position_ids"].extend(pos_ids)
         outputs["cur_position"] = np.max(pos_ids) + 1
 
-    def _add_processed_video_from_token_ids(
-        self, frames_cache: Tuple[np.ndarray, dict], outputs: Dict, uuid: str, token_len: int
-    ):
+    # def _add_processed_video_from_token_ids(
+    #     self, frames_cache: Tuple[np.ndarray, dict], outputs: Dict, uuid: str, token_len: int
+    # ):
+    #     frames, meta = frames_cache
+    #     num_tokens = frames.shape[0] // (self.spatial_conv_size**2 * self.temporal_conv_size)
+    #     if num_tokens != token_len:
+    #         raise ValueError("video tokens num not match the size")
+
+    #     t, h, w = meta["thw"]
+    #     outputs["images"].append(frames)
+    #     outputs["mm_hashes"].append(uuid)
+    #     outputs["grid_thw"].append(np.array([[t, h, w]]))
+
+    #     outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
+    #     outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
+    #     outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
+    #     outputs["image_type_ids"].extend([1] * t)
+
+    #     pos_ids = self._compute_3d_positions(t, h, w, outputs["cur_position"])
+    #     outputs["position_ids"].extend(pos_ids)
+    #     outputs["cur_position"] = np.max(pos_ids) + 1
+
+    def _add_processed_video(
+        self, frames_cache: Tuple[np.ndarray, dict], outputs: Dict, uuid: str, token_len=None
+    ) -> None:
         frames, meta = frames_cache
         num_tokens = frames.shape[0] // (self.spatial_conv_size**2 * self.temporal_conv_size)
-        if num_tokens != token_len:
+        if token_len and num_tokens != token_len:
             raise ValueError("video tokens num not match the size")
-
-        t, h, w = meta["thw"]
-        outputs["images"].append(frames)
-        outputs["mm_hashes"].append(uuid)
-        outputs["grid_thw"].append(np.array([[t, h, w]]))
-
-        outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
-        outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
-        outputs["image_type_ids"].extend([1] * t)
-
-        pos_ids = self._compute_3d_positions(t, h, w, outputs["cur_position"])
-        outputs["position_ids"].extend(pos_ids)
-        outputs["cur_position"] = np.max(pos_ids) + 1
-
-    def _add_processed_video(self, frames_cache: Tuple[np.ndarray, dict], outputs: Dict, uuid: str) -> None:
-        frames, meta = frames_cache
-        num_tokens = frames.shape[0] // (self.spatial_conv_size**2 * self.temporal_conv_size)
 
         t, h, w = meta["thw"]
         outputs["images"].append(frames)
