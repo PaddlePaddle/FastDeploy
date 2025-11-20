@@ -130,9 +130,9 @@ class TestResourceManagerV1(unittest.TestCase):
         self.manager.bos_client = mock_client
         result = self.manager._download_features(self.request)
         self.assertIsNone(result)
-        self.assertEqual(
+        self.assertIn(
+            "request test_request download features error: link bucket-name/path/to/object1 download error",
             self.request.error_message,
-            "request test_request download features error: link bucket-name/path/to/object1 download error: network error",
         )
         self.assertEqual(self.request.error_code, 530)
 
@@ -151,10 +151,25 @@ class TestResourceManagerV1(unittest.TestCase):
         self.manager.bos_client = mock_client
         result = self.manager._download_features(self.request)
         self.assertIsNone(result)
-        self.assertEqual(
+        self.assertIn(
+            "request test_request download features error: link bucket-name/path/to/object2 download error",
             self.request.error_message,
-            "request test_request download features error: link bucket-name/path/to/object2 download error: timeout",
         )
+        self.assertEqual(self.request.error_code, 530)
+
+    def test_download_features_retry(self):
+        """Test image feature download with error"""
+        mock_client = MagicMock()
+        mock_client.get_object_as_string.side_effect = Exception(
+            "Your request rate is too high. We have put limits on your bucket."
+        )
+
+        self.request.multimodal_inputs = {"image_feature_urls": ["bos://bucket-name/path/to/object1"]}
+
+        self.manager.bos_client = mock_client
+        result = self.manager._download_features(self.request)
+        self.assertIsNone(result)
+        self.assertIn("Failed after 1 retries for bos://bucket-name/path/to/object1", self.request.error_message)
         self.assertEqual(self.request.error_code, 530)
 
 
