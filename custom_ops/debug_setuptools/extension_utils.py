@@ -175,7 +175,7 @@ def custom_write_stub(resource, pyfile):
 
         def __bootstrap__():
             if not os.path.exists(so_path):
-                raise RuntimeError(f"Shared library {so_path} not found.")
+                raise RuntimeError("Shared library not found." + str(so_path))
         
             assert os.path.exists(so_path)
             # load custom op shared library with abs path
