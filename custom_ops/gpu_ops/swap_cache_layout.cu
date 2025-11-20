@@ -53,21 +53,21 @@ void SwapCacheImpLayout(
   #ifdef SWAP_DEBUG
   std::cout << "cache_cpu_ptr: " << cache_cpu_ptr << std::endl;
   #endif
-      
+
   for (int layer_idx = 0; layer_idx < cache_gpu_tensors.size(); layer_idx++) {
     const paddle::Tensor& cache_gpu = cache_gpu_tensors[layer_idx];
     data_t* cache_gpu_ptr = const_cast<data_t*>(cache_gpu.data<data_t>());
     auto stream = cache_gpu.stream();
-    for (int id=0; id < swap_block_ids_gpu.size(); id++) {
+    for (int id = 0; id < swap_block_ids_gpu.size(); id++) {
       #ifdef SWAP_DEBUG
       std::cout << "current block " << swap_block_ids_gpu[id] << std::endl;
       #endif
-      
+
       auto* cache_gpu_ptr_now = cache_gpu_ptr + swap_block_ids_gpu[id] * cache_stride;
       auto* cache_cpu_ptr_now = cache_cpu_ptr +
                                 id * cache_stride * layer_number +
                                 layer_idx * cache_stride;
-      
+
       #ifdef SWAP_DEBUG
       std::cout << "current data" << *cache_cpu_ptr_now << std::endl;
       #endif
@@ -81,45 +81,46 @@ void SwapCacheImpLayout(
           stream);
       #ifdef SWAP_DEBUG
       std::cout << "current data11 " << *cache_cpu_ptr_now << std::endl;
-      #endif    }
+      #endif    
+      }
+    }
+    cudaStreamSynchronize(stream);
+#ifdef SWAP_DEBUG
+    std::cout << "finished " << std::endl;
+#endif
   }
-  cudaStreamSynchronize(stream);
-  #ifdef SWAP_DEBUG
-  std::cout << "finished " << std::endl;
-  #endif
-}
 
-void SwapCacheLayout(
-    const std::vector<paddle::Tensor>& cache_gpu_tensors,  // gpu
-    const int64_t& cache_cpu_ptrs,                         // cpu memory pointer
-    const std::vector<int64_t>& cache_shape,
-    const std::vector<int64_t>& swap_block_ids_gpu,
-    int rank,
-    int mode) {
-  cudaSetDevice(rank);  // used for distributed launch
-  assert(cache_gpu_tensors.size() > 0);
-  switch (cache_gpu_tensors[0].dtype()) {
-    case paddle::DataType::BFLOAT16:
-      return SwapCacheImpLayout<paddle::DataType::BFLOAT16>(
+  void SwapCacheLayout(
+      const std::vector<paddle::Tensor>& cache_gpu_tensors,  // gpu
+      const int64_t& cache_cpu_ptrs,                         // cpu memory pointer
+      const std::vector<int64_t>& cache_shape,
+      const std::vector<int64_t>& swap_block_ids_gpu,
+      int rank,
+      int mode) {
+    cudaSetDevice(rank);  // used for distributed launch
+    assert(cache_gpu_tensors.size() > 0);
+    switch (cache_gpu_tensors[0].dtype()) {
+      case paddle::DataType::BFLOAT16:
+        return SwapCacheImpLayout<paddle::DataType::BFLOAT16>(
+            cache_gpu_tensors, cache_cpu_ptrs, cache_shape, swap_block_ids_gpu, mode);
+      case paddle::DataType::FLOAT16:
+        return SwapCacheImpLayout<paddle::DataType::FLOAT16>(
           cache_gpu_tensors, cache_cpu_ptrs, cache_shape, swap_block_ids_gpu, mode);
-    case paddle::DataType::FLOAT16:
-      return SwapCacheImpLayout<paddle::DataType::FLOAT16>(
+      case paddle::DataType::UINT8:
+        return SwapCacheImpLayout<paddle::DataType::UINT8>(
           cache_gpu_tensors, cache_cpu_ptrs, cache_shape, swap_block_ids_gpu, mode);
-    case paddle::DataType::UINT8:
-      return SwapCacheImpLayout<paddle::DataType::UINT8>(
-          cache_gpu_tensors, cache_cpu_ptrs, cache_shape, swap_block_ids_gpu, mode);
-    default:
-      PD_THROW("Unsupported data type.");
+      default:
+        PD_THROW("Unsupported data type.");
+    }
   }
-}
 
-PD_BUILD_STATIC_OP(swap_cache_layout)
-    .Inputs({paddle::Vec("cache_gpu_tensors")})
-    .Attrs({
-        "cache_cpu_ptrs: int64_t",
-        "cache_shape: std::vector<int64_t>",
-        "swap_block_ids_gpu: std::vector<int64_t>",
-        "rank: int",
-        "mode: int",
-    })
-    .SetKernelFn(PD_KERNEL(SwapCacheLayout));
+  PD_BUILD_STATIC_OP(swap_cache_layout)
+      .Inputs({paddle::Vec("cache_gpu_tensors")})
+      .Attrs({
+          "cache_cpu_ptrs: int64_t",
+          "cache_shape: std::vector<int64_t>",
+          "swap_block_ids_gpu: std::vector<int64_t>",
+          "rank: int",
+          "mode: int",
+      })
+      .SetKernelFn(PD_KERNEL(SwapCacheLayout));
