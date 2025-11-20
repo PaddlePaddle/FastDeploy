@@ -428,12 +428,6 @@ class DataProcessor:
             raise ValueError("number of images does not match")
         if video_idx != len(videos):
             raise ValueError("number of videos does not match")
-        # for test cases
-        if len(outputs["input_ids"]) != prompt_token_ids_len:
-            raise ValueError("number of token ids does not match")
-        for idx in range(prompt_token_ids_len):
-            if outputs["input_ids"][idx] != prompt_token_ids[idx]:
-                raise ValueError("token ids does not match")
 
         if self.enable_processor_cache:
             missing_idx = set(missing_idx)
