@@ -14,38 +14,51 @@
 """
 
 """
-自定义日志格式化器模块
-该模块定义了 ColoredFormatter 类，用于在控制台输出带颜色的日志信息，
-便于开发者在终端中快速识别不同级别的日志。
+Custom log formatter module
+This module defines the ColoredFormatter class for outputting colored log information to the console,
+helping developers quickly identify different levels of logs in the terminal.
 """
 
 import logging
+import re
+import time
 
 
 class ColoredFormatter(logging.Formatter):
     """
-    自定义日志格式器，用于控制台输出带颜色的日志。
-    支持的颜色：
-        - WARNING: 黄色
-        - ERROR: 红色
-        - CRITICAL: 红色
-        - 其他等级: 默认终端颜色
+    Custom log formatter for console output with colored logs.
+    Supported colors:
+        - WARNING: Yellow
+        - ERROR: Red
+        - CRITICAL: Red
+        - Other levels: Default terminal color
     """
 
     COLOR_CODES = {
-        logging.WARNING: 33,  # 黄色
-        logging.ERROR: 31,  # 红色
-        logging.CRITICAL: 31,  # 红色
+        logging.WARNING: 33,  # Yellow
+        logging.ERROR: 31,  # Red
+        logging.CRITICAL: 31,  # Red
     }
 
     def format(self, record):
         """
-        格式化日志记录，并根据日志等级添加 ANSI 颜色前缀和后缀。
+        Format log record and add ANSI color prefix and suffix based on log level.
+        Newly supports attributes expansion and otelSpanID/otelTraceID fields.
         Args:
-            record (LogRecord): 日志记录对象。
+            record (LogRecord): Log record object.
         Returns:
-            str: 带有颜色的日志消息字符串。
+            str: Colored log message string.
         """
+
+        try:
+            # Add OpenTelemetry-related fields.
+            if hasattr(record, "otelSpanID") and record.otelSpanID is not None:
+                record.msg = f"[otel_span_id={record.otelSpanID}] {record.msg}"
+            if hasattr(record, "otelTraceID") and record.otelTraceID is not None:
+                record.msg = f"[otel_trace_id={record.otelTraceID}] {record.msg}"
+        except:
+            pass
+
         color_code = self.COLOR_CODES.get(record.levelno, 0)
         prefix = f"\033[{color_code}m"
         suffix = "\033[0m"
@@ -53,3 +66,63 @@ class ColoredFormatter(logging.Formatter):
         if color_code:
             message = f"{prefix}{message}{suffix}"
         return message
+
+
+class CustomFormatter(logging.Formatter):
+    """
+    Custom log formatter for console output.
+    Supports field expansion and adds thread, timestamp and other information.
+    """
+
+    def _format_attributes(self, record):
+        """
+        Expand attributes in record to [attr=value] format
+        """
+        if hasattr(record, "attributes"):
+            if isinstance(record.attributes, dict):
+                return " ".join(f"[{k}={v}]" for k, v in record.attributes.items())
+        return ""
+
+    def _camel_to_snake(self, name: str) -> str:
+        """Convert camel case to snake case"""
+        s1 = re.sub("([a-z0-9])([A-Z])", r"\1_\2", name)
+        return s1.lower()
+
+    def format(self, record):
+        """
+        Format log record, with new support for attributes expansion and otelSpanID/otelTraceID fields.
+        Supports field expansion and adds thread, timestamp and other information.
+        Args:
+            record (LogRecord): Log record object.
+        Returns:
+            str: Log message string.
+        """
+
+        try:
+            log_fields = {
+                "thread": record.thread,
+                "thread_name": record.threadName,
+                "timestamp": int(time.time() * 1000),
+            }
+
+            if hasattr(record, "attributes") and isinstance(record.attributes, dict):
+                for k, v in record.attributes.items():
+                    log_fields[self._camel_to_snake(k)] = v
+
+            # filter out null values.
+            log_fields = {k: v for k, v in log_fields.items() if not (isinstance(v, str) and v == "")}
+
+            log_str = " ".join(f"[{k}={v}]" for k, v in log_fields.items())
+            if log_str:
+                record.msg = f"{log_str} {record.msg}"
+
+            # Add OpenTelemetry-related fields.
+            if hasattr(record, "otelSpanID") and record.otelSpanID is not None:
+                record.msg = f"[otel_span_id={record.otelSpanID}] {record.msg}"
+            if hasattr(record, "otelTraceID") and record.otelTraceID is not None:
+                record.msg = f"[otel_trace_id={record.otelTraceID}] {record.msg}"
+
+        except:
+            pass
+
+        return super().format(record)
