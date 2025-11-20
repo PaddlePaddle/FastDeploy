@@ -43,40 +43,53 @@ list_files_recursive() {
 
 echo ">>> 1"
 
-list_files_recursive "./${OPS_TMP_DIR}"
+list_files_recursive "${OPS_TMP_DIR}"
 
 ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}
 
 echo ">>> 2"
 
-list_files_recursive "./${OPS_TMP_DIR}"
+list_files_recursive "${OPS_TMP_DIR}"
 
 
 # Handle directory compatibility between modern and legacy naming
-if [ -d "./${OPS_TMP_DIR}/${WHEEL_MODERN_NAME}" ]; then
+if [ -d "${OPS_TMP_DIR}/${WHEEL_MODERN_NAME}" ]; then
     echo -e "${GREEN}[Info]${NONE} Ready to use ops from modern directory ${WHEEL_MODERN_NAME}"
     # Use modern directory name
     TARGET_DIR="${OPS_TMP_DIR}/${WHEEL_MODERN_NAME}"
 else
     # If modern directory doesn't exist, check for legacy directory
-    if [ -d "./${OPS_TMP_DIR}/${WHEEL_NAME}" ]; then
+    if [ -d "${OPS_TMP_DIR}/${WHEEL_NAME}" ]; then
         echo -e "${YELLOW}[Warning]${NONE} ${WHEEL_NAME} directory exists. This is a deprecated packaging and distribution method."
-        # Use legacy directory name
-        TARGET_DIR="${OPS_TMP_DIR}/${WHEEL_NAME}"
     else
         echo -e "${RED}[Error]${NONE} Neither modern nor legacy directory found in ${OPS_TMP_DIR}"
         # exit 1
     fi
+    TARGET_DIR="${OPS_TMP_DIR}/${WHEEL_NAME}"
+
 fi
 
-TARGET_DIR="${OPS_TMP_DIR}/${WHEEL_NAME}"
 
 echo ">>> 3"
 
-list_files_recursive "./${OPS_TMP_DIR}"
+list_files_recursive "${OPS_TMP_DIR}"
+
+echo ">>> 3 1"
+
+list_files_recursive "${TARGET_DIR}"
 
 
 mkdir -p ${TARGET_DIR}/libs
+
+echo ">>> 4"
+
+list_files_recursive "${OPS_TMP_DIR}"
+
+echo ">>> 4 1"
+
+list_files_recursive "${TARGET_DIR}"
+
+
 cp ${XVLLM_PATH}/xft_blocks/so/libxft_blocks.so ${TARGET_DIR}/libs/
 cp ${XVLLM_PATH}/infer_ops/so/libapiinfer.so ${TARGET_DIR}/libs/
 patchelf --set-rpath '$ORIGIN/libs' ${TARGET_DIR}/fastdeploy_ops_pd_.so
