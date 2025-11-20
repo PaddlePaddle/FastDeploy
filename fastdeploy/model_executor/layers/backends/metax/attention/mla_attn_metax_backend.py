@@ -184,7 +184,7 @@ class MetaxMLAAttentionBackend(AttentionBackend):
         # MLA
         metadata.max_enc_len_this_time = forward_meta.max_len_tensor_cpu[1].item()
         metadata.max_dec_len_this_time = forward_meta.max_len_tensor_cpu[2]
-        metadata.max_kv_len_this_time = forward_meta.max_len_tensor_cpu[8]
+        metadata.max_kv_len_this_time = forward_meta.max_len_tensor_cpu[5]
 
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers

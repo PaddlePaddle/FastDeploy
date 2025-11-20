@@ -79,7 +79,7 @@ __global__ void GetMaxLenKernel(const int *seq_lens_decoder,
     max_lens[2] = total_max_len_decoder;
     max_lens[3] = total;
     max_lens[4] = total_just_dec;
-    max_lens[8] = total_max_len_kv;
+    max_lens[5] = total_max_len_kv;
   }
 }
 
@@ -301,10 +301,9 @@ void GetBlockShapeAndSplitKVBlock(
   int max_dec_len_this_time = max_len_cpu_ptr[2];
   int max_enc_dec_len_this_time = max_len_cpu_ptr[3];
   int max_just_dec_len_this_time = max_len_cpu_ptr[4];
-  int max_just_dec_merged_len_this_time = max_len_cpu_ptr[5];
-  int max_system_len = max_len_cpu_ptr[6];
-  int max_just_dec_len_without_system = max_len_cpu_ptr[7];
-  int max_kv_len_this_time = max_len_cpu_ptr[8];
+  int max_kv_len_this_time = max_len_cpu_ptr[5];
+
+  const uint32_t decoder_batch_ele_num = decoder_batch_ids.shape()[0];
 
   const uint32_t decoder_batch_ele_num = decoder_batch_ids.shape()[0];
 

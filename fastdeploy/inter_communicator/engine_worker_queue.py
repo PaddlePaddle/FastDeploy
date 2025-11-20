@@ -499,7 +499,13 @@ class EngineWorkerQueue:
                     "attention_mask_offset",
                 ]
 
-                llm_logger.debug(f"Converting multimodal inputs to tensor...{tensor_keys}")
+                list_keys = [
+                    "image_features",
+                    "video_features",
+                    "audio_features",
+                ]
+
+                llm_logger.debug(f"Converting multimodal inputs to tensor...{tensor_keys + list_keys}")
 
                 for key in tensor_keys:
                     value = multimodal_inputs.get(key)
@@ -507,6 +513,13 @@ class EngineWorkerQueue:
                         continue
                     if not isinstance(value, paddle.Tensor):
                         multimodal_inputs[key] = paddle.to_tensor(value)
+
+                for key in list_keys:
+                    value = multimodal_inputs.get(key)
+                    if value is None:
+                        continue
+                    if isinstance(value, list):
+                        multimodal_inputs[key] = [paddle.to_tensor(v) for v in value]
         except Exception as e:
             llm_logger.warning(f"Tensor conversion failed: {type(e).__name__}: {e}")
 
@@ -518,16 +531,30 @@ class EngineWorkerQueue:
         Args:
             tasks: List of tasks containing multimodal inputs.
         """
+        if (not envs.FD_ENABLE_MAX_PREFILL) and (not envs.FD_ENABLE_E2W_TENSOR_CONVERT):
+            return
+
         try:
-            if envs.FD_ENABLE_MAX_PREFILL:
-                for batch_tasks, _ in tasks:
-                    for task in batch_tasks:
-                        if not hasattr(task, "multimodal_inputs"):
-                            continue
-                        images = task.multimodal_inputs.get("images", None)
-                        if isinstance(images, paddle.Tensor):
-                            llm_logger.debug(f"Convert image to numpy, shape: {images.shape}")
-                            task.multimodal_inputs["images"] = images.numpy()
+            batch_tasks, _ = tasks
+            for task in batch_tasks:
+                if not hasattr(task, "multimodal_inputs"):
+                    continue
+                images = task.multimodal_inputs.get("images", None)
+                if isinstance(images, paddle.Tensor):
+                    llm_logger.debug(f"Convert image to numpy, shape: {images.shape}")
+                    task.multimodal_inputs["images"] = images.numpy()
+
+                list_keys = [
+                    "image_features",
+                    "video_features",
+                    "audio_features",
+                ]
+                for key in list_keys:
+                    value = task.multimodal_inputs.get(key, None)
+                    if value is None:
+                        continue
+                    if isinstance(value, list):
+                        task.multimodal_inputs[key] = [v.numpy() for v in value]
         except Exception as e:
             llm_logger.warning(f"Failed to convert to numpy: {e}")
 
@@ -565,7 +592,7 @@ class EngineWorkerQueue:
 
         tasks.extend(self.tasks)
         # 多模态输入转换为numpy
-        # EngineWorkerQueue.to_numpy(tasks)
+        EngineWorkerQueue.to_numpy(tasks)
 
         self.client_read_flag[self.client_id] = 1
         all_client_read: bool = np.sum(self.client_read_flag) == self.num_client
