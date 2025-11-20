@@ -25,6 +25,7 @@ from fastdeploy.distributed.communication import (
     tensor_model_parallel_all_reduce,
     tensor_model_parallel_all_reduce_custom,
 )
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import h2d_copy, slice_fn
 from fastdeploy.platforms import current_platform
@@ -621,7 +622,7 @@ class FusedMoE(nn.Layer):
 
         return out
 
-    def forward(self, x: paddle.Tensor, gate: nn.Layer):
+    def forward(self, x: paddle.Tensor, gate: nn.Layer, forward_meta: ForwardMeta):
         """
         Defines the forward computation of the moe layer.
 
