@@ -342,11 +342,14 @@ class PaddleDisWorkerProc:
                 eplb_config=self.eplb_config,
                 logger=logger,
             )
+
+        tp_size = self.parallel_config.tensor_parallel_size
         # Currently, only support single node
-        self.nnode = int((self.parallel_config.tensor_parallel_size + 7) // 8)
+        self.nnode = int((tp_size + 7) // 8)
         req_ids = []
         num_running_requests = 0
-        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+        tp_rank = self.local_rank % tp_size
+
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
             if self.eplb_config.enable_eplb:
@@ -388,35 +391,34 @@ class PaddleDisWorkerProc:
                     if self.local_rank == 0:
                         rearrange_experts_signal.value[0] = RearrangeExpertStatus.DONE.value
                     logger.info("redundant_expert: done")
-            if self.local_rank % self.parallel_config.tensor_parallel_size == 0:
+            if tp_rank == 0:
                 if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
                     self.model_weights_signal[0] = self._broadcast_model_weights_signal(
                         src=0, group=self.parallel_config.ep_group
                     )
-            if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.tensor_parallel_size > 1:
+            if self.fd_config.load_config.dynamic_load_weight and tp_size > 1:
                 self.model_weights_signal[0] = self._broadcast_model_weights_signal(
                     src=0, group=self.parallel_config.tp_group
                 )
 
             self.insert_step = False
             req_dicts = None
-            local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
-            self.worker_healthy_live_signal.value[local_rank % self.max_chips_per_node] = int(time.time())
+            self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
-            if local_rank == 0:
+            if tp_rank == 0:
                 if self.task_queue.num_tasks() > 0:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
                     ):
-                        if self.nnode > 1 and self.parallel_config.tensor_parallel_size > self.max_chips_per_node:
+                        if self.nnode > 1 and tp_size > self.max_chips_per_node:
                             self.task_queue.read_finish_flag.set(1)
                         else:
                             self.exist_task_signal.value[0] = ExistTaskStatus.EXIST
 
-            if self.parallel_config.tensor_parallel_size > 1:
+            if tp_size > 1:
                 # Synchronize the signal for other workers
                 self._tp_barrier_wait()
 
@@ -559,10 +561,13 @@ class PaddleDisWorkerProc:
 
     def start_task_queue_service(self):
         # Initialize task queue
-        task_address = (
-            self.parallel_config.pod_ip,
-            self.parallel_config.engine_worker_queue_port,
-        )
+        if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+            task_address = (
+                self.parallel_config.pod_ip,
+                self.parallel_config.engine_worker_queue_port,
+            )
+        else:
+            task_address = f"/dev/shm/fd_task_queue_{self.parallel_config.engine_worker_queue_port}.sock"
         logger.info(f"connect task queue address {task_address}")
         self.task_queue = TaskQueue(
             address=task_address,
@@ -660,6 +665,11 @@ def parse_args():
         action="store_true",
         help="enable custom all-reduce",
     )
+    parser.add_argument(
+        "--disable_sequence_parallel_moe",
+        action="store_true",
+        help="disable sequence parallel moe",
+    )
     parser.add_argument("--splitwise_role", type=str, default="mixed", help="splitwise role")
     parser.add_argument(
         "--tensor_parallel_size",
@@ -719,7 +729,7 @@ def parse_args():
     )
     parser.add_argument(
         "--disable_any_whitespace",
-        action="store_false",
+        action="store_true",
         help="Disable any whitespace for guided decoding.",
     )
     parser.add_argument(
@@ -929,8 +939,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
 
-    if args.splitwise_role != "mixed" and args.cache_transfer_protocol != "rdma":
-        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
     if not current_platform.is_cuda() and not current_platform.is_xpu():
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0

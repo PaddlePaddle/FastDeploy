@@ -2,7 +2,12 @@
 
 This document describes how to configure the server in FastDeploy to use the tool parser, and how to invoke tools from the client.
 
----
+## Tool Call parser for Ernie series models
+| Model Name     | Parser Name       |
+|---------------|-------------|
+| baidu/ERNIE-4.5-21B-A3B-Thinking  | ernie-x1  |
+| baidu/ERNIE-4.5-VL-28B-A3B-Thinking  | ernie-45-vl-thinking  |
+
 ## Quickstart
 
 ### Starting FastDeploy with Tool Calling Enabled.

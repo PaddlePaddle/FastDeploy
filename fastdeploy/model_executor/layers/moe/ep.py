@@ -219,7 +219,7 @@ class DeepEPEngine:
         ep_rank: int,
         splitwise_role: str,
         moe_phase: MoEPhase,
-        async_finish: bool = False,
+        async_finish: bool = True,
         group=None,
         use_internode_ll_two_stage: bool = False,
         top_k: int = 8,
@@ -275,6 +275,7 @@ class DeepEPEngine:
         topk_idx: paddle.Tensor,
         expertwise_scale,
         use_fp8: bool = False,
+        quant_group_size: int = 128,
     ):
         if self.deepep_engine is None:
             raise RuntimeError("DeepEP buffer not initialized!")
@@ -294,6 +295,7 @@ class DeepEPEngine:
             use_fp8=use_fp8,
             async_finish=False,
             return_recv_hook=True,
+            # num_per_channel=quant_group_size,
         )
 
         return packed_recv_x, recv_expert_count, handle, dispatch_hook
@@ -532,8 +534,8 @@ class EPPrefillRunner(EPRunner):
             num_tokens_per_rdma_rank,
             num_tokens_per_expert,
             is_token_in_rank,
-            _,
-        ) = buffer.get_dispatch_layout(topk_idx, self.num_experts)
+            event,
+        ) = buffer.get_dispatch_layout(topk_idx, self.num_experts, async_finish=self.ep_engine.async_finish)
 
         x_scale_tensor = kwargs.get("x_scale_tensor", None)
         dispatch_args = {
@@ -547,6 +549,7 @@ class EPPrefillRunner(EPRunner):
             "topk_idx": topk_idx,
             "topk_weights": topk_weights,
             "expert_alignment": expert_alignment,
+            "previous_event": event,
         }
         return buffer.dispatch(**dispatch_args)
 
@@ -567,8 +570,8 @@ class EPPrefillRunner(EPRunner):
             "async_finish": self.ep_engine.async_finish,
             "topk_weights": recv_topk_weights,
         }
-        fused_moe_out, _, _ = buffer.combine(**combine_args)
-        return fused_moe_out
+        fused_moe_out, _, event = buffer.combine(**combine_args)
+        return fused_moe_out, event
 
 
 class EPDecoderRunner(EPRunner):

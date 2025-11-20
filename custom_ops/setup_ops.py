@@ -552,6 +552,8 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 "gpu_ops/text_image_index_out.cu",
                 "gpu_ops/text_image_gather_scatter.cu",
                 "gpu_ops/set_data_ipc.cu",
+                "gpu_ops/limit_thinking_content_length_v1.cu",
+                "gpu_ops/limit_thinking_content_length_v2.cu",
                 "iluvatar_ops/moe_dispatch.cu",
                 "iluvatar_ops/moe_reduce.cu",
                 "iluvatar_ops/paged_attn.cu",
@@ -627,6 +629,7 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "metax_ops/moe_ffn.cu",
         "metax_ops/moe_reduce.cu",
         "metax_ops/fused_moe.cu",
+        "metax_ops/apply_rope.cu",
     ]
 
     sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
