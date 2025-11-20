@@ -364,13 +364,12 @@ class XPUModelRunner(ModelRunnerBase):
         """
         check whether decode only
         """
-        # Update Batch type for if_only_decode
+        # Update Batch type for cuda graph for if_only_decode
         if_only_decode = True
-        decoder_exists = None
-        # 在ep场景下no_need_stop如果都是F，返回false，走prefill分支模型
-        # 否则，需要进一步判断
+        prefill_exists = None
         # mix ep in single node
         if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
+            # 在ep场景下no_need_stop如果都是F，表示全部卡空闲，返回false，走高吞吐分支，否则为部分卡空闲，需要进一步判断
             no_need_stop_list = []
             no_need_stops = self.not_need_stop()
             paddle.distributed.all_gather_object(no_need_stop_list, not no_need_stops)
@@ -379,15 +378,13 @@ class XPUModelRunner(ModelRunnerBase):
                 if_only_decode = False
             else:
                 only_decode_batch_list = []
-                decoder_exists = self.exist_decode() or not self.not_need_stop()
-                paddle.distributed.all_gather_object(only_decode_batch_list, decoder_exists)
+                prefill_exists = self.exist_prefill()
+                paddle.distributed.all_gather_object(only_decode_batch_list, not prefill_exists)
                 if_only_decode = all(only_decode_batch_list)
 
-                print(
-                    f"only_decode_batch_list {only_decode_batch_list} decoder_exists {decoder_exists} self.exist_decode() {self.exist_decode()} if_only_decode {if_only_decode}"
-                )
-
-        if_only_decode = if_only_decode and (decoder_exists if decoder_exists is not None else self.exist_decode())
+        if_only_decode = if_only_decode and not (
+            prefill_exists if prefill_exists is not None else self.exist_prefill()
+        )
 
         return if_only_decode
 
