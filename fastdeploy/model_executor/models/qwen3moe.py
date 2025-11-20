@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import re
 from functools import partial
 
 import paddle
@@ -342,7 +343,10 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
             weights_iterator (Iterator): An iterator yielding (name, weight) pairs.
         """
 
-        from fastdeploy.model_executor.utils import default_weight_loader
+        from fastdeploy.model_executor.utils import (
+            default_weight_loader,
+            process_weights_after_loading,
+        )
 
         stacked_params_mapping = [
             # (param_name, shard_name, shard_id)
@@ -356,6 +360,7 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
         ]
         expert_params_mapping = self.get_expert_mapping()
         params_dict = dict(self.named_parameters())
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
@@ -389,10 +394,8 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
                     weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
                     weight_loader(param, loaded_weight)
 
-        for name, sublayer in self.named_sublayers():
-            quant_method = getattr(sublayer, "quant_method", None)
-            if quant_method is not None and hasattr(quant_method, "process_weights_after_loading"):
-                quant_method.process_weights_after_loading(sublayer)
+            model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
+            process_weights_after_loading_fn(model_sublayer_name, param)
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict):

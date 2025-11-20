@@ -20,6 +20,8 @@ import importlib.util
 import os
 import shutil
 
+from paddleformers.utils.log import logger
+
 
 @functools.cache
 def has_flashinfer() -> bool:
@@ -28,12 +30,11 @@ def has_flashinfer() -> bool:
     # This avoids potential CUDA initialization side effects
     if os.environ.get("PADDLE_COMPATIBLE_API", "0").lower() not in ["1", "on", "true"]:
         # currently must support by Paddle compatible API
+        logger.warning("FlashInfer is not supported by Paddle compatible API.")
         return False
     if importlib.util.find_spec("flashinfer") is None:
-        # logger.debug_once("FlashInfer unavailable since package was not found")
         return False
     # Also check if nvcc is available since it's required to JIT compile flashinfer
     if shutil.which("nvcc") is None:
-        # logger.debug_once("FlashInfer unavailable since nvcc was not found")
         return False
     return True

@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import inspect
+import re
 from functools import partial
 from typing import Dict, Union
 
@@ -514,6 +515,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
 
         from fastdeploy.model_executor.utils import (
             default_weight_loader,
+            process_weights_after_loading,
             rename_offline_ckpt_suffix_to_fd_suffix,
         )
 
@@ -560,6 +562,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         )
         params_dict = dict(self.named_parameters())
 
+        process_weights_after_loading_fn = process_weights_after_loading(
+            dict(self.named_sublayers()), fd_config=self.fd_config
+        )
+
         for loaded_weight_name, loaded_weight in weights_iterator:
             loaded_weight_name = loaded_weight_name.replace("model", "ernie")
             for param_name, weight_name, exp_id, shard_id, is_moe in all_param_mapping:
@@ -588,10 +594,10 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             else:
                 weight_loader(param, loaded_weight, shard_id)
 
-        for name, sublayer in self.named_sublayers():
-            quant_method = getattr(sublayer, "quant_method", None)
-            if quant_method is not None and hasattr(quant_method, "process_weights_after_loading"):
-                quant_method.process_weights_after_loading(sublayer)
+            model_sublayer_name = re.sub(
+                r"\.(up_gate_proj_weight|down_proj_weight|weight|cache_k_scale|cache_v_scale)$", "", model_param_name
+            )
+            process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings:
             self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))

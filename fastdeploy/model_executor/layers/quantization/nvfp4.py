@@ -17,15 +17,12 @@
 from typing import Optional
 
 import paddle
-
-paddle.compat.enable_torch_proxy()
-
 from paddleformers.utils.log import logger
 
+import fastdeploy
 from fastdeploy import envs
 from fastdeploy.flashinfer import has_flashinfer
 from fastdeploy.model_executor.layers.moe import FusedMoE
-from fastdeploy.model_executor.ops.gpu import moe_topk_select
 from fastdeploy.model_executor.utils import (
     create_parameter_and_copy,
     free_tensor,
@@ -35,6 +32,7 @@ from fastdeploy.model_executor.utils import (
 from .quant_base import QuantConfigBase, QuantMethodBase
 
 if has_flashinfer():
+    paddle.compat.enable_torch_proxy()
     from flashinfer import fp4_quantize
     from flashinfer import mm_fp4 as fp4_gemm
     from flashinfer.fused_moe import cutlass_fused_moe as flashinfer_cutlass_fused_moe
@@ -176,7 +174,9 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
             assert has_flashinfer(), f"FlashInfer is required for {self.backend}"
 
         if self.backend == "none":
-            raise ValueError("No valid NVFP4 GEMM backend found. " "Please check your platform capability.")
+            raise ValueError(
+                "No valid NVFP4 GEMM backend found. Please check your platform capability and installtion of Flashinfer."
+            )
 
         logger.info(f"Using {self.backend} for NVFP4 GEMM")
 
@@ -394,7 +394,9 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
             assert has_flashinfer(), f"FlashInfer is required for MoE backend {self.backend}"
 
         if self.backend == "none":
-            raise ValueError("No valid NVFP4 flashinfer MoE backend found. " "Please check your platform capability.")
+            raise ValueError(
+                "No valid NVFP4 flashinfer MoE backend found. Please check your platform capability and installtion of FlashInfer."
+            )
 
         logger.info(f"Using {self.backend} for NVFP4 FusedMoE")
 
@@ -426,13 +428,10 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         self.weight_scale_dtype = paddle.float8_e4m3fn
         self.weight_dtype = paddle.uint8
         self.added_scale_attrs = ["up_gate_proj_weight_scale", "down_proj_weight_scale"]
-        # self.added_blockscale_swizzled_attrs = ["up_gate_proj_blockscale_swizzled", "down_proj_blockscale_swizzled"]
         up_gate_proj_weight_name = self.added_weight_attrs[0]
         down_proj_weight_name = self.added_weight_attrs[1]
         up_gate_proj_scale_name = self.added_scale_attrs[0]
         down_proj_scale_name = self.added_scale_attrs[1]
-        # up_gate_proj_blockscale_swizzled_name = self.added_blockscale_swizzled_attrs[0]
-        # down_proj_blockscale_swizzled_name = self.added_blockscale_swizzled_attrs[1]
         setattr(
             layer,
             up_gate_proj_weight_name,
@@ -595,7 +594,7 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         flashinfer nvfp4 fusedmoe for Model Optimizer
         """
         gate_out = gate(x.cast("float32"))
-        topk_ids, topk_weights = moe_topk_select(
+        topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
             gate_out,
             layer.gate_correction_bias,
             layer.top_k,
