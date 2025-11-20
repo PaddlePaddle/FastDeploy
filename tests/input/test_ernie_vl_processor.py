@@ -77,7 +77,7 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
             "prompt_token_ids": [1, 1, 1],
         }
         self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], False)
+        self.assertEqual(request_dict["enable_thinking"], True)
 
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
@@ -93,7 +93,7 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
             "prompt_token_ids": [1, 1, 1],
         }
         self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], False)
+        self.assertEqual(request_dict["enable_thinking"], True)
 
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
@@ -101,7 +101,7 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
             "prompt_token_ids": [1, 1, 1],
         }
         self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], False)
+        self.assertEqual(request_dict["enable_thinking"], True)
 
         request_dict = {
             "messages": [{"role": "user", "content": "Hello"}],
@@ -110,6 +110,27 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         }
         self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(request_dict["enable_thinking"], True)
+
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "chat_template_kwargs": {"options": {"thinking_mode": "close"}},
+        }
+        self.processor.process_request_dict(request_dict, 100)
+        self.assertEqual(request_dict["enable_thinking"], False)
+
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "chat_template_kwargs": {"options": {"thinking_mode": "false"}},
+        }
+        self.processor.process_request_dict(request_dict, 100)
+        self.assertEqual(request_dict["enable_thinking"], False)
+
+        request_dict = {
+            "messages": [{"role": "user", "content": "Hello"}],
+            "chat_template_kwargs": {"enable_thinking": False},
+        }
+        self.processor.process_request_dict(request_dict, 100)
+        self.assertEqual(request_dict["enable_thinking"], False)
 
 
 if __name__ == "__main__":
