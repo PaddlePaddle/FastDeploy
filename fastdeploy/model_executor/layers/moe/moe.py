@@ -600,7 +600,7 @@ class FusedMoE(nn.Layer):
         else:
             self.quant_method.process_loaded_weights(self, state_dict)
 
-    def forward_split_allgather(self, x: paddle.Tensor, gate: nn.Layer, forward_meta: ForwardMeta):
+    def forward_split_allgather(self, x: paddle.Tensor, gate: nn.Layer):
         """
         Forward split allgather function.
         """
