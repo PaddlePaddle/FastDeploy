@@ -69,91 +69,97 @@ def init_eplb_signals(config: FDConfig, ipc_signal_suffix):
     """
     Initialize shared memory to indicate eplb status
     """
-    if config.parallel_config.local_data_parallel_id == 0:
-        # rearrange_experts_status Record the expert's rearrangement status
-        rearrange_experts_array = np.zeros([1], dtype=np.int32)
-        _ = IPCSignal(
-            name="rearrange_experts_status",
-            array=rearrange_experts_array,
+    if config.parallel_config.tensor_parallel_rank != 0:
+        # only TP rank 0 need to init eplb signals, rank 0 manage all EPLB signals for all TP ranks
+        return
+
+    dp_ipc_signal_suffix = f"{ipc_signal_suffix}_dp{config.parallel_config.local_data_parallel_id}"
+    # rearrange_experts_status Record the expert's rearrangement status
+    rearrange_experts_array = np.zeros([1], dtype=np.int32)
+    _ = IPCSignal(
+        name="rearrange_experts_status",
+        array=rearrange_experts_array,
+        dtype=np.int32,
+        suffix=dp_ipc_signal_suffix,
+        create=True,
+    )
+
+    # Record all DP rank IPs when receiving expert rearrangement requests
+    rearrange_experts_ips_size_array = np.zeros([1], dtype=np.int32)
+    _ = IPCSignal(
+        name="rearrange_experts_ips_size",
+        array=rearrange_experts_ips_size_array,
+        dtype=np.int32,
+        suffix=dp_ipc_signal_suffix,
+        create=True,
+    )
+    _ = IPCSignal(
+        name="rearrange_experts_ips_list",
+        shm_size=config.eplb_config.redundant_expert_ip_shm_size,
+        suffix=dp_ipc_signal_suffix,
+        create=True,
+    )
+
+    # Receive signals for updating weights
+    signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
+    _ = IPCSignal(
+        name="signal_update_weight_from_tensor",
+        array=signal_update_weight_from_tensor,
+        dtype=np.int32,
+        suffix=dp_ipc_signal_suffix,
+        create=True,
+    )
+
+    for rank_id in range(config.parallel_config.tensor_parallel_size):
+        tp_ipc_signal_suffix = f"{dp_ipc_signal_suffix}_tp{rank_id}"
+        # Record expert workload
+        experts_token_stats = np.zeros(
+            (config.model_config.num_hidden_layers, config.model_config.moe_num_experts),
             dtype=np.int32,
-            suffix=ipc_signal_suffix,
-            create=True,
         )
-
-        # Record all DP rank IPs when receiving expert rearrangement requests
-        rearrange_experts_ips_size_array = np.zeros([1], dtype=np.int32)
         _ = IPCSignal(
-            name="rearrange_experts_ips_size",
-            array=rearrange_experts_ips_size_array,
+            name="all_experts_token_stats",
+            array=experts_token_stats,
             dtype=np.int32,
-            suffix=ipc_signal_suffix,
+            suffix=tp_ipc_signal_suffix,
             create=True,
         )
         _ = IPCSignal(
-            name="rearrange_experts_ips_list",
-            shm_size=config.eplb_config.redundant_expert_ip_shm_size,
-            suffix=ipc_signal_suffix,
-            create=True,
-        )
-
-        # Receive signals for updating weights
-        signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
-        _ = IPCSignal(
-            name="signal_update_weight_from_tensor",
-            array=signal_update_weight_from_tensor,
+            name="local_experts_token_stats",
+            array=experts_token_stats,
             dtype=np.int32,
-            suffix=ipc_signal_suffix,
+            suffix=tp_ipc_signal_suffix,
             create=True,
         )
 
-    # Record expert workload
-    experts_token_stats = np.zeros(
-        (config.model_config.num_hidden_layers, config.model_config.moe_num_experts),
-        dtype=np.int32,
-    )
-    _ = IPCSignal(
-        name="all_experts_token_stats",
-        array=experts_token_stats,
-        dtype=np.int32,
-        suffix=ipc_signal_suffix,
-        create=True,
-    )
-    _ = IPCSignal(
-        name="local_experts_token_stats",
-        array=experts_token_stats,
-        dtype=np.int32,
-        suffix=ipc_signal_suffix,
-        create=True,
-    )
+        # Receive signals for loading weights
+        signal_update_weight_from_disk = np.zeros([1], dtype=np.int32)
+        _ = IPCSignal(
+            name="signal_update_weight_from_disk",
+            array=signal_update_weight_from_disk,
+            dtype=np.int32,
+            suffix=tp_ipc_signal_suffix,
+            create=True,
+        )
 
-    # Receive signals for loading weights
-    signal_update_weight_from_disk = np.zeros([1], dtype=np.int32)
-    _ = IPCSignal(
-        name="signal_update_weight_from_disk",
-        array=signal_update_weight_from_disk,
-        dtype=np.int32,
-        suffix=ipc_signal_suffix,
-        create=True,
-    )
+        # Receive signals for clearing expert loads
+        clear_experts_token_stats = np.zeros([1], dtype=np.int32)
+        _ = IPCSignal(
+            name="signal_clear_experts_token_stats",
+            array=clear_experts_token_stats,
+            dtype=np.int32,
+            suffix=tp_ipc_signal_suffix,
+            create=True,
+        )
 
-    # Receive signals for clearing expert loads
-    clear_experts_token_stats = np.zeros([1], dtype=np.int32)
-    _ = IPCSignal(
-        name="signal_clear_experts_token_stats",
-        array=clear_experts_token_stats,
-        dtype=np.int32,
-        suffix=ipc_signal_suffix,
-        create=True,
-    )
-
-    result_update_weight_from_disk = np.zeros([1], dtype=np.int32)
-    _ = IPCSignal(
-        name="result_update_weight_from_disk",
-        array=result_update_weight_from_disk,
-        dtype=np.int32,
-        suffix=ipc_signal_suffix,
-        create=True,
-    )
+        result_update_weight_from_disk = np.zeros([1], dtype=np.int32)
+        _ = IPCSignal(
+            name="result_update_weight_from_disk",
+            array=result_update_weight_from_disk,
+            dtype=np.int32,
+            suffix=tp_ipc_signal_suffix,
+            create=True,
+        )
 
 
 if __name__ == "__main__":

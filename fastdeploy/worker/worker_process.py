@@ -282,67 +282,122 @@ class PaddleDisWorkerProc:
         else:
             paddle.distributed.barrier(self.parallel_config.tp_group)
 
+    def _init_eplb_signal(self):
+        if not self.eplb_config.enable_eplb:
+            return
+
+        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+        self.last_dump_expert_workload_ts = 0
+        self.experts_manager = RedundantExpertManager(
+            rank=self.local_rank,
+            ep_size=self.ranks,
+            fd_config=self.fd_config,
+            ipc_signal_suffix=self.parallel_config.engine_worker_queue_port,
+        )
+
+        dp_ipc_signal_suffix = (
+            f"{self.parallel_config.engine_worker_queue_port}_dp{self.parallel_config.local_data_parallel_id}"
+        )
+        if local_rank == 0:  # master rank0
+            signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
+            self.signal_update_weight_from_tensor_array = IPCSignal(
+                name="signal_update_weight_from_tensor",
+                array=signal_update_weight_from_tensor,
+                dtype=np.int32,
+                suffix=dp_ipc_signal_suffix,
+                create=False,
+            )
+
+            rearrange_experts_status = np.zeros([1], dtype=np.int32)
+            self.rearrange_experts_signal = IPCSignal(
+                name="rearrange_experts_status",
+                array=rearrange_experts_status,
+                dtype=np.int32,
+                suffix=dp_ipc_signal_suffix,
+                create=False,
+            )
+
+        tp_ipc_signal_suffix = f"{dp_ipc_signal_suffix}_tp{local_rank}"
+        experts_token_stats = np.zeros(
+            (self.fd_config.model_config.num_hidden_layers, self.fd_config.model_config.moe_num_experts),
+            dtype=np.int32,
+        )
+        self.local_experts_token_stats_array = IPCSignal(
+            name="local_experts_token_stats",
+            array=experts_token_stats,
+            dtype=np.int32,
+            suffix=tp_ipc_signal_suffix,
+            create=False,
+        )
+
+        clear_experts_token_stats = np.zeros([1], dtype=np.int32)
+        self.signal_clear_experts_token_stats = IPCSignal(
+            name="signal_clear_experts_token_stats",
+            array=clear_experts_token_stats,
+            dtype=np.int32,
+            suffix=tp_ipc_signal_suffix,
+            create=False,
+        )
+
+        self.mmap_infos = create_mmap(
+            [MODEL_MAIN_NAME],
+            self.local_rank,
+            self.ranks,
+            shm_uuid=self.parallel_config.engine_worker_queue_port,
+            eplb_config=self.eplb_config,
+            logger=logger,
+        )
+
+    def _run_eplb(self, tp_rank):
+        """internal call to run eplb"""
+        if not self.eplb_config.enable_eplb:
+            return
+
+        rearrange_time = time.time()
+        # 获取专家负载
+        if self.local_experts_token_stats_array.value is not None and (
+            int(rearrange_time) - self.last_dump_expert_workload_ts
+            > self.eplb_config.redundant_expert_dump_workload_interval
+        ):
+            self.last_dump_expert_workload_ts = int(rearrange_time)
+            clear_stat = False
+            if self.signal_clear_experts_token_stats.value[0] == 1:
+                clear_stat = True
+                self.signal_clear_experts_token_stats.value[0] = 0
+            (
+                new_stats_array,
+                _,
+                _,
+                _,
+            ) = self.worker.get_model().redundant_table_manger.get_expert_tokens_stats(clear_stat=clear_stat)
+            self.local_experts_token_stats_array.value[:] = new_stats_array[:]
+        elif self.local_experts_token_stats_array.value is None:
+            logger.warning("redundant_expert: local_experts_token_stats not init")
+
+        # 所有DP同步更新权重
+        broadcast_value = 0
+        if tp_rank == 0 and self.signal_update_weight_from_tensor_array.value[0] == 1:
+            logger.info("redundant_expert: update_weight_from_tensor broadcast signal")
+            self.signal_update_weight_from_tensor_array.value[0] = 0
+            broadcast_value = REARRANGE_EXPERT_MAGIC_NUM
+        data = paddle.to_tensor([broadcast_value])
+        paddle.distributed.broadcast(data, 0)
+        if data[0] == REARRANGE_EXPERT_MAGIC_NUM:
+            self.update_weights_from_tensor(self.mmap_infos)
+            logger.info(
+                f"redundant_expert: update_weight_from_tensor success, cost {(time.time() - rearrange_time)*1000}ms"
+            )
+            paddle.distributed.barrier()
+            if tp_rank == 0:
+                self.rearrange_experts_signal.value[0] = RearrangeExpertStatus.DONE.value
+            logger.info("redundant_expert: done")
+
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
         """
-        if self.eplb_config.enable_eplb:
-            self.last_dump_expert_workload_ts = 0
-            self.experts_manager = RedundantExpertManager(
-                rank=self.local_rank,
-                ep_size=self.ranks,
-                fd_config=self.fd_config,
-                ipc_signal_suffix=self.parallel_config.engine_worker_queue_port,
-            )
-            experts_token_stats = np.zeros(
-                (self.fd_config.model_config.num_hidden_layers, self.fd_config.model_config.moe_num_experts),
-                dtype=np.int32,
-            )
-            local_experts_token_stats_array = IPCSignal(
-                name="local_experts_token_stats",
-                array=experts_token_stats,
-                dtype=np.int32,
-                suffix=self.parallel_config.engine_worker_queue_port,
-                create=False,
-            )
-
-            clear_experts_token_stats = np.zeros([1], dtype=np.int32)
-            signal_clear_experts_token_stats = IPCSignal(
-                name="signal_clear_experts_token_stats",
-                array=clear_experts_token_stats,
-                dtype=np.int32,
-                suffix=self.parallel_config.engine_worker_queue_port,
-                create=False,
-            )
-
-            if self.local_rank == 0:
-                signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
-                signal_update_weight_from_tensor_array = IPCSignal(
-                    name="signal_update_weight_from_tensor",
-                    array=signal_update_weight_from_tensor,
-                    dtype=np.int32,
-                    suffix=self.parallel_config.engine_worker_queue_port,
-                    create=False,
-                )
-
-                rearrange_experts_status = np.zeros([1], dtype=np.int32)
-                rearrange_experts_signal = IPCSignal(
-                    name="rearrange_experts_status",
-                    array=rearrange_experts_status,
-                    dtype=np.int32,
-                    suffix=self.parallel_config.engine_worker_queue_port,
-                    create=False,
-                )
-
-            mmap_infos = create_mmap(
-                [MODEL_MAIN_NAME],
-                self.local_rank,
-                self.ranks,
-                shm_uuid=self.parallel_config.engine_worker_queue_port,
-                eplb_config=self.eplb_config,
-                logger=logger,
-            )
-
+        # init eplb signal
+        self._init_eplb_signal()
         tp_size = self.parallel_config.tensor_parallel_size
         # Currently, only support single node
         self.nnode = int((tp_size + 7) // 8)
@@ -352,45 +407,8 @@ class PaddleDisWorkerProc:
 
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
-            if self.eplb_config.enable_eplb:
-                rearrange_time = time.time()
-                # 获取专家负载
-                if local_experts_token_stats_array.value is not None and (
-                    int(rearrange_time) - self.last_dump_expert_workload_ts
-                    > self.eplb_config.redundant_expert_dump_workload_interval
-                ):
-                    self.last_dump_expert_workload_ts = int(rearrange_time)
-                    clear_stat = False
-                    if signal_clear_experts_token_stats.value[0] == 1:
-                        clear_stat = True
-                        signal_clear_experts_token_stats.value[0] = 0
-                    (
-                        new_stats_array,
-                        _,
-                        _,
-                        _,
-                    ) = self.worker.get_model().redundant_table_manger.get_expert_tokens_stats(clear_stat=clear_stat)
-                    local_experts_token_stats_array.value[:] = new_stats_array[:]
-                elif local_experts_token_stats_array.value is None:
-                    logger.warning("redundant_expert: local_experts_token_stats not init")
-
-                # 所有DP同步更新权重
-                broadcast_value = 0
-                if self.local_rank == 0 and signal_update_weight_from_tensor_array.value[0] == 1:
-                    logger.info("redundant_expert: update_weight_from_tensor broadcast signal")
-                    signal_update_weight_from_tensor_array.value[0] = 0
-                    broadcast_value = REARRANGE_EXPERT_MAGIC_NUM
-                data = paddle.to_tensor([broadcast_value])
-                paddle.distributed.broadcast(data, 0)
-                if data[0] == REARRANGE_EXPERT_MAGIC_NUM:
-                    self.update_weights_from_tensor(mmap_infos)
-                    logger.info(
-                        f"redundant_expert: update_weight_from_tensor success, cost {(time.time() - rearrange_time)*1000}ms"
-                    )
-                    paddle.distributed.barrier()
-                    if self.local_rank == 0:
-                        rearrange_experts_signal.value[0] = RearrangeExpertStatus.DONE.value
-                    logger.info("redundant_expert: done")
+            # run eplb
+            self._run_eplb(tp_rank)
             if tp_rank == 0:
                 if self.model_weights_status.value[0] != ModelWeightsStatus.NORMAL:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])

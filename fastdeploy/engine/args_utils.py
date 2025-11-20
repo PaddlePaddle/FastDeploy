@@ -1213,6 +1213,7 @@ class EngineArgs:
         if self.eplb_config is not None:
             for k, v in self.eplb_config.items():
                 eplb_args[k] = v
+        eplb_args["enable_eplb"] = self.enable_eplb
         return EPLBConfig(eplb_args)
 
     def create_engine_config(self, port_availability_check=True) -> FDConfig:
