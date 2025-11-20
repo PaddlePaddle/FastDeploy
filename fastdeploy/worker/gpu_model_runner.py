@@ -2096,20 +2096,18 @@ class GPUModelRunner(ModelRunnerBase):
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
 
-
         model_output = [None]
         import threading
 
-        my_dict = self.model.ernie.layers[-1].mlp.experts.quant_method.ep_prefill_runner.ep_engine.my_dict
+        from fastdeploy.model_executor.layers.moe.ep import GLOBAL_THREAD_INFO
 
         def haha():
 
-            is_tbo_thread = threading.current_thread().name in my_dict.keys()
+            is_tbo_thread = threading.current_thread().name in GLOBAL_THREAD_INFO.keys()
 
             if is_tbo_thread:
-                my_dict[threading.current_thread().name][0].wait()
-                my_dict[threading.current_thread().name][0].clear()
-
+                GLOBAL_THREAD_INFO[threading.current_thread().name][0].wait()
+                GLOBAL_THREAD_INFO[threading.current_thread().name][0].clear()
 
             # 3. Run model
             if self.enable_mm:
@@ -2124,25 +2122,25 @@ class GPUModelRunner(ModelRunnerBase):
                     forward_meta=self.forward_meta,
                 )
             if is_tbo_thread:
-                for key in my_dict:
-                    my_dict[key][0].set()
+                for key in GLOBAL_THREAD_INFO:
+                    GLOBAL_THREAD_INFO[key][0].set()
 
             return model_output[0]
 
-        t0 = Thread(target=haha, name = "thread0")
-        t1 = Thread(target=haha, name = "thread1")
+        t0 = Thread(target=haha, name="thread0")
+        t1 = Thread(target=haha, name="thread1")
 
-        my_dict[t0.name][0].clear()
-        my_dict[t1.name][0].clear()
+        GLOBAL_THREAD_INFO[t0.name][0].clear()
+        GLOBAL_THREAD_INFO[t1.name][0].clear()
 
         t0.start()
         t1.start()
 
-        my_dict[t0.name][0].set()
+        GLOBAL_THREAD_INFO[t0.name][0].set()
 
         t0.join()
         t1.join()
-        
+
         # haha()
 
         if not self.not_need_stop():

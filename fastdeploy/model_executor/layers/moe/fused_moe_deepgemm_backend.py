@@ -139,6 +139,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         Apply the EP prefill method.
         """
         import threading
+
         gate_out = gate(x.cast("float32"))
         # gate_out = paddle.randn([x.shape[0], layer.num_experts], dtype="float32")
         # 1. Select topk experts and weights
@@ -159,13 +160,15 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128
         )
 
-        my_dict = self.ep_prefill_runner.ep_engine.my_dict
+        from fastdeploy.model_executor.layers.moe.ep import GLOBAL_THREAD_INFO
 
-        if threading.current_thread().name in ["thread0", "thread1"]:
-            my_dict[threading.current_thread().name][1].set()
-            my_dict[threading.current_thread().name][0].wait()
-            my_dict[threading.current_thread().name][0].clear()
-        
+        thread_name = threading.current_thread().name
+
+        if thread_name in GLOBAL_THREAD_INFO:
+            GLOBAL_THREAD_INFO[thread_name][1].set()
+            GLOBAL_THREAD_INFO[thread_name][0].wait()
+            GLOBAL_THREAD_INFO[thread_name][0].clear()
+
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
 
@@ -249,11 +252,11 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         # 5. EP combine
         tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
-        
-        if threading.current_thread().name in ["thread0", "thread1"]:
-            my_dict[threading.current_thread().name][1].set()
-            my_dict[threading.current_thread().name][0].wait()
-            my_dict[threading.current_thread().name][0].clear()
+
+        if thread_name in GLOBAL_THREAD_INFO:
+            GLOBAL_THREAD_INFO[thread_name][1].set()
+            GLOBAL_THREAD_INFO[thread_name][0].wait()
+            GLOBAL_THREAD_INFO[thread_name][0].clear()
 
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
