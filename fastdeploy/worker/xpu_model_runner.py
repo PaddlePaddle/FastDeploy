@@ -371,10 +371,10 @@ class XPUModelRunner(ModelRunnerBase):
         if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
             # 在ep场景下no_need_stop如果都是false，表示全部卡空闲，返回false，走高吞吐分支，否则为部分卡空闲，需要进一步判断
             no_need_stop_list = []
-            no_need_stops = self.not_need_stop()
-            paddle.distributed.all_gather_object(no_need_stop_list, not no_need_stops)
-            no_need_stop = all(no_need_stop_list)
-            if no_need_stop:
+            no_need_stop = self.not_need_stop()
+            paddle.distributed.all_gather_object(no_need_stop_list, not no_need_stop)
+            if_all_device_empty = all(no_need_stop_list)
+            if if_all_device_empty:
                 if_only_decode = False
             else:
                 only_decode_batch_list = []
