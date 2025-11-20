@@ -273,13 +273,7 @@ class Request:
             setattr(self, key, value)
 
     def __repr__(self) -> str:
-        return (
-            f"Request(request_id={self.request_id}, "
-            f"prompt={self.prompt!r}, "
-            f"prompt_token_ids={self.prompt_token_ids}, "
-            f"draft_token_ids={self.draft_token_ids}, "
-            f"sampling_params={self.sampling_params})"
-        )
+        return ""
 
 
 @dataclass(slots=True)
