@@ -395,6 +395,7 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
             previous_token_ids=[],
             current_token_ids=[200],
             delta_token_ids=[200],
+            model_status="think_start",
         )
         self.assertIsInstance(result, DeltaMessage)
         self.assertEqual(result.reasoning_content, "a")
@@ -408,6 +409,7 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
             previous_token_ids=[200, 201],
             current_token_ids=[200, 201, 100],
             delta_token_ids=[100],
+            model_status="think_start",
         )
         self.assertIsNone(result)
 
@@ -419,6 +421,7 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
             previous_token_ids=[200, 201],
             current_token_ids=[200, 201, 100, 300, 400],
             delta_token_ids=[100, 300, 400],
+            model_status="think_start",
         )
         self.assertIsInstance(result, DeltaMessage)
         self.assertIsNone(result.reasoning_content)
@@ -432,6 +435,7 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
             previous_token_ids=[200, 201, 202],
             current_token_ids=[200, 201, 202, 100],
             delta_token_ids=[100],
+            model_status="think_start",
         )
         self.assertIsNone(result)
 
@@ -443,9 +447,10 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
             previous_token_ids=[200, 201, 202],
             current_token_ids=[200, 201, 202, 100, 200, 101],
             delta_token_ids=[100, 200, 101],
+            model_status="think_start",
         )
         self.assertIsInstance(result, DeltaMessage)
-        self.assertEqual(result.reasoning_content, "")
+        self.assertEqual(result.reasoning_content, None)
 
     def test_streaming_with_reasoning_and_illegal_tool(self):
         result = self.parser.extract_reasoning_content_streaming(
@@ -455,6 +460,7 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
             previous_token_ids=[200, 201, 202],
             current_token_ids=[200, 201, 202, 100, 200, 101],
             delta_token_ids=[109, 200, 101],
+            model_status="think_start",
         )
         self.assertIsInstance(result, DeltaMessage)
         self.assertEqual(result.content, "\n\nhello<tool_call>")
@@ -467,6 +473,7 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
             previous_token_ids=[200, 201, 202],
             current_token_ids=[200, 201, 202, 100, 200, 110],
             delta_token_ids=[100, 200, 110],
+            model_status="think_start",
         )
         self.assertIsInstance(result, DeltaMessage)
         self.assertEqual(result.reasoning_content, "hello")
@@ -480,6 +487,7 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
             previous_token_ids=[100],
             current_token_ids=[100, 110, 111],
             delta_token_ids=[110, 111],
+            model_status="think_start",
         )
         self.assertIsInstance(result, DeltaMessage)
         self.assertIsNone(result.reasoning_content)
@@ -493,51 +501,126 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
             previous_token_ids=[101],
             current_token_ids=[101, 110],
             delta_token_ids=[110],
+            model_status="think_start",
         )
         self.assertIsInstance(result, DeltaMessage)
         self.assertEqual(result.reasoning_content, "hello")
 
+    def test_think_end_status_streaming(self):
+        result = self.parser.extract_reasoning_content_streaming(
+            previous_text="<tool_call>",
+            current_text="<tool_call>hello",
+            delta_text="hello",
+            previous_token_ids=[101],
+            current_token_ids=[101, 110],
+            delta_token_ids=[110],
+            model_status="think_end",
+        )
+        self.assertIs(result, None)
+
+        result = self.parser.extract_reasoning_content_streaming(
+            previous_text="hello, ",
+            current_text="hello, hi",
+            delta_text="hi",
+            previous_token_ids=[101],
+            current_token_ids=[101, 110],
+            delta_token_ids=[110],
+            model_status="think_end",
+        )
+        self.assertIsInstance(result, DeltaMessage)
+        self.assertEqual(result.content, "hi")
+
+    def test_other_status_streaming(self):
+        result = self.parser.extract_reasoning_content_streaming(
+            previous_text="hello, ",
+            current_text="hello, hi",
+            delta_text="hi",
+            previous_token_ids=[101],
+            current_token_ids=[101, 110],
+            delta_token_ids=[110],
+            model_status="tool_call_start",
+        )
+        self.assertIs(result, None)
+
     def test_batch_no_think_end(self):
         reasoning, content = self.parser.extract_reasoning_content(
-            model_output="direct response", request=self.test_request
+            model_output="direct response", request=self.test_request, model_status="think_start"
         )
         self.assertEqual(reasoning, "direct response")
         self.assertEqual(content, "")
 
     def test_batch_no_think_end_with_tool(self):
         reasoning, content = self.parser.extract_reasoning_content(
-            model_output="direct response<tool_call>abc", request=self.test_request
+            model_output="direct response<tool_call>abc", request=self.test_request, model_status="think_start"
         )
         self.assertEqual(reasoning, "direct response<tool_call>abc")
         self.assertEqual(content, "")
 
     def test_batch_think_end_normal_content(self):
         reasoning, content = self.parser.extract_reasoning_content(
-            model_output="reasoning</think>\nresponse", request=self.test_request
+            model_output="reasoning</think>\nresponse", request=self.test_request, model_status="think_start"
         )
         self.assertEqual(reasoning, "reasoning")
         self.assertEqual(content, "\nresponse")
 
     def test_batch_think_end_with_tool(self):
         reasoning, content = self.parser.extract_reasoning_content(
-            model_output="reasoning</think>\n<tool_call>tool params</tool_call>", request=self.test_request
+            model_output="reasoning</think>\n<tool_call>tool params</tool_call>",
+            request=self.test_request,
+            model_status="think_start",
         )
         self.assertEqual(reasoning, "reasoning")
         self.assertEqual(content, "")
 
     def test_batch_think_end_with_illegal_tool(self):
         reasoning, content = self.parser.extract_reasoning_content(
-            model_output="reasoning</think>\nABC\n<tool_call>tool params</tool_call>", request=self.test_request
+            model_output="reasoning</think>\nABC\n<tool_call>tool params</tool_call>",
+            request=self.test_request,
+            model_status="think_start",
         )
         self.assertEqual(reasoning, "reasoning")
         self.assertEqual(content, "\nABC\n<tool_call>tool params</tool_call>")
 
     def test_batch_think_end_content_with_newline(self):
         reasoning, content = self.parser.extract_reasoning_content(
-            model_output="reasoning</think>\n\n  actual response", request=self.test_request
+            model_output="reasoning</think>\n\n  actual response",
+            request=self.test_request,
+            model_status="think_start",
         )
         self.assertEqual(reasoning, "reasoning")
         self.assertEqual(content, "\n\n  actual response")
+
+    def test_think_end_status_non_streaming(self):
+        reasoning, content = self.parser.extract_reasoning_content(
+            model_output="response", request=self.test_request, model_status="think_end"
+        )
+        self.assertEqual(reasoning, "")
+        self.assertEqual(content, "response")
+
+        reasoning, content = self.parser.extract_reasoning_content(
+            model_output="<tool_call>response", request=self.test_request, model_status="think_end"
+        )
+        self.assertEqual(reasoning, "")
+        self.assertEqual(content, "")
+
+        reasoning, content = self.parser.extract_reasoning_content(
+            model_output="\n 1<tool_call>response", request=self.test_request, model_status="think_end"
+        )
+        self.assertEqual(reasoning, "")
+        self.assertEqual(content, "\n 1<tool_call>response")
+
+    def test_other_status_non_streaming(self):
+        reasoning, content = self.parser.extract_reasoning_content(
+            model_output="response", request=self.test_request, model_status="tool_call_start"
+        )
+        self.assertEqual(reasoning, "")
+        self.assertEqual(content, "")
+
+        reasoning, content = self.parser.extract_reasoning_content(
+            model_output="response", request=self.test_request, model_status="tool_call_end"
+        )
+        self.assertEqual(reasoning, "")
+        self.assertEqual(content, "")
 
 
 class TestErnieVLReasoningParser(unittest.TestCase):
@@ -556,6 +639,7 @@ class TestErnieVLReasoningParser(unittest.TestCase):
             previous_token_ids=[200, 201, 202],
             current_token_ids=[200, 201, 202, 100, 110, 120, 130],
             delta_token_ids=[100, 110, 120, 130],
+            model_status="think_start",
         )
         self.assertIsInstance(result, DeltaMessage)
         self.assertEqual(result.reasoning_content, "")
@@ -569,6 +653,7 @@ class TestErnieVLReasoningParser(unittest.TestCase):
             previous_token_ids=[200, 201, 202, 100],
             current_token_ids=[200, 201, 202, 100, 110, 120, 130],
             delta_token_ids=[110, 120, 130],
+            model_status="think_start",
         )
         self.assertIsInstance(result, DeltaMessage)
         self.assertIsNone(result.reasoning_content)
@@ -582,6 +667,7 @@ class TestErnieVLReasoningParser(unittest.TestCase):
             previous_token_ids=[200, 201, 202],
             current_token_ids=[200, 201, 202, 110, 120, 130],
             delta_token_ids=[110, 120, 130],
+            model_status="think_start",
         )
         self.assertIsInstance(result, DeltaMessage)
         self.assertIsNone(result.content)
@@ -589,7 +675,7 @@ class TestErnieVLReasoningParser(unittest.TestCase):
 
     def test_extract_reasoning_content(self):
         reasoning, content = self.parser.extract_reasoning_content(
-            model_output="reasoning</think>\nactual response", request=self.test_request
+            model_output="reasoning</think>\nactual response", request=self.test_request, model_status="think_start"
         )
         self.assertEqual(reasoning, "reasoning")
         self.assertEqual(content, "\nactual response")
