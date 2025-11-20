@@ -20,8 +20,6 @@ from unittest import mock
 import paddle
 
 from fastdeploy.flashinfer import has_flashinfer
-
-# import fastdeploy
 from fastdeploy.model_executor.layers.linear import QKVParallelLinear
 from fastdeploy.model_executor.layers.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.nvfp4 import (
