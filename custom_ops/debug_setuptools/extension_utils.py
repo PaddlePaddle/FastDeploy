@@ -174,6 +174,9 @@ def custom_write_stub(resource, pyfile):
         so_path = os.path.join(cur_dir, "{resource}")
 
         def __bootstrap__():
+            if not os.path.exists(so_path):
+                raise RuntimeError(f"Shared library {so_path} not found.")
+        
             assert os.path.exists(so_path)
             # load custom op shared library with abs path
             custom_ops = paddle.utils.cpp_extension.load_op_meta_info_and_register_op(so_path)
