@@ -20,7 +20,6 @@ class TestResourceManagerV1(unittest.TestCase):
             max_num_seqs=max_num_seqs,
             num_gpu_blocks_override=102,
             max_num_batched_tokens=3200,
-            enable_async_download_features=True,
         )
         args = asdict(engine_args)
 
