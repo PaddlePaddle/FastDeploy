@@ -949,18 +949,9 @@ class XPUModelRunner(ModelRunnerBase):
         self.initialize_attention_backend()
         if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
             self.forward_meta.kv_signal_sender = self.kv_signal_sender
-        # if self.not_need_stop():
-        if True:  # 空闲状态的卡不进判断，忙碌卡的逻辑还是根据
-            print("********************** ", self.not_need_stop())
-            if_only_decode = self.only_decode()
-            # if if_only_decode:
-            #     print("it is only decode step!")
-            # else:
-            #     print("it is prefill step")
-
-            if self.fd_config.scheduler_config.splitwise_role == "mixed":
-                self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
-                print(f"moe_phase.phase {self.fd_config.model_config.moe_phase.phase}")
+        if_only_decode = self.only_decode()
+        if self.fd_config.scheduler_config.splitwise_role == "mixed":  # 混合式默认初始化为prefill
+            self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
         # Get sampling metadata
         # TODU(lilujia): sync with GPU

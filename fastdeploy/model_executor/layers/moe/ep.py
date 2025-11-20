@@ -279,6 +279,7 @@ class DeepEPEngine:
     ):
         if self.deepep_engine is None:
             raise RuntimeError("DeepEP buffer not initialized!")
+
         (
             packed_recv_x,
             recv_expert_count,
@@ -296,6 +297,7 @@ class DeepEPEngine:
             return_recv_hook=True,
             num_per_channel=quant_group_size,
         )
+
         return packed_recv_x, recv_expert_count, handle, dispatch_hook
 
     def low_latency_dispatch_two_stage(
@@ -308,6 +310,7 @@ class DeepEPEngine:
     ):
         if self.deepep_engine is None:
             raise RuntimeError("DeepEP buffer not initialized!")
+
         (
             packed_recv_x,
             packed_recv_count,
@@ -325,6 +328,7 @@ class DeepEPEngine:
             async_finish=False,
             return_recv_hook=True,
         )
+
         return packed_recv_x, packed_recv_count, handle, dispatch_hook
 
     def low_latency_combine(

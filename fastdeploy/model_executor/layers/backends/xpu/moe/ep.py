@@ -345,7 +345,6 @@ class XPUEPPrefillRunner(XPUEPRunner):
         *args,
         **kwargs,
     ):
-        # print("============XPUEPPrefillRunner dispatch==========")
         self.num_combined_tokens = x.shape[0]
         x_scale_tensor = kwargs.get("x_scale_tensor", None)
         dispatch_args = {
@@ -353,7 +352,6 @@ class XPUEPPrefillRunner(XPUEPRunner):
             "topk_idx": topk_idx,
             "topk_weights": topk_weights,
         }
-        # print("============XPUEPPrefillRunner dispatch end==========")
         return self.ep_engine.deepep_engine.dispatch(**dispatch_args)
 
     def combine(
@@ -411,7 +409,6 @@ class XPUEPDecoderRunner(XPUEPRunner):
         *args,
         **kwargs,
     ):
-        print("===========XPUEPDecoderRunner dispatch start===========")
         expertwise_scale = kwargs.get("expertwise_scale", None)
         use_fp8 = expertwise_scale is not None
 
@@ -425,7 +422,7 @@ class XPUEPDecoderRunner(XPUEPRunner):
         # no need to call dispatch_hook here, because it has already been done in xDeepEP
         # if dispatch_hook is not None:
         #     dispatch_hook()
-        print("===========XPUEPDecoderRunner dispatch end===========")
+
         return recv_hidden_states, recv_expert_count, handle, valid_token_num
 
     def combine(self, ffn_out, topk_idx, topk_weights, handle):
