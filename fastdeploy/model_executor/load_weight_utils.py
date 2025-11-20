@@ -247,18 +247,22 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
             )
         return base_range
 
+    prefix_layer_name = (
+        "mtp_block" if getattr(fd_config.speculative_config, "model_type", "main") == "mtp" else "layers"
+    )
+
     for i in range(fd_config.model_config.moe_layer_start_index, fd_config.model_config.num_hidden_layers):
         for j in get_expert_ranges(fd_config):
-            up_gate_proj_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight"
-            down_proj_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight"
+            up_gate_proj_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.up_gate_proj.weight"
+            down_proj_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.down_proj.weight"
 
-            up_gate_proj_quant_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.quant_weight"
-            down_proj_quant_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.quant_weight"
+            up_gate_proj_quant_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.up_gate_proj.quant_weight"
+            down_proj_quant_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.down_proj.quant_weight"
 
-            up_gate_proj_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight_scale"
-            down_proj_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight_scale"
+            up_gate_proj_scale_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.up_gate_proj.weight_scale"
+            down_proj_scale_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.down_proj.weight_scale"
 
-            down_proj_in_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.activation_scale"
+            down_proj_in_scale_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.down_proj.activation_scale"
             num_local_ffn_keys.append(up_gate_proj_key)
             num_local_ffn_keys.append(down_proj_key)
             num_local_ffn_keys.append(up_gate_proj_quant_key)
@@ -273,7 +277,7 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
             num_experts = num_experts[0]
 
         for j in range(num_experts):
-            up_gate_proj_in_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.activation_scale"
+            up_gate_proj_in_scale_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.up_gate_proj.activation_scale"
             num_local_ffn_keys.append(up_gate_proj_in_scale_key)
 
     for k in num_local_ffn_keys:
@@ -284,7 +288,7 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
         no_tp_action_keys = copy.deepcopy(num_local_ffn_keys)
         if fd_config.parallel_config.use_sequence_parallel_moe:
             for i in range(fd_config.model_config.moe_layer_start_index, fd_config.model_config.num_hidden_layers):
-                k = f"ernie.layers.{i}.self_attn.o_proj.weight"
+                k = f"ernie.{prefix_layer_name}.{i}.self_attn.o_proj.weight"
                 if k in weight_list:
                     no_tp_action_keys.append(k)
         tp_actions = cls._get_tensor_parallel_mappings(fd_config.model_config.pretrained_config)
@@ -506,7 +510,7 @@ def load_composite_checkpoint(
     # 2. Tensor Parallel (TP)
     # 3. Pre-sharded (pre-split)
     """
-    if fd_config.parallel_config.use_ep and fd_config.speculative_config.model_type != "mtp":
+    if fd_config.parallel_config.use_ep:
         state_dict = load_ep_checkpoint(cls, model_path, fd_config, return_numpy=True)
     else:
         rank_dirs = [
