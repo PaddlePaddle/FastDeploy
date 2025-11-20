@@ -1001,7 +1001,7 @@ class ResourceManagerV1(ResourceManager):
                 request.need_prefill_tokens + self.config.cache_config.block_size - 1
             ) // self.config.cache_config.block_size + self.config.cache_config.enc_dec_block_num  # consider for mtp, plus enc_dec_block_num
             if self.cache_manager.can_allocate_gpu_blocks(need_prealloc_prefill_blocks):
-                request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks))
+                request.block_tables = self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks)
                 request.num_computed_tokens = request.need_prefill_tokens
                 request.disaggregate_info["block_tables"] = request.block_tables
                 allocated_position = self.get_available_position()
