@@ -16,8 +16,8 @@
  */
 
 #pragma once
-#include <string>
 #include <sstream>
+#include <string>
 #include "cub/cub.cuh"
 
 namespace phi {
@@ -45,7 +45,10 @@ class CubKeyValueSorter {
   size_t getWorkspaceSize(const size_t num_key_value_pairs,
                           bool descending = false) {
     num_key_value_pairs_ = num_key_value_pairs;
-    size_t required_storage = 0;
+    // Initialize to 1 as workaround: under CUDA Graph capture, CUB may not
+    // write to required_storage, and 1 is the minimum expected size in that
+    // scenario.
+    size_t required_storage = 1;
     int* null_int = nullptr;
     if (descending) {
       cub::DeviceRadixSort::SortPairsDescending(NULL,

@@ -42,7 +42,7 @@ echo "uninstall org"
 python -m pip uninstall paddlepaddle-xpu -y
 python -m pip uninstall fastdeploy-xpu -y
 
-python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
+python -m pip install https://paddle-whl.bj.bcebos.com/nightly/xpu-p800/paddlepaddle-xpu/paddlepaddle_xpu-3.3.0.dev20251118-cp310-cp310-linux_x86_64.whl
 
 echo "build whl"
 bash custom_ops/xpu_ops/download_dependencies.sh develop
@@ -85,7 +85,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
     --max-num-seqs 128 \
-    --quantization wint4 > server.log 2>&1 &
+    --quantization wint4 \
+    --enable-prefix-caching \
+    --enable-chunked-prefill > server.log 2>&1 &
 
 sleep 60
 # 探活
@@ -240,7 +242,8 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --enable-mm \
     --mm-processor-kwargs '{"video_max_frames": 30}' \
     --limit-mm-per-prompt '{"image": 10, "video": 3}' \
-    --reasoning-parser ernie-45-vl > server.log 2>&1 &
+    --reasoning-parser ernie-45-vl \
+    --enable-chunked-prefill > server.log 2>&1 &
 
 sleep 60
 # 探活
