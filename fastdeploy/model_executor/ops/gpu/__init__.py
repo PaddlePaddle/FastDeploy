@@ -63,6 +63,26 @@ functions = inspect.getmembers(module)
 _debug += '###3 2\n'
 _debug += str(functions)
 
+module1 = importlib.import_module(PACKAGE, package="fastdeploy_ops")
+
+_debug += '###3 3\n'
+_debug += str(module1)
+
+functions1 = inspect.getmembers(module1)
+
+_debug += '###3 4\n'
+_debug += str(functions1)
+
+module2 = importlib.import_module(PACKAGE + ".fastdeploy_ops")
+
+_debug += '###3 5\n'
+_debug += str(module2)
+
+functions2 = inspect.getmembers(module2)
+
+_debug += '###3 6\n'
+_debug += str(functions2)
+
 
 # debug 4
 _debug += '###4\n'
