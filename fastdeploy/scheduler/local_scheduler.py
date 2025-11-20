@@ -79,6 +79,7 @@ class LocalScheduler:
 
         self.requests: Dict[str, ScheduledRequest] = dict()
         self.responses: Dict[str, List[ScheduledResponse]] = dict()
+        self.batch_responses_per_step: List[List[ScheduledResponse]] = list()
 
         self.wait_request_timeout = 10
         self.wait_response_timeout = 0.001
@@ -314,6 +315,7 @@ class LocalScheduler:
             scheduler_logger.info(f"Scheduler has received some finished responses: {finished_responses}")
 
         with self.mutex:
+            self.batch_responses_per_step.append([response.raw for response in responses])
             for response in responses:
                 if response.request_id not in self.requests:
                     scheduler_logger.warning(f"Scheduler has received a expired response: {[response.request_id]}")
@@ -352,12 +354,19 @@ class LocalScheduler:
 
         def _get_results():
             responses = self.responses
+            batch_responses_per_step = self.batch_responses_per_step
             self.responses = dict()
-            return responses
+            self.batch_responses_per_step = list()
+            if not responses:
+                return None  # No response yet
+            return responses, batch_responses_per_step
 
         with self.responses_not_empty:
-            responses = self.responses_not_empty.wait_for(_get_results, self.wait_response_timeout)
-
+            wait_response_result = self.responses_not_empty.wait_for(_get_results, self.wait_response_timeout)
+            if wait_response_result is not None:
+                responses, batch_responses_per_step = wait_response_result
+            else:
+                responses, batch_responses_per_step = dict(), list()
             results = dict()
             for request_id, resps in responses.items():
                 finished = False
@@ -373,4 +382,7 @@ class LocalScheduler:
             if results:
                 scheduler_logger.debug(f"get responses, {results}")
 
-            return results
+            if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                return batch_responses_per_step
+            else:
+                return results
