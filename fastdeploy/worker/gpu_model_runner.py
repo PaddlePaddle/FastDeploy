@@ -924,10 +924,13 @@ class GPUModelRunner(ModelRunnerBase):
         """
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
         max_dec_len = expected_decode_len + 1
-        input_length = min(
-            num_tokens // (1 if capture_prefill else batch_size),
-            self.model_config.max_model_len - max_dec_len,
-        )
+        if batch_size == 0:
+            input_length = 1
+        else:
+            input_length = min(
+                num_tokens // (1 if capture_prefill else batch_size),
+                self.model_config.max_model_len - max_dec_len,
+            )
 
         # NOTE(wanglongzhi): When the full length is too large, DeepEP's buffer size will not be enough to cause the result to appear nan.
         # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
@@ -2080,19 +2083,11 @@ class GPUModelRunner(ModelRunnerBase):
 
         def haha():
 
-            need = threading.current_thread().name in ["thread0", "thread1"]
+            is_tbo_thread = threading.current_thread().name in my_dict.keys()
 
-            if need:
+            if is_tbo_thread:
                 my_dict[threading.current_thread().name][0].wait()
                 my_dict[threading.current_thread().name][0].clear()
-
-            if not self.not_need_stop():
-                self._execute_empty_input()
-                if need:
-                    my_dict["thread0"][0].set()
-                    my_dict["thread1"][0].set()
-
-                return None
 
 
             # 3. Run model
@@ -2107,9 +2102,9 @@ class GPUModelRunner(ModelRunnerBase):
                     ids_remove_padding=self.share_inputs["ids_remove_padding"],
                     forward_meta=self.forward_meta,
                 )
-            if need:
-                my_dict["thread0"][0].set()
-                my_dict["thread1"][0].set()
+            if is_tbo_thread:
+                for key in my_dict:
+                    my_dict[key][0].set()
 
             return model_output[0]
 
@@ -2127,7 +2122,7 @@ class GPUModelRunner(ModelRunnerBase):
         t0.join()
         t1.join()
         
-        #haha()
+        # haha()
 
         if not self.not_need_stop():
             return None
