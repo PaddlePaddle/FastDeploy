@@ -124,9 +124,7 @@ class Qwen2_5_VLModel(nn.Layer):
                 residual,
             )
 
-        hidden_states = hidden_states + residual
-
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual)[0]
 
         return out
 
@@ -210,7 +208,7 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         ]
 
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
@@ -233,10 +231,7 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
             process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings:
-            # because we use lazy guard and is not initialized by default
-            if not self.lm_head.linear.weight._is_initialized():
-                self.lm_head.linear.weight.initialize()
-            self.lm_head.load_state_dict({self.lm_head.weight_key: self.model.embed_tokens.embeddings.weight})
+            self.lm_head.linear.weight.set_value(self.model.embed_tokens.embeddings.weight.transpose([1, 0]))
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
@@ -261,21 +256,6 @@ class Qwen2_5_VLForConditionalGeneration(ModelForCasualLM):
         logits[:, self.ori_vocab_size :] = -float("inf")
 
         return logits
-
-    def empty_input_forward(self):
-        """
-        empty_input_forward
-        """
-        fake_hidden_states = paddle.empty(
-            shape=[0, self.fd_config.model_config.hidden_size],
-            dtype=paddle.get_default_dtype(),
-        )
-        for i in range(
-            self.fd_config.model_config.moe_layer_start_index,
-            self.fd_config.model_config.num_hidden_layers,
-        ):
-            self.ernie.layers[i].mlp.text_fused_moe(fake_hidden_states)
-            self.ernie.layers[i].mlp.image_fused_moe(fake_hidden_states)
 
     def get_input_embeddings(
         self,

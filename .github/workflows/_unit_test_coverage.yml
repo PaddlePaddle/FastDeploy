@@ -98,11 +98,13 @@ jobs:
           DEVICES=$(echo "$CARD_ID" | fold -w1 | paste -sd,)
           DEVICE_PORT=$(echo "$DEVICES" | cut -d',' -f1)
 
-          FLASK_PORT=$((42068 + DEVICE_PORT * 100))
-          FD_API_PORT=$((42088 + DEVICE_PORT * 100))
-          FD_ENGINE_QUEUE_PORT=$((42058 + DEVICE_PORT * 100))
-          FD_METRICS_PORT=$((42078 + DEVICE_PORT * 100))
-          FD_CACHE_QUEUE_PORT=$((42098 + DEVICE_PORT * 100))
+          FLASK_PORT=$((8068 + DEVICE_PORT * 100))
+          FD_API_PORT=$((8088 + DEVICE_PORT * 100))
+          FD_ENGINE_QUEUE_PORT=$((8058 + DEVICE_PORT * 100))
+          FD_METRICS_PORT=$((8078 + DEVICE_PORT * 100))
+          FD_CACHE_QUEUE_PORT=$((8098 + DEVICE_PORT * 100))
+          FD_ROUTER_PORT=$((8048 + DEVICE_PORT * 100))
+          FD_CONNECTOR_PORT=$((8038 + DEVICE_PORT * 100))
           echo "Test ENV Parameter:"
           echo "========================================================="
           echo "FLASK_PORT=${FLASK_PORT}"
@@ -110,6 +112,8 @@ jobs:
           echo "FD_ENGINE_QUEUE_PORT=${FD_ENGINE_QUEUE_PORT}"
           echo "FD_METRICS_PORT=${FD_METRICS_PORT}"
           echo "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}"
+          echo "FD_ROUTER_PORT=${FD_ROUTER_PORT}"
+          echo "FD_CONNECTOR_PORT=${FD_CONNECTOR_PORT}"
           echo "DEVICES=${DEVICES}"
           echo "========================================================="
 
@@ -159,6 +163,8 @@ jobs:
           -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
           -e "FLASK_PORT=${FLASK_PORT}" \
           -e "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}" \
+          -e "FD_ROUTER_PORT=${FD_ROUTER_PORT}" \
+          -e "FD_CONNECTOR_PORT=${FD_CONNECTOR_PORT}" \
           -e TZ="Asia/Shanghai" \
           -e "fd_wheel_url=${fd_wheel_url}" \
           -e "BASE_REF=${BASE_REF}" \
@@ -168,7 +174,7 @@ jobs:
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
           git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
-          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install paddlepaddle-gpu==3.3.0.dev20251118 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
           pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
           python -m pip install -r scripts/unittest_requirement.txt

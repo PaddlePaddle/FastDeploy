@@ -26,6 +26,8 @@ from fastdeploy.utils import data_processor_logger
 
 from .process import DataProcessor
 
+_SAMPLING_EPS = 1e-5
+
 
 class Ernie4_5_VLProcessor(Ernie4_5Processor):
     """The processor class for ERNIE MoE VL models."""
@@ -234,7 +236,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             if chat_template_kwargs:
                 if isinstance(chat_template_kwargs, dict):
                     for k, v in chat_template_kwargs.items():
-                        if k not in request:
+                        if k not in request or request[k] is None:
                             request[k] = v
                 else:
                     raise ValueError("Invalid input: chat_template_kwargs must be a dict")
@@ -253,6 +255,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
 
         if request.get("completion_token_ids"):
             self.append_completion_tokens(outputs, request["completion_token_ids"])
+
         outputs = self.pack_outputs(outputs)
         request["prompt_token_ids"] = outputs["input_ids"].tolist()
         request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
@@ -261,6 +264,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         # 截断超过长度限制的prompt
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
         else:
@@ -276,6 +280,9 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             for idx in range(n):
                 self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
             request["enable_thinking"] = model_status == "think_start"
+        if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
+            request["top_p"] = _SAMPLING_EPS
+
         return request
 
     def append_completion_tokens(self, multimodal_inputs, completion_token_ids):

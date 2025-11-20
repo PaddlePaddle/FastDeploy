@@ -16,6 +16,10 @@
 
 from unittest.mock import Mock
 
+import numpy as np
+import paddle
+import paddle.device.cuda.graphs as graphs
+
 from fastdeploy.config import (
     CacheConfig,
     FDConfig,
@@ -68,3 +72,66 @@ def get_default_test_fd_config():
         test_mode=True,
     )
     return fd_config
+
+
+class OpPerformanceTester:
+    def __init__(self, op_name, op_fn, num_layers=20, weight_size=None, gate=None):
+        self.op_name = op_name
+        self.op_fn = op_fn
+        self.num_layers = num_layers
+        self.weight_size = weight_size
+        self.gate = gate
+
+    def _fake_model_run(self, x):
+        for j in range(self.num_layers):
+            if self.gate:
+                out = self.op_fn(x, self.gate)
+            else:
+                out = self.op_fn(x)
+        return out
+
+    def benchmark(self, input_size, batch_sizes, dtype="bfloat16", num_warmup=1, num_tests=10):
+        print(f"======== {self.op_name} Performance ========")
+        print(
+            "{:<15} {:<40} {:<15} {:<15} {:<15}".format(
+                "Batch Size", "Last 5 Times (us)", "Last Time (us)", "TFlops", "TB/s"
+            )
+        )
+
+        for idx, bsz in enumerate(batch_sizes):
+            x = paddle.rand((bsz, input_size), dtype=dtype)
+
+            self._fake_model_run(x)
+
+            graph = graphs.CUDAGraph()
+            graph.capture_begin()
+            self._fake_model_run(x)
+            graph.capture_end()
+
+            start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
+            end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(num_tests)]
+
+            for i in range(num_tests):
+                start_events[i].record()
+                graph.replay()
+                end_events[i].record()
+
+            paddle.device.synchronize()
+
+            times = np.array([round(s.elapsed_time(e), 2) for s, e in zip(start_events, end_events)])[num_warmup:]
+            times = times * 1e3 / self.num_layers  # us / layer
+            times = np.array([round(time, 2) for time in times])
+            last_5_times = times[-5:]
+            last_time = times[-1]
+
+            tfloaps = None
+            tbps = None
+            if self.weight_size:
+                flops = 2 * bsz * self.weight_size
+                memory = self.weight_size
+                tfloaps = round(flops / 1e12 / (last_time * 1e-6), 1)
+                tbps = round(memory / 1e12 / (last_time * 1e-6), 1)
+
+                print("{:<15} {:<40} {:<15} {:<15} {:<15}".format(bsz, str(last_5_times), last_time, tfloaps, tbps))
+            else:
+                print("{:<15} {:<40} {:<15}".format(bsz, str(last_5_times), last_time))

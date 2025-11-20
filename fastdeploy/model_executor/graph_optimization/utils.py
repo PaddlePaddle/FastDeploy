@@ -56,7 +56,10 @@ class GPUMemoryChecker:
 
     def __del__(self):
         """ """
-        pynvml.nvmlShutdown()
+        if self.gpu_memory_handle is None:
+            pass
+        else:
+            pynvml.nvmlShutdown()
 
     def _print_memory_info(
         self,

@@ -29,7 +29,12 @@ from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
 from fastdeploy.utils import data_processor_logger
-from fastdeploy.worker.output import LogprobsLists, SampleLogprobs
+from fastdeploy.worker.output import (
+    LogprobsLists,
+    LogprobsTensors,
+    PromptLogprobs,
+    SampleLogprobs,
+)
 
 
 class RequestStatus(Enum):
@@ -70,6 +75,8 @@ class Request:
         pooling_params: Optional[PoolingParams] = None,
         preprocess_start_time: Optional[float] = None,
         preprocess_end_time: Optional[float] = None,
+        inference_start_time: float = 0,
+        llm_engine_recv_req_timestamp: float = 0,
         multimodal_inputs: Optional[dict] = None,
         multimodal_data: Optional[dict] = None,
         disable_chat_template: bool = False,
@@ -113,6 +120,10 @@ class Request:
         self.arrival_time = arrival_time
         self.preprocess_start_time = preprocess_start_time
         self.preprocess_end_time = preprocess_end_time
+        self.inference_start_time = inference_start_time
+        self.llm_engine_recv_req_timestamp = (
+            llm_engine_recv_req_timestamp if llm_engine_recv_req_timestamp else time.time()
+        )
         self.disable_chat_template = disable_chat_template
         self.disaggregate_info = disaggregate_info
 
@@ -161,6 +172,10 @@ class Request:
         self.extend_block_tables = []
         # dp
         self.dp_rank = dp_rank
+
+        self.async_process_futures = []
+        self.error_message = None
+        self.error_code = None
 
     @classmethod
     def from_dict(cls, d: dict):
@@ -211,6 +226,8 @@ class Request:
             video_end=d.get("video_end", 0),
             audio_end=d.get("audio_end", 0),
             dp_rank=d.get("dp_rank", None),
+            inference_start_time=d.get("inference_start_time"),
+            llm_engine_recv_req_timestamp=d.get("llm_engine_recv_req_timestamp"),
         )
 
     @property
@@ -399,6 +416,9 @@ class RequestMetrics:
     model_forward_time: Optional[float] = None
     model_execute_time: Optional[float] = None
     request_start_time: Optional[float] = None
+    llm_engine_recv_req_timestamp: Optional[float] = None
+    llm_engine_send_req_to_engine_timestamp: Optional[float] = None
+    llm_engine_recv_token_timestamp: Optional[float] = None
 
     def to_dict(self):
         """
@@ -413,6 +433,9 @@ class RequestMetrics:
             "model_forward_time": self.model_forward_time,
             "model_execute_time": self.model_execute_time,
             "request_start_time": self.request_start_time,
+            "llm_engine_recv_req_timestamp": self.llm_engine_recv_req_timestamp,
+            "llm_engine_send_req_to_engine_timestamp": self.llm_engine_send_req_to_engine_timestamp,
+            "llm_engine_recv_token_timestamp": self.llm_engine_recv_token_timestamp,
         }
 
     @classmethod
@@ -456,6 +479,8 @@ class RequestOutput:
         request_id: str,
         prompt: Optional[str] = None,
         prompt_token_ids: Optional[list[int]] = None,
+        prompt_logprobs: Optional[PromptLogprobs] = None,
+        prompt_logprobs_tensors: Optional[LogprobsTensors] = None,
         output_type: Optional[int] = 3,
         outputs: CompletionOutput = None,
         finished: bool = False,
@@ -469,6 +494,8 @@ class RequestOutput:
         self.request_id = request_id
         self.prompt = prompt
         self.prompt_token_ids = prompt_token_ids
+        self.prompt_logprobs = prompt_logprobs
+        self.prompt_logprobs_tensors = prompt_logprobs_tensors
         self.output_type = output_type
         self.outputs = outputs
         self.finished = finished
@@ -514,6 +541,7 @@ class RequestOutput:
             f"RequestOutput(request_id={self.request_id}, "
             f"prompt={self.prompt!r}, "
             f"prompt_token_ids={self.prompt_token_ids}, "
+            f"prompt_logprobs={self.prompt_logprobs}, "
             f"output_type={self.output_type}, "
             f"outputs={self.outputs}, "
             f"finished={self.finished}, "
@@ -521,6 +549,8 @@ class RequestOutput:
             f"num_input_image_tokens={self.num_input_image_tokens}, "
             f"num_input_video_tokens={self.num_input_video_tokens}, "
             f"metrics={self.metrics}, "
+            f"error_code={self.error_code}, "
+            f"error_msg={self.error_msg},"
         )
 
     @classmethod
@@ -537,6 +567,7 @@ class RequestOutput:
             "request_id": self.request_id,
             "prompt": self.prompt,
             "prompt_token_ids": self.prompt_token_ids,
+            "prompt_logprobs": self.prompt_logprobs,
             "output_type": self.output_type,
             "outputs": None if self.outputs is None else self.outputs.to_dict(),
             "metrics": None if self.metrics is None else self.metrics.to_dict(),

@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Test for router and mixed server
+
 import json
 import os
 import shutil
@@ -29,6 +31,7 @@ FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8133))
 FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
 FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
+FD_ROUTER_PORT = int(os.getenv("FD_ROUTER_PORT", 8533))
 
 # List of ports to clean before and after tests
 PORTS_TO_CLEAN = [
@@ -40,6 +43,7 @@ PORTS_TO_CLEAN = [
     FD_ENGINE_QUEUE_PORT + 1,
     FD_METRICS_PORT + 1,
     FD_CACHE_QUEUE_PORT + 1,
+    FD_ROUTER_PORT,
 ]
 
 
@@ -55,23 +59,101 @@ def is_port_open(host: str, port: int, timeout=1.0):
         return False
 
 
+def check_service_health(base_url: str, timeout: int = 3) -> bool:
+    """
+    Check the health status of a service.
+
+    Args:
+        base_url (str): The base URL of the service, e.g. "http://127.0.0.1:8080"
+        timeout (int): Request timeout in seconds.
+
+    Returns:
+        bool: True if the service is healthy, False otherwise.
+    """
+    if not base_url.startswith("http"):
+        base_url = f"http://{base_url}"
+    url = f"{base_url.rstrip('/')}/health"
+    try:
+        resp = requests.get(url, timeout=timeout)
+        if resp.status_code == 200:
+            return True
+        else:
+            return False
+    except Exception:
+        return False
+
+
+def get_registered_number(router_url) -> list:
+    """
+    Get the number of registered models in the router.
+
+    Args:
+        router_url (str): The base URL of the router, e.g. "http://localhost:8080".
+
+    Returns:
+        int: The number of registered models.
+    """
+    if not router_url.startswith("http"):
+        router_url = f"http://{router_url}"
+
+    try:
+        response = requests.get(f"{router_url}/registered_number", timeout=60)
+        registered_numbers = response.json()
+        return registered_numbers
+    except Exception:
+        return {"mixed": 0, "prefill": 0, "decode": 0}
+
+
 def kill_process_on_port(port: int):
     """
     Kill processes that are listening on the given port.
-    Uses `lsof` to find process ids and sends SIGKILL.
+    Uses multiple methods to ensure thorough cleanup.
     """
+    current_pid = os.getpid()
+    parent_pid = os.getppid()
+
+    # Method 1: Use lsof to find processes
     try:
         output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
-        current_pid = os.getpid()
-        parent_pid = os.getppid()
         for pid in output.splitlines():
             pid = int(pid)
             if pid in (current_pid, parent_pid):
                 print(f"Skip killing current process (pid={pid}) on port {port}")
                 continue
-            os.kill(pid, signal.SIGKILL)
-            print(f"Killed process on port {port}, pid={pid}")
+            try:
+                # First try SIGTERM for graceful shutdown
+                os.kill(pid, signal.SIGTERM)
+                time.sleep(1)
+                # Then SIGKILL if still running
+                os.kill(pid, signal.SIGKILL)
+                print(f"Killed process on port {port}, pid={pid}")
+            except ProcessLookupError:
+                pass  # Process already terminated
     except subprocess.CalledProcessError:
+        pass
+
+    # Method 2: Use netstat and fuser as backup
+    try:
+        # Find processes using netstat and awk
+        cmd = f"netstat -tulpn 2>/dev/null | grep :{port} | awk '{{print $7}}' | cut -d'/' -f1"
+        output = subprocess.check_output(cmd, shell=True).decode().strip()
+        for pid in output.splitlines():
+            if pid and pid.isdigit():
+                pid = int(pid)
+                if pid in (current_pid, parent_pid):
+                    continue
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                    print(f"Killed process (netstat) on port {port}, pid={pid}")
+                except ProcessLookupError:
+                    pass
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
+    # Method 3: Use fuser if available
+    try:
+        subprocess.run(f"fuser -k {port}/tcp", shell=True, timeout=5)
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
         pass
 
 
@@ -79,9 +161,17 @@ def clean_ports():
     """
     Kill all processes occupying the ports listed in PORTS_TO_CLEAN.
     """
+    print(f"Cleaning ports: {PORTS_TO_CLEAN}")
     for port in PORTS_TO_CLEAN:
         kill_process_on_port(port)
+
+    # Double check and retry if ports are still in use
     time.sleep(2)
+    for port in PORTS_TO_CLEAN:
+        if is_port_open("127.0.0.1", port, timeout=0.1):
+            print(f"Port {port} still in use, retrying cleanup...")
+            kill_process_on_port(port)
+            time.sleep(1)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -97,21 +187,52 @@ def setup_and_run_server():
     clean_ports()
 
     print("log dir clean ")
-    if os.path.exists("log") and os.path.isdir("log"):
-        shutil.rmtree("log")
+    if os.path.exists("log_router") and os.path.isdir("log_router"):
+        shutil.rmtree("log_router")
+    if os.path.exists("log_server_0") and os.path.isdir("log_server_0"):
+        shutil.rmtree("log_server_0")
+    if os.path.exists("log_server_1") and os.path.isdir("log_server_1"):
+        shutil.rmtree("log_server_1")
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
         model_path = os.path.join(base_path, "ERNIE-4.5-0.3B-Paddle")
     else:
-        model_path = "./ERNIE-4.5-0.3B-Paddle"
+        model_path = "baidu/ERNIE-4.5-0.3B-Paddle"
+    print(f"model_path: {model_path}")
 
-    # prefill实例
-    env_prefill = os.environ.copy()
-    env_prefill["CUDA_VISIBLE_DEVICES"] = "0"
-    env_prefill["INFERENCE_MSG_QUEUE_ID"] = str(FD_API_PORT)
-    prefill_log_path = "server.log"
-    prefill_cmd = [
+    # router
+    print("start router...")
+    env_router = os.environ.copy()
+    env_router["FD_LOG_DIR"] = "log_router"
+    router_log_path = "router.log"
+
+    router_cmd = [
+        sys.executable,
+        "-m",
+        "fastdeploy.router.launch",
+        "--port",
+        str(FD_ROUTER_PORT),
+    ]
+
+    with open(router_log_path, "w") as logfile:
+        process_router = subprocess.Popen(
+            router_cmd,
+            stdout=logfile,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,  # Enables killing full group via os.killpg
+            env=env_router,
+        )
+
+    # server0
+    print("start server0...")
+    env_server_0 = os.environ.copy()
+    env_server_0["CUDA_VISIBLE_DEVICES"] = "0"
+    env_server_0["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
+    env_server_0["FD_LOG_DIR"] = "log_server_0"
+    env_server_0["INFERENCE_MSG_QUEUE_ID"] = str(FD_API_PORT)
+    log_path = "server_0.log"
+    cmd = [
         sys.executable,
         "-m",
         "fastdeploy.entrypoints.openai.api_server",
@@ -133,27 +254,30 @@ def setup_and_run_server():
         "20",
         "--quantization",
         "wint8",
-        "--splitwise-role",
-        "prefill",
+        "--router",
+        f"0.0.0.0:{FD_ROUTER_PORT}",
     ]
 
     # Start subprocess in new process group
-    with open(prefill_log_path, "w") as logfile:
-        process_prefill = subprocess.Popen(
-            prefill_cmd,
+    with open(log_path, "w") as logfile:
+        process_server_0 = subprocess.Popen(
+            cmd,
             stdout=logfile,
             stderr=subprocess.STDOUT,
             start_new_session=True,  # Enables killing full group via os.killpg
-            env=env_prefill,
+            env=env_server_0,
         )
+    time.sleep(1)
 
-    # decode实例
-    env_decode = os.environ.copy()
-    env_decode["CUDA_VISIBLE_DEVICES"] = "1"
-    env_decode["INFERENCE_MSG_QUEUE_ID"] = str(FD_API_PORT + 1)
-    env_decode["FD_LOG_DIR"] = "decode_log"
-    decode_log_path = "decode_server.log"
-    decode_cmd = [
+    # server 1
+    print("start server 1...")
+    env_server_1 = os.environ.copy()
+    env_server_1["CUDA_VISIBLE_DEVICES"] = "1"
+    env_server_1["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
+    env_server_1["INFERENCE_MSG_QUEUE_ID"] = str(FD_API_PORT + 1)
+    env_server_1["FD_LOG_DIR"] = "log_server_1"
+    log_path = "server_1.log"
+    cmd = [
         sys.executable,
         "-m",
         "fastdeploy.entrypoints.openai.api_server",
@@ -175,33 +299,32 @@ def setup_and_run_server():
         "20",
         "--quantization",
         "wint8",
-        "--splitwise-role",
-        "decode",
+        "--router",
+        f"0.0.0.0:{FD_ROUTER_PORT}",
     ]
 
     # Start subprocess in new process group
-    with open(decode_log_path, "w") as logfile:
-        process_decode = subprocess.Popen(
-            decode_cmd,
+    with open(log_path, "w") as logfile:
+        process_server_1 = subprocess.Popen(
+            cmd,
             stdout=logfile,
             stderr=subprocess.STDOUT,
             start_new_session=True,  # Enables killing full group via os.killpg
-            env=env_decode,
+            env=env_server_1,
         )
 
     # Wait up to 300 seconds for API server to be ready
-    for _ in range(300):
-        if is_port_open("127.0.0.1", FD_API_PORT):
-            if is_port_open("127.0.0.1", FD_API_PORT + 1):
-                print(f"Prefill server is up on port {FD_API_PORT}")
-                print(f"Decode server is up on port {FD_API_PORT + 1}")
-                break
-        time.sleep(1)
+    for _ in range(60):
+        registered_numbers = get_registered_number(f"0.0.0.0:{FD_ROUTER_PORT}")
+        if registered_numbers["mixed"] >= 2:
+            print("Mixed servers are both online")
+            break
+        time.sleep(5)
     else:
         print("[TIMEOUT] API server failed to start in 5 minutes. Cleaning up...")
         try:
-            os.killpg(process_prefill.pid, signal.SIGTERM)
-            os.killpg(process_decode.pid, signal.SIGTERM)
+            os.killpg(process_server_0.pid, signal.SIGTERM)
+            os.killpg(process_server_1.pid, signal.SIGTERM)
             clean_ports()
         except Exception as e:
             print(f"Failed to kill process group: {e}")
@@ -211,11 +334,12 @@ def setup_and_run_server():
 
     print("\n===== Post-test server cleanup... =====")
     try:
-        os.killpg(process_prefill.pid, signal.SIGTERM)
-        os.killpg(process_decode.pid, signal.SIGTERM)
+        os.killpg(process_router.pid, signal.SIGTERM)
+        os.killpg(process_server_0.pid, signal.SIGTERM)
+        os.killpg(process_server_1.pid, signal.SIGTERM)
         clean_ports()
-        print(f"Prefill server (pid={process_prefill.pid}) terminated")
-        print(f"Decode server (pid={process_decode.pid}) terminated")
+        print(f"server (pid={process_server_0.pid}) terminated")
+        print(f"server (pid={process_server_1.pid}) terminated")
     except Exception as e:
         print(f"Failed to terminate API server: {e}")
 
@@ -225,7 +349,7 @@ def api_url(request):
     """
     Returns the API endpoint URL for chat completions.
     """
-    return f"http://0.0.0.0:{FD_API_PORT}/v1/chat/completions", f"http://0.0.0.0:{FD_API_PORT + 1}/v1/chat/completions"
+    return f"http://0.0.0.0:{FD_ROUTER_PORT}/v1/chat/completions"
 
 
 @pytest.fixture(scope="session")
@@ -312,26 +436,12 @@ def test_chat_usage_stream(api_url):
         "stream_options": {"include_usage": True, "continuous_usage_stats": True},
         "metadata": {"min_tokens": 10},
     }
-    p_url, d_url = api_url
 
-    response = send_request(url=p_url, payload=payload)
+    response = send_request(url=api_url, payload=payload)
     chunks = get_stream_chunks(response)
     result = "".join([x["choices"][0]["delta"]["content"] for x in chunks[:-1]])
-    print("Prefill Response:", result)
+    print("Response:", result)
     assert result != "", "结果为空"
-    usage = chunks[-1]["usage"]
-    total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
-    assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
-    assert payload["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
-    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
-
-    response = send_request(url=d_url, payload=payload)
-    chunks = get_stream_chunks(response)
-    result = "".join([x["choices"][0]["delta"]["content"] for x in chunks[:-1]])
-    print("Decode Response:", result)
-    assert result != "", "结果为空"
-    # for idx, chunk in enumerate(chunks):
-    #     print(f"\nchunk[{idx}]:\n{json.dumps(chunk, indent=2, ensure_ascii=False)}")
     usage = chunks[-1]["usage"]
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
     assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
@@ -354,18 +464,8 @@ def test_chat_usage_non_stream(api_url):
         "stream": False,
         "metadata": {"min_tokens": 10},
     }
-    p_url, d_url = api_url
 
-    response = send_request(url=p_url, payload=payload).json()
-    usage = response["usage"]
-    result = response["choices"][0]["message"]["content"]
-    assert result != "", "结果为空"
-    total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
-    assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
-    assert payload["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
-    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
-
-    response = send_request(url=d_url, payload=payload).json()
+    response = send_request(url=api_url, payload=payload).json()
     usage = response["usage"]
     result = response["choices"][0]["message"]["content"]
     assert result != "", "结果为空"
@@ -388,25 +488,12 @@ def test_non_chat_usage_stream(api_url):
         "stream_options": {"include_usage": True, "continuous_usage_stats": True},
         "metadata": {"min_tokens": 10},
     }
-    p_url, d_url = api_url
-    p_url = p_url.replace("chat/completions", "completions")
-    d_url = d_url.replace("chat/completions", "completions")
+    api_url = api_url.replace("chat/completions", "completions")
 
-    response = send_request(url=p_url, payload=payload)
+    response = send_request(url=api_url, payload=payload)
     chunks = get_stream_chunks(response)
     result = "".join([x["choices"][0]["text"] for x in chunks[:-1]])
-    # print("Prefill Response:", result)
-    assert result != "", "结果为空"
-    usage = chunks[-1]["usage"]
-    total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
-    assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
-    assert payload["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
-    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
-
-    response = send_request(url=d_url, payload=payload)
-    chunks = get_stream_chunks(response)
-    result = "".join([x["choices"][0]["text"] for x in chunks[:-1]])
-    # print("Decode Response:", result)
+    print("Response:", result)
     assert result != "", "结果为空"
     usage = chunks[-1]["usage"]
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
@@ -427,23 +514,12 @@ def test_non_chat_usage_non_stream(api_url):
         "stream": False,
         "metadata": {"min_tokens": 10},
     }
-    p_url, d_url = api_url
-    p_url = p_url.replace("chat/completions", "completions")
-    d_url = d_url.replace("chat/completions", "completions")
+    api_url = api_url.replace("chat/completions", "completions")
 
-    response = send_request(url=p_url, payload=payload).json()
+    response = send_request(url=api_url, payload=payload).json()
     usage = response["usage"]
     result = response["choices"][0]["text"]
-    # print("Prefill Response:", result)
-    assert result != "", "结果为空"
-    total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
-    assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
-    assert payload["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
-    assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
-
-    response = send_request(url=d_url, payload=payload).json()
-    usage = response["usage"]
-    result = response["choices"][0]["text"]
+    print("Response:", result)
     assert result != "", "结果为空"
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
     assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
