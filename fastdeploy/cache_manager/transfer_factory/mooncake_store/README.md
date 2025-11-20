@@ -68,8 +68,8 @@ Start the Fastdeploy with Mooncake enabled. Mooncake configuration can be provid
 ```bash
 MOONCAKE_CONFIG_PATH="./mooncake_config.json" \
 python -m fastdeploy.entrypoints.openai.api_server \
-    --enable-hierarchical-cache \
-    --kv-storage-backend mooncake \
+    --enable-hierarchical-kvcache \
+    --kvcache-storage-backend mooncake \
     --model-path [model_path]
 ```
 
