@@ -109,7 +109,7 @@ _debug += '###5\n'
 _debug += str(globals())
 
 
-assert False, _debug
+# assert False, _debug
 
 
 def tolerant_import_error():
