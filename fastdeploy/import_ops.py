@@ -121,4 +121,4 @@ def preprocess_static_op(global_ns):
         original_custom_op = global_ns[static_op_name]
         global_ns[op_name] = wrap_unified_op(original_cpp_ext_op, original_custom_op)
 
-    assert False, global_ns
+    # assert False, global_ns

@@ -194,6 +194,15 @@ def custom_write_stub(resource, pyfile):
             for custom_op in custom_ops:
                 setattr(mod, custom_op, eval(custom_op))
 
+            # Ensure the loaded ops are visible from the module/package namespace.
+            # This copies the ops into the actual imported module object so that
+            # importlib.import_module(...) + inspect.getmembers(...) can find them
+            # both when the op is packaged as a single .py file or as a package dir.
+            target_mod = sys.modules.get(__name__)
+            if target_mod is not None:
+                for custom_op in custom_ops:
+                    setattr(target_mod, custom_op, getattr(mod, custom_op))
+
         __bootstrap__()
 
         """
