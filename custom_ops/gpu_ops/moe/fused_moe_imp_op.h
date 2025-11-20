@@ -45,8 +45,9 @@ class CubKeyValueSorter {
   size_t getWorkspaceSize(const size_t num_key_value_pairs,
                           bool descending = false) {
     num_key_value_pairs_ = num_key_value_pairs;
-    // Initialize to 1 as workaround: under CUDA Graph capture, CUB may not write 
-    // to required_storage, and 1 is the minimum expected size in that scenario.
+    // Initialize to 1 as workaround: under CUDA Graph capture, CUB may not
+    // write to required_storage, and 1 is the minimum expected size in that
+    // scenario.
     size_t required_storage = 1;
     int* null_int = nullptr;
     if (descending) {
