@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Test splitwise deployment which uses local_scheduler + router,
-# and ENABLE_V1_KVCACHE_SCHEDULER is 1
+# Test splitwise deployment: use local_scheduler + router,
+# set ENABLE_V1_KVCACHE_SCHEDULER is 1, use rdma to transfer cache.
 
 import json
 import os

@@ -226,10 +226,14 @@ class PrefixCacheManager:
         )
 
         cache_manager_processes = []
-        launch_cache_transfer_managers = (
-            self.splitwise_role != "decode" and cache_config.enable_hierarchical_cache and self.num_cpu_blocks > 0
-        ) or (self.splitwise_role == "decode" and cache_config.splitwise_cache_buffer_block_num > 0)
-        if launch_cache_transfer_managers:
+        is_launch = (
+            (self.splitwise_role == "mixed" and cache_config.enable_prefix_caching)
+            or (
+                self.splitwise_role == "prefill" and cache_config.enable_hierarchical_cache and self.num_cpu_blocks > 0
+            )
+            or (self.splitwise_role == "decode" and cache_config.splitwise_cache_buffer_block_num > 0)
+        )
+        if is_launch:
             current_dir_path = os.path.split(os.path.abspath(__file__))[0]
             filename = "cache_transfer_manager.py"
             py_path = os.path.join(current_dir_path, filename)
