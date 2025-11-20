@@ -450,7 +450,7 @@ class XPUMoEMethod(MoEMethodBase):
 
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
-        print("Dispatch")
+
         # 2. EP Dispatch
         expertwise_scale = None
         use_fp8 = False
@@ -472,8 +472,8 @@ class XPUMoEMethod(MoEMethodBase):
             layer,
             permute_input,
             token_nums_per_expert,
-            max(1, valid_token_num),
-        )  # 确保空跑时也不为0
+            max(1, valid_token_num),  # 确保空跑时也不为0
+        )
 
         # 4. EP combine
         return self.ep_decoder_runner.combine(
