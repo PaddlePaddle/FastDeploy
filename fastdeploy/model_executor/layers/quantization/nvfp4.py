@@ -134,18 +134,9 @@ class ModelOptNvFp4Config(QuantConfigBase):
         """
         Get quantization method.
         """
-        # skip_layer = self.is_layer_excluded(prefix)
         if isinstance(layer, FusedMoE):
-            # if skip_layer:
-            #     return None
             return ModelOptNvFp4FusedMoE(self)
         else:
-            # LinearBase
-            # if skip_layer:
-            #     return UnquantizedLinearMethod()
-            # Check if this is a vision model layer that should not be quantized
-            # if "vision_tower" in prefix or "vision_model" in prefix:
-            #     return UnquantizedLinearMethod()
             return ModelOptNvFp4LinearMethod(self)
 
         return None
@@ -224,7 +215,7 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
             input_scale_shape: 输入缩放形状
         """
         layer.input_scale = layer.create_parameter(
-            shape=input_scale_shape,  # output_size
+            shape=input_scale_shape,
             dtype=paddle.float32,
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
@@ -240,7 +231,7 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
             extra_weight_attrs: 额外权重属性
         """
         layer.weight_scale_2 = layer.create_parameter(
-            shape=weight_scale_2_shape,  # output_size
+            shape=weight_scale_2_shape,
             dtype=paddle.float32,
             is_bias=False,
             default_initializer=paddle.nn.initializer.Constant(0),
@@ -257,7 +248,6 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         )
 
     def process_weights_after_loading(self, layer) -> None:
-        # if
         def _process_scale_interleaved(scales):
             scale_dim = len(scales.shape)
             if scale_dim == 2:
@@ -386,7 +376,7 @@ class ModelOptNvFp4FusedMoE(QuantMethodBase):
         self.backend = "none"
 
         if envs.FD_FLASHINFER_MOE_BACKEND is None:
-            # currently support flashinfer-cutlass and flashinfer-trtllm
+            # currently support flashinfer-cutlass,  flashinfer-trtllm will support in the future
             if has_flashinfer():
                 self.backend = "flashinfer-cutlass"
         elif envs.FD_FLASHINFER_MOE_BACKEND.startswith("flashinfer-"):
