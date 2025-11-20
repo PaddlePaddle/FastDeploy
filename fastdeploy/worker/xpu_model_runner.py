@@ -369,7 +369,7 @@ class XPUModelRunner(ModelRunnerBase):
         prefill_exists = None
         # mix ep in single node
         if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
-            # 在ep场景下no_need_stop如果都是F，表示全部卡空闲，返回false，走高吞吐分支，否则为部分卡空闲，需要进一步判断
+            # 在ep场景下no_need_stop如果都是false，表示全部卡空闲，返回false，走高吞吐分支，否则为部分卡空闲，需要进一步判断
             no_need_stop_list = []
             no_need_stops = self.not_need_stop()
             paddle.distributed.all_gather_object(no_need_stop_list, not no_need_stops)
@@ -947,7 +947,9 @@ class XPUModelRunner(ModelRunnerBase):
         if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
             self.forward_meta.kv_signal_sender = self.kv_signal_sender
         if_only_decode = self.only_decode()
-        if self.fd_config.scheduler_config.splitwise_role == "mixed":  # 混合式默认初始化为prefill
+        if (
+            self.fd_config.scheduler_config.splitwise_role == "mixed"
+        ):  # 集中式场景，phase默认初始化为prefill, 推理运行时不同类型的batch能够在此处实现phase切换
             self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
         # Get sampling metadata
