@@ -305,8 +305,6 @@ void GetBlockShapeAndSplitKVBlock(
 
   const uint32_t decoder_batch_ele_num = decoder_batch_ids.shape()[0];
 
-  const uint32_t decoder_batch_ele_num = decoder_batch_ids.shape()[0];
-
   // decoder
   if (max_dec_len_this_time > 0) {
     const bool mla_backend = checkAttentionBackend();
