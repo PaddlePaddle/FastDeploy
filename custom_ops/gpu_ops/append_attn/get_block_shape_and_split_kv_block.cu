@@ -311,16 +311,17 @@ void GetBlockShapeAndSplitKVBlock(
     if (mla_backend && group_size <= 64) {
       const int set_chunk_size = get_mla_dec_chunk_size(bsz);
 
-      PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
+      CUDA_CHECK(cudaMemsetAsync(
           decoder_chunk_size_device.data<int>(), 64, sizeof(int32_t), stream));
 
-      PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
+      CUDA_CHECK(cudaMemsetAsync(
           decoder_num_blocks_device.data<int>(), 0, sizeof(int32_t), stream));
 
       int device;
-      cudaGetDevice(&device);
+      CUDA_CHECK(cudaGetDevice(&device));
       int sm_cout;
-      cudaDeviceGetAttribute(&sm_cout, cudaDevAttrMultiProcessorCount, device);
+      CUDA_CHECK(cudaDeviceGetAttribute(
+          &sm_cout, cudaDevAttrMultiProcessorCount, device));
       constexpr int config_size =
           12;  // search space for chunk size:[64, 128, 256, ... 131072]
 
@@ -341,16 +342,14 @@ void GetBlockShapeAndSplitKVBlock(
           decoder_chunk_size_device.copy_to(paddle::CPUPlace(), false);
       const int chunk_size = decoder_chunk_size_cpu.data<int>()[0];
 
-      PADDLE_ENFORCE_GPU_SUCCESS(
-          cudaMemsetAsync(decoder_batch_ids.data<int>(),
-                          0,
-                          decoder_batch_ele_num * sizeof(int32_t),
-                          stream));
-      PADDLE_ENFORCE_GPU_SUCCESS(
-          cudaMemsetAsync(decoder_tile_ids_per_batch.data<int>(),
-                          0,
-                          decoder_batch_ele_num * sizeof(int32_t),
-                          stream));
+      CUDA_CHECK(cudaMemsetAsync(decoder_batch_ids.data<int>(),
+                                 0,
+                                 decoder_batch_ele_num * sizeof(int32_t),
+                                 stream));
+      CUDA_CHECK(cudaMemsetAsync(decoder_tile_ids_per_batch.data<int>(),
+                                 0,
+                                 decoder_batch_ele_num * sizeof(int32_t),
+                                 stream));
 
       split_block_for_mla<<<1, 32, 0, stream>>>(
           seq_lens_this_time.data<int>(),
@@ -362,17 +361,15 @@ void GetBlockShapeAndSplitKVBlock(
           chunk_size);
 
     } else {
-      PADDLE_ENFORCE_GPU_SUCCESS(
-          cudaMemsetAsync(decoder_batch_ids.data<int>(),
-                          0,
-                          decoder_batch_ele_num * sizeof(int32_t),
-                          stream));
-      PADDLE_ENFORCE_GPU_SUCCESS(
-          cudaMemsetAsync(decoder_tile_ids_per_batch.data<int>(),
-                          0,
-                          decoder_batch_ele_num * sizeof(int32_t),
-                          stream));
-      PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
+      CUDA_CHECK(cudaMemsetAsync(decoder_batch_ids.data<int>(),
+                                 0,
+                                 decoder_batch_ele_num * sizeof(int32_t),
+                                 stream));
+      CUDA_CHECK(cudaMemsetAsync(decoder_tile_ids_per_batch.data<int>(),
+                                 0,
+                                 decoder_batch_ele_num * sizeof(int32_t),
+                                 stream));
+      CUDA_CHECK(cudaMemsetAsync(
           decoder_num_blocks_device.data<int>(), 0, sizeof(int32_t), stream));
 
       split_q_block<<<1, 32, 0, stream>>>(
@@ -391,8 +388,6 @@ void GetBlockShapeAndSplitKVBlock(
 #endif
         decoder_num_blocks_cpu.copy_(
             decoder_num_blocks_device, decoder_num_blocks_cpu.place(), false);
-      PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
-          decoder_chunk_size_device.data<int>(), 64, sizeof(int32_t), stream));
     }
   }
 
@@ -401,19 +396,17 @@ void GetBlockShapeAndSplitKVBlock(
     const uint32_t max_tile_size_per_bs_kv =
         div_up(max_enc_dec_len_this_time, block_size);
     const uint32_t kv_batch_shape = bsz * max_tile_size_per_bs_kv;
-    PADDLE_ENFORCE_GPU_SUCCESS(cudaMemsetAsync(
+    CUDA_CHECK(cudaMemsetAsync(
         kv_batch_ids.data<int>(), 0, kv_batch_shape * sizeof(int32_t), stream));
-    PADDLE_ENFORCE_GPU_SUCCESS(
-        cudaMemsetAsync(kv_tile_ids_per_batch.data<int>(),
-                        0,
-                        kv_batch_shape * sizeof(int32_t),
-                        stream));
+    CUDA_CHECK(cudaMemsetAsync(kv_tile_ids_per_batch.data<int>(),
+                               0,
+                               kv_batch_shape * sizeof(int32_t),
+                               stream));
     auto kv_num_blocks_x =
         GetEmptyTensor({1}, paddle::DataType::INT32, seq_lens_encoder.place());
 
     split_kv_block<<<1, 32, 0, seq_lens_encoder.stream()>>>(
         seq_lens_decoder.data<int>(),
-        // sequence_lengths->data<int>(),
         seq_lens_encoder.data<int>(),
         kv_batch_ids.data<int>(),
         kv_tile_ids_per_batch.data<int>(),
@@ -428,16 +421,14 @@ void GetBlockShapeAndSplitKVBlock(
     const uint32_t encoder_max_tile_size_per_bs_q =
         div_up((max_enc_dec_len_this_time * group_size), encoder_block_shape_q);
     const uint32_t encoder_batch_shape = bsz * encoder_max_tile_size_per_bs_q;
-    PADDLE_ENFORCE_GPU_SUCCESS(
-        cudaMemsetAsync(encoder_batch_ids.data<int>(),
-                        0,
-                        encoder_batch_shape * sizeof(int32_t),
-                        stream));
-    PADDLE_ENFORCE_GPU_SUCCESS(
-        cudaMemsetAsync(encoder_tile_ids_per_batch.data<int>(),
-                        0,
-                        encoder_batch_shape * sizeof(int32_t),
-                        stream));
+    CUDA_CHECK(cudaMemsetAsync(encoder_batch_ids.data<int>(),
+                               0,
+                               encoder_batch_shape * sizeof(int32_t),
+                               stream));
+    CUDA_CHECK(cudaMemsetAsync(encoder_tile_ids_per_batch.data<int>(),
+                               0,
+                               encoder_batch_shape * sizeof(int32_t),
+                               stream));
     auto encoder_num_blocks_x =
         GetEmptyTensor({1}, paddle::DataType::INT32, seq_lens_encoder.place());
     split_q_block<<<1, 32, 0, stream>>>(seq_lens_encoder.data<int>(),
