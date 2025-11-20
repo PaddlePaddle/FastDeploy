@@ -75,6 +75,8 @@ class Request:
         pooling_params: Optional[PoolingParams] = None,
         preprocess_start_time: Optional[float] = None,
         preprocess_end_time: Optional[float] = None,
+        inference_start_time: float = 0,
+        llm_engine_recv_req_timestamp: float = 0,
         multimodal_inputs: Optional[dict] = None,
         multimodal_data: Optional[dict] = None,
         disable_chat_template: bool = False,
@@ -120,6 +122,10 @@ class Request:
         self.arrival_time = arrival_time
         self.preprocess_start_time = preprocess_start_time
         self.preprocess_end_time = preprocess_end_time
+        self.inference_start_time = inference_start_time
+        self.llm_engine_recv_req_timestamp = (
+            llm_engine_recv_req_timestamp if llm_engine_recv_req_timestamp else time.time()
+        )
         self.disable_chat_template = disable_chat_template
         self.disaggregate_info = disaggregate_info
 
@@ -171,6 +177,10 @@ class Request:
         self.llm_engine_recv_req_timestamp = time.time()
         self.ic_req_data = ic_req_data
 
+        self.async_process_futures = []
+        self.error_message = None
+        self.error_code = None
+
     @classmethod
     def from_dict(cls, d: dict):
         data_processor_logger.debug(f"{d}")
@@ -221,6 +231,8 @@ class Request:
             audio_end=d.get("audio_end", 0),
             dp_rank=d.get("dp_rank", None),
             ic_req_data=d.get("ic_req_data", None),
+            inference_start_time=d.get("inference_start_time"),
+            llm_engine_recv_req_timestamp=d.get("llm_engine_recv_req_timestamp"),
         )
 
     @property
