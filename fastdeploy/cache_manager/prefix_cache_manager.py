@@ -1834,4 +1834,3 @@ class PrefixCacheManager:
             time.sleep(0.01)
             # debug
             logger.info("DEBUG")
-            time.sleep(0.02)
