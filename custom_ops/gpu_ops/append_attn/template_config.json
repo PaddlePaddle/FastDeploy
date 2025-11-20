@@ -17,7 +17,7 @@
       "IsDynamicC8"
     ],
     "dispatch_params": {
-      "GROUP_SIZE": [1, 2, 3, 4, 5, 6, 7, 8, 12, 14, 16],
+      "GROUP_SIZE": [1, 2, 4, 5, 6, 7, 8, 12, 14, 16],
       "HEAD_DIM": [128],
       "BLOCK_SIZE": [64],
       "CAUSAL": [0, 1],
@@ -54,7 +54,7 @@
       "ENABLE_PREFILL"
     ],
     "dispatch_params": {
-      "GROUP_SIZE": [1, 2, 3, 4, 5, 6, 7, 8, 12, 14, 16],
+      "GROUP_SIZE": [1, 2, 4, 5, 6, 7, 8, 12, 14, 16],
       "HEAD_DIM": [128],
       "BLOCK_SIZE": [64],
       "CAUSAL": [0, 1],
@@ -89,7 +89,7 @@
       "ENABLE_PREFILL"
     ],
     "dispatch_params": {
-      "GROUP_SIZE": [1, 2, 3, 4, 5, 6, 7, 8, 12, 14, 16],
+      "GROUP_SIZE": [1, 2, 4, 5, 6, 7, 8, 12, 14, 16],
       "HEAD_DIM": [64,128],
       "BLOCK_SIZE": [64],
       "CAUSAL": [0, 1],
