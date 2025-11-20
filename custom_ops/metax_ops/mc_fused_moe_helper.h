@@ -17,15 +17,16 @@
 #include "mctlassEx/mctlassEx.h"
 
 template <typename ElementA, typename ElementB, typename ElementC>
-void mc_grouped_gemm_basic_kernel(const ElementA *ptrA,
+void mc_grouped_gemm_basic_kernel(const ElementA* ptrA,
                                   mctlassExOrder_t majorA,
-                                  const ElementB *ptrB,
+                                  const ElementB* ptrB,
                                   mctlassExOrder_t majorB,
-                                  const ElementA *ptrScale,
-                                  const ElementA *ptrBias,
-                                  ElementC *ptrC,
+                                  const ElementA* ptrScale,
+                                  const ElementA* ptrBias,
+                                  ElementC* ptrC,
                                   mctlassExOrder_t majorC,
-                                  const int *ptrSegInd,
+                                  const int* ptrSegInd,
+                                  int* ptrMNumTilesInd,
                                   int numExperts,
                                   int m,  // expanded_active_expert_rows
                                   int n,  // inter_dim
@@ -33,9 +34,6 @@ void mc_grouped_gemm_basic_kernel(const ElementA *ptrA,
                                   mcStream_t stream) {
   mctlassExHandle_t handle;
   mctlassExHandleCreate(&handle);
-
-  int *ptrMNumTilesInd;
-  mcMallocAsync((void **)&ptrMNumTilesInd, sizeof(int) * numExperts, stream);
 
   mctlassExMatrixLayout_t matLayoutA;
   mctlassExMatrixLayout_t matLayoutB;
@@ -170,7 +168,6 @@ void mc_grouped_gemm_basic_kernel(const ElementA *ptrA,
   mctlassExMatrixLayoutDestroy(matLayoutC);
   mctlassExContiguousGroupedDescDestroy(contiguous_group_desc);
   mctlassExDestroyDesc(mctlass_desc);
-  mcFreeAsync(ptrMNumTilesInd, stream);
 }
 
 template <typename T, typename ElementA, typename ElementB, typename ElementC>
@@ -227,27 +224,27 @@ class McMoeHelper {
     return total_ws_bytes;
   }
 
-  void computeFFN(const paddle::Tensor *input,
-                  const paddle::Tensor *gate_weight,
-                  const paddle::Tensor *ffn1_weight,
-                  const paddle::Tensor *ffn1_scale,
-                  const paddle::Tensor *ffn1_bias,
-                  const paddle::Tensor *ffn2_weight,
-                  const paddle::Tensor *ffn2_scale,
-                  const paddle::Tensor *ffn2_bias,
-                  const paddle::Tensor *moe_token_type_ids,
+  void computeFFN(const paddle::Tensor* input,
+                  const paddle::Tensor* gate_weight,
+                  const paddle::Tensor* ffn1_weight,
+                  const paddle::Tensor* ffn1_scale,
+                  const paddle::Tensor* ffn1_bias,
+                  const paddle::Tensor* ffn2_weight,
+                  const paddle::Tensor* ffn2_scale,
+                  const paddle::Tensor* ffn2_bias,
+                  const paddle::Tensor* moe_token_type_ids,
                   const int moe_topk,
                   const bool group_moe,
                   const bool norm_topk_prob,
                   const float routed_scaling_factor,
                   const std::string moe_type,
-                  paddle::Tensor *output) {
-    auto *input_activations = input->data<T>();
-    auto *gating_weights = gate_weight->data<float>();
-    const T *fc1_expert_biases = ffn1_bias ? ffn1_bias->data<T>() : nullptr;
-    const T *fc2_expert_biases = ffn2_bias ? ffn2_bias->data<T>() : nullptr;
+                  paddle::Tensor* output) {
+    auto* input_activations = input->data<T>();
+    auto* gating_weights = gate_weight->data<float>();
+    const T* fc1_expert_biases = ffn1_bias ? ffn1_bias->data<T>() : nullptr;
+    const T* fc2_expert_biases = ffn2_bias ? ffn2_bias->data<T>() : nullptr;
 
-    auto *output_ = output->data<T>();
+    auto* output_ = output->data<T>();
     auto stream = input->stream();
     auto place = input->place();
     auto input_type = input->dtype();
@@ -282,52 +279,52 @@ class McMoeHelper {
         getWorkspaceSize<T>(num_rows, hidden_size, inter_size, num_experts, k);
 
     // Pointers
-    int *expert_for_source_row;
-    int *source_rows_;
-    int *permuted_rows_;
-    int *permuted_experts_;
-    int *expanded_source_row_to_expanded_dest_row;
+    int* expert_for_source_row;
+    int* source_rows_;
+    int* permuted_rows_;
+    int* permuted_experts_;
+    int* expanded_source_row_to_expanded_dest_row;
 
-    T *permuted_data_;
-    int32_t *total_rows_before_expert_;
-    T *fc1_result_;
-    float *softmax_out_;
+    T* permuted_data_;
+    int32_t* total_rows_before_expert_;
+    T* fc1_result_;
+    float* softmax_out_;
 
     paddle::Tensor ws_ptr_tensor =
         GetEmptyTensor({bytes}, paddle::DataType::INT8, place);
-    int8_t *ws_ptr = ws_ptr_tensor.data<int8_t>();
+    int8_t* ws_ptr = ws_ptr_tensor.data<int8_t>();
 
     const int64_t buf_size = AlignTo16(k * num_rows * hidden_size);
     const int64_t interbuf_size = AlignTo16(k * num_rows * inter_size);
     const int64_t padded_experts = AlignTo16(num_experts);
     const int64_t num_moe_inputs = AlignTo16(k * num_rows);
 
-    expert_for_source_row = reinterpret_cast<int *>(ws_ptr);
+    expert_for_source_row = reinterpret_cast<int*>(ws_ptr);
     source_rows_ = expert_for_source_row + num_moe_inputs;
     permuted_rows_ = source_rows_ + num_moe_inputs;
     permuted_experts_ = permuted_rows_ + num_moe_inputs;
     expanded_source_row_to_expanded_dest_row =
         permuted_experts_ + num_moe_inputs;
-    permuted_data_ = reinterpret_cast<T *>(
+    permuted_data_ = reinterpret_cast<T*>(
         expanded_source_row_to_expanded_dest_row + num_moe_inputs);
     total_rows_before_expert_ =
-        reinterpret_cast<int32_t *>(permuted_data_ + buf_size);
+        reinterpret_cast<int32_t*>(permuted_data_ + buf_size);
     fc1_result_ =
-        reinterpret_cast<T *>(total_rows_before_expert_ + padded_experts);
+        reinterpret_cast<T*>(total_rows_before_expert_ + padded_experts);
 
     const bool is_pow_2 =
         (num_experts != 0) && ((num_experts & (num_experts - 1)) == 0);
     if (!is_pow_2 || num_experts > 256) {
-      softmax_out_ = reinterpret_cast<float *>(fc1_result_ + interbuf_size);
+      softmax_out_ = reinterpret_cast<float*>(fc1_result_ + interbuf_size);
     } else {
       softmax_out_ = nullptr;
     }
 
     paddle::Tensor expert_scales_float_tensor =
         GetEmptyTensor({num_rows, moe_topk}, paddle::DataType::FLOAT32, place);
-    float *expert_scales_float = expert_scales_float_tensor.data<float>();
+    float* expert_scales_float = expert_scales_float_tensor.data<float>();
 
-    float *softmax_max_prob = nullptr;
+    float* softmax_max_prob = nullptr;
     if (group_moe) {
       paddle::Tensor softmax_max_prob_tensor = GetEmptyTensor(
           {num_rows, moe_topk}, paddle::DataType::FLOAT32, place);
@@ -338,16 +335,16 @@ class McMoeHelper {
 
     paddle::Tensor fc1_out_tensor =
         GetEmptyTensor({num_rows * k, inter_size}, input_type, place);
-    T *fc1_out = fc1_out_tensor.data<T>();
+    T* fc1_out = fc1_out_tensor.data<T>();
 
     auto input_cast_tensor =
         paddle::experimental::cast(*input, paddle::DataType::FLOAT32);
     auto gate_tensor =
         paddle::experimental::matmul(input_cast_tensor, *gate_weight);
-    float *gating_output = gate_tensor.data<float>();
+    float* gating_output = gate_tensor.data<float>();
 
     if (moe_token_type_ids) {
-      auto *moe_token_type_ids_out = moe_token_type_ids->data<int>();
+      auto* moe_token_type_ids_out = moe_token_type_ids->data<int>();
       moe_token_type_ids_kernelLauncher<float>(gating_output,
                                                moe_token_type_ids_out,
                                                num_rows,
@@ -403,17 +400,21 @@ class McMoeHelper {
     mctlassExOrder_t row_major = mctlassExOrder_t::MCTLASS_EX_ORDER_ROW_MAJOR;
     mctlassExOrder_t column_major =
         mctlassExOrder_t::MCTLASS_EX_ORDER_COLUMN_MAJOR;
+    auto m_num_tile =
+        GetEmptyTensor({num_experts}, paddle::DataType::INT32, place);
+    int* m_num_tile_ptr = reinterpret_cast<int*>(m_num_tile.data<int>());
 
     mc_grouped_gemm_basic_kernel<ElementA, ElementB, ElementC>(
-        reinterpret_cast<const ElementA *>(permuted_data_),
+        reinterpret_cast<const ElementA*>(permuted_data_),
         row_major,
-        reinterpret_cast<const ElementB *>(ffn1_weight->data<ElementB>()),
+        reinterpret_cast<const ElementB*>(ffn1_weight->data<ElementB>()),
         column_major,
-        reinterpret_cast<const ElementA *>(ffn1_scale->data<T>()),
-        reinterpret_cast<const ElementA *>(fc1_expert_biases),
-        reinterpret_cast<ElementC *>(fc1_out),
+        reinterpret_cast<const ElementA*>(ffn1_scale->data<T>()),
+        reinterpret_cast<const ElementA*>(fc1_expert_biases),
+        reinterpret_cast<ElementC*>(fc1_out),
         row_major,
         total_rows_before_expert_,
+        m_num_tile_ptr,
         num_experts,
         expanded_active_expert_rows,
         inter_size,
@@ -427,18 +428,19 @@ class McMoeHelper {
 
       paddle::Tensor fc2_output_tensor =
           GetEmptyTensor({k * num_rows, hidden_size}, input_type, place);
-      T *fc2_result = fc2_output_tensor.data<T>();
+      T* fc2_result = fc2_output_tensor.data<T>();
 
       mc_grouped_gemm_basic_kernel<ElementA, ElementB, ElementC>(
-          reinterpret_cast<const ElementA *>(act_out),
+          reinterpret_cast<const ElementA*>(act_out),
           row_major,
-          reinterpret_cast<const ElementB *>(ffn2_weight->data<ElementB>()),
+          reinterpret_cast<const ElementB*>(ffn2_weight->data<ElementB>()),
           column_major,
-          reinterpret_cast<const ElementA *>(ffn2_scale->data<T>()),
+          reinterpret_cast<const ElementA*>(ffn2_scale->data<T>()),
           nullptr,
-          reinterpret_cast<ElementC *>(fc2_result),
+          reinterpret_cast<ElementC*>(fc2_result),
           row_major,
           total_rows_before_expert_,
+          m_num_tile_ptr,
           num_experts,
           expanded_active_expert_rows,
           hidden_size,
@@ -449,7 +451,7 @@ class McMoeHelper {
           fc2_result,
           output_,
           fc2_expert_biases,
-          reinterpret_cast<float *>(expert_scales_float),
+          reinterpret_cast<float*>(expert_scales_float),
           expanded_source_row_to_expanded_dest_row,
           expert_for_source_row,
           num_rows,
@@ -465,7 +467,7 @@ class McMoeHelper {
           fc1_out,
           output_,
           fc1_expert_biases,  // fc2_expert_biases,
-          reinterpret_cast<float *>(expert_scales_float),
+          reinterpret_cast<float*>(expert_scales_float),
           expanded_source_row_to_expanded_dest_row,
           expert_for_source_row,
           num_rows,
