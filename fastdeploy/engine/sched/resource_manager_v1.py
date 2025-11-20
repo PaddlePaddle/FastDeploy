@@ -514,6 +514,8 @@ class ResourceManagerV1(ResourceManager):
             error_reqs: list[tuple[str, str]] = []
             token_budget = self.config.scheduler_config.max_num_batched_tokens
 
+            self.check_and_free_block_tables()
+
             # First, schedule the RUNNING requests.
             req_index = 0
             num_decoding_req_nums = 0

@@ -285,7 +285,7 @@ class LocalScheduler:
                         if short_partial_requests + long_partial_requests > self.max_num_partial_prefills:
                             break
                     else:
-                        if current_prefill_tokens > max_num_batched_tokens:
+                        if current_prefill_tokens > max_num_batched_tokens and len(requests) > 0:
                             break
                 requests.append(request.raw)
 
