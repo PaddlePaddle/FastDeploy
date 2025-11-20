@@ -360,10 +360,6 @@ class MergedReplicatedLinear(ReplicatedLinear):
         self.output_sizes = output_sizes
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
-        weight_need_transpose = getattr(param, "weight_need_transpose", False)
-        if weight_need_transpose:
-            loaded_weight = get_tensor(loaded_weight).transpose([1, 0])
-
         assert loaded_shard_id in ["q_a", "kv_a"]
         if not param._is_initialized():
             param.initialize()
@@ -389,7 +385,6 @@ class MergedReplicatedLinear(ReplicatedLinear):
             else:
                 loaded_weight = loaded_weight.cast(param.dtype)
         # (bukejiyu) After this fix, the early H2D copy for non-GPU devices is no longer needed and can be safely removed.
-        loaded_weight = get_tensor(loaded_weight)
         h2d_copy(param, loaded_weight)
 
 
@@ -962,7 +957,10 @@ class KVBatchLinear(nn.Layer):
         self.num_heads_per_partition = divide(num_attention_heads, self.nranks)
         self.local_rank = fd_config.parallel_config.tensor_parallel_rank
         self.fd_config = fd_config
-        self.kv_b_proj = kv_b_proj
+        if self.fd_config.load_config.load_choices == "default_v1":
+            self.kv_b_proj = kv_b_proj
+        else:
+            self.kv_b_proj = None
 
         self.weight_dtype = self._helper.get_default_dtype()
 

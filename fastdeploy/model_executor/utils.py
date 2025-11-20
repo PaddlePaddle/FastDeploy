@@ -141,7 +141,7 @@ def process_weight_transpose(layer, weight_name):
         is_bias=False,
     )
     if layer.fd_config.load_config.dynamic_load_weight or layer.fd_config.model_config.enable_cache:
-        free_tensor(weight)
+        free_tensor(weight, clear_memory=False)
         setattr(layer, weight_name, weight_tmp)
         return
 
@@ -150,7 +150,7 @@ def process_weight_transpose(layer, weight_name):
     elif len(weight.shape) == 3:
         weight_transpose = weight.transpose([0, 2, 1])
     weight_tmp.copy_(weight_transpose, False)
-    free_tensor(weight)
+    free_tensor(weight, clear_memory=False)
     setattr(layer, weight_name, weight_tmp)
 
 
@@ -260,11 +260,13 @@ def process_final_after_loading(model, fd_config: FDConfig):
         sublayer.process_weights_after_loading()
 
 
-def free_tensor(tensor):
+def free_tensor(tensor, clear_memory=True):
     if hasattr(tensor, "tensor_track"):
         tensor.tensor_track = None
     tensor.value().get_tensor()._clear()
     del tensor
+    if clear_memory:
+        paddle.device.cuda.empty_cache()
 
 
 def fd_cast(weight, param):
