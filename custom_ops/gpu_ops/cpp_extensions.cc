@@ -1498,7 +1498,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("noaux_tc", &NoauxTc, "noaux_tc for Deepseekv3 MoE compute");
 
-  m.def("noaux_tc_redunant",
+  m.def("noaux_tc_redundant",
         &NoauxTcRedundant,
         "noaux_tc_redundant for MoE compute");
 
