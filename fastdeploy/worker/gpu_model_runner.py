@@ -950,8 +950,7 @@ class GPUModelRunner(ModelRunnerBase):
                 input_length_list = [1] * (batch_size - 1)
                 input_length_list.append(num_tokens - batch_size + 1)
 
-        len_of_input_length_list = len(input_length_list)
-        max_dec_len_list = [max_dec_len] * len_of_input_length_list
+        max_dec_len_list = [max_dec_len] * len(input_length_list)
 
         return input_length_list, max_dec_len_list, block_num
 
