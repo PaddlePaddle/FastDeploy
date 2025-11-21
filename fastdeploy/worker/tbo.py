@@ -69,7 +69,7 @@ def split_batch(forward_meta: ForwardMeta):
     return res
 
 
-def allow_another_thread_run():
+def let_another_thread_run():
     thread_name = threading.current_thread().name
 
     if thread_name in GLOBAL_THREAD_INFO:

@@ -159,9 +159,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128
         )
 
-        from fastdeploy.worker.tbo import allow_another_thread_run
+        from fastdeploy.worker.tbo import let_another_thread_run
 
-        allow_another_thread_run()
+        let_another_thread_run()
 
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
@@ -247,7 +247,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         # 5. EP combine
         tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
 
-        allow_another_thread_run()
+        let_another_thread_run()
 
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
