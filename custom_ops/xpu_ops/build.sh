@@ -41,7 +41,26 @@ else
     if [ -d "./${OPS_TMP_DIR}/${WHEEL_NAME}" ]; then
         echo -e "${YELLOW}[Warning]${NONE} ${WHEEL_NAME} directory exists. This is a deprecated packaging and distribution method."
     else
-        echo -e "${RED}[Error]${NONE} Neither modern nor legacy directory found in ${OPS_TMP_DIR}"
+        # Check if required files exist in OPS_TMP_DIR
+        if [ -f "./${OPS_TMP_DIR}/fastdeploy_ops.py" ] && { [ -f "./${OPS_TMP_DIR}/fastdeploy_ops_pd_.so" ] || [ -f "./${OPS_TMP_DIR}/fastdeploy_ops.so" ]; }; then
+            echo -e "${YELLOW}[Warning]${NONE} Neither modern nor legacy directory found, but required files exist in ${OPS_TMP_DIR}"
+            echo -e "${GREEN}[Info]${NONE} Creating ${WHEEL_NAME} directory and moving files"
+
+            # Create the WHEEL_NAME directory
+            mkdir -p "./${OPS_TMP_DIR}/${WHEEL_NAME}"
+
+            # Copy the required files to the WHEEL_NAME directory
+            cp "./${OPS_TMP_DIR}/fastdeploy_ops.py" "./${OPS_TMP_DIR}/${WHEEL_NAME}/"
+
+            # Copy the appropriate .so file
+            if [ -f "./${OPS_TMP_DIR}/fastdeploy_ops_pd_.so" ]; then
+                cp "./${OPS_TMP_DIR}/fastdeploy_ops_pd_.so" "./${OPS_TMP_DIR}/${WHEEL_NAME}/"
+            else
+                cp "./${OPS_TMP_DIR}/fastdeploy_ops.so" "./${OPS_TMP_DIR}/${WHEEL_NAME}/fastdeploy_ops_pd_.so"
+            fi
+        else
+            echo -e "${RED}[Error]${NONE} Neither modern nor legacy directory found in ${OPS_TMP_DIR}"
+        fi
     fi
     # Use legacy directory name
     TARGET_DIR="${OPS_TMP_DIR}/${WHEEL_NAME}"
