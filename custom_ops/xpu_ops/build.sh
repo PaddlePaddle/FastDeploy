@@ -35,7 +35,7 @@ if [ ! -d "./${OPS_TMP_DIR}" ]; then
     mkdir -p "./${OPS_TMP_DIR}"
 fi
 
-${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}
+${python} setup_ops.py install --install-lib ${OPS_TMP_DIR} --verbose
 
 # Handle directory compatibility between modern and legacy naming
 if [ -d "./${OPS_TMP_DIR}/${WHEEL_MODERN_NAME}" ]; then
