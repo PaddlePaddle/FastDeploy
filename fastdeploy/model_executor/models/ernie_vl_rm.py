@@ -89,22 +89,6 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
                 ),
             ),
         )
-        # set_weight_attrs(
-        #     self.rm_head.up_gate_proj.weight,
-        #     {
-        #         "weight_loader": default_weight_loader(fd_config),
-        #         "weight_need_transpose": fd_config.model_config.model_format == "torch",
-        #         "output_dim": True,
-        #     },
-        # )
-        # set_weight_attrs(
-        #     self.rm_head.down_proj.weight,
-        #     {
-        #         "weight_loader": default_weight_loader(fd_config),
-        #         "weight_need_transpose": fd_config.model_config.model_format == "torch",
-        #         "output_dim": False,
-        #     },
-        # )
 
     def get_input_embeddings(
         self,

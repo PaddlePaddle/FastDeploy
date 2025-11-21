@@ -239,7 +239,6 @@ class ModelConfig:
         assert self.model != ""
         pretrained_config, _ = PretrainedConfig.get_config_dict(self.model)
         self.pretrained_config = PretrainedConfig.from_dict(pretrained_config)
-        print("self.pretrained_config", self.pretrained_config)
 
         # set attribute from pretrained_config
         for key, value in pretrained_config.items():
