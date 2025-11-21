@@ -403,8 +403,10 @@ class LLMEngine:
         llm_logger.info("Engine shut down, exiting sub services...")
 
         if hasattr(self, "cache_manager_processes"):
-            self.engine.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
-            self.engine.resource_manager.cache_manager.cache_ready_signal.clear()
+            if hasattr(self.engine.resource_manager.cache_manager, "shm_cache_task_flag_broadcast"):
+                self.engine.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
+            if hasattr(self.engine.resource_manager.cache_manager, "cache_ready_signal"):
+                self.engine.resource_manager.cache_manager.cache_ready_signal.clear()
             for p in self.cache_manager_processes:
                 llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:

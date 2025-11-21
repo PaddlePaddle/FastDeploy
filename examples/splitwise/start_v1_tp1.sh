@@ -6,22 +6,8 @@ set -e
 # v0: using splitwise_scheduler or dp_scheduler
 # v1: using local_scheduler + router
 
-wait_for_health() {
-       local server_port=$1
-       while true; do
-       status_code=$(curl -s -o /dev/null -w "%{http_code}" "http://0.0.0.0:${server_port}/health" || echo "000")
-       if [ "$status_code" -eq 200 ]; then
-              break
-       else
-              echo "Service not ready. Retrying in 2s..."
-              sleep 2
-       fi
-       done
-}
-
 # prepare environment
-MODEL_NAME="PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
-
+export MODEL_NAME="PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
 export FD_DEBUG=1
 export ENABLE_V1_KVCACHE_SCHEDULER=1
 export KVCACHE_GDRCOPY_FLUSH_ENABLE=1
@@ -37,10 +23,21 @@ fi
 
 unset http_proxy && unset https_proxy
 rm -rf log_*
+source ./utils.sh
 
 P_PORT=52400
 D_PORT=52500
-ROUTER_PORT=52600
+ROUTER_PORT=52700
+
+ports=(
+    $P_PORT $((P_PORT + 1)) $((P_PORT + 2)) $((P_PORT + 3)) $((P_PORT + 4)) $((P_PORT + 5))
+    $D_PORT $((D_PORT + 1)) $((D_PORT + 2)) $((D_PORT + 3)) $((D_PORT + 4)) $((D_PORT + 5))
+    $ROUTER_PORT
+)
+check_ports "${ports[@]}" || {
+    echo "❌ Some ports are in use. Please release them."
+    exit 1
+}
 
 # start router
 export FD_LOG_DIR="log_router"
@@ -50,7 +47,6 @@ nohup python -m fastdeploy.router.launch \
     --port ${ROUTER_PORT} \
     --splitwise \
     2>&1 >${FD_LOG_DIR}/nohup &
-sleep 1
 
 # start prefill
 export CUDA_VISIBLE_DEVICES=0
@@ -96,12 +92,13 @@ wait_for_health ${D_PORT}
 
 # send request
 sleep 10  # make sure server is registered to router
+echo "send request..."
 curl -X POST "http://0.0.0.0:${ROUTER_PORT}/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [
     {"role": "user", "content": "hello"}
   ],
-  "max_tokens": 20,
-  "stream": true
+  "max_tokens": 100,
+  "stream": false
 }'
