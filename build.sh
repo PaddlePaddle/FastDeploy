@@ -249,8 +249,14 @@ function extract_ops_from_precompiled_wheel() {
   echo -e "${BLUE}[precompiled]${NONE} Copying GPU precompiled contents..."
   mkdir -p "$DST_DIR"
   cp -r "$SRC_DIR/deep_gemm" "$DST_DIR/" 2>/dev/null || true
-  cp -r "$SRC_DIR/fastdeploy_ops.py" "$DST_DIR/" 2>/dev/null || true
-  cp -f "$SRC_DIR/"fastdeploy_ops_*.so "$DST_DIR/" 2>/dev/null || true
+  # Check for modern Python packaging approach (fastdeploy_ops directory)
+  # If exists, copy the entire directory; otherwise, fall back to legacy method (individual files)
+  if [ -d "$SRC_DIR/fastdeploy_ops" ]; then
+    cp -r "$SRC_DIR/fastdeploy_ops" "$DST_DIR/" 2>/dev/null || true
+  else
+    cp -r "$SRC_DIR/fastdeploy_ops.py" "$DST_DIR/" 2>/dev/null || true
+    cp -f "$SRC_DIR/"fastdeploy_ops_*.so "$DST_DIR/" 2>/dev/null || true
+  fi
   cp -f "$SRC_DIR/version.txt" "$DST_DIR/" 2>/dev/null || true
 
   echo -e "${GREEN}[SUCCESS]${NONE} Installed FastDeploy using precompiled wheel."
