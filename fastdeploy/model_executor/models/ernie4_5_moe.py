@@ -211,7 +211,7 @@ class Ernie4_5_MoE(nn.Layer):
             self.shared_experts.load_state_dict(state_dict)
 
     def update_state_dict(self, state_dict):
-        self.fused_moe.load_state_dict(state_dict, True)
+        self.experts.load_state_dict(state_dict, True)
 
     def forward(self, hidden_states: paddle.Tensor):
         out = self.experts(hidden_states, self.gate)
