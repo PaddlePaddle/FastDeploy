@@ -36,7 +36,7 @@ from http import HTTPStatus
 from importlib.metadata import PackageNotFoundError, distribution
 from logging.handlers import BaseRotatingHandler
 from pathlib import Path
-from typing import Literal, TypeVar, Union
+from typing import Any, Literal, TypeVar, Union
 
 import numpy as np
 import paddle
@@ -54,7 +54,7 @@ from fastdeploy.entrypoints.openai.protocol import ErrorInfo, ErrorResponse
 from fastdeploy.logger.logger import FastDeployLogger
 
 T = TypeVar("T")
-from typing import Callable, Optional
+from typing import Callable, List, Optional
 
 # [N,2] -> every line is [config_name, enable_xxx_name]
 # Make sure enable_xxx equal to config.enable_xxx
@@ -1058,3 +1058,80 @@ def optional_type(return_type: Callable[[str], T]) -> Callable[[str], Optional[T
         return parse_type(return_type)(val)
 
     return _optional_type
+
+
+def to_numpy(tasks: List[Any]):
+    """
+    Convert PaddlePaddle tensors in multimodal inputs to NumPy arrays.
+
+    Args:
+        tasks: List of tasks containing multimodal inputs.
+    """
+    try:
+        for task in tasks:
+            if not hasattr(task, "multimodal_inputs"):
+                continue
+            images = task.multimodal_inputs.get("images", None)
+            if isinstance(images, paddle.Tensor):
+                llm_logger.debug(f"Convert image to numpy, shape: {images.shape}")
+                task.multimodal_inputs["images"] = images.numpy()
+
+            list_keys = [
+                "image_features",
+                "video_features",
+                "audio_features",
+            ]
+            for key in list_keys:
+                value = task.multimodal_inputs.get(key, None)
+                if value is None:
+                    continue
+                if isinstance(value, list):
+                    task.multimodal_inputs[key] = [v.numpy() for v in value]
+    except Exception as e:
+        llm_logger.warning(f"Failed to convert to numpy: {e}")
+
+
+def to_tensor(tasks: List[Any]):
+    """
+    Convert NumPy arrays in multimodal inputs to Paddle tensors.
+
+    Args:
+        tasks (tuple): ([request], bsz)
+    """
+    try:
+        for task in tasks:
+            multimodal_inputs = getattr(task, "multimodal_inputs", None)
+            if not multimodal_inputs:
+                continue
+            # tensor keys
+            tensor_keys = [
+                "images",
+                "patch_idx",
+                "token_type_ids",
+                "position_ids",
+                "attention_mask_offset",
+            ]
+
+            list_keys = [
+                "image_features",
+                "video_features",
+                "audio_features",
+            ]
+
+            llm_logger.debug(f"Converting multimodal inputs to tensor...{tensor_keys + list_keys}")
+
+            for key in tensor_keys:
+                value = multimodal_inputs.get(key)
+                if value is None:
+                    continue
+                if not isinstance(value, paddle.Tensor):
+                    multimodal_inputs[key] = paddle.to_tensor(value)
+
+            for key in list_keys:
+                value = multimodal_inputs.get(key)
+                if value is None:
+                    continue
+                if isinstance(value, list):
+                    multimodal_inputs[key] = [paddle.to_tensor(v) for v in value]
+    except Exception as e:
+        llm_logger.warning(f"Tensor conversion failed: {type(e).__name__}: {e}")
