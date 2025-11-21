@@ -64,7 +64,7 @@ def split_batch(forward_meta: ForwardMeta):
         res[i].cu_seqlens_k = forward_meta.cu_seqlens_k[start_bs : end_bs + 1] - start_token_id
 
         for key in GLOBAL_ATTN_BUFFERS[i]:
-            setattr(res[i], key, GLOBAL_ATTN_BUFFERS[i])
+            setattr(res[i], key, GLOBAL_ATTN_BUFFERS[i][key])
 
     return res
 
