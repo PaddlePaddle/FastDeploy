@@ -297,7 +297,8 @@ class LLGuidanceChecker(BaseChecker):
             if request.guided_regex:
                 request.guided_regex = guidance_grm
             elif request.guided_choice:
-                request.guided_choice = guidance_grm
+                request.guided_grammar = guidance_grm
+                request.guided_choice = None
             elif request.guided_grammar:
                 request.guided_grammar = guidance_grm
             elif request.guided_json:
