@@ -511,7 +511,7 @@ class EngineArgs:
                     self.data_parallel_size // (len(self.ips) if self.ips else 1)
                 ):
                     raise ValueError(
-                        f"The number of rdma comm ports must be equal to number of ranks ({self.data_parallel_size=} * {self.tensor_parallel_size=} = {self.data_parallel_size * self.tensor_parallel_size}), but got {len(self.rdma_comm_ports)}."
+                        f"The number of rdma comm ports must be equal to number of ranks ({self.data_parallel_size=} // (number of nodes) * {self.tensor_parallel_size=} = {self.data_parallel_size // (len(self.ips) if self.ips else 1) * self.tensor_parallel_size}), but got {len(self.rdma_comm_ports)}."
                     )
 
         if not current_platform.is_cuda() and not current_platform.is_xpu():
