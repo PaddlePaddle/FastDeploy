@@ -83,6 +83,8 @@ from fastdeploy.model_executor.pre_and_post_process import (
 if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
     from fastdeploy.spec_decode import MTPProposer, NgramProposer
 
+import threading
+
 import zmq
 
 from fastdeploy import envs
@@ -97,7 +99,7 @@ from fastdeploy.model_executor.models.interfaces_base import FdModelForPooling
 from fastdeploy.output.pooler import PoolerOutput
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, ModelRunnerOutput
-from fastdeploy.worker.tbo import GLOBAL_ATTN_BUFFERS, split_batch
+from fastdeploy.worker.tbo import GLOBAL_ATTN_BUFFERS, GLOBAL_THREAD_INFO, split_batch
 
 
 class GPUModelRunner(ModelRunnerBase):
@@ -2111,9 +2113,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.padding_cudagraph_inputs()
 
         model_output = {}
-        import threading
-
-        from fastdeploy.worker.tbo import GLOBAL_THREAD_INFO
 
         def haha(forward_meta):
 
