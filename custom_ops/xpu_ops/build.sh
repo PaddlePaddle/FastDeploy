@@ -42,6 +42,7 @@ if [ -d "${OPS_TMP_DIR}/${WHEEL_MODERN_NAME}" ]; then
     echo -e "${GREEN}[Info]${NONE} Ready to use ops from modern directory ${WHEEL_MODERN_NAME}"
     # Use modern directory name
     PACKAGE_DIR="${OPS_TMP_DIR}"
+    CUSTOM_OP_DLL_RPATH='$ORIGIN/libs'
     CUSTOM_OP_DLL_PATH="${PACKAGE_DIR}/${WHEEL_MODERN_NAME}/fastdeploy_ops_pd_.so"
 else
     # If modern directory doesn't exist, check for legacy directory
@@ -73,10 +74,11 @@ else
     fi
     # Use legacy directory name
     PACKAGE_DIR="${OPS_TMP_DIR}/${WHEEL_NAME}"
+    CUSTOM_OP_DLL_RPATH='$ORIGIN/../libs'
     CUSTOM_OP_DLL_PATH="${PACKAGE_DIR}/fastdeploy_ops_pd_.so"
 fi
 
 mkdir -p ${PACKAGE_DIR}/libs
 cp ${XVLLM_PATH}/xft_blocks/so/libxft_blocks.so ${PACKAGE_DIR}/libs/
 cp ${XVLLM_PATH}/infer_ops/so/libapiinfer.so ${PACKAGE_DIR}/libs/
-patchelf --set-rpath '$ORIGIN/libs' ${CUSTOM_OP_DLL_PATH}
+patchelf --set-rpath ${CUSTOM_OP_DLL_RPATH} ${CUSTOM_OP_DLL_PATH}
