@@ -29,6 +29,12 @@ WHEEL_NAME="fastdeploy_ops-${OPS_VERSION}-${PY_VERSION}-${SYSTEM_VERSION}-${PROC
 # Add compatibility for modern python packaging methods
 WHEEL_MODERN_NAME="fastdeploy_ops"
 
+# Check if OPS_TMP_DIR exists, create it if it doesn't
+if [ ! -d "./${OPS_TMP_DIR}" ]; then
+    echo -e "${GREEN}[Info]${NONE} Creating directory ${OPS_TMP_DIR}"
+    mkdir -p "./${OPS_TMP_DIR}"
+fi
+
 ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR}
 
 # Handle directory compatibility between modern and legacy naming
