@@ -154,6 +154,19 @@ class XPUModelRunner(ModelRunnerBase):
         # Forward meta store the global meta information of the forward
         self.forward_meta: ForwardMeta = None
 
+        # Initialize shared memory and barrier for only_decode optimization
+        if self.fd_config.parallel_config.use_ep:
+            import multiprocessing
+            from threading import Barrier
+
+            # Create shared memory list for all processes
+            group_size = self.parallel_config.expert_parallel_size
+            self.shared_only_decode_list = [multiprocessing.Value("i", 0) for _ in range(group_size)]
+            self.shared_not_need_stop_list = [multiprocessing.Value("i", 0) for _ in range(group_size)]
+
+            # Create barrier for synchronization with timeout
+            self.decode_barrier = Barrier(group_size, timeout=10.0)
+
         self.pd_disaggregation_mode: str = self.fd_config.parallel_config.pd_disaggregation_mode
 
     def exist_prefill(self):
@@ -362,14 +375,38 @@ class XPUModelRunner(ModelRunnerBase):
 
     def only_decode(self):
         """
-        check whether decode only
+        check whether decode only using shared memory and barrier for all devices
         """
-        # Update Batch type for cuda graph for if_only_decode
+        # Use shared memory to avoid d2h copy
+        if hasattr(self, "shared_only_decode_list") and self.fd_config.parallel_config.use_ep:
+            try:
+                world_size = self.parallel_config.expert_parallel_size
+                rank = self.rank % world_size
+
+                # First check if all devices are empty
+                no_need_stop = self.not_need_stop()
+                self.shared_not_need_stop_list[rank].value = 1 if not no_need_stop else 0
+                self.decode_barrier.wait()
+                if_all_device_empty = all(p.value == 1 for p in self.shared_not_need_stop_list)
+                self.decode_barrier.wait()
+
+                if if_all_device_empty:
+                    return False
+
+                # Then check if only decode
+                self.shared_only_decode_list[rank].value = self.forward_meta.len_info_cpu[0] <= 0
+                self.decode_barrier.wait()
+                if_only_decode = all(p.value for p in self.shared_only_decode_list)
+                self.decode_barrier.wait()
+
+                return if_only_decode
+            except Exception as e:
+                logger.warning(f"Shared memory only_decode failed: {e}, fallback to original implementation")
+
+        # Fallback to original implementation
         if_only_decode = True
         prefill_exists = None
-        # mix ep in single node
         if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
-            # 在ep场景下no_need_stop如果都是false，表示全部卡空闲，返回false，走高吞吐分支，否则为部分卡空闲，需要进一步判断
             no_need_stop_list = []
             no_need_stop = self.not_need_stop()
             paddle.distributed.all_gather_object(no_need_stop_list, not no_need_stop)
@@ -385,7 +422,6 @@ class XPUModelRunner(ModelRunnerBase):
         if_only_decode = if_only_decode and not (
             prefill_exists if prefill_exists is not None else self.exist_prefill()
         )
-
         return if_only_decode
 
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int):
@@ -944,9 +980,12 @@ class XPUModelRunner(ModelRunnerBase):
             self.forward_meta.pos_emb_type = self.share_inputs["pos_emb_type"]
         self.forward_meta.attn_backend = self.attn_backends[0]
         self.initialize_attention_backend()
+
         if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
             self.forward_meta.kv_signal_sender = self.kv_signal_sender
+
         if_only_decode = self.only_decode()
+        print("if_only_decode: ", if_only_decode)
         if (
             self.fd_config.scheduler_config.splitwise_role == "mixed"
         ):  # 集中式场景，phase默认初始化为prefill, 推理运行时不同类型的batch能够在此处实现phase切换
