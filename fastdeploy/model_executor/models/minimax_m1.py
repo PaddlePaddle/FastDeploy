@@ -355,21 +355,25 @@ class MiniMaxM1DecoderLayer(nn.Layer):
         residual_attn = layernorm_output if self.postnorm else hidden_states
         attn_output = None
 
-        if self.attn_type == 1: # GQA
+        if self.attn_type == 1: # GQA (假设是 L7)
             qkv_out = self.qkv_proj(layernorm_output)
             if SHOULD_LOG:
-                print_tensor_stats(qkv_out, f"[NEW][CHK_D] L{layer_id}:1b_After_QKV_Proj_Combined")
+                print_tensor_stats(qkv_out, f"VLLM_L{layer_id}_After_QKV_Proj_Combined") # 修改标签
             
-            # Optional: Print Q/K/V split for GQA
+            # 增加 Q/K/V split 和 RoPE 的打印，与 vLLM 对齐
             if SHOULD_LOG:
                 q_size_tp = self.self_attn.num_heads * self.self_attn.head_dim
                 k_size_tp = self.self_attn.kv_num_heads * self.self_attn.head_dim
-                q_before_rope, k_before_rope, v_tensor = qkv_out.split([q_size_tp, k_size_tp, k_size_tp], axis=-1)
-                print_tensor_stats(q_before_rope, f"FD_L{layer_id}:1c_Q_BeforeRoPE")
-                print_tensor_stats(k_before_rope, f"FD_L{layer_id}:1d_K_BeforeRoPE")
-                print_tensor_stats(v_tensor,      f"FD_L{layer_id}:1e_V_Tensor")
+                q, k, v = qkv_out.split([q_size_tp, k_size_tp, k_size_tp], axis=-1)
+                print_tensor_stats(q, f"VLLM_L{layer_id}_Q_BeforeRoPE")
+                print_tensor_stats(k, f"VLLM_L{layer_id}_K_BeforeRoPE")
+                print_tensor_stats(v, f"VLLM_L{layer_id}_V_Tensor")
+            
 
             attn_output = self.self_attn(qkv=qkv_out, forward_meta=forward_meta)
+            if SHOULD_LOG:
+                print_tensor_stats(attn_output, f"VLLM_L{layer_id}_Attention_Kernel_Output")
+
             attn_output = self.o_proj(attn_output)
         else: # Linear
             if SHOULD_LOG:
@@ -518,9 +522,18 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
                     was_handled = True
                 if was_handled: continue
 
+            # 2. GQA 和 Linear Attention 权重处理
             param_name, shard_id = loaded_weight_name, None
+            
+            # ### Linear Attn Check ###
+            is_linear_attn_qkv = False
             if 'self_attn' in param_name and layer_match:
-                if self.config.attn_type_list[layer_id] == 1:
+                # 检查是否是 Linear Attention 层
+                if self.config.attn_type_list[layer_id] == 0: # Linear Attention
+                    if "qkv_proj.weight" in param_name:
+                        is_linear_attn_qkv = True
+                        # Linear Attention 不需要名称映射，直接就是 qkv_proj
+                elif self.config.attn_type_list[layer_id] == 1: # GQA
                     if 'q_proj.weight' in param_name: param_name, shard_id = param_name.replace('self_attn.q_proj.weight', 'qkv_proj.weight'), 'q'
                     elif 'k_proj.weight' in param_name: param_name, shard_id = param_name.replace('self_attn.k_proj.weight', 'qkv_proj.weight'), 'k'
                     elif 'v_proj.weight' in param_name: param_name, shard_id = param_name.replace('self_attn.v_proj.weight', 'qkv_proj.weight'), 'v'
@@ -533,6 +546,30 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
             if param_name in params_dict:
                 param = params_dict[param_name]
                 loader = getattr(param, 'weight_loader', default_weight_loader(self.fd_config))
+                
+                # ### Linear Attn 专属修复 ###
+                if is_linear_attn_qkv:
+                    def linear_attn_transposing_loader(p, w, *args, **kwargs):
+                        t = get_tensor(w)
+                        tp_rank = self.fd_config.parallel_config.tensor_parallel_rank
+                        tp_size = self.fd_config.parallel_config.tensor_parallel_size
+                        
+                        # 1. 切分 dim=0
+                        out_chunk = t.shape[0] // tp_size
+                        start = tp_rank * out_chunk
+                        end = start + out_chunk
+                        shard = t[start:end, :] # [6144, 6144]
+                        
+                        # 2. 别转置了！直接塞进去！
+                        # 如果 Paddle Linear 内部也会做转置，那我们就负负得正了。
+                        p.set_value(shard)
+                        
+                        if tp_rank == 0:
+                            logger.info(f"[FIX] L0 Loader (NO TRANSPOSE): Loaded {t.shape} -> Shard {shard.shape} -> Set {shard.shape}")
+
+                    loader = linear_attn_transposing_loader
+                # ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
                 if shard_id:
                     loader(param, current_weight, shard_id)
                 else:
@@ -546,6 +583,30 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
             print_tensor_stats(layer7_weight, "  - L7 GQA qkv_proj.weight")
         except Exception as e:
             logger.error(f"Failed to access weights for debugging: {e}")
+        logger.warning("!"*70 + "\n")
+        
+        logger.warning(f"\n{'!'*20} CRITICAL WEIGHT CHECK {'!'*20}")
+        try:
+            l0_param = self.model.layers['0'].self_attn.qkv_proj.weight
+            # 获取参数的真实 tensor
+            t_real = l0_param.value().get_tensor()
+            t_cpu = paddle.to_tensor(t_real).cpu()
+            
+            logger.info(f"L0 qkv_proj.weight SHAPE: {t_cpu.shape}")
+            
+            # 1. 打印前 5 个值（默认视角）
+            logger.info(f"L0 First 5 (Default): {t_cpu.flatten().numpy()[:5]}")
+            
+            # 2. 打印转置后的前 5 个值（检查是否需要转置）
+            t_trans = t_cpu.transpose([1, 0])
+            logger.info(f"L0 First 5 (Transposed): {t_trans.flatten().numpy()[:5]}")
+            
+            # 3. 打印按列切分后的前 5 个值（检查是否切分错了维度）
+            # 假设当前是 4 卡 TP，模拟一下如果当初按另一维切分会是啥样
+            # 这步可能比较难精确模拟，先看前两个
+            
+        except Exception as e:
+            logger.error(f"Check failed: {e}")
         logger.warning("!"*70 + "\n")
 
     def set_state_dict(self, state_dict):
