@@ -1061,7 +1061,7 @@ def optional_type(return_type: Callable[[str], T]) -> Callable[[str], Optional[T
     return _optional_type
 
 
-def to_numpy(tasks: List[Request]):
+def to_numpy(tasks: List[TaskRequest]):
     """
     Convert PaddlePaddle tensors in multimodal inputs to NumPy arrays.
 
