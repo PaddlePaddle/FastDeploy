@@ -467,11 +467,6 @@ class EngineArgs:
     Url for router server, such as `0.0.0.0:30000`.
     """
 
-    enable_async_download_features: bool = False
-    """
-    Flag to enable async download features. Default is False (disabled).
-    """
-
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -512,19 +507,20 @@ class EngineArgs:
                     raise ValueError(
                         "Please set --rdma_comm_ports argument when using " "rdma cache transfer protocol."
                     )
-                if len(self.rdma_comm_ports) != self.tensor_parallel_size:
-                    raise ValueError("The number of rdma comm ports must be equal to tensor parallel size.")
-
-            if envs.ENABLE_V1_KVCACHE_SCHEDULER == 1:
-                if "ipc" in self.cache_transfer_protocol:
-                    # FIXME: support ipc cache transfer protocol
-                    raise NotImplementedError(
-                        "only support rdma cache transfer protocol " "when using ENABLE_V1_KVCACHE_SCHEDULER."
+                num_nodes = len(self.ips) if self.ips else 1
+                if self.data_parallel_size % num_nodes != 0:
+                    raise ValueError(
+                        f"data_parallel_size ({self.data_parallel_size}) must be divisible by "
+                        f"num_nodes ({num_nodes})."
                     )
-                # FIXME: fix this bug
-                if self.splitwise_role == "prefill" and self.num_gpu_blocks_override is None:
-                    raise NotImplementedError(
-                        "please set num_gpu_blocks_override for prefill " "instance using ENABLE_V1_KVCACHE_SCHEDULER."
+                dp_per_node = self.data_parallel_size // num_nodes
+                expected_ports = self.tensor_parallel_size * dp_per_node
+                if len(self.rdma_comm_ports) != expected_ports:
+                    raise ValueError(
+                        f"The number of rdma_comm_ports must equal "
+                        f"tensor_parallel_size * (data_parallel_size / num_nodes) = "
+                        f"{self.tensor_parallel_size} * ({self.data_parallel_size} / {num_nodes}) "
+                        f"= {expected_ports}, but got {len(self.rdma_comm_ports)}."
                     )
 
         if not current_platform.is_cuda() and not current_platform.is_xpu():
@@ -853,12 +849,6 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_expert_parallel,
             help="Enable expert parallelism.",
-        )
-        parallel_group.add_argument(
-            "--enable-async-download-features",
-            action="store_true",
-            default=EngineArgs.enable_async_download_features,
-            help="Enable async download features.",
         )
 
         # Load group
