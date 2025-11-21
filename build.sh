@@ -95,7 +95,7 @@ function copy_ops(){
         echo -e "${YELLOW}[Warning]${NONE} ${EGG_NAME} directory exists. This is a legacy packaging and distribution method."
         TMP_PACKAGE_DIR="${LEGACY_PACKAGE_DIR}"
     else
-        echo -e "${RED}[Error]${NONE} Neither modern nor legacy directory found in ${OPS_TMP_DIR}"
+        echo -e "${RED}[Error]${NONE} Neither modern nor legacy directory for gpu ops found in ${OPS_TMP_DIR}"
     fi
 
     # Handle CPU ops directory compatibility between modern and legacy naming
@@ -107,7 +107,7 @@ function copy_ops(){
         echo -e "${YELLOW}[Warning]${NONE} ${EGG_CPU_NAME} directory exists. This is a legacy packaging and distribution method."
         TMP_PACKAGE_DIR_BASE="${LEGACY_PACKAGE_DIR_CPU}"
     else
-        echo -e "${RED}[Error]${NONE} Neither modern nor legacy directory found in ${OPS_TMP_DIR}"
+        echo -e "${YELLOW}[Warning]${NONE} Neither modern nor legacy directory for cpu ops found in ${OPS_TMP_DIR}"
     fi
     is_rocm=`$python -c "import paddle; print(paddle.is_compiled_with_rocm())"`
     if [ "$is_rocm" = "True" ]; then

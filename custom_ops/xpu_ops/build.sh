@@ -53,7 +53,7 @@ elif [ -d "${LEGACY_PACKAGE_DIR}" ]; then
     CUSTOM_OP_DLL_RPATH='$ORIGIN/../libs'
     CUSTOM_OP_DLL_PATH="${TMP_PACKAGE_DIR}/fastdeploy_ops_pd_.so"
 else
-    echo -e "${RED}[Error]${NONE} Neither modern nor legacy directory found in ${OPS_TMP_DIR}"
+    echo -e "${RED}[Error]${NONE} Neither modern nor legacy directory for xpu ops found in ${OPS_TMP_DIR}"
 fi
 
 mkdir -p ${TMP_PACKAGE_DIR}/libs
