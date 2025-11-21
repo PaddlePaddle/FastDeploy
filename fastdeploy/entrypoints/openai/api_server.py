@@ -389,11 +389,17 @@ def update_model_weight(request: Request) -> Response:
     update model weight
     """
     if app.state.dynamic_load_weight:
+        api_server_logger.info(f"Recevice command: update_model_weight in port: {args.port}")
         status, msg = app.state.engine_client.update_model_weight()
         if not status:
+            api_server_logger.info(f"Command: update_model_weight in port: {args.port}, return code 404, msg={msg}")
             return Response(content=msg, status_code=404)
+        api_server_logger.info(f"Command: update_model_weight in port: {args.port}, return code 200")
         return Response(status_code=200)
     else:
+        api_server_logger.info(
+            f"Command: update_model_weight in port: {args.port}, return code 404, msg=(The interface is disabled)"
+        )
         return Response(content="Dynamic Load Weight Disabled.", status_code=404)
 
 
@@ -402,12 +408,18 @@ def clear_load_weight(request: Request) -> Response:
     """
     clear model weight
     """
+    api_server_logger.info(f"Recevice command: clear_load_weight in port: {args.port}")
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.clear_load_weight()
         if not status:
+            api_server_logger.info(f"Command: clear_load_weight in port: {args.port}, return code 404, msg={msg}")
             return Response(content=msg, status_code=404)
+        api_server_logger.info(f"Command: clear_load_weight in port: {args.port}, return code 200")
         return Response(status_code=200)
     else:
+        api_server_logger.info(
+            f"Command: clear_load_weight in port: {args.port}, return code 404, msg=(The interface is disabled)"
+        )
         return Response(content="Dynamic Load Weight Disabled.", status_code=404)
 
 
