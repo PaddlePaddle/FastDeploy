@@ -144,6 +144,8 @@ class ForwardMeta:
     prompt_lens: Optional[paddle.Tensor] = None
     # Step index
     step_idx: Optional[paddle.Tensor] = None
+    # Flag of profile run
+    is_dummy_or_profile_run: bool = False
 
     def clear_caches(self):
         """Safely clean up the caches"""

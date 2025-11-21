@@ -687,8 +687,8 @@ class CacheMessagerV1:
                             for engine_idx, _ in batch_engine_signals:
                                 task = self.idx_cache_task_dict[engine_idx]
                                 if task["status"] == "finished" or ("error" in task["status"]):
-                                    target_id = int(task["rdma_ports"][self.rank])
                                     if task["transfer_protocol"] == "ipc":
+                                        target_id = int(task["device_ids"][self.rank])
                                         self.messager["ipc"].write_block_by_sync(target_id)
                                     self.engine_worker_queue.finish_send_cache_barrier.wait()
                                     self.engine_worker_queue.put_finished_req([[task["request_id"], task["status"]]])

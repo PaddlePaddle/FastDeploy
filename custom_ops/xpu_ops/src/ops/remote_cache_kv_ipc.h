@@ -72,12 +72,14 @@ struct RemoteCacheKvIpc {
     }
 
     void send_signal() {
-      msg_sed.mtext[1] = layer_id_;
-      if ((msgsnd(msgid, &msg_sed, (MAX_BSZ * 3 + 2) * 4, 0)) == -1) {
-        printf("kv signal full msg buffer\n");
+      if (inited) {
+        msg_sed.mtext[1] = layer_id_;
+        if ((msgsnd(msgid, &msg_sed, (MAX_BSZ * 3 + 2) * 4, 0)) == -1) {
+          printf("kv signal full msg buffer\n");
+        }
+        layer_id_ = (layer_id_ + 1);
+        assert(layer_id_ <= num_layers_);
       }
-      layer_id_ = (layer_id_ + 1);
-      assert(layer_id_ <= num_layers_);
     }
   };
 

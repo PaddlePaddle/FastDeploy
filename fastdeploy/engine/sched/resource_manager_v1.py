@@ -524,6 +524,8 @@ class ResourceManagerV1(ResourceManager):
             error_reqs: list[tuple[str, str]] = []
             token_budget = self.config.scheduler_config.max_num_batched_tokens
 
+            self.check_and_free_block_tables()
+
             # First, schedule the RUNNING requests.
             req_index = 0
             num_decoding_req_nums = 0
@@ -1009,7 +1011,7 @@ class ResourceManagerV1(ResourceManager):
                 request.need_prefill_tokens + self.config.cache_config.block_size - 1
             ) // self.config.cache_config.block_size + self.config.cache_config.enc_dec_block_num  # consider for mtp, plus enc_dec_block_num
             if self.cache_manager.can_allocate_gpu_blocks(need_prealloc_prefill_blocks):
-                request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks))
+                request.block_tables = self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks)
                 request.num_computed_tokens = request.need_prefill_tokens
                 request.disaggregate_info["block_tables"] = request.block_tables
                 allocated_position = self.get_available_position()
