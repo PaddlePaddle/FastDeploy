@@ -36,10 +36,12 @@ class TestAsyncExpertLoader(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures"""
         self.temp_dir = tempfile.mkdtemp()
-        self.eplb_config = EPLBConfig()
-        self.eplb_config.redundant_expert_async_load_model_shmem_size_gb = 1
-        self.eplb_config.model_use_safetensors = False
-        self.eplb_config.moe_quant_type = ""
+        args = {
+            "redundant_expert_async_load_model_shmem_size_gb": 1,
+            "model_use_safetensors": False,
+            "moe_quant_type": "",
+        }
+        self.eplb_config = EPLBConfig(args)
 
     def tearDown(self):
         """Clean up test fixtures"""
