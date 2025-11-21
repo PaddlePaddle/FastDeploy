@@ -985,7 +985,6 @@ class XPUModelRunner(ModelRunnerBase):
             self.forward_meta.kv_signal_sender = self.kv_signal_sender
 
         if_only_decode = self.only_decode()
-        print("if_only_decode: ", if_only_decode)
         if (
             self.fd_config.scheduler_config.splitwise_role == "mixed"
         ):  # 集中式场景，phase默认初始化为prefill, 推理运行时不同类型的batch能够在此处实现phase切换
