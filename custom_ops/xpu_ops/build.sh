@@ -60,6 +60,8 @@ else
             fi
         else
             echo -e "${RED}[Error]${NONE} Neither modern nor legacy directory found in ${OPS_TMP_DIR}"
+            echo -e "${RED}[Error]${NONE} Contents of ${OPS_TMP_DIR}:"
+            ls -la "./${OPS_TMP_DIR}"
         fi
     fi
     # Use legacy directory name
