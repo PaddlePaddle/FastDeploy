@@ -73,6 +73,8 @@ class DeepEPEngineBase:
         """
         if self.deepep_engine is not None:
             self.deepep_engine.barrier_all()
+        else:
+            raise RuntimeError("The deepep engine has not been initialized yet.")
 
 
 @singleton
@@ -207,18 +209,6 @@ class XPUEPRunner:
     EPRunnerBase
     """
 
-    def _init_ep_engine(self, engine_class):
-        self.ep_engine = engine_class(
-            num_max_dispatch_tokens_per_rank=self.num_max_dispatch_tokens_per_rank,
-            hidden_size=self.hidden_size,
-            num_experts=self.num_experts + self.redundant_experts_num,
-            ep_size=self.ep_size,
-            ep_rank=self.ep_rank,
-            splitwise_role=self.splitwise_role,
-            moe_phase=self.moe_phase,
-            group=self.ep_group,
-        )
-
     def __init__(
         self,
         top_k: int,
@@ -248,6 +238,18 @@ class XPUEPRunner:
     def init_ep_engine(self):
         """Initialize the EP engine with default implementation"""
         self._init_ep_engine(self._get_engine_class())
+
+    def _init_ep_engine(self, engine_class):
+        self.ep_engine = engine_class(
+            num_max_dispatch_tokens_per_rank=self.num_max_dispatch_tokens_per_rank,
+            hidden_size=self.hidden_size,
+            num_experts=self.num_experts + self.redundant_experts_num,
+            ep_size=self.ep_size,
+            ep_rank=self.ep_rank,
+            splitwise_role=self.splitwise_role,
+            moe_phase=self.moe_phase,
+            group=self.ep_group,
+        )
 
     @abstractmethod
     def _get_engine_class(self):
