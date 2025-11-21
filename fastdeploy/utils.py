@@ -36,7 +36,7 @@ from http import HTTPStatus
 from importlib.metadata import PackageNotFoundError, distribution
 from logging.handlers import BaseRotatingHandler
 from pathlib import Path
-from typing import Literal, TypeVar, Union
+from typing import Any, Literal, TypeVar, Union
 
 import numpy as np
 import paddle
@@ -50,7 +50,6 @@ from tqdm import tqdm
 from typing_extensions import TypeIs, assert_never
 
 from fastdeploy import envs
-from fastdeploy.engine.request import Request as TaskRequest
 from fastdeploy.entrypoints.openai.protocol import ErrorInfo, ErrorResponse
 from fastdeploy.logger.logger import FastDeployLogger
 
@@ -1061,7 +1060,7 @@ def optional_type(return_type: Callable[[str], T]) -> Callable[[str], Optional[T
     return _optional_type
 
 
-def to_numpy(tasks: List[TaskRequest]):
+def to_numpy(tasks: List[Any]):
     """
     Convert PaddlePaddle tensors in multimodal inputs to NumPy arrays.
 
@@ -1092,7 +1091,7 @@ def to_numpy(tasks: List[TaskRequest]):
         llm_logger.warning(f"Failed to convert to numpy: {e}")
 
 
-def to_tensor(tasks: List[TaskRequest]):
+def to_tensor(tasks: List[Any]):
     """
     Convert NumPy arrays in multimodal inputs to Paddle tensors.
 
