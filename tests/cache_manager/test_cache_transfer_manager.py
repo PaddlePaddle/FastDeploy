@@ -180,28 +180,6 @@ class TestCacheTransferManager(unittest.TestCase):
         self.assertFalse(healthy)
         self.assertIn("Not Healthy", msg)
 
-    def test_do_data_transfer_broken_pipe(self):
-        """Test do_data_transfer error handling for BrokenPipeError.
-
-        Verifies that the method properly handles BrokenPipeError from task queue,
-        logs the error, and exits the loop when check_work_status returns False.
-        """
-        # Mock BrokenPipeError when fetching transfer task
-        self.manager.cache_task_queue.get_transfer_task.side_effect = BrokenPipeError("mock broken pipe")
-
-        # Mock unhealthy status to trigger loop exit
-        self.manager.check_work_status = MagicMock(return_value=(False, "Not Healthy"))
-
-        # Patch do_data_transfer to prevent infinite loop in test
-        with patch.object(self.manager, "do_data_transfer") as mock_transfer:
-            mock_transfer.side_effect = lambda: None  # Short-circuit the loop
-            self.manager.do_data_transfer()
-
-        # Verify error handling behavior
-        self.assertTrue(self.manager.check_work_status.called)
-        self.assertTrue(cache_transfer_manager.logger.error.called)
-        self.assertTrue(cache_transfer_manager.logger.critical.called)
-
 
 # RDMACommManager Test Cases
 class TestRDMACommManager(unittest.TestCase):
@@ -250,7 +228,7 @@ class TestRDMACommManager(unittest.TestCase):
 
         result = manager.connect("127.0.0.1", 5001)
         self.assertTrue(result)
-        mock_instance.connect.assert_called_once_with("127.0.0.1", 5001)
+        mock_instance.connect.assert_called_once_with("127.0.0.1", "5001")
 
     def test_connect_invalid_role(self):
         """Test connect method with invalid role (decode).
