@@ -1,9 +1,6 @@
 import threading
 
 from fastdeploy.model_executor.forward_meta import ForwardMeta
-from fastdeploy.model_executor.layers.attention.append_attn_backend import (
-    allocate_launch_related_buffer,
-)
 
 event0 = threading.Event()
 event1 = threading.Event()
@@ -14,7 +11,10 @@ GLOBAL_THREAD_INFO["thread0"] = [event0, event1]
 GLOBAL_THREAD_INFO["thread1"] = [event1, event0]
 
 
-def split_batch(forward_meta: ForwardMeta, tmp_dict):
+GLOBAL_ATTN_BUFFERS = {}
+
+
+def split_batch(forward_meta: ForwardMeta):
     split_num = 2
     real_bs = forward_meta.seq_lens_this_time.shape[0]
 
@@ -63,9 +63,8 @@ def split_batch(forward_meta: ForwardMeta, tmp_dict):
         res[i].cu_seqlens_q = forward_meta.cu_seqlens_q[start_bs : end_bs + 1] - start_token_id
         res[i].cu_seqlens_k = forward_meta.cu_seqlens_k[start_bs : end_bs + 1] - start_token_id
 
-        attention_buffer = allocate_launch_related_buffer(**tmp_dict)
-        for key in attention_buffer:
-            setattr(res[i], key, attention_buffer[key])
+        for key in GLOBAL_ATTN_BUFFERS[i]:
+            setattr(res[i], key, GLOBAL_ATTN_BUFFERS[i])
 
     return res
 

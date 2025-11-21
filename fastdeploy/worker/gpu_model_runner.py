@@ -97,6 +97,7 @@ from fastdeploy.model_executor.models.interfaces_base import FdModelForPooling
 from fastdeploy.output.pooler import PoolerOutput
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, ModelRunnerOutput
+from fastdeploy.worker.tbo import GLOBAL_ATTN_BUFFERS, split_batch
 
 
 class GPUModelRunner(ModelRunnerBase):
@@ -1520,6 +1521,19 @@ class GPUModelRunner(ModelRunnerBase):
         )
         self.share_inputs.update(res_buffer)
 
+        # Note(ZKK) This is so strange, later will remove.
+        for j in range(2):
+            GLOBAL_ATTN_BUFFERS[j] = allocate_launch_related_buffer(
+                max_batch_size=self.scheduler_config.max_num_seqs,
+                max_model_len=self.model_config.max_model_len,
+                encoder_block_shape_q=encoder_block_shape_q,
+                decoder_block_shape_q=decoder_block_shape_q,
+                decoder_step_token_num=self.speculative_config.num_speculative_tokens + 1,
+                num_heads=num_heads,
+                kv_num_heads=self.model_config.kv_num_heads,
+                block_size=self.fd_config.cache_config.block_size,
+            )
+
         # Get the attention backend
         attn_cls = get_attention_backend()
         attn_backend = attn_cls(
@@ -2120,19 +2134,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             return model_output
 
-        from fastdeploy.worker.tbo import split_batch
-
-        tmp_dict = {}
-        tmp_dict["max_batch_size"] = self.scheduler_config.max_num_seqs
-        tmp_dict["max_model_len"] = self.model_config.max_model_len
-        tmp_dict["encoder_block_shape_q"] = 64
-        tmp_dict["decoder_block_shape_q"] = 16
-        tmp_dict["decoder_step_token_num"] = self.speculative_config.num_speculative_tokens + 1
-        tmp_dict["num_heads"] = 64
-        tmp_dict["kv_num_heads"] = self.model_config.kv_num_heads
-        tmp_dict["block_size"] = self.fd_config.cache_config.block_size
-
-        split_res = split_batch(self.forward_meta, tmp_dict)
+        split_res = split_batch(self.forward_meta)
         real_token_num = self.forward_meta.ids_remove_padding.shape[0]
 
         # model_output0 = self.model(
