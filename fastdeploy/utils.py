@@ -29,6 +29,7 @@ import subprocess
 import sys
 import tarfile
 import time
+import traceback
 from datetime import datetime
 from enum import Enum
 from http import HTTPStatus
@@ -976,12 +977,13 @@ def init_bos_client():
     return BosClient(cfg)
 
 
-def download_from_bos(bos_client, bos_links):
+def download_from_bos(bos_client, bos_links, retry: int = 0):
     """
     Download pickled objects from Baidu Object Storage (BOS).
     Args:
         bos_client: BOS client instance
         bos_links: Single link or list of BOS links in format "bos://bucket-name/path/to/object"
+        retry: Number of times to retry on failure (only retries on network-related errors)
     Yields:
         tuple: (success: bool, data: np.ndarray | error_msg: str)
             - On success: (True, deserialized_data)
@@ -989,20 +991,39 @@ def download_from_bos(bos_client, bos_links):
     Security Note:
         Uses pickle deserialization. Only use with trusted data sources.
     """
+
+    def _bos_download(bos_client, link):
+        if link.startswith("bos://"):
+            link = link.replace("bos://", "")
+
+        bucket_name = "/".join(link.split("/")[1:-1])
+        object_key = link.split("/")[-1]
+        return bos_client.get_object_as_string(bucket_name, object_key)
+
     if not isinstance(bos_links, list):
         bos_links = [bos_links]
 
     for link in bos_links:
         try:
-            if link.startswith("bos://"):
-                link = link.replace("bos://", "")
-
-            bucket_name = "/".join(link.split("/")[1:-1])
-            object_key = link.split("/")[-1]
-            response = bos_client.get_object_as_string(bucket_name, object_key)
+            response = _bos_download(bos_client, link)
             yield True, pickle.loads(response)
-        except Exception as e:
-            yield False, f"link {link} download error: {str(e)}"
+        except Exception:
+            # Only retry on network-related or timeout exceptions
+            exceptions_msg = str(traceback.format_exc())
+
+            if "request rate is too high" not in exceptions_msg or retry <= 0:
+                yield False, f"Failed to download {link}: {exceptions_msg}"
+                break
+
+            for attempt in range(retry):
+                try:
+                    llm_logger.warning(f"Retry attempt {attempt + 1}/{retry} for {link}")
+                    response = _bos_download(bos_client, link)
+                    yield True, pickle.loads(response)
+                    break
+                except Exception:
+                    if attempt == retry - 1:  # Last attempt failed
+                        yield False, f"Failed after {retry} retries for {link}: {str(traceback.format_exc())}"
             break
 
 

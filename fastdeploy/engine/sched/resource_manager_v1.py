@@ -809,7 +809,7 @@ class ResourceManagerV1(ResourceManager):
 
         def download_bos_features(bos_client, features_urls):
             result_list = []
-            for status, feature in download_from_bos(self.bos_client, features_urls):
+            for status, feature in download_from_bos(self.bos_client, features_urls, retry=1):
                 if status:
                     llm_logger.info(f"request {request.request_id} async download feature: {feature.shape}")
                     result_list.append(feature)
@@ -819,7 +819,7 @@ class ResourceManagerV1(ResourceManager):
                     return error_msg
             return result_list
 
-        if not self.config.parallel_config.enable_async_download_features or not self._has_features_info(request):
+        if not self._has_features_info(request):
             return None
 
         if self.bos_client is None:
