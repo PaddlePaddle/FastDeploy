@@ -209,6 +209,13 @@ class ModelConfig:
         pretrained_config, _ = PretrainedConfig.get_config_dict(self.model)
         self.pretrained_config = PretrainedConfig.from_dict(pretrained_config)
 
+        # Some exported configs (e.g. Qwen3-VL) embed the text model's configuration under a `text_config` key.
+        if "text_config" in pretrained_config and isinstance(pretrained_config["text_config"], dict):
+            text_fg = pretrained_config.pop("text_config")
+            for key, value in text_fg.items():
+                if not hasattr(self, key):
+                    setattr(self, key, value)
+
         # set attribute from pretrained_config
         for key, value in pretrained_config.items():
             setattr(self, key, value)
@@ -325,7 +332,13 @@ class ModelConfig:
     def read_model_config(self):
         config_path = os.path.join(self.model, "config.json")
         if os.path.exists(config_path):
-            self.model_config = json.load(open(config_path, "r", encoding="utf-8"))
+            raw_cfg = json.load(open(config_path, "r", encoding="utf-8"))
+            if "text_config" in raw_cfg and isinstance(raw_cfg["text_config"], dict):
+                text_cfg = raw_cfg.pop("text_config")
+                for k, v in text_cfg.items():
+                    if k not in raw_cfg:
+                        raw_cfg[k] = v
+            self.model_config = raw_cfg
             if "torch_dtype" in self.model_config and "dtype" in self.model_config:
                 raise ValueError(
                     "Only one of 'torch_dtype' or 'dtype' should be present in config.json. "

@@ -59,8 +59,8 @@ def auto_models_registry(dir_path, register_path="fastdeploy.model_executor.mode
                 ):
                     ModelRegistry.register_pretrained_model(attr)
 
-        except ImportError:
-            raise ImportError(f"{module_file=} import error")
+        except Exception as e:
+            raise ImportError(f"{module_file=} import error, error message: {e}")
 
 
 auto_models_registry(os.path.dirname(__file__))
