@@ -30,51 +30,53 @@ WHEEL_NAME="fastdeploy_ops-${OPS_VERSION}-${PY_VERSION}-${SYSTEM_VERSION}-${PROC
 WHEEL_MODERN_NAME="fastdeploy_ops"
 
 # Check if OPS_TMP_DIR exists, create it if it doesn't
-if [ ! -d "./${OPS_TMP_DIR}" ]; then
+if [ ! -d "${OPS_TMP_DIR}" ]; then
     echo -e "${GREEN}[Info]${NONE} Creating directory ${OPS_TMP_DIR}"
-    mkdir -p "./${OPS_TMP_DIR}"
+    mkdir -p "${OPS_TMP_DIR}"
 fi
 
 ${python} setup_ops.py install --install-lib ${OPS_TMP_DIR} --verbose
 
 # Handle directory compatibility between modern and legacy naming
-if [ -d "./${OPS_TMP_DIR}/${WHEEL_MODERN_NAME}" ]; then
+if [ -d "${OPS_TMP_DIR}/${WHEEL_MODERN_NAME}" ]; then
     echo -e "${GREEN}[Info]${NONE} Ready to use ops from modern directory ${WHEEL_MODERN_NAME}"
     # Use modern directory name
-    TARGET_DIR="${OPS_TMP_DIR}/${WHEEL_MODERN_NAME}"
+    PACKAGE_DIR="${OPS_TMP_DIR}"
+    CUSTOM_OP_DLL_PATH="${PACKAGE_DIR}/${WHEEL_MODERN_NAME}/fastdeploy_ops_pd_.so"
 else
     # If modern directory doesn't exist, check for legacy directory
-    if [ -d "./${OPS_TMP_DIR}/${WHEEL_NAME}" ]; then
+    if [ -d "${OPS_TMP_DIR}/${WHEEL_NAME}" ]; then
         echo -e "${YELLOW}[Warning]${NONE} ${WHEEL_NAME} directory exists. This is a deprecated packaging and distribution method."
     else
         # Check if required files exist in OPS_TMP_DIR
-        if [ -f "./${OPS_TMP_DIR}/fastdeploy_ops.py" ] && { [ -f "./${OPS_TMP_DIR}/fastdeploy_ops_pd_.so" ] || [ -f "./${OPS_TMP_DIR}/fastdeploy_ops.so" ]; }; then
+        if [ -f "${OPS_TMP_DIR}/fastdeploy_ops.py" ] && { [ -f "${OPS_TMP_DIR}/fastdeploy_ops_pd_.so" ] || [ -f "${OPS_TMP_DIR}/fastdeploy_ops.so" ]; }; then
             echo -e "${YELLOW}[Warning]${NONE} Neither modern nor legacy directory found, but required files exist in ${OPS_TMP_DIR}"
             echo -e "${GREEN}[Info]${NONE} Creating ${WHEEL_NAME} directory and moving files"
 
             # Create the WHEEL_NAME directory
-            mkdir -p "./${OPS_TMP_DIR}/${WHEEL_NAME}"
+            mkdir -p "${OPS_TMP_DIR}/${WHEEL_NAME}"
 
             # Copy the required files to the WHEEL_NAME directory
-            cp "./${OPS_TMP_DIR}/fastdeploy_ops.py" "./${OPS_TMP_DIR}/${WHEEL_NAME}/"
+            cp "${OPS_TMP_DIR}/fastdeploy_ops.py" "${OPS_TMP_DIR}/${WHEEL_NAME}/"
 
             # Copy the appropriate .so file
-            if [ -f "./${OPS_TMP_DIR}/fastdeploy_ops_pd_.so" ]; then
-                cp "./${OPS_TMP_DIR}/fastdeploy_ops_pd_.so" "./${OPS_TMP_DIR}/${WHEEL_NAME}/"
+            if [ -f "${OPS_TMP_DIR}/fastdeploy_ops_pd_.so" ]; then
+                cp "${OPS_TMP_DIR}/fastdeploy_ops_pd_.so" "${OPS_TMP_DIR}/${WHEEL_NAME}/"
             else
-                cp "./${OPS_TMP_DIR}/fastdeploy_ops.so" "./${OPS_TMP_DIR}/${WHEEL_NAME}/fastdeploy_ops_pd_.so"
+                cp "${OPS_TMP_DIR}/fastdeploy_ops.so" "${OPS_TMP_DIR}/${WHEEL_NAME}/fastdeploy_ops_pd_.so"
             fi
         else
             echo -e "${RED}[Error]${NONE} Neither modern nor legacy directory found in ${OPS_TMP_DIR}"
             echo -e "${RED}[Error]${NONE} Contents of ${OPS_TMP_DIR}:"
-            ls -la "./${OPS_TMP_DIR}"
+            ls -la "${OPS_TMP_DIR}"
         fi
     fi
     # Use legacy directory name
-    TARGET_DIR="${OPS_TMP_DIR}/${WHEEL_NAME}"
+    PACKAGE_DIR="${OPS_TMP_DIR}/${WHEEL_NAME}"
+    CUSTOM_OP_DLL_PATH="${PACKAGE_DIR}/fastdeploy_ops_pd_.so"
 fi
 
-mkdir -p ${TARGET_DIR}/libs
-cp ${XVLLM_PATH}/xft_blocks/so/libxft_blocks.so ${TARGET_DIR}/libs/
-cp ${XVLLM_PATH}/infer_ops/so/libapiinfer.so ${TARGET_DIR}/libs/
-patchelf --set-rpath '$ORIGIN/libs' ${TARGET_DIR}/fastdeploy_ops_pd_.so
+mkdir -p ${PACKAGE_DIR}/libs
+cp ${XVLLM_PATH}/xft_blocks/so/libxft_blocks.so ${PACKAGE_DIR}/libs/
+cp ${XVLLM_PATH}/infer_ops/so/libapiinfer.so ${PACKAGE_DIR}/libs/
+patchelf --set-rpath '$ORIGIN/libs' ${CUSTOM_OP_DLL_PATH}
