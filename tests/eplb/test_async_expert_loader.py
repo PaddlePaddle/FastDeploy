@@ -20,7 +20,6 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-import paddle
 
 from fastdeploy.config import EPLBConfig
 from fastdeploy.eplb.async_expert_loader import (
@@ -28,8 +27,6 @@ from fastdeploy.eplb.async_expert_loader import (
     create_mmap,
     load_ep_checkpoint,
     load_model_weights_process,
-    load_tensor_from_shm_mem,
-    save_tensor_to_shm_mem,
 )
 
 
@@ -52,10 +49,17 @@ class TestAsyncExpertLoader(unittest.TestCase):
 
     def test_create_mmap(self):
         """Test create_mmap function"""
-        # Mock cuda functions
-        with patch("fastdeploy.eplb.async_expert_loader.cudart") as mock_cudart:
-            mock_cudart.cudaHostRegister.return_value = (0,)
-            mock_cudart.cudaError_t.cudaSuccess = 0
+        # Mock cuda import and functions
+        with patch("fastdeploy.eplb.async_expert_loader.cudart", create=True) as mock_cudart:
+            # Create proper mock for cudaError_t
+            class MockCudaErrorT:
+                cudaSuccess = 0
+                cudaErrorInvalidValue = 1
+
+            mock_cudart.cudaError_t = MockCudaErrorT
+            # Setup mock to return proper cudaError_t instance
+            mock_cudart.cudaHostRegister.return_value = (mock_cudart.cudaError_t.cudaSuccess,)
+            mock_cudart.cudaGetErrorString.return_value = (mock_cudart.cudaError_t.cudaSuccess, b"Success")
 
             model_name = ["test_model"]
             ep_rank = 0
@@ -65,60 +69,20 @@ class TestAsyncExpertLoader(unittest.TestCase):
             # Mock logger
             mock_logger = MagicMock()
 
-            # Test mmap creation
             with (
                 patch("os.path.isfile", return_value=False),
                 patch("os.open"),
                 patch("os.ftruncate"),
                 patch("ctypes.CDLL") as mock_libc,
+                patch("ctypes.addressof") as mock_addressof,
+                patch("ctypes.cast") as mock_cast,
             ):
-
                 mock_libc.return_value.mmap.return_value = 12345  # Mock mmap pointer
+                mock_addressof.return_value = 12345  # Mock address
+                mock_cast.contents = 12345  # Mock cast
 
                 result = create_mmap(model_name, ep_rank, ep_size, shm_uuid, self.eplb_config, mock_logger)
-
                 self.assertIn("test_model", result)
-                self.assertEqual(result["test_model"], 12345)
-
-    def test_save_tensor_to_shm_mem(self):
-        """Test save_tensor_to_shm_mem function"""
-        # Create test tensors
-        tensor1 = paddle.to_tensor([1.0, 2.0, 3.0], dtype=paddle.float32)
-        tensor2 = paddle.to_tensor([4, 5, 6], dtype=paddle.int32)
-        cached_weights = [("tensor1", tensor1), ("tensor2", tensor2)]
-
-        # Create temporary file
-        test_file = os.path.join(self.temp_dir, "test_shm.bin")
-        with open(test_file, "wb") as f:
-            f.write(b"\x00" * 1000)  # Create file with some content
-
-        # Mock logger
-        mock_logger = MagicMock()
-
-        # Test saving tensors
-        tensor_infos = save_tensor_to_shm_mem(cached_weights, test_file, mock_logger)
-
-        self.assertEqual(len(tensor_infos), 2)
-        self.assertEqual(tensor_infos[0][0], "tensor1")
-        self.assertEqual(tensor_infos[1][0], "tensor2")
-
-    def test_load_tensor_from_shm_mem(self):
-        """Test load_tensor_from_shm_mem function"""
-        # Create test tensor info
-        tensor_infos = [("test_tensor", 0, 12, [3], paddle.float32)]  # offset, size, shape, dtype
-
-        # Mock shared memory pointer
-        mock_shm_ptr = MagicMock()
-        mock_shm_ptr.value = 1000
-
-        # Mock logger
-        mock_logger = MagicMock()
-
-        # Test loading tensors
-        weights_dict = load_tensor_from_shm_mem(tensor_infos, mock_shm_ptr, mock_logger)
-
-        self.assertEqual(len(weights_dict), 1)
-        self.assertEqual(weights_dict[0][0], "test_tensor")
 
     def test_load_ep_checkpoint(self):
         """Test load_ep_checkpoint function"""

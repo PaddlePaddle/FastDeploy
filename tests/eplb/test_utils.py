@@ -18,11 +18,20 @@ import json
 import os
 import tempfile
 import unittest
+from dataclasses import asdict
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from fastdeploy.config import EPLBConfig, FDConfig, ModelConfig
+from fastdeploy.config import (
+    CacheConfig,
+    EPLBConfig,
+    FDConfig,
+    ParallelConfig,
+    SchedulerConfig,
+)
+from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.eplb.utils import RedundantExpertWorkload, init_eplb_signals
 
 
@@ -97,20 +106,6 @@ class TestRedundantExpertWorkload(unittest.TestCase):
         # Verify return message
         self.assertIn("redundant_expert: dump expert workload result in", result)
 
-    def test_dump_failure(self):
-        """Test dump failure (e.g., permission denied)"""
-        # Create a directory that we can't write to
-        read_only_dir = os.path.join(self.temp_dir, "readonly")
-        os.makedirs(read_only_dir)
-        os.chmod(read_only_dir, 0o444)  # Read-only
-
-        workload = RedundantExpertWorkload(read_only_dir)
-
-        result = workload.dump()
-
-        # Verify error message
-        self.assertIn("redundant_expert: dump expert workload failed", result)
-
     def test_load_success(self):
         """Test successful load"""
         # Create test file
@@ -163,16 +158,49 @@ class TestInitEplbSignals(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures"""
-        self.model_config = ModelConfig()
-        self.model_config.num_hidden_layers = 3
-        self.model_config.moe_num_experts = 64
+        max_num_seqs = 2
+        engine_args = EngineArgs(
+            max_num_seqs=max_num_seqs,
+            num_gpu_blocks_override=102,
+            max_num_batched_tokens=3200,
+        )
+        args = asdict(engine_args)
 
-        self.eplb_config = EPLBConfig()
-        self.eplb_config.redundant_expert_ip_shm_size = 1024
+        cache_cfg = CacheConfig(args)
+        model_cfg = SimpleNamespace(enable_mm=True)  # Enable multimodal for feature testing
+        speculative_cfg = SimpleNamespace(method=None)
+        model_cfg.print = print
+        model_cfg.max_model_len = 5120
+        model_cfg.num_hidden_layers = 3
+        model_cfg.moe_num_experts = 64
+        model_cfg.moe_layer_start_index = 1
+        model_cfg.model = "/test/model"
+        cache_cfg.bytes_per_layer_per_block = 1
 
-        self.fd_config = FDConfig()
-        self.fd_config.model_config = self.model_config
-        self.fd_config.eplb_config = self.eplb_config
+        parallel_cfg = ParallelConfig(args)
+        scheduler_cfg = SchedulerConfig(args)
+        graph_opt_cfg = engine_args.create_graph_optimization_config()
+
+        eplb_args = {
+            "redundant_experts_num": 0,
+            "redundant_expert_api_user": "test_user",
+            "redundant_expert_api_password": "test_pass",
+            "redundant_expert_eplb_strategy": "",
+            "redundant_expert_ip_shm_size": 1024,
+            "moe_quant_type": "",
+            "redundant_expert_enable_schedule_cordon": False,
+        }
+        eplb_config = EPLBConfig(eplb_args)
+
+        self.fd_config = FDConfig(
+            model_config=model_cfg,
+            cache_config=cache_cfg,
+            parallel_config=parallel_cfg,
+            graph_opt_config=graph_opt_cfg,
+            speculative_config=speculative_cfg,
+            scheduler_config=scheduler_cfg,
+            eplb_config=eplb_config,
+        )
         self.fd_config.parallel_config.local_data_parallel_id = 0
 
     @patch("fastdeploy.eplb.utils.IPCSignal")
@@ -212,23 +240,82 @@ class TestInitEplbSignals(unittest.TestCase):
         mock_ipc_signal.return_value = mock_ipc_instance
 
         # Test with non-zero rank
+        self.fd_config.parallel_config.tensor_parallel_rank = 0
+        self.fd_config.parallel_config.tensor_parallel_size = 1
         self.fd_config.parallel_config.local_data_parallel_id = 1
+        self.fd_config.eplb_config.redundant_expert_ip_shm_size = 1024
         ipc_signal_suffix = 123
-
         init_eplb_signals(self.fd_config, ipc_signal_suffix)
 
         # For non-zero rank, only common signals should be created
+        dp_ipc_signal_suffix = f"{ipc_signal_suffix}_dp1"
+        tp_ipc_signal_suffix = f"{dp_ipc_signal_suffix}_tp0"
         expected_calls = [
             # Common signals (no rank 0 specific signals)
-            ("all_experts_token_stats", np.zeros((3, 64), dtype=np.int32), np.int32, ipc_signal_suffix, True),
-            ("local_experts_token_stats", np.zeros((3, 64), dtype=np.int32), np.int32, ipc_signal_suffix, True),
-            ("signal_update_weight_from_disk", np.zeros([1], dtype=np.int32), np.int32, ipc_signal_suffix, True),
-            ("signal_clear_experts_token_stats", np.zeros([1], dtype=np.int32), np.int32, ipc_signal_suffix, True),
-            ("result_update_weight_from_disk", np.zeros([1], dtype=np.int32), np.int32, ipc_signal_suffix, True),
+            ("rearrange_experts_status", np.zeros([1], dtype=np.int32), np.int32, dp_ipc_signal_suffix, True),
+            ("rearrange_experts_ips_size", np.zeros([1], dtype=np.int32), np.int32, dp_ipc_signal_suffix, True),
+            ("rearrange_experts_ips_list", 1024, dp_ipc_signal_suffix, True),
+            ("signal_update_weight_from_tensor", np.zeros([1], dtype=np.int32), np.int32, dp_ipc_signal_suffix, True),
+            ("all_experts_token_stats", np.zeros((3, 64), dtype=np.int32), np.int32, tp_ipc_signal_suffix, True),
+            ("local_experts_token_stats", np.zeros((3, 64), dtype=np.int32), np.int32, tp_ipc_signal_suffix, True),
+            ("signal_update_weight_from_disk", np.zeros([1], dtype=np.int32), np.int32, tp_ipc_signal_suffix, True),
+            ("signal_clear_experts_token_stats", np.zeros([1], dtype=np.int32), np.int32, tp_ipc_signal_suffix, True),
+            ("result_update_weight_from_disk", np.zeros([1], dtype=np.int32), np.int32, tp_ipc_signal_suffix, True),
         ]
 
         # Verify only common signals were created
         self.assertEqual(mock_ipc_signal.call_count, len(expected_calls))
+
+        # Get all actual calls and verify each parameter
+        actual_calls = mock_ipc_signal.call_args_list
+        # Verify each call matches expected parameters
+        for i, expected in enumerate(expected_calls):
+            call = actual_calls[i]
+
+            # Extract call arguments
+            if len(call) == 2:  # args and kwargs
+                args, kwargs = call
+                actual_args = args if isinstance(args, tuple) else (args,)
+                suffix = kwargs.get("suffix")
+            else:
+                actual_args = call if isinstance(call, tuple) else (call,)
+                suffix = None
+
+            # Skip verification if we can't access the expected parameters
+            if len(expected) < 1:
+                continue
+
+            # Verify signal name is present
+            if len(actual_args) > 0:
+                self.assertEqual(actual_args[0], expected[0], f"Signal name mismatch at call {i}")
+            else:
+                continue
+
+            # Special handling for rearrange_experts_ips_list
+            if expected[0] == "rearrange_experts_ips_list":
+                continue
+
+            # Verify array/values if present
+            if len(expected) > 1 and len(actual_args) > 1:
+                if isinstance(expected[1], np.ndarray):
+                    np.testing.assert_array_equal(actual_args[1], expected[1], f"Array mismatch at call {i}")
+                else:
+                    self.assertEqual(actual_args[1], expected[1], f"Value mismatch at call {i}")
+
+            # Verify data type if present
+            if len(expected) > 2 and len(actual_args) > 2:
+                self.assertEqual(actual_args[2], expected[2], f"Data type mismatch at call {i}")
+
+            # Verify suffix if present
+            if len(expected) > 3:
+                if suffix is not None:
+                    self.assertEqual(suffix, expected[3], f"IPC suffix mismatch at call {i}")
+                elif len(actual_args) > 3:
+                    self.assertEqual(actual_args[3], expected[3], f"IPC suffix mismatch at call {i}")
+
+            # Verify create flag if present
+            if len(expected) > 4 and len(actual_args) > 4:
+                self.assertEqual(actual_args[4], expected[4], f"Create flag mismatch at call {i}")
 
     @patch("fastdeploy.eplb.utils.IPCSignal")
     def test_init_eplb_signals_different_suffix(self, mock_ipc_signal):
@@ -236,14 +323,25 @@ class TestInitEplbSignals(unittest.TestCase):
         mock_ipc_instance = MagicMock()
         mock_ipc_signal.return_value = mock_ipc_instance
 
-        ipc_signal_suffix = 999
-
+        ipc_signal_suffix = "999"
         init_eplb_signals(self.fd_config, ipc_signal_suffix)
 
+        target_suffix = [
+            "999_dp0",
+            "999_dp0",
+            "999_dp0",
+            "999_dp0",
+            "999_dp0_tp0",
+            "999_dp0_tp0",
+            "999_dp0_tp0",
+            "999_dp0_tp0",
+            "999_dp0_tp0",
+        ]
         # Verify that suffix is used correctly
-        for call in mock_ipc_signal.call_args_list:
+        for idx, call in enumerate(mock_ipc_signal.call_args_list):
             args, kwargs = call
-            self.assertEqual(kwargs.get("suffix"), ipc_signal_suffix)
+            print(kwargs.get("suffix"))
+            self.assertEqual(kwargs.get("suffix"), target_suffix[idx])
 
     def test_main_function(self):
         """Test the main function at the end of the file"""

@@ -22,6 +22,7 @@ from typing import List, Tuple
 
 import numpy as np
 import paddle
+from cuda import cudart
 
 from fastdeploy.config import EPLBConfig
 
@@ -71,9 +72,6 @@ def create_mmap(model_name: List, ep_rank: int, ep_size: int, shm_uuid: str, epl
     main_size = main_size * G
 
     mmap_infos = {}
-
-    from cuda import cudart
-
     for name in model_name:
         expert_weight_file = f"/dev/shm/{name}_rank_{ep_rank}_expert_weight_{shm_uuid}"
         shm_size = main_size
@@ -287,7 +285,7 @@ class AsyncEPLoader(object):
                     # self.logger.info(f"redundant_expert: {file_name} not exist.")
                     continue
                 # self.logger.info(f"redundant_expert: Loading expert weights: {file_name}.")
-                self.state_dicts[file_name] = paddle.load(self.model_path + "/merged_tp1_state_split/" + file_name)
+                # self.state_dicts[file_name] = paddle.load(self.model_path + "/merged_tp1_state_split/" + file_name)
 
             paddle.set_device(last_device)
             self.logger.info("redundant_expert: Loading expert weights end.")

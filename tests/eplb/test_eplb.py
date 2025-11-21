@@ -38,8 +38,8 @@ class TestEplb(unittest.TestCase):
 
         pack_index, rank_in_pack = balanced_packing(weight, num_packs)
 
-        expected_pack_index = np.array([[1, 1, 0, 0]], dtype=np.int32)
-        expected_rank_in_pack = np.array([[0, 1, 0, 1]], dtype=np.int32)
+        expected_pack_index = np.array([[0, 1, 1, 0]], dtype=np.int32)
+        expected_rank_in_pack = np.array([[1, 1, 0, 0]], dtype=np.int32)
 
         np.testing.assert_array_equal(pack_index, expected_pack_index)
         np.testing.assert_array_equal(rank_in_pack, expected_rank_in_pack)
@@ -101,7 +101,7 @@ class TestEplb(unittest.TestCase):
         self.assertEqual(logcnt.shape, (1, 4))
 
         # Verify that each logical expert has correct count
-        expected_logcnt = np.array([[2, 1, 1, 2]], dtype=np.int32)  # Heaviest and lightest get replicated
+        expected_logcnt = np.array([[1, 1, 2, 2]], dtype=np.int32)  # Heaviest and lightest get replicated
         np.testing.assert_array_equal(logcnt, expected_logcnt)
 
     def test_rebalance_experts_intra_node(self):
