@@ -958,7 +958,10 @@ class EngineService:
         )
         # Since the request is not in scheduler
         # Send result by zmq directly
-        self.send_response_server.send_response(request_id, [error_result])
+        if envs.FD_ENABLE_INTERNAL_ADAPTER:
+            self.send_response_server.send_response(None, [[error_result]])
+        else:
+            self.send_response_server.send_response(request_id, [error_result])
 
     def _decode_token(self, token_ids, req_id, is_end):
         delta_text = ""
@@ -984,33 +987,67 @@ class EngineService:
                 if len(results) == 0:
                     time.sleep(0.005)
                     continue
-                for request_id, contents in results.items():
+                if envs.FD_ENABLE_INTERNAL_ADAPTER:
                     new_contents = []
-                    for content in contents:
-                        if isinstance(content, RequestOutput) and content.outputs is not None:
-                            decode_type = content.outputs.decode_type
-                            delta_text = ""
-                            if decode_type == 0:
-                                delta_text, token_ids = self._decode_token(
-                                    token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
-                                )
+                    for step_batch_results in results:
+                        new_step_contents = []
+                        for content in step_batch_results:
+                            if isinstance(content, RequestOutput) and content.outputs is not None:
+                                decode_type = content.outputs.decode_type
+                                delta_text = ""
+                                if decode_type == 0:
+                                    delta_text, token_ids = self._decode_token(
+                                        token_ids=content.outputs.token_ids,
+                                        req_id=content.request_id,
+                                        is_end=content.finished,
+                                    )
+                                else:
+                                    token_ids = content.outputs.token_ids
+                                if len(token_ids):
+                                    content.outputs.token_ids = token_ids
+                                    content.outputs.text = delta_text
+                                    new_step_contents.append(content)
+                                elif content.finished:
+                                    new_step_contents.append(content)
+                                else:
+                                    llm_logger.warning(
+                                        f"current tokens need to accumulate, req_id: {content.request_id} {content.outputs.token_ids}"
+                                    )
                             else:
-                                token_ids = content.outputs.token_ids
-                            if len(token_ids):
-                                content.outputs.token_ids = token_ids
-                                content.outputs.text = delta_text
-                                new_contents.append(content)
-                            elif content.finished:
-                                new_contents.append(content)
+                                new_step_contents.append(content)
+                        if new_step_contents:
+                            new_contents.append(new_step_contents)
+                    if new_contents:
+                        self.send_response_server.send_response(None, new_contents)
+
+                else:
+                    for request_id, contents in results.items():
+                        new_contents = []
+                        for content in contents:
+                            if isinstance(content, RequestOutput) and content.outputs is not None:
+                                decode_type = content.outputs.decode_type
+                                delta_text = ""
+                                if decode_type == 0:
+                                    delta_text, token_ids = self._decode_token(
+                                        token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
+                                    )
+                                else:
+                                    token_ids = content.outputs.token_ids
+                                if len(token_ids):
+                                    content.outputs.token_ids = token_ids
+                                    content.outputs.text = delta_text
+                                    new_contents.append(content)
+                                elif content.finished:
+                                    new_contents.append(content)
+                                else:
+                                    llm_logger.warning(
+                                        f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
+                                    )
                             else:
-                                llm_logger.warning(
-                                    f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
-                                )
-                        else:
-                            new_contents.append(content)
-                    if len(new_contents):
-                        llm_logger.debug(f"Send response for request id: {request_id}, {new_contents}")
-                        self.send_response_server.send_response(request_id, new_contents)
+                                new_contents.append(content)
+                        if len(new_contents):
+                            llm_logger.debug(f"Send response for request id: {request_id}")
+                            self.send_response_server.send_response(request_id, new_contents)
             except Exception as e:
                 llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
 

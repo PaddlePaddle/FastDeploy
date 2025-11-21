@@ -436,6 +436,5 @@ class SplitwiseConnector:
         self.logger.debug(f"_handle_decode function receive {payload}")
         tasks = []
         for task in payload:
-            output = RequestOutput.from_dict(task)
-            tasks.append(output)
+            tasks.append(RequestOutput.from_dict(task))
         self.engine_worker_queue.put_disaggregated_tasks(("decode", tasks))

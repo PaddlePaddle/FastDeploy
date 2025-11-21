@@ -38,6 +38,9 @@ class TestTokenProcessorLogprobs(unittest.TestCase):
         self.task_mock.preprocess_end_time = 95.0
         self.task_mock.preprocess_start_time = 90.0
         self.task_mock.schedule_start_time = 95.0
+        self.task_mock.llm_engine_recv_req_timestamp = 95.0
+        self.task_mock.ic_req_data = {}
+        self.task_mock.prompt_token_ids_len = 0
 
         self.processor.resource_manager.tasks_list = [self.task_mock]
 

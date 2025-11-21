@@ -180,6 +180,10 @@ class LLMEngine:
         if self.cfg.scheduler_config.splitwise_role != "mixed":
             self.launched_cache_manager_signal.value[0] = 1
 
+        if self.cfg.scheduler_config.splitwise_role != "mixed" and envs.FD_ENABLE_INTERNAL_ADAPTER:
+            envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT = envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS.split(",")[0]
+            envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT = envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS.split(",")[0]
+
         if api_server_pid is not None:
             llm_logger.info(f"Start zmq server, api_server_pid: {api_server_pid}")
             self.engine.start_zmq_service(api_server_pid)
@@ -707,18 +711,19 @@ class LLMEngine:
         host_ip = self.cfg.host_ip
         disaggregate = self.cfg.disaggregate_info
         request_queues_for_dp_ipc = None
-        result_queue_for_dp_ipc = None
+        result_queues_for_dp_ipc = None
         if self.cfg.scheduler_config.name == "splitwise":
             self.engine.scheduler.start(role, host_ip, disaggregate)
         elif self.cfg.scheduler_config.name == "dp":
             request_queues_for_dp_ipc = []
-            result_queue_for_dp_ipc = multiprocessing.Queue()
+            result_queues_for_dp_ipc = []
             for i in range(self.cfg.parallel_config.data_parallel_size):
                 request_queues_for_dp_ipc.append(multiprocessing.Queue())
+                result_queues_for_dp_ipc.append(multiprocessing.Queue())
             self.engine.scheduler.start(
                 self.cfg.node_rank * self.cfg.worker_num_per_node % self.cfg.worker_num_per_node,
                 request_queues_for_dp_ipc,
-                result_queue_for_dp_ipc,
+                result_queues_for_dp_ipc,
             )
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
@@ -755,7 +760,7 @@ class LLMEngine:
                                 i,
                                 None,
                                 request_queues_for_dp_ipc,
-                                result_queue_for_dp_ipc,
+                                result_queues_for_dp_ipc,
                             ),
                         )
                     )

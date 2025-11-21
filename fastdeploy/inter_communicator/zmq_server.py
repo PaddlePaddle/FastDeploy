@@ -36,6 +36,9 @@ class ZmqServerBase(ABC):
     def __init__(self):
         self.cached_results = defaultdict(list)
         self.response_token_lock = threading.Lock()
+        self.response_handle_per_step = None
+        self.response_handle_name_per_step = None
+        self.batch_id_per_step = 0
 
     @abstractmethod
     def _create_socket(self):
@@ -126,16 +129,20 @@ class ZmqServerBase(ABC):
                 with self.response_token_lock:
                     client, _, request_id = self.socket.recv_multipart(flags=zmq.NOBLOCK)
                 req_id_str = request_id.decode("utf-8")
-                need_send_after_finished_inference = False
-                with self.mutex:
-                    self.req_dict[req_id_str] = client
-                    if req_id_str in self.cached_results:
-                        if self.cached_results[req_id_str][-1][-1].finished:
-                            need_send_after_finished_inference = True
-                if need_send_after_finished_inference:
-                    self.send_response(req_id_str, [])
-                    llm_logger.info(f"send_multipart finished, req_id: {req_id_str}")
-                    self.req_dict.pop(req_id_str, None)
+                if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                    with self.mutex:
+                        self.response_handle_per_step = client
+                else:
+                    need_send_after_finished_inference = False
+                    with self.mutex:
+                        self.req_dict[req_id_str] = client
+                        if req_id_str in self.cached_results:
+                            if self.cached_results[req_id_str][-1][-1].finished:
+                                need_send_after_finished_inference = True
+                    if need_send_after_finished_inference:
+                        self.send_response(req_id_str, [])
+                        llm_logger.info(f"send_multipart finished, req_id: {req_id_str}")
+                        self.req_dict.pop(req_id_str, None)
 
             except zmq.Again:
                 time.sleep(0.001)
@@ -144,7 +151,39 @@ class ZmqServerBase(ABC):
                 llm_logger.error(f"recv_result_handle get unknown exception: {e}")
                 continue
 
-    def send_response(self, req_id, data):
+    def _send_response_per_step(self, batch_id, data):
+        """
+        Send generated token result to client.
+        """
+        self._ensure_socket()
+        if self.socket is None:
+            raise RuntimeError("Router socket not created. Call create_router() first.")
+        need_send_data = []
+        with self.mutex:
+            if self.response_handle_per_step is None:
+                self.cached_results["data"].extend(data)
+            else:
+                need_send_data = self.cached_results["data"]
+                self.cached_results["data"] = []
+        if self.response_handle_per_step is not None:
+            try:
+                if data:
+                    need_send_data.extend(data)
+                start_send = time.time()
+                result = msgpack.packb(
+                    [[response.to_dict() for response in send_data_list] for send_data_list in need_send_data]
+                )
+                with self.response_token_lock:
+                    self.socket.send_multipart([self.response_handle_per_step, b"", result])
+                llm_logger.info(
+                    f"send_multipart result: step {self.batch_id_per_step} lens {len(need_send_data)} elapse: {time.time()-start_send}"
+                )
+                self.batch_id_per_step += 1
+
+            except Exception as e:
+                llm_logger.error(f"Send result to zmq client failed: {e}")
+
+    def _send_response_per_query(self, req_id, data):
         """
         Send generated token result to client.
         """
@@ -188,6 +227,12 @@ class ZmqServerBase(ABC):
                     llm_logger.info(f"send_multipart finished, req_id: {req_id}")
                     self.req_dict.pop(req_id, None)
 
+    def send_response(self, req_id, data):
+        if envs.FD_ENABLE_INTERNAL_ADAPTER:
+            self._send_response_per_step(req_id, data)
+        else:
+            self._send_response_per_query(req_id, data)
+
     @abstractmethod
     def close(self):
         pass
@@ -202,6 +247,7 @@ class ZmqIpcServer(ZmqServerBase):
     """
 
     def __init__(self, name, mode):
+        super(ZmqIpcServer, self).__init__()
         self.name = name
         self.mode = mode
         self.cached_results = defaultdict(list)
@@ -262,6 +308,7 @@ class ZmqTcpServer(ZmqServerBase):
     """
 
     def __init__(self, port, mode):
+        super(ZmqTcpServer, self).__init__()
         self.mode = mode
         self.port = port
         self.cached_results = defaultdict(list)

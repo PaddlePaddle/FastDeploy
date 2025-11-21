@@ -71,6 +71,7 @@ class MockScheduledResponse:
     def __init__(self, request_output):
         self.request_id = request_output.request_id
         self.finished = request_output.finished
+        self.raw = self
 
 
 # Mock LocalScheduler base class
@@ -93,6 +94,7 @@ class MockLocalScheduler:
         self.ids_read_cursor = 0
         self.requests_not_empty = threading.Condition()
         self.responses_not_empty = threading.Condition()
+        self.batch_responses_per_step = list()
 
     def calc_required_blocks(self, token_len, block_size):
         return (token_len + block_size - 1) // block_size
