@@ -2,9 +2,9 @@
 set -e
 
 # Test splitwise deployment
-# v0 requires prefill and decode in one node and it uses local scheduler
-# v1 supports prefill and decode in multi node and it uses splitwise scheduler
-# v2 supports prefill and decode in multi node and it uses router and local scheduler
+# There are two methods for splitwise deployment:
+# v0: using splitwise_scheduler or dp_scheduler
+# v1: using local_scheduler + router
 
 wait_for_health() {
        local server_port=$1
@@ -21,7 +21,6 @@ wait_for_health() {
 
 # prepare environment
 MODEL_NAME="PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
-# MODEL_NAME="baidu/ERNIE-4.5-21B-A3B-Paddle"
 
 export FD_DEBUG=1
 export ENABLE_V1_KVCACHE_SCHEDULER=0
@@ -39,14 +38,16 @@ fi
 unset http_proxy && unset https_proxy
 rm -rf log_*
 
-# start redis
-if ! redis-cli ping &>/dev/null; then
-    echo "Redis is not running. Starting redis-server..."
-    redis-server --daemonize yes
-    sleep 1
-else
-    echo "Redis is already running."
-fi
+# start router
+export FD_LOG_DIR="log_router"
+mkdir -p ${FD_LOG_DIR}
+
+echo "start router"
+router_port=9000
+nohup python -m fastdeploy.router.launch \
+    --port ${router_port} \
+    --splitwise \
+    2>&1 >${FD_LOG_DIR}/nohup &
 sleep 1
 
 # start prefill
@@ -54,45 +55,56 @@ export CUDA_VISIBLE_DEVICES=0,1
 export FD_LOG_DIR="log_prefill"
 mkdir -p ${FD_LOG_DIR}
 
+echo "start prefill"
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
        --port 8100 \
        --metrics-port 8101 \
        --engine-worker-queue-port 8102 \
        --cache-queue-port 8103 \
-       --max-model-len 32768 \
        --tensor-parallel-size 2 \
+       --max-model-len 32768 \
        --splitwise-role "prefill" \
-       --cache-transfer-protocol "rdma,ipc" \
        --pd-comm-port 8104 \
        --rdma-comm-ports 8105,8106 \
-       --scheduler-name "splitwise" \
-       --scheduler-host "127.0.0.1" \
-       --scheduler-port 6379 \
-       --scheduler-ttl 9000 \
+       --router "0.0.0.0:${router_port}" \
        2>&1 >${FD_LOG_DIR}/nohup &
-wait_for_health 8100
+
+# wait_for_health 8100
 
 # start decode
 export CUDA_VISIBLE_DEVICES=2,3
 export FD_LOG_DIR="log_decode"
 mkdir -p ${FD_LOG_DIR}
 
+echo "start decode"
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
-       --port 9000 \
-       --metrics-port 9001 \
-       --engine-worker-queue-port 9002 \
-       --cache-queue-port 9003 \
+       --port 8200 \
+       --metrics-port 8201 \
+       --engine-worker-queue-port 8202 \
+       --cache-queue-port 8203 \
        --max-model-len 32768 \
        --tensor-parallel-size 2 \
        --splitwise-role "decode" \
-       --cache-transfer-protocol "rdma,ipc" \
-       --pd-comm-port 9004 \
-       --rdma-comm-ports 9005,9006 \
-       --scheduler-name "splitwise" \
-       --scheduler-host "127.0.0.1" \
-       --scheduler-port 6379 \
-       --scheduler-ttl 9000 \
+       --pd-comm-port 8204 \
+       --rdma-comm-ports 8205,8206 \
+       --router "0.0.0.0:${router_port}" \
        2>&1 >${FD_LOG_DIR}/nohup &
-wait_for_health 9000
+
+wait_for_health 8200
+
+
+
+# send request
+sleep 10  # make sure server is registered to router
+port=9000
+curl -X POST "http://0.0.0.0:${port}/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "hello"}
+  ],
+  "max_tokens": 20,
+  "stream": true
+}'
