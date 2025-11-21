@@ -77,47 +77,49 @@ function copy_ops(){
     PY_VERSION="py${PY_MAIN_VERSION}.${PY_SUB_VERSION}"
     SYSTEM_VERSION=`${python} -c "import platform; print(platform.system().lower())"`
     PROCESSOR_VERSION=`${python} -c "import platform; print(platform.processor())"`
-    WHEEL_NAME="fastdeploy_ops-${OPS_VERSION}-${PY_VERSION}-${SYSTEM_VERSION}-${PROCESSOR_VERSION}.egg"
-    WHEEL_CPU_NAME="fastdeploy_cpu_ops-${OPS_VERSION}-${PY_VERSION}-${SYSTEM_VERSION}-${PROCESSOR_VERSION}.egg"
+    EGG_NAME="fastdeploy_ops-${OPS_VERSION}-${PY_VERSION}-${SYSTEM_VERSION}-${PROCESSOR_VERSION}.egg"
+    EGG_CPU_NAME="fastdeploy_cpu_ops-${OPS_VERSION}-${PY_VERSION}-${SYSTEM_VERSION}-${PROCESSOR_VERSION}.egg"
 
     # Add compatibility for modern python packaging methods
-    WHEEL_MODERN_NAME="fastdeploy_ops"
-    WHEEL_MODERN_CPU_NAME="fastdeploy_cpu_ops"
+    LEGACY_PACKAGE_DIR="${OPS_TMP_DIR}/${EGG_NAME}"
+    MODERN_PACKAGE_DIR="${OPS_TMP_DIR}/fastdeploy_ops"
+    LEGACY_PACKAGE_DIR_CPU="${OPS_TMP_DIR}/${EGG_CPU_NAME}"
+    MODERN_PACKAGE_DIR_CPU="${OPS_TMP_DIR}/fastdeploy_cpu_ops"
 
-    # Handle GPU ops directories (WHEEL_MODERN_NAME and WHEEL_NAME)
-    if [ -d "./${OPS_TMP_DIR}/${WHEEL_MODERN_NAME}" ]; then
+    # Handle GPU ops directory compatibility between modern and legacy naming
+    if [ -d "${MODERN_PACKAGE_DIR}" ]; then
         echo -e "${GREEN}[Info]${NONE} Ready to copy ops from modern directory ${WHEEL_MODERN_NAME} to target directory"
-        # Set WHEEL_NAME to empty string to ignore the directory path
-        WHEEL_NAME=""
+        TMP_PACKAGE_DIR="${OPS_TMP_DIR}"
+    # If modern directory doesn't exist, check for legacy directory, this branch should be removed in the future
+    elif [ -d "${LEGACY_PACKAGE_DIR}" ]; then
+        echo -e "${YELLOW}[Warning]${NONE} ${EGG_NAME} directory exists. This is a legacy packaging and distribution method."
+        TMP_PACKAGE_DIR="${LEGACY_PACKAGE_DIR}"
     else
-        # If modern directory doesn't exist, check for deprecated directory
-        if [ -d "./${OPS_TMP_DIR}/${WHEEL_NAME}" ]; then
-            echo -e "${YELLOW}[Warning]${NONE} ${WHEEL_NAME} directory exists. This is a deprecated packaging and distribution method."
-        fi
+        echo -e "${RED}[Error]${NONE} Neither modern nor legacy directory for gpu ops found in ${OPS_TMP_DIR}"
     fi
 
-    # Handle CPU ops directories (WHEEL_MODERN_CPU_NAME and WHEEL_CPU_NAME)
-    if [ -d "./${OPS_TMP_DIR}/${WHEEL_MODERN_CPU_NAME}" ]; then
+    # Handle CPU ops directory compatibility between modern and legacy naming
+    if [ -d "${MODERN_PACKAGE_DIR_CPU}" ]; then
         echo -e "${GREEN}[Info]${NONE} Ready to copy ops from modern directory ${WHEEL_MODERN_CPU_NAME} to target directory"
-        # Set WHEEL_CPU_NAME to empty string to ignore the directory path
-        WHEEL_CPU_NAME=""
+        TMP_PACKAGE_DIR_BASE="${OPS_TMP_DIR}"
+    # If modern directory doesn't exist, check for legacy directory, this branch should be removed in the future
+    elif [ -d "${LEGACY_PACKAGE_DIR_CPU}" ]; then
+        echo -e "${YELLOW}[Warning]${NONE} ${EGG_CPU_NAME} directory exists. This is a legacy packaging and distribution method."
+        TMP_PACKAGE_DIR_BASE="${LEGACY_PACKAGE_DIR_CPU}"
     else
-        # If modern directory doesn't exist, check for deprecated directory
-        if [ -d "./${OPS_TMP_DIR}/${WHEEL_CPU_NAME}" ]; then
-            echo -e "${YELLOW}[Warning]${NONE} ${WHEEL_CPU_NAME} directory exists. This is a deprecated packaging and distribution method."
-        fi
+        echo -e "${YELLOW}[Warning]${NONE} Neither modern nor legacy directory for cpu ops found in ${OPS_TMP_DIR}"
     fi
     is_rocm=`$python -c "import paddle; print(paddle.is_compiled_with_rocm())"`
     if [ "$is_rocm" = "True" ]; then
       DEVICE_TYPE="rocm"
-      cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/gpu
+      cp -r ${TMP_PACKAGE_DIR}/* ../fastdeploy/model_executor/ops/gpu
       echo -e "ROCM ops have been copy to fastdeploy"
       return
     fi
     is_cuda=`$python -c "import paddle; print(paddle.is_compiled_with_cuda())"`
     if [ "$is_cuda" = "True" ]; then
       DEVICE_TYPE="gpu"
-      cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/gpu
+      cp -r ${TMP_PACKAGE_DIR}/* ../fastdeploy/model_executor/ops/gpu
       echo -e "CUDA ops have been copy to fastdeploy"
       return
     fi
@@ -125,7 +127,7 @@ function copy_ops(){
     is_xpu=`$python -c "import paddle; print(paddle.is_compiled_with_xpu())"`
     if [ "$is_xpu" = "True" ]; then
       DEVICE_TYPE="xpu"
-      cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/xpu
+      cp -r ${TMP_PACKAGE_DIR}/* ../fastdeploy/model_executor/ops/xpu
       echo -e "xpu ops have been copy to fastdeploy"
       return
     fi
@@ -133,7 +135,7 @@ function copy_ops(){
     is_npu=`$python -c "import paddle; print(paddle.is_compiled_with_custom_device('npu'))"`
     if [ "$is_npu" = "True" ]; then
       DEVICE_TYPE="npu"
-      cp -r ${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/npu
+      cp -r ${TMP_PACKAGE_DIR}/* ../fastdeploy/model_executor/ops/npu
       echo -e "npu ops have been copy to fastdeploy"
       return
     fi
@@ -141,7 +143,7 @@ function copy_ops(){
     if_corex=`$python -c "import paddle; print(paddle.is_compiled_with_custom_device(\"iluvatar_gpu\"))"`
     if [ "$if_corex" = "True" ]; then
       DEVICE_TYPE="iluvatar-gpu"
-      cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/iluvatar
+      cp -r ${TMP_PACKAGE_DIR}/* ../fastdeploy/model_executor/ops/iluvatar
       echo -e "Iluvatar ops have been copy to fastdeploy"
       return
     fi
@@ -149,7 +151,7 @@ function copy_ops(){
     is_gcu=`$python -c "import paddle; print(paddle.is_compiled_with_custom_device('gcu'))"`
     if [ "$is_gcu" = "True" ]; then
       DEVICE_TYPE="gcu"
-      cp -r ${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/gcu
+      cp -r ${TMP_PACKAGE_DIR}/* ../fastdeploy/model_executor/ops/gcu
       echo -e "gcu ops have been copy to fastdeploy"
       return
     fi
@@ -158,8 +160,8 @@ function copy_ops(){
     if [ "$is_maca" = "True" ]; then
       DEVICE_TYPE="metax_gpu"
       mkdir -p ../fastdeploy/model_executor/ops/base
-      cp -r ./${OPS_TMP_DIR_BASE}/${WHEEL_BASE_NAME}/* ../fastdeploy/model_executor/ops/base
-      cp -r ./${OPS_TMP_DIR}/${WHEEL_NAME}/* ../fastdeploy/model_executor/ops/gpu
+      cp -r ${OPS_TMP_DIR_BASE}/${WHEEL_BASE_NAME}/* ../fastdeploy/model_executor/ops/base
+      cp -r ${TMP_PACKAGE_DIR}/* ../fastdeploy/model_executor/ops/gpu
       echo -e "MACA ops have been copy to fastdeploy"
       return
     fi
@@ -249,8 +251,14 @@ function extract_ops_from_precompiled_wheel() {
   echo -e "${BLUE}[precompiled]${NONE} Copying GPU precompiled contents..."
   mkdir -p "$DST_DIR"
   cp -r "$SRC_DIR/deep_gemm" "$DST_DIR/" 2>/dev/null || true
-  cp -r "$SRC_DIR/fastdeploy_ops.py" "$DST_DIR/" 2>/dev/null || true
-  cp -f "$SRC_DIR/"fastdeploy_ops_*.so "$DST_DIR/" 2>/dev/null || true
+  # Check for modern Python packaging approach (fastdeploy_ops directory)
+  # If exists, copy the entire directory; otherwise, fall back to legacy method (individual files)
+  if [ -d "$SRC_DIR/fastdeploy_ops" ]; then
+    cp -r "$SRC_DIR/fastdeploy_ops" "$DST_DIR/" 2>/dev/null || true
+  else
+    cp -r "$SRC_DIR/fastdeploy_ops.py" "$DST_DIR/" 2>/dev/null || true
+    cp -f "$SRC_DIR/"fastdeploy_ops_*.so "$DST_DIR/" 2>/dev/null || true
+  fi
   cp -f "$SRC_DIR/version.txt" "$DST_DIR/" 2>/dev/null || true
 
   echo -e "${GREEN}[SUCCESS]${NONE} Installed FastDeploy using precompiled wheel."
