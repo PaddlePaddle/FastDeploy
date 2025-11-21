@@ -40,6 +40,7 @@ from fastdeploy.engine.request import (
     RequestType,
 )
 from fastdeploy.engine.resource_manager import ResourceManager
+from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.multimodal.hasher import MultimodalHasher
@@ -391,8 +392,15 @@ class ResourceManagerV1(ResourceManager):
                     end_patch_idx -= 1
             end_patch_map = inputs["patch_map"][end_patch_idx]
             end_modal_id = end_patch_map["modal_id"]
-            if end_modal_id > 0:
+            if end_modal_id > 0 and end_modal_id != IDS_TYPE_FLAG["video"]:
                 new_end_idx = end_patch_map["end_idx"]  # 当前模态结束位置
+
+            if end_modal_id == IDS_TYPE_FLAG["video"] and "can_split_idx_list" in inputs:
+                can_split_idx_list = inputs["can_split_idx_list"]
+                for i in range(len(can_split_idx_list)):
+                    if can_split_idx_list[i] >= new_end_idx:
+                        new_end_idx = can_split_idx_list[i]
+                        break
             num_new_tokens = new_end_idx - pre_end_idx
 
             request.image_end = end_patch_map["image_num"]
@@ -505,6 +513,8 @@ class ResourceManagerV1(ResourceManager):
             preempted_reqs: list[Request] = []
             error_reqs: list[tuple[str, str]] = []
             token_budget = self.config.scheduler_config.max_num_batched_tokens
+
+            self.check_and_free_block_tables()
 
             # First, schedule the RUNNING requests.
             req_index = 0
@@ -799,7 +809,7 @@ class ResourceManagerV1(ResourceManager):
 
         def download_bos_features(bos_client, features_urls):
             result_list = []
-            for status, feature in download_from_bos(self.bos_client, features_urls):
+            for status, feature in download_from_bos(self.bos_client, features_urls, retry=1):
                 if status:
                     llm_logger.info(f"request {request.request_id} async download feature: {feature.shape}")
                     result_list.append(feature)
@@ -809,7 +819,7 @@ class ResourceManagerV1(ResourceManager):
                     return error_msg
             return result_list
 
-        if not self.config.parallel_config.enable_async_download_features or not self._has_features_info(request):
+        if not self._has_features_info(request):
             return None
 
         if self.bos_client is None:
@@ -991,7 +1001,7 @@ class ResourceManagerV1(ResourceManager):
                 request.need_prefill_tokens + self.config.cache_config.block_size - 1
             ) // self.config.cache_config.block_size + self.config.cache_config.enc_dec_block_num  # consider for mtp, plus enc_dec_block_num
             if self.cache_manager.can_allocate_gpu_blocks(need_prealloc_prefill_blocks):
-                request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks))
+                request.block_tables = self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks)
                 request.num_computed_tokens = request.need_prefill_tokens
                 request.disaggregate_info["block_tables"] = request.block_tables
                 allocated_position = self.get_available_position()
