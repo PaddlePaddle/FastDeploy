@@ -29,7 +29,7 @@ from typing import Any, List, Tuple
 import numpy as np
 
 from fastdeploy import envs
-from fastdeploy.utils import llm_logger, numpy_to_tensor
+from fastdeploy.utils import llm_logger, to_tensor
 
 
 class EngineWorkerQueue:
@@ -489,7 +489,7 @@ class EngineWorkerQueue:
 
         if envs.FD_ENABLE_MAX_PREFILL or envs.FD_ENABLE_E2W_TENSOR_CONVERT:
             # multimodal input numpy -> tensor
-            numpy_to_tensor(tasks[0])
+            to_tensor(tasks[0])
 
         self.tasks[:] = list()
         self.client_read_flag[:] = [0] * self.num_client

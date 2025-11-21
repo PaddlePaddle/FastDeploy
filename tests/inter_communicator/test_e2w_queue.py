@@ -21,7 +21,7 @@ import paddle
 
 from fastdeploy import envs
 from fastdeploy.engine.request import Request
-from fastdeploy.utils import numpy_to_tensor, tensor_to_numpy
+from fastdeploy.utils import to_numpy, to_tensor
 
 
 class DummyTask:
@@ -36,7 +36,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
         np_images = paddle.randn([2, 3, 224, 224]).numpy()
         task = DummyTask(np_images)
         tasks = [task]
-        numpy_to_tensor(tasks)
+        to_tensor(tasks)
 
         # 验证已转换为tensor
         self.assertIsInstance(task.multimodal_inputs["images"], paddle.Tensor)
@@ -47,7 +47,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
         np_images = paddle.randn([2, 3, 224, 224]).numpy()
         task = DummyTask(np_images)
         tasks = [task]
-        numpy_to_tensor(tasks)
+        to_tensor(tasks)
 
         # 验证已转换为tensor
         self.assertIsInstance(task.multimodal_inputs["images"], np.ndarray)
@@ -61,7 +61,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
 
         # 不应抛异常
         try:
-            numpy_to_tensor(tasks)
+            to_tensor(tasks)
         except Exception as e:
             self.fail(f"Unexpected exception raised: {e}")
 
@@ -70,7 +70,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
         bad_tasks = [bad_task]
 
         try:
-            numpy_to_tensor(bad_tasks)
+            to_tensor(bad_tasks)
         except Exception as e:
             self.fail(f"Exception should be handled internally, but got: {e}")
 
@@ -80,7 +80,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
         tensor_images = paddle.randn([2, 3, 224, 224])
         task = DummyTask(tensor_images)
         tasks = [task]
-        tensor_to_numpy(tasks)
+        to_numpy(tasks)
 
         # 验证转换为 numpy.ndarray
         self.assertIsInstance(task.multimodal_inputs["images"], np.ndarray)
@@ -95,7 +95,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
         tasks = [task]
 
         # 调用转换方法(预期不会转换)
-        tensor_to_numpy(tasks)
+        to_numpy(tasks)
 
         # 因为开关关闭，应仍为 Tensor
         self.assertIsInstance(task.multimodal_inputs["images"], paddle.Tensor)
@@ -109,7 +109,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
 
         # 不应抛异常
         try:
-            tensor_to_numpy(tasks)
+            to_numpy(tasks)
         except Exception as e:
             self.fail(f"Unexpected exception raised: {e}")
 
@@ -119,7 +119,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
         task = DummyTask(np_images)
         tasks = [task]
 
-        tensor_to_numpy(tasks)
+        to_numpy(tasks)
 
         # 非 Tensor 输入应保持为 numpy 数组
         self.assertIsInstance(task.multimodal_inputs["images"], np.ndarray)
@@ -136,7 +136,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
         bad_tasks = [bad_task]
 
         try:
-            tensor_to_numpy(bad_tasks)
+            to_numpy(bad_tasks)
         except Exception as e:
             self.fail(f"Exception should be handled internally, but got: {e}")
 
@@ -151,7 +151,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
             "multimodal_inputs": multimodal_inputs,
         }
         task = Request.from_dict(req_dict)
-        numpy_to_tensor([task])
+        to_tensor([task])
 
         # 验证已转换为tensor
         self.assertEqual(len(task.multimodal_inputs["image_features"]), 2)
@@ -169,7 +169,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
             "multimodal_inputs": multimodal_inputs,
         }
         task = Request.from_dict(req_dict)
-        tensor_to_numpy([task])
+        to_numpy([task])
 
         # 验证已转换为ndarray
         self.assertEqual(len(task.multimodal_inputs["video_features"]), 2)

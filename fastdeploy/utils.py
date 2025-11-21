@@ -1060,7 +1060,7 @@ def optional_type(return_type: Callable[[str], T]) -> Callable[[str], Optional[T
     return _optional_type
 
 
-def tensor_to_numpy(tasks: List[Request]):
+def to_numpy(tasks: List[Request]):
     """
     Convert PaddlePaddle tensors in multimodal inputs to NumPy arrays.
 
@@ -1091,7 +1091,7 @@ def tensor_to_numpy(tasks: List[Request]):
         llm_logger.warning(f"Failed to convert to numpy: {e}")
 
 
-def numpy_to_tensor(tasks: List[Request]):
+def to_tensor(tasks: List[Request]):
     """
     Convert NumPy arrays in multimodal inputs to Paddle tensors.
 
