@@ -288,6 +288,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/tune_cublaslt_gemm.cu",
         "gpu_ops/swap_cache_batch.cu",
         "gpu_ops/swap_cache.cu",
+        "gpu_ops/swap_cache_layout.cu",
         "gpu_ops/step_system_cache.cu",
         "gpu_ops/cpp_extensions.cc",
         "gpu_ops/share_external_data.cu",

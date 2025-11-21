@@ -9,6 +9,7 @@ if current_platform.is_cuda():
         set_data_ipc,
         share_external_data,
         swap_cache_all_layers,
+        swap_cache_layout,
         unset_data_ipc,
     )
 
@@ -23,6 +24,7 @@ elif current_platform.is_xpu():
     )
 
     unset_data_ipc = None
+    swap_cache_layout = None
     memory_allocated = paddle.device.xpu.memory_allocated
 
 else:
@@ -57,4 +59,5 @@ __all__ = [
     "unset_data_ipc",  # XPU是 None
     "set_device",
     "memory_allocated",
+    "swap_cache_layout",
 ]

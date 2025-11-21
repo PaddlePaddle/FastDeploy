@@ -1217,6 +1217,9 @@ class CacheConfig:
         self.enable_ssd_cache = False
         self.cache_queue_port = None
         self.swap_space = None
+        self.write_policy = None
+        self.enable_hierarchical_kvcache = False
+        self.kvcache_storage_backend = None
         self.max_encoder_cache = None
         self.max_processor_cache = None
         self.disable_chunked_mm_input = False
@@ -1229,11 +1232,6 @@ class CacheConfig:
 
         if self.pd_comm_port is not None and isinstance(self.pd_comm_port, str):
             self.pd_comm_port = [int(port) for port in self.pd_comm_port.split(",")]
-
-        if self.swap_space is None:
-            self.enable_hierarchical_cache = False
-        else:
-            self.enable_hierarchical_cache = True
 
         if self.model_cfg is not None:
             if self.model_cfg.quantization_config is not None:
