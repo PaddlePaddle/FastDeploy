@@ -19,17 +19,15 @@ from abc import abstractmethod
 import deep_ep
 import paddle
 from paddle import nn
-from paddleformers.utils.log import logger
 
 import fastdeploy
 from fastdeploy.config import MoEPhase
 from fastdeploy.utils import singleton
 
 
-@singleton
-class DeepEPEngine:
+class DeepEPEngineBase:
     """
-    A wrapper class for DeepEP engine.
+    Base class for DeepEP engine implementations.
     """
 
     def __init__(
@@ -45,7 +43,7 @@ class DeepEPEngine:
         group=None,
     ):
         """
-        Initialize the DeepEP engine.
+        Initialize the DeepEP engine base.
         Args:
             group: The MPI group object.
             ep_size: The number of ranks.
@@ -67,42 +65,47 @@ class DeepEPEngine:
             group = paddle.distributed.new_group(range(ep_size))
         self.group = group
         self.num_local_experts = num_experts // ep_size
-        self.deepep_engine = None  # deepep_engine只调用dispatch, combine
-        self.deepep_engine_low_latency = (
-            None  # deepep_engine_low_latency只调用low_latency_dispatch,low_latency_combine
-        )
-        self.init_deepep_engine()
+        self.deepep_engine = None
 
-    def init_deepep_engine(self):
-        if self.splitwise_role == "mixed":  # 集中式场景需要初始化两种buffer，按需取用
-            self.deepep_engine = deep_ep.Buffer(
-                self.group,
-                int(1e9),
-                0,
-                num_experts=self.num_experts,
-                low_latency_mode=False,
-                num_qps_per_rank=1,
-            )
-            logger.info("Initializing Low Latency Buffer")
-            self.get_low_latency_buffer()
-        elif self.moe_phase.phase == "prefill":  # 分离式的P节点
-            self.deepep_engine = deep_ep.Buffer(
-                self.group,
-                int(1e9),
-                0,
-                num_experts=self.num_experts,
-                low_latency_mode=False,
-                num_qps_per_rank=1,
-            )
-        elif self.moe_phase.phase == "decode":  # 分离式的D节点
-            logger.info("Initializing Low Latency Buffer")
-            self.get_low_latency_buffer()
-        else:
-            raise ValueError(f"Unknown generation phase {self.moe_phase}")
+    def barrier_all(self):
+        """
+        barrier_all
+        """
+        if self.deepep_engine is not None:
+            self.deepep_engine.barrier_all()
+
+
+@singleton
+class DeepEPEngineHighThroughput(DeepEPEngineBase):
+    """
+    High throughput version of DeepEP engine for prefill phase.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.deepep_engine = deep_ep.Buffer(
+            self.group,
+            int(1e9),
+            0,
+            num_experts=self.num_experts,
+            low_latency_mode=False,
+            num_qps_per_rank=1,
+        )
+
+
+@singleton
+class DeepEPEngineLowLatency(DeepEPEngineBase):
+    """
+    Low latency version of DeepEP engine for decode phase.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.get_low_latency_buffer()
 
     def get_low_latency_buffer(self):
         """
-        Get the DeepEP buffer.
+        Initialize low latency buffer for decode phase.
         Args:
             group: The MPI group object.
             num_max_dispatch_tokens_per_rank: The maximum number of tokens per rank to dispatch.
@@ -117,23 +120,16 @@ class DeepEPEngine:
             self.ep_size,
             self.num_experts,
         )
-        # Allocate a buffer if not existed or not enough buffer size
-        if (
-            self.deepep_engine_low_latency is None
-            or self.deepep_engine_low_latency.group != self.group
-            or not self.deepep_engine_low_latency.low_latency_mode
-            or self.deepep_engine_low_latency.num_rdma_bytes < num_rdma_bytes
-        ):
-            # NOTES: for best performance, the QP number **must** be equal to the number of the local experts
-            assert self.num_experts % self.ep_size == 0
-            self.deepep_engine_low_latency = deep_ep.Buffer(
-                self.group,
-                0,
-                num_rdma_bytes,
-                self.num_experts,
-                low_latency_mode=True,
-                num_qps_per_rank=self.num_experts // self.ep_size,
-            )
+        # NOTES: for best performance, the QP number **must** be equal to the number of the local experts
+        assert self.num_experts % self.ep_size == 0
+        self.deepep_engine = deep_ep.Buffer(
+            self.group,
+            0,
+            num_rdma_bytes,
+            self.num_experts,
+            low_latency_mode=True,
+            num_qps_per_rank=self.num_experts // self.ep_size,
+        )
 
     def low_latency_dispatch(
         self,
@@ -165,7 +161,7 @@ class DeepEPEngine:
             handle,
             dispatch_hook,
             valid_token_num,
-        ) = self.deepep_engine_low_latency.low_latency_dispatch(
+        ) = self.deepep_engine.low_latency_dispatch(
             hidden_states,
             moe_in_w4a8_scale,
             topk_idx,
@@ -186,11 +182,10 @@ class DeepEPEngine:
         handle,
     ):
         """
-
         Return:
             combined_hidden_states: [num_tokens, hidden_size]
         """
-        combined_hidden_states, combine_hook = self.deepep_engine_low_latency.low_latency_combine(
+        combined_hidden_states, combine_hook = self.deepep_engine.low_latency_combine(
             hidden_states,
             topk_idx,
             topk_weights,
@@ -206,24 +201,23 @@ class DeepEPEngine:
         """
         pass
 
-    def barrier_all(self):
-        """
-        barrier_all
-        """
-        if self.deepep_engine is None and self.deepep_engine_low_latency is None:
-            raise ValueError("The DeepEP engine has not been initialized yet.")
-
-        if self.deepep_engine is not None:
-            self.deepep_engine.barrier_all()
-        if self.deepep_engine_low_latency is not None:
-            self.deepep_engine_low_latency.barrier_all()
-        # self.deepep_engine.barrier_all()
-
 
 class XPUEPRunner:
     """
     EPRunnerBase
     """
+
+    def _init_ep_engine(self, engine_class):
+        self.ep_engine = engine_class(
+            num_max_dispatch_tokens_per_rank=self.num_max_dispatch_tokens_per_rank,
+            hidden_size=self.hidden_size,
+            num_experts=self.num_experts + self.redundant_experts_num,
+            ep_size=self.ep_size,
+            ep_rank=self.ep_rank,
+            splitwise_role=self.splitwise_role,
+            moe_phase=self.moe_phase,
+            group=self.ep_group,
+        )
 
     def __init__(
         self,
@@ -248,19 +242,17 @@ class XPUEPRunner:
         self.ep_rank = ep_rank
         self.redundant_experts_num = redundant_experts_num
         self.ep_group = ep_group
+        self.ep_engine = None
         self.init_ep_engine()
 
     def init_ep_engine(self):
-        self.ep_engine = DeepEPEngine(
-            num_max_dispatch_tokens_per_rank=self.num_max_dispatch_tokens_per_rank,
-            hidden_size=self.hidden_size,
-            num_experts=self.num_experts + self.redundant_experts_num,
-            ep_size=self.ep_size,
-            ep_rank=self.ep_rank,
-            splitwise_role=self.splitwise_role,
-            moe_phase=self.moe_phase,
-            group=self.ep_group,
-        )
+        """Initialize the EP engine with default implementation"""
+        self._init_ep_engine(self._get_engine_class())
+
+    @abstractmethod
+    def _get_engine_class(self):
+        """Get the engine class to be initialized"""
+        raise NotImplementedError("Subclasses must implement this method")
 
     def moe_select(self, layer: nn.Layer, gate_out: paddle.Tensor):
         """
@@ -346,6 +338,9 @@ class XPUEPPrefillRunner(XPUEPRunner):
             ep_group=ep_group,
         )
 
+    def _get_engine_class(self):
+        return DeepEPEngineHighThroughput
+
     def dispatch(
         self,
         x: paddle.Tensor,
@@ -409,6 +404,9 @@ class XPUEPDecoderRunner(XPUEPRunner):
             redundant_experts_num=redundant_experts_num,
             ep_group=ep_group,
         )
+
+    def _get_engine_class(self):
+        return DeepEPEngineLowLatency
 
     def dispatch(
         self,
