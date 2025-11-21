@@ -45,7 +45,8 @@ jobs:
     needs: check_cov_skip
     if: needs.check_cov_skip.outputs.can-skip != 'true'
     outputs:
-      diff_cov_file_url: ${{ steps.cov_upload.outputs.diff_cov_file_url }}
+      diff_txt_url: ${{ steps.cov_upload.outputs.diff_txt_url }}
+      all_cov_file_url: ${{ steps.cov_upload.outputs.all_cov_file_url }}
       unittest_failed_url: ${{ steps.cov_upload.outputs.unittest_failed_url }}
       diff_cov_result_json_url: ${{ steps.cov_upload.outputs.diff_cov_result_json_url }}
     steps:
@@ -202,7 +203,7 @@ jobs:
           if [[ "$IS_PR" == "true" ]]; then
             echo "Running diff coverage for PR..."
             diff-cover python_coverage_all.xml --diff-file=diff.txt --fail-under=80 --json-report diff_coverage.json || COVERAGE_EXIT_CODE=9
-            python scripts/generate_diff_coverage_xml.py diff.txt python_coverage_all.xml
+            # python scripts/generate_diff_coverage_xml.py diff.txt python_coverage_all.xml
           else
             echo "Running full coverage"
             coverage report -m > full_coverage_report.txt
@@ -251,12 +252,12 @@ jobs:
           target_path_stripped="${target_path#paddle-github-action/}"
 
           if [[ "$IS_PR" == "true" ]]; then
-            diff_cov_file="diff_coverage.xml"
-            if [ -f ${diff_cov_file} ]; then
-              python ${push_file} ${diff_cov_file} ${target_path}/CoverageData
-              DIFF_COV_FILE_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${diff_cov_file}
-              echo "diff_cov_file_url=${DIFF_COV_FILE_URL}" >> $GITHUB_OUTPUT
-              echo "diff_cov_file_url=${DIFF_COV_FILE_URL}" >> $GITHUB_ENV
+            diff_txt="diff.txt"
+            if [ -f ${diff_txt} ]; then
+              python ${push_file} ${diff_txt} ${target_path}/CoverageData
+              DIFF_TXT_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${diff_txt}
+              echo "diff_txt_url=${DIFF_TXT_URL}" >> $GITHUB_OUTPUT
+              echo "diff_txt_url=${DIFF_TXT_URL}" >> $GITHUB_ENV
             fi
 
             diff_cov_result_json="diff_coverage.json"
@@ -265,6 +266,14 @@ jobs:
               DIFF_COV_JSON_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${diff_cov_result_json}
               echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_OUTPUT
               echo "diff_cov_result_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_ENV
+            fi
+
+            all_coverage_file="python_coverage_all.xml"
+            if [ -f ${all_coverage_file} ]; then
+              python ${push_file} ${all_coverage_file} ${target_path}/CoverageData
+              ALL_COV_FILE_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/${all_coverage_file}
+              echo "all_cov_file_url=${ALL_COV_FILE_URL}" >> $GITHUB_OUTPUT
+              echo "all_cov_file_url=${ALL_COV_FILE_URL}" >> $GITHUB_ENV
             fi
           fi
 
@@ -352,28 +361,54 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
+      diff_txt_url: ${{ needs.run_tests_with_coverage.outputs.diff_txt_url }}
+      all_cov_file_url: ${{ needs.run_tests_with_coverage.outputs.all_cov_file_url }}
     steps:
-      - name: coverage diff file download
-        shell: bash
-        env:
-          diff_cov_file_url: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url }}
+      - name: Clone FastDeploy
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Fetch base branch
         run: |
-          wget -q --no-proxy ${fd_archive_url}
-          tar -xf FastDeploy.tar.gz
-          cd FastDeploy
-          if [ -z "${diff_cov_file_url}" ]; then
-            echo "No diff coverage file URL provided."
+          echo "Fetching base branch: ${{ github.event.pull_request.base.ref }}"
+          git fetch origin ${{ github.event.pull_request.base.ref }}:refs/remotes/origin/${{ github.event.pull_request.base.ref }}
+
+      - name: Download diff coverage file
+        shell: bash
+        run: |
+          if [ -z "${diff_txt_url}" ]; then
+            echo "No diff.txt URL provided."
             exit 0
           fi
-          wget "${diff_cov_file_url}" -O ./diff_coverage.xml || echo "Download cov file failed, but continuing..."
+
+          echo "Downloading diff.txt ..."
+          if ! wget --no-proxy "${diff_txt_url}" -O diff.txt; then
+            echo "Download failed, skipping upload."
+            exit 0
+          fi
+
+          echo "Downloading all coverage file..."
+          if ! wget --no-proxy "${all_cov_file_url}" -O python_coverage_all.xml; then
+            echo "Download failed, skipping upload."
+            exit 0
+          fi
+
+          if [ ! -s diff.txt ]; then
+            echo "Downloaded diff.txt is empty!"
+            exit 0
+          fi
+
+          sed -i 's|<source>/workspace/FastDeploy/fastdeploy</source>|<source>fastdeploy</source>|' python_coverage_all.xml
+
       - name: Upload diff coverage report
-        if: ${{ needs.run_tests_with_coverage.outputs.diff_cov_file_url != null && needs.run_tests_with_coverage.outputs.diff_cov_file_url != '' }}
-        uses: codecov/codecov-action@v5
+        if: always() && hashFiles('diff.txt') != ''
+        uses: codecov/codecov-action@v4
         with:
-          files: ./FastDeploy/diff_coverage.xml
-          name: python diff coverage
-          verbose: true
-          disable_search: true
-          commit_parent: false
+          files: ./diff.txt, ./python_coverage_all.xml
           flags: diff
+          name: python diff coverage
+          fail_ci_if_error: false
+          verbose: true

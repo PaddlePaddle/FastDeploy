@@ -471,13 +471,10 @@ class EngineArgs:
     """
     Flag to enable eplb
     """
+
     eplb_config: Optional[Dict[str, Any]] = None
     """
     Configuration for eplb.
-    """
-    enable_async_download_features: bool = False
-    """
-    Flag to enable async download features. Default is False (disabled).
     """
 
     def __post_init__(self):
@@ -523,18 +520,6 @@ class EngineArgs:
                 if len(self.rdma_comm_ports) != self.tensor_parallel_size * self.data_parallel_size:
                     raise ValueError(
                         f"The number of rdma comm ports must be equal to number of ranks ({self.data_parallel_size=} * {self.tensor_parallel_size=} = {self.data_parallel_size * self.tensor_parallel_size}), but got {len(self.rdma_comm_ports)}."
-                    )
-
-            if envs.ENABLE_V1_KVCACHE_SCHEDULER == 1:
-                if "ipc" in self.cache_transfer_protocol:
-                    # FIXME: support ipc cache transfer protocol
-                    raise NotImplementedError(
-                        "only support rdma cache transfer protocol " "when using ENABLE_V1_KVCACHE_SCHEDULER."
-                    )
-                # FIXME: fix this bug
-                if self.splitwise_role == "prefill" and self.num_gpu_blocks_override is None:
-                    raise NotImplementedError(
-                        "please set num_gpu_blocks_override for prefill " "instance using ENABLE_V1_KVCACHE_SCHEDULER."
                     )
 
         if not current_platform.is_cuda() and not current_platform.is_xpu():
@@ -875,12 +860,6 @@ class EngineArgs:
             type=json.loads,
             default=EngineArgs.eplb_config,
             help="Config of eplb.",
-        )
-        parallel_group.add_argument(
-            "--enable-async-download-features",
-            action="store_true",
-            default=EngineArgs.enable_async_download_features,
-            help="Enable async download features.",
         )
 
         # Load group
