@@ -43,14 +43,14 @@ if [ -d "${MODERN_PACKAGE_DIR}" ]; then
     echo -e "${GREEN}[Info]${NONE} Ready to use ops from modern directory ${MODERN_PACKAGE_DIR}"
     # Use modern directory name
     TMP_PACKAGE_DIR="${OPS_TMP_DIR}"
-    CUSTOM_OP_DLL_RPATH='$ORIGIN/libs'
+    CUSTOM_OP_DLL_RPATH='$ORIGIN/../libs'
     CUSTOM_OP_DLL_PATH="${MODERN_PACKAGE_DIR}/fastdeploy_ops_pd_.so"
 # If modern directory doesn't exist, check for legacy directory, this branch should be removed in the future
 elif [ -d "${LEGACY_PACKAGE_DIR}" ]; then
     echo -e "${YELLOW}[Warning]${NONE} ${LEGACY_PACKAGE_DIR} directory exists. This is a deprecated packaging and distribution method."
     # Use legacy directory name
     TMP_PACKAGE_DIR="${LEGACY_PACKAGE_DIR}"
-    CUSTOM_OP_DLL_RPATH='$ORIGIN/../libs'
+    CUSTOM_OP_DLL_RPATH='$ORIGIN/libs'
     CUSTOM_OP_DLL_PATH="${TMP_PACKAGE_DIR}/fastdeploy_ops_pd_.so"
 else
     echo -e "${RED}[Error]${NONE} Neither modern nor legacy directory for xpu ops found in ${OPS_TMP_DIR}"
