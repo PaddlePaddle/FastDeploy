@@ -31,5 +31,10 @@ def init_signal_layerwise(
 
         out = init_signal_layerwise(kv_signal_metadata, layer_id)
         return out
+    elif current_platform.is_xpu():
+        from fastdeploy.model_executor.ops.xpu import init_signal_layerwise
+
+        out = init_signal_layerwise(kv_signal_metadata, layer_id)
+        return out
     else:
         raise NotImplementedError

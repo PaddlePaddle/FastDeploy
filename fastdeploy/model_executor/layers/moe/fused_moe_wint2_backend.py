@@ -19,6 +19,7 @@ from paddle import nn
 
 import fastdeploy
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
+from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch, moe_expert_reduce
 from fastdeploy.utils import ceil_div
 
 from ..quantization.quant_base import QuantMethodBase
@@ -266,7 +267,6 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
         Use Wint2 Triton Fusedmoe compute Fused MoE.
         """
         gate_out = gate(x.cast("float32"))
-        from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch
 
         (
             permute_input,
@@ -305,8 +305,6 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
             layer.down_proj_code_zp,
             False,
         )
-
-        from fastdeploy.model_executor.ops.gpu import moe_expert_reduce
 
         fused_moe_out = moe_expert_reduce(
             ffn_out,
