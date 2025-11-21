@@ -50,6 +50,7 @@ from tqdm import tqdm
 from typing_extensions import TypeIs, assert_never
 
 from fastdeploy import envs
+from fastdeploy.engine.request import Request as TaskRequest
 from fastdeploy.entrypoints.openai.protocol import ErrorInfo, ErrorResponse
 from fastdeploy.logger.logger import FastDeployLogger
 
@@ -1091,7 +1092,7 @@ def to_numpy(tasks: List[Request]):
         llm_logger.warning(f"Failed to convert to numpy: {e}")
 
 
-def to_tensor(tasks: List[Request]):
+def to_tensor(tasks: List[TaskRequest]):
     """
     Convert NumPy arrays in multimodal inputs to Paddle tensors.
 

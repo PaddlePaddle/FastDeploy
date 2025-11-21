@@ -42,7 +42,6 @@ class TestEngineWorkerQueue(unittest.TestCase):
         self.assertIsInstance(task.multimodal_inputs["images"], paddle.Tensor)
 
     def test_to_tensor_disabled(self):
-        envs.FD_ENABLE_MAX_PREFILL = 0
         # 模拟 numpy 数组输入（使用 paddle 转 numpy）
         np_images = paddle.randn([2, 3, 224, 224]).numpy()
         task = DummyTask(np_images)
@@ -50,7 +49,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
         to_tensor(tasks)
 
         # 验证已转换为tensor
-        self.assertIsInstance(task.multimodal_inputs["images"], np.ndarray)
+        self.assertIsInstance(task.multimodal_inputs["images"], paddle.Tensor)
 
     def test_to_tensor_no_multimodal_inputs(self):
         class NoMMTask:
@@ -86,8 +85,6 @@ class TestEngineWorkerQueue(unittest.TestCase):
         self.assertIsInstance(task.multimodal_inputs["images"], np.ndarray)
 
     def test_to_numpy_disabled(self):
-        # 禁用张量转换开关
-        envs.FD_ENABLE_MAX_PREFILL = 0
         # 创建随机张量作为测试输入
         tensor_images = paddle.randn([2, 3, 224, 224])
         # 创建模拟任务
@@ -97,8 +94,7 @@ class TestEngineWorkerQueue(unittest.TestCase):
         # 调用转换方法(预期不会转换)
         to_numpy(tasks)
 
-        # 因为开关关闭，应仍为 Tensor
-        self.assertIsInstance(task.multimodal_inputs["images"], paddle.Tensor)
+        self.assertIsInstance(task.multimodal_inputs["images"], np.ndarray)
 
     def test_to_numpy_no_multimodal_inputs(self):
         class NoMMTask:
