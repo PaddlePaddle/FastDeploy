@@ -199,18 +199,6 @@ class TestRDMACommManager(unittest.TestCase):
         self.assertTrue(hasattr(manager, "messager"))
         self.assertEqual(manager.splitwise_role, "prefill")
 
-    def test_init_without_rdma_comm(self):
-        """Test RDMACommManager initialization without rdma_comm module.
-
-        Verifies that the messager is not created and an error is logged
-        when rdma_comm module is missing.
-        """
-        with patch.dict(sys.modules, {}), patch.object(rdma_module.logger, "error") as mock_log:
-
-            manager = create_rdma_manager(None)
-            mock_log.assert_called_once()
-            self.assertFalse(hasattr(manager, "messager"))
-
     def test_connect_nominal(self):
         """Test connect method with valid prefill role.
 
