@@ -169,7 +169,7 @@ void FlashAttentionMask(const paddle::Tensor& q_input,
   }
 }
 
-PD_BUILD_STATIC_OP(flash_attention_mask)
+PD_BUILD_STATIC_OP(flash_mask_attention)
     .Inputs({"q_input",
              "k_input",
              "v_input",
