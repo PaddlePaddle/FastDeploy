@@ -138,7 +138,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         """
         Apply the EP prefill method.
         """
-        import threading
 
         gate_out = gate(x.cast("float32"))
         # a = paddle.randn([5120, 5120])
@@ -163,14 +162,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128
         )
 
-        from fastdeploy.worker.tbo import GLOBAL_THREAD_INFO
+        from fastdeploy.worker.tbo import allow_another_thread_run
 
-        thread_name = threading.current_thread().name
-
-        if thread_name in GLOBAL_THREAD_INFO:
-            GLOBAL_THREAD_INFO[thread_name][1].set()
-            GLOBAL_THREAD_INFO[thread_name][0].wait()
-            GLOBAL_THREAD_INFO[thread_name][0].clear()
+        allow_another_thread_run()
 
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
@@ -256,10 +250,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         # 5. EP combine
         tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
 
-        if thread_name in GLOBAL_THREAD_INFO:
-            GLOBAL_THREAD_INFO[thread_name][1].set()
-            GLOBAL_THREAD_INFO[thread_name][0].wait()
-            GLOBAL_THREAD_INFO[thread_name][0].clear()
+        allow_another_thread_run()
 
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()

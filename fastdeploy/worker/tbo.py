@@ -68,3 +68,12 @@ def split_batch(forward_meta: ForwardMeta, tmp_dict):
             setattr(res[i], key, attention_buffer[key])
 
     return res
+
+
+def allow_another_thread_run():
+    thread_name = threading.current_thread().name
+
+    if thread_name in GLOBAL_THREAD_INFO:
+        GLOBAL_THREAD_INFO[thread_name][1].set()
+        GLOBAL_THREAD_INFO[thread_name][0].wait()
+        GLOBAL_THREAD_INFO[thread_name][0].clear()
