@@ -275,9 +275,9 @@ setup(
     url="https://github.com/PaddlePaddle/FastDeploy",
     packages=find_packages(),
     package_dir={"fastdeploy": "fastdeploy/"},
-    # For deprecated packaging and distribution method, `.so` in the `model_executor/ops/XXX` directory
-    # For modern packaging and distribution method, `.so` in the `model_executor/ops/XXX/fastdeploy_ops` directory
-    # So, the`fastdeploy_ops` directory should be included for modern python packaging
+    # For deprecated method (egg-based installation), `.so` files are placed in the `model_executor/ops/XXX` directory.
+    # For modern method (PEP 517/518-based installation), `.so` files are placed in the `model_executor/ops/XXX/fastdeploy_ops` directory.
+    # Therefore, the `fastdeploy_ops` directory should be included for modern Python packaging.
     package_data={
         "fastdeploy": [
             "model_executor/ops/gpu/*",
