@@ -25,6 +25,13 @@ import traceback
 import numpy as np
 import paddle
 
+from fastdeploy.cache_manager.ops import (
+    get_output_kv_signal,
+    get_peer_mem_addr,
+    memory_allocated,
+    set_data_ipc,
+    set_device,
+)
 from fastdeploy.cache_manager.transfer_factory import IPCCommManager, RDMACommManager
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.inter_communicator import (
@@ -32,7 +39,6 @@ from fastdeploy.inter_communicator import (
     IPCSignal,
     shared_memory_exists,
 )
-from fastdeploy.model_executor.ops.gpu import get_output_kv_signal, set_data_ipc
 from fastdeploy.utils import envs, get_logger
 
 logger = get_logger("cache_messager", "cache_messager.log")
@@ -157,8 +163,12 @@ class CacheMessager:
             val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
             cache_k.append(key_cache)
             cache_v.append(val_cache)
-            cache_k_ptr_list.append(key_cache.data_ptr())
-            cache_v_ptr_list.append(val_cache.data_ptr())
+            if paddle.is_compiled_with_xpu():
+                cache_k_ptr_list.append(get_peer_mem_addr(key_cache.data_ptr()))
+                cache_v_ptr_list.append(get_peer_mem_addr(val_cache.data_ptr()))
+            else:
+                cache_k_ptr_list.append(key_cache.data_ptr())
+                cache_v_ptr_list.append(val_cache.data_ptr())
         cache_k_ptr_list = np.array(cache_k_ptr_list)
         cache_v_ptr_list = np.array(cache_v_ptr_list)
 
@@ -166,7 +176,7 @@ class CacheMessager:
         cache_shape = key_cache.shape
         max_block_num = cache_shape[0]
         block_bytes = math.prod(cache_shape[1:])
-        if key_cache.dtype == paddle.bfloat16:
+        if key_cache.dtype == paddle.bfloat16 or key_cache.dtype == paddle.float16:
             block_bytes *= 2
         logger.info(
             f"layers {num_layers} cache_shape: {cache_shape}, max_block_num: {max_block_num}, "
@@ -452,8 +462,12 @@ class CacheMessagerV1:
             val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
             cache_k.append(key_cache)
             cache_v.append(val_cache)
-            cache_k_ptr_list.append(key_cache.data_ptr())
-            cache_v_ptr_list.append(val_cache.data_ptr())
+            if paddle.is_compiled_with_xpu():
+                cache_k_ptr_list.append(get_peer_mem_addr(key_cache.data_ptr()))
+                cache_v_ptr_list.append(get_peer_mem_addr(val_cache.data_ptr()))
+            else:
+                cache_k_ptr_list.append(key_cache.data_ptr())
+                cache_v_ptr_list.append(val_cache.data_ptr())
         cache_k_ptr_list = np.array(cache_k_ptr_list)
         cache_v_ptr_list = np.array(cache_v_ptr_list)
 
@@ -763,7 +777,7 @@ class CacheMessagerV1:
 def main():
     device = args.device_id
     rank = args.rank
-    paddle.set_device(f"gpu:{device}")
+    set_device(device)
     cache_type = args.cache_dtype
     speculative_config = SpeculativeConfig(args.speculative_config)
     num_extra_layers = speculative_config.num_extra_cache_layer
@@ -823,7 +837,7 @@ def main():
     cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in gpu_cache_kvs.items()])
     logger.info(f"device :{device}")
     logger.info(f"cache_kv_size_byte : {cache_kv_size_byte}")
-    logger.info(f"done init cache (full) gmem alloc : {paddle.device.cuda.memory_allocated()}")
+    logger.info(f"done init cache (full) gmem alloc : {memory_allocated}")
 
     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
         cache_messager = CacheMessagerV1(
@@ -875,7 +889,6 @@ if __name__ == "__main__":
     args = parse_args()
     rank_id = args.rank + args.local_data_parallel_id * args.mp_num
     logger = get_logger("cache_messager", f"cache_messager_rank{rank_id}.log")
-
     logger.info("create cache messager...")
     logger.info(f"{args}")
     main()

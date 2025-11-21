@@ -33,6 +33,7 @@ import numpy as np
 from fastdeploy import envs
 from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
 from fastdeploy.cache_manager.cache_metrics import CacheMetrics
+from fastdeploy.cache_manager.ops import get_all_visible_devices
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, PrefixTreeStatus
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import get_logger
@@ -243,9 +244,11 @@ class PrefixCacheManager:
         # Run command to launch cache transfer managers
         log_dir = envs.FD_LOG_DIR
         cache_manager_processes = []
+        visible_devices = get_all_visible_devices()
         for i in range(tensor_parallel_size):
             launch_cmd = (
-                "FLAGS_allocator_strategy=auto_growth CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7"
+                "FLAGS_allocator_strategy=auto_growth "
+                + visible_devices
                 + " NCCL_MAX_NCHANNELS=1 NCCL_BUFFSIZE=0"
                 + f" FD_ENABLE_SWAP_SPACE_CLEARING={envs.FD_ENABLE_SWAP_SPACE_CLEARING}"
                 + f" {sys.executable} {py_path}"
@@ -328,9 +331,11 @@ class PrefixCacheManager:
         py_path = os.path.join(current_dir_path, filename)
         log_dir = envs.FD_LOG_DIR
         cache_messager_processes = []
+        visible_devices = get_all_visible_devices()
         for i in range(tensor_parallel_size):
             launch_cmd = (
-                "FLAGS_allocator_strategy=auto_growth CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7"
+                "FLAGS_allocator_strategy=auto_growth "
+                + visible_devices
                 + " NCCL_MAX_NCHANNELS=1 NCCL_BUFFSIZE=0"
                 + f" {sys.executable} {py_path}"
                 + f" --device_id {int(device_ids[i])}"
