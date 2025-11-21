@@ -6,6 +6,7 @@ This module references the router implementation of slglang and vllm.
 
 import asyncio
 import random
+from dataclasses import dataclass
 from itertools import chain
 from uuid import uuid4
 
@@ -19,9 +20,58 @@ from fastdeploy.router.utils import (
     InstanceRole,
     check_service_health_async,
 )
+from fastdeploy.utils import FlexibleArgumentParser
 from fastdeploy.utils import router_logger as logger
 
 app = FastAPI()
+
+
+@dataclass
+class RouterArgs:
+    host: str = "0.0.0.0"
+    """
+    Host address to bind the router server
+    """
+    port: str = "9000"
+    """
+    Port to bind the router server.
+    """
+    splitwise: bool = False
+    """
+    Router uses splitwise deployment
+    """
+    request_timeout_secs: int = 1800
+    """
+    Request timeout in seconds
+    """
+
+    @staticmethod
+    def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
+        parser.add_argument(
+            "--host",
+            type=str,
+            default=RouterArgs.host,
+            help="Host address to bind the router server.",
+        )
+        parser.add_argument(
+            "--port",
+            type=str,
+            default=RouterArgs.port,
+            help="Port number to bind the router server",
+        )
+        parser.add_argument(
+            "--splitwise",
+            action="store_true",
+            default=RouterArgs.splitwise,
+            help="Router uses splitwise deployment",
+        )
+        parser.add_argument(
+            "--request-timeout-secs",
+            type=int,
+            default=RouterArgs.request_timeout_secs,
+            help="Request timeout in seconds",
+        )
+        return parser
 
 
 class Router:
@@ -306,8 +356,9 @@ async def health_generate():
     return Response(status_code=200)
 
 
-def start_router(router_args):
+def launch_router(router_args: RouterArgs):
     app.state.router_args = router_args
+    print(f"Starting router with args: {router_args}")
 
     @app.on_event("startup")
     async def startup_event():
