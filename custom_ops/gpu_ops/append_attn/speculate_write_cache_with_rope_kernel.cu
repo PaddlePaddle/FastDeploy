@@ -17,32 +17,32 @@
 
 template <typename T, typename QKV_TYPE>
 void append_speculate_cache_rope_qk_norm(const QKV_TYPE* qkv,
-                              T* key_cache,
-                              T* value_cache,
-                              T* qkv_out,
-                              const int* block_tables,
-                              const int* batch_id_per_token,
-                              const int* cu_seqlens_q,
-                              const int* seq_lens,
-                              const int* seq_lens_encoder,
-                              const float* cos_emb,
-                              const float* sin_emb,
-                              const float* qkv_out_scales,
-                              const T* qkv_biases,
-                              const int max_seq_len,
-                              const int max_blocks_per_seq,
-                              const int num_heads,
-                              const int kv_num_heads,
-                              const int dim_head,
-                              const int block_size,
-                              const int bsz,
-                              const int token_num,
-                              const cudaStream_t& stream,
-                              const bool use_neox_style,
-                              const float* q_norm_weight,
-                              const float* k_norm_weight,
-                              const float rms_norm_eps,
-                              const bool rope_3d) {
+                                         T* key_cache,
+                                         T* value_cache,
+                                         T* qkv_out,
+                                         const int* block_tables,
+                                         const int* batch_id_per_token,
+                                         const int* cu_seqlens_q,
+                                         const int* seq_lens,
+                                         const int* seq_lens_encoder,
+                                         const float* cos_emb,
+                                         const float* sin_emb,
+                                         const float* qkv_out_scales,
+                                         const T* qkv_biases,
+                                         const int max_seq_len,
+                                         const int max_blocks_per_seq,
+                                         const int num_heads,
+                                         const int kv_num_heads,
+                                         const int dim_head,
+                                         const int block_size,
+                                         const int bsz,
+                                         const int token_num,
+                                         const cudaStream_t& stream,
+                                         const bool use_neox_style,
+                                         const float* q_norm_weight,
+                                         const float* k_norm_weight,
+                                         const float rms_norm_eps,
+                                         const bool rope_3d) {
   int output_inner_dim = num_heads + 2 * kv_num_heads;
   const uint32_t elem_nums =
       use_neox_style ? token_num * (num_heads + 2 * kv_num_heads) * dim_head / 2
@@ -55,35 +55,34 @@ void append_speculate_cache_rope_qk_norm(const QKV_TYPE* qkv,
   int grid_size = 1;
   GetNumBlocks<128>(pack_num, &grid_size);
   if (use_neox_style) {
-      PD_THROW(
-          "append_speculate_cache_rope_qk_norm not support neox rope yet");
+    PD_THROW("append_speculate_cache_rope_qk_norm not support neox rope yet");
   } else {
     dim3 block_dim(kWarpSize, blocksize / kWarpSize, 1);
     append_speculate_cache_T_rope_qk_norm_kernel<T, PackSize>
-      <<<grid_size, block_dim, 0, stream>>>(qkv,
-                                            key_cache,
-                                            value_cache,
-                                            qkv_out,
-                                            block_tables,
-                                            batch_id_per_token,
-                                            cu_seqlens_q,
-                                            seq_lens,
-                                            cos_emb,
-                                            sin_emb,
-                                            qkv_out_scales,
-                                            qkv_biases,
-                                            max_seq_len,
-                                            max_blocks_per_seq,
-                                            num_heads,
-                                            output_inner_dim,
-                                            dim_head,
-                                            block_size,
-                                            elem_nums,
-                                            kv_num_heads,
-                                            q_norm_weight,
-                                            k_norm_weight,
-                                            rms_norm_eps,
-                                            rope_3d);
+        <<<grid_size, block_dim, 0, stream>>>(qkv,
+                                              key_cache,
+                                              value_cache,
+                                              qkv_out,
+                                              block_tables,
+                                              batch_id_per_token,
+                                              cu_seqlens_q,
+                                              seq_lens,
+                                              cos_emb,
+                                              sin_emb,
+                                              qkv_out_scales,
+                                              qkv_biases,
+                                              max_seq_len,
+                                              max_blocks_per_seq,
+                                              num_heads,
+                                              output_inner_dim,
+                                              dim_head,
+                                              block_size,
+                                              elem_nums,
+                                              kv_num_heads,
+                                              q_norm_weight,
+                                              k_norm_weight,
+                                              rms_norm_eps,
+                                              rope_3d);
   }
 }
 
@@ -175,33 +174,33 @@ void append_speculate_cache_rope(const QKV_TYPE* qkv,
   }
 }
 
-template <typename T>
-void append_speculate_cache_fp8_dynamic_rope(const T* qkv,
-                                             uint8_t* key_cache,
-                                             uint8_t* value_cache,
-                                             T* qkv_out,
-                                             const int* block_tables,
-                                             const int* batch_id_per_token,
-                                             const int* cu_seqlens_q,
-                                             const int* seq_lens,
-                                             const int* seq_lens_encoder,
-                                             const float* cos_emb,
-                                             const float* sin_emb,
-                                             T* cache_k_scale,
-                                             T* cache_v_scale,
-                                             const float* q_norm_weight,
-                                             const float* k_norm_weight,
-                                             const int max_seq_len,
-                                             const int max_blocks_per_seq,
-                                             const int num_heads,
-                                             const int kv_num_heads,
-                                             const int dim_head,
-                                             const int block_size,
-                                             const int bsz,
-                                             const int token_num,
-                                             const cudaStream_t& stream,
-                                             const bool rope_3d,
-                                             const float rms_norm_eps) {
+template <typename T, bool IsDynamic = true>
+void append_speculate_cache_fp8_rope(const T* qkv,
+                                     uint8_t* key_cache,
+                                     uint8_t* value_cache,
+                                     T* qkv_out,
+                                     const int* block_tables,
+                                     const int* batch_id_per_token,
+                                     const int* cu_seqlens_q,
+                                     const int* seq_lens,
+                                     const int* seq_lens_encoder,
+                                     const float* cos_emb,
+                                     const float* sin_emb,
+                                     T* cache_k_scale,
+                                     T* cache_v_scale,
+                                     const float* q_norm_weight,
+                                     const float* k_norm_weight,
+                                     const int max_seq_len,
+                                     const int max_blocks_per_seq,
+                                     const int num_heads,
+                                     const int kv_num_heads,
+                                     const int dim_head,
+                                     const int block_size,
+                                     const int bsz,
+                                     const int token_num,
+                                     const cudaStream_t& stream,
+                                     const bool rope_3d,
+                                     const float rms_norm_eps) {
   constexpr int num_warps = 4;
   const int all_warps =
       ((num_heads + 2 * kv_num_heads) + num_warps - 1) / num_warps * num_warps;
@@ -220,7 +219,12 @@ void append_speculate_cache_fp8_dynamic_rope(const T* qkv,
                                              num_heads,
                                              block_size,
                                              kv_num_heads);
-  append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel<T, 4, 0, 128, true>
+  append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel<T,
+                                                         4,
+                                                         0,
+                                                         128,
+                                                         true,
+                                                         IsDynamic>
       <<<grids, num_warps * 32, 0, stream>>>(qkv,
                                              key_cache,
                                              value_cache,
@@ -247,7 +251,7 @@ void append_speculate_cache_fp8_dynamic_rope(const T* qkv,
                                              rms_norm_eps);
 }
 
-template <typename T, typename QKV_TYPE, bool IsFP8=false>
+template <typename T, typename QKV_TYPE, bool IsFP8 = false>
 void append_speculate_cache_int8_rope(const QKV_TYPE* qkv,
                                       uint8_t* key_cache,
                                       uint8_t* value_cache,
@@ -489,7 +493,6 @@ void SpeculateWriteCacheWithRoPEKernel(
   auto num_heads = meta_data.q_num_heads;
   auto kv_num_heads = meta_data.kv_num_heads;
 
-
   const float* cos_emb =
       rotary_embs ? rotary_embs.get().data<float>() : nullptr;
   const float* sin_emb;
@@ -515,8 +518,8 @@ void SpeculateWriteCacheWithRoPEKernel(
           sin_emb,
           qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
           qkv_biases ? reinterpret_cast<DataType_*>(
-                          const_cast<T*>(qkv_biases.get().data<T>()))
-                    : nullptr,
+                           const_cast<T*>(qkv_biases.get().data<T>()))
+                     : nullptr,
           max_seq_len,
           max_blocks_per_seq,
           num_heads,
@@ -532,209 +535,243 @@ void SpeculateWriteCacheWithRoPEKernel(
           rms_norm_eps,
           rope_3d);
     } else if (cache_quant_type_str == "block_wise_fp8") {
-        append_speculate_cache_fp8_dynamic_rope(
-            reinterpret_cast<const DataType_*>(qkv_ptr),
-            key_cache_out->data<uint8_t>(),
-            value_cache_out->data<uint8_t>(),
-            reinterpret_cast<DataType_*>(qkv_out->data<T>()),
-            block_tables.data<int>(),
-            batch_id_per_token.data<int>(),
-            cu_seqlens_q.data<int>(),
-            seq_lens.data<int>(),
-            seq_lens_encoder.data<int>(),
-            cos_emb,
-            sin_emb,
-            const_cast<DataType_*>(reinterpret_cast<const DataType_*>(cache_k_scale.get().data<T>())),
-            const_cast<DataType_*>(reinterpret_cast<const DataType_*>(cache_v_scale.get().data<T>())),
-            q_norm_weight.get().data<float>(),
-            k_norm_weight.get().data<float>(),
-            max_seq_len,
-            max_blocks_per_seq,
-            num_heads,
-            kv_num_heads,
-            dim_head,
-            block_size,
-            bsz,
-            token_nums,
-            stream,
-            rope_3d,
-            rms_norm_eps
-        );
+      append_speculate_cache_fp8_rope<DataType_, true>(
+          reinterpret_cast<const DataType_*>(qkv_ptr),
+          key_cache_out->data<uint8_t>(),
+          value_cache_out->data<uint8_t>(),
+          reinterpret_cast<DataType_*>(qkv_out->data<T>()),
+          block_tables.data<int>(),
+          batch_id_per_token.data<int>(),
+          cu_seqlens_q.data<int>(),
+          seq_lens.data<int>(),
+          seq_lens_encoder.data<int>(),
+          cos_emb,
+          sin_emb,
+          const_cast<DataType_*>(reinterpret_cast<const DataType_*>(
+              cache_k_scale.get().data<T>())),
+          const_cast<DataType_*>(reinterpret_cast<const DataType_*>(
+              cache_v_scale.get().data<T>())),
+          q_norm_weight.get().data<float>(),
+          k_norm_weight.get().data<float>(),
+          max_seq_len,
+          max_blocks_per_seq,
+          num_heads,
+          kv_num_heads,
+          dim_head,
+          block_size,
+          bsz,
+          token_nums,
+          stream,
+          rope_3d,
+          rms_norm_eps);
+    } else if (cache_quant_type_str == "cache_fp8") {
+      append_speculate_cache_fp8_rope<DataType_, false>(
+          reinterpret_cast<const DataType_*>(qkv_ptr),
+          key_cache_out->data<uint8_t>(),
+          value_cache_out->data<uint8_t>(),
+          reinterpret_cast<DataType_*>(qkv_out->data<T>()),
+          block_tables.data<int>(),
+          batch_id_per_token.data<int>(),
+          cu_seqlens_q.data<int>(),
+          seq_lens.data<int>(),
+          seq_lens_encoder.data<int>(),
+          cos_emb,
+          sin_emb,
+          const_cast<DataType_*>(reinterpret_cast<const DataType_*>(
+              cache_k_scale.get().data<T>())),
+          const_cast<DataType_*>(reinterpret_cast<const DataType_*>(
+              cache_v_scale.get().data<T>())),
+          q_norm_weight.get().data<float>(),
+          k_norm_weight.get().data<float>(),
+          max_seq_len,
+          max_blocks_per_seq,
+          num_heads,
+          kv_num_heads,
+          dim_head,
+          block_size,
+          bsz,
+          token_nums,
+          stream,
+          rope_3d,
+          rms_norm_eps);
     } else {
       PD_THROW(
-          "append_decode_cache_rope_qk_norm not support cachekv quant yet");
+          "speculate_append_decode_cache_rope_qk_norm just supports "
+          "cache_quant_type "
+          "none/block_wise_fp8/cache_fp8");
     }
 
   } else {
     if (cache_quant_type_str == "none") {
-        append_speculate_cache_rope(
-            reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
-            reinterpret_cast<DataType_*>(key_cache_out->data<T>()),
-            reinterpret_cast<DataType_*>(value_cache_out->data<T>()),
-            reinterpret_cast<DataType_*>(qkv_out->data<T>()),
-            block_tables.data<int>(),
-            batch_id_per_token.data<int>(),
-            cu_seqlens_q.data<int>(),
-            seq_lens.data<int>(),
-            seq_lens_encoder.data<int>(),
-            cos_emb,
-            sin_emb,
-            qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
-            qkv_biases ? reinterpret_cast<DataType_*>(
-                            const_cast<T*>(qkv_biases.get().data<T>()))
-                    : nullptr,
-            max_seq_len,
-            max_blocks_per_seq,
-            num_heads,
-            kv_num_heads,
-            dim_head,
-            block_size,
-            bsz,
-            token_nums,
-            stream,
-            use_neox_rotary_style,
-            rope_3d);
+      append_speculate_cache_rope(
+          reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
+          reinterpret_cast<DataType_*>(key_cache_out->data<T>()),
+          reinterpret_cast<DataType_*>(value_cache_out->data<T>()),
+          reinterpret_cast<DataType_*>(qkv_out->data<T>()),
+          block_tables.data<int>(),
+          batch_id_per_token.data<int>(),
+          cu_seqlens_q.data<int>(),
+          seq_lens.data<int>(),
+          seq_lens_encoder.data<int>(),
+          cos_emb,
+          sin_emb,
+          qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
+          qkv_biases ? reinterpret_cast<DataType_*>(
+                           const_cast<T*>(qkv_biases.get().data<T>()))
+                     : nullptr,
+          max_seq_len,
+          max_blocks_per_seq,
+          num_heads,
+          kv_num_heads,
+          dim_head,
+          block_size,
+          bsz,
+          token_nums,
+          stream,
+          use_neox_rotary_style,
+          rope_3d);
     } else if (cache_quant_type_str == "cache_int8") {
-        append_speculate_cache_int8_rope(
-            reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
-            key_cache_out->data<uint8_t>(),
-            value_cache_out->data<uint8_t>(),
-            reinterpret_cast<DataType_*>(qkv_out->data<T>()),
-            block_tables.data<int>(),
-            batch_id_per_token.data<int>(),
-            cu_seqlens_q.data<int>(),
-            seq_lens.data<int>(),
-            seq_lens_encoder.data<int>(),
-            cos_emb,
-            sin_emb,
-            qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
-            qkv_biases ? reinterpret_cast<DataType_*>(
-                            const_cast<T*>(qkv_biases.get().data<T>()))
-                    : nullptr,
-            cache_k_scale ? reinterpret_cast<DataType_*>(
-                                const_cast<T*>(cache_k_scale.get().data<T>()))
+      append_speculate_cache_int8_rope(
+          reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
+          key_cache_out->data<uint8_t>(),
+          value_cache_out->data<uint8_t>(),
+          reinterpret_cast<DataType_*>(qkv_out->data<T>()),
+          block_tables.data<int>(),
+          batch_id_per_token.data<int>(),
+          cu_seqlens_q.data<int>(),
+          seq_lens.data<int>(),
+          seq_lens_encoder.data<int>(),
+          cos_emb,
+          sin_emb,
+          qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
+          qkv_biases ? reinterpret_cast<DataType_*>(
+                           const_cast<T*>(qkv_biases.get().data<T>()))
+                     : nullptr,
+          cache_k_scale ? reinterpret_cast<DataType_*>(
+                              const_cast<T*>(cache_k_scale.get().data<T>()))
                         : nullptr,
-            cache_v_scale ? reinterpret_cast<DataType_*>(
-                                const_cast<T*>(cache_v_scale.get().data<T>()))
+          cache_v_scale ? reinterpret_cast<DataType_*>(
+                              const_cast<T*>(cache_v_scale.get().data<T>()))
                         : nullptr,
-            max_seq_len,
-            max_blocks_per_seq,
-            num_heads,
-            kv_num_heads,
-            dim_head,
-            block_size,
-            bsz,
-            token_nums,
-            stream,
-            use_neox_rotary_style,
-            rope_3d);
+          max_seq_len,
+          max_blocks_per_seq,
+          num_heads,
+          kv_num_heads,
+          dim_head,
+          block_size,
+          bsz,
+          token_nums,
+          stream,
+          use_neox_rotary_style,
+          rope_3d);
     } else if (cache_quant_type_str == "cache_fp8") {
-        append_speculate_cache_int8_rope<DataType_, QKV_TYPE, true>(
-            reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
-            key_cache_out->data<uint8_t>(),
-            value_cache_out->data<uint8_t>(),
-            reinterpret_cast<DataType_*>(qkv_out->data<T>()),
-            block_tables.data<int>(),
-            batch_id_per_token.data<int>(),
-            cu_seqlens_q.data<int>(),
-            seq_lens.data<int>(),
-            seq_lens_encoder.data<int>(),
-            cos_emb,
-            sin_emb,
-            qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
-            qkv_biases ? reinterpret_cast<DataType_*>(
-                            const_cast<T*>(qkv_biases.get().data<T>()))
-                    : nullptr,
-            cache_k_scale ? reinterpret_cast<DataType_*>(
-                                const_cast<T*>(cache_k_scale.get().data<T>()))
+      append_speculate_cache_int8_rope<DataType_, QKV_TYPE, true>(
+          reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
+          key_cache_out->data<uint8_t>(),
+          value_cache_out->data<uint8_t>(),
+          reinterpret_cast<DataType_*>(qkv_out->data<T>()),
+          block_tables.data<int>(),
+          batch_id_per_token.data<int>(),
+          cu_seqlens_q.data<int>(),
+          seq_lens.data<int>(),
+          seq_lens_encoder.data<int>(),
+          cos_emb,
+          sin_emb,
+          qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
+          qkv_biases ? reinterpret_cast<DataType_*>(
+                           const_cast<T*>(qkv_biases.get().data<T>()))
+                     : nullptr,
+          cache_k_scale ? reinterpret_cast<DataType_*>(
+                              const_cast<T*>(cache_k_scale.get().data<T>()))
                         : nullptr,
-            cache_v_scale ? reinterpret_cast<DataType_*>(
-                                const_cast<T*>(cache_v_scale.get().data<T>()))
+          cache_v_scale ? reinterpret_cast<DataType_*>(
+                              const_cast<T*>(cache_v_scale.get().data<T>()))
                         : nullptr,
-            max_seq_len,
-            max_blocks_per_seq,
-            num_heads,
-            kv_num_heads,
-            dim_head,
-            block_size,
-            bsz,
-            token_nums,
-            stream,
-            use_neox_rotary_style,
-            rope_3d);
+          max_seq_len,
+          max_blocks_per_seq,
+          num_heads,
+          kv_num_heads,
+          dim_head,
+          block_size,
+          bsz,
+          token_nums,
+          stream,
+          use_neox_rotary_style,
+          rope_3d);
     } else if (cache_quant_type_str == "block_wise_fp8") {
-        append_speculate_cache_fp8_dynamic_rope(
-            reinterpret_cast<const DataType_*>(qkv_ptr),
-            key_cache_out->data<uint8_t>(),
-            value_cache_out->data<uint8_t>(),
-            reinterpret_cast<DataType_*>(qkv_out->data<T>()),
-            block_tables.data<int>(),
-            batch_id_per_token.data<int>(),
-            cu_seqlens_q.data<int>(),
-            seq_lens.data<int>(),
-            seq_lens_encoder.data<int>(),
-            cos_emb,
-            sin_emb,
-            const_cast<DataType_*>(reinterpret_cast<const DataType_*>(cache_k_scale.get().data<T>())),
-            const_cast<DataType_*>(reinterpret_cast<const DataType_*>(cache_v_scale.get().data<T>())),
-            nullptr, // q_norm_weight
-            nullptr, // k_norm_weight
-            max_seq_len,
-            max_blocks_per_seq,
-            num_heads,
-            kv_num_heads,
-            dim_head,
-            block_size,
-            bsz,
-            token_nums,
-            stream,
-            rope_3d,
-            rms_norm_eps
-        );
+      append_speculate_cache_fp8_rope(
+          reinterpret_cast<const DataType_*>(qkv_ptr),
+          key_cache_out->data<uint8_t>(),
+          value_cache_out->data<uint8_t>(),
+          reinterpret_cast<DataType_*>(qkv_out->data<T>()),
+          block_tables.data<int>(),
+          batch_id_per_token.data<int>(),
+          cu_seqlens_q.data<int>(),
+          seq_lens.data<int>(),
+          seq_lens_encoder.data<int>(),
+          cos_emb,
+          sin_emb,
+          const_cast<DataType_*>(reinterpret_cast<const DataType_*>(
+              cache_k_scale.get().data<T>())),
+          const_cast<DataType_*>(reinterpret_cast<const DataType_*>(
+              cache_v_scale.get().data<T>())),
+          nullptr,  // q_norm_weight
+          nullptr,  // k_norm_weight
+          max_seq_len,
+          max_blocks_per_seq,
+          num_heads,
+          kv_num_heads,
+          dim_head,
+          block_size,
+          bsz,
+          token_nums,
+          stream,
+          rope_3d,
+          rms_norm_eps);
     } else if (cache_quant_type_str == "cache_int4_zp") {
-        append_speculate_cache_int4_rope(
-            reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
-            key_cache_out->data<uint8_t>(),
-            value_cache_out->data<uint8_t>(),
-            reinterpret_cast<DataType_*>(const_cast<T*>(qkv_out->data<T>())),
-            block_tables.data<int>(),
-            batch_id_per_token.data<int>(),
-            cu_seqlens_q.data<int>(),
-            seq_lens.data<int>(),
-            seq_lens_encoder.data<int>(),
-            cos_emb,
-            sin_emb,
-            qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
-            qkv_biases ? reinterpret_cast<DataType_*>(
-                            const_cast<T*>(qkv_biases.get().data<T>()))
-                    : nullptr,
-            cache_k_scale ? reinterpret_cast<DataType_*>(
-                                const_cast<T*>(cache_k_scale.get().data<T>()))
+      append_speculate_cache_int4_rope(
+          reinterpret_cast<const QKV_TYPE*>(qkv_ptr),
+          key_cache_out->data<uint8_t>(),
+          value_cache_out->data<uint8_t>(),
+          reinterpret_cast<DataType_*>(const_cast<T*>(qkv_out->data<T>())),
+          block_tables.data<int>(),
+          batch_id_per_token.data<int>(),
+          cu_seqlens_q.data<int>(),
+          seq_lens.data<int>(),
+          seq_lens_encoder.data<int>(),
+          cos_emb,
+          sin_emb,
+          qkv_out_scales ? qkv_out_scales.get().data<float>() : nullptr,
+          qkv_biases ? reinterpret_cast<DataType_*>(
+                           const_cast<T*>(qkv_biases.get().data<T>()))
+                     : nullptr,
+          cache_k_scale ? reinterpret_cast<DataType_*>(
+                              const_cast<T*>(cache_k_scale.get().data<T>()))
                         : nullptr,
-            cache_v_scale ? reinterpret_cast<DataType_*>(
-                                const_cast<T*>(cache_v_scale.get().data<T>()))
+          cache_v_scale ? reinterpret_cast<DataType_*>(
+                              const_cast<T*>(cache_v_scale.get().data<T>()))
                         : nullptr,
-            cache_k_zp ? reinterpret_cast<DataType_*>(
-                            const_cast<T*>(cache_k_zp.get().data<T>()))
-                    : nullptr,
-            cache_v_zp ? reinterpret_cast<DataType_*>(
-                            const_cast<T*>(cache_v_zp.get().data<T>()))
-                    : nullptr,
-            max_seq_len,
-            max_blocks_per_seq,
-            num_heads,
-            kv_num_heads,
-            dim_head,
-            block_size,
-            bsz,
-            token_nums,
-            stream,
-            use_neox_rotary_style,
-            rope_3d);
+          cache_k_zp ? reinterpret_cast<DataType_*>(
+                           const_cast<T*>(cache_k_zp.get().data<T>()))
+                     : nullptr,
+          cache_v_zp ? reinterpret_cast<DataType_*>(
+                           const_cast<T*>(cache_v_zp.get().data<T>()))
+                     : nullptr,
+          max_seq_len,
+          max_blocks_per_seq,
+          num_heads,
+          kv_num_heads,
+          dim_head,
+          block_size,
+          bsz,
+          token_nums,
+          stream,
+          use_neox_rotary_style,
+          rope_3d);
     } else {
-        PD_THROW(
-            "cache_quant_type_str should be one of [none, cache_int8, "
-            "cache_int4_zp]");
+      PD_THROW(
+          "cache_quant_type_str should be one of [none, cache_int8, "
+          "cache_int4_zp]");
     }
   }
 }
@@ -826,7 +863,6 @@ template void SpeculateWriteCacheWithRoPEKernel<paddle::float16, int>(
     const paddle::optional<paddle::Tensor>& q_norm_weight,
     const paddle::optional<paddle::Tensor>& k_norm_weight,
     const float rms_norm_eps);
-
 
 template void
 SpeculateWriteCacheWithRoPEKernel<paddle::float16, paddle::float16>(
