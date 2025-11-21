@@ -27,7 +27,7 @@ from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 
 try:
-    from fastdeploy.model_executor.ops.gpu import noaux_tc
+    from fastdeploy.model_executor.ops.gpu import noaux_tc, noaux_tc_redundant
 except:
     logger.warning("import noaux_tc Failed!")
 import numpy as np
@@ -74,6 +74,10 @@ def get_moe_scores(
     routed_scaling_factor,
     e_score_correction_bias,
     renormalize: bool = False,
+    expert_id_to_ep_rank_array: paddle.Tensor = None,
+    expert_in_rank_num_list: paddle.Tensor = None,
+    tokens_per_expert_stats_list: paddle.Tensor = None,
+    redundant_ep_rank_num_plus_one: int = 1,
 ) -> paddle.Tensor:
     """
     compute moe scores using e_score_correction_bias.
@@ -81,15 +85,30 @@ def get_moe_scores(
     scores = paddle.nn.functional.sigmoid(gating_output)
     assert e_score_correction_bias is not None, "e_score_correction_bias is none!"
     scores_with_bias = scores + e_score_correction_bias
-    scores, topk_values, topk_idx = noaux_tc(
-        scores,
-        scores_with_bias,
-        n_group if n_group > 0 else 1,
-        topk_group if topk_group > 0 else 1,
-        top_k,
-        renormalize,
-        routed_scaling_factor,
-    )
+    if expert_id_to_ep_rank_array is None:
+        scores, topk_values, topk_idx = noaux_tc(
+            scores,
+            scores_with_bias,
+            n_group if n_group > 0 else 1,
+            topk_group if topk_group > 0 else 1,
+            top_k,
+            renormalize,
+            routed_scaling_factor,
+        )
+    else:
+        scores, topk_values, topk_idx, _ = noaux_tc_redundant(
+            scores,
+            scores_with_bias,
+            expert_id_to_ep_rank_array,
+            expert_in_rank_num_list,
+            tokens_per_expert_stats_list,
+            n_group if n_group > 0 else 1,
+            topk_group if topk_group > 0 else 1,
+            top_k,
+            renormalize,
+            routed_scaling_factor,
+            redundant_ep_rank_num_plus_one,
+        )
     return scores, topk_values, topk_idx
 
 
@@ -196,6 +215,7 @@ class FusedMoE(nn.Layer):
             self.quant_method = get_moe_method()
         assert self.quant_method is not None, "self.quant_method should not be None"
         self.redundant_table_manger = redundant_table_manger
+        self.is_rearrange = False
         if self.ep_size > 1:
             self.quant_method.init_ep(self)
 
@@ -438,7 +458,7 @@ class FusedMoE(nn.Layer):
             )
         ]
         ep_rank_to_expert_id_list = [i for i in range(self.num_experts)]
-        if self.redundant_table_manger is not None:
+        if self.redundant_table_manger is not None and is_rearrange is True:
             (
                 ep_rank_to_expert_id_list,
                 expert_id_to_ep_rank_array,

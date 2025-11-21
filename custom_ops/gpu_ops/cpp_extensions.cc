@@ -647,6 +647,19 @@ std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& scores,
                                     bool renormalize,
                                     float routed_scaling_factor);
 
+std::vector<paddle::Tensor> NoauxTcRedundant(
+    paddle::Tensor& scores,
+    paddle::Tensor& scores_with_bias,
+    paddle::Tensor& expert_id_to_ep_rank_array,
+    paddle::Tensor& expert_in_rank_num_list,
+    paddle::Tensor& tokens_per_expert_stats_list,
+    int n_group,
+    int topk_group,
+    int topk,
+    bool renormalize,
+    float routed_scaling_factor,
+    int redundant_ep_rank_num_plus_one);
+
 #ifdef ENABLE_FP8
 paddle::Tensor cutlass_fp8_fp8_half_gemm_func(
     const paddle::Tensor& x,
@@ -1484,6 +1497,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         "multi_head_latent_attention function");
 
   m.def("noaux_tc", &NoauxTc, "noaux_tc for Deepseekv3 MoE compute");
+
+  m.def("noaux_tc_redundant",
+        &NoauxTcRedundant,
+        "noaux_tc_redundant for MoE compute");
 
 #ifdef ENABLE_FP8
   m.def("cutlass_fp8_fp8_half_gemm_fused",
