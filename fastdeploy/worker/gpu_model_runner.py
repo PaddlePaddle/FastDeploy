@@ -2096,43 +2096,67 @@ class GPUModelRunner(ModelRunnerBase):
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
 
-        model_output = [None]
+        model_output = {}
         import threading
 
-        from fastdeploy.model_executor.layers.moe.ep import GLOBAL_THREAD_INFO
+        from fastdeploy.worker.tbo import GLOBAL_THREAD_INFO
 
-        def haha():
+        def haha(forward_meta):
 
-            is_tbo_thread = threading.current_thread().name in GLOBAL_THREAD_INFO.keys()
+            thread_name = threading.current_thread().name
+            is_tbo_thread = thread_name in GLOBAL_THREAD_INFO.keys()
 
             if is_tbo_thread:
-                GLOBAL_THREAD_INFO[threading.current_thread().name][0].wait()
-                GLOBAL_THREAD_INFO[threading.current_thread().name][0].clear()
+                GLOBAL_THREAD_INFO[thread_name][0].wait()
+                GLOBAL_THREAD_INFO[thread_name][0].clear()
 
             # 3. Run model
-            if self.enable_mm:
-                model_output[0] = self.model(
-                    self.share_inputs["ids_remove_padding"],
-                    self.share_inputs["image_features"],
-                    self.forward_meta,
-                )
-            else:
-                model_output[0] = self.model(
-                    ids_remove_padding=self.share_inputs["ids_remove_padding"],
-                    forward_meta=self.forward_meta,
-                )
+            tmp_output = self.model(
+                forward_meta.ids_remove_padding,
+                forward_meta,
+            )
 
-            return model_output[0]
+            model_output[thread_name] = tmp_output
 
-        t0 = Thread(target=haha, name="thread0")
-        t1 = Thread(target=haha, name="thread1")
+            return model_output
+
+        from fastdeploy.worker.tbo import split_batch
+
+        tmp_dict = {}
+        tmp_dict["max_batch_size"] = self.scheduler_config.max_num_seqs
+        tmp_dict["max_model_len"] = self.model_config.max_model_len
+        tmp_dict["encoder_block_shape_q"] = 64
+        tmp_dict["decoder_block_shape_q"] = 16
+        tmp_dict["decoder_step_token_num"] = self.speculative_config.num_speculative_tokens + 1
+        tmp_dict["num_heads"] = 64
+        tmp_dict["kv_num_heads"] = self.model_config.kv_num_heads
+        tmp_dict["block_size"] = self.fd_config.cache_config.block_size
+
+        split_res = split_batch(self.forward_meta, tmp_dict)
+        real_token_num = self.forward_meta.ids_remove_padding.shape[0]
+
+        # model_output0 = self.model(
+        #     split_res[0].ids_remove_padding,
+        #     split_res[0],
+        # )
+
+        # model_output1 = self.model(
+        #     split_res[1].ids_remove_padding,
+        #     split_res[1],
+        # )
+
+        # model_output = paddle.concat([model_output0, model_output1],axis=0)
+        # model_output = model_output[:real_token_num]
+
+        t0 = Thread(target=haha, name="thread0", args=(split_res[0],))
+        t1 = Thread(target=haha, name="thread1", args=(split_res[1],))
 
         GLOBAL_THREAD_INFO[t0.name][0].clear()
         GLOBAL_THREAD_INFO[t1.name][0].clear()
 
         t0.start()
         t1.start()
-        
+
         # 主线程记得先让t0跑起来跑！
         GLOBAL_THREAD_INFO[t0.name][0].set()
 
@@ -2141,12 +2165,13 @@ class GPUModelRunner(ModelRunnerBase):
         GLOBAL_THREAD_INFO[t0.name][1].set()
         t1.join()
 
-        # haha()
+        model_output0 = model_output["thread0"]
+        model_output1 = model_output["thread1"]
+        model_output = paddle.concat([model_output0, model_output1], axis=0)
+        model_output = model_output[:real_token_num]
 
         if not self.not_need_stop():
             return None
-
-        model_output = model_output[0]
 
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]

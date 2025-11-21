@@ -31,8 +31,6 @@ import fastdeploy
 from fastdeploy.config import MoEPhase
 from fastdeploy.utils import singleton
 
-GLOBAL_THREAD_INFO = {}
-
 
 class DeepEPBufferManager:
     _engine: Optional["DeepEPEngine"] = None
@@ -256,13 +254,6 @@ class DeepEPEngine:
             top_k=self.top_k,
         )
         self.buffer.create_buffer()
-
-        import threading
-
-        event0 = threading.Event()
-        event1 = threading.Event()
-        GLOBAL_THREAD_INFO["thread0"] = [event0, event1]
-        GLOBAL_THREAD_INFO["thread1"] = [event1, event0]
 
         # Register for global buffer management
         DeepEPBufferManager.set_engine(self)

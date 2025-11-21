@@ -144,7 +144,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         # a = paddle.randn([5120, 5120])
         # a = paddle.matmul(a, a)
         # gate_out = paddle.randn([x.shape[0], layer.num_experts], dtype="float32")
-        
+
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
         # 2. Dynamic compute blockwise quantization scales
@@ -163,7 +163,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128
         )
 
-        from fastdeploy.model_executor.layers.moe.ep import GLOBAL_THREAD_INFO
+        from fastdeploy.worker.tbo import GLOBAL_THREAD_INFO
 
         thread_name = threading.current_thread().name
 
