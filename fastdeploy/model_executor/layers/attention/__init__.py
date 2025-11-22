@@ -17,6 +17,7 @@ from .attention import Attention
 from .attention_selecter import get_attention_backend
 from .base_attention_backend import AttentionBackend
 from .block_multihead_attn_backend import BlockAttentionBackend
+from .dynamic_quant_int2_attn_backend import DynamciQuantInt2AttentionBackend
 from .flash_attn_backend import FlashAttentionBackend
 from .iluvatar_attn_backend import IluvatarAttnBackend
 from .mla_attention_backend import MLAAttentionBackend
@@ -35,5 +36,6 @@ __all__ = [
     "IluvatarAttnBackend",
     "BlockAttentionBackend",
     "Attention",
+    "DynamciQuantInt2AttentionBackend",
     "PlasAttentionBackend",
 ]

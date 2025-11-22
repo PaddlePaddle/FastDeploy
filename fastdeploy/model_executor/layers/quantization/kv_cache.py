@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import os
 from enum import Enum
 from typing import Optional
 
@@ -252,8 +253,10 @@ class KVCacheMethodBase(QuantMethodBase):
         self.cache_v_scale_name = layer.prefix + ".cachev_matmul.activation_scale"
         self.cache_k_zp_name = layer.prefix + ".cachek_matmul.activation_zero_point"
         self.cache_v_zp_name = layer.prefix + ".cachev_matmul.activation_zero_point"
-
-        if "block_wise" not in layer.cache_quant_type_str:
+        using_int2_attn = (
+            "FD_ATTENTION_BACKEND" in os.environ and os.environ["FD_ATTENTION_BACKEND"] == "DYNAMIC_QUANT_INT2_ATTN"
+        )
+        if "block_wise" not in layer.cache_quant_type_str and not using_int2_attn:
             self.load_scale(layer, state_dict)
             if self.cache_quant_config.has_zero_point:
                 self.load_zp(layer, state_dict)

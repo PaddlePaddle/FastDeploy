@@ -119,8 +119,14 @@ class Attention(nn.Layer):
         else:
             self.quant_method = None
 
+        using_int2_attn = (
+            "FD_ATTENTION_BACKEND" in os.environ and os.environ["FD_ATTENTION_BACKEND"] == "DYNAMIC_QUANT_INT2_ATTN"
+        )
+
         if self.quant_method is None:
             logger.info(f"Attention is running in cache kv {self._dtype} mode")
+        elif using_int2_attn:
+            logger.info("Attention is running in cache kv int8 mode")
         else:
             logger.info(f"Attention is running in cache kv {self.quant_method.cache_quant_config.quant_type} mode")
         self.use_qk_norm = use_qk_norm
@@ -186,6 +192,27 @@ class Attention(nn.Layer):
                     self.head_dim,
                 ],
                 dtype=paddle.get_default_dtype(),
+            )
+        if using_int2_attn:
+            self.c16_remain_seq_len = 128
+            self.block_size = 64
+            self.cache_k_c16 = paddle.zeros(
+                [
+                    fd_config.scheduler_config.max_num_seqs,
+                    self.c16_remain_seq_len + self.block_size,
+                    self.kv_num_heads,
+                    self.head_dim,
+                ],
+                dtype="float16",
+            )
+            self.cache_v_c16 = paddle.zeros(
+                [
+                    fd_config.scheduler_config.max_num_seqs,
+                    self.c16_remain_seq_len + self.block_size,
+                    self.kv_num_heads,
+                    self.head_dim,
+                ],
+                dtype="float16",
             )
 
     def init_weight(self):

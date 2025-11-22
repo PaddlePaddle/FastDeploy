@@ -15,6 +15,7 @@
 """
 
 import copy
+import os
 import threading
 import time
 import traceback
@@ -356,6 +357,15 @@ class ResourceManagerV1(ResourceManager):
     def _get_num_new_tokens(self, request, token_budget):
         # TODO: set condition to new _get_num_new_tokens
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
+
+        if "FD_ATTENTION_BACKEND" in os.environ and os.environ["FD_ATTENTION_BACKEND"] == "DYNAMIC_QUANT_INT2_ATTN":
+            remain_tokens = request.need_prefill_tokens - request.prefill_end_index
+            if remain_tokens < self.config.scheduler_config.max_num_batched_tokens:
+                #  last chunk
+                return remain_tokens
+            else:
+                return self.config.scheduler_config.max_num_batched_tokens
+
         num_new_tokens = min(num_new_tokens, token_budget)
         request.with_image = False
 
