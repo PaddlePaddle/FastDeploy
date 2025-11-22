@@ -181,7 +181,7 @@ def xpu_process_output(
 
 
 def xpu_post_process(
-    sampled_token_ids: paddle.Tensor,
+    sampler_output,
     model_output: ModelOutputData,
     share_inputs: Dict[str, paddle.Tensor],
     block_size: int = 64,
@@ -195,6 +195,8 @@ def xpu_post_process(
         set_stop_value_multi_ends,
         update_inputs,
     )
+    from fastdeploy.model_executor.ops.xpu import static_op_save_output_topk as save_output_topk
+    sampled_token_ids = sampler_output.sampled_token_ids
 
     if think_end_id > 0:
         limit_strategy = envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR
@@ -286,12 +288,27 @@ def xpu_post_process(
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
     if not skip_save_output:
-        save_output(
-            sampled_token_ids,
-            model_output.not_need_stop,
-            model_output.mp_rank,
-            False,  # use_ep
-        )
+        if sampler_output.logprobs_tensors is None:
+            save_output(
+                sampled_token_ids,
+                model_output.not_need_stop,
+                model_output.mp_rank,
+                False,  # use_ep
+            )
+        else:
+            if save_output_topk is None:
+                raise ImportError(
+                    "save_output_topk operator is not available. "
+                    "Please rebuild the XPU operators with the new get_output_msg_with_topk.cc and save_output_msg_with_topk.cc files."
+                )
+            save_output_topk(
+                sampled_token_ids,
+                sampler_output.logprobs_tensors.logprob_token_ids,
+                sampler_output.logprobs_tensors.logprobs,
+                sampler_output.logprobs_tensors.selected_token_ranks,
+                model_output.not_need_stop,
+                model_output.mp_rank,
+            )
 
 
 def step_paddle(
@@ -349,6 +366,11 @@ class XPUModelRunner(ModelRunnerBase):
         self.local_rank = local_rank
         self.device_id = device_id
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
+        self.enable_logprob = fd_config.model_config.enable_logprob
+        self.ori_vocab_size = self.fd_config.model_config.ori_vocab_size
+        self.max_logprobs = (
+            self.ori_vocab_size if fd_config.model_config.max_logprobs == -1 else fd_config.model_config.max_logprobs
+        )
 
         # VL model config:
         if self.enable_mm:
@@ -921,6 +943,7 @@ class XPUModelRunner(ModelRunnerBase):
             min_dec_lens=self.share_inputs["min_dec_len"],
             bad_words_token_ids=self.share_inputs["bad_tokens"][:, :max_bad_tokens_len],
             eos_token_ids=self.share_inputs["eos_token_id"],
+            max_num_logprobs=self.max_logprobs if self.enable_logprob else None,
             enable_early_stop=self.enable_early_stop,
             stop_flags=self.share_inputs["stop_flags"],
         )
@@ -1180,6 +1203,10 @@ class XPUModelRunner(ModelRunnerBase):
         # 4. Compute logits, Sample
         logits = self.model.compute_logits(hidden_states)
         sampler_output = self.sampler(logits, self.sampling_metadata)
+        if self.enable_logprob and sampler_output.logprobs_tensors is None:
+            logger.warning(f"enable_logprob=True but logprobs_tensors is None! "
+                          f"max_num_logprobs={self.sampling_metadata.max_num_logprobs}, "
+                          f"max_logprobs={self.max_logprobs}")
 
         # 5. Speculative decode
 
@@ -1211,7 +1238,7 @@ class XPUModelRunner(ModelRunnerBase):
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
         xpu_post_process(
-            sampled_token_ids=sampler_output.sampled_token_ids,
+            sampler_output=sampler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
             block_size=self.cache_config.block_size,

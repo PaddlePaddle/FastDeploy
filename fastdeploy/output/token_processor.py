@@ -48,6 +48,8 @@ from fastdeploy.worker.output import LogprobsLists
 RECOVERY_STOP_SIGNAL = -3
 MAX_BSZ = 512
 K = 20
+XPU_LOGPROB_MAX_BSZ = 128
+XPU_LOGPROB_K = 5
 MAX_DRAFT_TOKENS = 6
 SPECULATE_MAX_BSZ = 256
 
@@ -74,6 +76,8 @@ class TokenProcessor:
 
         self.speculative_decoding = self.cfg.speculative_config.method is not None
         self.use_logprobs = self.cfg.model_config.enable_logprob
+        self.logprob_max_bsz = XPU_LOGPROB_MAX_BSZ if current_platform.is_xpu() else MAX_BSZ
+        self.logprob_k = XPU_LOGPROB_K if current_platform.is_xpu() else K
 
         if self.speculative_decoding:
             if self.use_logprobs:
@@ -91,9 +95,9 @@ class TokenProcessor:
                     dtype="int64",
                 )
         elif self.use_logprobs:
-            self.output_tokens = paddle.full(shape=[MAX_BSZ * (K + 1) + 2, 1], fill_value=2, dtype="int64")
-            self.output_scores = paddle.full(shape=[MAX_BSZ * (K + 1), 1], fill_value=0.0, dtype="float32")
-            self.output_ranks = paddle.full(shape=[MAX_BSZ], fill_value=0, dtype="int64")
+            self.output_tokens = paddle.full(shape=[self.logprob_max_bsz * (K + 1) + 2, 1], fill_value=2, dtype="int64")
+            self.output_scores = paddle.full(shape=[self.logprob_max_bsz * (K + 1), 1], fill_value=0.0, dtype="float32")
+            self.output_ranks = paddle.full(shape=[self.logprob_max_bsz], fill_value=0, dtype="int64")
         else:
             self.output_tokens = paddle.full(shape=[MAX_BSZ + 2, 1], fill_value=2, dtype="int64")
         self.worker = None
@@ -351,7 +355,11 @@ class TokenProcessor:
         """
 
         if current_platform.is_xpu():
-            from fastdeploy.model_executor.ops.xpu import get_output, get_output_ep
+            from fastdeploy.model_executor.ops.xpu import (
+                get_output,
+                get_output_ep,
+                get_output_topk,
+            )
         elif current_platform.is_iluvatar():
             from fastdeploy.model_executor.ops.iluvatar import get_output
         elif current_platform.is_gcu():
@@ -377,7 +385,7 @@ class TokenProcessor:
                             self.output_tokens,
                             self.output_scores,
                             self.output_ranks,
-                            K,
+                            self.logprob_k,
                             rank_id,
                             is_blocking,
                         )
@@ -586,8 +594,11 @@ class TokenProcessor:
             self._record_speculative_decoding_mertics(accept_num)
         elif self.use_logprobs:
             batch = self.output_tokens[1, 0]
-            tokens = tokens[2 : batch * (K + 1) + 2].reshape([batch, K + 1])[:, : (K + 1)]
-            scores = self.output_scores[: batch * (K + 1)].numpy().reshape([batch, K + 1])[:, : (K + 1)]
+            k_plus_one = self.logprob_k + 1
+            tokens = tokens[2 : batch * k_plus_one + 2].reshape([batch, k_plus_one])[:, :k_plus_one]
+            scores = (
+                self.output_scores[: batch * k_plus_one].numpy().reshape([batch, k_plus_one])[:, :k_plus_one]
+            )
             ranks = self.output_ranks[:batch].numpy()
         else:
             batch = self.output_tokens[1, 0]
