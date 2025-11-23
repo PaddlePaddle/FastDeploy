@@ -38,6 +38,8 @@ from fastdeploy.inter_communicator import (
 )
 from fastdeploy.metrics.work_metrics import work_process_metrics
 from fastdeploy.platforms import current_platform
+from fastdeploy.trace.constants import LoggingEventName
+from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import (
     EngineError,
     ParameterError,
@@ -185,6 +187,7 @@ class EngineClient:
         """
 
         task["preprocess_start_time"] = time.time()
+        trace_print(LoggingEventName.PREPROCESSING_START, task["request_id"], task.get("user", ""))
         try:
             chat_template_kwargs = task.get("chat_template_kwargs") or {}
             chat_template_kwargs.update({"chat_template": task.get("chat_template")})
@@ -207,14 +210,7 @@ class EngineClient:
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]
 
-            completion_token_len = len(task["completion_token_ids"]) if task.get("completion_token_ids") else 0
-            task["max_tokens"] = min(
-                self.max_model_len - input_ids_len, max(0, task.get("max_tokens") - completion_token_len)
-            )
-
-            if task.get("min_tokens") is not None:
-                task["min_tokens"] = max(1, task["min_tokens"] - completion_token_len)
-
+            task["max_tokens"] = min(self.max_model_len - input_ids_len, task.get("max_tokens"))
             min_tokens = task.get("min_tokens", 1)
             if "messages" in task:
                 del task["messages"]
@@ -302,7 +298,12 @@ class EngineClient:
 
         if data.get("max_tokens") is not None:
             if data["max_tokens"] < 1 or data["max_tokens"] >= self.max_model_len:
-                raise ParameterError("max_tokens", f"max_tokens can be defined [1, {self.max_model_len}).")
+                api_server_logger.error(
+                    f"req_id:{data['request_id']}, max_tokens must be defined [1, {self.max_model_len}), but now it's {data['max_tokens']}."
+                )
+                raise ValueError(
+                    f"max_tokens can be defined [1, {self.max_model_len}), but now it's {data['max_tokens']}."
+                )
 
         if data.get("reasoning_max_tokens") is not None:
             if data["reasoning_max_tokens"] < 1:
@@ -310,7 +311,7 @@ class EngineClient:
             if data["reasoning_max_tokens"] > data["max_tokens"]:
                 data["reasoning_max_tokens"] = data["max_tokens"]
                 api_server_logger.warning(
-                    f"req_id: {data['request_id']}, reasoning_max_tokens exceeds max_tokens, the value of reasoning_max_tokens will be adjusted to match that of max_tokens"
+                    f"req_id: {data['request_id']}, reasoning_max_tokens exceeds max_tokens, the value of reasoning_max_tokens will be adjusted to {data['max_tokens']}"
                 )
         if data.get("temperature") is not None and abs(data["temperature"]) < 1e-6:
             data["temperature"] = 1e-6

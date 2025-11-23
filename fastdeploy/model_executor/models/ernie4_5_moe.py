@@ -211,7 +211,7 @@ class Ernie4_5_MoE(nn.Layer):
             self.shared_experts.load_state_dict(state_dict)
 
     def update_state_dict(self, state_dict):
-        self.fused_moe.load_state_dict(state_dict, True)
+        self.experts.load_state_dict(state_dict, True)
 
     def forward(self, hidden_states: paddle.Tensor):
         out = self.experts(hidden_states, self.gate)
@@ -600,7 +600,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings:
-            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight)
+            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
