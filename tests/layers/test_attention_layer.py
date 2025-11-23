@@ -315,7 +315,7 @@ class TestAttentionPerformance(unittest.TestCase):
         #     mode=ForwardMode.EXTEND,
         #     fd_config=self.fd_config,
         #     attn_backend=self.attn_backend,
-        #     use_dynamic_quant=use_dynamic_quant,
+        #     cache_quant_type_str=self.cache_quant_type_str,
         # )
 
         # self.attn_backend.init_attention_metadata(forward_meta)
@@ -343,6 +343,7 @@ class TestAttentionPerformance(unittest.TestCase):
 
         # times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
         # print(times[-5:])
+        # return
 
         # p.stop()
 
