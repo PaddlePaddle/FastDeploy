@@ -90,7 +90,6 @@ class TestAttentionPerformance(unittest.TestCase):
             self.attention_layer[i] = Ernie4_5_Attention(self.fd_config, layer_id=i, prefix="test_layer")
             state_dict = self.create_random_attention_state_dict(self.fd_config, prefix="test_layer")
             self.attention_layer[i].load_state_dict(state_dict)
-            self.attention_layer[i].attn.cache_quant_type_str = "block_wise_fp8"
 
         def attn_forward(forward_meta, hidden_states):
             for i in range(num_layers):
@@ -99,6 +98,8 @@ class TestAttentionPerformance(unittest.TestCase):
             return hidden_states
 
         self.attn_forward = attn_forward
+
+        self.cache_quant_type_str = getattr(self.attention_layer[0].attn, "cache_quant_type_str", "none")
 
         print("===== Initialization Complete =====")
 
@@ -154,7 +155,9 @@ class TestAttentionPerformance(unittest.TestCase):
             scheduler_config=SchedulerConfig({}),
             load_config=LoadConfig({}),
             quant_config=MixQuantConfig(
-                dense_quant_type="block_wise_fp8", moe_quant_type="block_wise_fp8", kv_cache_quant_type="float8_e4m3fn"
+                dense_quant_type="block_wise_fp8",
+                moe_quant_type="block_wise_fp8",
+                kv_cache_quant_type="float8_e4m3fn",
             ),
             graph_opt_config=GraphOptimizationConfig({}),
             commit_config=CommitConfig(),
@@ -203,7 +206,7 @@ class TestAttentionPerformance(unittest.TestCase):
         mode: ForwardMode,
         fd_config: FDConfig,
         attn_backend: AttentionBackend,
-        use_dynamic_quant: bool = False,
+        cache_quant_type_str: str = "none",
     ) -> ForwardMeta:
         """
         Creates a high-fidelity ForwardMeta object.
@@ -239,7 +242,7 @@ class TestAttentionPerformance(unittest.TestCase):
         kv_num_heads_tp = fd_config.model_config.num_key_value_heads // fd_config.parallel_config.tensor_parallel_size
         num_layers = fd_config.model_config.num_hidden_layers
         cache_type = fd_config.model_config.dtype
-        if use_dynamic_quant:
+        if cache_quant_type_str != "none":
             cache_type = "uint8"
         cache_shape = (allocated_num_blocks, kv_num_heads_tp, block_size, head_dim)
         scale_shape = (allocated_num_blocks, kv_num_heads_tp, block_size)
@@ -248,7 +251,7 @@ class TestAttentionPerformance(unittest.TestCase):
             key_cache = paddle.randint(0, 255, shape=cache_shape, dtype="int32").cast(cache_type)
             value_cache = paddle.randint(0, 255, shape=cache_shape, dtype="int32").cast(cache_type)
             caches.extend([key_cache, value_cache])
-            if use_dynamic_quant:
+            if cache_quant_type_str == "block_wise_fp8":
                 key_cache_scale = paddle.rand(shape=scale_shape, dtype=fd_config.model_config.dtype)
                 value_cache_scale = paddle.rand(shape=scale_shape, dtype=fd_config.model_config.dtype)
                 caches.extend([key_cache_scale, value_cache_scale])
@@ -296,7 +299,6 @@ class TestAttentionPerformance(unittest.TestCase):
     def test_decode_performance_with_prefill(self):
         # Test parameters
         test_steps = 100
-        use_dynamic_quant = True
         act_tensor_dtype = paddle.bfloat16
 
         # prefill_batch_size = 1
@@ -363,7 +365,7 @@ class TestAttentionPerformance(unittest.TestCase):
                 mode=ForwardMode.DECODE,
                 fd_config=self.fd_config,
                 attn_backend=self.attn_backend,
-                use_dynamic_quant=use_dynamic_quant,
+                cache_quant_type_str=self.cache_quant_type_str,
             )
 
             self.attn_backend.init_attention_metadata(forward_meta)
