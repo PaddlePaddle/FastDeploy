@@ -119,9 +119,10 @@ class TestAttentionPerformance(unittest.TestCase):
         config_dict = {
             "architectures": ["Ernie4_5_MoeForCausalLM"],
             "dtype": "bfloat16",
-            "hidden_size": 4096,
             "max_position_embeddings": 131072,
-            "max_model_len": 36 * 1024 + 1024,
+            "max_model_len": 131072,
+            "head_dim": 128,
+            "hidden_size": 4096,
             "num_attention_heads": 32,
             "num_key_value_heads": 4,
             "num_hidden_layers": 57,
@@ -231,16 +232,17 @@ class TestAttentionPerformance(unittest.TestCase):
 
         block_size = fd_config.cache_config.block_size
         max_model_len = fd_config.model_config.max_model_len
-        num_blocks_per_seq = (max_model_len + block_size - 1) // block_size
-        num_blocks = num_blocks_per_seq * batch_size
+        max_blocks_per_seq = (max_model_len + block_size - 1) // block_size
+        allocated_blocks_per_seq = seq_len // block_size + 1
+        allocated_num_blocks = allocated_blocks_per_seq * batch_size
         head_dim = fd_config.model_config.head_dim
         kv_num_heads_tp = fd_config.model_config.num_key_value_heads // fd_config.parallel_config.tensor_parallel_size
         num_layers = fd_config.model_config.num_hidden_layers
         cache_type = fd_config.model_config.dtype
         if use_dynamic_quant:
             cache_type = "uint8"
-        cache_shape = (num_blocks, kv_num_heads_tp, block_size, head_dim)
-        scale_shape = (num_blocks, kv_num_heads_tp, block_size)
+        cache_shape = (allocated_num_blocks, kv_num_heads_tp, block_size, head_dim)
+        scale_shape = (allocated_num_blocks, kv_num_heads_tp, block_size)
         caches = []
         for _ in range(num_layers):
             key_cache = paddle.randint(0, 255, shape=cache_shape, dtype="int32").cast(cache_type)
@@ -251,10 +253,10 @@ class TestAttentionPerformance(unittest.TestCase):
                 value_cache_scale = paddle.rand(shape=scale_shape, dtype=fd_config.model_config.dtype)
                 caches.extend([key_cache_scale, value_cache_scale])
 
-        block_tables = paddle.zeros(shape=(batch_size, num_blocks_per_seq), dtype="int32")
+        block_tables = paddle.zeros(shape=(batch_size, max_blocks_per_seq), dtype="int32")
         for i in range(batch_size):
-            for j in range(num_blocks_per_seq):
-                block_tables[i, j] = i * num_blocks_per_seq + j
+            for j in range(allocated_blocks_per_seq):
+                block_tables[i, j] = i * allocated_blocks_per_seq + j
 
         tmp_position_ids = paddle.arange(fd_config.model_config.max_model_len).reshape((1, -1))
         rope_emb = get_rope(
