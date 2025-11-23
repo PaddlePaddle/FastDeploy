@@ -31,6 +31,7 @@ omit =
     */fastdeploy/benchmarks/lib/endpoint_request_func.py
     */fastdeploy/model_executor/graph_optimization/utils.py
     */fastdeploy/model_executor/ops/gpu/fastdeploy_ops.py
+    */fastdeploy/model_executor/ops/gpu/fastdeploy_ops/__init__.py
     */fastdeploy/model_executor/ops/gpu/deep_gemm/utils.py
     */fastdeploy/**/dcu/*
     */fastdeploy/worker/dcu*.py
