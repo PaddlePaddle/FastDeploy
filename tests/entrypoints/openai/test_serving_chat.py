@@ -27,12 +27,28 @@ sys.modules["paddleformers.utils"] = MockModule()
 sys.modules["paddleformers.utils.log"] = MockModule()
 sys.modules["paddleformers.transformers"] = MockModule()
 sys.modules["paddleformers.transformers.configuration_utils"] = MockModule()
-sys.modules["paddle"] = MockModule()
+
+# Mock paddle with specific configurations
+mock_paddle = MockModule()
+mock_paddle.base = MockModule()
+mock_paddle.base.core = MockModule()
+# Mock paddle to return 0 for GCU device count (not available)
+mock_paddle.base.core.get_custom_device_count = Mock(return_value=0)
+mock_paddle.is_compiled_with_custom_device = Mock(return_value=False)
+mock_paddle.is_compiled_with_cuda = Mock(return_value=True)  # Force CUDA platform
+mock_paddle.is_compiled_with_rocm = Mock(return_value=False)
+mock_paddle.is_compiled_with_xpu = Mock(return_value=False)
+sys.modules["paddle"] = mock_paddle
+
 sys.modules["paddle.nn"] = MockModule()
 sys.modules["paddle.distributed"] = MockModule()
 sys.modules["cupy"] = MockModule()
 sys.modules["triton"] = MockModule()
 sys.modules["use_triton_in_paddle"] = MockModule()
+# Mock paddle_custom_device to avoid import errors in CI
+sys.modules["paddle_custom_device"] = MockModule()
+sys.modules["paddle_custom_device.gcu"] = MockModule()
+sys.modules["paddle_custom_device.gcu.ops"] = MockModule()
 
 # Import the target module to generate coverage
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
