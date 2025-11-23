@@ -79,18 +79,6 @@ def is_pow2(n):
 
 
 def get_hadK(n, transpose=False):
-    """
-    获取一个矩阵，该矩阵是用于哈达纳变换的基础矩阵。
-    如果矩阵大小为2^k, 则返回一个基础矩阵, 否则返回None。
-    如果transpose参数为True, 则返回基础矩阵的转置形式。
-
-    Args:
-        n (int): 矩阵大小, 必须是2的幂或者能被以下任意值整除: 172, 156, 140, 108, 60, 52, 36, 28, 40, 20, 12。
-        transpose (bool, optional): 默认为False, 表示返回基础矩阵本身。如果为True, 则返回基础矩阵的转置形式。 Default: False.
-
-    Returns:
-        tuple (ndarray, int): 第一个元素是一个ndarray类型的矩阵, 代表基础矩阵; 第二个元素是一个整数, 代表基础矩阵的大小 (即矩阵大小/基础矩阵大小)。如果不存在基础矩阵，则返回(None, None)。
-    """
     hadK, K = None, None
     assert is_pow2(n)
     K = 1
@@ -98,21 +86,6 @@ def get_hadK(n, transpose=False):
 
 
 def matmul_hadU_int4(X, transpose=False):
-    """
-    hadamard变换。
-
-    如果需要转置输入矩阵, 则可以指定transpose参数为True。
-
-    Args:
-        X (Tensor, numpy.ndarray): 形状为(..., m, n)的矩阵, 其中m和n分别是行数和列数。
-            Tensor类型的矩阵支持任何浮点数类型, numpy.ndarray类型的矩阵只支持浮点数类型。
-        transpose (bool, optional): 默认值为False, 表示不进行转置操作。如果设为True, 则会将输入矩阵转置后再进行计算。
-            默认值: False.
-
-    Returns:
-        Tensor: 形状为(..., m, n)的矩阵, 其中m和n分别是行数和列数, 结果矩阵的每个元素是输入矩阵的对应位置元素与另一个矩阵的对应位置元素的乘积。
-        返回的Tensor类型的矩阵支持任何浮点数类型, numpy.ndarray类型的矩阵只支持浮点数类型。
-    """
     n = X.shape[-1]
     hadK, K = get_hadK(n, transpose)
     input = X.clone().reshape((-1, n, 1))
@@ -133,18 +106,6 @@ def matmul_hadU_int4(X, transpose=False):
 
 
 def random_hadamard_matrix_int4(size, device=None, ffn2=False):
-    """
-    生成一个随机的 Hadamard 矩阵，该矩阵是一个对角线矩阵，其中每个元素为-1或1。
-    如果 ffn2 为 True, 则返回一个大小为 size 的矩阵，其中每个块都是一个大小为 size/2 的 Hadamard 矩阵。
-
-    Args:
-        size (int): 矩阵的大小。
-        device (str, optional): 可选的设备。
-        ffn2 (bool, optional): 布尔值, 指示是否返回大小为size的矩阵, 默认为 False。
-
-    Returns:
-        Tensor: 大小为size的Tensor, 其中每个元素为-1或1。
-    """
     # See https://cornell-relaxml.github.io/quip-sharp/ , Section "Randomized Hadamard Transformation"
     if not ffn2:
         Q = paddle.randint(low=0, high=2, shape=(size,)).cast("float32")
@@ -170,23 +131,6 @@ def random_hadamard_matrix_int4(size, device=None, ffn2=False):
 
 
 def get_orthogonal_matrix(size, mode="hadamard", device="cuda"):
-    """
-    获取一个正交矩阵，可以是随机生成的、哈达马尔矩阵或者哈达马尔矩阵的FFN2版本。
-
-    Args:
-        size (int): 正交矩阵的大小。
-        mode (str, optional): 生成方式，可选值为"random", "hadamard", "hadamard_ffn2"中的一种。默认为"random"。
-            - "random"：生成一个随机正交矩阵。
-            - "hadamard"：生成一个哈达马尔矩阵。
-            - "hadamard_ffn2"：生成一个哈达马尔矩阵的FFN2版本。
-        device (str, optional): 设备类型，默认为"cuda"。
-
-    Returns:
-        paddle.Tensor: 返回一个大小为size*size的正交矩阵，维度为2。
-
-    Raises:
-        ValueError: 如果mode不在"random", "hadamard", "hadamard_ffn2"中。
-    """
     if mode == "random":
         return random_orthogonal_matrix(size, device)
     elif mode == "hadamard":
@@ -198,20 +142,10 @@ def get_orthogonal_matrix(size, mode="hadamard", device="cuda"):
 
 
 def rotate_model(state_dict, layer_idx, moe_num_experts=48, hidden_size=7168, moe_intermediate_size=3584, ep_rank=0):
-    """
-    Rotate FFN2 (ernie.layers.{}.mlp.experts.{}.down_proj.weight) layer
-
-    Args:
-        state_dict (dict):
-    """
     with paddle.no_grad():
         # collect hadamard rotation matrix [moe_intermediate_size, moe_intermediate_size]
         Q_ffn2, moe_block_size = get_orthogonal_matrix(size=moe_intermediate_size, mode="hadamard_ffn2")
-        # Q_ffn2 = Q_ffn2.to('gpu:0')
         # down_proj.weight: [moe_intermediate_size, hidden_size]
-        print(
-            f"rotating layer ernie.layers.{layer_idx}.mlp.experts.[{ep_rank * moe_num_experts},{ep_rank * moe_num_experts + moe_num_experts}).down_proj.weight..."
-        )
         expert_list = [
             get_tensor(
                 state_dict[

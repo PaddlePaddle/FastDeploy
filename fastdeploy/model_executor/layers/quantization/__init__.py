@@ -85,7 +85,6 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
             quantization_config["hadamard_block_size"] = 512
             quantization_config["quantization"] = "mix_quant"
             quant_config_name = "mix_quant"
-            print("quantization_config_xx", quantization_config)
     else:
         quant_config_name = None
     if quant_config_name is None:

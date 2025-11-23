@@ -912,6 +912,9 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
         Paddle cutlass load weight process.
         """
         if not layer.is_quantized:
+            logger.info(
+                f"Rotating ernie.layers.{layer.layer_idx}.mlp.experts.[{layer.ep_rank * layer.num_local_experts},{layer.ep_rank * layer.num_local_experts + layer.num_local_experts}).down_proj.weight..."
+            )
             rotate_model(
                 state_dict,
                 layer.layer_idx,
