@@ -53,6 +53,239 @@ def pad_vocab_size(vocab_size: int, pad_to: int = DEFAULT_VOCAB_PADDING_SIZE) ->
     return ((vocab_size + pad_to - 1) // pad_to) * pad_to
 
 
+def random_orthogonal_matrix(size, device):
+    """
+    Generate a random orthogonal matrix of the specified size.
+    First, we generate a random matrix with entries from a standard distribution.
+    Then, we use QR decomposition to obtain an orthogonal matrix.
+    Finally, we multiply by a diagonal matrix with diag r to adjust the signs.
+
+    Args:
+    size (int): The size of the matrix (size x size).
+
+    Returns:
+    paddle.Tensor: An orthogonal matrix of the specified size.
+    """
+    paddle.device.cuda.empty_cache()
+    if device == "cuda":
+        random_matrix = paddle.randn(size, size, dtype="float32").to("gpu")
+    q, r = paddle.linalg.qr(random_matrix)
+    q *= paddle.sign(paddle.diag(r)).unsqueeze(0)
+    return q
+
+
+def is_pow2(n):
+    return (n & (n - 1) == 0) and (n > 0)
+
+
+def get_hadK(n, transpose=False):
+    """
+    获取一个矩阵，该矩阵是用于哈达纳变换的基础矩阵。
+    如果矩阵大小为2^k, 则返回一个基础矩阵, 否则返回None。
+    如果transpose参数为True, 则返回基础矩阵的转置形式。
+
+    Args:
+        n (int): 矩阵大小, 必须是2的幂或者能被以下任意值整除: 172, 156, 140, 108, 60, 52, 36, 28, 40, 20, 12。
+        transpose (bool, optional): 默认为False, 表示返回基础矩阵本身。如果为True, 则返回基础矩阵的转置形式。 Default: False.
+
+    Returns:
+        tuple (ndarray, int): 第一个元素是一个ndarray类型的矩阵, 代表基础矩阵; 第二个元素是一个整数, 代表基础矩阵的大小 (即矩阵大小/基础矩阵大小)。如果不存在基础矩阵，则返回(None, None)。
+    """
+    hadK, K = None, None
+    assert is_pow2(n)
+    K = 1
+    return hadK, K
+
+
+def matmul_hadU_int4(X, transpose=False):
+    """
+    hadamard变换。
+
+    如果需要转置输入矩阵, 则可以指定transpose参数为True。
+
+    Args:
+        X (Tensor, numpy.ndarray): 形状为(..., m, n)的矩阵, 其中m和n分别是行数和列数。
+            Tensor类型的矩阵支持任何浮点数类型, numpy.ndarray类型的矩阵只支持浮点数类型。
+        transpose (bool, optional): 默认值为False, 表示不进行转置操作。如果设为True, 则会将输入矩阵转置后再进行计算。
+            默认值: False.
+
+    Returns:
+        Tensor: 形状为(..., m, n)的矩阵, 其中m和n分别是行数和列数, 结果矩阵的每个元素是输入矩阵的对应位置元素与另一个矩阵的对应位置元素的乘积。
+        返回的Tensor类型的矩阵支持任何浮点数类型, numpy.ndarray类型的矩阵只支持浮点数类型。
+    """
+    n = X.shape[-1]
+    hadK, K = get_hadK(n, transpose)
+    input = X.clone().reshape((-1, n, 1))
+    output = input.clone()
+    while input.shape[1] > K:
+        input = input.reshape((input.shape[0], input.shape[1] // 2, 2, input.shape[2]))
+        output = output.reshape(input.shape)
+        output[:, :, 0, :] = input[:, :, 0, :] + input[:, :, 1, :]
+        output[:, :, 1, :] = input[:, :, 0, :] - input[:, :, 1, :]
+        output = output.reshape((input.shape[0], input.shape[1], -1))
+        (input, output) = (output, input)
+    del output
+
+    if K > 1:
+        input = hadK.reshape((1, K, K)).to(input) @ input
+
+    return input.reshape(X.shape) / paddle.to_tensor(n, dtype="float32").sqrt()
+
+
+def random_hadamard_matrix_int4(size, device=None, ffn2=False):
+    """
+    生成一个随机的 Hadamard 矩阵，该矩阵是一个对角线矩阵，其中每个元素为-1或1。
+    如果 ffn2 为 True, 则返回一个大小为 size 的矩阵，其中每个块都是一个大小为 size/2 的 Hadamard 矩阵。
+
+    Args:
+        size (int): 矩阵的大小。
+        device (str, optional): 可选的设备。
+        ffn2 (bool, optional): 布尔值, 指示是否返回大小为size的矩阵, 默认为 False。
+
+    Returns:
+        Tensor: 大小为size的Tensor, 其中每个元素为-1或1。
+    """
+    # See https://cornell-relaxml.github.io/quip-sharp/ , Section "Randomized Hadamard Transformation"
+    if not ffn2:
+        Q = paddle.randint(low=0, high=2, shape=(size,)).cast("float32")
+        Q = paddle.ones_like(Q, dtype="float32")
+        Q = Q * 2 - 1
+        Q = paddle.diag(Q)
+        return matmul_hadU_int4(Q), None
+
+    else:
+        num_blocks = size
+        while not (num_blocks % 2):
+            num_blocks = num_blocks // 2
+        block_size = size // num_blocks
+        Q = paddle.diag(paddle.ones((block_size,), dtype="float32"))
+        block = matmul_hadU_int4(Q)
+        large_matrix = paddle.zeros([size, size])
+
+        for i in range(num_blocks):
+            start_row = i * block_size
+            start_col = i * block_size
+            large_matrix[start_row : start_row + block_size, start_col : start_col + block_size] = block
+        return large_matrix.cast("float32"), block_size
+
+
+def get_orthogonal_matrix(size, mode="hadamard", device="cuda"):
+    """
+    获取一个正交矩阵，可以是随机生成的、哈达马尔矩阵或者哈达马尔矩阵的FFN2版本。
+
+    Args:
+        size (int): 正交矩阵的大小。
+        mode (str, optional): 生成方式，可选值为"random", "hadamard", "hadamard_ffn2"中的一种。默认为"random"。
+            - "random"：生成一个随机正交矩阵。
+            - "hadamard"：生成一个哈达马尔矩阵。
+            - "hadamard_ffn2"：生成一个哈达马尔矩阵的FFN2版本。
+        device (str, optional): 设备类型，默认为"cuda"。
+
+    Returns:
+        paddle.Tensor: 返回一个大小为size*size的正交矩阵，维度为2。
+
+    Raises:
+        ValueError: 如果mode不在"random", "hadamard", "hadamard_ffn2"中。
+    """
+    if mode == "random":
+        return random_orthogonal_matrix(size, device)
+    elif mode == "hadamard":
+        return random_hadamard_matrix_int4(size, device)
+    elif mode == "hadamard_ffn2":
+        return random_hadamard_matrix_int4(size, device, True)
+    else:
+        raise ValueError(f"Unknown mode {mode}")
+
+
+def rotate_model(state_dict, layer_idx, moe_num_experts=48, hidden_size=7168, moe_intermediate_size=3584, ep_rank=0):
+    """
+    Rotate FFN2 (ernie.layers.{}.mlp.experts.{}.down_proj.weight) layer
+
+    Args:
+        state_dict (dict):
+    """
+    with paddle.no_grad():
+        # collect hadamard rotation matrix [moe_intermediate_size, moe_intermediate_size]
+        Q_ffn2, moe_block_size = get_orthogonal_matrix(size=moe_intermediate_size, mode="hadamard_ffn2")
+        # Q_ffn2 = Q_ffn2.to('gpu:0')
+        # down_proj.weight: [moe_intermediate_size, hidden_size]
+        print(
+            f"rotating layer ernie.layers.{layer_idx}.mlp.experts.[{ep_rank * moe_num_experts},{ep_rank * moe_num_experts + moe_num_experts}).down_proj.weight..."
+        )
+        expert_list = [
+            get_tensor(
+                state_dict[
+                    f"ernie.layers.{layer_idx}.mlp.experts.{ep_rank * moe_num_experts + expert_idx}.down_proj.weight"
+                ]
+            )
+            for expert_idx in range(moe_num_experts)
+        ]
+        moe_weight = paddle.concat(expert_list, axis=-1)  # [moe_intermediate_size, hidden_size * moe_num_experts]
+        new_moe_weight = Q_ffn2.cast("float32").T @ moe_weight.to(Q_ffn2.place)
+        for expert_idx in range(moe_num_experts):
+            rotated_weight = new_moe_weight[:, expert_idx * hidden_size : (expert_idx + 1) * hidden_size]
+            expert_idx_local = ep_rank * moe_num_experts + expert_idx
+            state_dict[f"ernie.layers.{layer_idx}.mlp.experts.{expert_idx_local}.down_proj.weight"] = (
+                rotated_weight.cpu()
+            )
+        del moe_weight, new_moe_weight, rotated_weight
+        paddle.device.cuda.empty_cache()
+    return Q_ffn2.cpu()
+
+
+def pack(src, bits=4):
+    pack_num = 8 // bits
+    shift_bits = (paddle.arange(0, pack_num) * bits).cast("uint8")
+    src = paddle.to_tensor(src).cast("uint8")
+
+    if len(src.shape) == 2:
+        row, col = src.shape
+        src = src.reshape((row, col // pack_num, pack_num))
+    else:
+        src = src.reshape((src.shape[0] // pack_num, pack_num))
+
+    src[..., 0] = paddle.bitwise_and(src[..., 0], paddle.to_tensor(15, dtype="uint8"))
+    src = paddle.to_tensor(src.numpy() << shift_bits.numpy())
+
+    return src.sum(axis=-1).transpose((1, 0)).cast("int8")
+
+
+def group_wise_int4_weight_quantize(weight: paddle.Tensor, group_size: int = 128):
+    """
+    Block-wise int4 weight quantization.
+
+    Args
+        weight: paddle.Tensor
+        group_size: int
+
+    Returns
+        weight_quant: paddle.Tensor, int8 weight after quantization and pack
+        weight_scale: paddle.Tensor, fp32 weight scale with group_size
+    """
+    if weight.dtype == paddle.bfloat16:
+        weight = weight.astype(paddle.float32)
+    assert weight.dim() == 2
+    weight = weight.transpose((1, 0))
+    out_features, in_features = weight.shape
+    q_max, q_min = 7, -8
+
+    # [out_features, in_features] -> [out_features, in_features // group_size, group_size]
+    assert (
+        in_features % group_size == 0
+    ), f"in_features must be divisible by group_size: {group_size}, but got in_features: {in_features}"
+    weight = weight.reshape((out_features, in_features // group_size, group_size))
+
+    # calculate weight_scale
+    abs_max = paddle.max(paddle.abs(weight), axis=-1, keepdim=False).astype(paddle.float32)
+    weight_scale = paddle.clip(abs_max, min=1e-8)
+
+    quant_weight = paddle.round(weight / weight_scale.unsqueeze(-1) * q_max)
+    quant_weight = paddle.clip(quant_weight, min=q_min, max=q_max)
+    quant_weight = quant_weight.reshape((out_features, in_features)).transpose((1, 0))
+
+    return quant_weight.astype(paddle.int8), weight_scale
+
+
 def per_block_cast_to_fp8(x: Tensor, block_size: list = [128, 128]) -> Tuple[Tensor, Tensor]:
     """
     Only used in deep_gemm block wise quant weight.
