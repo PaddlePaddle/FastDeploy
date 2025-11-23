@@ -381,3 +381,4 @@ jobs:
           name: python diff coverage
           fail_ci_if_error: false
           verbose: true
+          disable_search: true
