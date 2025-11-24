@@ -41,7 +41,7 @@ wait_for_health() {
 
 
 # serving config
-MODEL_NAME="/root/paddlejob/workspace/env_run/liyonghua/models/Ernie/ERNIE-4.5-0.3B-Base-Paddle/"
+MODEL_NAME="PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle"
 DATA_PARALLEL_SIZE=2
 TENSOR_PARALLEL_SIZE=1
 NUM_GPUS=$(($DATA_PARALLEL_SIZE * $TENSOR_PARALLEL_SIZE))
