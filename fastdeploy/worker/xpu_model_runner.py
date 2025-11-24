@@ -383,23 +383,21 @@ class XPUModelRunner(ModelRunnerBase):
                 world_size = self.parallel_config.expert_parallel_size
                 rank = self.rank % world_size
 
-                # First check if all devices are empty
+                # Combined check in one Barrier round
                 no_need_stop = self.not_need_stop()
                 self.shared_not_need_stop_list[rank].value = 1 if not no_need_stop else 0
-                self.decode_barrier.wait()
-                if_all_device_empty = all(p.value == 1 for p in self.shared_not_need_stop_list)
-                self.decode_barrier.wait()
-
-                if if_all_device_empty:
-                    return False
-
-                # Then check if only decode
                 self.shared_only_decode_list[rank].value = self.forward_meta.len_info_cpu[0] <= 0
-                self.decode_barrier.wait()
-                if_only_decode = all(p.value for p in self.shared_only_decode_list)
+
+                # Single Barrier for both checks
                 self.decode_barrier.wait()
 
-                return if_only_decode
+                if_all_device_empty = all(p.value == 1 for p in self.shared_not_need_stop_list)
+                if_only_decode = all(p.value for p in self.shared_only_decode_list)
+
+                # Single Barrier for reset
+                self.decode_barrier.wait()
+
+                return False if if_all_device_empty else if_only_decode
             except Exception as e:
                 logger.warning(f"Shared memory only_decode failed: {e}, fallback to original implementation")
 
