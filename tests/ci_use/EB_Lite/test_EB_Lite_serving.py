@@ -385,14 +385,14 @@ def test_streaming_with_stop_str(openai_client):
         messages=[{"role": "user", "content": "Hello, how are you?"}],
         temperature=1,
         max_tokens=5,
-        extra_body={"include_stop_str_in_output": True},
+        extra_body={"min_tokens": 1, "include_stop_str_in_output": True},
         stream=True,
     )
     # Assertions to check the response structure
     last_token = ""
     for chunk in response:
         last_token = chunk.choices[0].delta.content
-    assert last_token.endswith("</s>")
+    assert last_token.endswith("</s>"), f"last_token did not end with '</s>': {last_token!r}"
 
     response = openai_client.chat.completions.create(
         model="default",
