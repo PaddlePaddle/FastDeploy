@@ -1017,15 +1017,16 @@ def xpu_pre_process(
         ids_remove_padding.reshape([-1, 1]),
         cum_offsets,
         xpu_forward_meta.encoder_seq_lod,
+        xpu_forward_meta.decoder_seq_lod,
         xpu_forward_meta.encoder_batch_idx,
         xpu_forward_meta.decoder_batch_idx,
         xpu_forward_meta.encoder_seq_lod_cpu,
+        xpu_forward_meta.decoder_seq_lod_cpu,
         xpu_forward_meta.encoder_batch_idx_cpu,
         xpu_forward_meta.decoder_batch_idx_cpu,
-        xpu_forward_meta.enc_batch,
-        xpu_forward_meta.dec_batch,
+        xpu_forward_meta.len_info_cpu,
         None,  # output_padding_offset
-        -1,  # max_input_length
+        -1,  # max bs
     )
 
     adjusted_input = adjusted_input.squeeze(1)

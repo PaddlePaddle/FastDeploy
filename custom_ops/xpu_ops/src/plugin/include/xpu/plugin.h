@@ -263,6 +263,7 @@ DLL_EXPORT int eb_adjust_batch(
     const TX* x,
     TY* y,
     VectorParam<int32_t>& encoder_seqs_lods,  // NOLINT
+    VectorParam<int32_t>& decoder_seqs_lods,  // NOLINT
     VectorParam<int32_t>& encoder_batch_map,  // NOLINT
     VectorParam<int32_t>& decoder_batch_map,  // NOLINT
     int64_t hidden_dim);
@@ -273,6 +274,17 @@ DLL_EXPORT int eb_gather_next_token(
     const TX* x,
     TY* y,
     VectorParam<int32_t>& encoder_seqs_lods,  // NOLINT
+    VectorParam<int32_t>& encoder_batch_map,  // NOLINT
+    VectorParam<int32_t>& decoder_batch_map,  // NOLINT
+    int64_t hidden_dim);
+
+template <typename TX, typename TY>
+DLL_EXPORT int eb_mtp_gather_next_token(
+    Context* ctx,
+    const TX* x,
+    TY* y,
+    VectorParam<int32_t>& encoder_seqs_lods,  // NOLINT
+    VectorParam<int32_t>& decoder_seqs_lods,  // NOLINT
     VectorParam<int32_t>& encoder_batch_map,  // NOLINT
     VectorParam<int32_t>& decoder_batch_map,  // NOLINT
     int64_t hidden_dim);

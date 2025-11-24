@@ -37,13 +37,14 @@ std::vector<paddle::Tensor> AdjustBatch(
     const paddle::Tensor& x,            // [token_num, dim_embed]
     const paddle::Tensor& cum_offsets,  // [bsz, 1]
     const paddle::Tensor& encoder_seq_lod,
+    const paddle::Tensor& decoder_seq_lod,
     const paddle::Tensor& encoder_batch_idx,
     const paddle::Tensor& decoder_batch_idx,
     const paddle::Tensor& encoder_seq_lod_cpu,
+    const paddle::Tensor& decoder_seq_lod_cpu,
     const paddle::Tensor& encoder_batch_idx_cpu,
     const paddle::Tensor& decoder_batch_idx_cpu,
-    const paddle::Tensor& enc_batch_tensor,
-    const paddle::Tensor& dec_batch_tensor,
+    const paddle::Tensor& len_info_cpu,
     const paddle::optional<paddle::Tensor>& output_padding_offset,
     int max_input_length);
 
@@ -351,18 +352,19 @@ std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
     const paddle::Tensor& step_idx);
 
 std::vector<paddle::Tensor> GatherNextToken(
-    const paddle::Tensor& tmp_out,      // [token_num, dim_embed]
+    const paddle::Tensor& x,            // [token_num, dim_embed]
     const paddle::Tensor& cum_offsets,  // [bsz, 1]
     const paddle::Tensor& encoder_seq_lod,
+    const paddle::Tensor& decoder_seq_lod,
     const paddle::Tensor& encoder_batch_map,
     const paddle::Tensor& decoder_batch_map,
     const paddle::Tensor& encoder_seq_lod_cpu,
+    const paddle::Tensor& decoder_seq_lod_cpu,
     const paddle::Tensor& encoder_batch_map_cpu,
     const paddle::Tensor& decoder_batch_map_cpu,
-    const paddle::Tensor& enc_batch_tensor,
-    const paddle::Tensor& dec_batch_tensor,
+    const paddle::Tensor& len_info_cpu,
     const paddle::optional<paddle::Tensor>& output_padding_offset,
-    int max_input_length);
+    int max_bsz);
 
 std::vector<paddle::Tensor> GetImgBoundaries(
     const paddle::Tensor& task_input_ids,
@@ -605,13 +607,14 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("x"),
         py::arg("cum_offsets"),
         py::arg("encoder_seq_lod"),
+        py::arg("decoder_seq_lod"),
         py::arg("encoder_batch_idx"),
         py::arg("decoder_batch_idx"),
         py::arg("encoder_seq_lod_cpu"),
+        py::arg("decoder_seq_lod_cpu"),
         py::arg("encoder_batch_idx_cpu"),
         py::arg("decoder_batch_idx_cpu"),
-        py::arg("enc_batch_tensor"),
-        py::arg("dec_batch_tensor"),
+        py::arg("len_info_cpu"),
         py::arg("output_padding_offset"),
         py::arg("max_input_length"),
         "adjust batch in XPU");
@@ -818,18 +821,19 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("gather_next_token",
         &GatherNextToken,
-        py::arg("tmp_out"),
+        py::arg("x"),
         py::arg("cum_offsets"),
         py::arg("encoder_seq_lod"),
+        py::arg("decoder_seq_lod"),
         py::arg("encoder_batch_map"),
         py::arg("decoder_batch_map"),
         py::arg("encoder_seq_lod_cpu"),
+        py::arg("decoder_seq_lod_cpu"),
         py::arg("encoder_batch_map_cpu"),
         py::arg("decoder_batch_map_cpu"),
-        py::arg("enc_batch_tensor"),
-        py::arg("dec_batch_tensor"),
+        py::arg("len_info_cpu"),
         py::arg("output_padding_offset"),
-        py::arg("max_input_length"),
+        py::arg("max_bsz"),
         "Gather next token for XPU");
 
   m.def("get_img_boundaries",
