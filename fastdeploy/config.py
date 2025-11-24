@@ -198,6 +198,8 @@ class ModelConfig:
         self.pooler_config: Optional["PoolerConfig"] = field(init=False)
         self.override_pooler_config: Optional[Union[dict, "PoolerConfig"]] = None
         self.revision = None
+        self.prefix_layer_name = "layers"
+        self.kv_cache_quant_scale_path = ""
 
         self.partial_rotary_factor: float = 1.0
         self.num_nextn_predict_layers = 0
@@ -244,6 +246,7 @@ class ModelConfig:
 
         self.enable_mm = is_multimodal_model
 
+        self.kv_cache_quant_scale_path = os.path.join(self.model, "kv_cache_scale.json")
         if self.runner_type == "pooling":
             os.environ["FD_USE_GET_SAVE_OUTPUT_V1"] = "1"
 
@@ -900,6 +903,12 @@ class GraphOptimizationConfig:
         draft_capture_sizes.append(max_capture_size)
         self.cudagraph_capture_sizes = sorted(draft_capture_sizes)
 
+    def filter_capture_size(self, tp_size: int = 1):
+        """When TSP is used, capture size must be divisible by tp size."""
+        self.cudagraph_capture_sizes = [
+            draft_size for draft_size in self.cudagraph_capture_sizes if (draft_size % tp_size == 0)
+        ]
+
     def to_json_string(self):
         """
         Convert speculative_config to json string.
@@ -1230,6 +1239,8 @@ class CacheConfig:
             self.enable_hierarchical_cache = True
 
         if self.model_cfg is not None:
+            if self.model_cfg.quantization is not None and isinstance(self.model_cfg.quantization, dict):
+                self.cache_dtype = self.model_cfg.quantization.get("kv_cache_quant_type", self.cache_dtype)
             if self.model_cfg.quantization_config is not None:
                 self.cache_dtype = self.model_cfg.quantization_config.get("kv_cache_quant_type", self.cache_dtype)
             if (
@@ -1417,7 +1428,6 @@ class StructuredOutputsConfig:
         # disable any whitespace for guided decoding
         self.disable_any_whitespace: bool = True
         self.logits_processors: Optional[list[str]] = None
-
         for key, value in args.items():
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
@@ -1584,6 +1594,10 @@ class FDConfig:
                 else:
                     self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
 
+        self.scheduler_config.max_chunk_len = (
+            self.scheduler_config.max_num_batched_tokens + self.scheduler_config.max_extra_num_batched_tokens
+        )
+
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.model_config.max_model_len * 0.04)
 
@@ -1627,7 +1641,15 @@ class FDConfig:
         if self.device_config is not None and self.device_config.device_type != "cuda":
             self.graph_opt_config.use_cudagraph = False
             logger.info(f"CUDAGraph only support on GPU, current device type is {self.device_config.device_type}!")
-
+        if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
+            if self.scheduler_config.max_num_seqs < self.parallel_config.tensor_parallel_size:
+                self.parallel_config.use_sequence_parallel_moe = False
+                logger.info(
+                    "Warning: sequence parallel moe do not support max_num_seqs < tensor_parallel_size when cudagraph enabled. We set use_sequence_parallel_moe to False."
+                )
+            else:
+                # It will hang when real batch_size < tp_size
+                self.graph_opt_config.filter_capture_size(tp_size=self.parallel_config.tensor_parallel_size)
         if self.model_config.enable_mm and self.graph_opt_config.use_cudagraph:
             self.cache_config.enable_prefix_caching = False
             logger.info("Multi-modal models do not support prefix caching when using CUDAGraph!")
