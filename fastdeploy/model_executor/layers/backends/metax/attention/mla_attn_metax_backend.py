@@ -141,8 +141,11 @@ class MetaxMLAAttentionBackend(AttentionBackend):
         self.flash_attn_func = flash_attn_unpadded_func
         self.flash_attn_kwargs = {"softmax_scale": self.attn_softmax_scale}
 
+    @paddle.no_grad()
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attention metadata hence all layers in the forward pass can reuse it."""
+        paddle.device.empty_cache()
+
         metadata = MLAAttentionMetadata()
         metadata.max_partition_size = 32768
         metadata.encoder_max_partition_size = self.max_seq_len
@@ -202,8 +205,6 @@ class MetaxMLAAttentionBackend(AttentionBackend):
         self.seq_lens_this_time_min = min(self.seq_lens_this_time)
         self.seq_lens = seq_lens_decoder + seq_lens_this_time
         self.block_tables = forward_meta.block_tables[non_zero_index]
-
-        paddle.device.empty_cache()
 
     def get_attntion_meta(self) -> AttentionMetadata:
         """get_attntion_meta"""
@@ -290,6 +291,8 @@ class MetaxMLAAttentionBackend(AttentionBackend):
         """
         Prefill阶段的前向传播
         """
+        paddle.device.empty_cache()
+
         metadata = self.attention_metadata
 
         latent_cache = forward_meta.caches[layer.layer_id] if hasattr(forward_meta, "caches") else None
@@ -364,6 +367,7 @@ class MetaxMLAAttentionBackend(AttentionBackend):
 
         return fmha_out
 
+    @paddle.no_grad()
     def forward_mixed(
         self,
         q: paddle.Tensor,

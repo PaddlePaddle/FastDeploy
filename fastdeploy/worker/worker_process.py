@@ -937,7 +937,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     logger.info(f"- Dynamic load weight: {load_config.dynamic_load_weight}")
     logger.info(f"- Load strategy: {load_config.load_strategy}")
 
-    if not current_platform.is_cuda() and not current_platform.is_xpu():
+    if not (current_platform.is_cuda() or current_platform.is_xpu() or current_platform.is_maca()):
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
     if structured_outputs_config.guided_decoding_backend != "off":
