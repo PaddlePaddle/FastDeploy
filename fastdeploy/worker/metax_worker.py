@@ -103,12 +103,12 @@ class MetaxWorker(WorkerBase):
             Gb = 1024**3
 
             local_rank = self.local_rank % self.max_chips_per_node
-            paddle.device.cuda.reset_max_memory_reserved(local_rank)
-            paddle.device.cuda.reset_max_memory_allocated(local_rank)
+            paddle.device.reset_max_memory_reserved(local_rank)
+            paddle.device.reset_max_memory_allocated(local_rank)
             # max memory for Allocator
-            paddle_reserved_mem_before_run = paddle.device.cuda.max_memory_reserved(local_rank)
+            paddle_reserved_mem_before_run = paddle.device.max_memory_reserved(local_rank)
             # max memory for Tensor
-            paddle_allocated_mem_before_run = paddle.device.cuda.max_memory_allocated(local_rank)  # not reserved
+            paddle_allocated_mem_before_run = paddle.device.max_memory_allocated(local_rank)  # not reserved
 
             device_id = int(self.device_ids[local_rank])
             if os.getenv("MACA_VISIBLE_DEVICES") is not None:
@@ -132,13 +132,13 @@ class MetaxWorker(WorkerBase):
             self.model_runner.profile_run()
 
             # 3. Statistical memory information
-            paddle_reserved_mem_after_run = paddle.device.cuda.max_memory_reserved(local_rank)
-            paddle_allocated_mem_after_run = paddle.device.cuda.max_memory_allocated(local_rank)
+            paddle_reserved_mem_after_run = paddle.device.max_memory_reserved(local_rank)
+            paddle_allocated_mem_after_run = paddle.device.max_memory_allocated(local_rank)
 
             model_block_memory_used = self.cal_theortical_kvcache()
             paddle_peak_increase = paddle_reserved_mem_after_run - paddle_allocated_mem_before_run
 
-            paddle.device.cuda.empty_cache()
+            paddle.device.empty_cache()
 
             info = pymxsml.mxSmlGetMemoryInfo(device_id)
             after_run_meminfo_total = info.vramTotal * 1024
@@ -146,8 +146,10 @@ class MetaxWorker(WorkerBase):
             after_run_meminfo_free = after_run_meminfo_total - after_run_meminfo_used
 
             available_kv_cache_memory = (
-                after_run_meminfo_free - paddle_peak_increase
-            ) * self.cache_config.gpu_memory_utilization
+                after_run_meminfo_total * self.cache_config.gpu_memory_utilization
+                - after_run_meminfo_used
+                - paddle_peak_increase
+            )
             available_kv_cache_memory += model_block_memory_used * self.cache_config.total_block_num
 
             end_time = time.perf_counter()
