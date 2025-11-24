@@ -436,6 +436,129 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
         self.assertEqual(len(outputs["grid_thw"]), 1)
         self.assertEqual(len(outputs["image_type_ids"]), 2)
 
+    def test_prompt_token_ids2outputs_add_image_token_len_mismatch(self):
+        test_prompt_token_ids = [101, 1002, 1001, 1001, 1001, 1003, 102]
+        mock_img = MagicMock()
+        mock_img.height = 224
+        mock_img.width = 224
+        mock_img.convert.return_value = mock_img
+        request = {
+            "prompt_token_ids": test_prompt_token_ids,
+            "messages": [
+                {"role": "user", "content": [{"type": "image_url", "image_url": mock_img, "uuid": "img_uuid"}]}
+            ],
+        }
+        self.data_processor.extract_mm_items.return_value = (
+            [mock_img],
+            [],
+            ["img_uuid"],
+            [],
+            None,
+            [],
+            [{"type": "image", "data": mock_img}],
+        )
+        patches_h, patches_w = 8, 8
+        self.data_processor.image_preprocessor.get_smarted_resize.return_value = (None, (patches_h, patches_w))
+        mock_preprocess = {
+            "pixel_values": np.random.randn(1, patches_h, patches_w, 3),
+            "image_grid_thw": np.array([[patches_h, patches_w]]),
+        }
+        self.data_processor.image_preprocessor.preprocess.return_value = mock_preprocess
+        with self.assertRaises(ValueError) as ctx:
+            self.data_processor.prompt_token_ids2outputs(request)
+        self.assertIn("image tokens num not match the size", str(ctx.exception))
+
+    def test_prompt_token_ids2outputs_add_processed_image_token_len_mismatch(self):
+        test_prompt_token_ids = [101, 1002, 1001, 1001, 1003, 102]
+        spatial_conv_size = self.data_processor.spatial_conv_size
+        num_tokens = 4
+        mock_img_data = np.random.randn(num_tokens * (spatial_conv_size**2), 28, 28)
+        mock_img_cache = (mock_img_data, {"thw": (1, 8, 8)})
+        request = {
+            "prompt_token_ids": test_prompt_token_ids,
+            "messages": [
+                {"role": "user", "content": [{"type": "image_url", "image_url": mock_img_cache, "uuid": "img_uuid"}]}
+            ],
+        }
+        self.data_processor.extract_mm_items.return_value = (
+            [mock_img_cache],
+            [],
+            ["img_uuid"],
+            [],
+            None,
+            [],
+            [{"type": "image", "data": mock_img_cache}],
+        )
+        with self.assertRaises(ValueError) as ctx:
+            self.data_processor.prompt_token_ids2outputs(request)
+        self.assertIn("image tokens num not match the size", str(ctx.exception))
+
+    def test_prompt_token_ids2outputs_add_video_token_len_mismatch(self):
+        test_prompt_token_ids = [101, 1004, 1001, 1001, 1005, 102]
+        mock_frame1 = MagicMock()
+        mock_frame1.height = 224
+        mock_frame1.width = 224
+        mock_frame1.convert.return_value = mock_frame1
+        mock_frame2 = MagicMock()
+        mock_frame2.height = 224
+        mock_frame2.width = 224
+        mock_frame2.convert.return_value = mock_frame2
+        frames = [mock_frame1, mock_frame2]
+        request = {
+            "prompt_token_ids": test_prompt_token_ids,
+            "messages": [
+                {"role": "user", "content": [{"type": "video_url", "video_url": frames, "uuid": "vid_uuid"}]}
+            ],
+        }
+        self.data_processor.extract_mm_items.return_value = (
+            [],
+            [frames],
+            [],
+            ["vid_uuid"],
+            None,
+            [],
+            [{"type": "video", "data": frames}],
+        )
+        self.data_processor._load_and_process_video = MagicMock(return_value=frames)
+        patches_h, patches_w = 8, 8
+        self.data_processor.image_preprocessor.get_smarted_resize.return_value = (None, (patches_h, patches_w))
+        mock_preprocess = {
+            "pixel_values_videos": np.random.randn(2, patches_h, patches_w, 3),
+            "video_grid_thw": np.array([[patches_h, patches_w]] * 2),
+        }
+        self.data_processor.image_preprocessor.preprocess.return_value = mock_preprocess
+        with self.assertRaises(ValueError) as ctx:
+            self.data_processor.prompt_token_ids2outputs(request)
+        self.assertIn("video tokens num not match the size", str(ctx.exception))
+
+    def test_prompt_token_ids2outputs_add_processed_video_token_len_mismatch(self):
+        test_prompt_token_ids = [101, 1004, 1001, 1005, 102]
+        t, h, w = 2, 8, 8
+        spatial_conv_size = self.data_processor.spatial_conv_size
+        temporal_conv_size = self.data_processor.temporal_conv_size
+
+        num_tokens = 4
+        mock_frames_data = np.random.randn(num_tokens * spatial_conv_size**2 * temporal_conv_size, 28, 28)
+        mock_frames_cache = (mock_frames_data, {"thw": (t, h, w)})
+        request = {
+            "prompt_token_ids": test_prompt_token_ids,
+            "messages": [
+                {"role": "user", "content": [{"type": "video", "data": mock_frames_cache, "uuid": "vid_uuid"}]}
+            ],
+        }
+        self.data_processor.extract_mm_items.return_value = (
+            [],
+            [mock_frames_cache],
+            [],
+            ["vid_uuid"],
+            None,
+            [],
+            [{"type": "video", "data": mock_frames_cache}],
+        )
+        with self.assertRaises(ValueError) as ctx:
+            self.data_processor.prompt_token_ids2outputs(request)
+        self.assertIn("video tokens num not match the size", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
