@@ -523,7 +523,7 @@ class EngineArgs:
                         f"= {expected_ports}, but got {len(self.rdma_comm_ports)}."
                     )
 
-        if not current_platform.is_cuda() and not current_platform.is_xpu():
+        if not (current_platform.is_cuda() or current_platform.is_xpu() or current_platform.is_maca()):
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if self.guided_decoding_backend != "off":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
