@@ -49,7 +49,6 @@ class ExistTaskStatus:
     REFUSE = 2
 
 
-@dataclass
 class RearrangeExpertStatus(Enum):
     FREE = 0
     DOING = 1

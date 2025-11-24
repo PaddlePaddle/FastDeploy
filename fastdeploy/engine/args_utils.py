@@ -1137,7 +1137,7 @@ class EngineArgs:
 
     def create_scheduler_config(self) -> SchedulerConfig:
         """
-        Create and retuan a SchedulerConfig object based on the current settings.
+        Create and return a SchedulerConfig object based on the current settings.
         """
         prefix = "scheduler_"
         prefix_len = len(prefix)

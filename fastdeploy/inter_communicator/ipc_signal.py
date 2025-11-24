@@ -87,9 +87,11 @@ class IPCSignal:
                     llm_logger.warning(f"ShareMemory: {name} already exists, delete it")
                     SharedMemory(name=name, create=False).unlink()
                 self.shm = SharedMemory(create=True, size=shm_size, name=name)
+                self.value = None
             else:
                 llm_logger.debug(f"attaching ipc signal: {name}")
                 self.shm = SharedMemory(name=name)
+                self.value = None
         else:
             assert isinstance(array, np.ndarray), "Input must be a numpy array"
             assert dtype == array.dtype, "Specified dtype must match array dtype"

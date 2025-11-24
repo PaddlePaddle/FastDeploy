@@ -1153,6 +1153,9 @@ class EPLBConfig:
         self,
         args,
     ):
+        if args is None:
+            args = {}
+
         # enable eplb
         self.enable_eplb: bool = False
         # redundant experts num

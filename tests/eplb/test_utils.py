@@ -340,7 +340,6 @@ class TestInitEplbSignals(unittest.TestCase):
         # Verify that suffix is used correctly
         for idx, call in enumerate(mock_ipc_signal.call_args_list):
             args, kwargs = call
-            print(kwargs.get("suffix"))
             self.assertEqual(kwargs.get("suffix"), target_suffix[idx])
 
     def test_main_function(self):

@@ -593,9 +593,7 @@ class EngineClient:
         Returns:
             tuple: response body, status code
         """
-        content, status_code = None, HTTPStatus.OK
         eplb_config = self.config.eplb_config
-
         if not eplb_config.enable_eplb:
             content = {"code": 1, "msg": "redundant expert is disabled"}
             status_code = HTTPStatus.BAD_REQUEST
@@ -665,10 +663,10 @@ class EngineClient:
                 status_code = HTTPStatus.OK
             return content, status_code
         elif action == "update_weight_from_tensor":
-            if self.cfg.scheduler_config.splitwise_role != "prefill" and content is None:
+            if self.config.scheduler_config.splitwise_role != "prefill" and content is None:
                 content = {
                     "code": 1,
-                    "msg": f"actual role {self.cfg.scheduler_config.splitwise_role}, expect role prefill",
+                    "msg": f"actual role {self.config.scheduler_config.splitwise_role}, expect role prefill",
                 }
                 status_code = HTTPStatus.BAD_REQUEST
             if self.rearrange_experts_signal.value[0] != RearrangeExpertStatus.LOAD_SUCC.value and content is None:
@@ -697,9 +695,7 @@ class EngineClient:
         Returns:
             tuple: response body, status code
         """
-        content, status_code = None, HTTPStatus.OK
         eplb_config = self.config.eplb_config
-
         if not eplb_config.enable_eplb:
             content = {"code": 1, "msg": "redundant expert is disabled"}
             status_code = HTTPStatus.BAD_REQUEST
@@ -769,7 +765,8 @@ class EngineClient:
             status = "unknown"
             try:
                 status = RearrangeExpertStatus(self.rearrange_experts_signal.value[0]).name
-            except:
+            except Exception:
+                # Ignore errors if status cannot be determined; default to "unknown"
                 pass
             content = {"code": 0, "msg": "ok", "status": status}
             get_workloads = False if "check_get_workloads" not in request_dict else request_dict["check_get_workloads"]

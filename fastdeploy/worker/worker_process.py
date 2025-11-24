@@ -354,7 +354,7 @@ class PaddleDisWorkerProc:
             return
 
         rearrange_time = time.time()
-        # 获取专家负载
+        # Get expert load
         if self.local_experts_token_stats_array.value is not None and (
             int(rearrange_time) - self.last_dump_expert_workload_ts
             > self.eplb_config.redundant_expert_dump_workload_interval
@@ -374,7 +374,7 @@ class PaddleDisWorkerProc:
         elif self.local_experts_token_stats_array.value is None:
             logger.warning("redundant_expert: local_experts_token_stats not init")
 
-        # 所有DP同步更新权重
+        # All DP synchronously update weights
         broadcast_value = 0
         if tp_rank == 0 and self.signal_update_weight_from_tensor_array.value[0] == 1:
             logger.info("redundant_expert: update_weight_from_tensor broadcast signal")

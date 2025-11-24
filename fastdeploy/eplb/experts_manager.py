@@ -155,9 +155,6 @@ class RedundantExpertManager:
             strategy {self.eplb_config.redundant_expert_eplb_strategy}"
         )
 
-    # def get_unique_name(self, name):
-    #     return f"{envs.get_unique_name(name + '_dprank_' + str(self.rank))}"
-
     def get_ep_rank_to_expert_id_list(self):
         """
         get_ep_rank_to_expert_id_list
