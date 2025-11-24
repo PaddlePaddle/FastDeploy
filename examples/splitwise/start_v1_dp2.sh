@@ -45,7 +45,7 @@ MODEL_NAME="/root/paddlejob/workspace/env_run/liyonghua/models/Ernie/ERNIE-4.5-0
 DATA_PARALLEL_SIZE=2
 TENSOR_PARALLEL_SIZE=1
 NUM_GPUS=$(($DATA_PARALLEL_SIZE * $TENSOR_PARALLEL_SIZE))
-LOG_DATE=debug_pd_dp # $(date +%Y%m%d_%H%M%S)
+LOG_DATE=$(date +%Y%m%d_%H%M%S)
 
 # fastdeploy environment
 export FD_DEBUG=1
@@ -65,7 +65,6 @@ fi
 
 # clean up proxy and files
 unset http_proxy && unset https_proxy
-rm -rf core.*
 
 # start router
 ROUTER_PORT=$(bash $SCRIPT_DIR/get_free_ports.sh 1)
@@ -166,7 +165,7 @@ wait_for_health ${D_SERVER_PORTS}
 
 
 # send request
-echo "--- Request Check ---"
+echo "------ Request Check ------"
 sleep 10  # make sure server is registered to router
 curl -X POST "http://0.0.0.0:${ROUTER_PORT}/v1/chat/completions" \
 -H "Content-Type: application/json" \
