@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Test splitwise deployment which uses local_scheduler + router,
-# and ENABLE_V1_KVCACHE_SCHEDULER is 1
+# Test splitwise deployment: use local_scheduler + router,
+# set ENABLE_V1_KVCACHE_SCHEDULER is 1, use rdma to transfer cache.
 
 import json
 import os
@@ -37,6 +37,7 @@ from utils.serving_utils import (
 # Read ports from environment variables; use default values if not set
 FD_CONNECTOR_PORT = int(os.getenv("FD_CONNECTOR_PORT", 8433))
 FD_ROUTER_PORT = int(os.getenv("FD_ROUTER_PORT", 8533))
+FD_RDMA_PORT = int(os.getenv("FD_RDMA_PORT", 8623))
 
 # List of ports to clean before and after tests
 PORTS_TO_CLEAN = [
@@ -45,11 +46,13 @@ PORTS_TO_CLEAN = [
     FD_METRICS_PORT,
     FD_CACHE_QUEUE_PORT,
     FD_CONNECTOR_PORT,
+    FD_RDMA_PORT,
     FD_API_PORT + 1,
     FD_ENGINE_QUEUE_PORT + 1,
     FD_METRICS_PORT + 1,
     FD_CACHE_QUEUE_PORT + 1,
     FD_CONNECTOR_PORT + 1,
+    FD_RDMA_PORT + 1,
     FD_ROUTER_PORT,
 ]
 
@@ -81,6 +84,13 @@ def setup_and_run_server():
         model_path = "baidu/ERNIE-4.5-0.3B-Paddle"
     print(f"model_path: {model_path}")
 
+    # get rdma nics
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    shell_path = os.path.join(current_dir, "utils/get_rdma_nics.sh")
+    output = subprocess.check_output(["bash", shell_path, "gpu"], text=True)
+    _, rdma_nics = output.split("=")
+    print(f"shell_path: {shell_path}, rdma_nics: {rdma_nics}")
+
     # router
     print("start router...")
     env_router = os.environ.copy()
@@ -109,9 +119,10 @@ def setup_and_run_server():
     print("start prefill...")
     env_prefill = os.environ.copy()
     env_prefill["CUDA_VISIBLE_DEVICES"] = "0"
-    env_prefill["ENABLE_V1_KVCACHE_SCHEDULER"] = "1"
     env_prefill["FD_LOG_DIR"] = "log_prefill"
-    prefill_log_path = "server.log"
+    env_prefill["KVCACHE_RDMA_NICS"] = rdma_nics
+
+    prefill_log_path = "prefill.log"
     prefill_cmd = [
         sys.executable,
         "-m",
@@ -120,8 +131,6 @@ def setup_and_run_server():
         model_path,
         "--port",
         str(FD_API_PORT),
-        "--tensor-parallel-size",
-        "1",
         "--engine-worker-queue-port",
         str(FD_ENGINE_QUEUE_PORT),
         "--metrics-port",
@@ -130,14 +139,12 @@ def setup_and_run_server():
         str(FD_CACHE_QUEUE_PORT),
         "--max-model-len",
         "8192",
-        "--max-num-seqs",
-        "20",
-        "--quantization",
-        "wint8",
         "--splitwise-role",
         "prefill",
         "--cache-transfer-protocol",
-        "ipc",
+        "rdma",
+        "--rdma-comm-ports",
+        str(FD_RDMA_PORT),
         "--pd-comm-port",
         str(FD_CONNECTOR_PORT),
         "--router",
@@ -159,9 +166,10 @@ def setup_and_run_server():
     print("start decode...")
     env_decode = os.environ.copy()
     env_decode["CUDA_VISIBLE_DEVICES"] = "1"
-    env_decode["ENABLE_V1_KVCACHE_SCHEDULER"] = "1"
     env_decode["FD_LOG_DIR"] = "log_decode"
-    decode_log_path = "decode_server.log"
+    env_decode["KVCACHE_RDMA_NICS"] = rdma_nics
+
+    decode_log_path = "decode.log"
     decode_cmd = [
         sys.executable,
         "-m",
@@ -170,8 +178,6 @@ def setup_and_run_server():
         model_path,
         "--port",
         str(FD_API_PORT + 1),
-        "--tensor-parallel-size",
-        "1",
         "--engine-worker-queue-port",
         str(FD_ENGINE_QUEUE_PORT + 1),
         "--metrics-port",
@@ -180,14 +186,12 @@ def setup_and_run_server():
         str(FD_CACHE_QUEUE_PORT + 1),
         "--max-model-len",
         "8192",
-        "--max-num-seqs",
-        "20",
-        "--quantization",
-        "wint8",
         "--splitwise-role",
         "decode",
         "--cache-transfer-protocol",
-        "ipc",
+        "rdma",
+        "--rdma-comm-ports",
+        str(FD_RDMA_PORT + 1),
         "--pd-comm-port",
         str(FD_CONNECTOR_PORT + 1),
         "--router",
@@ -216,7 +220,7 @@ def setup_and_run_server():
         try:
             os.killpg(process_prefill.pid, signal.SIGTERM)
             os.killpg(process_decode.pid, signal.SIGTERM)
-            clean_ports()
+            clean_ports(PORTS_TO_CLEAN)
         except Exception as e:
             print(f"Failed to kill process group: {e}")
         raise RuntimeError(f"API server did not start on port {FD_API_PORT}")

@@ -105,6 +105,7 @@ jobs:
           FD_CACHE_QUEUE_PORT=$((8098 + DEVICE_PORT * 100))
           FD_ROUTER_PORT=$((8048 + DEVICE_PORT * 100))
           FD_CONNECTOR_PORT=$((8038 + DEVICE_PORT * 100))
+          FD_RDMA_PORT=$((9008 + DEVICE_PORT * 100))
           echo "Test ENV Parameter:"
           echo "========================================================="
           echo "FLASK_PORT=${FLASK_PORT}"
@@ -114,6 +115,7 @@ jobs:
           echo "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}"
           echo "FD_ROUTER_PORT=${FD_ROUTER_PORT}"
           echo "FD_CONNECTOR_PORT=${FD_CONNECTOR_PORT}"
+          echo "FD_RDMA_PORT=${FD_RDMA_PORT}"
           echo "DEVICES=${DEVICES}"
           echo "========================================================="
 
@@ -165,6 +167,7 @@ jobs:
           -e "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}" \
           -e "FD_ROUTER_PORT=${FD_ROUTER_PORT}" \
           -e "FD_CONNECTOR_PORT=${FD_CONNECTOR_PORT}" \
+          -e "FD_RDMA_PORT=${FD_RDMA_PORT}" \
           -e TZ="Asia/Shanghai" \
           -e "fd_wheel_url=${fd_wheel_url}" \
           -e "BASE_REF=${BASE_REF}" \
