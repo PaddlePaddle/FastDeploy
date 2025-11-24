@@ -104,6 +104,7 @@ class MTPProposer(Proposer):
         self.model_config.num_hidden_layers = 1
         self.model_config.model = self.speculative_config.model
         self.model_config.pretrained_config.prefix_name = "ernie.mtp_block"
+        self.model_config.prefix_layer_name = "mtp_block"
         if self.speculative_config.quantization != "":
             self.model_config.quantization = self.speculative_config.quantization
         self.model_config.start_layer_index = self.num_main_model_layers
@@ -354,7 +355,7 @@ class MTPProposer(Proposer):
             self.target_model_inputs["decoder_tile_ids_per_batch"]
         )
         self.model_inputs["target_hidden_states"] = paddle.full(
-            [self.max_model_len * self.fd_config.max_prefill_batch, self.model_config.hidden_size], 0, dtype="bfloat16"
+            [self.fd_config.scheduler_config.max_chunk_len, self.model_config.hidden_size], 0, dtype="bfloat16"
         )
 
         tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
