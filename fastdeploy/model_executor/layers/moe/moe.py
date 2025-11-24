@@ -584,7 +584,7 @@ class FusedMoE(nn.Layer):
         """
         load_state_dict function.
         """
-        if self.is_quantized:
+        if self.is_quantized or self.fd_config.model_config.is_moe_quantized:
             if getattr(self.fd_config.quant_config, "is_permuted", True):
                 self.quant_method.process_prequanted_weights(self, state_dict, is_rearrange)
             else:
