@@ -67,6 +67,7 @@ else:
         share_external_data,
         speculate_schedule_cache,
         set_data_ipc,
+        reorder_split_prefill_and_decode,
     )
 
 from fastdeploy.model_executor.pre_and_post_process import (
@@ -1254,7 +1255,6 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_decoder"],
         )
 
-        self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
         # NOTE: (changwenbin) Initialized to max_num_seq '-1' before copying, marking illegal positions
         self.share_inputs["batch_id_per_token"][:] = -1
         self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
@@ -1270,6 +1270,13 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Initialize forward meta data
         self.initialize_forward_meta()
+
+        # Reorder inputs to split prefill and decode tokens
+        if getattr(self.attn_backends[0].get_attention_meta(), "enable_ids_reorder", False):
+            ids_remove_padding, batch_id_per_token, num_decode = reorder_split_prefill_and_decode(
+                ids_remove_padding, batch_id_per_token, cu_seqlens_q, self.share_inputs["prompt_lens"]
+            )
+        self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
         self.forward_meta.batch_id_per_token.copy_(batch_id_per_token, False)
 
         # Get sampling metadata

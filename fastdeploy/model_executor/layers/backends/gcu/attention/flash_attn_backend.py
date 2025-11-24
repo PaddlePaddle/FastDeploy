@@ -202,8 +202,8 @@ class GCUFlashAttnBackend(AttentionBackend):
         self.max_seqlen_q = self.max_seq_len_this_time
         self.max_seqlen_k = np.max(cache_lens)
 
-    def get_attntion_meta(self):
-        """get_attntion_meta"""
+    def get_attention_meta(self):
+        """get_attention_meta"""
         return self.attention_metadata
 
     def get_kv_cache_shape(

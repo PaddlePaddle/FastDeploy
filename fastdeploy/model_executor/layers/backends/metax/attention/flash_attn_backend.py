@@ -218,8 +218,8 @@ class FlashAttentionBackend(AttentionBackend):
         self.seq_lens_dec = forward_meta.seq_lens_decoder[self.batch_ids_decode, 0]
         self.block_table_dec = forward_meta.block_tables[self.batch_ids_decode, :]
 
-    def get_attntion_meta(self) -> AttentionMetadata:
-        """get_attntion_meta"""
+    def get_attention_meta(self) -> AttentionMetadata:
+        """get_attention_meta"""
         return self.attention_metadata
 
     def get_kv_cache_shape(

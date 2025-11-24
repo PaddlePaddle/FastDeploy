@@ -104,8 +104,8 @@ class BlockAttentionBackend(AttentionBackend):
         metadata.attn_mask = forward_meta.attn_mask
         self.attention_metadata = metadata
 
-    def get_attntion_meta(self):
-        """get_attntion_meta"""
+    def get_attention_meta(self):
+        """get_attention_meta"""
         return self.attention_metadata
 
     def get_kv_cache_shape(

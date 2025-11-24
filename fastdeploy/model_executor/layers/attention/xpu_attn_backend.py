@@ -122,8 +122,8 @@ class XPUAttentionBackend(AttentionBackend):
             metadata.kv_signal_metadata = open_shm_and_get_meta_signal(self.rank, self.keep_pd_step_flag)
         self.attention_metadata: AttentionMetadata = metadata
 
-    def get_attntion_meta(self) -> AttentionMetadata:
-        """get_attntion_meta"""
+    def get_attention_meta(self) -> AttentionMetadata:
+        """get_attention_meta"""
         return self.attention_metadata
 
     def get_kv_cache_shape(

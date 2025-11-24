@@ -387,6 +387,12 @@ std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor& input_ids,
                                              const paddle::Tensor& token_num,
                                              const paddle::Tensor& seq_len);
 
+std::vector<paddle::Tensor> ReorderSplitPrefillAndDecode(
+    const paddle::Tensor& x_remove_padding,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& prompt_lens);
+
 void SetValueByFlagsAndIdx(const paddle::Tensor& pre_ids_all,
                            const paddle::Tensor& input_ids,
                            const paddle::Tensor& seq_lens_this_time,
@@ -1329,6 +1335,14 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
    * get_padding_offset
    */
   m.def("get_padding_offset", &GetPaddingOffset, "get_padding_offset function");
+
+  /**
+   * reorder_split_prefill_and_decode.cu
+   * reorder_split_prefill_and_decode
+   */
+  m.def("reorder_split_prefill_and_decode",
+        &ReorderSplitPrefillAndDecode,
+        "reorder_split_prefill_and_decode function");
 
   /**
    * get_padding_offset.cu
