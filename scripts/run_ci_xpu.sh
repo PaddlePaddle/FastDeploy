@@ -15,6 +15,8 @@ function stop_processes() {
         lsof -t -i :${port} | xargs kill -9 || true
     done
     netstat -tunlp 2>/dev/null | grep $((8190 + XPU_ID * 100)) | awk '{print $NF}' | awk -F'/' '{print $1}' | xargs -r kill -9
+    netstat -tunlp 2>/dev/null | grep $((8190 + XPU_ID * 100)) | awk '{print $(NF-1)}' | cut -d/ -f1 | grep -E '^[0-9]+$' | xargs -r kill -9
+    
 }
 
 stop_processes >kill.log 2>&1
