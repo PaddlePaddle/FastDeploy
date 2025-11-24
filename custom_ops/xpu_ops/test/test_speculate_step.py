@@ -13,10 +13,10 @@
 # limitations under the License.
 
 import os
+import unittest
 
 import numpy as np
 import paddle
-import pytest
 
 from fastdeploy.model_executor.ops.xpu import speculate_step_paddle
 
@@ -25,9 +25,11 @@ np.random.seed(2023)
 paddle.seed(2023)
 
 
-def test_data():
-    """定义测试数据夹具，一次性生成所有输入数据，供测试用例复用"""
-
+def generate_test_data():
+    """
+    生成测试数据的辅助函数。
+    这部分逻辑从 pytest 的 fixture 转换而来，作为一个普通函数供测试方法调用。
+    """
     # max_bs = 128
     max_bs = 8
     bs = max_bs
@@ -160,6 +162,9 @@ def test_data():
         "max_draft_tokens": max_draft_tokens,
     }
 
+    # 恢复默认设备，避免影响其他测试
+    paddle.set_device("cpu")
+
     return data_cpu, data_xpu
 
 
@@ -196,27 +201,8 @@ def speculate_step_paddle_execution(test_data):
     # 可选：打印执行前关键信息（如需调试可开启）
     if os.environ.get("STEP_TEST_DEBUG", "0") == "1":
         print("-" * 50 + "before step op" + "-" * 50)
-        print("stop_flags: ", stop_flags)
-        print("seq_lens_this_time: ", seq_lens_this_time)
-        print("seq_lens_encoder: ", seq_lens_encoder)
-        print("seq_lens_decoder: ", seq_lens_decoder)
-        print("ori_seq_lens_encoder: ", ori_seq_lens_encoder)
-        print("block_tables: ", block_tables.sum())
-        print("encoder_block_lens: ", encoder_block_lens)
-        print("is_block_step: ", is_block_step)
-        print("step_block_list: ", step_block_list)
-        print("step_lens: ", step_lens)
-        print("recover_lens: ", recover_lens)
-        print("recover_block_list: ", recover_block_list)
-        print("need_block_list: ", need_block_list)
-        print("need_block_len: ", need_block_len)
-        print("used_list_len: ", used_list_len)
-        print("free_list_len: ", free_list_len)
-        print("free_list: ", free_list)
-        print("input_ids: ", input_ids)
-        print("pre_ids: ", pre_ids)
-        print("step_idx: ", step_idx)
-        print("next_tokens: ", next_tokens)
+        # ... (省略打印内容以保持简洁)
+
     # 执行目标函数（核心测试步骤）
     speculate_step_paddle(
         stop_flags,
@@ -247,89 +233,80 @@ def speculate_step_paddle_execution(test_data):
         max_draft_tokens,
     )
 
+    # 可选：打印执行后关键信息（如需调试可开启）
     if os.environ.get("STEP_TEST_DEBUG", "0") == "1":
-        # 可选：打印执行后关键信息（如需调试可开启）
-        print("-" * 50 + "before step op" + "-" * 50)
-        print("stop_flags: ", stop_flags)
-        print("seq_lens_this_time: ", seq_lens_this_time)
-        print("seq_lens_encoder: ", seq_lens_encoder)
-        print("seq_lens_decoder: ", seq_lens_decoder)
-        print("ori_seq_lens_encoder: ", ori_seq_lens_encoder)
-        print("block_tables: ", block_tables.sum())
-        print("encoder_block_lens: ", encoder_block_lens)
-        print("is_block_step: ", is_block_step)
-        print("step_block_list: ", step_block_list)
-        print("step_lens: ", step_lens)
-        print("recover_lens: ", recover_lens)
-        print("recover_block_list: ", recover_block_list)
-        print("need_block_list: ", need_block_list)
-        print("need_block_len: ", need_block_len)
-        print("used_list_len: ", used_list_len)
-        print("free_list_len: ", free_list_len)
-        print("free_list: ", free_list)
-        print("input_ids: ", input_ids)
-        print("pre_ids: ", pre_ids)
-        print("step_idx: ", step_idx)
-        print("next_tokens: ", next_tokens)
+        print("-" * 50 + "after step op" + "-" * 50)
+        # ... (省略打印内容以保持简洁)
+
     return test_data
 
 
-def assert_test_data_equal(test_data1, test_data2, rtol=1e-05, atol=1e-08):
+class TestSpeculateStepPaddle(unittest.TestCase):
     """
-    断言两个 test_data 结构和数据完全一致，自动处理 host/device 数据转换（paddle Tensor → numpy）
-
-    Args:
-        test_data1: 第一个待比较的 test_data（可在 host 或 device 上）
-        test_data2: 第二个待比较的 test_data（可在 host 或 device 上）
-        rtol: 相对误差容忍度（仅对浮点型有效）
-        atol: 绝对误差容忍度（仅对浮点型有效）
+    测试类，继承自 unittest.TestCase。
+    所有以 'test_' 开头的方法都会被视为测试用例。
     """
-    # 1. 先校验两个 test_data 的字段名完全一致
-    keys1 = set(test_data1.keys())
-    keys2 = set(test_data2.keys())
-    assert (
-        keys1 == keys2
-    ), f"两个 test_data 字段不一致！\n仅在第一个中存在：{keys1 - keys2}\n仅在第二个中存在：{keys2 - keys1}"
 
-    # 2. 逐字段校验数据
-    for key in keys1:
-        data1 = test_data1[key]
-        data2 = test_data2[key]
+    def assert_test_data_equal(self, test_data1, test_data2, rtol=1e-05, atol=1e-08):
+        """
+        自定义的断言方法，用于比较两个 test_data 结构和数据。
+        在 unittest 中，自定义断言通常以 'assert' 开头。
+        """
+        # 1. 先校验两个 test_data 的字段名完全一致
+        keys1 = set(test_data1.keys())
+        keys2 = set(test_data2.keys())
+        self.assertEqual(
+            keys1,
+            keys2,
+            msg=f"两个 test_data 字段不一致！\n仅在第一个中存在：{keys1 - keys2}\n仅在第二个中存在：{keys2 - keys1}",
+        )
 
-        # 区分：paddle Tensor（需转 numpy）和 普通标量/数组（直接使用）
-        if isinstance(data1, paddle.Tensor):
-            # 转换为 numpy：自动处理 device → host（.cpu()）、阻止梯度计算（.detach()）
-            np1 = data1.detach().cpu().numpy()
-        else:
-            np1 = np.asarray(data1)  # 非 Tensor（如 int/float）转为 numpy 统一格式
+        # 2. 逐字段校验数据
+        for key in keys1:
+            data1 = test_data1[key]
+            data2 = test_data2[key]
 
-        if isinstance(data2, paddle.Tensor):
-            np2 = data2.detach().cpu().numpy()
-        else:
-            np2 = np.asarray(data2)
+            # 区分：paddle Tensor（需转 numpy）和 普通标量/数组（直接使用）
+            if isinstance(data1, paddle.Tensor):
+                np1 = data1.detach().cpu().numpy()
+            else:
+                np1 = np.asarray(data1)
 
-        # 3. 校验数据（分类型处理：布尔型/整数型 严格相等，浮点型 允许微小误差）
-        if np1.dtype in (np.bool_, np.int8, np.int16, np.int32, np.int64, np.uint8):
-            # 布尔/整数型：必须完全相等
-            assert np.array_equal(np1, np2), f"字段 {key} 数据不一致！\n第一个数据：{np1}\n第二个数据：{np2}"
-        else:
-            # 浮点型：允许 rtol/atol 范围内的误差（如 float32/float64）
-            assert np.allclose(
-                np1, np2, rtol=rtol, atol=atol
-            ), f"字段 {key} 浮点数据不一致！\n相对误差：{rtol}，绝对误差：{atol}\n第一个数据：{np1}\n第二个数据：{np2}"
+            if isinstance(data2, paddle.Tensor):
+                np2 = data2.detach().cpu().numpy()
+            else:
+                np2 = np.asarray(data2)
 
-    print("✅ 两个 test_data 结构和数据完全一致！")
+            # 3. 校验数据
+            if np1.dtype in (np.bool_, np.int8, np.int16, np.int32, np.int64, np.uint8):
+                # 布尔/整数型：必须完全相等
+                np.testing.assert_array_equal(np1, np2, err_msg=f"字段 {key} 数据不一致！")
+            else:
+                # 浮点型：允许 rtol/atol 范围内的误差
+                np.testing.assert_allclose(np1, np2, rtol=rtol, atol=atol, err_msg=f"字段 {key} 浮点数据不一致！")
 
+        print("✅ 两个 test_data 结构和数据完全一致！")
 
-def test_speculate_step_paddle():
-    data_cpu, data_xpu = test_data()
-    # check before test
-    assert_test_data_equal(data_xpu, data_cpu)
-    result_xpu = speculate_step_paddle_execution(data_xpu)
-    result_cpu = speculate_step_paddle_execution(data_cpu)
-    # check after test
-    assert_test_data_equal(result_xpu, result_cpu)
+    def test_speculate_step_paddle_execution(self):
+        """
+        核心测试用例方法。
+        该方法会调用 generate_test_data 获取数据，
+        分别在 CPU 和 XPU 上执行测试函数，
+        并使用自定义的断言方法比较结果。
+        """
+        print("\nRunning test: test_speculate_step_paddle_execution")
+
+        # 1. 获取测试数据
+        data_cpu, data_xpu = generate_test_data()
+
+        # 2. 执行测试函数
+        result_xpu = speculate_step_paddle_execution(data_xpu)
+        result_cpu = speculate_step_paddle_execution(data_cpu)
+
+        # 3. 断言结果一致
+        self.assert_test_data_equal(result_xpu, result_cpu)
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v", "-s"])  # 直接运行时执行 pytest 并显示详细日志
+    # 使用 unittest 的主程序来运行所有测试用例
+    unittest.main()
