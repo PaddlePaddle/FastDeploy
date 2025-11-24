@@ -123,7 +123,7 @@ class RedundantExpertManager:
         self.http_timeout = 1
         # 重置重排状态: 'done' -> 'free'
         self.rearrange_end_ts = 0
-        self.rearrange_reset_interval = 300
+        self.rearrange_reset_interval = 30
 
         self.tensor_infos = None
 
@@ -285,8 +285,8 @@ class RedundantExpertManager:
         eplb_strategy = self.eplb_config.redundant_expert_eplb_strategy
         if is_init:
             num_groups = 1
-            num_nodes = 2
-            num_gpus = 2 * 8
+            num_nodes = 8
+            num_gpus = 8 * 8
             eplb_strategy = ""
         # eplb
         rank_expert_list, logical_to_physical_map, expert_count = rebalance_experts(
@@ -446,7 +446,9 @@ class RedundantExpertManager:
         if not exist_fail and all_success:
             # prefill需要等待调度屏蔽
             if (
-                self.fd_config.splitwise_role == "decode"
+                self.fd_config.scheduler_config.splitwise_role == "mixed"
+                or self.fd_config.scheduler_config.splitwise_role == "decode"
+                or self.fd_config.scheduler_config.splitwise_role == "prefill"
                 or not self.eplb_config.redundant_expert_enable_schedule_cordon
             ):
                 self.logger.info("redundant_expert: allreduce_load_weight_result success, notify infer.py")
