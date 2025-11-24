@@ -23,7 +23,7 @@ import time
 import traceback
 import weakref
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import paddle
@@ -49,14 +49,9 @@ from fastdeploy.plugins.token_processor import load_token_processor_plugins
 from fastdeploy.router.utils import check_service_health
 from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
-from fastdeploy.utils import (
-    EngineError,
-    check_download_links,
-    envs,
-    get_logger,
-    init_bos_client,
-    llm_logger,
-)
+from fastdeploy.trace.constants import LoggingEventName
+from fastdeploy.trace.trace_logger import print as trace_print
+from fastdeploy.utils import EngineError, envs, get_logger, llm_logger
 
 try:
     TokenProcessor = load_token_processor_plugins()
@@ -160,8 +155,8 @@ class EngineService:
         self.insert_task_to_worker_thread.start()
         self.token_processor.tasks_queue = self.engine_worker_queue
         self.token_processor.run()
-        if self.cfg.scheduler_config.splitwise_role != "mixed":
-            self._process_splitwise_task()
+        if self.cfg.scheduler_config.splitwise_role == "decode":
+            self._decode_process_splitwise_requests()
 
         self._register_to_router()
 
@@ -270,10 +265,16 @@ class EngineService:
         """
         start queue service for engine worker communication
         """
-        address = (
-            self.cfg.master_ip,
-            int(self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]),
-        )
+
+        if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+            address = (
+                self.cfg.master_ip,
+                int(
+                    self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+                ),
+            )
+        else:
+            address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]}.sock"
 
         if start_queue and (self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0"):
             self.llm_logger.info(f"Starting engine worker queue server service at {address}")
@@ -284,15 +285,18 @@ class EngineService:
                 local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
             )
             # Dynamically updates the port value if an anonymous port is used
-            self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id] = str(
-                self.engine_worker_queue_server.get_server_port()
-            )
-            address = (
-                self.cfg.master_ip,
-                int(
-                    self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
-                ),
-            )
+            if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+                self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id] = (
+                    str(self.engine_worker_queue_server.get_server_port())
+                )
+                address = (
+                    self.cfg.master_ip,
+                    int(
+                        self.cfg.parallel_config.engine_worker_queue_port[
+                            self.cfg.parallel_config.local_data_parallel_id
+                        ]
+                    ),
+                )
 
             if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
                 self.cache_task_queue = EngineCacheQueue(
@@ -320,58 +324,17 @@ class EngineService:
             local_data_parallel_id=self.cfg.parallel_config.local_data_parallel_id,
         )
 
-    def insert_tasks(self, tasks: Union[List[Request], List[RequestOutput]], current_id=-1, allocated=False):
+    def insert_tasks(self, tasks: List[Request], current_id=-1):
         """
-        Insert tasks to engine.
+        Allocate resource and insert tasks to engine.
+        Used in v0_kvcache_scheduler.
         """
+        if not isinstance(tasks, list):
+            tasks = [tasks]
         for task in tasks:
             start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
 
-        # TODO 返回至 scheduler
-        if allocated:
-            current_tasks = []
-            for task in tasks:
-                cur_task_idx = self.resource_manager.req_dict[task.request_id]
-                del self.resource_manager.req_dict[task.request_id]
-                cur_task = self.resource_manager.tasks_list[cur_task_idx]
-                if envs.FD_ENABLE_INTERNAL_ADAPTER:
-                    if not task.outputs.token_ids:  # first token is eos in Prefill, just recycle resource and continue
-                        self.resource_manager.stop_flags[cur_task_idx] = True
-                        self.resource_manager.tasks_list[cur_task_idx] = None
-                        self.resource_manager._recycle_block_tables(cur_task)
-                        if task.request_id in self.token_processor.tokens_counter:
-                            del self.token_processor.tokens_counter[task.request_id]
-                        self.llm_logger.warning(f"{task.request_id} need not decode after first token")
-                        continue
-                cur_task.prompt_token_ids[0] = task.outputs.token_ids[0]
-                cur_task.num_cached_tokens = task.num_cached_tokens
-                if (
-                    self.cfg.speculative_config.method in ["mtp"]
-                    and self.cfg.scheduler_config.splitwise_role == "decode"
-                ):
-                    cur_task.draft_token_ids = copy.deepcopy(task.outputs.draft_token_ids)
-                if task.error_code != 200:
-                    self.resource_manager.stop_flags[cur_task_idx] = True
-                    self.resource_manager.tasks_list[cur_task_idx] = None
-                    self.resource_manager._recycle_block_tables(cur_task)
-                    if task.request_id in self.token_processor.tokens_counter:
-                        del self.token_processor.tokens_counter[task.request_id]
-                    self.scheduler.put_results([task])
-                    self.llm_logger.warning(
-                        f"{task.request_id} prefill failed with msg:{task.error_msg}, recycle resource."
-                    )
-                    continue
-                self.token_processor.tokens_counter[task.request_id] = 1
-                current_tasks.append(cur_task)
-            if current_tasks:
-                self.engine_worker_queue.put_tasks((current_tasks, self.resource_manager.real_bsz))
-                self.llm_logger.debug(f"put task to engine worker queue, task:{current_tasks}")
-            return True
-
         self.resource_manager.check_and_free_block_tables()
-
-        if not isinstance(tasks, list):
-            tasks = [tasks]
 
         need_delete_tasks = []
         for task in tasks:
@@ -396,7 +359,7 @@ class EngineService:
 
         for item in tasks:
             item.schedule_start_time = time.time()
-
+            trace_print(LoggingEventName.RESOURCE_ALLOCATE_START, item.request_id, getattr(item, "user", ""))
         available_batch = np.sum(self.resource_manager.stop_flags)
         if len(tasks) > available_batch:
             self.llm_logger.error(f"Inserting batch:{len(tasks)} exceeds the available batch:{available_batch}.")
@@ -425,19 +388,72 @@ class EngineService:
                     is_prefill = True
             self.token_processor.number_of_input_tokens += tasks[i].prompt_token_ids_len
 
-        self.split_connector.send_cache_infos(tasks, current_id)
+        if self.cfg.scheduler_config.splitwise_role == "prefill":
+            self.split_connector.send_cache_info_to_messager(tasks, current_id)
+        elif self.cfg.scheduler_config.splitwise_role == "decode":
+            self.split_connector.send_cache_info_to_prefill(tasks)
+
         if not is_decode:
             self.llm_logger.info(f"Tasks are sent to engine, req_ids={req_ids}")
             for task in tasks:
                 task.inference_start_time = time.time()
+                trace_print(LoggingEventName.RESOURCE_ALLOCATE_END, task.request_id, getattr(task, "user", ""))
+                trace_print(LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", ""))
+                trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
             if not is_prefill:
                 if not self.cfg.model_config.enable_mm:
                     self.update_requests_chunk_size(tasks)
                 else:
                     self.update_mm_requests_chunk_size(tasks)
             self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
-            if is_prefill and self.cfg.scheduler_config.name != "splitwise":
-                self.engine_worker_queue.available_prefill_instances.put(1)
+        return True
+
+    def _insert_prefilled_requests(self, request_outputs: List[RequestOutput]):
+        """
+        Decode insert prefilled requests into engine worker queue.
+        Used in v1_kvcache_scheduler.
+        Args:
+            request_outputs: a list of RequestOutput sent by prefill instance
+        """
+        to_infer_reqs = []
+        for req_out in request_outputs:
+            solt_idx = self.resource_manager.req_dict[req_out.request_id]
+            del self.resource_manager.req_dict[req_out.request_id]
+            cur_req = self.resource_manager.tasks_list[solt_idx]
+
+            if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                if not req_out.outputs.token_ids:  # first token is eos in Prefill, just recycle resource and continue
+                    self.resource_manager.stop_flags[solt_idx] = True
+                    self.resource_manager.tasks_list[solt_idx] = None
+                    self.resource_manager._recycle_block_tables(cur_req)
+                    if req_out.request_id in self.token_processor.tokens_counter:
+                        del self.token_processor.tokens_counter[req_out.request_id]
+                    self.llm_logger.warning(f"{req_out.request_id} need not decode after first token")
+                    continue
+
+            cur_req.prompt_token_ids[0] = req_out.outputs.token_ids[0]
+            cur_req.num_cached_tokens = req_out.num_cached_tokens
+            if self.cfg.speculative_config.method in ["mtp"] and self.cfg.scheduler_config.splitwise_role == "decode":
+                cur_req.draft_token_ids = copy.deepcopy(req_out.outputs.draft_token_ids)
+
+            if req_out.error_code != 200:
+                self.resource_manager.stop_flags[solt_idx] = True
+                self.resource_manager.tasks_list[solt_idx] = None
+                self.resource_manager._recycle_block_tables(cur_req)
+                if req_out.request_id in self.token_processor.tokens_counter:
+                    del self.token_processor.tokens_counter[req_out.request_id]
+                self.scheduler.put_results([req_out])
+                self.llm_logger.warning(
+                    f"{req_out.request_id} prefill failed with msg:{req_out.error_msg}, recycle resource."
+                )
+                continue
+
+            self.token_processor.tokens_counter[req_out.request_id] = 1
+            to_infer_reqs.append(cur_req)
+
+        if to_infer_reqs:
+            self.engine_worker_queue.put_tasks((to_infer_reqs, self.resource_manager.real_bsz))
+            self.llm_logger.debug(f"put requests to engine worker queue, task:{to_infer_reqs}")
         return True
 
     def task_is_finished(self, index):
@@ -623,12 +639,15 @@ class EngineService:
                     max_num_batched_tokens=self.cfg.scheduler_config.max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
-
+                for task in tasks:
+                    trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
                 if len(tasks) == 0:
                     time.sleep(0.001)
                     continue
-                if self.cfg.splitwise_version == "v2" and self.cfg.scheduler_config.splitwise_role == "decode":
-                    # the task in decode instance will processed in _process_splitwise_task thread
+                if self.cfg.scheduler_config.splitwise_role == "decode":
+                    # TODO: refine scheduler to remove this limitation
+                    # Decode will process and schedule the request sent by prefill to engine,
+                    # so the same request sent by the decode api server will be ignored
                     continue
 
                 llm_logger.debug(f"get tasks from scheduler: {tasks}")
@@ -675,7 +694,17 @@ class EngineService:
                     max_num_batched_tokens=max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
-                self.llm_logger.debug(f"get tasks from scheduler: {tasks}")
+                for task in tasks:
+                    trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
+
+                if self.cfg.scheduler_config.splitwise_role == "decode":
+                    # TODO: refine scheduler to remove this limitation
+                    # Decode will process and schedule the request sent by prefill to engine,
+                    # so the same request sent by the decode api server will be ignored
+                    is_fetching = False
+                    return
+
+                self.llm_logger.debug(f"get tasks from {type(self.scheduler)}: {tasks}")
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     need_delete_tasks = []
                     if envs.FD_OFFLINE_PERF_TEST_FOR_PD:
@@ -696,6 +725,7 @@ class EngineService:
                         for task in tasks:
                             # assure can allocate block ids in P
                             while not self.resource_manager.preallocate_resource_in_p(task):
+                                self.llm_logger.info("wait for preallocate_resource_in_p")
                                 time.sleep(0.005)
                             self.llm_logger.info(f"ask D resource for req_id: {task.request_id}")
                             self.split_connector.send_splitwise_tasks([task], task.idx)
@@ -721,11 +751,11 @@ class EngineService:
                     for tmp_task in need_delete_tasks:
                         tasks.remove(tmp_task)
                         # release resource in P
-                        self.resource_manager.prerelease_resource(tmp_task)
+                        self.resource_manager.pre_recycle_resource(tmp_task.request_id)
                 if self.cfg.scheduler_config.splitwise_role == "prefill":
                     # to send cache info to cache messager
                     if tasks:
-                        self.split_connector.send_cache_infos(tasks, 0)
+                        self.split_connector.send_cache_info_to_messager(tasks, 0)
                         # ensure cache tasks has sent to cache_messager
                         need_check_req_ids = [task.request_id for task in tasks]
                         while need_check_req_ids:
@@ -739,6 +769,10 @@ class EngineService:
                                 time.sleep(0.001)
                 # Fetch requests and add them to the scheduling queue
                 if tasks:
+                    for task in tasks:
+                        trace_print(
+                            LoggingEventName.RESOURCE_ALLOCATE_START, task.request_id, getattr(task, "user", "")
+                        )
                     if self.cfg.scheduler_config.splitwise_role == "prefill":
                         self.resource_manager.add_request_in_p(tasks)
                     else:
@@ -774,7 +808,7 @@ class EngineService:
                             else:
                                 raise
                 # 2. Schedule requests
-                tasks = self.resource_manager.schedule()
+                tasks, error_tasks = self.resource_manager.schedule()
 
                 # 3. Send to engine
                 if tasks:
@@ -794,8 +828,21 @@ class EngineService:
                                     ]
                                 )
                     self.resource_manager.get_real_bsz()
+                    for task in tasks:
+                        trace_print(LoggingEventName.RESOURCE_ALLOCATE_END, task.request_id, getattr(task, "user", ""))
+                        trace_print(LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", ""))
+                        trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
-                else:
+
+                # 4. Response error tasks
+                if error_tasks:
+                    for request_id, failed in error_tasks:
+                        if failed is None:
+                            llm_logger.warning(f"Request {request_id} has no error, skip sending error response.")
+                            continue
+                        self._send_error_response(request_id, failed)
+
+                if not tasks and not error_tasks:
                     time.sleep(0.005)
 
             except RuntimeError as e:
@@ -856,6 +903,10 @@ class EngineService:
                         start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
                         main_process_metrics.requests_number.inc()
                         self.llm_logger.debug(f"Receive request: {request}")
+                        trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))
+                        trace_print(LoggingEventName.REQUEST_SCHEDULE_START, data["request_id"], data.get("user", ""))
+                        trace_print(LoggingEventName.REQUEST_QUEUE_START, data["request_id"], data.get("user", ""))
+                        self.llm_logger.debug(f"Receive request from api server: {request}")
                     except Exception as e:
                         self.llm_logger.error(f"Receive request error: {e}, {traceback.format_exc()!s}")
                         err_msg = str(e)
@@ -865,24 +916,6 @@ class EngineService:
                         request, err_msg = self.guided_decoding_checker.schema_format(request)
                         if err_msg is not None:
                             self.llm_logger.error(f"Receive request error: {err_msg}")
-                            results.append((request.request_id, err_msg))
-
-                    if self._has_features_info(request) and err_msg is None:
-                        if self.bos_client is None:
-                            self.bos_client = init_bos_client()
-
-                        download_urls = []
-                        inputs = request.multimodal_inputs
-                        if inputs.get("video_feature_urls") is not None:
-                            download_urls.extend(inputs.get("video_feature_urls"))
-                        if inputs.get("image_feature_urls") is not None:
-                            download_urls.extend(inputs.get("image_feature_urls"))
-                        if inputs.get("audio_feature_urls") is not None:
-                            download_urls.extend(inputs.get("audio_feature_urls"))
-
-                        err_msg = check_download_links(self.bos_client, download_urls)
-                        if err_msg:
-                            llm_logger.error(f"Receive request {request.request_id} download error: {err_msg}")
                             results.append((request.request_id, err_msg))
 
                     if err_msg is None:
@@ -906,20 +939,29 @@ class EngineService:
                         main_process_metrics.num_requests_waiting.inc(1)
                         continue
 
-                    error_result = RequestOutput(
-                        request_id=request_id,
-                        finished=True,
-                        error_code=500,
-                        error_msg=failed,
-                    )
-                    # Since the request is not in scheduler
-                    # Send result by zmq directly
-                    self.send_response_server.send_response(request_id, [error_result])
+                    self._send_error_response(request_id, failed)
             except Exception as e:
                 self.llm_logger.error(
                     f"Error happened while receiving new request from zmq, details={e}, "
                     f"traceback={traceback.format_exc()}"
                 )
+
+    def _send_error_response(self, request_id, error_msg, error_code: int = 500):
+        llm_logger.error(
+            f"Send error response to client, request_id: {request_id}, error_msg: {error_msg}, error_code: {error_code}"
+        )
+        error_result = RequestOutput(
+            request_id=request_id,
+            finished=True,
+            error_code=error_code,
+            error_msg=error_msg,
+        )
+        # Since the request is not in scheduler
+        # Send result by zmq directly
+        if envs.FD_ENABLE_INTERNAL_ADAPTER:
+            self.send_response_server.send_response(None, [[error_result]])
+        else:
+            self.send_response_server.send_response(request_id, [error_result])
 
     def _decode_token(self, token_ids, req_id, is_end):
         delta_text = ""
@@ -935,19 +977,6 @@ class EngineService:
                 del self.data_processor.decode_status[req_id]
         return delta_text, token_ids
 
-    def _has_features_info(self, task):
-        inputs = task.multimodal_inputs
-        if inputs is None or len(inputs) == 0:
-            return False
-
-        if (
-            (inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0)
-            or (inputs.get("image_feature_urls") is not None and len(inputs["image_feature_urls"]) > 0)
-            or (inputs.get("audio_feature_urls") is not None and len(inputs["audio_feature_urls"]) > 0)
-        ):
-            return True
-        return False
-
     def _zmq_send_generated_tokens(self):
         """
         Recieve output for zmq
@@ -958,186 +987,185 @@ class EngineService:
                 if len(results) == 0:
                     time.sleep(0.005)
                     continue
-                for request_id, contents in results.items():
+                if envs.FD_ENABLE_INTERNAL_ADAPTER:
                     new_contents = []
-                    for content in contents:
-                        if isinstance(content, RequestOutput) and content.outputs is not None:
-                            decode_type = content.outputs.decode_type
-                            delta_text = ""
-                            if decode_type == 0:
-                                delta_text, token_ids = self._decode_token(
-                                    token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
-                                )
+                    for step_batch_results in results:
+                        new_step_contents = []
+                        for content in step_batch_results:
+                            if isinstance(content, RequestOutput) and content.outputs is not None:
+                                decode_type = content.outputs.decode_type
+                                delta_text = ""
+                                if decode_type == 0:
+                                    delta_text, token_ids = self._decode_token(
+                                        token_ids=content.outputs.token_ids,
+                                        req_id=content.request_id,
+                                        is_end=content.finished,
+                                    )
+                                else:
+                                    token_ids = content.outputs.token_ids
+                                if len(token_ids):
+                                    content.outputs.token_ids = token_ids
+                                    content.outputs.text = delta_text
+                                    new_step_contents.append(content)
+                                elif content.finished:
+                                    new_step_contents.append(content)
+                                else:
+                                    llm_logger.warning(
+                                        f"current tokens need to accumulate, req_id: {content.request_id} {content.outputs.token_ids}"
+                                    )
                             else:
-                                token_ids = content.outputs.token_ids
-                            if len(token_ids):
-                                content.outputs.token_ids = token_ids
-                                content.outputs.text = delta_text
-                                new_contents.append(content)
-                            elif content.finished:
-                                new_contents.append(content)
+                                new_step_contents.append(content)
+                        if new_step_contents:
+                            new_contents.append(new_step_contents)
+                    if new_contents:
+                        self.send_response_server.send_response(None, new_contents)
+
+                else:
+                    for request_id, contents in results.items():
+                        new_contents = []
+                        for content in contents:
+                            if isinstance(content, RequestOutput) and content.outputs is not None:
+                                decode_type = content.outputs.decode_type
+                                delta_text = ""
+                                if decode_type == 0:
+                                    delta_text, token_ids = self._decode_token(
+                                        token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
+                                    )
+                                else:
+                                    token_ids = content.outputs.token_ids
+                                if len(token_ids):
+                                    content.outputs.token_ids = token_ids
+                                    content.outputs.text = delta_text
+                                    new_contents.append(content)
+                                elif content.finished:
+                                    new_contents.append(content)
+                                else:
+                                    llm_logger.warning(
+                                        f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
+                                    )
                             else:
-                                llm_logger.warning(
-                                    f"current tokens need to accumulate, req_id: {request_id} {content.outputs.token_ids}"
-                                )
-                        else:
-                            new_contents.append(content)
-                    if len(new_contents):
-                        llm_logger.debug(f"Send response for request id: {request_id}")
-                        self.send_response_server.send_response(request_id, new_contents)
+                                new_contents.append(content)
+                        if len(new_contents):
+                            llm_logger.debug(f"Send response for request id: {request_id}")
+                            self.send_response_server.send_response(request_id, new_contents)
             except Exception as e:
                 llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
 
-    def _process_splitwise_task(self):
+    def _decode_process_splitwise_requests(self):
         """
-        Processing tasks from engine worker queue in splitwise deployment.
-        For v0 version, prefill instance gets tasks from engine worker queue.
-        For v1 and v2 version, decode instance gets raw tasks from engine worker queue to preallocate resources,
-        and decode instance gets prefilled tasks from engine worker queue to generate tokens.
-        TODO: unifiy the communication between decode and prefill instances.
+        Decode processes requests from engine worker queue, which are sent by prefill.
+        TODO: merge this function to the schedule function in resource manager
         """
+        allocate_resource_requests: list[Request] = []
+        prefilled_request_ouputs: list[RequestOutput] = []
 
-        def receiver_loop():
-            waiting_resource_requests = []
-            waiting_ready_tasks = []
+        def _fetch_requests():
+            if self.engine_worker_queue.disaggregate_queue_empty():
+                return
 
-            # Waiting for the api_server and scheduler in decode to
-            # receive the request sent by the client
-            def _decode_process_prefilled_task_v0_scheduler(input_tasks):
-                ready_tasks = []
-                waiting_tasks = []
-                for task in input_tasks:
-                    if not hasattr(self.scheduler, "has_request") or self.scheduler.has_request(task.request_id):
-                        ready_tasks.append(task)
+            items = self.engine_worker_queue.get_disaggregated_tasks()
+            for item in items:
+                tasks = item[1]
+                if isinstance(tasks[0], Request):
+                    self.llm_logger.debug(f"receive tasks to preallocate resource, {tasks}")
+                    allocate_resource_requests.extend(tasks)
+                elif isinstance(tasks[0], RequestOutput):
+                    self.llm_logger.debug(f"receive prefilled tasks, {tasks}")
+                    if not isinstance(tasks, list):
+                        tasks = [tasks]
+                    for task in tasks:
+                        task.finished = False
+                    prefilled_request_ouputs.extend(tasks)
+
+        def _process_allocate_resource_requests():
+            processed_indices = []
+            for idx, task in enumerate(allocate_resource_requests):
+                is_success = False
+
+                if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                    if self.resource_manager.preallocate_resource_in_d(task):
+                        self.llm_logger.info(f"Resource available, processing task {task.request_id}")
+                        self.split_connector.send_cache_info_to_prefill([task])
+                        processed_indices.append(idx)
+                        is_success = True
+                else:
+                    if self.resource_manager.is_resource_sufficient(task.prompt_token_ids_len):
+                        self.llm_logger.info(f"Resource available, processing task {task.request_id}")
+                        self.insert_tasks([task])
+                        processed_indices.append(idx)
+                        is_success = True
+
+                if not is_success:
+                    if not self.enable_decode_cache_task:
+                        task.error_msg = "Not enough resources"
+                        self.split_connector.send_cache_info_to_prefill([task])
+                        processed_indices.append(idx)
                     else:
-                        waiting_tasks.append(task)
-                self.insert_tasks(ready_tasks, allocated=True)
-                if self.cfg.splitwise_version in ("v0", "v2"):
-                    self.scheduler.put_results(ready_tasks)
-                return waiting_tasks
+                        self.llm_logger.debug(f"Still waiting for resources {task.request_id}")
+                        break
 
+            for idx in sorted(processed_indices, reverse=True):
+                allocate_resource_requests.pop(idx)
+
+        def _process_prefilled_requests():
+            nonlocal prefilled_request_ouputs
+            ready_request_outputs = []
+            waiting_request_outputs = []
+
+            for req_output in prefilled_request_ouputs:
+                if hasattr(self.scheduler, "has_request") and not self.scheduler.has_request(req_output.request_id):
+                    # ensure the api_server and scheduler in decode have
+                    # received the request sent by the client
+                    waiting_request_outputs.append(req_output)
+                    continue
+
+                ready_request_outputs.append(req_output)
+                self.llm_logger.debug(f"there are enough resource for prefilled request: {req_output.request_id}")
+
+            prefilled_request_ouputs = waiting_request_outputs
+            if self.cfg.splitwise_version == "v1":
+                # decode return first token to client
+                self.scheduler.put_results(ready_request_outputs)
+
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                self._insert_prefilled_requests(ready_request_outputs)
+            else:
+                for req_output in ready_request_outputs:
+                    request_id = req_output.request_id
+                    if envs.FD_ENABLE_INTERNAL_ADAPTER and not req_output.outputs.token_ids:
+                        # first token is eos in Prefill, just recycle resource and continue
+                        self.llm_logger.warning(f"{request_id} need not decode after first token")
+                        self.resource_manager.pre_recycle_resource(request_id)
+                        if request_id in self.token_processor.tokens_counter:
+                            del self.token_processor.tokens_counter[request_id]
+                        continue
+                    if req_output.error_code != 200:
+                        self.llm_logger.warning(
+                            f"{request_id} prefill failed with msg:{req_output.error_msg}, recycle resource."
+                        )
+                        self.resource_manager.pre_recycle_resource(request_id)
+                        if request_id in self.token_processor.tokens_counter:
+                            del self.token_processor.tokens_counter[request_id]
+                        self.scheduler.put_results([req_output])
+                        continue
+                    self.token_processor.tokens_counter[request_id] = 1
+                    self.resource_manager.add_prefilled_request(req_output)
+                    self.llm_logger.debug(f"add prefilled request success, {request_id}")
+
+        def decode_loop():
             while self.running:
                 try:
-                    processed_indices = []
-                    for idx, task in enumerate(waiting_resource_requests):
-                        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                            if self.resource_manager.preallocate_resource_in_d(task):
-                                self.llm_logger.info(f"Resource available, processing task {task.request_id}")
-                                self.split_connector.send_cache_infos([task], -1)
-                                processed_indices.append(idx)
-                            else:
-                                self.llm_logger.debug(f"Still waiting for resources {task.request_id}")
-                                break
-                        else:
-                            if self.resource_manager.is_resource_sufficient(task.prompt_token_ids_len):
-                                self.insert_tasks([task])
-                                self.llm_logger.info(f"Resource available, processing task {task.request_id}")
-                                processed_indices.append(idx)
-                            else:
-                                self.llm_logger.debug(f"Still waiting for resources {task.request_id}")
-                                break
-
-                    for idx in sorted(processed_indices, reverse=True):
-                        waiting_resource_requests.pop(idx)
-
-                    waiting_ready_tasks = _decode_process_prefilled_task_v0_scheduler(waiting_ready_tasks)
-
-                    if self.engine_worker_queue.disaggregate_queue_empty():
-                        time.sleep(0.001)
-                    else:
-                        items = self.engine_worker_queue.get_disaggregated_tasks()
-                        for item in items:
-                            role = item[0]
-                            tasks = item[1]
-
-                            # prefill instance gets tasks from engine worker queue
-                            if role == "prefill":
-                                for task in tasks:
-                                    task.max_tokens = task.min_tokens = 2
-                                self.insert_tasks(tasks)
-                            # decode instance gets tasks from engine worker queue
-                            elif role == "decode":
-                                if isinstance(tasks[0], RequestOutput):
-                                    self.llm_logger.debug(f"receive prefilled tasks, {tasks}")
-                                    if not isinstance(tasks, list):
-                                        tasks = [tasks]
-                                    for task in tasks:
-                                        task.finished = False
-                                    if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                                        for task in tasks:
-                                            if envs.FD_ENABLE_INTERNAL_ADAPTER:
-                                                if (
-                                                    not task.outputs.token_ids
-                                                ):  # first token is eos in Prefill, just recycle resource and continue
-                                                    cur_task = self.resource_manager.requests[task.request_id]
-                                                    self.resource_manager.stop_flags[cur_task.idx] = True
-                                                    self.resource_manager.tasks_list[cur_task.idx] = None
-                                                    self.resource_manager._free_blocks(cur_task)
-                                                    if cur_task.request_id in self.token_processor.tokens_counter:
-                                                        del self.token_processor.tokens_counter[task.request_id]
-                                                    self.llm_logger.warning(
-                                                        f"{task.request_id} need not decode after first token"
-                                                    )
-                                                    del self.resource_manager.requests[task.request_id]
-                                                    del self.resource_manager.req_dict[task.request_id]
-                                                    continue
-                                            if task.error_code != 200:
-                                                cur_task = self.resource_manager.requests[task.request_id]
-                                                self.resource_manager.stop_flags[cur_task.idx] = True
-                                                self.resource_manager.tasks_list[cur_task.idx] = None
-                                                self.resource_manager._free_blocks(cur_task)
-                                                if cur_task.request_id in self.token_processor.tokens_counter:
-                                                    del self.token_processor.tokens_counter[task.request_id]
-                                                self.scheduler.put_results([task])
-                                                self.llm_logger.warning(
-                                                    f"{task.request_id} prefill failed with msg:{task.error_msg}, recycle resource."
-                                                )
-                                                continue
-                                            self.token_processor.tokens_counter[task.request_id] = 1
-                                            self.resource_manager.insert_task_for_decoding(task)
-
-                                    else:
-                                        waiting_ready_tasks.extend(_decode_process_prefilled_task_v0_scheduler(tasks))
-                                elif isinstance(tasks[0], Request):
-                                    self.llm_logger.debug(f"receive tasks to preallocate resource, {tasks}")
-                                    if len(waiting_resource_requests):
-                                        self.llm_logger.info(f"Waiting for resource for task {tasks[0].request_id}")
-                                        waiting_resource_requests.extend(tasks)
-                                    else:
-                                        new_waiting = []
-                                        for task in tasks:
-                                            can_allocate_resource = False
-                                            if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                                                if self.resource_manager.preallocate_resource_in_d(task):
-                                                    self.split_connector.send_cache_infos([task], -1)
-                                                    can_allocate_resource = True
-                                            else:
-                                                if self.resource_manager.is_resource_sufficient(
-                                                    task.prompt_token_ids_len
-                                                ):
-                                                    self.insert_tasks([task])
-                                                    can_allocate_resource = True
-                                            if can_allocate_resource is False:
-                                                if not self.enable_decode_cache_task:
-                                                    task.error_msg = "Not enough resources"
-                                                new_waiting.append(task)
-
-                                        if new_waiting:
-                                            if not self.enable_decode_cache_task:
-                                                self.split_connector.send_cache_infos(new_waiting, -1)
-                                            else:
-                                                waiting_resource_requests.extend(new_waiting)
-                                                self.llm_logger.info(
-                                                    f"Added {len(new_waiting)} tasks to waiting queue"
-                                                )
-                                else:
-                                    raise ValueError(f"Unsupported task type: {type(tasks[0])}")
-
+                    _fetch_requests()
+                    _process_allocate_resource_requests()
+                    _process_prefilled_requests()
+                    time.sleep(0.001)
                 except Exception as e:
-                    self.llm_logger.error(f"Error in main loop: {e}")
-                    time.sleep(0.1)
+                    self.llm_logger.error(
+                        f"Error in main loop of decode_process_splitwise_requests: " f"{e}, {traceback.format_exc()}"
+                    )
+                    time.sleep(0.01)
 
-        threading.Thread(target=receiver_loop, daemon=True).start()
+        threading.Thread(target=decode_loop, daemon=True).start()
 
     def start_cache_service(self, device_ids, ipc_signal_suffix):
         return self.resource_manager.cache_manager.launch_cache_manager(

@@ -68,7 +68,15 @@ class IluvatarAttnBackend(AttentionBackend):
     Which is used only for testing purpose.
     """
 
-    def __init__(self, fd_config: FDConfig, kv_num_heads: int, num_heads: int, head_dim: int):
+    def __init__(
+        self,
+        fd_config: FDConfig,
+        kv_num_heads: int,
+        num_heads: int,
+        head_dim: int,
+        encoder_block_shape_q: int = -1,
+        decoder_block_shape_q: int = -1,
+    ):
         super().__init__()
         self.attention_metadata = IluvatarAttentionMetadata()
         self.block_size = fd_config.cache_config.block_size
@@ -186,12 +194,9 @@ class IluvatarAttnBackend(AttentionBackend):
         """
         Calculate kv cache shape
         """
-        return (
-            max_num_blocks,
-            self.num_kv_heads,
-            self.block_size,
-            self.head_dim,
-        )
+        key_cache_shape = [max_num_blocks, self.num_kv_heads, self.block_size, self.head_dim]
+        value_cache_shape = [max_num_blocks, self.num_kv_heads, self.block_size, self.head_dim]
+        return key_cache_shape, value_cache_shape
 
     def transpose(self, hidden_states):
         for ids, reverse_ids in zip(self.id_group, self.reverse_id_group):

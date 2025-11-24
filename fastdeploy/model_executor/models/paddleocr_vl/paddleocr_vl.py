@@ -20,9 +20,7 @@ from typing import Dict, Optional, Union
 import numpy as np
 import paddle
 import paddle.nn as nn
-from paddleformers.transformers import PretrainedModel
 
-from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
@@ -105,9 +103,7 @@ class PaddleOCRVLModel(nn.Layer):
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
-        hidden_states = hidden_states + residual
-
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual)[0]
 
         return out
 
@@ -136,14 +132,11 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         )
 
         # Persistent buffers for CUDA graphs.
-        if envs.FD_ENABLE_MAX_PREFILL:
-            max_length = fd_config.scheduler_config.max_num_seqs * fd_config.model_config.max_model_len
-        else:
-            max_length = fd_config.model_config.max_model_len
-        self._input_embeddings = paddle.zeros(
-            [max_length, fd_config.model_config.hidden_size],
-            dtype=fd_config.model_config.dtype,
-        )
+        if fd_config.graph_opt_config.use_cudagraph:
+            self._decoder_input_embeddings = paddle.zeros(
+                [fd_config.graph_opt_config.max_capture_size, fd_config.model_config.hidden_size],
+                dtype=fd_config.model_config.dtype,
+            )
 
     @paddle.no_grad()
     def load_weights(self, weights_iterator) -> None:
@@ -166,7 +159,7 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         ]
 
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             loaded_weight_name = (
                 self.process_weights_before_loading_fn(loaded_weight_name)
@@ -247,102 +240,14 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         input_embeddings = self.get_input_embeddings(
             ids_remove_padding=ids_remove_padding, image_features=image_features
         )
-        self._input_embeddings.copy_(input_embeddings, False)
+
+        if forward_meta.step_use_cudagraph:
+            self._decoder_input_embeddings.copy_(input_embeddings, False)
+            input_embeddings = self._decoder_input_embeddings
 
         hidden_states = self.model(
-            input_embeddings=self._input_embeddings,
+            input_embeddings=input_embeddings,
             forward_meta=forward_meta,
         )
 
         return hidden_states
-
-
-class PaddleOCRVLPretrainedModel(PretrainedModel):
-
-    config_class = FDConfig
-
-    def _init_weight(self, layer):
-        """
-        _init_weight
-        """
-        return None
-
-    @classmethod
-    def arch_name(self):
-        return "PaddleOCRVLForConditionalGeneration"
-
-    from fastdeploy.model_executor.models.tp_utils import TensorSplitMode as tsm
-    from fastdeploy.model_executor.models.utils import LayerIdPlaceholder as layerid
-    from fastdeploy.model_executor.models.utils import WeightMeta
-
-    weight_infos = [
-        WeightMeta(
-            f".layers.{{{layerid.LAYER_ID}}}.self_attn.qkv_proj.weight",
-            True,
-            tsm.GQA,
-        ),
-        WeightMeta(f".layers.{{{layerid.LAYER_ID}}}.self_attn.o_proj.weight", False),
-        WeightMeta(
-            f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.up_gate_proj.weight",
-            True,
-            tsm.PairFused,
-        ),
-        WeightMeta(f".layers.{{{layerid.FFN_LAYER_ID}}}.mlp.down_proj.weight", False),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.TEXT_EXPERT_ID}}}.up_gate_proj.weight",
-            True,
-            tsm.PairFused,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.TEXT_EXPERT_ID}}}.down_proj.weight",
-            False,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.IMG_EXPERT_ID}}}.up_gate_proj.weight",
-            True,
-            tsm.PairFused,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.experts.{{{layerid.IMG_EXPERT_ID}}}.down_proj.weight",
-            False,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.up_gate_proj.weight",
-            True,
-            tsm.PairFused,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.down_proj.weight",
-            False,
-        ),
-        WeightMeta(
-            f".layers.{{{layerid.MOE_LAYER_ID}}}.mlp.shared_experts.down_proj.weight",
-            False,
-        ),
-        WeightMeta(".embed_tokens.weight", False),
-        WeightMeta("lm_head.weight", True),
-    ]
-
-    weight_vison = [
-        # resampler_model
-        WeightMeta("ernie.resampler_model.spatial_linear.0.weight", False),
-        WeightMeta("resampler_model.spatial_linear.0.weight", False),
-        # vision
-        WeightMeta(
-            f"vision_model.blocks.{{{layerid.LAYER_ID}}}.attn.proj.weight",
-            False,
-        ),
-        WeightMeta(f"vision_model.blocks.{{{layerid.LAYER_ID}}}.mlp.fc2.weight", False),
-        WeightMeta(f"vision_model.blocks.{{{layerid.LAYER_ID}}}.mlp.fc1.weight", True),
-        WeightMeta(f"vision_model.blocks.{{{layerid.LAYER_ID}}}.mlp.fc1.bias", True),
-        WeightMeta(
-            f"vision_model.blocks.{{{layerid.LAYER_ID}}}.attn.qkv.weight",
-            True,
-            tsm.GQA,
-        ),
-        WeightMeta(
-            f"vision_model.blocks.{{{layerid.LAYER_ID}}}.attn.qkv.bias",
-            True,
-            tsm.GQA,
-        ),
-    ]

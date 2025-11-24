@@ -240,12 +240,25 @@ class EngineArgs:
 
     disable_custom_all_reduce: bool = False
     """
-    Flag to enable the custom all-reduce kernel.
+    Flag to disable the custom all-reduce kernel.
     """
 
     use_internode_ll_two_stage: bool = False
     """
     Flag to use the internode_ll_two_stage kernel.
+    """
+
+    disable_sequence_parallel_moe: bool = False
+    """
+    # The all_reduce at the end of attention (during o_proj) means that
+    # inputs are replicated across each rank of the tensor parallel group.
+    # If using expert-parallelism with DeepEP All2All ops, replicated
+    # tokens results in useless duplicate computation and communication.
+    #
+    # In this case, ensure the input to the experts is sequence parallel
+    # to avoid the excess work.
+    #
+    # This optimization is enabled by default, and can be disabled by using this flag.
     """
 
     engine_worker_queue_port: str = "0"
@@ -281,11 +294,6 @@ class EngineArgs:
     pd_comm_port: Optional[List[int]] = None
     """
     Port for splitwise communication.
-    """
-
-    innode_prefill_ports: Optional[List[int]] = None
-    """
-    Ports for innode dispatch request.
     """
 
     rdma_comm_ports: Optional[List[int]] = None
@@ -470,7 +478,7 @@ class EngineArgs:
             self.enable_prefix_caching = False
         if self.speculative_config is not None:
             self.enable_prefix_caching = False
-        if not current_platform.is_cuda() and not current_platform.is_xpu():
+        if not current_platform.is_cuda() and not current_platform.is_xpu() and not current_platform.is_intel_hpu():
             self.enable_prefix_caching = False
         # if self.dynamic_load_weight:
         #     self.enable_prefix_caching = False
@@ -481,14 +489,40 @@ class EngineArgs:
                 raise NotImplementedError("processed_logprobs not support in speculative.")
             if self.speculative_config is not None and self.max_logprobs == -1:
                 raise NotImplementedError("max_logprobs=-1 not support in speculative.")
-            if not envs.FD_USE_GET_SAVE_OUTPUT_V1:
+            if not envs.FD_USE_GET_SAVE_OUTPUT_V1 and (self.max_logprobs == -1 or self.max_logprobs > 20):
                 self.max_logprobs = 20
                 console_logger.warning("Set max_logprobs=20 when FD_USE_GET_SAVE_OUTPUT_V1=0")
             if self.max_logprobs == -1 and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 raise NotImplementedError("Only ENABLE_V1_KVCACHE_SCHEDULER=1 support max_logprobs=-1")
 
-        if self.splitwise_role != "mixed" and self.cache_transfer_protocol != "rdma":
-            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
+        if self.splitwise_role != "mixed":
+            if self.scheduler_name == "local" and self.router is None:
+                raise ValueError(
+                    f"When using {self.splitwise_role} role and the {self.scheduler_name} "
+                    f"scheduler, please provide --router argument."
+                )
+
+            if "rdma" in self.cache_transfer_protocol:
+                if self.rdma_comm_ports is None:
+                    raise ValueError(
+                        "Please set --rdma_comm_ports argument when using " "rdma cache transfer protocol."
+                    )
+                num_nodes = len(self.ips) if self.ips else 1
+                if self.data_parallel_size % num_nodes != 0:
+                    raise ValueError(
+                        f"data_parallel_size ({self.data_parallel_size}) must be divisible by "
+                        f"num_nodes ({num_nodes})."
+                    )
+                dp_per_node = self.data_parallel_size // num_nodes
+                expected_ports = self.tensor_parallel_size * dp_per_node
+                if len(self.rdma_comm_ports) != expected_ports:
+                    raise ValueError(
+                        f"The number of rdma_comm_ports must equal "
+                        f"tensor_parallel_size * (data_parallel_size / num_nodes) = "
+                        f"{self.tensor_parallel_size} * ({self.data_parallel_size} / {num_nodes}) "
+                        f"= {expected_ports}, but got {len(self.rdma_comm_ports)}."
+                    )
+
         if not current_platform.is_cuda() and not current_platform.is_xpu():
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if self.guided_decoding_backend != "off":
@@ -767,6 +801,12 @@ class EngineArgs:
             help="Flag to use the internode_ll_two_stage kernel.",
         )
         parallel_group.add_argument(
+            "--disable-sequence-parallel-moe",
+            action="store_true",
+            default=EngineArgs.disable_sequence_parallel_moe,
+            help="Flag to disable disable the sequence parallel moe.",
+        )
+        parallel_group.add_argument(
             "--max-num-seqs",
             type=int,
             default=EngineArgs.max_num_seqs,
@@ -910,13 +950,6 @@ class EngineArgs:
             default=EngineArgs.splitwise_role,
             help="Role of splitwise. Default is \
             'mixed'. (prefill, decode, mixed)",
-        )
-
-        splitwise_group.add_argument(
-            "--innode-prefill-ports",
-            type=lambda s: s.split(",") if s else None,
-            default=EngineArgs.innode_prefill_ports,
-            help="port for innode prefill, only used in single machine splitwise deployment",
         )
 
         splitwise_group.add_argument(
@@ -1214,7 +1247,6 @@ class EngineArgs:
             limit_mm_per_prompt=self.limit_mm_per_prompt,
             mm_processor_kwargs=self.mm_processor_kwargs,
             tool_parser=self.tool_call_parser,
-            innode_prefill_ports=self.innode_prefill_ports,
             max_num_partial_prefills=self.max_num_partial_prefills,
             max_long_partial_prefills=self.max_long_partial_prefills,
             long_prefill_token_threshold=self.long_prefill_token_threshold,

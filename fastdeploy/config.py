@@ -20,7 +20,7 @@ import json
 import os
 from dataclasses import field
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, Literal, Optional, Union
 
 import paddle
 import paddle.distributed as dist
@@ -198,6 +198,8 @@ class ModelConfig:
         self.pooler_config: Optional["PoolerConfig"] = field(init=False)
         self.override_pooler_config: Optional[Union[dict, "PoolerConfig"]] = None
         self.revision = None
+        self.prefix_layer_name = "layers"
+        self.kv_cache_quant_scale_path = ""
 
         self.partial_rotary_factor: float = 1.0
         self.num_nextn_predict_layers = 0
@@ -227,8 +229,8 @@ class ModelConfig:
         self.think_end_id = args.get("think_end_id", -1)
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
-        if self.max_logprobs == -1 and hasattr(self, "vocab_size"):
-            self.max_logprobs = self.vocab_size
+        if self.max_logprobs < -1:
+            raise ValueError(" The possible values for max_logprobs can't be less than -1 ")
 
         self._post_init()
 
@@ -244,6 +246,7 @@ class ModelConfig:
 
         self.enable_mm = is_multimodal_model
 
+        self.kv_cache_quant_scale_path = os.path.join(self.model, "kv_cache_scale.json")
         if self.runner_type == "pooling":
             os.environ["FD_USE_GET_SAVE_OUTPUT_V1"] = "1"
 
@@ -307,8 +310,8 @@ class ModelConfig:
         Read configuration information from environment variables and update the object's attributes.
         If an attribute is not present or is an empty string in the environment variables, use the default value.
         """
-        self.max_stop_seqs_num = int(envs.FD_MAX_STOP_SEQS_NUM)
-        self.stop_seqs_max_len = int(envs.FD_STOP_SEQS_MAX_LEN)
+        self.max_stop_seqs_num = envs.FD_MAX_STOP_SEQS_NUM
+        self.stop_seqs_max_len = envs.FD_STOP_SEQS_MAX_LEN
 
         def reset_config_value(key, value):
             if not hasattr(self, key.lower()):
@@ -548,6 +551,8 @@ class ParallelConfig:
         self.do_profile: bool = False
         # Use internode_ll_two_stage or not
         self.use_internode_ll_two_stage: bool = False
+        # disable sequence parallel moe
+        self.disable_sequence_parallel_moe: bool = False
 
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
@@ -577,14 +582,14 @@ class ParallelConfig:
         else:
             self.pd_disaggregation_mode = "None"
 
-        # ep+tp strategy: "all_reduce" or "all_to_all"
-        # all_reduce: qkv_linear + attn + out_linear + allreduce
-        # all_to_all: allgather + qkv_linear + attn + all2all + out_linear
-        self.ep_tp_strategy = envs.FD_EP_TP_STRATEGY
-        assert self.ep_tp_strategy in [
-            "all_reduce",
-            "all_to_all",
-        ], f"FD_EP_TP_STRATEGY: '{self.ep_tp_strategy}' is not supported, only supports 'all_reduce' or 'all_to_all'."
+        # disable_sequence_parallel_moe: qkv_linear + attn + out_linear + allreduce
+        # use_sequence_parallel_moe: allgather + qkv_linear + attn + all2all + out_linear
+        self.use_sequence_parallel_moe = (
+            (not self.disable_sequence_parallel_moe)
+            and self.expert_parallel_size > 1
+            and self.tensor_parallel_size > 1
+        )
+        logger.info(f"use_sequence_parallel_moe: {self.use_sequence_parallel_moe}")
 
     def set_communicate_group(self):
         # different tp group id
@@ -897,6 +902,12 @@ class GraphOptimizationConfig:
 
         draft_capture_sizes.append(max_capture_size)
         self.cudagraph_capture_sizes = sorted(draft_capture_sizes)
+
+    def filter_capture_size(self, tp_size: int = 1):
+        """When TSP is used, capture size must be divisible by tp size."""
+        self.cudagraph_capture_sizes = [
+            draft_size for draft_size in self.cudagraph_capture_sizes if (draft_size % tp_size == 0)
+        ]
 
     def to_json_string(self):
         """
@@ -1228,6 +1239,8 @@ class CacheConfig:
             self.enable_hierarchical_cache = True
 
         if self.model_cfg is not None:
+            if self.model_cfg.quantization is not None and isinstance(self.model_cfg.quantization, dict):
+                self.cache_dtype = self.model_cfg.quantization.get("kv_cache_quant_type", self.cache_dtype)
             if self.model_cfg.quantization_config is not None:
                 self.cache_dtype = self.model_cfg.quantization_config.get("kv_cache_quant_type", self.cache_dtype)
             if (
@@ -1288,6 +1301,9 @@ class CacheConfig:
                 self.prefill_kvcache_block_num = self.total_block_num
             else:
                 self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
+            assert (
+                self.prefill_kvcache_block_num >= self.max_block_num_per_seq
+            ), f"current block number :{self.prefill_kvcache_block_num} should be greater than or equal to current model len needed minimum block number :{self.max_block_num_per_seq}"
         else:
             length = num_total_tokens // number_of_tasks
             block_num = (length + self.block_size - 1 + self.dec_token_num) // self.block_size
@@ -1308,6 +1324,9 @@ class CacheConfig:
             f"Reset block num, the total_block_num:{self.total_block_num},"
             f" prefill_kvcache_block_num:{self.prefill_kvcache_block_num}"
         )
+        assert (
+            self.prefill_kvcache_block_num >= self.max_block_num_per_seq
+        ), f"current block number :{self.prefill_kvcache_block_num} should be greater than or equal to current model len needed minimum block number :{self.max_block_num_per_seq}"
 
     def print(self):
         """
@@ -1409,7 +1428,6 @@ class StructuredOutputsConfig:
         # disable any whitespace for guided decoding
         self.disable_any_whitespace: bool = True
         self.logits_processors: Optional[list[str]] = None
-
         for key, value in args.items():
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
@@ -1445,7 +1463,6 @@ class FDConfig:
         use_warmup: bool = False,
         limit_mm_per_prompt: Optional[Dict[str, Any]] = None,
         mm_processor_kwargs: Optional[Dict[str, Any]] = None,
-        innode_prefill_ports: Optional[List[int]] = None,
         max_num_partial_prefills: int = 1,
         max_long_partial_prefills: int = 1,
         long_prefill_token_threshold: int = 0,
@@ -1509,12 +1526,9 @@ class FDConfig:
         self.limit_mm_per_prompt = limit_mm_per_prompt
         self.mm_processor_kwargs = mm_processor_kwargs
         self.use_warmup = use_warmup
-        self.innode_prefill_ports = innode_prefill_ports
         self.max_num_partial_prefills = max_num_partial_prefills
         self.max_long_partial_prefills = max_long_partial_prefills
         self.long_prefill_token_threshold = long_prefill_token_threshold
-
-        self._str_to_list("innode_prefill_ports", int)
 
         if envs.FD_FOR_TORCH_MODEL_FORMAT:
             self.model_config.model_format = "torch"
@@ -1580,11 +1594,15 @@ class FDConfig:
                 else:
                     self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
 
+        self.scheduler_config.max_chunk_len = (
+            self.scheduler_config.max_num_batched_tokens + self.scheduler_config.max_extra_num_batched_tokens
+        )
+
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.model_config.max_model_len * 0.04)
 
-        self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         self.cache_config.max_block_num_per_seq = int(self.model_config.max_model_len // self.cache_config.block_size)
+        self.cache_config.postprocess(self.scheduler_config.max_num_batched_tokens, self.scheduler_config.max_num_seqs)
         if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.cache_config.enable_prefix_caching = False
 
@@ -1623,7 +1641,15 @@ class FDConfig:
         if self.device_config is not None and self.device_config.device_type != "cuda":
             self.graph_opt_config.use_cudagraph = False
             logger.info(f"CUDAGraph only support on GPU, current device type is {self.device_config.device_type}!")
-
+        if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
+            if self.scheduler_config.max_num_seqs < self.parallel_config.tensor_parallel_size:
+                self.parallel_config.use_sequence_parallel_moe = False
+                logger.info(
+                    "Warning: sequence parallel moe do not support max_num_seqs < tensor_parallel_size when cudagraph enabled. We set use_sequence_parallel_moe to False."
+                )
+            else:
+                # It will hang when real batch_size < tp_size
+                self.graph_opt_config.filter_capture_size(tp_size=self.parallel_config.tensor_parallel_size)
         if self.model_config.enable_mm and self.graph_opt_config.use_cudagraph:
             self.cache_config.enable_prefix_caching = False
             logger.info("Multi-modal models do not support prefix caching when using CUDAGraph!")
@@ -1765,23 +1791,15 @@ class FDConfig:
         """
         initialize cache info
         """
-        # TODO: group the splitiwse params, remove code of v0
-        # v0 requires prefill and decode in one node and it uses local scheduler
-        # v1 supports prefill and decode in multi node and it uses splitwise or dp scheduler
-        # v2 supports prefill and decode in multi node and it uses router and local scheduler
+        # TODO: group the splitiwse params
+        # There are two methods for splitwise deployment:
+        # 1. v0 splitwise_scheduler or dp_scheduler
+        # 2. v1 local_scheduler + router
         self.splitwise_version = None
-        if self.scheduler_config.name == "local" and (self.router_config is None or self.router_config.router is None):
+        if self.scheduler_config.name in ("splitwise", "dp"):
             self.splitwise_version = "v0"
-        elif self.scheduler_config.name in ("splitwise", "dp"):
-            self.splitwise_version = "v1"
         elif self.scheduler_config.name == "local" and self.router_config and self.router_config.router:
-            self.splitwise_version = "v2"
-        else:
-            raise ValueError(
-                f"Unsupported scheduler mode, scheduler_name: {self.scheduler_config.name}, "
-                f"router_config: {self.router_config}"
-            )
-        logger.info(f"splitwise_version: {self.splitwise_version}")
+            self.splitwise_version = "v1"
 
         if isinstance(self.parallel_config.engine_worker_queue_port, (int, str)):
             engine_worker_queue_port = self.parallel_config.engine_worker_queue_port

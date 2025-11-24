@@ -27,6 +27,8 @@ from fastdeploy.platforms import current_platform
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
         get_padding_offset,
+        limit_thinking_content_length_v1,
+        limit_thinking_content_length_v2,
         save_output,
         set_stop_value_multi_ends,
         step_paddle,
@@ -77,6 +79,7 @@ else:
         speculate_step_paddle,
         speculate_step_system_cache,
         speculate_update,
+        speculate_set_stop_value_multi_seqs,
         step_paddle,
         step_system_cache,
         update_inputs,
@@ -203,7 +206,8 @@ def pre_process(
     """
     token_num = paddle.sum(seq_lens_this_time)
 
-    if (current_platform.is_cuda() or current_platform.is_iluvatar()) and not speculative_decoding:
+    specific_platform = current_platform.is_cuda() or current_platform.is_maca() or current_platform.is_iluvatar()
+    if specific_platform and not speculative_decoding:
         # Note(ZKK): This case's code is very simple!
         ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
             input_ids, token_num, seq_lens_this_time
@@ -464,7 +468,17 @@ def post_process_specualate(
             think_end_id=think_end_id,
             line_break_id=line_break_id,
         )
-
+    speculate_set_stop_value_multi_seqs(
+        model_output.accept_tokens,
+        model_output.accept_num,
+        model_output.pre_ids,
+        model_output.step_idx,
+        model_output.stop_flags,
+        model_output.seq_lens_this_time,
+        model_output.stop_token_ids,
+        model_output.stop_seqs_len,
+        model_output.eos_token_id,
+    )
     speculate_update(
         model_output.seq_lens_encoder,
         model_output.seq_lens_decoder,

@@ -104,6 +104,7 @@ class MTPProposer(Proposer):
         self.model_config.num_hidden_layers = 1
         self.model_config.model = self.speculative_config.model
         self.model_config.pretrained_config.prefix_name = "ernie.mtp_block"
+        self.model_config.prefix_layer_name = "mtp_block"
         if self.speculative_config.quantization != "":
             self.model_config.quantization = self.speculative_config.quantization
         self.model_config.start_layer_index = self.num_main_model_layers
@@ -169,11 +170,11 @@ class MTPProposer(Proposer):
             kv_cache_quant_type = self.quant_config.kv_cache_quant_type
 
         # Get kv cache shape
-        kv_cache_shape = self.attn_backends[0].get_kv_cache_shape(
+        key_cache_shape, value_cache_shape = self.attn_backends[0].get_kv_cache_shape(
             max_num_blocks=self.num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
         )
         if kv_cache_quant_type == "block_wise_fp8":
-            kv_cache_scale_shape = [kv_cache_shape[0], kv_cache_shape[1], kv_cache_shape[2]]
+            kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
         if not profile and (
             self.cache_config.enable_prefix_caching or self.scheduler_config.splitwise_role != "mixed"
@@ -186,22 +187,22 @@ class MTPProposer(Proposer):
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
-                key_cache = share_external_data(key_cache, key_cache_name, kv_cache_shape)
+                key_cache = share_external_data(key_cache, key_cache_name, key_cache_shape)
                 cache_kvs_list.append(key_cache)
                 value_cache = paddle.empty(shape=[], dtype=cache_type)
-                value_cache = share_external_data(value_cache, val_cache_name, kv_cache_shape)
+                value_cache = share_external_data(value_cache, val_cache_name, value_cache_shape)
                 cache_kvs_list.append(value_cache)
 
             self.model_inputs["caches"] = cache_kvs_list
         else:
             for i in range(self.model_config.num_hidden_layers):
                 self.cache_kvs[f"key_caches_{i}"] = paddle.full(
-                    shape=kv_cache_shape,
+                    shape=key_cache_shape,
                     fill_value=0,
                     dtype=cache_type,
                 )
                 self.cache_kvs[f"value_caches_{i}"] = paddle.full(
-                    shape=kv_cache_shape,
+                    shape=value_cache_shape,
                     fill_value=0,
                     dtype=cache_type,
                 )
@@ -354,7 +355,7 @@ class MTPProposer(Proposer):
             self.target_model_inputs["decoder_tile_ids_per_batch"]
         )
         self.model_inputs["target_hidden_states"] = paddle.full(
-            [self.max_model_len * self.fd_config.max_prefill_batch, self.model_config.hidden_size], 0, dtype="bfloat16"
+            [self.fd_config.scheduler_config.max_chunk_len, self.model_config.hidden_size], 0, dtype="bfloat16"
         )
 
         tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
@@ -659,7 +660,7 @@ class MTPProposer(Proposer):
         """
         check whether prefill stage exist
         """
-        if int(paddle.max(self.model_inputs["seq_lens_encoder"])) != 0:
+        if np.any(self.share_inputs["seq_lens_encoder"].numpy() > 0):
             return 1
         else:
             return 0

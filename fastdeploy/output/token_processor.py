@@ -40,6 +40,8 @@ from fastdeploy.engine.request import (
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcServer
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
+from fastdeploy.trace.constants import LoggingEventName
+from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import llm_logger, spec_logger
 from fastdeploy.worker.output import LogprobsLists
 
@@ -241,6 +243,11 @@ class TokenProcessor:
 
             task_id = task.request_id
             token_ids = stream_data.tokens  # numpy.array
+            if token_ids is not None and token_ids[-1] <= 0:
+                if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                    if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                        self.resource_manager.reschedule_preempt_task(task_id)
+                continue
 
             current_time = time.time()
             if self.tokens_counter[task_id] == 0:
@@ -284,7 +291,21 @@ class TokenProcessor:
                     ),
                     finished=False,
                     metrics=metrics,
+                    ic_req_data=task.ic_req_data,
                 )
+                if self.use_logprobs:
+                    if getattr(stream_data, "logprobs", None) is not None:
+                        try:
+                            logprobs_list: LogprobsLists = stream_data.logprobs.tolists()
+                            result.outputs.logprob = float(logprobs_list.logprobs[0][0])
+                            result.outputs.top_logprobs = logprobs_list
+                        except Exception as e:
+                            llm_logger.warning(f"Failed to parse logprobs from StreamTransferData: {e}")
+                    if getattr(stream_data, "prompt_logprobs", None) is not None:
+                        try:
+                            result.prompt_logprobs_tensors = stream_data.prompt_logprobs
+                        except Exception as e:
+                            llm_logger.warning(f"Failed to parse prompt_logprobs from StreamTransferData: {e}")
                 if self.tokens_counter[task_id] == 0:
                     if task.messages is not None:
                         result.prompt = task.messages
@@ -306,8 +327,6 @@ class TokenProcessor:
         """
         if self.speculative_decoding:
             raise NotImplementedError("GET_SAVE_OUTPUT_V1 does not support speculative decoding")
-        if self.use_logprobs:
-            raise NotImplementedError("GET_SAVE_OUTPUT_V1 does not support use_logprobs")
         rank_id = self.cfg.parallel_config.local_data_parallel_id
         while True:
             try:
@@ -316,7 +335,8 @@ class TokenProcessor:
                 ) or (rank_id == 0):
                     receive_datas = self.zmq_server.recv_pyobj()
                     assert isinstance(receive_datas, list)
-                    llm_logger.debug(f"token_processor receive_data {receive_datas}")
+                    if envs.FD_DEBUG:
+                        llm_logger.debug(f"token_processor receive_data {receive_datas}")
 
                     self._reschedule_preempt_task_use_zmq(receive_datas)
 
@@ -481,6 +501,9 @@ class TokenProcessor:
                     self.split_connector.send_first_token(task.disaggregate_info, [result])
                     break
                 else:
+                    # TODO: Refine checking sending cache and do not keep waiting
+                    if time.time() - start_time > 30:
+                        llm_logger.warning(f"wait for sending cache, {task_id}")
                     time.sleep(0.002)
         else:
             if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -599,11 +622,11 @@ class TokenProcessor:
                         + i * MAX_DRAFT_TOKENS
                         + accept_num[i]
                     ].tolist()
-                    if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] <= 0):
-                        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                            if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
-                                self.resource_manager.reschedule_preempt_task(task_id)
-                        continue
+                if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] <= 0):
+                    if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                        if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                            self.resource_manager.reschedule_preempt_task(task_id)
+                    continue
             else:
                 token_id = int(tokens[i, 0])
                 token_ids = [token_id]
@@ -662,6 +685,8 @@ class TokenProcessor:
                 ),
                 finished=False,
                 metrics=metrics,
+                ic_req_data=task.ic_req_data,
+                prompt_token_ids_len=task.prompt_token_ids_len,
             )
             if self.tokens_counter[task_id] == 0:
                 if task.messages is not None:
@@ -682,7 +707,10 @@ class TokenProcessor:
                 if token_id != RECOVERY_STOP_SIGNAL:
                     if not (envs.FD_ENABLE_INTERNAL_ADAPTER and token_id in task.eos_token_ids):
                         result.outputs.token_ids.append(token_id)
-                    task.output_token_ids.append(token_id)
+
+                    if mtype == 3:
+                        task.output_token_ids.append(token_id)
+
                     if self.use_logprobs:
                         if self.cfg.speculative_config.method:
                             result.outputs.logprob = float(scores[i, batch_token_index, 0])
@@ -736,10 +764,8 @@ class TokenProcessor:
                     self._recycle_resources(task_id, i, task, result, is_prefill)
                     break
 
-            if not (is_prefill and self.cfg.splitwise_version == "v0"):
-                # NOTE: prefill instance in v0 version does not return result to scheduler
-                llm_logger.debug(f"get response from infer: {result}")
-                batch_result.append(result)
+            llm_logger.debug(f"get response from infer: {result}")
+            batch_result.append(result)
 
         self.postprocess(batch_result, mtype)
 
@@ -756,6 +782,8 @@ class TokenProcessor:
     def _record_first_token_metrics(self, task, current_time):
         """Record metrics for first token"""
         task.first_token_time = current_time
+        trace_print(LoggingEventName.FIRST_TOKEN_GENERATED, task.request_id, getattr(task, "user", ""))
+        trace_print(LoggingEventName.DECODE_START, task.request_id, getattr(task, "user", ""))
         main_process_metrics.first_token_latency.set(current_time - task.inference_start_time)
         main_process_metrics.time_to_first_token.observe(current_time - task.inference_start_time)
         main_process_metrics.request_queue_time.observe(task.schedule_start_time - task.preprocess_end_time)
@@ -765,7 +793,8 @@ class TokenProcessor:
         if hasattr(task, "first_token_time"):
             decode_time = current_time - task.first_token_time
             main_process_metrics.request_decode_time.observe(decode_time)
-
+        trace_print(LoggingEventName.INFERENCE_END, task.request_id, getattr(task, "user", ""))
+        trace_print(LoggingEventName.POSTPROCESSING_START, task.request_id, getattr(task, "user", ""))
         main_process_metrics.num_requests_running.dec(1)
         main_process_metrics.request_success_total.inc()
         main_process_metrics.infer_latency.set(current_time - task.inference_start_time)
@@ -830,7 +859,7 @@ class TokenProcessor:
     def clear_data(self):
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.resource_manager.clear_data()
-        for i in range(self.cfg.max_num_seqs):
+        for i in range(self.resource_manager.max_num_seqs):
             if self.resource_manager.stop_flags[i]:
                 continue
             task = self.resource_manager.tasks_list[i]
