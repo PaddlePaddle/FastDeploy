@@ -152,6 +152,9 @@ def load_tensor_from_shm_mem(tensor_infos, shm_ptr, logger=None):
             # NumPy 不支持 bfloat16，因此先以 uint16 读取原始数据，再用 Paddle cast 为 bfloat16
             tmp = np_array.view(np.uint16)
             tensor = paddle.Tensor(tmp, dtype=paddle.bfloat16, place=paddle.CPUPlace(), zero_copy=True)
+        elif dtype == paddle.float8_e4m3fn:
+            tmp = np_array.view(np.uint8)
+            tensor = paddle.Tensor(tmp, dtype=paddle.float8_e4m3fn, place=paddle.CPUPlace(), zero_copy=True)
         else:
             raise TypeError(f"Unsupported dtype: {dtype}")
 
@@ -294,8 +297,6 @@ class AsyncEPLoader(object):
         """
         up_gate_down = ["up_gate_proj", "down_proj"]
         quant_weight_scale = ["quant_weight", "weight_scale"]
-        if self.moe_quant_type == "w4a8":
-            quant_weight_scale = ["quant_weight"]
         ckpt_name = [
             (f"ernie.layers.{layer_id}.mlp.experts.{expert_id}.{proj_name}.{quant_name}")
             for layer_id, expert_id in need_to_reload
@@ -312,7 +313,7 @@ class AsyncEPLoader(object):
         from safetensors import safe_open
 
         for st_file in hf_weights_files:
-            with safe_open(st_file, framework="np", device="cpu") as f:
+            with safe_open(st_file, framework="paddle", device="cpu") as f:
                 for name in f.keys():
                     if name in ckpt_name:
                         weight = f.get_tensor(name)

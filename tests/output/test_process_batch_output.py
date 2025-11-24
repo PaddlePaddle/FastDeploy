@@ -63,6 +63,8 @@ class MockTask:
         self.prefill_chunk_info = None
         self.prefill_chunk_num = 0
         self.llm_engine_recv_req_timestamp = time.time()
+        self.ic_req_data = {}
+        self.prompt_token_ids_len = 0
 
     def get(self, key: str, default_value=None):
         if hasattr(self, key):

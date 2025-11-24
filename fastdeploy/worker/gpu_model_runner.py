@@ -1252,7 +1252,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
-    def _prepare_inputs(self) -> None:
+    def _prepare_inputs(self, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             recover_decode_task(
@@ -1303,7 +1303,7 @@ class GPUModelRunner(ModelRunnerBase):
         max_bad_tokens_len = np.max(self.share_inputs["bad_tokens_len"].numpy())
 
         # Initialize forward meta data
-        self.initialize_forward_meta()
+        self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
 
         # Get sampling metadata
         self.sampling_metadata = SamplingMetadata(
@@ -1357,7 +1357,7 @@ class GPUModelRunner(ModelRunnerBase):
         """Get current model"""
         return self.model
 
-    def initialize_forward_meta(self):
+    def initialize_forward_meta(self, is_dummy_or_profile_run=False):
         """
         Initialize forward meta and attention meta data
         """
@@ -1408,6 +1408,9 @@ class GPUModelRunner(ModelRunnerBase):
         self.forward_meta.step_use_cudagraph = (
             only_prefill_use_cudagraph if self.cudagraph_only_prefill else only_decode_use_cudagraph
         )
+
+        # Set forward_meta.is_dummy_or_profile_run to True to skip init_kv_signal_per_query for attention backends
+        self.forward_meta.is_dummy_or_profile_run = is_dummy_or_profile_run
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
@@ -1470,8 +1473,10 @@ class GPUModelRunner(ModelRunnerBase):
         for i in range(self.model_config.num_hidden_layers):
             # init key cache
             key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
+            key_cache_scales_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device}"
             if value_cache_shape:
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
+                value_cache_scales_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device}"
             if create_cache_tensor:
                 logger.info(f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
                 key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_type)
@@ -1497,12 +1502,25 @@ class GPUModelRunner(ModelRunnerBase):
                 logger.info(f"..attaching kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache = share_external_data(key_cache, key_cache_name, key_cache_shape)
+                if kv_cache_quant_type == "block_wise_fp8":
+                    key_cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
+                    key_cache_scales = share_external_data(
+                        key_cache_scales, key_cache_scales_name, kv_cache_scale_shape
+                    )
                 if value_cache_shape:
                     val_cache = paddle.empty(shape=[], dtype=cache_type)
                     val_cache = share_external_data(val_cache, val_cache_name, value_cache_shape)
                     cache_kvs_list.extend([key_cache, val_cache])
+                    if kv_cache_quant_type == "block_wise_fp8":
+                        val_cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
+                        val_cache_scales = share_external_data(
+                            val_cache_scales, value_cache_scales_name, kv_cache_scale_shape
+                        )
+                        cache_kvs_list.extend([key_cache_scales, val_cache_scales])
                 else:
                     cache_kvs_list.extend([key_cache])
+                    if kv_cache_quant_type == "block_wise_fp8":
+                        cache_kvs_list.extend([key_cache_scales])
 
         self.share_inputs["caches"] = cache_kvs_list
 
@@ -1801,7 +1819,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         while True:
             # 1. Initialize forward meta and attention meta data
-            self._prepare_inputs()
+            self._prepare_inputs(is_dummy_or_profile_run=True)
 
             # 2. Padding inputs for cuda graph
             self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph

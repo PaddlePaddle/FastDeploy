@@ -291,6 +291,7 @@ class TokenProcessor:
                     ),
                     finished=False,
                     metrics=metrics,
+                    ic_req_data=task.ic_req_data,
                 )
                 if self.use_logprobs:
                     if getattr(stream_data, "logprobs", None) is not None:
@@ -621,11 +622,11 @@ class TokenProcessor:
                         + i * MAX_DRAFT_TOKENS
                         + accept_num[i]
                     ].tolist()
-                    if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] <= 0):
-                        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                            if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
-                                self.resource_manager.reschedule_preempt_task(task_id)
-                        continue
+                if (not recovery_stop) and (len(token_ids) == 0 or token_ids[-1] <= 0):
+                    if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                        if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                            self.resource_manager.reschedule_preempt_task(task_id)
+                    continue
             else:
                 token_id = int(tokens[i, 0])
                 token_ids = [token_id]
@@ -684,6 +685,8 @@ class TokenProcessor:
                 ),
                 finished=False,
                 metrics=metrics,
+                ic_req_data=task.ic_req_data,
+                prompt_token_ids_len=task.prompt_token_ids_len,
             )
             if self.tokens_counter[task_id] == 0:
                 if task.messages is not None:
