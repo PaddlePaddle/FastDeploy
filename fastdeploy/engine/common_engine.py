@@ -82,9 +82,9 @@ class EngineService:
                     self.cfg.cache_config.cache_queue_port[self.cfg.parallel_config.local_data_parallel_id]
                 )
 
-        if self.cfg.parallel_config.enable_expert_parallel:
+        if self.cfg.parallel_config.data_parallel_size > 1:
             self.llm_logger = get_logger(
-                "fastdeploy", f"fastdeploy_rank{self.cfg.parallel_config.local_data_parallel_id}.log"
+                "fastdeploy", f"fastdeploy_dp{self.cfg.parallel_config.local_data_parallel_id}.log"
             )
         else:
             self.llm_logger = llm_logger
@@ -716,30 +716,40 @@ class EngineService:
                     is_fetching = False
                     return
 
-                self.llm_logger.debug(f"get tasks from {type(self.scheduler)}: {tasks}")
+                if tasks:
+                    self.llm_logger.info(f"Engine has fetched tasks from {self.scheduler.__class__.__name__}: {tasks}")
+
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     need_delete_tasks = []
                     if envs.FD_OFFLINE_PERF_TEST_FOR_PD:
                         for task in tasks:
                             # assure can allocate block ids in P
+                            self.llm_logger.debug(f"P is preallocating resources for request: {task.request_id}")
                             while not self.resource_manager.preallocate_resource_in_p(task):
                                 time.sleep(0.005)
-                            self.llm_logger.info(f"ask D resource for req_id: {task.request_id}")
+                            self.llm_logger.debug(f"P has allocated resources for request: {task.request_id}")
+                            self.llm_logger.debug(f"P is asking D to allocate resource for request: {task.request_id}")
                             while True:
+                                self.llm_logger.debug(f"P is putting splitwise tasks: {task.request_id}")
                                 self.split_connector.send_splitwise_tasks([task], task.idx)
                                 status, msg = self.split_connector.check_decode_allocated(task)
                                 if not status:
-                                    self.llm_logger.error(f"{task.request_id} ask D resource failed, try again.")
+                                    self.llm_logger.error(
+                                        f"D failed to allocate resource for request {task.request_id}, try again."
+                                    )
                                     time.sleep(0.05)
                                 else:
                                     break
+                            self.llm_logger.debug(f"D has allocated resource for request: {task.request_id}")
                     else:
                         for task in tasks:
                             # assure can allocate block ids in P
+                            self.llm_logger.debug(f"P is preallocating resources for request: {task.request_id}")
                             while not self.resource_manager.preallocate_resource_in_p(task):
                                 self.llm_logger.info("wait for preallocate_resource_in_p")
                                 time.sleep(0.005)
-                            self.llm_logger.info(f"ask D resource for req_id: {task.request_id}")
+                            self.llm_logger.debug(f"P has allocated resources for request: {task.request_id}")
+                            self.llm_logger.debug(f"P is asking D to allocate resource for request: {task.request_id}")
                             self.split_connector.send_splitwise_tasks([task], task.idx)
 
                         for task in tasks:
@@ -747,7 +757,9 @@ class EngineService:
                                 # assure fetch block ids from D
                                 status, msg = self.split_connector.check_decode_allocated(task)
                                 if not status:
-                                    self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
+                                    self.llm_logger.error(
+                                        f"D failed to allocate resource for request {task.request_id}, message: {msg}."
+                                    )
                                     self.scheduler.put_results(
                                         [
                                             RequestOutput(
@@ -760,25 +772,35 @@ class EngineService:
                                     )
                                     need_delete_tasks.append(task)
                                     continue
+                                else:
+                                    self.llm_logger.debug(f"D has allocated resource for request: {task.request_id}")
+
                     for tmp_task in need_delete_tasks:
                         tasks.remove(tmp_task)
                         # release resource in P
                         self.resource_manager.pre_recycle_resource(tmp_task.request_id)
+
                 if self.cfg.scheduler_config.splitwise_role == "prefill":
                     # to send cache info to cache messager
                     if tasks:
+                        need_check_req_ids = [task.request_id for task in tasks]
+                        self.llm_logger.debug(
+                            f"P is sending cache infos to cache messager for requests: {need_check_req_ids}"
+                        )
                         self.split_connector.send_cache_info_to_messager(tasks, 0)
                         # ensure cache tasks has sent to cache_messager
-                        need_check_req_ids = [task.request_id for task in tasks]
                         while need_check_req_ids:
                             req_ids = self.engine_worker_queue.get_finished_add_cache_task_req()
-                            self.llm_logger.info(f"get_finished_add_cache_task_req: {req_ids}")
                             if req_ids:
+                                self.llm_logger.debug(
+                                    f"P has successfully sent cache infos to cache messager for requests: {req_ids}"
+                                )
                                 for req_id in req_ids:
                                     assert req_id in need_check_req_ids
                                     need_check_req_ids.remove(req_id)
                             else:
                                 time.sleep(0.001)
+
                 # Fetch requests and add them to the scheduling queue
                 if tasks:
                     for task in tasks:
@@ -786,6 +808,9 @@ class EngineService:
                             LoggingEventName.RESOURCE_ALLOCATE_START, task.request_id, getattr(task, "user", "")
                         )
                     if self.cfg.scheduler_config.splitwise_role == "prefill":
+                        self.llm_logger.debug(
+                            f"P is putting requests into running queue: {[task.request_id for task in tasks]}"
+                        )
                         self.resource_manager.add_request_in_p(tasks)
                     else:
                         for task in tasks:
@@ -917,7 +942,6 @@ class EngineService:
                         request.llm_engine_recv_req_timestamp = time.time()
                         start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
                         main_process_metrics.requests_number.inc()
-                        self.llm_logger.debug(f"Receive request: {request}")
                         trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_SCHEDULE_START, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_QUEUE_START, data["request_id"], data.get("user", ""))
@@ -1082,10 +1106,14 @@ class EngineService:
             for item in items:
                 tasks = item[1]
                 if isinstance(tasks[0], Request):
-                    self.llm_logger.debug(f"receive tasks to preallocate resource, {tasks}")
+                    self.llm_logger.debug(
+                        f"D has received tasks from disaggregated queue to preallocate resource for tasks: {tasks}"
+                    )
                     allocate_resource_requests.extend(tasks)
                 elif isinstance(tasks[0], RequestOutput):
-                    self.llm_logger.debug(f"receive prefilled tasks, {tasks}")
+                    self.llm_logger.debug(
+                        f"D has received tasks from disaggregated queue to process prefilled tasks: {tasks}"
+                    )
                     if not isinstance(tasks, list):
                         tasks = [tasks]
                     for task in tasks:
@@ -1099,8 +1127,11 @@ class EngineService:
 
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                     if self.resource_manager.preallocate_resource_in_d(task):
-                        self.llm_logger.info(f"Resource available, processing task {task.request_id}")
+                        self.llm_logger.debug(
+f"D has preallocated resources, send cache infos now for task {task.request_id}"
+                        )
                         self.split_connector.send_cache_info_to_prefill([task])
+                        self.llm_logger.debug(f"D has successfully sent cache infos for task {task.request_id}")
                         processed_indices.append(idx)
                         is_success = True
                 else:
@@ -1114,6 +1145,7 @@ class EngineService:
                     if not self.enable_decode_cache_task:
                         task.error_msg = "Not enough resources"
                         self.split_connector.send_cache_info_to_prefill([task])
+                        self.llm_logger.debug(f"D has failed to send cache infos for task {task.request_id}")
                         processed_indices.append(idx)
                     else:
                         self.llm_logger.debug(f"Still waiting for resources {task.request_id}")
@@ -1169,7 +1201,7 @@ class EngineService:
                     if envs.FD_ENABLE_INTERNAL_ADAPTER:  # first token sent by D instance
                         self.scheduler.put_results([req_output])
                     self.resource_manager.add_prefilled_request(req_output)
-                    self.llm_logger.debug(f"add prefilled request success, {request_id}")
+                    self.llm_logger.debug(f"D has successfully added prefilled request, {request_id}")
 
         def decode_loop():
             while self.running:
