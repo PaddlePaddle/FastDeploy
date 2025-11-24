@@ -1118,7 +1118,7 @@ class EngineService:
                     # received the request sent by the client
                     waiting_request_outputs.append(req_output)
                     continue
-
+                req_output.finished = False
                 ready_request_outputs.append(req_output)
                 self.llm_logger.debug(f"there are enough resource for prefilled request: {req_output.request_id}")
 
@@ -1138,6 +1138,8 @@ class EngineService:
                         self.resource_manager.pre_recycle_resource(request_id)
                         if request_id in self.token_processor.tokens_counter:
                             del self.token_processor.tokens_counter[request_id]
+                        req_output.finished = True
+                        self.scheduler.put_results([req_output])
                         continue
                     if req_output.error_code != 200:
                         self.llm_logger.warning(
