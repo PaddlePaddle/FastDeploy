@@ -2074,8 +2074,8 @@ class GPUModelRunner(ModelRunnerBase):
                 # in chunk prefill
                 if self.cache_config.enable_chunked_prefill:
                     if hasattr(task, "prefill_end_index") and hasattr(task, "prompt_token_ids"):
-                        if len(task.prompt_token_ids) > task.prefill_end_index and idx in prefill_done_idxs:
-                            prefill_done_idxs.remove(idx)
+                        if len(task.prompt_token_ids) > task.prefill_end_index and task.idx in prefill_done_idxs:
+                            prefill_done_idxs.remove(task.idx)
 
             return prefill_done_idxs
 
