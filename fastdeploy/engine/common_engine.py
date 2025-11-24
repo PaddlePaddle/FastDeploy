@@ -1149,6 +1149,8 @@ class EngineService:
                         self.scheduler.put_results([req_output])
                         continue
                     self.token_processor.tokens_counter[request_id] = 1
+                    if envs.FD_ENABLE_INTERNAL_ADAPTER:  # first token sent by D instance
+                        self.scheduler.put_results([req_output])
                     self.resource_manager.add_prefilled_request(req_output)
                     self.llm_logger.debug(f"add prefilled request success, {request_id}")
 
