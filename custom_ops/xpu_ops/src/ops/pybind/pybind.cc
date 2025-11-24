@@ -33,19 +33,19 @@ void prof_start();
 
 void prof_stop();
 
-std::vector<paddle::Tensor> AdjustBatch(
-    const paddle::Tensor& x,            // [token_num, dim_embed]
-    const paddle::Tensor& cum_offsets,  // [bsz, 1]
-    const paddle::Tensor& encoder_seq_lod,
-    const paddle::Tensor& encoder_batch_idx,
-    const paddle::Tensor& decoder_batch_idx,
-    const paddle::Tensor& encoder_seq_lod_cpu,
-    const paddle::Tensor& encoder_batch_idx_cpu,
-    const paddle::Tensor& decoder_batch_idx_cpu,
-    const paddle::Tensor& enc_batch_tensor,
-    const paddle::Tensor& dec_batch_tensor,
-    const paddle::optional<paddle::Tensor>& output_padding_offset,
-    int max_input_length);
+// std::vector<paddle::Tensor> AdjustBatch(
+//     const paddle::Tensor& x,            // [token_num, dim_embed]
+//     const paddle::Tensor& cum_offsets,  // [bsz, 1]
+//     const paddle::Tensor& encoder_seq_lod,
+//     const paddle::Tensor& encoder_batch_idx,
+//     const paddle::Tensor& decoder_batch_idx,
+//     const paddle::Tensor& encoder_seq_lod_cpu,
+//     const paddle::Tensor& encoder_batch_idx_cpu,
+//     const paddle::Tensor& decoder_batch_idx_cpu,
+//     const paddle::Tensor& enc_batch_tensor,
+//     const paddle::Tensor& dec_batch_tensor,
+//     const paddle::optional<paddle::Tensor>& output_padding_offset,
+//     int max_input_length);
 
 void InitKVSignalPerQuery(const paddle::Tensor& seq_lens_encoder_tensor,
                           const paddle::Tensor& seq_lens_this_time_tensor,
@@ -350,19 +350,19 @@ std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& step_idx);
 
-std::vector<paddle::Tensor> GatherNextToken(
-    const paddle::Tensor& tmp_out,      // [token_num, dim_embed]
-    const paddle::Tensor& cum_offsets,  // [bsz, 1]
-    const paddle::Tensor& encoder_seq_lod,
-    const paddle::Tensor& encoder_batch_map,
-    const paddle::Tensor& decoder_batch_map,
-    const paddle::Tensor& encoder_seq_lod_cpu,
-    const paddle::Tensor& encoder_batch_map_cpu,
-    const paddle::Tensor& decoder_batch_map_cpu,
-    const paddle::Tensor& enc_batch_tensor,
-    const paddle::Tensor& dec_batch_tensor,
-    const paddle::optional<paddle::Tensor>& output_padding_offset,
-    int max_input_length);
+// std::vector<paddle::Tensor> GatherNextToken(
+//     const paddle::Tensor& tmp_out,      // [token_num, dim_embed]
+//     const paddle::Tensor& cum_offsets,  // [bsz, 1]
+//     const paddle::Tensor& encoder_seq_lod,
+//     const paddle::Tensor& encoder_batch_map,
+//     const paddle::Tensor& decoder_batch_map,
+//     const paddle::Tensor& encoder_seq_lod_cpu,
+//     const paddle::Tensor& encoder_batch_map_cpu,
+//     const paddle::Tensor& decoder_batch_map_cpu,
+//     const paddle::Tensor& enc_batch_tensor,
+//     const paddle::Tensor& dec_batch_tensor,
+//     const paddle::optional<paddle::Tensor>& output_padding_offset,
+//     int max_input_length);
 
 std::vector<paddle::Tensor> GetImgBoundaries(
     const paddle::Tensor& task_input_ids,
@@ -600,21 +600,21 @@ std::vector<paddle::Tensor> WeightQuantize(const paddle::Tensor& x,
                                            const int32_t group_size);
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
-  m.def("adjust_batch",
-        &AdjustBatch,
-        py::arg("x"),
-        py::arg("cum_offsets"),
-        py::arg("encoder_seq_lod"),
-        py::arg("encoder_batch_idx"),
-        py::arg("decoder_batch_idx"),
-        py::arg("encoder_seq_lod_cpu"),
-        py::arg("encoder_batch_idx_cpu"),
-        py::arg("decoder_batch_idx_cpu"),
-        py::arg("enc_batch_tensor"),
-        py::arg("dec_batch_tensor"),
-        py::arg("output_padding_offset"),
-        py::arg("max_input_length"),
-        "adjust batch in XPU");
+//   m.def("adjust_batch",
+//         &AdjustBatch,
+//         py::arg("x"),
+//         py::arg("cum_offsets"),
+//         py::arg("encoder_seq_lod"),
+//         py::arg("encoder_batch_idx"),
+//         py::arg("decoder_batch_idx"),
+//         py::arg("encoder_seq_lod_cpu"),
+//         py::arg("encoder_batch_idx_cpu"),
+//         py::arg("decoder_batch_idx_cpu"),
+//         py::arg("enc_batch_tensor"),
+//         py::arg("dec_batch_tensor"),
+//         py::arg("output_padding_offset"),
+//         py::arg("max_input_length"),
+//         "adjust batch in XPU");
 
   m.def("block_attn",
         &BlockAttn,
@@ -816,21 +816,21 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("quant_min_bound")    // 量化最小值边界
   );
 
-  m.def("gather_next_token",
-        &GatherNextToken,
-        py::arg("tmp_out"),
-        py::arg("cum_offsets"),
-        py::arg("encoder_seq_lod"),
-        py::arg("encoder_batch_map"),
-        py::arg("decoder_batch_map"),
-        py::arg("encoder_seq_lod_cpu"),
-        py::arg("encoder_batch_map_cpu"),
-        py::arg("decoder_batch_map_cpu"),
-        py::arg("enc_batch_tensor"),
-        py::arg("dec_batch_tensor"),
-        py::arg("output_padding_offset"),
-        py::arg("max_input_length"),
-        "Gather next token for XPU");
+//   m.def("gather_next_token",
+//         &GatherNextToken,
+//         py::arg("tmp_out"),
+//         py::arg("cum_offsets"),
+//         py::arg("encoder_seq_lod"),
+//         py::arg("encoder_batch_map"),
+//         py::arg("decoder_batch_map"),
+//         py::arg("encoder_seq_lod_cpu"),
+//         py::arg("encoder_batch_map_cpu"),
+//         py::arg("decoder_batch_map_cpu"),
+//         py::arg("enc_batch_tensor"),
+//         py::arg("dec_batch_tensor"),
+//         py::arg("output_padding_offset"),
+//         py::arg("max_input_length"),
+//         "Gather next token for XPU");
 
   m.def("get_img_boundaries",
         &GetImgBoundaries,
