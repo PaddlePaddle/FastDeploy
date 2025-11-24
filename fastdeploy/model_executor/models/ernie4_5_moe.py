@@ -138,7 +138,8 @@ class Ernie4_5_MoE(nn.Layer):
                 "down_proj_expert_code_zp_key": f"{prefix}.experts.{{}}.down_proj.code_zp",
             }
         elif moe_quant_type == "tensor_wise_fp8" or (
-            moe_quant_type == "block_wise_fp8" and fd_config.model_config.is_quantized
+            moe_quant_type == "block_wise_fp8"
+            and (fd_config.model_config.is_quantized or fd_config.model_config.is_moe_quantized)
         ):
             weight_key_map = {
                 "gate_weight_key": f"{prefix}.gate.weight",

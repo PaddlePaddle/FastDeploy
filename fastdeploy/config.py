@@ -180,6 +180,7 @@ class ModelConfig:
     ):
         self.model = ""
         self.is_quantized = False
+        self.is_moe_quantized = False
         self.max_model_len = 0
         self.dtype = "bfloat16"
         self.enable_logprob = False
