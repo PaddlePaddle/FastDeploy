@@ -86,6 +86,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         # self.check(layer, up_gate_proj_weights, down_proj_weights)
         up_gate_proj_weight_scale = []
         down_proj_weight_scale = []
+
+        if isinstance(state_dict, list):
+            state_dict = dict(state_dict)
+
         for expert_idx in logical_expert_ids:
             up_gate_proj_expert_weight_scale_key_name = up_gate_proj_expert_weight_scale_key.format(expert_idx)
             down_proj_expert_weight_scale_key_name = down_proj_expert_weight_scale_key.format(expert_idx)
