@@ -24,6 +24,15 @@ os.environ["GLOG_minloglevel"] = "2"
 os.environ["AISTUDIO_LOG"] = "critical"
 import typing
 
+# first import prometheus setup to set PROMETHEUS_MULTIPROC_DIR
+# otherwise, the Prometheus package will be imported first,
+# which will prevent correct multi-process setup
+from fastdeploy.metrics.prometheus_multiprocess_setup import (
+    setup_multiprocess_prometheus,
+)
+
+setup_multiprocess_prometheus()
+
 from paddleformers.utils.log import logger as pf_logger
 
 from fastdeploy.engine.sampling_params import SamplingParams

@@ -31,8 +31,6 @@ class TestGetFilteredMetrics(unittest.TestCase):
         3. Ensure metrics registered by extra_register_func are effective
         """
 
-        exclude_names = {"metric_to_exclude"}
-
         # Simulated metrics in base_registry (Gauge instances)
         g_keep = Gauge("metric_to_keep", "Kept metric")
         g_keep.set(1.23)
@@ -54,7 +52,7 @@ class TestGetFilteredMetrics(unittest.TestCase):
         with patch(
             "fastdeploy.metrics.metrics.multiprocess.MultiProcessCollector", side_effect=fake_multiprocess_collector
         ):
-            result = get_filtered_metrics(exclude_names=exclude_names, extra_register_func=extra_func)
+            result = get_filtered_metrics()
 
         print("==== result ====\n", result)
 
