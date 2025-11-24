@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import os
 import random
 import time
 from typing import Dict, List, Optional
@@ -43,6 +44,8 @@ from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.model_executor.ops.xpu import (
     adjust_batch,
+    create_kv_signal_sender,
+    destroy_kv_signal_sender,
     get_infer_param,
     get_padding_offset,
     limit_thinking_content_length_v1,
@@ -68,6 +71,7 @@ def xpu_pre_process(
     draft_tokens: Optional[paddle.Tensor] = None,
     seq_lens_encoder: Optional[paddle.Tensor] = None,
     seq_lens_decoder: Optional[paddle.Tensor] = None,
+    is_profiling: bool = False,
 ) -> XPUForwardMeta:
     """ """
     max_len = input_ids.shape[1]
@@ -152,6 +156,8 @@ def xpu_pre_process(
 
     share_inputs["ids_remove_padding"] = adjusted_input
     xpu_forward_meta.ids_remove_padding = adjusted_input
+    # Set forward_meta.is_profiling to True to skip init_kv_signal_per_query for attention backends
+    xpu_forward_meta.is_profiling = is_profiling
     return xpu_forward_meta
 
 
@@ -402,6 +408,8 @@ class XPUModelRunner(ModelRunnerBase):
         # Forward meta store the global meta information of the forward
         self.forward_meta: ForwardMeta = None
 
+        self.pd_disaggregation_mode: str = self.fd_config.parallel_config.pd_disaggregation_mode
+
     def exist_prefill(self):
         """
         check whether prefill stage exist
@@ -610,48 +618,75 @@ class XPUModelRunner(ModelRunnerBase):
 
     def insert_prefill_inputs(self, req_dicts: List[Request]):
         """Process inputs for prefill tasks and update share_inputs buffer"""
+        # NOTE(luotingdan): Set environment variable of prefill node
+        if req_dicts[-1].disaggregate_info is not None and req_dicts[-1].disaggregate_info["role"] == "prefill":
+            os.environ["PREFILL_NODE_ONE_STEP_STOP"] = "1"
+
         req_len = len(req_dicts)
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
             length = len(request.prompt_token_ids)
             assert length > 0, "The prompt requested must not be empty."
-            self.share_inputs["pre_ids"][idx : idx + 1] = -1
-            self.share_inputs["step_idx"][idx : idx + 1] = 0
-            self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
-            self.share_inputs["prompt_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
-            if self.enable_mm:
-                inputs = self._preprocess_mm_task(request.multimodal_inputs)
-                if inputs.get("images") is not None:
-                    self.share_inputs["image_features"] = self.extract_vision_features(inputs)
+
+            # Is Decode Node
+            if req_dicts[i].disaggregate_info is not None and req_dicts[i].disaggregate_info["role"] == "decode":
+                self.share_inputs["pre_ids"][idx : idx + 1] = request.prompt_token_ids[-1]
+                self.share_inputs["input_ids"][idx : idx + 1, 0] = request.prompt_token_ids[0]
+                self.share_inputs["prompt_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
+                self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
+                self.share_inputs["seq_lens_decoder"][idx : idx + 1] = length
+                self.share_inputs["seq_lens_this_time"][idx : idx + 1] = 1
+                self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = 0
+                self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = length
+                self.share_inputs["prompt_lens"][idx : idx + 1] = length
+                self.share_inputs["step_idx"][idx : idx + 1] = 1
+
+                # TODO support MTP
+                # if self.speculative_decoding:
+                #     num_prefill_send_token = self.speculative_config.num_speculative_tokens + 1
+                #     self.share_inputs["draft_tokens"][idx : idx + 1, 0:num_prefill_send_token] = paddle.to_tensor(
+                #         request.draft_token_ids[0:num_prefill_send_token],
+                #         dtype="int64",
+                #     )
+                #     self.seq_lens_this_time_buffer[idx : idx + 1] = num_prefill_send_token
+            else:
+                self.share_inputs["pre_ids"][idx : idx + 1] = -1
+                self.share_inputs["step_idx"][idx : idx + 1] = 0
+                self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
+                self.share_inputs["prompt_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
+                if self.enable_mm:
+                    inputs = self._preprocess_mm_task(request.multimodal_inputs)
+                    if inputs.get("images") is not None:
+                        self.share_inputs["image_features"] = self.extract_vision_features(inputs)
+                    else:
+                        # Compatible with the situation that lacks images and videos
+                        self.share_inputs["image_features"] = None
+                    position_ids = inputs["position_ids"]
+                    length = inputs["input_ids"].shape[1]
+                    self.share_inputs["input_ids"][idx : idx + 1, :length] = inputs["input_ids"]
                 else:
-                    # Compatible with the situation that lacks images and videos
-                    self.share_inputs["image_features"] = None
-                position_ids = inputs["position_ids"]
-                length = inputs["input_ids"].shape[1]
-                self.share_inputs["input_ids"][idx : idx + 1, :length] = inputs["input_ids"]
-            else:
-                self.share_inputs["seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
-                self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
-            self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length
-            self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = length
-            self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
-            self.share_inputs["prompt_lens"][idx : idx + 1] = length
+                    self.share_inputs["seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
+                    self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
+                self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length
+                self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = length
+                self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
+                self.share_inputs["prompt_lens"][idx : idx + 1] = length
 
-            if self.enable_mm:
-                self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
-                    position_ids, [request.get("max_tokens", 2048)], [0, position_ids.shape[0]]
-                )[0]
-                self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
+                if self.enable_mm:
+                    self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
+                        position_ids, [request.get("max_tokens", 2048)], [0, position_ids.shape[0]]
+                    )[0]
+                    self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
 
-            if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
-                # Enable thinking
-                self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
-                self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
-            else:
-                # Disable thinking
-                self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
-                self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
+                    # Enable thinking
+                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
+                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                else:
+                    # Disable thinking
+                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
                 res = request.get(attr, default_value)
@@ -892,6 +927,7 @@ class XPUModelRunner(ModelRunnerBase):
             draft_tokens=None,
             seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
             seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+            is_profiling=is_dummy_run,
         )
         # Update bad tokens len
         max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
@@ -900,7 +936,8 @@ class XPUModelRunner(ModelRunnerBase):
             self.forward_meta.pos_emb_type = self.share_inputs["pos_emb_type"]
         self.forward_meta.attn_backend = self.attn_backends[0]
         self.initialize_attention_backend()
-
+        if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
+            self.forward_meta.kv_signal_sender = self.kv_signal_sender
         # Get sampling metadata
         # TODU(lilujia): sync with GPU
         self.sampling_metadata = SamplingMetadata(
@@ -1151,10 +1188,10 @@ class XPUModelRunner(ModelRunnerBase):
         """
         # 0. set debug level
         # self._set_debug_level(0x1, model_forward_batch, is_dummy_run)
-
+        if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
+            self.kv_signal_sender = create_kv_signal_sender()
         # 1. Prepare inputs of model and decoder.
         self._prepare_inputs(is_dummy_run=is_dummy_run)
-
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
         # when there is data on other runner, the current runner is required to execute part of the model.
@@ -1229,6 +1266,8 @@ class XPUModelRunner(ModelRunnerBase):
             self.cache_config.enc_dec_block_num,
         )
 
+        if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
+            destroy_kv_signal_sender(self.kv_signal_sender)
         return None
 
     def _execute_empty_input(self) -> None:
