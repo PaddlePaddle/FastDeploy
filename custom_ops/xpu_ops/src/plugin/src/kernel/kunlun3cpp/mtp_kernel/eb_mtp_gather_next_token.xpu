@@ -38,14 +38,14 @@ static __device__ void do_memcpy_1d(_global_ptr_ TX* src,
 
 template <typename TX, typename TY>
 __global__ void eb_mtp_gather_next_token(TX* src,
-                                     TY* dst,
-                                     int* encoder_seqs_lods,
-                                     int* decoder_seqs_lods,
-                                     int* encoder_batch_map,
-                                     int* decoder_batch_map,
-                                     int en_batch,
-                                     int de_batch,
-                                     int64_t copy_size) {
+                                         TY* dst,
+                                         int* encoder_seqs_lods,
+                                         int* decoder_seqs_lods,
+                                         int* encoder_batch_map,
+                                         int* decoder_batch_map,
+                                         int en_batch,
+                                         int de_batch,
+                                         int64_t copy_size) {
   int tid = core_id() * cluster_num() + cluster_id();
   int nthreads = core_num() * cluster_num();
   __group_shared__ int local_lods_en[MAX_BATCH + 1];
@@ -75,13 +75,13 @@ __global__ void eb_mtp_gather_next_token(TX* src,
         len += local_lods_de[dec_idx + 1] - local_lods_de[dec_idx];
         dec_idx++;
         is_enc = false;
-        continue;      
+        continue;
       }
       if (dec_idx >= de_batch) {
         len += 1;
         enc_idx++;
         is_enc = true;
-        continue;        
+        continue;
       }
       if (local_map_en[enc_idx] < local_map_de[dec_idx]) {
         len += 1;
@@ -98,21 +98,22 @@ __global__ void eb_mtp_gather_next_token(TX* src,
     if (is_enc) {
       cur_src = src + (local_lods_en[enc_idx] - 1) * copy_size;
     } else {
-      cur_src = src + (encoder_len_total + local_lods_de[dec_idx] - (len - i)) * copy_size;
+      cur_src = src + (encoder_len_total + local_lods_de[dec_idx] - (len - i)) *
+                          copy_size;
     }
     do_memcpy_1d<TX, TY>(cur_src, cur_dst, copy_size);
   }
 }
-#define _XPU_DEF__EB_MTP_GATHER_NEXT_TOKEN(TX, TY)            \
-  template __global__ void eb_mtp_gather_next_token<TX, TY>(  \
-      TX * src,                                               \
-      TY * dst,                                               \
-      int* encoder_seqs_lods,                                 \
-      int* decoder_seqs_lods,                                 \
-      int* encoder_batch_map,                                 \
-      int* decoder_batch_map,                                 \
-      int en_batch,                                           \
-      int de_batch,                                           \
+#define _XPU_DEF__EB_MTP_GATHER_NEXT_TOKEN(TX, TY)           \
+  template __global__ void eb_mtp_gather_next_token<TX, TY>( \
+      TX * src,                                              \
+      TY * dst,                                              \
+      int* encoder_seqs_lods,                                \
+      int* decoder_seqs_lods,                                \
+      int* encoder_batch_map,                                \
+      int* decoder_batch_map,                                \
+      int en_batch,                                          \
+      int de_batch,                                          \
       int64_t copy_size);
 
 _XPU_DEF__EB_MTP_GATHER_NEXT_TOKEN(float16, float16);

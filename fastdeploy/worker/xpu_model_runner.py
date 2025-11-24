@@ -936,8 +936,9 @@ class XPUModelRunner(ModelRunnerBase):
                 forward_meta=self.forward_meta,
             )
 
-        hidden_states = xpu_process_output(model_output, self.share_inputs["cum_offsets"], self.forward_meta)
-
+        hidden_states = xpu_process_output(
+            model_output, self.share_inputs["cum_offsets"], self.forward_meta, self.share_inputs
+        )
         # 4. Compute logits, Sample
         logits = self.model.compute_logits(hidden_states)
         sampler_output = self.sampler(logits, self.sampling_metadata)

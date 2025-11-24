@@ -1042,21 +1042,25 @@ def xpu_process_output(
     forward_output,
     cum_offsets: paddle.Tensor,
     xpu_forward_meta: XPUForwardMeta,
+    share_inputs,
 ) -> paddle.Tensor:
     """ """
+
+    output_padding_offset = share_inputs.get("output_padding_offset", None)
 
     hiddden_states = gather_next_token(
         forward_output,
         cum_offsets,
         xpu_forward_meta.encoder_seq_lod,
+        xpu_forward_meta.decoder_seq_lod,
         xpu_forward_meta.encoder_batch_map,
         xpu_forward_meta.decoder_batch_map,
         xpu_forward_meta.encoder_seq_lod_cpu,
+        xpu_forward_meta.decoder_seq_lod_cpu,
         xpu_forward_meta.encoder_batch_map_cpu,
         xpu_forward_meta.decoder_batch_map_cpu,
-        xpu_forward_meta.enc_batch,
-        xpu_forward_meta.dec_batch,
-        None,  # output_padding_offset
+        xpu_forward_meta.len_info_cpu,
+        output_padding_offset,  # output_padding_offset
         -1,  # max_input_length
     )
     return hiddden_states
