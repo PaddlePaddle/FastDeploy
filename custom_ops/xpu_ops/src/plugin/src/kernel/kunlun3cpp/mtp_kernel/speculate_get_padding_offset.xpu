@@ -65,7 +65,7 @@ __global__ void speculate_remove_padding(T* output_data,
   }
 }
 
-__global__ void speculate_get_padding_offset(int* padding_offset,
+__global__ void speculate_get_padding_offset(int* batch_id_per_token,
                                              int* cum_offsets_out,
                                              int* cu_seqlens_q,
                                              int* cu_seqlens_k,
@@ -73,42 +73,6 @@ __global__ void speculate_get_padding_offset(int* padding_offset,
                                              const int* seq_lens,
                                              const int max_seq_len,
                                              int bsz) {
-  int bid = cluster_id();
-  int tid = core_id();
-  int ncores = core_num();
-  int nclusters = cluster_num();
-  int seq_lens_now = 0;
-  int cum_offsets_now = 0;
-  int cum_offsets_now_ind = 0;
-  for (int bi = bid; bi < bsz; bi += nclusters) {
-    GM2LM(seq_lens + bi, &seq_lens_now, sizeof(int));
-    if (bi == 0) {
-      cum_offsets_now = 0;
-    } else {
-      GM2LM(cum_offsets + bi - 1, &cum_offsets_now, sizeof(int));
-    }
-    GM2LM(cum_offsets + bi, &cum_offsets_now_ind, sizeof(int));
-
-    for (int i = tid; i < seq_lens_now; i += ncores) {
-      LM2GM(&cum_offsets_now,
-            padding_offset + bi * max_seq_len - cum_offsets_now + i,
-            sizeof(int));
-    }
-    LM2GM(&cum_offsets_now, cum_offsets_out + bi, sizeof(int));
-    int cum_seq_len = (bi + 1) * max_seq_len - cum_offsets_now_ind;
-    LM2GM(&cum_seq_len, cu_seqlens_q + bi + 1, sizeof(int));
-    LM2GM(&cum_seq_len, cu_seqlens_k + bi + 1, sizeof(int));
-  }
-}
-
-__global__ void speculate_get_padding_offset_v2(int* batch_id_per_token,
-                                                int* cum_offsets_out,
-                                                int* cu_seqlens_q,
-                                                int* cu_seqlens_k,
-                                                const int* cum_offsets,
-                                                const int* seq_lens,
-                                                const int max_seq_len,
-                                                int bsz) {
   int bid = cluster_id();
   int tid = core_id();
   int ncores = core_num();
