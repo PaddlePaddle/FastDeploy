@@ -75,6 +75,22 @@ if [ "${HAS_SPECULATIVE_DECODING_MODIFY}" != "" ] && [ "${PR_ID}" != "" ]; then
     check_approval "$echo_line1" 1 freeliuzc Deleter-D
 fi
 
+if [[ "${BRANCH}" != "develop" ]] && [[ -n "${PR_ID}" ]]; then
+    pr_info=$(curl -H "Authorization: token ${GITHUB_TOKEN}" \
+        https://api.github.com/repos/PaddlePaddle/FastDeploy/pulls/${PR_ID})
+
+    pr_title=$(echo "$pr_info" | jq -r '.title')
+    echo "==> PR title: ${pr_title}"
+
+    has_cp_tag=$(echo "$pr_title" | grep -o "\[Cherry-Pick\]" || true)
+    has_pr_number=$(echo "$pr_title" | grep -oE "#[0-9]{2,6}" || true)
+
+    if [[ -z "$has_cp_tag" ]] || [[ -z "$has_pr_number" ]]; then
+        echo_line="Cherry-Pick PR must come from develop and the title must contain [Cherry-Pick] and the original develop PR number (e.g., #5010). Approval required from FastDeploy RD: qingqing01(dangqingqing), Jiang-Jia-Jun(jiangjiajun), heavengate(dengkaipeng)."
+        check_approval "$echo_line" 1 qingqing01 Jiang-Jia-Jun heavengate
+    fi
+fi
+
 if [ -n "${echo_list}" ];then
   echo "****************"
   echo -e "${echo_list[@]}"
