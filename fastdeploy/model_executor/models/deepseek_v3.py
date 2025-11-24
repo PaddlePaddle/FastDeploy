@@ -344,7 +344,7 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         if needs_prefill:
             key_value = self.kv_b_proj(compressed_kv)
-            key_value = key_value.reshape(
+            key_value.reshape_(
                 [
                     -1,
                     self.num_attention_heads_tp,
@@ -370,7 +370,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             )
             fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp, self.qk_head_dim])
             fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
-            fmha_out_prefill = fmha_out_prefill.reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
+            fmha_out_prefill.reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
             fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
         else:
             fmha_out_prefill = paddle.zeros_like(output)
@@ -379,7 +379,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
 
             q_input = paddle.concat([q_nope_out, query_pe], axis=-1)
-            q_input = q_input.reshape(
+            q_input.reshape_(
                 [
                     -1,
                     self.num_attention_heads_tp * (self.kv_lora_rank + self.qk_rope_head_dim),

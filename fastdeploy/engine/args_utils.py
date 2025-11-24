@@ -478,7 +478,7 @@ class EngineArgs:
             self.enable_prefix_caching = False
         if self.speculative_config is not None:
             self.enable_prefix_caching = False
-        if not current_platform.is_cuda() and not current_platform.is_xpu():
+        if not current_platform.is_cuda() and not current_platform.is_xpu() and not current_platform.is_intel_hpu():
             self.enable_prefix_caching = False
         # if self.dynamic_load_weight:
         #     self.enable_prefix_caching = False
@@ -489,7 +489,7 @@ class EngineArgs:
                 raise NotImplementedError("processed_logprobs not support in speculative.")
             if self.speculative_config is not None and self.max_logprobs == -1:
                 raise NotImplementedError("max_logprobs=-1 not support in speculative.")
-            if not envs.FD_USE_GET_SAVE_OUTPUT_V1:
+            if not envs.FD_USE_GET_SAVE_OUTPUT_V1 and (self.max_logprobs == -1 or self.max_logprobs > 20):
                 self.max_logprobs = 20
                 console_logger.warning("Set max_logprobs=20 when FD_USE_GET_SAVE_OUTPUT_V1=0")
             if self.max_logprobs == -1 and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -507,22 +507,23 @@ class EngineArgs:
                     raise ValueError(
                         "Please set --rdma_comm_ports argument when using " "rdma cache transfer protocol."
                     )
-                if len(self.rdma_comm_ports) != self.tensor_parallel_size:
-                    raise ValueError("The number of rdma comm ports must be equal to tensor parallel size.")
-
-            if envs.ENABLE_V1_KVCACHE_SCHEDULER == 1:
-                if "ipc" in self.cache_transfer_protocol:
-                    # FIXME: support ipc cache transfer protocol
-                    raise NotImplementedError(
-                        "only support rdma cache transfer protocol " "when using ENABLE_V1_KVCACHE_SCHEDULER."
+                num_nodes = len(self.ips) if self.ips else 1
+                if self.data_parallel_size % num_nodes != 0:
+                    raise ValueError(
+                        f"data_parallel_size ({self.data_parallel_size}) must be divisible by "
+                        f"num_nodes ({num_nodes})."
                     )
-                # FIXME: fix this bug
-                if self.splitwise_role == "prefill" and self.num_gpu_blocks_override is None:
-                    raise NotImplementedError(
-                        "please set num_gpu_blocks_override for prefill " "instance using ENABLE_V1_KVCACHE_SCHEDULER."
+                dp_per_node = self.data_parallel_size // num_nodes
+                expected_ports = self.tensor_parallel_size * dp_per_node
+                if len(self.rdma_comm_ports) != expected_ports:
+                    raise ValueError(
+                        f"The number of rdma_comm_ports must equal "
+                        f"tensor_parallel_size * (data_parallel_size / num_nodes) = "
+                        f"{self.tensor_parallel_size} * ({self.data_parallel_size} / {num_nodes}) "
+                        f"= {expected_ports}, but got {len(self.rdma_comm_ports)}."
                     )
 
-        if not current_platform.is_cuda() and not current_platform.is_xpu():
+        if not (current_platform.is_cuda() or current_platform.is_xpu() or current_platform.is_maca()):
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
         if self.guided_decoding_backend != "off":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
