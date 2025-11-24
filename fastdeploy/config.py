@@ -198,6 +198,8 @@ class ModelConfig:
         self.pooler_config: Optional["PoolerConfig"] = field(init=False)
         self.override_pooler_config: Optional[Union[dict, "PoolerConfig"]] = None
         self.revision = None
+        self.prefix_layer_name = "layers"
+        self.kv_cache_quant_scale_path = ""
 
         self.partial_rotary_factor: float = 1.0
         self.num_nextn_predict_layers = 0
@@ -244,6 +246,7 @@ class ModelConfig:
 
         self.enable_mm = is_multimodal_model
 
+        self.kv_cache_quant_scale_path = os.path.join(self.model, "kv_cache_scale.json")
         if self.runner_type == "pooling":
             os.environ["FD_USE_GET_SAVE_OUTPUT_V1"] = "1"
 
@@ -550,8 +553,6 @@ class ParallelConfig:
         self.use_internode_ll_two_stage: bool = False
         # disable sequence parallel moe
         self.disable_sequence_parallel_moe: bool = False
-        # enable async download features
-        self.enable_async_download_features: bool = False
 
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
@@ -1238,6 +1239,8 @@ class CacheConfig:
             self.enable_hierarchical_cache = True
 
         if self.model_cfg is not None:
+            if self.model_cfg.quantization is not None and isinstance(self.model_cfg.quantization, dict):
+                self.cache_dtype = self.model_cfg.quantization.get("kv_cache_quant_type", self.cache_dtype)
             if self.model_cfg.quantization_config is not None:
                 self.cache_dtype = self.model_cfg.quantization_config.get("kv_cache_quant_type", self.cache_dtype)
             if (
@@ -1590,6 +1593,10 @@ class FDConfig:
                     self.scheduler_config.max_num_batched_tokens = 2048
                 else:
                     self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
+
+        self.scheduler_config.max_chunk_len = (
+            self.scheduler_config.max_num_batched_tokens + self.scheduler_config.max_extra_num_batched_tokens
+        )
 
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.model_config.max_model_len * 0.04)
