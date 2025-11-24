@@ -2,8 +2,9 @@
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "$DIR"
 
-#安装lsof工具
+#安装ci必要工具
 apt install -y lsof
+apt-get install -y iproute2
 
 #先kill一遍
 function stop_processes() {
