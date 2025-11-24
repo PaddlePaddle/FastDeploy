@@ -566,6 +566,7 @@ class LLMEngine:
             f" --override-pooler-config {self.cfg.model_config.override_pooler_config}"
             f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
             f" --max_logprobs {self.cfg.model_config.max_logprobs}"
+            f" --eplb_config '{self.cfg.eplb_config.to_json_string()}'"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"

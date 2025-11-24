@@ -351,6 +351,8 @@ def create_model_paths(args: Namespace) -> List[ModelPath]:
 
 async def initialize_engine_client(args: Namespace, pid: int) -> EngineClient:
     """Initialize and configure the engine client."""
+    engine_args = EngineArgs.from_cli_args(args)
+    config = engine_args.create_engine_config(port_availability_check=False)
     engine_client = EngineClient(
         model_name_or_path=args.model,
         tokenizer=args.tokenizer,
@@ -365,6 +367,7 @@ async def initialize_engine_client(args: Namespace, pid: int) -> EngineClient:
         enable_logprob=args.enable_logprob,
         workers=args.workers,
         tool_parser=args.tool_call_parser,
+        config=config,
     )
 
     await engine_client.connection_manager.initialize()

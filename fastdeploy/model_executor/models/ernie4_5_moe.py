@@ -368,7 +368,7 @@ class Ernie4_5_Model(nn.Layer):
         fd_config.model_config.pretrained_config.prefix_name = "ernie"
         self.fd_config = fd_config
         self.redundant_table_manger = None
-        if fd_config.model_config.enable_redundant_experts is True:
+        if fd_config.eplb_config.enable_eplb is True:
             self.redundant_table_manger = RedundantExpertManger(
                 n_routed_experts=fd_config.model_config.moe_num_experts,
                 num_hidden_layers=fd_config.model_config.num_hidden_layers,

@@ -1,4 +1,18 @@
-"""AsyncExpertLoader async load the model weights of the MoE experts."""
+"""
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
 
 import ctypes
 import os
@@ -8,15 +22,15 @@ from typing import List, Tuple
 
 import numpy as np
 import paddle
+from cuda import cudart
 
-from fastdeploy import envs
+from fastdeploy.config import EPLBConfig
 
 REARRANGE_EXPERT_MAGIC_NUM = 147183647
 REARRANGE_ORIGINATOR_EP_RANK = 0
 CHECK_TIME_INTERNAL = 3
 HTTP_RETRY_NUM = 5
 CHECK_TIMEOUT = 120
-
 
 libc = ctypes.CDLL(None)
 
@@ -45,22 +59,19 @@ MAIN_MODEL_REDUNDANT_SHM_SIZE = 5
 MODEL_MAIN_NAME = "eplb_main"
 
 
-def create_mmap(model_name: List, ep_rank: int, ep_size: int, shm_uuid: str, logger=None):
+def create_mmap(model_name: List, ep_rank: int, ep_size: int, shm_uuid: str, eplb_config: EPLBConfig, logger=None):
     """create_mmap"""
     flags = MAP_SHARED
     prot = PROT_READ | PROT_WRITE
 
     main_size = 0
-    if envs.FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB == 0:
+    if eplb_config.redundant_expert_async_load_model_shmem_size_gb == 0:
         main_size = TOTAL_MODEL_SIZE // ep_size
     else:
-        main_size = envs.FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB
+        main_size = eplb_config.redundant_expert_async_load_model_shmem_size_gb
     main_size = main_size * G
 
     mmap_infos = {}
-
-    from cuda import cudart
-
     for name in model_name:
         expert_weight_file = f"/dev/shm/{name}_rank_{ep_rank}_expert_weight_{shm_uuid}"
         shm_size = main_size
@@ -70,10 +81,7 @@ def create_mmap(model_name: List, ep_rank: int, ep_size: int, shm_uuid: str, log
         shm_fd = os.open(expert_weight_file, os.O_RDWR)
         os.ftruncate(shm_fd, shm_size)
         if logger is not None:
-            logger.info(
-                f"redundant_expert: create_mmap file {expert_weight_file}, \
-                                            fd {shm_fd}, size {shm_size}"
-            )
+            logger.info(f"redundant_expert: create_mmap file {expert_weight_file}, fd {shm_fd}, size {shm_size}")
 
         shm_ptr = libc.mmap(0, ctypes.c_size_t(shm_size), prot, flags, shm_fd, 0)
         if shm_ptr == MAP_FAILED:
@@ -86,8 +94,8 @@ def create_mmap(model_name: List, ep_rank: int, ep_size: int, shm_uuid: str, log
         (ret,) = cudart.cudaHostRegister(addr, shm_size, 0)
         if ret != cudart.cudaError_t.cudaSuccess:
             raise RuntimeError(
-                f"cudaHostRegister failed: {cudart.cudaGetErrorString(ret)},"
-                + f" address {hex(addr)} size {shm_size}, ret: {ret}"
+                f"cudaHostRegister failed: {cudart.cudaGetErrorString(ret)}, "
+                f" address {hex(addr)} size {shm_size}, ret: {ret}"
             )
 
         mmap_infos[name] = shm_ptr
@@ -173,6 +181,7 @@ class AsyncEPLoader(object):
     def __init__(
         self,
         model_dir,
+        eplb_config,
         rank=8,
         expert_per_rank=8,
         moe_layer_start_index=3,
@@ -183,6 +192,7 @@ class AsyncEPLoader(object):
         __init__
         """
         self.model_path = model_dir
+        self.eplb_config = eplb_config
 
         self.expert_per_rank = expert_per_rank
         self.moe_layer_start_index = moe_layer_start_index
@@ -239,7 +249,7 @@ class AsyncEPLoader(object):
             succ = True
             message = ""
             if len(need_to_reload) > 0:
-                if envs.FD_MODEL_USE_SAFETENSORS:
+                if self.eplb_config.model_use_safetensors:
                     succ, message = self.load_safetensor_fp8_from_disk(need_to_reload)
                 else:
                     succ, message = self.load_weight_bf16_from_disk(need_to_reload)
@@ -278,7 +288,7 @@ class AsyncEPLoader(object):
                     # self.logger.info(f"redundant_expert: {file_name} not exist.")
                     continue
                 # self.logger.info(f"redundant_expert: Loading expert weights: {file_name}.")
-                self.state_dicts[file_name] = paddle.load(self.model_path + "/merged_tp1_state_split/" + file_name)
+                # self.state_dicts[file_name] = paddle.load(self.model_path + "/merged_tp1_state_split/" + file_name)
 
             paddle.set_device(last_device)
             self.logger.info("redundant_expert: Loading expert weights end.")
@@ -343,7 +353,15 @@ def load_ep_checkpoint(model_path):
 
 
 def load_model_weights_process(
-    rank: int, expert_per_rank: int, moe_layer_start_index: int, moe_quant_type: str, data_conn, mg_conn, shm_uuid
+    rank: int,
+    model_dir: str,
+    expert_per_rank: int,
+    moe_layer_start_index: int,
+    moe_quant_type: str,
+    shm_uuid: str,
+    eplb_config: EPLBConfig,
+    data_conn,
+    mg_conn,
 ):
     """
     load_model_weights_process
@@ -354,18 +372,20 @@ def load_model_weights_process(
 
     setproctitle(f"eplb::async_load_model_{rank}")
     faulthandler.enable()
-    from server.utils import get_logger
+    from fastdeploy.utils import get_logger
 
     logger = get_logger("eplb_async_loader", "eplb_{0}.log".format(rank))
     logger.info("redundant_expert: load_model_weights_process start")
 
     paddle.set_device("cpu")
     ep_loader = AsyncEPLoader(
+        model_dir=model_dir,
         rank=rank,
         expert_per_rank=expert_per_rank,
         moe_layer_start_index=moe_layer_start_index,
         moe_quant_type=moe_quant_type,
         logger=logger,
+        eplb_config=eplb_config,
     )
 
     while True:

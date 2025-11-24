@@ -64,6 +64,7 @@ class RolloutModelConfig:
         plas_attention_config: str = None,
         data_parallel_size: int = 1,
         num_nextn_predict_layers: int = 0,
+        eplb_config: str = {},
     ):
         # Required parameters
         self.model = model_name_or_path
@@ -111,6 +112,7 @@ class RolloutModelConfig:
         self.ips = None
         self.plas_attention_config = plas_attention_config
         self.num_nextn_predict_layers = num_nextn_predict_layers
+        self.eplb_config = eplb_config
 
     def __str__(self):
         return "\n".join(f"{k}: {v}" for k, v in self.__dict__.items())

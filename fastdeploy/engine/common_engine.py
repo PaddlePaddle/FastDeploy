@@ -34,6 +34,7 @@ from opentelemetry import trace
 from fastdeploy.engine.request import Request, RequestOutput, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
+from fastdeploy.eplb.utils import init_eplb_signals
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
     EngineCacheQueue,
@@ -141,6 +142,12 @@ class EngineService:
                 disable_any_whitespace=self.cfg.structured_outputs_config.disable_any_whitespace,
             )
         self._init_worker_monitor_signals()
+
+        if self.cfg.eplb_config.enable_eplb:
+            current_suffix = int(
+                self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+            )
+            init_eplb_signals(cfg, current_suffix)
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 

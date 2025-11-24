@@ -186,7 +186,6 @@ class ModelConfig:
         self.enable_logprob = False
         self.max_logprobs = 20
         self.logprobs_mode = "raw_logprobs"
-        self.enable_redundant_experts = False
         self.redundant_experts_num = 0
         self.seed = 0
         self.quantization = None
@@ -1153,20 +1152,54 @@ class EPLBConfig:
 
     def __init__(
         self,
+        args,
     ):
-        self.enable_redundant_experts = envs.FD_ENABLE_REDUNDANT_EXPERTS
-        self.redundant_experts_num = envs.FD_REDUNDANT_EXPERTS_NUM
-        self.redundant_expert_ip_shm_size = envs.FD_REDUNDANT_EXPERT_IP_SHM_SIZE
-        self.redundant_expert_meta_dir = envs.FD_REDUNDANT_EXPERT_META_DIR
-        self.redundant_expert_api_user = envs.FD_REDUNDANT_EXPERT_API_USER
-        self.redundant_expert_api_password = envs.FD_REDUNDANT_EXPERT_API_PASSWORD
-        self.redundant_expert_eplb_strategy = envs.FD_REDUNDANT_EXPERT_EPLB_STRATEGY
-        self.redundant_expert_dump_workload_interval = envs.FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL
-        self.redundant_expert_async_load_model_shmem_size_gb = envs.FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB
-        self.redundant_expert_enable_schedule_cordon = envs.FD_REDUNDANT_EXPERT_ENABLE_SCHEDULE_CORDON
-        self.model_use_safetensors = envs.FD_MODEL_USE_SAFETENSORS
-        self.model_use_offline_quant = envs.FD_MODEL_USE_OFFLINE_QUANT
-        self.moe_quant_type = envs.FD_MOE_QUANT_TYPE
+        if args is None:
+            args = {}
+
+        # enable eplb
+        self.enable_eplb: bool = False
+        # redundant experts num
+        self.redundant_experts_num: int = 0
+        # expert ip shm size
+        self.redundant_expert_ip_shm_size: int = 1024
+        # expert meta dir
+        self.redundant_expert_meta_dir: str = "/tmp/redundant_expert_meta"
+        # expert api user and password
+        self.redundant_expert_api_user: str = ""
+        self.redundant_expert_api_password: str = ""
+        # expert eplb strategy
+        self.redundant_expert_eplb_strategy: str = ""
+        # expert dump workload interval
+        self.redundant_expert_dump_workload_interval: int = 10
+        # expert async load model shmem size gb
+        self.redundant_expert_async_load_model_shmem_size_gb: int = 0
+        # expert enable schedule cordon
+        self.redundant_expert_enable_schedule_cordon: bool = True
+        # model use safetensors
+        self.model_use_safetensors: bool = True
+        # model use offline quant
+        self.model_use_offline_quant: bool = True
+        # moe quant type
+        self.moe_quant_type: str = "w4a8"
+        for key, value in args.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+
+    def to_json_string(self):
+        """
+        Convert eplb_config to json string.
+        """
+        return json.dumps({key: value for key, value in self.__dict__.items() if value is not None})
+
+    def print(self):
+        """
+        Print all configuration information.
+        """
+        logger.info("EPLB Configuration Information :")
+        for k, v in self.__dict__.items():
+            logger.info("{:<20}:{:<6}{}".format(k, "", v))
+        logger.info("=============================================================")
 
 
 class CacheConfig:

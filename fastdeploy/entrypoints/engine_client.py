@@ -20,20 +20,22 @@ import time
 import traceback
 import uuid
 from copy import copy
+from http import HTTPStatus
 
 import numpy as np
 from filelock import FileLock
 
 from fastdeploy import envs
-from fastdeploy.config import ModelConfig
 from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
+from fastdeploy.eplb.utils import RedundantExpertWorkload
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
     IPCSignal,
     KVCacheStatus,
     ModelWeightsStatus,
     PrefixTreeStatus,
+    RearrangeExpertStatus,
     ZmqIpcClient,
 )
 from fastdeploy.metrics.work_metrics import work_process_metrics
@@ -63,6 +65,7 @@ class EngineClient:
         port,
         limit_mm_per_prompt,
         mm_processor_kwargs,
+        config,
         reasoning_parser=None,
         data_parallel_size=1,
         enable_logprob=False,
@@ -72,11 +75,12 @@ class EngineClient:
         splitwise_role=None,
         max_processor_cache=0,
     ):
-        model_config = ModelConfig({"model": model_name_or_path})
-        self.enable_mm = model_config.enable_mm
+        self.config = config
+        self.model_config = config.model_config
+        self.enable_mm = self.model_config.enable_mm
         enable_processor_cache = self.enable_mm and max_processor_cache > 0
         input_processor = InputPreprocessor(
-            model_config,
+            self.model_config,
             reasoning_parser,
             limit_mm_per_prompt,
             mm_processor_kwargs,
@@ -96,12 +100,15 @@ class EngineClient:
                 is_mm_model_disable_prefix_cache,
             )
 
-            self.disable_prefix_mm = is_mm_model_disable_prefix_cache(model_config)
+            self.disable_prefix_mm = is_mm_model_disable_prefix_cache(self.model_config)
 
         if tensor_parallel_size <= max_chips_per_node:
             self.is_master = True
         else:
             self.is_master = False
+
+        if self.config.eplb_config.enable_eplb:
+            self.init_eplb_signals(ipc_signal_suffix=port)
 
         array_size = min(max_chips_per_node, tensor_parallel_size)
         self.worker_healthy_live_recorded_time_array = np.zeros(shape=[array_size], dtype=np.int32)
@@ -142,6 +149,113 @@ class EngineClient:
         )
         self.connection_initialized = False
         self.clear_update_lock = FileLock(f"/tmp/fd_weight_clear_update_lock__pid{pid}_port{port}.lock")
+
+    def init_eplb_signals(self, ipc_signal_suffix):
+        """
+        Initialize eplb signals.
+        """
+        if self.config.parallel_config.tensor_parallel_rank != 0:
+            # only TP rank 0 need to init eplb signals, rank 0 manage all EPLB signals for all TP ranks
+            return
+
+        self.signal_clear_experts_token_stats_list = []
+        self.local_experts_token_stats_array_list = []
+        self.expert_tokens_stats_array_list = []
+        self.signal_update_weight_from_disk_array_list = []
+        self.update_weight_from_disk_result_list = []
+
+        dp_ipc_signal_suffix = f"{ipc_signal_suffix}_dp{self.config.parallel_config.local_data_parallel_id}"
+        rearrange_experts_status = np.zeros([1], dtype=np.int32)
+        self.rearrange_experts_signal = IPCSignal(
+            name="rearrange_experts_status",
+            array=rearrange_experts_status,
+            dtype=np.int32,
+            suffix=dp_ipc_signal_suffix,
+            create=False,
+        )
+
+        rearrange_experts_ips_size_array = np.zeros([1], dtype=np.int32)
+        self.rearrange_experts_ips_size_signal = IPCSignal(
+            name="rearrange_experts_ips_size",
+            array=rearrange_experts_ips_size_array,
+            dtype=np.int32,
+            suffix=dp_ipc_signal_suffix,
+            create=False,
+        )
+
+        self.shm_rearrange_experts_ips_list = IPCSignal(
+            name="rearrange_experts_ips_list",
+            shm_size=self.config.eplb_config.redundant_expert_ip_shm_size,
+            suffix=dp_ipc_signal_suffix,
+            create=False,
+        )
+
+        signal_update_weight_from_tensor = np.zeros([1], dtype=np.int32)
+        self.signal_update_weight_from_tensor_array = IPCSignal(
+            name="signal_update_weight_from_tensor",
+            array=signal_update_weight_from_tensor,
+            dtype=np.int32,
+            suffix=dp_ipc_signal_suffix,
+            create=False,
+        )
+
+        for tp_rank_id in range(self.config.parallel_config.tensor_parallel_size):
+            tp_ipc_signal_suffix = f"{dp_ipc_signal_suffix}_tp{tp_rank_id}"
+            signal_clear_experts_token_stats = np.zeros([1], dtype=np.int32)
+            self.signal_clear_experts_token_stats_list.append(
+                IPCSignal(
+                    name="signal_clear_experts_token_stats",
+                    array=signal_clear_experts_token_stats,
+                    dtype=np.int32,
+                    suffix=tp_ipc_signal_suffix,
+                    create=False,
+                )
+            )
+
+            signal_update_weight_from_disk = np.zeros([1], dtype=np.int32)
+            self.signal_update_weight_from_disk_array_list.append(
+                IPCSignal(
+                    name="signal_update_weight_from_disk",
+                    array=signal_update_weight_from_disk,
+                    dtype=np.int32,
+                    suffix=tp_ipc_signal_suffix,
+                    create=False,
+                )
+            )
+
+            result_update_weight_from_disk = np.zeros([1], dtype=np.int32)
+            self.update_weight_from_disk_result_list.append(
+                IPCSignal(
+                    name="result_update_weight_from_disk",
+                    array=result_update_weight_from_disk,
+                    dtype=np.int32,
+                    suffix=tp_ipc_signal_suffix,
+                    create=False,
+                )
+            )
+
+            experts_token_stats = np.zeros(
+                (self.config.model_config.num_hidden_layers, self.config.model_config.moe_num_experts),
+                dtype=np.int32,
+            )
+            self.expert_tokens_stats_array_list.append(
+                IPCSignal(
+                    name="all_experts_token_stats",
+                    array=experts_token_stats,
+                    dtype=np.int32,
+                    suffix=tp_ipc_signal_suffix,
+                    create=False,
+                )
+            )
+            self.local_experts_token_stats_array_list.append(
+                IPCSignal(
+                    name="local_experts_token_stats",
+                    array=experts_token_stats,
+                    dtype=np.int32,
+                    suffix=tp_ipc_signal_suffix,
+                    create=False,
+                )
+            )
 
     def create_zmq_client(self, model, mode):
         """
@@ -470,3 +584,199 @@ class EngineClient:
 
     def check_model_weight_status(self):
         return self.model_weights_status_signal.value[0] < 0
+
+    async def rearrange_experts(self, request_dict: dict):
+        """
+        rearrange experts
+        Args:
+            request_dict (dict): request body
+        Returns:
+            tuple: response body, status code
+        """
+        eplb_config = self.config.eplb_config
+        if not eplb_config.enable_eplb:
+            content = {"code": 1, "msg": "redundant expert is disabled"}
+            status_code = HTTPStatus.BAD_REQUEST
+            return content, status_code
+
+        if (
+            request_dict.get("user", "") != eplb_config.redundant_expert_api_user
+            or request_dict.get("passwd", "") != eplb_config.redundant_expert_api_password
+        ):
+            content = {"code": 1, "msg": "user or passwd is invalid"}
+            status_code = HTTPStatus.UNAUTHORIZED
+            return content, status_code
+
+        if self.config.parallel_config.tensor_parallel_rank != 0:
+            content = {
+                "code": 1,
+                "msg": f"actual rank {self.config.parallel_config.tensor_parallel_rank}, expect rank 0",
+            }
+            status_code = HTTPStatus.BAD_REQUEST
+            return content, status_code
+
+        action = request_dict.get("action", "")
+        api_server_logger.info(f"redundant_expert: rearrange_experts recv request, action {action}")
+        if action == "":
+            # action: start rearrange experts
+            # params: {'user': 'xxx', 'passwd': 'xxx', 'ips': ['10.54.99.77:8000', '10.54.99.77:8300']}
+            if self.rearrange_experts_signal.value[0] != RearrangeExpertStatus.FREE.value:
+                content = {
+                    "code": 1,
+                    "msg": f"rearrange is doing. actual status {self.rearrange_experts_signal.value[0]}, expect status {RearrangeExpertStatus.FREE.value}",
+                }
+                status_code = HTTPStatus.BAD_REQUEST
+            if "ips" not in request_dict and content is None:
+                content = {"code": 1, "msg": "ips in request is None"}
+                status_code = HTTPStatus.BAD_REQUEST
+
+            if content is not None:
+                return content, status_code
+
+            data_bytes = (";".join(request_dict["ips"])).encode("utf-8")
+            data_size = len(data_bytes)
+            if data_size > eplb_config.redundant_expert_ip_shm_size:
+                content = {
+                    "code": 1,
+                    "msg": f"actual ips size {data_size}, max limit {eplb_config.redundant_expert_ip_shm_size}",
+                }
+                status_code = HTTPStatus.INTERNAL_SERVER_ERROR
+            else:
+                self.rearrange_experts_ips_size_signal.value[0] = data_size
+                self.shm_rearrange_experts_ips_list.shm.buf[:data_size] = data_bytes
+                content = {"code": 0, "msg": "ok"}
+                status_code = HTTPStatus.OK
+            return content, status_code
+        elif action == "recv_expert_weight":
+            # action: receive global expert workload, and begin update weight from disk
+            # params: {'user': 'xxx', 'passwd': 'xxx', 'weight': (layers, experts)}
+            if "data" not in request_dict or not isinstance(request_dict["data"], list):
+                content = {"code": 1, "msg": "data not in request or data is not a list"}
+                status_code = HTTPStatus.BAD_REQUEST
+            else:
+                weight = np.array(request_dict["data"], dtype=np.int32)
+                for idx in range(len(self.expert_tokens_stats_array_list)):
+                    self.expert_tokens_stats_array_list[idx].value[:] = weight[:]
+                    self.signal_update_weight_from_disk_array_list[idx].value[0] = 1
+
+                content = {"code": 0, "msg": "ok"}
+                status_code = HTTPStatus.OK
+            return content, status_code
+        elif action == "update_weight_from_tensor":
+            if self.config.scheduler_config.splitwise_role != "prefill" and content is None:
+                content = {
+                    "code": 1,
+                    "msg": f"actual role {self.config.scheduler_config.splitwise_role}, expect role prefill",
+                }
+                status_code = HTTPStatus.BAD_REQUEST
+            if self.rearrange_experts_signal.value[0] != RearrangeExpertStatus.LOAD_SUCC.value and content is None:
+                content = {
+                    "code": 1,
+                    "msg": f"actual status {self.rearrange_experts_signal.value[0]}, expect status {RearrangeExpertStatus.LOAD_SUCC.value}",
+                }
+                status_code = HTTPStatus.BAD_REQUEST
+
+            if content is None:
+                self.signal_update_weight_from_tensor_array.value[0] = 1
+                content = {"code": 0, "msg": "ok"}
+                status_code = HTTPStatus.OK
+            return content, status_code
+        else:
+            content = {"code": 1, "msg": f"invalid action {action}"}
+            status_code = HTTPStatus.BAD_REQUEST
+            return content, status_code
+
+    async def get_per_expert_tokens_stats(self, request_dict: dict):
+        """
+        get per expert tokens stats
+
+        Args:
+            request_dict (dict): request body
+        Returns:
+            tuple: response body, status code
+        """
+        eplb_config = self.config.eplb_config
+        if not eplb_config.enable_eplb:
+            content = {"code": 1, "msg": "redundant expert is disabled"}
+            status_code = HTTPStatus.BAD_REQUEST
+            return content, status_code
+
+        if (
+            request_dict.get("user", "") != eplb_config.redundant_expert_api_user
+            or request_dict.get("passwd", "") != eplb_config.redundant_expert_api_password
+        ):
+            content = {"code": 1, "msg": "user or passwd is invalid"}
+            status_code = HTTPStatus.UNAUTHORIZED
+            return content, status_code
+
+        if self.config.parallel_config.tensor_parallel_rank != 0:
+            content = {
+                "code": 1,
+                "msg": f"actual rank {self.config.parallel_config.tensor_parallel_rank}, expect rank 0",
+            }
+            status_code = HTTPStatus.BAD_REQUEST
+            return content, status_code
+
+        if "clear_stat" in request_dict and request_dict["clear_stat"]:
+            for clear_experts_token_stats in self.signal_clear_experts_token_stats_list:
+                clear_experts_token_stats.value[0] = 1
+
+        local_experts_list = []
+        for local_experts_token_stats in self.local_experts_token_stats_array_list:
+            local_experts_list.append(local_experts_token_stats.value.tolist())
+        content = {"code": 0, "msg": "ok", "data": local_experts_list}
+        status_code = HTTPStatus.OK
+        return content, status_code
+
+    async def check_redundant(self, request_dict: dict):
+        """
+        check redundant
+        Args:
+            request_dict (dict): request body
+        Returns:
+            tuple: response body, status code
+        """
+        content, status_code = None, HTTPStatus.OK
+        eplb_config = self.config.eplb_config
+
+        if not eplb_config.enable_eplb:
+            content = {"code": 1, "msg": "redundant expert is disabled"}
+            status_code = HTTPStatus.BAD_REQUEST
+            return content, status_code
+
+        if (
+            request_dict.get("user", "") != eplb_config.redundant_expert_api_user
+            or request_dict.get("passwd", "") != eplb_config.redundant_expert_api_password
+        ):
+            content = {"code": 1, "msg": "user or passwd is invalid"}
+            status_code = HTTPStatus.UNAUTHORIZED
+            return content, status_code
+
+        if self.config.parallel_config.tensor_parallel_rank != 0:
+            content = {
+                "code": 1,
+                "msg": f"actual rank {self.config.parallel_config.tensor_parallel_rank}, expect rank 0",
+            }
+            status_code = HTTPStatus.BAD_REQUEST
+            return content, status_code
+
+        action = request_dict.get("action", "")
+        if action == "":
+            status = "unknown"
+            try:
+                status = RearrangeExpertStatus(self.rearrange_experts_signal.value[0]).name
+            except Exception:
+                # Ignore errors if status cannot be determined; default to "unknown"
+                pass
+            content = {"code": 0, "msg": "ok", "status": status}
+            get_workloads = False if "check_get_workloads" not in request_dict else request_dict["check_get_workloads"]
+            if get_workloads:
+                content["data"], content["msg"] = RedundantExpertWorkload(eplb_config.redundant_expert_meta_dir).load()
+            status_code = HTTPStatus.OK
+        elif action == "check_load_weight_result":
+            update_weight_from_disk_list = []
+            for update_weight_result in self.update_weight_from_disk_result_list:
+                update_weight_from_disk_list.append(update_weight_result.value[0].tolist())
+            content = {"code": 0, "msg": "ok", "data": update_weight_from_disk_list}
+            status_code = HTTPStatus.OK
+        return content, status_code

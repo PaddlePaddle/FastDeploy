@@ -179,6 +179,8 @@ async def lifespan(app: FastAPI):
         verification = False
     model_paths = [ModelPath(name=served_model_names, model_path=args.model, verification=verification)]
 
+    engine_args = EngineArgs.from_cli_args(args)
+    config = engine_args.create_engine_config(port_availability_check=False)
     engine_client = EngineClient(
         model_name_or_path=args.model,
         tokenizer=args.tokenizer,
@@ -196,6 +198,7 @@ async def lifespan(app: FastAPI):
         enable_prefix_caching=args.enable_prefix_caching,
         splitwise_role=args.splitwise_role,
         max_processor_cache=args.max_processor_cache,
+        config=config,
     )
     await engine_client.connection_manager.initialize()
     app.state.dynamic_load_weight = args.dynamic_load_weight
@@ -223,8 +226,6 @@ async def lifespan(app: FastAPI):
         args.max_waiting_time,
     )
 
-    engine_args = EngineArgs.from_cli_args(args)
-    config = engine_args.create_engine_config(port_availability_check=False)
     embedding_handler = OpenAIServingEmbedding(
         engine_client,
         app.state.model_handler,
@@ -513,6 +514,36 @@ def clear_load_weight(request: Request) -> Response:
         return Response(status_code=200)
     else:
         return Response(content="Dynamic Load Weight Disabled.", status_code=404)
+
+
+@app.post("/rearrange_experts")
+async def rearrange_experts(request: Request):
+    """
+    rearrange experts
+    """
+    request_dict = await request.json()
+    content, status_code = await app.state.engine_client.rearrange_experts(request_dict=request_dict)
+    return JSONResponse(content, status_code=status_code)
+
+
+@app.post("/get_per_expert_tokens_stats")
+async def get_per_expert_tokens_stats(request: Request):
+    """
+    get per expert tokens stats
+    """
+    request_dict = await request.json()
+    content, status_code = await app.state.engine_client.get_per_expert_tokens_stats(request_dict=request_dict)
+    return JSONResponse(content, status_code=status_code)
+
+
+@app.post("/check_redundant")
+async def check_redundant(request: Request):
+    """
+    check redundant
+    """
+    request_dict = await request.json()
+    content, status_code = await app.state.engine_client.check_redundant(request_dict=request_dict)
+    return JSONResponse(content, status_code=status_code)
 
 
 def launch_api_server() -> None:
