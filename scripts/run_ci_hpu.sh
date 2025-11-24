@@ -15,6 +15,7 @@ ps -efww | grep -E $FD_API_PORT | grep -v grep | awk '{print $2}' | xargs kill -
 lsof -t -i :$FD_API_PORT | xargs kill -9 || true
 
 echo "pip requirements"
+python -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 python -m pip install -r requirements.txt
 
 echo "uninstall org"
@@ -22,7 +23,6 @@ echo "uninstall org"
 python -m pip uninstall paddle-intel-hpu -y
 #to uninstall fastdeploy
 python -m pip uninstall fastdeploy_intel_hpu -y
-python -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 #to install paddlepaddle
 pip install paddlepaddle==3.1.1 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
 #to install paddlecustomdevice? (paddle-intel-hpu)
