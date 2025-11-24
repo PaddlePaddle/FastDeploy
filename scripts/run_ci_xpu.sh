@@ -14,6 +14,8 @@ function stop_processes() {
     for port in $(seq $((8188 + XPU_ID * 100 + 10)) $((8188 + XPU_ID * 100 + 40))); do
         lsof -t -i :${port} | xargs kill -9 || true
     done
+    netstat -tunlp 2>/dev/null | grep $((8190 + XPU_ID * 100)) | awk '{print $NF}' | awk -F'/' '{print $1}' | xargs -r kill -9
+    netstat -tunlp 2>/dev/null | grep $((8190 + XPU_ID * 100)) | awk '{print $(NF-1)}' | cut -d/ -f1 | grep -E '^[0-9]+$' | xargs -r kill -9
 }
 
 stop_processes >kill.log 2>&1
@@ -230,19 +232,18 @@ else
 fi
 export port_num=$((8188 + XPU_ID * 100))
 python -m fastdeploy.entrypoints.openai.api_server \
-    --model ${MODEL_PATH}/ERNIE-4.5-VL-28B-A3B-Paddle \
+    --model ${MODEL_PATH}/ERNIE-4.5-VL-28B-A3B-Thinking \
     --port $port_num \
     --engine-worker-queue-port $((port_num + 1)) \
     --metrics-port $((port_num + 2)) \
     --cache-queue-port $((port_num + 47873)) \
     --tensor-parallel-size 4 \
     --max-model-len 32768 \
-    --max-num-seqs 10 \
+    --max-num-seqs 32 \
     --quantization wint8 \
-    --enable-mm \
-    --mm-processor-kwargs '{"video_max_frames": 30}' \
-    --limit-mm-per-prompt '{"image": 10, "video": 3}' \
-    --reasoning-parser ernie-45-vl \
+    --reasoning-parser ernie-45-vl-thinking \
+    --tool-call-parser ernie-45-vl-thinking \
+    --mm-processor-kwargs '{"image_max_pixels": 12845056 }' \
     --enable-chunked-prefill > server.log 2>&1 &
 
 sleep 60
