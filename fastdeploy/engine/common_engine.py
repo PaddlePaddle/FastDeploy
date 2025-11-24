@@ -687,6 +687,7 @@ class EngineService:
                 else:
                     max_num_batched_tokens = self.cfg.model_config.max_model_len
 
+                self.check_and_free_block_tables()
                 tasks = self.scheduler.get_requests(
                     available_blocks=self.cfg.cache_config.max_block_num_per_seq,
                     block_size=self.cfg.cache_config.block_size,
