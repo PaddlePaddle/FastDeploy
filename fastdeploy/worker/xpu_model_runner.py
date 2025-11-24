@@ -190,12 +190,12 @@ def xpu_post_process(
     line_break_id: int = None,
 ) -> None:
     """ """
+    from fastdeploy.model_executor.ops.xpu import save_output, set_stop_value_multi_ends
     from fastdeploy.model_executor.ops.xpu import (
-        save_output,
-        set_stop_value_multi_ends,
-        update_inputs,
+        static_op_save_output_topk as save_output_topk,
     )
-    from fastdeploy.model_executor.ops.xpu import static_op_save_output_topk as save_output_topk
+    from fastdeploy.model_executor.ops.xpu import update_inputs
+
     sampled_token_ids = sampler_output.sampled_token_ids
 
     if think_end_id > 0:
@@ -296,11 +296,6 @@ def xpu_post_process(
                 False,  # use_ep
             )
         else:
-            if save_output_topk is None:
-                raise ImportError(
-                    "save_output_topk operator is not available. "
-                    "Please rebuild the XPU operators with the new get_output_msg_with_topk.cc and save_output_msg_with_topk.cc files."
-                )
             save_output_topk(
                 sampled_token_ids,
                 sampler_output.logprobs_tensors.logprob_token_ids,
@@ -1203,10 +1198,6 @@ class XPUModelRunner(ModelRunnerBase):
         # 4. Compute logits, Sample
         logits = self.model.compute_logits(hidden_states)
         sampler_output = self.sampler(logits, self.sampling_metadata)
-        if self.enable_logprob and sampler_output.logprobs_tensors is None:
-            logger.warning(f"enable_logprob=True but logprobs_tensors is None! "
-                          f"max_num_logprobs={self.sampling_metadata.max_num_logprobs}, "
-                          f"max_logprobs={self.max_logprobs}")
 
         # 5. Speculative decode
 

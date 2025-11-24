@@ -95,8 +95,12 @@ class TokenProcessor:
                     dtype="int64",
                 )
         elif self.use_logprobs:
-            self.output_tokens = paddle.full(shape=[self.logprob_max_bsz * (K + 1) + 2, 1], fill_value=2, dtype="int64")
-            self.output_scores = paddle.full(shape=[self.logprob_max_bsz * (K + 1), 1], fill_value=0.0, dtype="float32")
+            self.output_tokens = paddle.full(
+                shape=[self.logprob_max_bsz * (K + 1) + 2, 1], fill_value=2, dtype="int64"
+            )
+            self.output_scores = paddle.full(
+                shape=[self.logprob_max_bsz * (K + 1), 1], fill_value=0.0, dtype="float32"
+            )
             self.output_ranks = paddle.full(shape=[self.logprob_max_bsz], fill_value=0, dtype="int64")
         else:
             self.output_tokens = paddle.full(shape=[MAX_BSZ + 2, 1], fill_value=2, dtype="int64")
@@ -596,9 +600,7 @@ class TokenProcessor:
             batch = self.output_tokens[1, 0]
             k_plus_one = self.logprob_k + 1
             tokens = tokens[2 : batch * k_plus_one + 2].reshape([batch, k_plus_one])[:, :k_plus_one]
-            scores = (
-                self.output_scores[: batch * k_plus_one].numpy().reshape([batch, k_plus_one])[:, :k_plus_one]
-            )
+            scores = self.output_scores[: batch * k_plus_one].numpy().reshape([batch, k_plus_one])[:, :k_plus_one]
             ranks = self.output_ranks[:batch].numpy()
         else:
             batch = self.output_tokens[1, 0]
