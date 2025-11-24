@@ -21,20 +21,18 @@ template <paddle::DataType T,
           typename ElementA,
           typename ElementB,
           typename ElementC>
-void McMoeFFNKernel(const paddle::Tensor& permute_input,
+void McMoeFFNKernel(paddle::Tensor& permute_input,
                     const paddle::Tensor& tokens_expert_prefix_sum,
                     const paddle::Tensor& ffn1_weight,
                     const paddle::Tensor& ffn2_weight,
                     const paddle::optional<paddle::Tensor>& ffn1_bias,
                     const paddle::optional<paddle::Tensor>& ffn1_scale,
                     const paddle::optional<paddle::Tensor>& ffn2_scale,
-                    const std::string& quant_method,
-                    paddle::Tensor ffn_out) {
+                    const std::string& quant_method) {
   typedef PDTraits<T> traits_;
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
 
-  auto ffn_out_ptr = ffn_out.data<data_t>();
   auto permuted_input_ptr = permute_input.data<data_t>();
   auto place = permute_input.place();
   auto input_type = permute_input.dtype();
@@ -54,6 +52,9 @@ void McMoeFFNKernel(const paddle::Tensor& permute_input,
   mctlassExOrder_t row_major = mctlassExOrder_t::MCTLASS_EX_ORDER_ROW_MAJOR;
   mctlassExOrder_t column_major =
       mctlassExOrder_t::MCTLASS_EX_ORDER_COLUMN_MAJOR;
+  auto m_num_tile =
+      GetEmptyTensor({num_experts}, paddle::DataType::INT32, place);
+  int* m_num_tile_ptr = reinterpret_cast<int*>(m_num_tile.data<int>());
 
   // ffn1
   auto fc1_expert_biases =
@@ -72,6 +73,7 @@ void McMoeFFNKernel(const paddle::Tensor& permute_input,
       reinterpret_cast<ElementC*>(fc1_out_ptr),
       row_major,
       tokens_expert_prefix_sum.data<int>(),
+      m_num_tile_ptr,
       num_experts,
       expanded_active_expert_rows,
       inter_dim,
@@ -91,9 +93,10 @@ void McMoeFFNKernel(const paddle::Tensor& permute_input,
       column_major,
       reinterpret_cast<const ElementA*>(fc2_expert_scales),
       nullptr,
-      reinterpret_cast<ElementC*>(ffn_out_ptr),
+      reinterpret_cast<ElementC*>(permuted_input_ptr),
       row_major,
       tokens_expert_prefix_sum.data<int>(),
+      m_num_tile_ptr,
       num_experts,
       expanded_active_expert_rows,
       hidden_size,
@@ -102,7 +105,7 @@ void McMoeFFNKernel(const paddle::Tensor& permute_input,
 }
 
 std::vector<paddle::Tensor> MoeExpertFFN(
-    const paddle::Tensor& permute_input,
+    paddle::Tensor& permute_input,
     const paddle::Tensor& tokens_expert_prefix_sum,
     const paddle::Tensor& ffn1_weight,
     const paddle::Tensor& ffn2_weight,
@@ -112,10 +115,9 @@ std::vector<paddle::Tensor> MoeExpertFFN(
     const std::string& quant_method) {
   assert(quant_method == "weight_only_int8");
   const auto input_type = permute_input.dtype();
-  auto ffn_out = paddle::empty_like(permute_input);
 
   if (permute_input.numel() == 0) {
-    return {ffn_out};
+    return {permute_input};
   }
 
   switch (input_type) {
@@ -130,8 +132,7 @@ std::vector<paddle::Tensor> MoeExpertFFN(
                                     ffn1_bias,
                                     ffn1_scale,
                                     ffn2_scale,
-                                    quant_method,
-                                    ffn_out);
+                                    quant_method);
       break;
     // case paddle::DataType::FLOAT16:
     //   MoeFFNKernel<paddle::DataType::FLOAT16>(permute_input,
@@ -147,7 +148,7 @@ std::vector<paddle::Tensor> MoeExpertFFN(
     default:
       PD_THROW("Unsupported data type for MoeExpertFFN");
   }
-  return {ffn_out};
+  return {permute_input};
 }
 
 std::vector<std::vector<int64_t>> MoeExpertFFNInferShape(

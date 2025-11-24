@@ -87,6 +87,13 @@ void MoeDispatchKernel(
   int8_t *sorter_ws_ptr = reinterpret_cast<int8_t *>(ws_ptr + bytes);
   int *permuted_experts_ =
       reinterpret_cast<int *>(sorter_ws_ptr + sorter_ws_size_bytes);
+  // If expected_ws_size > workspace_size ever occurs in sorter_.run (which
+  // should be practically impossible), there is a contiguous, currently unused
+  // region (permuted_experts_) right after sorter_ws_ptr. In practice, this
+  // region is larger than what cub::DeviceRadixSort::SortPairs requires.
+  // However, relying on this to “work” after canceling the assertion is unsafe:
+  // it constitutes undefined behavior, and there is no guarantee it will remain
+  // correct across inputs, CUDA/CUB versions, or architectures.
   int *permuted_rows_ = permuted_experts_ + num_moe_inputs;
 
   int *topk_idx_ptr = topk_idx->data<int>();
