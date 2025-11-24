@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import importlib
 import importlib.util
 import sys
@@ -96,7 +112,8 @@ class DummyHFTokenizer:
         return DummyTokenizer()
 
 
-def _import_text_processor(use_hf_tokenizer=False):
+def _create_dummy_modules():
+    """Create all dummy modules needed for testing fastdeploy.input.text_processor."""
     repo_root = Path(__file__).resolve().parents[2]
 
     dummy_logger = SimpleNamespace(
@@ -109,12 +126,7 @@ def _import_text_processor(use_hf_tokenizer=False):
     utils_module.data_processor_logger = dummy_logger
 
     envs_module = types.ModuleType("fastdeploy.envs")
-    envs_module.FD_USE_HF_TOKENIZER = use_hf_tokenizer
-
-    fastdeploy_module = types.ModuleType("fastdeploy")
-    fastdeploy_module.__path__ = [str(repo_root / "fastdeploy")]
-    fastdeploy_module.utils = utils_module
-    fastdeploy_module.envs = envs_module
+    envs_module.FD_USE_HF_TOKENIZER = False
 
     generation_module = types.ModuleType("paddleformers.generation")
 
@@ -143,7 +155,12 @@ def _import_text_processor(use_hf_tokenizer=False):
     llm_utils_module = types.ModuleType("paddleformers.trl.llm_utils")
     llm_utils_module.get_eos_token_id = lambda tokenizer, config: [tokenizer.eos_token_id]
 
-    injected_modules = {
+    fastdeploy_module = types.ModuleType("fastdeploy")
+    fastdeploy_module.__path__ = [str(repo_root / "fastdeploy")]
+    fastdeploy_module.utils = utils_module
+    fastdeploy_module.envs = envs_module
+
+    return {
         "fastdeploy": fastdeploy_module,
         "fastdeploy.utils": utils_module,
         "fastdeploy.envs": envs_module,
@@ -153,8 +170,14 @@ def _import_text_processor(use_hf_tokenizer=False):
         "paddleformers.trl.llm_utils": llm_utils_module,
     }
 
+
+def _import_text_processor(use_hf_tokenizer=False):
+    modules = _create_dummy_modules()
+
+    modules["fastdeploy.envs"].FD_USE_HF_TOKENIZER = use_hf_tokenizer
+
     previous_modules = {}
-    for name, module in injected_modules.items():
+    for name, module in modules.items():
         previous_modules[name] = sys.modules.get(name)
         sys.modules[name] = module
 
@@ -171,8 +194,7 @@ def _import_text_processor(use_hf_tokenizer=False):
 
     def cleanup():
         sys.modules.pop("fastdeploy.input.text_processor", None)
-        for name, module in injected_modules.items():
-            original = previous_modules[name]
+        for name, original in previous_modules.items():
             if original is None:
                 sys.modules.pop(name, None)
             else:
@@ -238,6 +260,28 @@ class DummyRequest:
 
 
 class DataProcessorTestCase(unittest.TestCase):
+    @staticmethod
+    def create_dummy_reasoning(tokenizer, reasoning_content="think"):
+        class DummyReasoning:
+            def __init__(self, tokenizer):
+                self.tokenizer = tokenizer
+
+            def extract_reasoning_content(self, full_text, response_dict):
+                return reasoning_content, f"{full_text}!"
+
+        return DummyReasoning(tokenizer)
+
+    @staticmethod
+    def create_dummy_tool_parser(tokenizer, content="tool-text"):
+        class DummyToolParser:
+            def __init__(self, tokenizer):
+                self.tokenizer = tokenizer
+
+            def extract_tool_calls(self, full_text, response_dict):
+                return SimpleNamespace(tools_called=True, tool_calls=["tool"], content=content)
+
+        return DummyToolParser
+
     def setUp(self):
         module, cleanup = _import_text_processor()
         self.text_processor_module = module
@@ -366,22 +410,8 @@ class DataProcessorTestCase(unittest.TestCase):
     def test_process_response_with_reasoning_and_tools(self):
         processor = self.processor
 
-        class DummyReasoning:
-            def __init__(self, tokenizer):
-                self.tokenizer = tokenizer
-
-            def extract_reasoning_content(self, full_text, response_dict):
-                return "think", f"{full_text}!"
-
-        class DummyToolParser:
-            def __init__(self, tokenizer):
-                self.tokenizer = tokenizer
-
-            def extract_tool_calls(self, full_text, response_dict):
-                return SimpleNamespace(tools_called=True, tool_calls=["tool"], content="tool-only")
-
-        processor.reasoning_parser = DummyReasoning(processor.tokenizer)
-        processor.tool_parser_obj = DummyToolParser
+        processor.reasoning_parser = self.create_dummy_reasoning(processor.tokenizer)
+        processor.tool_parser_obj = self.create_dummy_tool_parser(processor.tokenizer, content="tool-only")
 
         response = SimpleNamespace(
             request_id="resp",
@@ -406,22 +436,8 @@ class DataProcessorTestCase(unittest.TestCase):
     def test_process_response_dict_normal_with_reasoning(self):
         processor = self.processor
 
-        class DummyReasoning:
-            def __init__(self, tokenizer):
-                self.tokenizer = tokenizer
-
-            def extract_reasoning_content(self, full_text, response_dict):
-                return "because", full_text + "!"
-
-        class DummyToolParser:
-            def __init__(self, tokenizer):
-                self.tokenizer = tokenizer
-
-            def extract_tool_calls(self, full_text, response_dict):
-                return SimpleNamespace(tools_called=True, tool_calls=["tool"], content="tool-text")
-
-        processor.reasoning_parser = DummyReasoning(processor.tokenizer)
-        processor.tool_parser_obj = DummyToolParser
+        processor.reasoning_parser = self.create_dummy_reasoning(processor.tokenizer, reasoning_content="because")
+        processor.tool_parser_obj = self.create_dummy_tool_parser(processor.tokenizer, content="tool-text")
 
         response = {
             "finished": True,
