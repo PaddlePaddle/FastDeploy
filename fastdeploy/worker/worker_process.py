@@ -269,11 +269,11 @@ class PaddleDisWorkerProc:
                 break
         state_dicts = load_tensor_from_shm_mem(self.experts_manager.tensor_infos, mmap_infos[MODEL_MAIN_NAME], logger)
         rank_expert_list, logical_to_physical_map, expert_count = self.experts_manager.get_ep_rank_to_expert_id_list()
-        self.worker.get_model().ernie.redundant_table_manger.update_expert_rank_table(
+        self.worker.get_model().redundant_table_manger.update_expert_rank_table(
             rank_expert_list, logical_to_physical_map, expert_count
         )
         # TO BE FIXED
-        self.worker.get_model().ernie.update_state_dict(state_dicts)
+        self.worker.get_model().update_state_dict(state_dicts)
         self.experts_manager.tensor_infos = None
 
     def _broadcast_model_weights_signal(self, src: int, group) -> int:
