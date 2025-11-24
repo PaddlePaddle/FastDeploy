@@ -32,5 +32,10 @@ def open_shm_and_get_meta_signal(
 
         out = open_shm_and_get_meta_signal(rank, device_id, keep_pd_step_flag)
         return out
+    elif current_platform.is_xpu():
+        from fastdeploy.model_executor.ops.xpu import open_shm_and_get_meta_signal
+
+        out = open_shm_and_get_meta_signal(rank, device_id, keep_pd_step_flag)
+        return out
     else:
         raise NotImplementedError
