@@ -848,7 +848,7 @@ class EngineService:
                         trace_print(LoggingEventName.RESOURCE_ALLOCATE_END, task.request_id, getattr(task, "user", ""))
                         trace_print(LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", ""))
                         trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
-                    self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
+                    self.engine_worker_queue.put_tasks_v1((tasks, self.resource_manager.real_bsz))
                     self.insert_task_signal.value[0] = 1
 
                 # 4. Response error tasks

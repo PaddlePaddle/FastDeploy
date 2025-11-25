@@ -496,6 +496,21 @@ class EngineWorkerQueue:
         self.tasks.append(tasks)
         self.lock.release()
 
+    def put_tasks_v1(self, tasks: List[Any]) -> None:
+        if envs.FD_ENABLE_MAX_PREFILL or envs.FD_ENABLE_E2W_TENSOR_CONVERT:
+            # multimodal input numpy -> tensor
+            to_tensor(tasks[0])
+        self.tasks[:] = list()
+        self.tasks.append(tasks)
+
+    def get_tasks_v1(self) -> Tuple[List[Any], bool]:
+        tasks = list()
+        tasks.extend(self.tasks)
+        return tasks
+    
+    def clear_tasks_v1(self):
+        self.tasks[:] = list()
+
     def get_tasks(self) -> Tuple[List[Any], bool]:
         """
         Retrieve tasks from the shared queue and update read status.

@@ -487,11 +487,7 @@ class PaddleDisWorkerProc:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
                 self.insert_step = True
 
-                tasks, read_finish = self.task_queue.get_tasks()
-                if read_finish:
-                    # Ensure that every worker get the task
-                    self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
-                    self.insert_task_signal.value[0] = 0
+                tasks = self.task_queue.get_tasks_v1()
 
                 req_dicts = []
                 for req_dict, bsz in tasks:
@@ -518,6 +514,11 @@ class PaddleDisWorkerProc:
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
             self.worker.execute_model(req_dicts, num_running_requests)
+            if tp_rank == 0 and req_dicts is not None:
+                self.insert_task_signal.value[0] = 0
+                self.task_queue.clear_tasks_v1()
+                self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
+
             self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
 
