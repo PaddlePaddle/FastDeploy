@@ -472,7 +472,7 @@ class XPUMoEMethod(MoEMethodBase):
             layer,
             permute_input,
             token_nums_per_expert,
-            max(1, valid_token_num),  # 确保空跑时也不为0
+            valid_token_num,
         )
 
         # 4. EP combine
