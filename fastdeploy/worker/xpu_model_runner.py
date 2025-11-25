@@ -985,7 +985,7 @@ class XPUModelRunner(ModelRunnerBase):
         if_only_decode = self.only_decode()
         if (
             self.fd_config.scheduler_config.splitwise_role == "mixed"
-        ):  # 集中式场景，phase默认初始化为prefill, 推理运行时不同类型的batch能够在此处实现phase切换
+        ):  # Centralized scenario: the phase is initialized as "prefill" by default. During inference runtime, different types of batches can achieve phase switching at this point.
             self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
         # Get sampling metadata
