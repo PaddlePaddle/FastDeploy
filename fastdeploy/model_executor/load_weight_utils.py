@@ -62,10 +62,13 @@ def load_weights_from_cache(model, weights_iterator):
             logger.info(f"{loaded_weight_name} is not in model parameters.")
             continue
         param = params_dict[loaded_weight_name]
+        if param.shape != loaded_weight.shape:
+            raise ValueError(
+                f"Shape mismatch between loaded weight {loaded_weight_name}: {loaded_weight.shape}, expected shape: {param.shape}"
+            )
         param.copy_(loaded_weight, False)
         if "embeddings" in loaded_weight_name and getattr(model, "tie_word_embeddings", False):
-            model.lm_head.linear.weight.set_value(loaded_weight)
-            model.lm_head.process_weights_after_loading()
+            model.lm_head.linear.weight.set_value(loaded_weight.transpose([1, 0]))
         for _, model_sublayer in model.named_sublayers():
             if isinstance(model_sublayer, KVBatchLinear):
                 model_sublayer.process_weights_after_loading()
@@ -107,7 +110,6 @@ def is_weight_cache_enabled(fd_config, weight_cache_path=".cache"):
 
             weight_cache_context = multi_switch_config_context(
                 (fd_config.quant_config, "is_checkpoint_bf16", False),
-                (fd_config.model_config, "model_format", "paddle"),
             )
 
     return enable_cache, weight_cache_dir, weight_cache_context
@@ -245,18 +247,22 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
             )
         return base_range
 
+    prefix_layer_name = (
+        "mtp_block" if getattr(fd_config.speculative_config, "model_type", "main") == "mtp" else "layers"
+    )
+
     for i in range(fd_config.model_config.moe_layer_start_index, fd_config.model_config.num_hidden_layers):
         for j in get_expert_ranges(fd_config):
-            up_gate_proj_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight"
-            down_proj_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight"
+            up_gate_proj_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.up_gate_proj.weight"
+            down_proj_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.down_proj.weight"
 
-            up_gate_proj_quant_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.quant_weight"
-            down_proj_quant_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.quant_weight"
+            up_gate_proj_quant_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.up_gate_proj.quant_weight"
+            down_proj_quant_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.down_proj.quant_weight"
 
-            up_gate_proj_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.weight_scale"
-            down_proj_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.weight_scale"
+            up_gate_proj_scale_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.up_gate_proj.weight_scale"
+            down_proj_scale_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.down_proj.weight_scale"
 
-            down_proj_in_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.down_proj.activation_scale"
+            down_proj_in_scale_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.down_proj.activation_scale"
             num_local_ffn_keys.append(up_gate_proj_key)
             num_local_ffn_keys.append(down_proj_key)
             num_local_ffn_keys.append(up_gate_proj_quant_key)
@@ -271,7 +277,7 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
             num_experts = num_experts[0]
 
         for j in range(num_experts):
-            up_gate_proj_in_scale_key = f"ernie.layers.{i}.mlp.experts.{j}.up_gate_proj.activation_scale"
+            up_gate_proj_in_scale_key = f"ernie.{prefix_layer_name}.{i}.mlp.experts.{j}.up_gate_proj.activation_scale"
             num_local_ffn_keys.append(up_gate_proj_in_scale_key)
 
     for k in num_local_ffn_keys:
@@ -282,7 +288,7 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
         no_tp_action_keys = copy.deepcopy(num_local_ffn_keys)
         if fd_config.parallel_config.use_sequence_parallel_moe:
             for i in range(fd_config.model_config.moe_layer_start_index, fd_config.model_config.num_hidden_layers):
-                k = f"ernie.layers.{i}.self_attn.o_proj.weight"
+                k = f"ernie.{prefix_layer_name}.{i}.self_attn.o_proj.weight"
                 if k in weight_list:
                     no_tp_action_keys.append(k)
         tp_actions = cls._get_tensor_parallel_mappings(fd_config.model_config.pretrained_config)
@@ -469,15 +475,16 @@ def deal_state_dict(state_dict):
             src_tensor._share_data_with(dst_tensor)
 
 
-def load_cache_scale(model_path, fd_config, state_dict):
-    file_path = os.path.join(model_path, "kv_cache_scale.json")
+def load_cache_scale(fd_config, state_dict):
+    file_path = fd_config.model_config.kv_cache_quant_scale_path
+    prefix_layer_name = fd_config.model_config.prefix_layer_name
     if os.path.exists(file_path):
         with open(file_path, "r") as f:
             data = json.load(f)
             for i in range(fd_config.model_config.num_hidden_layers):
 
-                k_scale_name = f"ernie.layers.{i}.self_attn.cachek_matmul.activation_scale"
-                v_scale_name = f"ernie.layers.{i}.self_attn.cachev_matmul.activation_scale"
+                k_scale_name = f"ernie.{prefix_layer_name}.{i}.self_attn.cachek_matmul.activation_scale"
+                v_scale_name = f"ernie.{prefix_layer_name}.{i}.self_attn.cachev_matmul.activation_scale"
 
                 k_scale = data[k_scale_name]
                 k_scale_tensor = paddle.to_tensor(k_scale, dtype=paddle.get_default_dtype())
@@ -504,7 +511,7 @@ def load_composite_checkpoint(
     # 2. Tensor Parallel (TP)
     # 3. Pre-sharded (pre-split)
     """
-    if fd_config.parallel_config.use_ep and fd_config.speculative_config.model_type != "mtp":
+    if fd_config.parallel_config.use_ep:
         state_dict = load_ep_checkpoint(cls, model_path, fd_config, return_numpy=True)
     else:
         rank_dirs = [
@@ -525,6 +532,9 @@ def load_composite_checkpoint(
                 state_dict = load_tp_checkpoint_v1(model_path, cls, fd_config, use_fastsafetensor=True)
                 deal_state_dict(state_dict)
             else:
+                fd_config.model_config.pretrained_config.use_sequence_parallel_moe = (
+                    fd_config.parallel_config.use_sequence_parallel_moe
+                )
                 # NOTE: for very big model, cpu will be out of memory
                 state_dict = load_tp_checkpoint(
                     model_path,
@@ -538,6 +548,6 @@ def load_composite_checkpoint(
     if hasattr(fd_config.quant_config, "kv_cache_quant_type"):
         kv_cache_quant_type = fd_config.quant_config.kv_cache_quant_type
         if kv_cache_quant_type == "float8_e4m3fn":
-            load_cache_scale(model_path, fd_config, state_dict)
+            load_cache_scale(fd_config, state_dict)
 
     return state_dict

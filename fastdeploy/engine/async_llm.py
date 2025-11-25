@@ -833,6 +833,7 @@ class AsyncLLMEngine:
             f" --override-pooler-config {self.cfg.model_config.override_pooler_config}"
             f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
             f" --max_logprobs {self.cfg.model_config.max_logprobs}"
+            f" --eplb_config '{self.cfg.eplb_config.to_json_string()}'"
         )
 
         worker_store_true_flag = {
@@ -899,8 +900,6 @@ class AsyncLLMEngine:
 
     def launch_components(self):
         if self.cfg.scheduler_config.splitwise_role != "mixed":
-            # 单机逻辑
-            self.engine_service.engine_worker_queue.available_prefill_instances.put(1)
             self.engine_service.split_mode_get_tasks()
             if self.cfg.scheduler_config.name == "splitwise":
                 self.splitwise_receive_thread = threading.Thread(

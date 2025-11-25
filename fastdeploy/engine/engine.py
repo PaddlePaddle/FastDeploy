@@ -40,6 +40,7 @@ from fastdeploy.engine.expert_service import start_data_parallel_service
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
 
 
@@ -136,8 +137,9 @@ class LLMEngine:
 
         # If block numer is specified and model is deployed in mixed mode, start cache manager first
         if not self.do_profile and self.cfg.scheduler_config.splitwise_role != "mixed":
-            device_ids = self.cfg.parallel_config.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
+            if not current_platform.is_intel_hpu():
+                device_ids = self.cfg.parallel_config.device_ids.split(",")
+                self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
         # Start workers
         self.worker_proc = self._start_worker_service()
@@ -170,12 +172,17 @@ class LLMEngine:
         if self.do_profile:
             self._stop_profile()
         elif self.cfg.scheduler_config.splitwise_role == "mixed" and self.cfg.cache_config.enable_prefix_caching:
-            device_ids = self.cfg.parallel_config.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
+            if not current_platform.is_intel_hpu():
+                device_ids = self.cfg.parallel_config.device_ids.split(",")
+                self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
         # Launch components: scheduler, cache_manager, expert_service et.al.
         if self.cfg.scheduler_config.splitwise_role != "mixed":
             self.launched_cache_manager_signal.value[0] = 1
+
+        if self.cfg.scheduler_config.splitwise_role != "mixed" and envs.FD_ENABLE_INTERNAL_ADAPTER:
+            envs.FD_ZMQ_RECV_REQUEST_SERVER_PORT = envs.FD_ZMQ_RECV_REQUEST_SERVER_PORTS.split(",")[0]
+            envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORT = envs.FD_ZMQ_SEND_RESPONSE_SERVER_PORTS.split(",")[0]
 
         if api_server_pid is not None:
             llm_logger.info(f"Start zmq server, api_server_pid: {api_server_pid}")
@@ -400,8 +407,10 @@ class LLMEngine:
         llm_logger.info("Engine shut down, exiting sub services...")
 
         if hasattr(self, "cache_manager_processes"):
-            self.engine.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
-            self.engine.resource_manager.cache_manager.cache_ready_signal.clear()
+            if hasattr(self.engine.resource_manager.cache_manager, "shm_cache_task_flag_broadcast"):
+                self.engine.resource_manager.cache_manager.shm_cache_task_flag_broadcast.clear()
+            if hasattr(self.engine.resource_manager.cache_manager, "cache_ready_signal"):
+                self.engine.resource_manager.cache_manager.cache_ready_signal.clear()
             for p in self.cache_manager_processes:
                 llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:
@@ -445,6 +454,7 @@ class LLMEngine:
             "NCCL_ALGO": "Ring",
             "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 1024)),
             "OMP_NUM_THREADS": int(os.getenv("OMP_NUM_THREADS", 3)),
+            "FD_ENABLE_PDL": envs.FD_ENABLE_PDL,
         }
         # environment variables needed by Dy2St
         variables.update(
@@ -556,6 +566,7 @@ class LLMEngine:
             f" --override-pooler-config {self.cfg.model_config.override_pooler_config}"
             f" --logprobs_mode {self.cfg.model_config.logprobs_mode}"
             f" --max_logprobs {self.cfg.model_config.max_logprobs}"
+            f" --eplb_config '{self.cfg.eplb_config.to_json_string()}'"
         )
         if self.cfg.structured_outputs_config.logits_processors is not None:
             arguments += f" --logits-processors {' '.join(self.cfg.structured_outputs_config.logits_processors)}"
@@ -673,8 +684,9 @@ class LLMEngine:
         self.cfg.cache_config.reset(num_gpu_blocks)
         self.engine.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
-            device_ids = self.cfg.parallel_config.device_ids.split(",")
-            self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
+            if not current_platform.is_intel_hpu():
+                device_ids = self.cfg.parallel_config.device_ids.split(",")
+                self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
     def check_health(self, time_interval_threashold=30):
         """
@@ -690,8 +702,6 @@ class LLMEngine:
 
     def launch_components(self):
         if self.cfg.scheduler_config.splitwise_role != "mixed":
-            # 单机逻辑
-            self.engine.engine_worker_queue.available_prefill_instances.put(1)
             self.splitwise_receive_thread = threading.Thread(
                 target=self.engine.split_connector.start_receiver, args=()
             )
@@ -702,18 +712,19 @@ class LLMEngine:
         host_ip = self.cfg.host_ip
         disaggregate = self.cfg.disaggregate_info
         request_queues_for_dp_ipc = None
-        result_queue_for_dp_ipc = None
+        result_queues_for_dp_ipc = None
         if self.cfg.scheduler_config.name == "splitwise":
             self.engine.scheduler.start(role, host_ip, disaggregate)
         elif self.cfg.scheduler_config.name == "dp":
             request_queues_for_dp_ipc = []
-            result_queue_for_dp_ipc = multiprocessing.Queue()
+            result_queues_for_dp_ipc = []
             for i in range(self.cfg.parallel_config.data_parallel_size):
                 request_queues_for_dp_ipc.append(multiprocessing.Queue())
+                result_queues_for_dp_ipc.append(multiprocessing.Queue())
             self.engine.scheduler.start(
                 self.cfg.node_rank * self.cfg.worker_num_per_node % self.cfg.worker_num_per_node,
                 request_queues_for_dp_ipc,
-                result_queue_for_dp_ipc,
+                result_queues_for_dp_ipc,
             )
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
@@ -750,7 +761,7 @@ class LLMEngine:
                                 i,
                                 None,
                                 request_queues_for_dp_ipc,
-                                result_queue_for_dp_ipc,
+                                result_queues_for_dp_ipc,
                             ),
                         )
                     )

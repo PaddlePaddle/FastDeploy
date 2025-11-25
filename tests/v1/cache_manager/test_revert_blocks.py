@@ -32,7 +32,7 @@ def make_prefix_cache_manager(max_num_seqs, enable_mm=False, num_gpu_blocks_over
     )
     args = asdict(engine_args)
     cache_cfg = CacheConfig(args)
-    model_cfg = SimpleNamespace(enable_mm=enable_mm, max_model_len=8192)
+    model_cfg = SimpleNamespace(enable_mm=enable_mm, max_model_len=4196)
     speculative_cfg = SimpleNamespace(method=None)
     model_cfg.print = print
     cache_cfg.bytes_per_layer_per_block = 1

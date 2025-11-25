@@ -24,7 +24,6 @@ from typing import Any, Dict, Generic, Optional, Union
 import numpy as np
 from typing_extensions import TypeVar
 
-from fastdeploy import envs
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
@@ -77,6 +76,7 @@ class Request:
         preprocess_end_time: Optional[float] = None,
         schedule_start_time: Optional[float] = None,
         inference_start_time: Optional[float] = None,
+        llm_engine_recv_req_timestamp: Optional[float] = None,
         multimodal_inputs: Optional[dict] = None,
         multimodal_data: Optional[dict] = None,
         disable_chat_template: bool = False,
@@ -102,6 +102,8 @@ class Request:
         prefill_start_index: int = 0,
         prefill_end_index: int = 0,
         num_computed_tokens: int = 0,
+        # for internal adapter
+        ic_req_data: Optional[dict] = (None,),
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -122,6 +124,7 @@ class Request:
         self.preprocess_end_time = preprocess_end_time
         self.schedule_start_time = schedule_start_time
         self.inference_start_time = inference_start_time
+        self.llm_engine_recv_req_timestamp = llm_engine_recv_req_timestamp or time.time()
         self.disable_chat_template = disable_chat_template
         self.disaggregate_info = disaggregate_info
 
@@ -171,6 +174,11 @@ class Request:
         # dp
         self.dp_rank = dp_rank
         self.llm_engine_recv_req_timestamp = time.time()
+        self.ic_req_data = ic_req_data
+
+        self.async_process_futures = []
+        self.error_message = None
+        self.error_code = None
 
     @classmethod
     def from_dict(cls, d: dict):
@@ -221,6 +229,9 @@ class Request:
             video_end=d.get("video_end", 0),
             audio_end=d.get("audio_end", 0),
             dp_rank=d.get("dp_rank", None),
+            ic_req_data=d.get("ic_req_data", None),
+            inference_start_time=d.get("inference_start_time"),
+            llm_engine_recv_req_timestamp=d.get("llm_engine_recv_req_timestamp"),
         )
 
     @property
@@ -271,6 +282,7 @@ class Request:
             "image_end": self.image_end,
             "video_end": self.video_end,
             "audio_end": self.audio_end,
+            "ic_req_data": self.ic_req_data,
         }
         add_params = [
             "guided_json",
@@ -303,19 +315,7 @@ class Request:
 
     def __repr__(self) -> str:
         """Safe string representation that ignores private and None fields."""
-        try:
-            if not envs.FD_DEBUG:
-                return f"Request(request_id={self.request_id})"
-            else:
-                attrs_snapshot = dict(vars(self))
-                non_none_fields = [
-                    f"{attr}={value!r}"
-                    for attr, value in attrs_snapshot.items()
-                    if value is not None and not attr.startswith("_")
-                ]
-                return f"Request({', '.join(non_none_fields)})"
-        except Exception as e:
-            return f"<{self.__class__.__name__} repr failed: {e}>"
+        return ""
 
 
 @dataclass(slots=True)
@@ -483,6 +483,9 @@ class RequestOutput:
         num_input_video_tokens: Optional[int] = 0,
         error_code: Optional[int] = 200,
         error_msg: Optional[str] = None,
+        # for internal adapter
+        ic_req_data: Optional[dict] = None,
+        prompt_token_ids_len: Optional[int] = 0,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -498,6 +501,8 @@ class RequestOutput:
         self.num_input_video_tokens = num_input_video_tokens
         self.error_code = error_code
         self.error_msg = error_msg
+        self.ic_req_data = ic_req_data
+        self.prompt_token_ids_len = prompt_token_ids_len
 
         if prompt_token_ids is None:
             self.prompt_token_ids = []
@@ -570,6 +575,8 @@ class RequestOutput:
             "num_input_video_tokens": self.num_input_video_tokens,
             "error_code": self.error_code,
             "error_msg": self.error_msg,
+            "ic_req_data": self.ic_req_data,
+            "prompt_token_ids_len": self.prompt_token_ids_len,
         }
 
 

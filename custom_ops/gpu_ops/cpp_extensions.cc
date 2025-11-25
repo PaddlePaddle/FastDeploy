@@ -304,6 +304,7 @@ paddle::Tensor MoeExpertFFNFunc(
     const paddle::Tensor& tokens_expert_prefix_sum,
     const paddle::Tensor& up_gate_proj_weight,
     const paddle::Tensor& down_proj_weight,
+    const paddle::optional<paddle::Tensor>& up_proj_in_scale,
     const paddle::optional<paddle::Tensor>& up_gate_proj_bias,
     const paddle::optional<paddle::Tensor>& up_gate_proj_scale,
     const paddle::optional<paddle::Tensor>& down_proj_scale,
@@ -380,8 +381,7 @@ void GetBlockShapeAndSplitKVBlock(
     const int encoder_block_shape_q,
     const int decoder_block_shape_q,
     const int group_size,
-    const int block_size,
-    const int decoder_step_token_num);
+    const int block_size);
 
 std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor& input_ids,
                                              const paddle::Tensor& token_num,
@@ -646,6 +646,19 @@ std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& scores,
                                     int topk,
                                     bool renormalize,
                                     float routed_scaling_factor);
+
+std::vector<paddle::Tensor> NoauxTcRedundant(
+    paddle::Tensor& scores,
+    paddle::Tensor& scores_with_bias,
+    paddle::Tensor& expert_id_to_ep_rank_array,
+    paddle::Tensor& expert_in_rank_num_list,
+    paddle::Tensor& tokens_per_expert_stats_list,
+    int n_group,
+    int topk_group,
+    int topk,
+    bool renormalize,
+    float routed_scaling_factor,
+    int redundant_ep_rank_num_plus_one);
 
 #ifdef ENABLE_FP8
 paddle::Tensor cutlass_fp8_fp8_half_gemm_func(
@@ -1484,6 +1497,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         "multi_head_latent_attention function");
 
   m.def("noaux_tc", &NoauxTc, "noaux_tc for Deepseekv3 MoE compute");
+
+  m.def("noaux_tc_redundant",
+        &NoauxTcRedundant,
+        "noaux_tc_redundant for MoE compute");
 
 #ifdef ENABLE_FP8
   m.def("cutlass_fp8_fp8_half_gemm_fused",

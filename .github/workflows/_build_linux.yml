@@ -164,7 +164,7 @@ jobs:
             python -m pip install -r requirements.txt
             python -m pip install wheel
             # 编译RDMA
-            export ENABLE_FD_RDMA=1
+            export FD_ENABLE_RDMA_COMPILE=1
             bash build.sh 1 python false [${COMPILE_ARCH}]
             ls ./dist/*.whl
             '
