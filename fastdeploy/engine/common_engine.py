@@ -200,16 +200,6 @@ class EngineService:
             create=True,
         )
 
-
-        exist_task_signal_data = np.zeros([1], dtype=np.int32)
-        self.exist_task_signal = IPCSignal(
-            name="exist_task_signal",
-            array=exist_task_signal_data,
-            dtype=np.int32,
-            suffix=current_suffix,
-            create=True,
-        )
-
         # exist_swapped_task_signal 用于engine感知worker中是否存在swapped task
         exist_swapped_task_signal_data = np.zeros([1], dtype=np.int32)
         self.exist_swapped_task_signal = IPCSignal(
