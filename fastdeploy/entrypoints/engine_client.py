@@ -61,7 +61,7 @@ class EngineClient:
         self.enable_mm = self.config.model_config.enable_mm
         input_processor = InputPreprocessor(
             self.config.model_config,
-            self.structured_outputs_config.reasoning_parser,
+            self.config.structured_outputs_config.reasoning_parser,
             self.config.limit_mm_per_prompt,
             self.config.mm_processor_kwargs,
             self.config.tool_parser,
