@@ -671,10 +671,7 @@ class ChatCompletionRequest(BaseModel):
         if request_id is not None:
             req_dict["request_id"] = request_id
 
-        if "prompt_token_ids" in req_dict:
-            if "messages" in req_dict:
-                del req_dict["messages"]
-        else:
+        if "prompt_token_ids" not in req_dict or not req_dict["prompt_token_ids"]:
             # If disable_chat_template is set, then the first message in messages will be used as the prompt.
             assert (
                 len(req_dict["messages"]) > 0
