@@ -18,8 +18,12 @@
 
 set -e
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-echo "Script directory: $DIR"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+echo "Project root: $PROJECT_ROOT"
+
+# Change to project root directory
+cd "${PROJECT_ROOT}"
 
 # =============================================================================
 # Environment Setup
@@ -106,6 +110,9 @@ run_test() {
     local test_name=$2
 
     echo "============================开始 ${test_name} 测试!============================"
+    echo "当前工作目录: $(pwd)"
+    echo "测试路径: tests/xpu_ci/cases/"
+    echo "测试 marker: ${test_marker}"
 
     python -m pytest tests/xpu_ci/cases/ \
         -m "${test_marker}" \
@@ -114,9 +121,23 @@ run_test() {
         -v -s
 
     local exit_code=$?
+    echo "pytest 退出码: ${exit_code}"
 
-    if [ ${exit_code} -ne 0 ]; then
-        echo "${test_name} 测试失败，请检查pr代码"
+    # pytest exit codes:
+    # 0: All tests passed
+    # 1: Tests were collected and run but some failed
+    # 2: Test execution was interrupted by the user
+    # 3: Internal error happened while executing tests
+    # 4: pytest command line usage error
+    # 5: No tests were collected
+
+    if [ ${exit_code} -eq 5 ]; then
+        echo "警告: 没有找到 ${test_name} 的测试用例 (marker: ${test_marker})"
+        echo "请检查测试文件是否存在以及 marker 是否正确"
+        return 1
+    elif [ ${exit_code} -ne 0 ]; then
+        echo "${test_name} 测试失败，退出码: ${exit_code}"
+        echo "请检查上面的测试输出"
         return 1
     fi
 
