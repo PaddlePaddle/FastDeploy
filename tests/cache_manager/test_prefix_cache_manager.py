@@ -386,6 +386,11 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 _DummyEngineCacheQueue,
             ),
             patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
+                return_value=["0"],
+                create=True,
+            ),
+            patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
                 _DummyProcess,
             ),
@@ -422,6 +427,11 @@ class PrefixCacheManagerTest(unittest.TestCase):
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.EngineCacheQueue",
                 _DummyEngineCacheQueue,
+            ),
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
+                return_value=["0"],
+                create=True,
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
@@ -534,6 +544,11 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 _DummyEngineCacheQueue,
             ),
             patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
+                return_value=["0"],
+                create=True,
+            ),
+            patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
                 partial(_PollingProcess, poll_value=1),
             ),
@@ -570,6 +585,11 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 side_effect=_DummyIPCSignal,
             ),
             patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
+                return_value=["0"],
+                create=True,
+            ),
+            patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
                 _DummyProcess,
             ),
@@ -594,6 +614,11 @@ class PrefixCacheManagerTest(unittest.TestCase):
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.IPCSignal",
                 side_effect=_DummyIPCSignal,
+            ),
+            patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
+                return_value=["0"],
+                create=True,
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
