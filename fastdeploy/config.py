@@ -1689,10 +1689,20 @@ class FDConfig:
             logger.info("Multi-modal models do not support prefix caching when using CUDAGraph!")
 
         if self.scheduler_config.splitwise_role == "mixed":
+            if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
+                self.parallel_config.use_sequence_parallel_moe = False
+                logger.info(
+                    "Warning: sequence parallel moe do not support Mixed mode with cudagraph. We set use_sequence_parallel_moe to False."
+                )
             self.model_config.moe_phase = MoEPhase(phase="prefill")
         elif self.scheduler_config.splitwise_role == "prefill":
             self.model_config.moe_phase = MoEPhase(phase="prefill")
         elif self.scheduler_config.splitwise_role == "decode":
+            if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
+                self.parallel_config.use_sequence_parallel_moe = False
+                logger.info(
+                    "Warning: sequence parallel moe do not support PD's decode node with cudagraph. We set use_sequence_parallel_moe to False."
+                )
             self.model_config.moe_phase = MoEPhase(phase="decode")
         else:
             raise NotImplementedError
