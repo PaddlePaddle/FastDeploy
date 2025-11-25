@@ -156,6 +156,7 @@ class Ernie4_5_VLMoeForProcessRewardModel(Ernie4_5_VLMoeRewardBaseModel):
             {
                 "encode": Pooler.for_encode(pooler_config, fd_config.model_config),
                 "embed": Pooler.for_embed(pooler_config, fd_config.model_config),
+                "reward": Pooler.for_reward(pooler_config, fd_config.model_config),
             },
         )
 

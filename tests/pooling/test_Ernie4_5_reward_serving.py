@@ -166,9 +166,7 @@ def consistent_payload():
             {"role": "user", "content": [{"type": "text", "text": "北京天安门在哪里？"}]},
             {
                 "role": "assistant",
-                "content": [
-                    {"type": "text", "text": "北京天安门位于中国北京市中心，天安门广场北端，故宫博物院的南门。"}
-                ],
+                "content": [{"type": "text", "text": "北京天安门在中国北京故宫的前面。"}],
             },
         ],
         "user": "test-user-123",

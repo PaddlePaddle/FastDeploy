@@ -524,7 +524,6 @@ class GPUModelRunner(ModelRunnerBase):
 
             if hasattr(request, "pooling_params") and request.pooling_params is not None:
                 batch_pooling_params.append(request.pooling_params)
-                request.pooling_params.task = "embed"
 
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
                 prefill_start_index = request.prefill_start_index

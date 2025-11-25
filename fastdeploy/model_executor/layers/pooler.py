@@ -121,6 +121,14 @@ class Pooler(nn.Layer, ABC):
         return SimplePooler.from_config(resolved_config, model_config)
 
     @staticmethod
+    def for_reward(pooler_config: PoolerConfig, model_config: Optional["ModelConfig"] = None):
+        resolved_config = ResolvedPoolingConfig.from_config(
+            task="reward",
+            pooler_config=pooler_config,
+        )
+        return SimplePooler.from_config(resolved_config, model_config)
+
+    @staticmethod
     def for_classify(
         pooler_config: PoolerConfig,
         classify: Optional[ClassifierFn],
@@ -300,7 +308,6 @@ class RewardPoolerHead(PoolerHead):
         else:
             pooled_data = [self.activation(vecs) if f else vecs for vecs, f in zip(pooled_data, flags)]
 
-        print(f"==RewardPoolerHead end==>pooled_data:{pooled_data}, ===>{pooling_metadata}")
         return pooled_data
 
 
@@ -345,7 +352,7 @@ class PoolingMethod(nn.Layer, ABC):
 class LastPool(PoolingMethod):
 
     def get_supported_tasks(self) -> Set[PoolingTask]:
-        return {"encode", "embed", "classify", "score"}
+        return {"encode", "embed", "classify", "score", "reward"}
 
     def forward_all(
         self,
@@ -482,7 +489,7 @@ class SimplePooler(Pooler):
         pooling = PoolingMethod.from_pooling_type(pooler_config.pooling_type)
         if pooler_config.task == "embed":
             head = EmbeddingPoolerHead(model_config)
-        elif pooler_config.task == "encode":
+        elif pooler_config.task == "encode" or pooler_config.task == "reward":
             head = RewardPoolerHead(model_config)
         else:
             raise NotImplementedError(f"Unknown task: {pooler_config.task}")
