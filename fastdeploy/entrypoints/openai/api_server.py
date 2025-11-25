@@ -60,7 +60,6 @@ from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
 from fastdeploy.envs import environment_variables
 from fastdeploy.metrics.metrics import (
     EXCLUDE_LABELS,
-    cleanup_prometheus_files,
     get_filtered_metrics,
     main_process_metrics,
 )
@@ -630,17 +629,19 @@ def launch_metrics_server():
     if not is_port_available(args.host, args.metrics_port):
         raise Exception(f"The parameter `metrics_port`:{args.metrics_port} is already in use.")
 
-    prom_dir = cleanup_prometheus_files(True)
-    os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
+    # Move setting prometheus directory to fastdeploy/__init__.py
+    # prom_dir = cleanup_prometheus_files(True)
+    # os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
     metrics_server_thread = threading.Thread(target=run_metrics_server, daemon=True)
     metrics_server_thread.start()
     time.sleep(1)
 
 
-def setup_metrics_environment():
-    """Prepare Prometheus multiprocess directory before starting API workers."""
-    prom_dir = cleanup_prometheus_files(True)
-    os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
+# NOTE: This is commented out since PROMETHEUS_MULTIPROC_DIR is already set up in fastdeploy/__init__.py
+# def setup_metrics_environment():
+#     """Prepare Prometheus multiprocess directory before starting API workers."""
+#     prom_dir = cleanup_prometheus_files(True)
+#     os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
 
 
 controller_app = FastAPI()
@@ -755,7 +756,7 @@ def main():
         launch_metrics_server()
         console_logger.info(f"Launching metrics service at http://{args.host}:{args.metrics_port}/metrics")
     else:
-        setup_metrics_environment()
+        # setup_metrics_environment()
         console_logger.info(f"Launching metrics service at http://{args.host}:{args.port}/metrics")
     console_logger.info(f"Launching chat completion service at http://{args.host}:{args.port}/v1/chat/completions")
     console_logger.info(f"Launching completion service at http://{args.host}:{args.port}/v1/completions")
