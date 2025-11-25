@@ -105,7 +105,8 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
                 moe_quant_type = fd_config.quant_config.moe_quant_type
 
         if moe_quant_type == "tensor_wise_fp8" or (
-            moe_quant_type == "block_wise_fp8" and fd_config.model_config.is_quantized
+            moe_quant_type == "block_wise_fp8"
+            and (fd_config.model_config.is_quantized or fd_config.model_config.is_moe_quantized)
         ):
             weight_key_map = {
                 "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
