@@ -1,4 +1,4 @@
-// Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 #include "paddle/extension.h"
 #include "utils.hpp"
 
-namespace dynamic_quant_int2 {
+namespace dynamic_quant_cache_attn {
 struct Block_attn_params {
   void *__restrict__ q_input;
   uint8_t *__restrict__ cache_k_c2;
@@ -122,4 +122,4 @@ struct Block_attn_kernel_traits {
   static constexpr int kShareMemSizeC16 =
       (size(SmemLayoutQ{}) + size(SmemLayoutKV{}) * 2) * sizeof(input_type);
 };
-}  // namespace dynamic_quant_int2
+}  // namespace dynamic_quant_cache_attn

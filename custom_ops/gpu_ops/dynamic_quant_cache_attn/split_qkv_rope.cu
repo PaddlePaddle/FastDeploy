@@ -1,4 +1,4 @@
-// Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 #include "paddle/extension.h"
 #include "utils.hpp"
 
-namespace dynamic_quant_int2 {
+namespace dynamic_quant_cache_attn {
 
 template <typename input_type, typename output_type, int tokens_per_block>
 __global__ void split_qkv_and_rope_kernel(const input_type *qkv_input,
@@ -266,7 +266,7 @@ std::vector<paddle::Tensor> GetQKTokenNum(
   return {cu_seqlens_k, qk_tokens_cpu};
 }
 
-}  // namespace dynamic_quant_int2
+}  // namespace dynamic_quant_cache_attn
 
 PD_BUILD_OP(split_qkv_and_rope)
     .Inputs({"qkv_out",
@@ -289,9 +289,9 @@ PD_BUILD_OP(split_qkv_and_rope)
     .SetInplaceMap({{"q_input", "q_input_out"},
                     {"k_input", "k_input_out"},
                     {"v_input", "v_input_out"}})
-    .SetKernelFn(PD_KERNEL(dynamic_quant_int2::SplitQKVAndRope));
+    .SetKernelFn(PD_KERNEL(dynamic_quant_cache_attn::SplitQKVAndRope));
 
 PD_BUILD_OP(get_qk_tokens_num)
     .Inputs({"seq_lens_encoder", "seq_lens_this_time", "seq_lens_decoder"})
     .Outputs({"cu_seqlens_k", "qk_tokens"})
-    .SetKernelFn(PD_KERNEL(dynamic_quant_int2::GetQKTokenNum));
+    .SetKernelFn(PD_KERNEL(dynamic_quant_cache_attn::GetQKTokenNum));

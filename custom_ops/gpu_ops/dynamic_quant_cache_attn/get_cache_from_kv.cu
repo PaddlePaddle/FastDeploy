@@ -1,4 +1,4 @@
-// Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 #include "paddle/extension.h"
 #include "utils.hpp"
 
-namespace dynamic_quant_int2 {
+namespace dynamic_quant_cache_attn {
 
 template <typename T,
           typename ScaleType,
@@ -356,7 +356,7 @@ void GetKVFromCache(const paddle::Tensor &k_input,
   }
 }
 
-}  // namespace dynamic_quant_int2
+}  // namespace dynamic_quant_cache_attn
 
 PD_BUILD_OP(dynamic_quant_get_kv_from_cache)
     .Inputs({"k_input",
@@ -378,4 +378,4 @@ PD_BUILD_OP(dynamic_quant_get_kv_from_cache)
             "cache_quant_type_str: std::string"})
     .Outputs({"k_input_out", "v_input_out"})
     .SetInplaceMap({{"k_input", "k_input_out"}, {"v_input", "v_input_out"}})
-    .SetKernelFn(PD_KERNEL(dynamic_quant_int2::GetKVFromCache));
+    .SetKernelFn(PD_KERNEL(dynamic_quant_cache_attn::GetKVFromCache));

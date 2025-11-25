@@ -21,11 +21,6 @@ from typing import TYPE_CHECKING
 
 import paddle
 
-try:
-    from paddle.nn.functional.flash_attention import flash_attention_v3_varlen
-except:
-    flash_attention_v3_varlen = None
-
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (

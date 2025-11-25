@@ -1,4 +1,4 @@
-// Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 #include "cache.hpp"
 #include "paddle/extension.h"
 
-namespace dynamic_quant_int2 {
+namespace dynamic_quant_cache_attn {
 
 template <typename T,
           typename ScaleType,
@@ -266,7 +266,7 @@ void WriteEncoderCache(const paddle::Tensor &k_input,
     PD_THROW("BF16 is not supported\n");
   }
 }
-}  // namespace dynamic_quant_int2
+}  // namespace dynamic_quant_cache_attn
 
 PD_BUILD_OP(dynamic_quant_int2_write_encoder)
     .Inputs({"k_input",
@@ -294,4 +294,4 @@ PD_BUILD_OP(dynamic_quant_int2_write_encoder)
                     {"cache_v_c2", "cache_v_c2_out"},
                     {"cache_k_c16", "cache_k_c16_out"},
                     {"cache_v_c16", "cache_v_c16_out"}})
-    .SetKernelFn(PD_KERNEL(dynamic_quant_int2::WriteEncoderCache));
+    .SetKernelFn(PD_KERNEL(dynamic_quant_cache_attn::WriteEncoderCache));

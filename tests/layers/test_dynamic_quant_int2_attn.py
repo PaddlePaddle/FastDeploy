@@ -48,8 +48,8 @@ class TestC2Attnention(unittest.TestCase):
         self.seq_lens_this_time = paddle.to_tensor([self.seq_len] * self.batch_size).astype("int32")
         self.prompt_lens = paddle.to_tensor([self.seq_len] * self.batch_size).astype("int64")
         self.step_idx = paddle.to_tensor([0] * self.batch_size).astype("int64")
-        self.qkv_out = paddle.randn([self.tokens, self.num_heads + self.kv_num_heads * 2, self.head_dim]).astype(
-            "bfloat16"
+        self.qkv_out = (
+            paddle.randn([self.tokens, self.num_heads + self.kv_num_heads * 2, self.head_dim]).astype("bfloat16") / 10
         )
         self.q_input = paddle.zeros(
             [self.tokens + self.attn_block_m, self.num_heads, self.head_dim],
@@ -316,7 +316,7 @@ class TestC2Attnention(unittest.TestCase):
         )
 
         out_np = self.dynamic_quant_int2_decoder_attention_np(q_input).reshape(out.shape).astype("bfloat16")
-        assert np.allclose(out, out_np, rtol=0.1, atol=0.1)
+        assert np.allclose(out, out_np, rtol=0.01, atol=0.01)
 
     def test_server(self):
         os.environ["FD_ATTENTION_BACKEND"] = "DYNAMIC_QUANT_INT2_ATTN"

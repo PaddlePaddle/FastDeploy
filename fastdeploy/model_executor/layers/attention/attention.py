@@ -194,8 +194,8 @@ class Attention(nn.Layer):
                 dtype=paddle.get_default_dtype(),
             )
         if using_int2_attn:
-            self.c16_remain_seq_len = 128
-            self.block_size = 64
+            self.c16_remain_seq_len = os.environ.get("FD_C16_REMAIN_SEQ_LEN", 128)
+            self.block_size = fd_config.cache_config.block_size
             self.cache_k_c16 = paddle.zeros(
                 [
                     fd_config.scheduler_config.max_num_seqs,
