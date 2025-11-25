@@ -1564,9 +1564,6 @@ class FDConfig:
         self.max_long_partial_prefills = max_long_partial_prefills
         self.long_prefill_token_threshold = long_prefill_token_threshold
 
-        if self.model_config.runner == "pooling":
-            self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
-
         if envs.FD_FOR_TORCH_MODEL_FORMAT:
             self.model_config.model_format = "torch"
 
