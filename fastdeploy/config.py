@@ -180,12 +180,12 @@ class ModelConfig:
     ):
         self.model = ""
         self.is_quantized = False
+        self.is_moe_quantized = False
         self.max_model_len = 0
         self.dtype = "bfloat16"
         self.enable_logprob = False
         self.max_logprobs = 20
         self.logprobs_mode = "raw_logprobs"
-        self.enable_redundant_experts = False
         self.redundant_experts_num = 0
         self.seed = 0
         self.quantization = None
@@ -198,6 +198,8 @@ class ModelConfig:
         self.pooler_config: Optional["PoolerConfig"] = field(init=False)
         self.override_pooler_config: Optional[Union[dict, "PoolerConfig"]] = None
         self.revision = None
+        self.prefix_layer_name = "layers"
+        self.kv_cache_quant_scale_path = ""
 
         self.partial_rotary_factor: float = 1.0
         self.num_nextn_predict_layers = 0
@@ -244,6 +246,7 @@ class ModelConfig:
 
         self.enable_mm = is_multimodal_model
 
+        self.kv_cache_quant_scale_path = os.path.join(self.model, "kv_cache_scale.json")
         if self.runner_type == "pooling":
             os.environ["FD_USE_GET_SAVE_OUTPUT_V1"] = "1"
 
@@ -550,8 +553,6 @@ class ParallelConfig:
         self.use_internode_ll_two_stage: bool = False
         # disable sequence parallel moe
         self.disable_sequence_parallel_moe: bool = False
-        # enable async download features
-        self.enable_async_download_features: bool = False
 
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
@@ -902,6 +903,12 @@ class GraphOptimizationConfig:
         draft_capture_sizes.append(max_capture_size)
         self.cudagraph_capture_sizes = sorted(draft_capture_sizes)
 
+    def filter_capture_size(self, tp_size: int = 1):
+        """When TSP is used, capture size must be divisible by tp size."""
+        self.cudagraph_capture_sizes = [
+            draft_size for draft_size in self.cudagraph_capture_sizes if (draft_size % tp_size == 0)
+        ]
+
     def to_json_string(self):
         """
         Convert speculative_config to json string.
@@ -1145,20 +1152,54 @@ class EPLBConfig:
 
     def __init__(
         self,
+        args,
     ):
-        self.enable_redundant_experts = envs.FD_ENABLE_REDUNDANT_EXPERTS
-        self.redundant_experts_num = envs.FD_REDUNDANT_EXPERTS_NUM
-        self.redundant_expert_ip_shm_size = envs.FD_REDUNDANT_EXPERT_IP_SHM_SIZE
-        self.redundant_expert_meta_dir = envs.FD_REDUNDANT_EXPERT_META_DIR
-        self.redundant_expert_api_user = envs.FD_REDUNDANT_EXPERT_API_USER
-        self.redundant_expert_api_password = envs.FD_REDUNDANT_EXPERT_API_PASSWORD
-        self.redundant_expert_eplb_strategy = envs.FD_REDUNDANT_EXPERT_EPLB_STRATEGY
-        self.redundant_expert_dump_workload_interval = envs.FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL
-        self.redundant_expert_async_load_model_shmem_size_gb = envs.FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB
-        self.redundant_expert_enable_schedule_cordon = envs.FD_REDUNDANT_EXPERT_ENABLE_SCHEDULE_CORDON
-        self.model_use_safetensors = envs.FD_MODEL_USE_SAFETENSORS
-        self.model_use_offline_quant = envs.FD_MODEL_USE_OFFLINE_QUANT
-        self.moe_quant_type = envs.FD_MOE_QUANT_TYPE
+        if args is None:
+            args = {}
+
+        # enable eplb
+        self.enable_eplb: bool = False
+        # redundant experts num
+        self.redundant_experts_num: int = 0
+        # expert ip shm size
+        self.redundant_expert_ip_shm_size: int = 1024
+        # expert meta dir
+        self.redundant_expert_meta_dir: str = "/tmp/redundant_expert_meta"
+        # expert api user and password
+        self.redundant_expert_api_user: str = ""
+        self.redundant_expert_api_password: str = ""
+        # expert eplb strategy
+        self.redundant_expert_eplb_strategy: str = ""
+        # expert dump workload interval
+        self.redundant_expert_dump_workload_interval: int = 10
+        # expert async load model shmem size gb
+        self.redundant_expert_async_load_model_shmem_size_gb: int = 0
+        # expert enable schedule cordon
+        self.redundant_expert_enable_schedule_cordon: bool = True
+        # model use safetensors
+        self.model_use_safetensors: bool = True
+        # model use offline quant
+        self.model_use_offline_quant: bool = True
+        # moe quant type
+        self.moe_quant_type: str = "w4a8"
+        for key, value in args.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+
+    def to_json_string(self):
+        """
+        Convert eplb_config to json string.
+        """
+        return json.dumps({key: value for key, value in self.__dict__.items() if value is not None})
+
+    def print(self):
+        """
+        Print all configuration information.
+        """
+        logger.info("EPLB Configuration Information :")
+        for k, v in self.__dict__.items():
+            logger.info("{:<20}:{:<6}{}".format(k, "", v))
+        logger.info("=============================================================")
 
 
 class CacheConfig:
@@ -1232,6 +1273,8 @@ class CacheConfig:
             self.enable_hierarchical_cache = True
 
         if self.model_cfg is not None:
+            if self.model_cfg.quantization is not None and isinstance(self.model_cfg.quantization, dict):
+                self.cache_dtype = self.model_cfg.quantization.get("kv_cache_quant_type", self.cache_dtype)
             if self.model_cfg.quantization_config is not None:
                 self.cache_dtype = self.model_cfg.quantization_config.get("kv_cache_quant_type", self.cache_dtype)
             if (
@@ -1628,7 +1671,15 @@ class FDConfig:
         if self.device_config is not None and self.device_config.device_type != "cuda":
             self.graph_opt_config.use_cudagraph = False
             logger.info(f"CUDAGraph only support on GPU, current device type is {self.device_config.device_type}!")
-
+        if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
+            if self.scheduler_config.max_num_seqs < self.parallel_config.tensor_parallel_size:
+                self.parallel_config.use_sequence_parallel_moe = False
+                logger.info(
+                    "Warning: sequence parallel moe do not support max_num_seqs < tensor_parallel_size when cudagraph enabled. We set use_sequence_parallel_moe to False."
+                )
+            else:
+                # It will hang when real batch_size < tp_size
+                self.graph_opt_config.filter_capture_size(tp_size=self.parallel_config.tensor_parallel_size)
         if self.model_config.enable_mm and self.graph_opt_config.use_cudagraph:
             self.cache_config.enable_prefix_caching = False
             logger.info("Multi-modal models do not support prefix caching when using CUDAGraph!")
