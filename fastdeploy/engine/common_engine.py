@@ -1132,6 +1132,13 @@ class EngineService:
                     # received the request sent by the client
                     waiting_request_outputs.append(req_output)
                     continue
+                if (
+                    self.cfg.cache_config.enable_splitwise_cache_buffer
+                    and not self.resource_manager.has_resource_for_prefilled_req(req_output.request_id)
+                ):
+                    waiting_request_outputs.append(req_output)
+                    continue
+
                 req_output.finished = False
                 ready_request_outputs.append(req_output)
                 self.llm_logger.debug(f"there are enough resource for prefilled request: {req_output.request_id}")
@@ -1186,6 +1193,7 @@ class EngineService:
         threading.Thread(target=decode_loop, daemon=True).start()
 
     def start_cache_service(self, device_ids, ipc_signal_suffix):
+        self.llm_logger.info("launch cache processes including cache_transfer_manager and cache_messager...")
         return self.resource_manager.cache_manager.launch_cache_manager(
             cache_config=self.cfg.cache_config,
             tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,

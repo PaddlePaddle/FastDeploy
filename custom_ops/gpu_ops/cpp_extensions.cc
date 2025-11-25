@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <stdexcept>
+#include <string>
+
 #include "paddle/extension.h"
 #include "pybind11/pybind11.h"
 namespace py = pybind11;
@@ -47,6 +53,59 @@ uintptr_t cuda_host_alloc(size_t size,
 // 封装cudaFreeHost的Python函数
 void cuda_host_free(uintptr_t ptr) {
   check_cuda_error(cudaFreeHost(reinterpret_cast<void*>(ptr)));
+}
+
+// Create a shared memory region and register it with CUDA
+// The pinned shm can be shared between processes
+uintptr_t create_pinned_shm(const char* shm_name, size_t byte_size) {
+  int fd = shm_open(shm_name, O_CREAT | O_RDWR, 0666);
+  if (fd < 0) throw std::runtime_error("shm_open failed");
+
+  if (ftruncate(fd, byte_size) != 0) {
+    close(fd);
+    throw std::runtime_error("ftruncate failed");
+  }
+
+  void* addr =
+      mmap(nullptr, byte_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (addr == MAP_FAILED) {
+    close(fd);
+    throw std::runtime_error("mmap failed");
+  }
+
+  check_cuda_error(cudaHostRegister(addr, byte_size, cudaHostRegisterPortable));
+
+  close(fd);
+  return reinterpret_cast<uintptr_t>(addr);
+}
+
+uintptr_t open_pinned_shm(const char* shm_name, size_t byte_size) {
+  int fd = shm_open(shm_name, O_RDWR, 0666);
+  if (fd < 0) throw std::runtime_error("shm_open failed");
+
+  void* addr =
+      mmap(nullptr, byte_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (addr == MAP_FAILED) {
+    close(fd);
+    throw std::runtime_error("mmap failed");
+  }
+
+  check_cuda_error(cudaHostRegister(addr, byte_size, cudaHostRegisterPortable));
+
+  close(fd);
+  return reinterpret_cast<uintptr_t>(addr);
+}
+
+void free_pinned_shm(const char* shm_name,
+                     uintptr_t addr_uint,
+                     size_t byte_size) {
+  void* addr = reinterpret_cast<void*>(addr_uint);
+
+  check_cuda_error(cudaHostUnregister(addr));
+
+  if (munmap(addr, byte_size) != 0) throw std::runtime_error("munmap failed");
+
+  if (shm_unlink(shm_name) != 0) throw std::runtime_error("shm_unlink failed");
 }
 
 std::vector<paddle::Tensor> AppendAttention(
@@ -1146,6 +1205,22 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("flags") = cudaHostAllocDefault);
   m.def(
       "cuda_host_free", &cuda_host_free, "Free pinned memory", py::arg("ptr"));
+  m.def("create_pinned_shm",
+        &create_pinned_shm,
+        "Allocate pinned memory for supporting inter process communication",
+        py::arg("name"),
+        py::arg("byte_size"));
+  m.def("open_pinned_shm",
+        &open_pinned_shm,
+        "Open pinned memory which has been allocated by another process",
+        py::arg("name"),
+        py::arg("byte_size"));
+  m.def("free_pinned_shm",
+        &free_pinned_shm,
+        "Free pinned memory which supports inter process communication",
+        py::arg("name"),
+        py::arg("addr_uint"),
+        py::arg("byte_size"));
   py::register_exception<CudaError>(m, "CudaError");
   /**
    * append_attention.cu

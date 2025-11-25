@@ -32,6 +32,7 @@ from fastdeploy.cache_manager.ops import (
     cuda_host_alloc,
     cuda_host_free,
     memory_allocated,
+    open_pinned_shm,
     set_data_ipc,
     set_device,
     share_external_data_,
@@ -78,6 +79,12 @@ def parse_args():
         help="engine worker queue port",
     )
     parser.add_argument("--num_cpu_blocks", type=int, default=4, help="cpu cache block number")
+    parser.add_argument(
+        "--splitwise_cache_buffer_block_num",
+        type=int,
+        default=0,
+        help="The block num of cpu buffer to receive cache from prefill",
+    )
     parser.add_argument("--engine_pid", type=str, default=None, help="engine pid")
     parser.add_argument(
         "--protocol",
@@ -122,6 +129,7 @@ class CacheTransferManager:
         if args.value_cache_shape:
             self.value_cache_shape = [int(i) for i in args.value_cache_shape.split(",")]
         self.num_gpu_blocks = self.key_cache_shape[0]
+        self.bytes_per_block = None
         self.num_extra_layers = self.speculative_config.num_extra_cache_layer
         self.num_extra_layer_gpu_blocks = int(self.num_gpu_blocks * self.speculative_config.num_gpu_block_expand_ratio)
 
@@ -163,9 +171,21 @@ class CacheTransferManager:
 
         self.num_cpu_blocks = args.num_cpu_blocks
 
+        self.splitwise_cache_buffer_block_num = args.splitwise_cache_buffer_block_num
+        assert self.num_cpu_blocks <= 0 or self.splitwise_cache_buffer_block_num <= 0, (
+            "Only one of num_cpu_blocks or splitwise_cache_buffer_block_num must be greater than zero. "
+            "In mixed or prefill, num_cpu_blocks is greater than 0 when prefix caching uses cpu buffer. "
+            "In decode, splitwise_cache_buffer_block_num is greater than 0 when using cpu buffer to receive cache."
+            "Note that the prefix caching is not supported yet in decode."
+        )
+        if args.cache_dtype == "block_wise_fp8":
+            # TODO: support block_wise_fp8 when use splitwise cache buffer
+            assert (
+                self.splitwise_cache_buffer_block_num <= 0
+            ), "Splitwise cache buffer is not supported yet with block_wise_fp8."
+
         self._init_gpu_cache(args)
-        if self.num_cpu_blocks > 0:
-            self._init_cpu_cache(args)
+        self._init_cpu_cache(args)
 
         cache_task_broadcast_data = np.zeros(shape=[1], dtype=np.int32)
         self.cache_task_broadcast_signal = IPCSignal(
@@ -306,6 +326,19 @@ class CacheTransferManager:
         logger.info(f"[rank {self.rank}/{self.n_ranks}] done init cache (full) gmem alloc : {memory_allocated()}")
 
     def _init_cpu_cache(self, args):
+        num_blocks = self.num_cpu_blocks if self.num_cpu_blocks > 0 else self.splitwise_cache_buffer_block_num
+        if num_blocks <= 0:
+            logger.info(f"[rank {self.rank}/{self.n_ranks}] 💡 no swap space (cpu cache) is specified.")
+            self.swap_space_ready_signal.value[self.rank] = 1
+            return
+
+        def _allocate_or_open_cpu_cache(byte_size, name):
+            if self.num_cpu_blocks > 0:
+                return cuda_host_alloc(byte_size)
+            else:
+                # splitwise cpu cache buffer is allocated in cache messager process
+                return open_pinned_shm(name, byte_size)
+
         key_cache_size = self.key_cache_shape[1] * self.key_cache_shape[2] * self.key_cache_shape[3]
         if args.value_cache_shape:
             value_cache_size = self.value_cache_shape[1] * self.value_cache_shape[2] * self.value_cache_shape[3]
@@ -317,20 +350,21 @@ class CacheTransferManager:
             cache_bytes = 1
         else:
             raise ValueError(f"Unsupported cache dtype: {args.cache_dtype}")
-        key_need_to_allocate_bytes = args.num_cpu_blocks * cache_bytes * key_cache_size
-        value_need_to_allocate_bytes = args.num_cpu_blocks * cache_bytes * value_cache_size
+
+        self.bytes_per_block = cache_bytes * key_cache_size
+        key_need_to_allocate_bytes = num_blocks * cache_bytes * key_cache_size
+        value_need_to_allocate_bytes = num_blocks * cache_bytes * value_cache_size
         if args.cache_dtype == "block_wise_fp8":
             cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
             cache_scales_size = self.key_cache_shape[1] * self.key_cache_shape[2]
-            scales_key_need_to_allocate_bytes = args.num_cpu_blocks * cache_scales.element_size() * cache_scales_size
-            scales_value_need_to_allocate_bytes = args.num_cpu_blocks * cache_scales.element_size() * cache_scales_size
+            scales_key_need_to_allocate_bytes = num_blocks * cache_scales.element_size() * cache_scales_size
+            scales_value_need_to_allocate_bytes = num_blocks * cache_scales.element_size() * cache_scales_size
         logger.info(
-            f"[rank {self.rank}/{self.n_ranks}] ..swap space size : {(key_need_to_allocate_bytes + value_need_to_allocate_bytes) / 1024 ** 3:.2f}GB"
+            f"[rank {self.rank}/{self.n_ranks}] ...Init cpu cache, num_blocks: {num_blocks}, "
+            f"key size: {(key_need_to_allocate_bytes) / 1024 ** 3:.2f}GB, "
+            f"value size: {(value_need_to_allocate_bytes) / 1024 ** 3:.2f}GB"
         )
-        if args.num_cpu_blocks == 0:
-            logger.info(f"[rank {self.rank}/{self.n_ranks}] 💡 no swap space (cpu cache) is specified.")
-            self.swap_space_ready_signal.value[self.rank] = 1
-            return
+
         logger.info(f"[rank {self.rank}/{self.n_ranks}] Initializing swap space (cpu cache) for all layers.")
         paddle.set_device("cpu")
         self.k_dst_ptrs = []
@@ -342,16 +376,13 @@ class CacheTransferManager:
             val_name = f"value_caches_{i}_rank{self.rank}"
             key_cache_scales_name = f"key_cache_scales_{i}_rank{self.rank}"
             value_cache_scales_name = f"value_cache_scales_{i}_rank{self.rank}"
-            logger.info(
-                f"[rank {self.rank}/{self.n_ranks}] ..creating cpu cache for layer {i}: {(key_need_to_allocate_bytes + value_need_to_allocate_bytes) / 1024 ** 3:.2f}GB"
-            )
-            self.cpu_cache_kvs[key_name] = cuda_host_alloc(key_need_to_allocate_bytes)
+            self.cpu_cache_kvs[key_name] = _allocate_or_open_cpu_cache(key_need_to_allocate_bytes, key_name)
             self.k_dst_ptrs.append(self.cpu_cache_kvs[key_name])
             if args.cache_dtype == "block_wise_fp8":
                 self.cpu_cache_kvs[key_cache_scales_name] = cuda_host_alloc(scales_key_need_to_allocate_bytes)
                 self.k_scales_ptrs.append(self.cpu_cache_kvs[key_cache_scales_name])
             if value_need_to_allocate_bytes > 0:
-                self.cpu_cache_kvs[val_name] = cuda_host_alloc(value_need_to_allocate_bytes)
+                self.cpu_cache_kvs[val_name] = _allocate_or_open_cpu_cache(value_need_to_allocate_bytes, val_name)
                 self.v_dst_ptrs.append(self.cpu_cache_kvs[val_name])
                 if args.cache_dtype == "block_wise_fp8":
                     self.cpu_cache_kvs[value_cache_scales_name] = cuda_host_alloc(scales_value_need_to_allocate_bytes)
@@ -575,7 +606,7 @@ class CacheTransferManager:
                         0,
                     )
 
-            elif event_type.value == CacheStatus.SWAP2GPU.value:
+            elif event_type.value in (CacheStatus.SWAP2GPU.value, CacheStatus.SPLITWISE_CPU2GPU.value):
                 swap_cache_all_layers(
                     self.gpu_cache_k_tensors,
                     self.k_dst_ptrs,
@@ -618,13 +649,14 @@ class CacheTransferManager:
                     f"transfer data: Get unexpected event type {event_type}, only SWAP2CPU and SWAP2GPU supported"
                 )
         except Exception as e:
-            logger.error(f"transfer data: error: {e}")
+            logger.error(f"transfer data: error: {e}, {traceback.format_exc()}")
             raise e
         end_time = time.time()
         elasped_time = end_time - start_time
+        swap_speed = len(gpu_block_ids) * self.bytes_per_block / 1073741824 / elasped_time  # GB/s
         logger.info(
-            f"transfer data: transfer_task_id {transfer_task_id} event_type {event_type}: "
-            + f"transfer {len(gpu_block_ids)} blocks done  elapsed_time {elasped_time:.4f}"
+            f"finish transfer data: transfer_task_id {transfer_task_id}, blocks_num {len(gpu_block_ids)},"
+            + f"swap speed {swap_speed:.4f} GB/s, elapsed_time {elasped_time:.4f}"
         )
         return (
             swap_node_ids,
@@ -742,4 +774,9 @@ if __name__ == "__main__":
     rank_id = args.rank + args.local_data_parallel_id * args.mp_num
     logger = get_logger("cache_transfer_manager", f"cache_transfer_manager_rank{rank_id}.log")
     set_device(args.device_id)
-    main()
+
+    logger.info(f"create cache transfer manager, args: {args}")
+    try:
+        main()
+    except Exception as e:
+        logger.error(f"Exception occurred in cache transfer manager, error: {e}, traceback: {traceback.format_exc()}")

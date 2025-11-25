@@ -270,6 +270,10 @@ class EngineArgs:
     """
     Splitwise role: prefill, decode or mixed
     """
+    splitwise_cache_buffer_size: Optional[float] = None
+    """
+    The amount of CPU memory in decode to receive the cache from prefill (GB).
+    """
 
     data_parallel_size: int = 1
     """
@@ -532,6 +536,20 @@ class EngineArgs:
                         f"{self.tensor_parallel_size} * ({self.data_parallel_size} / {num_nodes}) "
                         f"= {expected_ports}, but got {len(self.rdma_comm_ports)}."
                     )
+        if self.splitwise_cache_buffer_size is not None:
+            if self.splitwise_cache_buffer_size < 0:
+                self.splitwise_cache_buffer_size = 0
+            if self.splitwise_role != "decode":
+                raise NotImplementedError("splitwise_cache_buffer_size params only support in decode mode now.")
+            if "ipc" in self.cache_transfer_protocol:
+                raise NotImplementedError(
+                    "CPU cache buffer (splitwise_cache_buffer_size > 0) is not compatible with IPC cache "
+                    "transfer protocol. Please use only RDMA protocol."
+                )
+            if envs.ENABLE_V1_KVCACHE_SCHEDULER == 0:
+                raise NotImplementedError(
+                    "splitwise_cache_buffer_size params only support when ENABLE_V1_KVCACHE_SCHEDULER=1"
+                )
 
         if not (current_platform.is_cuda() or current_platform.is_xpu() or current_platform.is_maca()):
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
@@ -892,7 +910,10 @@ class EngineArgs:
         )
 
         cache_group.add_argument(
-            "--swap-space", type=float, default=EngineArgs.swap_space, help="The amount of CPU memory to offload to."
+            "--swap-space",
+            type=float,
+            default=EngineArgs.swap_space,
+            help="The amount of CPU memory to offload to (GB).",
         )
 
         cache_group.add_argument(
@@ -991,6 +1012,12 @@ class EngineArgs:
             type=lambda s: s.split(",") if s else None,
             default=EngineArgs.rdma_comm_ports,
             help="ports for rdma communication.",
+        )
+        splitwise_group.add_argument(
+            "--splitwise-cache-buffer-size",
+            default=EngineArgs.splitwise_cache_buffer_size,
+            type=float,
+            help="The amount of CPU memory in decode to receive the cache from prefill (GB). Default is 0.",
         )
 
         perf_group.add_argument(
