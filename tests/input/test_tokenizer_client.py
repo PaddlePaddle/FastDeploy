@@ -58,6 +58,7 @@ async def test_encode_video_failure():
         start_ts=0.0,
         end_ts=10.0,
         frames=30,
+        vit_merge=True,
     )
 
     with pytest.raises(RuntimeError, match="Encode failed"):
