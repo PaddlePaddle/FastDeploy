@@ -194,7 +194,7 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
 
         self.assertEqual(
             outputs["input_ids"],
-            [test_prompt_token_ids],
+            test_prompt_token_ids,
             f"input_ids 不匹配：实际{outputs['input_ids']}，预期[{test_prompt_token_ids}]",
         )
 

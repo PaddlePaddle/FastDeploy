@@ -356,7 +356,7 @@ class DataProcessor:
         prompt_token_ids = request.get("prompt_token_ids", [])
         prompt_token_ids_len = len(prompt_token_ids)
         if not request.get("messages"):
-            outputs["input_ids"].append(prompt_token_ids)
+            outputs["input_ids"].extend(prompt_token_ids)
             outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * prompt_token_ids_len)
             for i in range(prompt_token_ids_len):
                 outputs["position_ids"].append([i] * 3)
