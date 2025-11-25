@@ -24,11 +24,14 @@ os.environ["GLOG_minloglevel"] = "2"
 os.environ["AISTUDIO_LOG"] = "critical"
 import typing
 
+import paddle
 from paddleformers.utils.log import logger as pf_logger
 
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.utils import current_package_version, envs
+
+paddle.compat.enable_torch_proxy()
 
 if envs.FD_DEBUG != 1:
     import logging
