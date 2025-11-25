@@ -194,12 +194,13 @@ class Request:
             isinstance(d.get("multimodal_inputs"), dict)
             and isinstance(d["multimodal_inputs"].get("mm_positions"), list)
             and len(d["multimodal_inputs"]["mm_positions"]) > 0
-            and not isinstance(d["multimodal_inputs"]["mm_positions"][0], ImagePosition)
         ):
             # if mm_positions is not of type ImagePosition, convert to ImagePosition
             try:
                 for i, mm_pos in enumerate(d["multimodal_inputs"]["mm_positions"]):
-                    d["multimodal_inputs"]["mm_positions"][i] = ImagePosition(**mm_pos)
+                    d["multimodal_inputs"]["mm_positions"][i] = (
+                        ImagePosition(**mm_pos) if not isinstance(mm_pos, ImagePosition) else mm_pos
+                    )
             except Exception as e:
                 data_processor_logger.error(
                     f"Convert mm_positions to ImagePosition error: {e}, {str(traceback.format_exc())}"
