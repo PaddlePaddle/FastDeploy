@@ -198,7 +198,7 @@ class WeightOnlyLinearMethod(QuantMethodBase):
         self.quant_config = quant_config
 
     def create_weights(self, layer, **extra_weight_attrs):
-        if layer.fd_config.load_config.load_choices == "default_v1":
+        if layer.fd_config.load_config.load_choices == "default_v1" and self.quant_config.is_checkpoint_bf16:
             layer.weight = layer.create_parameter(
                 shape=layer.weight_shape,
                 dtype=layer.weight_dtype,
