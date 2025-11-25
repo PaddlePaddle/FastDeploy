@@ -1564,21 +1564,20 @@ class FDConfig:
         self.max_long_partial_prefills = max_long_partial_prefills
         self.long_prefill_token_threshold = long_prefill_token_threshold
 
-        if self.model_config.runner == "pooling":
-            self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
 
         if envs.FD_FOR_TORCH_MODEL_FORMAT:
             self.model_config.model_format = "torch"
 
         # TODO
         if not envs.FD_ENABLE_MAX_PREFILL:
-            self.max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "3"))
+            self.max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "10"))
             if current_platform.is_xpu():
                 self.max_prefill_batch = 1
             if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
         else:
             self.max_prefill_batch = self.scheduler_config.max_num_seqs
+        # print("self.max_prefill_batch",self.max_prefill_batch)
 
         num_ranks = self.parallel_config.tensor_parallel_size * self.parallel_config.data_parallel_size
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
@@ -1630,6 +1629,7 @@ class FDConfig:
                     self.scheduler_config.max_num_batched_tokens = 2048
                 else:
                     self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
+        # print("self.scheduler_config.max_num_bathed_tokens",self.scheduler_config.max_num_batched_tokens)
 
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.model_config.max_model_len * 0.04)

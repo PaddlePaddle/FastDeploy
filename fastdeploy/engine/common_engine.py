@@ -693,7 +693,7 @@ class EngineService:
                     max_num_batched_tokens = self.cfg.scheduler_config.max_num_batched_tokens
                 else:
                     max_num_batched_tokens = self.cfg.model_config.max_model_len
-
+            
                 tasks = self.scheduler.get_requests(
                     available_blocks=self.cfg.cache_config.max_block_num_per_seq,
                     block_size=self.cfg.cache_config.block_size,
@@ -701,6 +701,7 @@ class EngineService:
                     max_num_batched_tokens=max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
+                
                 for task in tasks:
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
 

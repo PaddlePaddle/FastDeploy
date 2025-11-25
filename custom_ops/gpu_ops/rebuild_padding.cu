@@ -92,8 +92,8 @@ __global__ void RebuildAppendPaddingKernel(T *output_data,
 
 template <paddle::DataType D>
 std::vector<paddle::Tensor> rebuild_padding(
-    const paddle::Tensor &tmp_out,      // [token_num, dim_embed]
-    const paddle::Tensor &cu_seqlens_q,  // [bsz+1, 1]
+    const paddle::Tensor &tmp_out,
+    const paddle::Tensor &cu_seqlens_q,
     const paddle::Tensor &seq_len_this_time,
     const paddle::Tensor &seq_lens_decoder,
     const paddle::Tensor &seq_lens_encoder,
@@ -101,16 +101,19 @@ std::vector<paddle::Tensor> rebuild_padding(
     const paddle::optional<paddle::Tensor> &first_token_out,
     int max_input_length,
     bool enable_logprob) {
+    
     typedef PDTraits<D> traits_;
     typedef typename traits_::DataType DataType_;
     typedef typename traits_::data_t data_t;
 
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
-    auto dev_ctx = static_cast<const phi::CustomContext*>(paddle::experimental::DeviceContextPool::Instance().Get(tmp_out.place()));
+    auto dev_ctx = static_cast<const phi::CustomContext*>(
+        paddle::experimental::DeviceContextPool::Instance().Get(tmp_out.place()));
     auto cu_stream = dev_ctx->stream();
 #else
     auto cu_stream = tmp_out.stream();
 #endif
+
     std::vector<int64_t> tmp_out_shape = tmp_out.shape();
     const int token_num = tmp_out_shape[0];
     const int dim_embed = tmp_out_shape[1];
@@ -128,20 +131,20 @@ std::vector<paddle::Tensor> rebuild_padding(
             }
         }
         out = paddle::full({token_num - need_delete_token_num, dim_embed},
-                           0,
-                           D,
-                           tmp_out.place());
+                           0, D, tmp_out.place());
     } else {
-        out =
-            paddle::full({bsz, dim_embed}, 0, tmp_out.dtype(), tmp_out.place());
+        out = paddle::full({bsz, dim_embed}, 0, tmp_out.dtype(), tmp_out.place());
     }
 
     constexpr int PackSize = VEC_16B / sizeof(DataType_);
-    int elem_nums = out.numel();
-    int pack_num = elem_nums / PackSize;
+    const int elem_nums = out.numel();
     const int blocksize = 128;
-    const int grid_size = (pack_num + blocksize - 1) / blocksize;
+    
     if (output_padding_offset) {
+        // Speculative decoding 分支
+        int pack_num = (elem_nums + PackSize - 1) / PackSize;
+        int grid_size = std::max(1, (pack_num + blocksize - 1) / blocksize);
+        
         RebuildAppendPaddingKernel<DataType_, PackSize>
             <<<grid_size, blocksize, 0, cu_stream>>>(
                 reinterpret_cast<DataType_ *>(out.data<data_t>()),
@@ -161,21 +164,41 @@ std::vector<paddle::Tensor> rebuild_padding(
                 bsz,
                 enable_logprob);
     } else {
-        RebuildPaddingKernel<DataType_, PackSize>
-            <<<grid_size, blocksize, 0, cu_stream>>>(
-                reinterpret_cast<DataType_ *>(out.data<data_t>()),
-                reinterpret_cast<DataType_ *>(
-                    const_cast<data_t *>(tmp_out.data<data_t>())),
-                cu_seqlens_q.data<int>(),
-                seq_len_this_time.data<int>(),
-                seq_lens_decoder.data<int>(),
-                seq_lens_encoder.data<int>(),
-                max_input_length,
-                dim_embed,
-                elem_nums);
+        const int actual_pack_size = (dim_embed < PackSize) ? 1 : PackSize;
+        const int pack_num = (elem_nums + actual_pack_size - 1) / actual_pack_size;
+        const int grid_size = std::max(1, (pack_num + blocksize - 1) / blocksize);
+        
+        if (actual_pack_size == 1) {
+            RebuildPaddingKernel<DataType_, 1>
+                <<<grid_size, blocksize, 0, cu_stream>>>(
+                    reinterpret_cast<DataType_ *>(out.data<data_t>()),
+                    reinterpret_cast<DataType_ *>(
+                        const_cast<data_t *>(tmp_out.data<data_t>())),
+                    cu_seqlens_q.data<int>(),
+                    seq_len_this_time.data<int>(),
+                    seq_lens_decoder.data<int>(),
+                    seq_lens_encoder.data<int>(),
+                    max_input_length,
+                    dim_embed,
+                    elem_nums);
+        } else {
+            RebuildPaddingKernel<DataType_, PackSize>
+                <<<grid_size, blocksize, 0, cu_stream>>>(
+                    reinterpret_cast<DataType_ *>(out.data<data_t>()),
+                    reinterpret_cast<DataType_ *>(
+                        const_cast<data_t *>(tmp_out.data<data_t>())),
+                    cu_seqlens_q.data<int>(),
+                    seq_len_this_time.data<int>(),
+                    seq_lens_decoder.data<int>(),
+                    seq_lens_encoder.data<int>(),
+                    max_input_length,
+                    dim_embed,
+                    elem_nums);
+        }
     }
     return {out};
 }
+
 
 paddle::Tensor RebuildPaddingFunc(
     const paddle::Tensor &tmp_out,      // [token_num, dim_embed]

@@ -352,7 +352,11 @@ class LastPool(PoolingMethod):
         hidden_states: paddle.Tensor,
         pooling_cursor: PoolingCursor,
     ) -> Union[list[paddle.Tensor], paddle.Tensor]:
-        return hidden_states[pooling_cursor.last_token_indices_gpu]
+        return hidden_states
+        # print("hidden_states",hidden_states)
+        # print("pooling_cursor.last_token_indices_gpu",pooling_cursor.last_token_indices_gpu)
+        # print("hidden_states[pooling]",hidden_states[pooling_cursor.last_token_indices_gpu])
+        # return hidden_states[pooling_cursor.last_token_indices_gpu]
 
 
 class AllPool(PoolingMethod):

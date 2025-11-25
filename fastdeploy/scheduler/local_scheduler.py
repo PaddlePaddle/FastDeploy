@@ -255,6 +255,7 @@ class LocalScheduler:
             )
             return []
 
+        # scheduler_logger.info(f"available_blocks:{available_blocks}, max_num_batched_tokens:{max_num_batched_tokens} ,batch:{batch}")
         with self.requests_not_empty:
             batch_ids = self.requests_not_empty.wait_for(
                 lambda: self.ids[self.ids_read_cursor : self.ids_read_cursor + batch],
@@ -265,11 +266,13 @@ class LocalScheduler:
             required_total_blocks = 0
             current_prefill_tokens = 0
             long_partial_requests, short_partial_requests = 0, 0
+            scheduler_logger.info(f"batch_ids:{batch_ids}")
             for request_id in batch_ids:
                 request = self.requests[request_id]
                 required_input_blocks = self.calc_required_blocks(request.prompt_tokens_ids_len, block_size)
                 current_prefill_tokens += request.prompt_tokens_ids_len
                 required_total_blocks += required_input_blocks + reserved_output_blocks
+                # scheduler_logger.info(f"required_total_blocks:{required_total_blocks},available_blocks:{available_blocks}")
                 if required_total_blocks > available_blocks:
                     break
 
@@ -278,14 +281,20 @@ class LocalScheduler:
                         if request.prompt_tokens_ids_len > self.long_prefill_token_threshold:
                             # 长请求
                             long_partial_requests += 1
+                            # scheduler_logger.info(f"long_partial_request:{long_partial_requests}")
+                            # scheduler_logger.info(f"self.max_long_partial_prefills:{self.max_long_partial_prefills}")
                             if long_partial_requests > self.max_long_partial_prefills:
                                 break
                         else:
                             short_partial_requests += 1
 
+                        # scheduler_logger.info(f"====>prompt_tokens_ids_len:{request.prompt_tokens_ids_len}, short_partial_request:{short_partial_requests}, long_partial_request:{long_partial_requests}, self.max_num_partial_prefills:{self.max_num_partial_prefills}")
+
                         if short_partial_requests + long_partial_requests > self.max_num_partial_prefills:
                             break
                     else:
+                        # scheduler_logger.info(f"current_prefill_tokens:{current_prefill_tokens}, max_num_batched_tokens:{max_num_batched_tokens}, len(requests):{len(requests)}")
+
                         if current_prefill_tokens > max_num_batched_tokens and len(requests) > 0:
                             break
                 requests.append(request.raw)
@@ -308,24 +317,31 @@ class LocalScheduler:
             results: List of RequestOutput objects containing results
         """
         scheduler_logger.debug(f"put results: {results}")
+        # 将ResultOutput对象转换为ScheduledResponse对象
         responses: List[ScheduledResponse] = [ScheduledResponse(result) for result in results]
 
+        # 过滤出已完成请求的ID列表
         finished_responses = [response.request_id for response in responses if response.finished]
         if len(finished_responses) > 0:
             scheduler_logger.info(f"Scheduler has received some finished responses: {finished_responses}")
 
-        with self.mutex:
+        with self.mutex:  # 获取互斥锁，确保线程安全
+            # 将当前步骤的所有响应原始数据添加到批次响应列表中
             self.batch_responses_per_step.append([response.raw for response in responses])
-            for response in responses:
+            for response in responses:  # 遍历每个响应结果
+                # 检查请求ID是否存在于当前活跃任务中
                 if response.request_id not in self.requests:
                     scheduler_logger.warning(f"Scheduler has received a expired response: {[response.request_id]}")
-                    continue
+                    continue  # 如果请求已过期，忽略该响应
 
+                # 如果请求ID尚未存在于响应字典中，创建新的响应列表
                 if response.request_id not in self.responses:
                     self.responses[response.request_id] = [response]
                     continue
                 scheduler_logger.debug(f"append response {response.raw}")
+                # 将响应追加到对应请求ID的响应列表中
                 self.responses[response.request_id].append(response)
+            # 通知所有等待线程已有新响应到达
             self.responses_not_empty.notify_all()
 
     def get_results(self) -> Dict[str, List[RequestOutput]]:

@@ -500,6 +500,8 @@ class GPUModelRunner(ModelRunnerBase):
         req_dict: A list of Request dict
         num_running_requests: batch_size
         """
+
+
         # NOTE(luotingdan): Lazy initialize kv cache
         if "caches" not in self.share_inputs:
             self.initialize_kv_cache()
@@ -517,10 +519,13 @@ class GPUModelRunner(ModelRunnerBase):
             "position_ids_offset": [0],
             "max_tokens_lst": [],
         }
-
+        # logger.info(f"insert_tasks_v1 called with {req_len} requests")
+        # logger.info(f"seq_lens_this_time_buffer before: {self.seq_lens_this_time_buffer}")
+        # logger.info(f"req_dicts:{req_dicts}")
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
+            # logger.info(f"request:{request}")
 
             if hasattr(request, "pooling_params") and request.pooling_params is not None:
                 batch_pooling_params.append(request.pooling_params)
@@ -596,7 +601,6 @@ class GPUModelRunner(ModelRunnerBase):
                     has_decode_task = True
                 continue
             else:  # preempted task
-                logger.info(f"Handle preempted request {request} at idx {idx}")
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
                 self.seq_lens_this_time_buffer[idx : idx + 1] = 0
@@ -2132,10 +2136,21 @@ class GPUModelRunner(ModelRunnerBase):
             model_output = model_output[: self.real_token_num]
 
         prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
-
+        
         if self.is_pooling_model:
-            hidden_states = model_output
+            hidden_states = rebuild_padding(
+                model_output,
+                self.share_inputs["cu_seqlens_q"],
+                self.share_inputs["seq_lens_this_time"],
+                self.share_inputs["seq_lens_decoder"],
+                self.share_inputs["seq_lens_encoder"],
+                (self.share_inputs["output_padding_offset"] if self.speculative_decoding else None),
+                self.model_config.max_model_len,
+            )
+            # print("rebuild_padding后的hidden_states",hidden_states)
+            # hidden_states = model_output
             pooler_output = self._pool(hidden_states, num_running_requests)
+            # print("gpu_model的pooler_output",pooler_output)
 
             model_output_data = ModelOutputData(
                 next_tokens=self.share_inputs["next_tokens"],
@@ -2342,7 +2357,11 @@ class GPUModelRunner(ModelRunnerBase):
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
 
         num_scheduled_tokens = int(self.share_inputs["seq_lens_this_time"][:num_running_requests].sum())
+
+        # print("num_scheduled_tokens",num_scheduled_tokens)
+        # print("hidden_states前面",hidden_states)
         hidden_states = hidden_states[:num_scheduled_tokens]
+        # print("hidden_states取前面",hidden_states)
 
         prompt_lens = self.share_inputs["prompt_lens"][:num_running_requests]
         prompt_token_ids = self.share_inputs["prompt_ids"]
@@ -2355,6 +2374,7 @@ class GPUModelRunner(ModelRunnerBase):
         num_scheduled_tokens_list = [
             int(self.share_inputs["seq_lens_this_time"][i]) for i in range(num_running_requests)
         ]
+        
         device_str = "gpu" if hidden_states.place.is_gpu_place() else "cpu"
         pooling_metadata.build_pooling_cursor(num_scheduled_tokens_list, device=device_str)
 
@@ -2363,8 +2383,15 @@ class GPUModelRunner(ModelRunnerBase):
         seq_lens_cpu = self.share_inputs["seq_lens_this_time"][:num_running_requests]
         pooler_output: list[Optional[paddle.Tensor]] = []
 
+        # print("seq_lens_cpu",seq_lens_cpu)
+        # print("raw_pooler_output",raw_pooler_output)
+
         for raw_output, seq_len, prompt_len in zip(raw_pooler_output, seq_lens_cpu, pooling_metadata.prompt_lens):
+        # for seq_len, prompt_len in zip(seq_lens_cpu, pooling_metadata.prompt_lens):
+            # print("prompt_len",prompt_len)
+            # print("seq_len",seq_len)
             output = raw_output.data if int(seq_len) == int(prompt_len) else None
+            # output = raw_pooler_output[0].data if int(seq_len) == int(prompt_len) else None
             pooler_output.append(output)
 
         pooler_output = PoolerOutput(
