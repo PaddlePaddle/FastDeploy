@@ -59,14 +59,13 @@ class EngineClient:
         self.config = config
         self.tensor_parallel_size = self.config.parallel_config.tensor_parallel_size
         self.enable_mm = self.config.model_config.enable_mm
-        enable_processor_cache = self.enable_mm and self.cache_config.max_processor_cache > 0
         input_processor = InputPreprocessor(
             self.config.model_config,
             self.structured_outputs_config.reasoning_parser,
             self.config.limit_mm_per_prompt,
             self.config.mm_processor_kwargs,
             self.config.tool_parser,
-            enable_processor_cache,
+            self.enable_mm and self.cache_config.max_processor_cache > 0,
         )
         self.enable_logprob = self.config.model_config.enable_logprob
         self.data_processor = input_processor.create_processor()
