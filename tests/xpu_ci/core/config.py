@@ -44,14 +44,36 @@ class ServerConfig:
     load_choices: str = "default"
     disable_sequence_parallel_moe: bool = False
 
+    # Flags to control whether to explicitly pass certain parameters
+    # Only EP tests need these parameters in original script
+    use_gpu_memory_utilization: bool = False
+    use_load_choices: bool = False
+
     # Port offsets
     engine_worker_queue_port_offset: int = 1
     metrics_port_offset: int = 2
     cache_queue_port_offset: int = 47873
 
+    # For data_parallel_size > 1, each worker needs its own queue port
+    # This controls the interval between ports (e.g., +10, +20, +30, +40)
+    engine_worker_queue_port_interval: int = 10
+
     @property
-    def engine_worker_queue_port(self) -> int:
-        return self.port + self.engine_worker_queue_port_offset
+    def engine_worker_queue_port(self) -> str:
+        """Get engine worker queue port(s).
+
+        For data_parallel_size > 1, returns comma-separated ports.
+        E.g., with port=8188, offset=10, interval=10, dp_size=4:
+        Returns "8198,8208,8218,8228"
+        """
+        if self.data_parallel_size > 1:
+            base = self.port + self.engine_worker_queue_port_offset
+            ports = [
+                str(base + i * self.engine_worker_queue_port_interval)
+                for i in range(self.data_parallel_size)
+            ]
+            return ",".join(ports)
+        return str(self.port + self.engine_worker_queue_port_offset)
 
     @property
     def metrics_port(self) -> int:
@@ -70,7 +92,7 @@ class ServerConfig:
             "--max-model-len", str(self.max_model_len),
             "--max-num-seqs", str(self.max_num_seqs),
             "--quantization", self.quantization,
-            "--engine-worker-queue-port", str(self.engine_worker_queue_port),
+            "--engine-worker-queue-port", self.engine_worker_queue_port,
             "--metrics-port", str(self.metrics_port),
             "--cache-queue-port", str(self.cache_queue_port),
         ]
@@ -100,10 +122,11 @@ class ServerConfig:
         if self.reasoning_parser:
             args.extend(["--reasoning-parser", self.reasoning_parser])
 
-        if self.gpu_memory_utilization != 0.9:
+        # Only pass these parameters if explicitly requested (EP tests only)
+        if self.use_gpu_memory_utilization:
             args.extend(["--gpu-memory-utilization", str(self.gpu_memory_utilization)])
 
-        if self.load_choices != "default":
+        if self.use_load_choices:
             args.extend(["--load-choices", self.load_choices])
 
         if self.disable_sequence_parallel_moe:
@@ -264,6 +287,8 @@ class TestConfig:
                 data_parallel_size=1,
                 gpu_memory_utilization=0.9,
                 load_choices="default",
+                use_gpu_memory_utilization=True,
+                use_load_choices=True,
                 disable_sequence_parallel_moe=True,
                 engine_worker_queue_port_offset=10,
             ),
@@ -297,6 +322,8 @@ class TestConfig:
                 data_parallel_size=4,
                 gpu_memory_utilization=0.9,
                 load_choices="default",
+                use_gpu_memory_utilization=True,
+                use_load_choices=True,
                 engine_worker_queue_port_offset=10,
             ),
             env_config=EnvironmentConfig(
@@ -329,6 +356,8 @@ class TestConfig:
                 data_parallel_size=1,
                 gpu_memory_utilization=0.9,
                 load_choices="default",
+                use_gpu_memory_utilization=True,
+                use_load_choices=True,
                 engine_worker_queue_port_offset=10,
             ),
             env_config=EnvironmentConfig(
