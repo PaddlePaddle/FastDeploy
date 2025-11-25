@@ -40,8 +40,7 @@ import numpy as np
 import paddle
 import requests
 import yaml
-# from aistudio_sdk.snapshot_download import snapshot_download as aistudio_download
-from aistudio_sdk.hub import download as aistudio_download
+from aistudio_sdk.snapshot_download import snapshot_download as aistudio_download
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
