@@ -65,9 +65,6 @@ class TestSQAttnPipeline(unittest.TestCase):
             self.args.model_name_or_path, config=config, **kwargs
         )
        
-        from tests.layers.fix_all_linear_transpose import fix_all_linear_layers
-        model = fix_all_linear_layers(model)
-
         print("[OK] model and tokenizer built.")
         
         sample_text = "The quick brown fox jumps over the lazy dog." * 100
