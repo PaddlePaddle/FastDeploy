@@ -488,7 +488,11 @@ class GPUModelRunner(ModelRunnerBase):
         rope_3d_position_ids["position_ids_offset"].append(
             position_ids.shape[0] + rope_3d_position_ids["position_ids_offset"][-1]
         )
-        rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
+
+        if self.is_pooling_model:
+            rope_3d_position_ids["max_tokens_lst"].append(0)
+        else:
+            rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
 
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int = None):
         """
@@ -520,6 +524,7 @@ class GPUModelRunner(ModelRunnerBase):
 
             if hasattr(request, "pooling_params") and request.pooling_params is not None:
                 batch_pooling_params.append(request.pooling_params)
+                request.pooling_params.task = "embed"
 
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
                 prefill_start_index = request.prefill_start_index
@@ -2337,7 +2342,6 @@ class GPUModelRunner(ModelRunnerBase):
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
 
         num_scheduled_tokens = int(self.share_inputs["seq_lens_this_time"][:num_running_requests].sum())
-
         hidden_states = hidden_states[:num_scheduled_tokens]
 
         prompt_lens = self.share_inputs["prompt_lens"][:num_running_requests]
@@ -2355,8 +2359,10 @@ class GPUModelRunner(ModelRunnerBase):
         pooling_metadata.build_pooling_cursor(num_scheduled_tokens_list, device=device_str)
 
         raw_pooler_output = self.model.pooler(hidden_states=hidden_states, pooling_metadata=pooling_metadata)
+
         seq_lens_cpu = self.share_inputs["seq_lens_this_time"][:num_running_requests]
         pooler_output: list[Optional[paddle.Tensor]] = []
+
         for raw_output, seq_len, prompt_len in zip(raw_pooler_output, seq_lens_cpu, pooling_metadata.prompt_lens):
             output = raw_output.data if int(seq_len) == int(prompt_len) else None
             pooler_output.append(output)

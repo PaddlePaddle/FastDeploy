@@ -24,7 +24,6 @@ from typing import Any, Dict, Generic, Optional, Union
 import numpy as np
 from typing_extensions import TypeVar
 
-from fastdeploy import envs
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
@@ -145,7 +144,10 @@ class Request:
         self.multimodal_data = multimodal_data
         self.multimodal_img_boundaries = None
 
-        self.enable_thinking = enable_thinking
+        if pooling_params is not None:
+            self.enable_thinking = False
+        else:
+            self.enable_thinking = True
         self.reasoning_max_tokens = reasoning_max_tokens
         self.trace_carrier = trace_carrier
 
@@ -190,6 +192,10 @@ class Request:
             pooling_params = PoolingParams.from_dict(d["pooling_params"])
         else:
             sampling_params = SamplingParams.from_dict(d)
+
+        enable_thinking = d.get("enable_thinking", None)
+        if pooling_params is not None:
+            enable_thinking = False
         return cls(
             request_id=d["request_id"],
             prompt=d.get("prompt"),
@@ -216,7 +222,7 @@ class Request:
             guided_grammar=d.get("guided_grammar", None),
             structural_tag=d.get("structural_tag", None),
             guided_json_object=d.get("guided_json_object", None),
-            enable_thinking=d.get("enable_thinking", None),
+            enable_thinking=enable_thinking,
             reasoning_max_tokens=d.get("reasoning_max_tokens", None),
             trace_carrier=d.get("trace_carrier", {}),
             chat_template=d.get("chat_template", None),

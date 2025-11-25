@@ -78,7 +78,6 @@ def get_pooling_params(pooling_metadata: PoolingMetadata) -> list[PoolingParams]
 
 def get_tasks(pooling_metadata: PoolingMetadata) -> list[PoolingTask]:
     pooling_params = get_pooling_params(pooling_metadata)
-
     tasks: list[PoolingTask] = [task for pooling_param in pooling_params if (task := pooling_param.task) is not None]
     assert len(pooling_params) == len(tasks)
 
@@ -108,7 +107,7 @@ class Pooler(nn.Layer, ABC):
     @staticmethod
     def for_encode(pooler_config: PoolerConfig, model_config: Optional["ModelConfig"] = None):
         if pooler_config.pooling_type == "STEP":
-            return StepPooler()
+            return StepPooler(model_config)
 
         resolved_config = ResolvedPoolingConfig(task="encode", pooling_type=PoolingType.ALL)
         return SimplePooler.from_config(resolved_config, model_config)
@@ -274,6 +273,7 @@ class EmbeddingPoolerHead(PoolerHead):
                 pooled_data = [vecs if d is None else vecs[..., :d] for vecs, d in zip(pooled_data, dimensions_list)]
         # for normalize
         flags = [p.normalize for p in pooling_params]
+
         if len(set(flags)) == 1:
             if flags[0]:
                 pooled_data = self.activation(pooled_data)
@@ -293,7 +293,6 @@ class RewardPoolerHead(PoolerHead):
     def forward(self, pooled_data: Union[list[paddle.Tensor], paddle.Tensor], pooling_metadata: PoolingMetadata):
         pooling_params = get_pooling_params(pooling_metadata)
 
-        # for softmax
         flags = [p.softmax for p in pooling_params]
         if len(set(flags)) == 1:
             if flags[0]:
@@ -301,6 +300,7 @@ class RewardPoolerHead(PoolerHead):
         else:
             pooled_data = [self.activation(vecs) if f else vecs for vecs, f in zip(pooled_data, flags)]
 
+        print(f"==RewardPoolerHead end==>pooled_data:{pooled_data}, ===>{pooling_metadata}")
         return pooled_data
 
 
@@ -366,8 +366,8 @@ class AllPool(PoolingMethod):
     ) -> Union[list[paddle.Tensor], paddle.Tensor]:
 
         assert not pooling_cursor.is_partial_prefill(), "partial prefill not supported with ALL pooling"
-
         hidden_states_lst = list(hidden_states.split(pooling_cursor.num_scheduled_tokens_cpu.tolist()))
+
         return [hidden_states_lst[i] for i in pooling_cursor.index]
 
 
@@ -416,11 +416,12 @@ class CLSPool(PoolingMethod):
 class StepPooler(Pooler):
     def __init__(
         self,
+        model_config: ModelConfig,
     ) -> None:
         super().__init__()
 
         self.pooling = AllPool()
-        self.head = RewardPoolerHead()
+        self.head = RewardPoolerHead(model_config)
 
     def extract_states(
         self,
@@ -455,14 +456,11 @@ class StepPooler(Pooler):
 
     def forward(
         self,
-        hidden_states: Union[paddle.Tensor, list[paddle.Tensor]],
+        hidden_states: paddle.Tensor | list[paddle.Tensor],
         pooling_metadata: PoolingMetadata,
     ) -> PoolerOutput:
         pooled_data = self.extract_states(hidden_states, pooling_metadata)
-        pooling_params = get_pooling_params(pooling_metadata)
-        assert len(pooled_data) == len(pooling_params)
-
-        pooled_data = [self.head(d, p) for d, p in zip(pooled_data, pooling_params)]
+        pooled_data = self.head(pooled_data, pooling_metadata)
         return pooled_data
 
 

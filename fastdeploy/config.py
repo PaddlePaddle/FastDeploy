@@ -292,7 +292,7 @@ class ModelConfig:
             self.tensor_parallel_size = self.infer_model_mp_num
             del self.infer_model_mp_num
 
-        if hasattr(self, "num_hidden_layers"):
+        if hasattr(self, "num_hidden_layers") and self.runner != "pooling":
             if hasattr(self, "remove_tail_layer"):
                 if self.remove_tail_layer is True:
                     self.num_hidden_layers -= 1
@@ -1529,6 +1529,9 @@ class FDConfig:
         self.max_num_partial_prefills = max_num_partial_prefills
         self.max_long_partial_prefills = max_long_partial_prefills
         self.long_prefill_token_threshold = long_prefill_token_threshold
+
+        if self.model_config.runner == "pooling":
+            self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
 
         if envs.FD_FOR_TORCH_MODEL_FORMAT:
             self.model_config.model_format = "torch"
