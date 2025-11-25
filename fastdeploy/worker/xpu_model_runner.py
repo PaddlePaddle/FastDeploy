@@ -49,7 +49,7 @@ from fastdeploy.model_executor.ops.xpu import (
     set_data_ipc,
     share_external_data,
 )
-from fastdeploy.model_executor.pre_and_post_process import (  # xpu_post_process_specualate, # TODO(chenhuan09): add xpu_post_process_specualate
+from fastdeploy.model_executor.xpu_pre_and_post_process import (  # xpu_post_process_specualate, # TODO(chenhuan09): add xpu_post_process_specualate
     step_xpu,
     xpu_post_process_normal,
     xpu_pre_process,
