@@ -1,4 +1,4 @@
-<font color="red"> :warning: **注意：如果你的PR是属于BugFix类型（NVIDIA GPU硬件），请同时提交到develop与feature/online/pd_1131，请Reviewer也做好提醒义务。**</font>
+:warning: **注意：如果你的PR是属于BugFix类型（NVIDIA GPU硬件），请同时提交到develop与feature/online/pd_1131，请Reviewer也做好提醒义务。**
 <!-- TemplateReference: https://github.com/PaddlePaddle/FastDeploy/blob/develop/.github/pull_request_template.md -->
 
 <!-- Thank you for your contribution! Please follow these guidelines to enhance your pull request. If anything is unclear, submit your PR and reach out to maintainers for assistance. -->
