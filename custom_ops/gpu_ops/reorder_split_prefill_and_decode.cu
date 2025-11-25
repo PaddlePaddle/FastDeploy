@@ -72,8 +72,6 @@ __global__ void reorder_decode_kernel(const int64_t* x,
   if (idx >= max_output) return;
 
   // Find corresponding input position for this decode token
-  // Implementation depends on your specific data layout
-  // This is a simplified example
   int input_pos =
       find_decode_position(idx, cu_seqlens, prompt_lens, batch_size);
 
