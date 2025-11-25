@@ -56,6 +56,38 @@ class TestReorderSplitPrefillAndDecode(unittest.TestCase):
                 paddle.to_tensor([], dtype="int64"),
             )
 
+    def test_varied_sequence_lengths(self):
+        """
+        Test with multiple sequences of varying lengths
+        """
+        # Input data: 5 sequences with varying lengths
+        # Sequence 0: 3 tokens (1 prefill + 2 decode)
+        # Sequence 1: 4 tokens (2 prefill + 2 decode)
+        # Sequence 2: 2 tokens (1 prefill + 1 decode)
+        # Sequence 3: 5 tokens (3 prefill + 2 decode)
+        # Sequence 4: 1 token (1 prefill + 0 decode)
+        x_remove_padding = paddle.to_tensor(
+            [10, 11, 12, 20, 21, 22, 23, 30, 31, 40, 41, 42, 43, 44, 50], dtype="int64", place=self.place
+        )
+        batch_id_per_token = paddle.to_tensor(
+            [0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 3, 4], dtype="int32", place=self.place
+        )
+        cu_seqlens_q = paddle.to_tensor([0, 3, 7, 9, 14, 15], dtype="int32", place=self.place)
+        prompt_lens = paddle.to_tensor([1, 2, 1, 3, 1], dtype="int64", place=self.place)
+
+        x_reorder, batch_id_reorder, num_decode = reorder_split_prefill_and_decode(
+            x_remove_padding, batch_id_per_token, cu_seqlens_q, prompt_lens
+        )
+
+        # Verify outputs
+        self.assertEqual(num_decode.numpy()[0], 7)  # 2+2+1+2+0=7 decode tokens expected
+
+        # Expected order: decode tokens first, then prefill tokens
+        # decode tokens: 11,12,21,22,31,41,42
+        # prefill tokens: 10,20,23,30,40,43,44,50
+        np.testing.assert_array_equal(x_reorder.numpy(), [11, 12, 21, 22, 31, 41, 42, 10, 20, 23, 30, 40, 43, 44, 50])
+        np.testing.assert_array_equal(batch_id_reorder.numpy(), [0, 0, 1, 1, 2, 3, 3, 0, 1, 1, 2, 3, 3, 3, 4])
+
 
 if __name__ == "__main__":
     unittest.main()

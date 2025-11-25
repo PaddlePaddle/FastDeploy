@@ -201,42 +201,46 @@ std::vector<paddle::Tensor> ReorderSplitPrefillAndDecode(
   // Launch CUDA kernel to reorder data
   // First pass: collect decode tokens
   {
-    int grid_size = (total_decode + block_size - 1) / block_size;
-    reorder_decode_kernel<<<grid_size, block_size, 0, stream>>>(
-        x_ptr,
-        x_reorder_ptr,
-        batch_id_ptr,
-        batch_id_reorder_ptr,
-        cu_seqlens_ptr,
-        prompt_lens_ptr,
-        batch_size,
-        0,
-        total_decode);
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) {
-      PD_THROW("reorder_decode_kernel launch failed: ",
-               cudaGetErrorString(err));
+    if (total_decode > 0) {
+      int grid_size = (total_decode + block_size - 1) / block_size;
+      reorder_decode_kernel<<<grid_size, block_size, 0, stream>>>(
+          x_ptr,
+          x_reorder_ptr,
+          batch_id_ptr,
+          batch_id_reorder_ptr,
+          cu_seqlens_ptr,
+          prompt_lens_ptr,
+          batch_size,
+          0,
+          total_decode);
+      cudaError_t err = cudaGetLastError();
+      if (err != cudaSuccess) {
+        PD_THROW("reorder_decode_kernel launch failed: ",
+                 cudaGetErrorString(err));
+      }
     }
   }
 
   // Second pass: collect prefill tokens
   {
     int total_prefill = total_tokens - total_decode;
-    int grid_size = (total_prefill + block_size - 1) / block_size;
-    reorder_prefill_kernel<<<grid_size, block_size, 0, stream>>>(
-        x_ptr,
-        x_reorder_ptr,
-        batch_id_ptr,
-        batch_id_reorder_ptr,
-        cu_seqlens_ptr,
-        prompt_lens_ptr,
-        batch_size,
-        total_decode,
-        total_prefill);
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) {
-      PD_THROW("reorder_prefill_kernel launch failed: ",
-               cudaGetErrorString(err));
+    if (total_prefill > 0) {
+      int grid_size = (total_prefill + block_size - 1) / block_size;
+      reorder_prefill_kernel<<<grid_size, block_size, 0, stream>>>(
+          x_ptr,
+          x_reorder_ptr,
+          batch_id_ptr,
+          batch_id_reorder_ptr,
+          cu_seqlens_ptr,
+          prompt_lens_ptr,
+          batch_size,
+          total_decode,
+          total_prefill);
+      cudaError_t err = cudaGetLastError();
+      if (err != cudaSuccess) {
+        PD_THROW("reorder_prefill_kernel launch failed: ",
+                 cudaGetErrorString(err));
+      }
     }
   }
   return {x_reorder, batch_id_reorder, num_decode_tokens};
