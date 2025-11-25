@@ -64,17 +64,6 @@ elif current_platform.is_maca():
     )
 elif current_platform.is_intel_hpu():
     pass
-elif current_platform.is_xpu():
-    from fastdeploy.model_executor.ops.xpu import (
-        get_padding_offset,
-        limit_thinking_content_length_v1,
-        limit_thinking_content_length_v2,
-        save_output,
-        set_stop_value_multi_ends,
-        step_paddle,
-        update_inputs,
-        update_inputs_v1,
-    )
 else:
     from fastdeploy.model_executor.ops.gpu import (
         get_padding_offset,
