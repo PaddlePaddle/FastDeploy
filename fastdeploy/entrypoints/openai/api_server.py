@@ -180,11 +180,11 @@ async def lifespan(app: FastAPI):
     model_paths = [ModelPath(name=served_model_names, model_path=args.model, verification=verification)]
 
     engine_args = EngineArgs.from_cli_args(args)
-    config = engine_args.create_engine_config(port_availability_check=False)
+    fd_config = engine_args.create_engine_config(port_availability_check=False)
     engine_client = EngineClient(
         pid=pid,
         port=int(os.environ.get("INFERENCE_MSG_QUEUE_ID", "0")),
-        config=config,
+        fd_config=fd_config,
         workers=args.workers,
     )
     await engine_client.connection_manager.initialize()
@@ -216,14 +216,14 @@ async def lifespan(app: FastAPI):
     embedding_handler = OpenAIServingEmbedding(
         engine_client,
         app.state.model_handler,
-        config,
+        fd_config,
         pid,
         args.ips,
         args.max_waiting_time,
         chat_template,
     )
     reward_handler = OpenAIServingReward(
-        engine_client, app.state.model_handler, config, pid, args.ips, args.max_waiting_time, chat_template
+        engine_client, app.state.model_handler, fd_config, pid, args.ips, args.max_waiting_time, chat_template
     )
     engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid
