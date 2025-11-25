@@ -65,7 +65,7 @@ class EngineClient:
             self.config.limit_mm_per_prompt,
             self.config.mm_processor_kwargs,
             self.config.tool_parser,
-            self.enable_mm and self.cache_config.max_processor_cache > 0,
+            self.enable_mm and self.config.cache_config.max_processor_cache > 0,
         )
         self.enable_logprob = self.config.model_config.enable_logprob
         self.data_processor = input_processor.create_processor()
