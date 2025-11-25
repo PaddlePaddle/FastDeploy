@@ -33,15 +33,20 @@ except:
 import numpy as np
 
 
-def get_moe_method():
+def get_moe_method(use_method: str = envs.FD_MOE_BACKEND):
     """
     return moe method based on device platform
     """
 
     if current_platform.is_cuda() or current_platform.is_iluvatar():
-        from .fused_moe_cutlass_backend import CutlassMoEMethod
+        if use_method == "cutlass":
+            from .fused_moe_cutlass_backend import CutlassMoEMethod
 
-        return CutlassMoEMethod(None)
+            return CutlassMoEMethod(None)
+        else:
+            from .fused_moe_triton_backend import TritonMoEMethod
+
+            return TritonMoEMethod(None)
     elif current_platform.is_xpu():
         from fastdeploy.model_executor.layers.backends import XPUMoEMethod
 
