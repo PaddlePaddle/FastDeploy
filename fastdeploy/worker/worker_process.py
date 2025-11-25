@@ -444,7 +444,6 @@ class PaddleDisWorkerProc:
 
             # The first worker detects whether there are tasks in the task queue
             if tp_rank == 0:
-                start = time.perf_counter()
                 if self.insert_task_signal.value[0] == 1:
                 #if self.task_queue.num_tasks() > 0:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
