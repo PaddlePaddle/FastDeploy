@@ -113,14 +113,6 @@ class TokenProcessor:
         self.num_accept_requests_per_head = [
             0,
         ] * MAX_DRAFT_TOKENS
-        # prefill_time_data = np.zeros([100], dtype=np.float32)
-        # self.prefill_time_signal = IPCSignal(
-        #     name="prefill_time_signal",
-        #     array=prefill_time_data,
-        #     dtype=np.float32,
-        #     suffix=os.getpid(),
-        #     create=True,
-        # )
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.prefill_result_status = dict()
         self._finalizer = weakref.finalize(self, self._cleanup_resources)
@@ -128,9 +120,6 @@ class TokenProcessor:
 
     def _cleanup_resources(self):
         """Cleaning up shared memory resources"""
-        # if hasattr(self, "prefill_time_signal"):
-        #     self.prefill_time_signal.clear()
-
         if hasattr(self, "executor"):
             self.executor.shutdown(wait=False)
 
@@ -415,27 +404,9 @@ class TokenProcessor:
                     if self.output_tokens[0, 0] == -2:
                         continue
                     llm_logger.debug(f"rank_id {rank_id} self.output_tokens[0, 0] {self.output_tokens[0, 0]}")
-                # self._process_prefill_metrics()
                 self._process_batch_output()
             except Exception as e:
                 llm_logger.info(f"while get input_data error: {e} {traceback.format_exc()!s}")
-
-    # def _process_prefill_metrics(self):
-    #     """Asynchronous processing prefill time indicators"""
-
-    #     def process_metrics():
-    #         try:
-    #             current_index = 0
-    #             while current_index < len(self.prefill_time_signal.value):
-    #                 prefill_time = self.prefill_time_signal.value[current_index]
-    #                 if prefill_time > 0:
-    #                     main_process_metrics.request_prefill_time.observe(prefill_time)
-    #                     self.prefill_time_signal.value[current_index] = 0
-    #                 current_index += 1
-    #         except Exception as e:
-    #             llm_logger.error(f"Error processing prefill metrics: {e}, {str(traceback.format_exc())}")
-
-    #     self.executor.submit(process_metrics)
 
     def postprocess(self, batch_result: List[RequestOutput], mtype=3):
         """
