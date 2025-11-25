@@ -55,54 +55,34 @@ class EngineClient:
     EngineClient is a class that handles the communication between the client and the server.
     """
 
-    def __init__(
-        self,
-        model_name_or_path,
-        tokenizer,
-        max_model_len,
-        tensor_parallel_size,
-        pid,
-        port,
-        limit_mm_per_prompt,
-        mm_processor_kwargs,
-        config,
-        reasoning_parser=None,
-        data_parallel_size=1,
-        enable_logprob=False,
-        workers=1,
-        tool_parser=None,
-        enable_prefix_caching=None,
-        splitwise_role=None,
-        max_processor_cache=0,
-    ):
+    def __init__(self, pid, port, config, workers=1):
         self.config = config
-        self.model_config = config.model_config
-        self.enable_mm = self.model_config.enable_mm
-        enable_processor_cache = self.enable_mm and max_processor_cache > 0
+        self.tensor_parallel_size = self.config.parallel_config.tensor_parallel_size
+        self.enable_mm = self.config.model_config.enable_mm
+        enable_processor_cache = self.enable_mm and self.cache_config.max_processor_cache > 0
         input_processor = InputPreprocessor(
-            self.model_config,
-            reasoning_parser,
-            limit_mm_per_prompt,
-            mm_processor_kwargs,
-            tool_parser,
+            self.config.model_config,
+            self.structured_outputs_config.reasoning_parser,
+            self.config.limit_mm_per_prompt,
+            self.config.mm_processor_kwargs,
+            self.config.tool_parser,
             enable_processor_cache,
         )
-        self.enable_logprob = enable_logprob
-        self.reasoning_parser = reasoning_parser
+        self.enable_logprob = self.config.model_config.enable_logprob
         self.data_processor = input_processor.create_processor()
-        self.max_model_len = max_model_len
-        self.enable_prefix_caching = enable_prefix_caching
-        self.enable_splitwise = splitwise_role != "mixed"
-        max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        self.max_model_len = self.config.model_config.max_model_len
+        self.enable_prefix_caching = self.config.cache_config.enable_prefix_caching
+        self.enable_splitwise = self.config.scheduler_config.splitwise_role != "mixed"
+        self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
 
         if self.enable_mm and self.enable_prefix_caching:
             from fastdeploy.cache_manager.cache_data import (
                 is_mm_model_disable_prefix_cache,
             )
 
-            self.disable_prefix_mm = is_mm_model_disable_prefix_cache(self.model_config)
+            self.disable_prefix_mm = is_mm_model_disable_prefix_cache(self.config.model_config)
 
-        if tensor_parallel_size <= max_chips_per_node:
+        if self.tensor_parallel_size <= self.max_chips_per_node:
             self.is_master = True
         else:
             self.is_master = False
@@ -110,7 +90,7 @@ class EngineClient:
         if self.config.eplb_config.enable_eplb:
             self.init_eplb_signals(ipc_signal_suffix=port)
 
-        array_size = min(max_chips_per_node, tensor_parallel_size)
+        array_size = min(self.max_chips_per_node, self.tensor_parallel_size)
         self.worker_healthy_live_recorded_time_array = np.zeros(shape=[array_size], dtype=np.int32)
         self.worker_healthy_live_signal = IPCSignal(
             name="worker_healthy_live_signal",
@@ -199,7 +179,7 @@ class EngineClient:
             create=False,
         )
 
-        for tp_rank_id in range(self.config.parallel_config.tensor_parallel_size):
+        for tp_rank_id in range(self.tensor_parallel_size):
             tp_ipc_signal_suffix = f"{dp_ipc_signal_suffix}_tp{tp_rank_id}"
             signal_clear_experts_token_stats = np.zeros([1], dtype=np.int32)
             self.signal_clear_experts_token_stats_list.append(
