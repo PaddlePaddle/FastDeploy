@@ -365,8 +365,6 @@ def h2d_copy(dst, src, blocking=True):
     if not current_platform.is_cuda() or not is_paddle_support_new_h2d():
         # For non-GPU devices, data is transferred to device (H2D) in advance.
         src = get_tensor(src)
-    if not dst._is_initialized():
-        dst.initialize()
     dst.copy_(src, blocking)
 
 
