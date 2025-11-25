@@ -69,9 +69,19 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
         mock_data_processor = MagicMock()
         mock_data_processor.tokenizer = mock_tokenizer
-
         mock_model_config = MagicMock()
         mock_model_config.enable_mm = False
+
+        # Mock config object
+        mock_config = MagicMock()
+        mock_config.model_config = mock_model_config
+        mock_config.eplb_config = MagicMock()
+        mock_config.eplb_config.enable_eplb = False
+        mock_config.parallel_config = MagicMock()
+        mock_config.parallel_config.tensor_parallel_rank = 0
+        mock_config.parallel_config.local_data_parallel_id = 0
+        mock_config.scheduler_config = MagicMock()
+        mock_config.scheduler_config.splitwise_role = None
 
         # Mock IPCSignal to avoid file system dependencies
         with patch("fastdeploy.entrypoints.engine_client.IPCSignal") as mock_ipcsignal:
@@ -86,7 +96,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
                     with patch("fastdeploy.entrypoints.engine_client.FileLock") as mock_filelock:
                         mock_filelock.return_value = MagicMock()
 
-                        with patch("fastdeploy.entrypoints.engine_client.ModelConfig") as mock_model_config_class:
+                        with patch("fastdeploy.config.ModelConfig") as mock_model_config_class:
                             mock_model_config_class.return_value = mock_model_config
 
                             with patch(
@@ -106,6 +116,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
                                     port=8080,
                                     limit_mm_per_prompt=None,
                                     mm_processor_kwargs=None,
+                                    config=mock_config,  # Add the required config parameter
                                     enable_logprob=True,  # Enable logprob for testing
                                     max_logprobs=20,
                                 )
