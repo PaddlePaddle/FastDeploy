@@ -182,6 +182,25 @@ class EngineService:
             self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
         )
         self.llm_logger.info(f"current_suffix: {current_suffix}")
+        insert_task_signal_data = np.zeros([1], dtype=np.int32)
+        self.insert_task_signal = IPCSignal(
+            name="insert_task_signal",
+            array=insert_task_signal_data,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
+        exist_task_signal_data = np.zeros([1], dtype=np.int32)
+        self.exist_task_signal = IPCSignal(
+            name="exist_task_signal",
+            array=exist_task_signal_data,
+            dtype=np.int32,
+            suffix=current_suffix,
+            create=True,
+        )
+
+
         exist_task_signal_data = np.zeros([1], dtype=np.int32)
         self.exist_task_signal = IPCSignal(
             name="exist_task_signal",
@@ -792,7 +811,7 @@ class EngineService:
 
         while self.running:
             try:
-                if self.engine_worker_queue.num_tasks() > 0:
+                if self.insert_task_signal.value[0] == 1 or self.engine_worker_queue.num_tasks() > 0:
                     time.sleep(0.001)
                     continue
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
@@ -840,6 +859,7 @@ class EngineService:
                         trace_print(LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", ""))
                         trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
+                    self.insert_task_signal.value[0] = 1
 
                 # 4. Response error tasks
                 if error_tasks:

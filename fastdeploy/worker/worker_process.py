@@ -229,6 +229,15 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
+        insert_task_signal_data = np.zeros([1], dtype=np.int32)
+        self.insert_task_signal = IPCSignal(
+            name="insert_task_signal",
+            array=insert_task_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.engine_worker_queue_port,
+            create=False,
+        )
+
         # init exist_task_signal
         workers_exist_task = np.zeros([1], dtype=np.int32)
         self.exist_task_signal = IPCSignal(
@@ -435,7 +444,9 @@ class PaddleDisWorkerProc:
 
             # The first worker detects whether there are tasks in the task queue
             if tp_rank == 0:
-                if self.task_queue.num_tasks() > 0:
+                start = time.perf_counter()
+                if self.insert_task_signal.value[0] == 1:
+                #if self.task_queue.num_tasks() > 0:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
                     ):
@@ -473,7 +484,7 @@ class PaddleDisWorkerProc:
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
 
-            if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
+            if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST:
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
                 self.insert_step = True
 
@@ -481,7 +492,7 @@ class PaddleDisWorkerProc:
                 if read_finish:
                     # Ensure that every worker get the task
                     self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
-                    self.task_queue.read_finish_flag.set(0)
+                    self.insert_task_signal.value[0] = 0
 
                 req_dicts = []
                 for req_dict, bsz in tasks:
