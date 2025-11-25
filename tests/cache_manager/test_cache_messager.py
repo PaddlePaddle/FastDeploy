@@ -285,6 +285,8 @@ def _install_paddle_stubs():
 
     paddle.full = _full
     paddle.to_tensor = _to_tensor
+    paddle.is_compiled_with_xpu = lambda: False
+    paddle.float16 = "float16"
     paddle.set_device = lambda _name: None
 
     device_mod = types.ModuleType("paddle.device")
@@ -324,9 +326,28 @@ def _install_fastdeploy_core_stubs():
 
     utils_module.envs = envs_module
     utils_module.get_logger = _get_logger
+
+    def console_logger(_name, _filename=None):  # pylint: disable=unused-argument
+        """Stub console_logger returning a logger instance for tests."""
+        return _Logger()
+
+    utils_module.console_logger = console_logger
     sys.modules["fastdeploy.utils"] = utils_module
     sys.modules["fastdeploy.utils.envs"] = envs_module
     fastdeploy_pkg.utils = utils_module
+
+    platforms_module = types.ModuleType("fastdeploy.platforms")
+
+    class _Platform:
+        def is_cuda(self):
+            return True
+
+        def is_xpu(self):  # pragma: no cover - alternate platform helper
+            return False
+
+    platforms_module.current_platform = _Platform()
+    sys.modules["fastdeploy.platforms"] = platforms_module
+    fastdeploy_pkg.platforms = platforms_module
 
 
 def _install_transfer_factory_stubs():
@@ -383,6 +404,14 @@ def _install_ops_gpu_stubs():
 
     ops_gpu_module.get_output_kv_signal = _get_output_kv_signal
     ops_gpu_module.set_data_ipc = lambda *args, **kwargs: None
+    ops_gpu_module.unset_data_ipc = lambda *args, **kwargs: None
+    ops_gpu_module.share_external_data = lambda cache, *args, **kwargs: cache
+    ops_gpu_module.swap_cache_all_layers = lambda *args, **kwargs: None
+    ops_gpu_module.cuda_host_alloc = lambda *args, **kwargs: None
+    ops_gpu_module.cuda_host_free = lambda *args, **kwargs: None
+    ops_gpu_module.get_data_ptr_ipc = lambda *args, **kwargs: 0
+    ops_gpu_module.ipc_sent_key_value_cache_by_remote_ptr = lambda *args, **kwargs: 0
+    ops_gpu_module.ipc_sent_key_value_cache_by_remote_ptr_block_sync = lambda *args, **kwargs: 0
     sys.modules["fastdeploy.model_executor.ops.gpu"] = ops_gpu_module
 
 
