@@ -151,9 +151,15 @@ jobs:
             docker rm -f ${runner_name} || true
           fi
 
+          export RDMA_DEVICES=$(find /dev/infiniband/uverbs* -maxdepth 1 -not -type d | xargs -I{} echo '--device {}:{}')
+
           docker run --rm --net=host \
           --name ${runner_name} \
-          --cap-add=SYS_PTRACE --shm-size=64G \
+          --cap-add=SYS_PTRACE --cap-add=IPC_LOCK \
+          --shm-size=64G \
+          ${RDMA_DEVICES} \
+          --device=/dev/infiniband/rdma_cm \
+          --ulimit memlock=-1:-1 \
           -v $(pwd):/workspace -w /workspace \
           -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
           -v "${CACHE_DIR}/.cache:/root/.cache" \
