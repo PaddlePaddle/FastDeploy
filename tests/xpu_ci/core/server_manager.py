@@ -75,6 +75,11 @@ class ServerManager:
 
     def _kill_existing_processes(self):
         """Kill any existing server processes."""
+        # Get current process and parent process PIDs to avoid killing pytest
+        current_pid = os.getpid()
+        parent_pid = os.getppid()
+        protected_pids = {current_pid, parent_pid}
+
         patterns = ["cache_transfer_manager.py", "api_server"]
         port = self.config.server_config.port
 
@@ -90,7 +95,10 @@ class ServerManager:
                 for pid in pids:
                     if pid:
                         try:
-                            os.kill(int(pid), signal.SIGKILL)
+                            pid_int = int(pid)
+                            if pid_int in protected_pids:
+                                continue
+                            os.kill(pid_int, signal.SIGKILL)
                         except (ProcessLookupError, ValueError):
                             pass
             except Exception:
@@ -110,7 +118,10 @@ class ServerManager:
                 for pid in pids:
                     if pid:
                         try:
-                            os.kill(int(pid), signal.SIGKILL)
+                            pid_int = int(pid)
+                            if pid_int in protected_pids:
+                                continue
+                            os.kill(pid_int, signal.SIGKILL)
                         except (ProcessLookupError, ValueError):
                             pass
             except Exception:
