@@ -83,9 +83,9 @@ class TestReorderSplitPrefillAndDecode(unittest.TestCase):
         self.assertEqual(num_decode.numpy()[0], 7)  # 2+2+1+2+0=7 decode tokens expected
 
         # Expected order: decode tokens first, then prefill tokens
-        # decode tokens: 11,12,21,22,31,41,42
-        # prefill tokens: 10,20,23,30,40,43,44,50
-        np.testing.assert_array_equal(x_reorder.numpy(), [11, 12, 21, 22, 31, 41, 42, 10, 20, 23, 30, 40, 43, 44, 50])
+        # decode tokens: 11,12,22,23,31,43,44
+        # prefill tokens: 10,20,21,30,40,41,42,50
+        np.testing.assert_array_equal(x_reorder.numpy(), [11, 12, 22, 23, 31, 43, 44, 10, 20, 21, 30, 40, 41, 42, 50])
         np.testing.assert_array_equal(batch_id_reorder.numpy(), [0, 0, 1, 1, 2, 3, 3, 0, 1, 1, 2, 3, 3, 3, 4])
 
 
