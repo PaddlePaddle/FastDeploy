@@ -546,6 +546,7 @@ class Ernie4_5_VLModel(nn.Layer):
                 residual,
                 vl_moe_meta,
             )
+
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
         return out

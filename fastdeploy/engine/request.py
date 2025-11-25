@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import time
+import traceback
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from typing import Any, Dict, Generic, Optional, Union
@@ -196,6 +197,22 @@ class Request:
         enable_thinking = d.get("enable_thinking", None)
         if pooling_params is not None:
             enable_thinking = False
+        if (
+            isinstance(d.get("multimodal_inputs"), dict)
+            and isinstance(d["multimodal_inputs"].get("mm_positions"), list)
+            and len(d["multimodal_inputs"]["mm_positions"]) > 0
+        ):
+            # if mm_positions is not of type ImagePosition, convert to ImagePosition
+            try:
+                for i, mm_pos in enumerate(d["multimodal_inputs"]["mm_positions"]):
+                    d["multimodal_inputs"]["mm_positions"][i] = (
+                        ImagePosition(**mm_pos) if not isinstance(mm_pos, ImagePosition) else mm_pos
+                    )
+            except Exception as e:
+                data_processor_logger.error(
+                    f"Convert mm_positions to ImagePosition error: {e}, {str(traceback.format_exc())}"
+                )
+
         return cls(
             request_id=d["request_id"],
             prompt=d.get("prompt"),
