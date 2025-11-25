@@ -58,7 +58,7 @@ class BaseDataProcessor(ABC):
         def set_value(req, key, value):
             value = getattr(self.generation_config, key, value)
             if isinstance(req, dict):
-                if key not in req:
+                if key not in req or req[key] is None:
                     req[key] = value
             else:
                 if req.get(key) is None:
