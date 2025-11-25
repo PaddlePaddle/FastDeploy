@@ -52,25 +52,44 @@ class AsyncOutputProcessor:
         """
         self.data_processor = data_processor
 
-    def _process_output(self, output: RequestOutput) -> RequestOutput:
-        """Process a single RequestOutput via data_processor, with robust error handling."""
+    def _process_output(
+        self,
+        response_dict: Dict[str, Any],
+        stream: bool = True,
+        enable_thinking: bool = False,
+        include_stop_str_in_output: bool = False,
+    ) -> Dict[str, Any]:
+        """Process a single response dict via data_processor.process_response_dict.
+
+        This mirrors the behavior of ChatResponseProcessor in the OpenAI serving
+        path: operate on a dict representation and return a dict. On any error
+        we fall back to the original dict and ensure ``outputs.text`` exists to
+        avoid cascading failures.
+        """
         if self.data_processor is None:
-            return output
+            return response_dict
 
         try:
-            # Let the data_processor handle decoding and reasoning/tool parsing.
-            processed = self.data_processor.process_response(output)
-            # Some processors (e.g. ernie4_5_processor) may return None when there is no valid text.
+            processed = self.data_processor.process_response_dict(
+                response_dict,
+                stream=stream,
+                enable_thinking=enable_thinking,
+                include_stop_str_in_output=include_stop_str_in_output,
+            )
+            # Some processors may return None when there is no valid text.
             if processed is None:
-                if not hasattr(output.outputs, "text"):
-                    output.outputs.text = ""
-                return output
+                outputs = response_dict.get("outputs") or {}
+                if "text" not in outputs:
+                    outputs["text"] = ""
+                    response_dict["outputs"] = outputs
+                return response_dict
             return processed
         except Exception:
-            # On any error, ensure a text field exists to avoid cascading failures.
-            if not hasattr(output.outputs, "text"):
-                output.outputs.text = ""
-            return output
+            outputs = response_dict.get("outputs") or {}
+            if "text" not in outputs:
+                outputs["text"] = ""
+                response_dict["outputs"] = outputs
+            return response_dict
 
 
 class EngineServiceClient:
@@ -447,6 +466,14 @@ class AsyncLLM(EngineServiceClient):
         """
 
         num_choices = sampling_params.n if sampling_params is not None and sampling_params.n else 1
+        stream = True
+        include_stop_str_in_output = False
+        enable_thinking = kwargs.pop("enable_thinking", False)
+
+        if isinstance(prompt, dict):
+            stream = prompt.get("stream", True)
+            include_stop_str_in_output = prompt.get("include_stop_str_in_output", False)
+            num_choices = prompt.get("n")
 
         # Ensure ZMQ client and connection manager are initialized in current process
         if (
@@ -491,22 +518,23 @@ class AsyncLLM(EngineServiceClient):
 
                 for response_item in response_list:
                     if isinstance(response_item, dict) and "request_id" in response_item:
-                        # Convert dict response to RequestOutput object
-                        if isinstance(response_item, dict):
-                            request_output = RequestOutput.from_dict(response_item)
-                        else:
-                            request_output = response_item
-
-                        # Use output_processor for token decoding etc.
+                        # First, use output_processor to post-process the raw dict
                         if hasattr(self, "output_processor"):
-                            processed_output = self.output_processor._process_output(request_output)
+                            processed_output = self.output_processor._process_output(
+                                response_item,
+                                stream=stream,
+                                enable_thinking=enable_thinking,
+                                include_stop_str_in_output=include_stop_str_in_output,
+                            )
                         else:
-                            processed_output = request_output
+                            processed_output = response_item
+                        # Then convert processed dict to RequestOutput
+                        request_output = RequestOutput.from_dict(processed_output)
 
-                        if processed_output.finished:
+                        if request_output.finished:
                             remaining -= 1
 
-                        yield processed_output
+                        yield request_output
 
         except GeneratorExit:
             llm_logger.info(f"Request {conn_request_id} generator exit (outer)")

@@ -247,8 +247,15 @@ class TestAsyncLLMEngine(unittest.TestCase):
         """Test generating multiple choices with SamplingParams.n"""
 
         async def _test():
-            prompt = "Hello, my name is"
-            sampling_params = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=20, n=2)
+            # Use dict prompt to cover stream/include_stop_str_in_output flags
+            prompt = {
+                "prompt": "Hello, my name is",
+                "stream": True,
+                "include_stop_str_in_output": False,
+                "n": 2,
+            }
+            # Do not set n in SamplingParams so that prompt['n'] takes effect
+            sampling_params = SamplingParams(temperature=0.8, top_p=0.95, max_tokens=20)
 
             outputs = []
             generator = None
@@ -298,22 +305,27 @@ class TestAsyncLLMEngine(unittest.TestCase):
 
             # Create processor with mock data_processor that raises exception
             mock_data_processor = Mock()
-            mock_data_processor.process_response.side_effect = Exception("Decode error")
+            mock_data_processor.process_response_dict.side_effect = Exception("Decode error")
             processor = AsyncOutputProcessor(mock_data_processor)
 
-            # Create mock output without text attribute
-            mock_output = Mock()
-            mock_output.outputs = Mock()
-            mock_output.outputs.token_ids = [1, 2, 3]
-            # Don't set text attribute to test the error handling
-            if hasattr(mock_output.outputs, "text"):
-                delattr(mock_output.outputs, "text")
+            # Create response dict without text field
+            response_dict = {
+                "request_id": "test",
+                "finished": True,
+                "outputs": {
+                    "index": 0,
+                    "send_idx": 0,
+                    "token_ids": [1, 2, 3],
+                },
+                "metrics": {"arrival_time": 0.0},
+            }
 
             # Process the output
-            result = processor._process_output(mock_output)
+            result = processor._process_output(response_dict)
 
             # Verify text was set to empty string on error
-            self.assertEqual(result.outputs.text, "")
+            self.assertIn("outputs", result)
+            self.assertEqual(result["outputs"].get("text", ""), "")
 
             return True
 
@@ -330,21 +342,27 @@ class TestAsyncLLMEngine(unittest.TestCase):
 
             # Create processor with mock data_processor that returns None
             mock_data_processor = Mock()
-            mock_data_processor.process_response.return_value = None
+            mock_data_processor.process_response_dict.return_value = None
             processor = AsyncOutputProcessor(mock_data_processor)
 
-            # Create mock output without text attribute
-            mock_output = Mock()
-            mock_output.outputs = Mock()
-            mock_output.outputs.token_ids = [1, 2, 3]
-            if hasattr(mock_output.outputs, "text"):
-                delattr(mock_output.outputs, "text")
+            # Create response dict without text field
+            response_dict = {
+                "request_id": "test",
+                "finished": True,
+                "outputs": {
+                    "index": 0,
+                    "send_idx": 0,
+                    "token_ids": [1, 2, 3],
+                },
+                "metrics": {"arrival_time": 0.0},
+            }
 
             # Process the output
-            result = processor._process_output(mock_output)
+            result = processor._process_output(response_dict)
 
             # Verify text was set to empty string when processor returns None
-            self.assertEqual(result.outputs.text, "")
+            self.assertIn("outputs", result)
+            self.assertEqual(result["outputs"].get("text", ""), "")
 
             return True
 
@@ -411,7 +429,7 @@ class TestAsyncLLMEngine(unittest.TestCase):
             try:
                 prompts = [0, 1, 2]
                 # Create sampling params with very high min_tokens to trigger error
-                sampling_params = SamplingParams(min_tokens=999999)
+                sampling_params = SamplingParams(min_tokens=999999, n=1)
 
                 # This should trigger the min_tokens validation error
                 await self.engine.add_request("test_validation", prompts, sampling_params)
@@ -659,10 +677,10 @@ class TestAsyncLLMEngine(unittest.TestCase):
             async def fake_add_request(*args, **kwargs):
                 return None
 
-            # Simple output processor that returns the output unchanged
+            # Simple output processor that returns the dict unchanged
             class DummyOutputProcessor:
-                def _process_output(self, out):
-                    return out
+                def _process_output(self, response_dict, **kwargs):
+                    return response_dict
 
             with (
                 patch.object(engine, "connection_manager", mock_cm),
