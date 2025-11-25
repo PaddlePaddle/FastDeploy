@@ -14,11 +14,12 @@
 # limitations under the License.
 """
 
-try:
-    from .repetition_early_stop_kernel import repetition_early_stopper_kernel
-    from .wint2_fused_moe import fused_moe_wint2_triton
-    from .wint2_fused_moe_kernel import moe_wint2_ffn_kernel
+# try:
+from .repetition_early_stop_kernel import repetition_early_stopper_kernel
+from .wint2_fused_moe_kernel import moe_wint2_ffn_kernel
+from .wint2_fused_moe_kernel import moe_wint2_ffn_kernel
+from .sqattn.compress import compress_model, process_model
 
-    __all__ = ["fused_moe_wint2_triton", "moe_wint2_ffn_kernel", "repetition_early_stopper_kernel"]
-except:
-    pass
+__all__ = ["fused_moe_wint2_triton", "moe_wint2_ffn_kernel", "repetition_early_stopper_kernel", "compress_model", "process_model"]
+# except:
+#     pass
