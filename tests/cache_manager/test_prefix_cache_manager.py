@@ -1,13 +1,29 @@
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import sys
 import threading
 import types
 import unittest
+from functools import partial
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 
 
+# Minimal stub logger used by paddleformers logging utilities.
 class _StubLogger:
     def __init__(self):
         self.logger = self
@@ -57,11 +73,13 @@ def _install_required_stubs():
 
 _install_required_stubs()
 
+# Module under test: PrefixCacheManager and related cache primitives.
 from fastdeploy.cache_manager.cache_data import BlockNode, CacheStatus
 from fastdeploy.cache_manager.prefix_cache_manager import PrefixCacheManager
 from fastdeploy.inter_communicator.ipc_signal_const import PrefixTreeStatus
 
 
+# Metric test double used to track metric updates.
 class _DummyMetric:
     """Minimal metric stub that records the last values it receives."""
 
@@ -81,6 +99,7 @@ class _DummyMetric:
         self.values.append(("observe", value))
 
 
+# Metric registry that lazily creates metrics referenced in tests.
 class _DummyMainMetrics:
     """Creates metric objects on demand so code can freely reference metrics."""
 
@@ -93,12 +112,14 @@ class _DummyMainMetrics:
         return self.metrics[name]
 
 
+# IPC signal stub that mirrors the real object's surface area.
 class _DummyIPCSignal:
     def __init__(self, name, array, **kwargs):
         self.name = name
         self.value = np.ones_like(array)
 
 
+# Mock engine cache queue used to capture issued tasks.
 class _DummyEngineCacheQueue:
     def __init__(self, *args, **kwargs):
         self.tasks = []
@@ -107,6 +128,7 @@ class _DummyEngineCacheQueue:
         self.tasks.append(payload)
 
 
+# Test double for process objects spawned by PrefixCacheManager.
 class _DummyProcess:
     def __init__(self, *args, **kwargs):
         self.args = args
@@ -115,6 +137,7 @@ class _DummyProcess:
         return None
 
 
+# Process double that allows configuring poll return values.
 class _PollingProcess(_DummyProcess):
     def __init__(self, *args, poll_value=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -124,6 +147,7 @@ class _PollingProcess(_DummyProcess):
         return self._poll_value
 
 
+# Thread double that records whether start was called.
 class _DummyThread:
     def __init__(self, target=None, **kwargs):
         self.target = target
@@ -133,6 +157,7 @@ class _DummyThread:
         self.started = True
 
 
+# Immediate future used to synchronously invoke submitted functions.
 class _ImmediateFuture:
     def __init__(self, fn=None, *args):
         self._result = fn(*args) if fn is not None else None
@@ -144,6 +169,7 @@ class _ImmediateFuture:
         return True
 
 
+# Fake transfer queue returning preset payloads then raising SystemExit.
 class _FakeTransferQueue:
     def __init__(self, payloads, include_none=False):
         self.payloads = payloads
@@ -360,8 +386,13 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 _DummyEngineCacheQueue,
             ),
             patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
+                return_value=["0"],
+                create=True,
+            ),
+            patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
-                lambda *args, **kwargs: _DummyProcess(*args, **kwargs),
+                _DummyProcess,
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.threading.Thread",
@@ -398,8 +429,13 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 _DummyEngineCacheQueue,
             ),
             patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
+                return_value=["0"],
+                create=True,
+            ),
+            patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
-                lambda *args, **kwargs: _DummyProcess(*args, **kwargs),
+                _DummyProcess,
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.threading.Thread",
@@ -442,7 +478,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
-                lambda *args, **kwargs: _DummyProcess(*args, **kwargs),
+                _DummyProcess,
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.threading.Thread",
@@ -473,6 +509,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
             created_signals[name] = signal
             return signal
 
+        # Tracking thread used to assert expected background tasks are launched.
         class _TrackingThread:
             instances = []
 
@@ -484,6 +521,8 @@ class PrefixCacheManagerTest(unittest.TestCase):
 
             def start(self):
                 self.started = True
+
+        self.addCleanup(_TrackingThread.instances.clear)
 
         def _fake_sleep(_):
             ready_signal = created_signals.get("cache_ready_signal")
@@ -505,8 +544,13 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 _DummyEngineCacheQueue,
             ),
             patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
+                return_value=["0"],
+                create=True,
+            ),
+            patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
-                lambda *args, **kwargs: _PollingProcess(poll_value=1),
+                partial(_PollingProcess, poll_value=1),
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.threading.Thread",
@@ -541,8 +585,13 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 side_effect=_DummyIPCSignal,
             ),
             patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
+                return_value=["0"],
+                create=True,
+            ),
+            patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
-                lambda *args, **kwargs: _DummyProcess(*args, **kwargs),
+                _DummyProcess,
             ),
         ):
             processes = manager.launch_cache_messager(
@@ -567,8 +616,13 @@ class PrefixCacheManagerTest(unittest.TestCase):
                 side_effect=_DummyIPCSignal,
             ),
             patch(
+                "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
+                return_value=["0"],
+                create=True,
+            ),
+            patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.subprocess.Popen",
-                lambda *args, **kwargs: _PollingProcess(poll_value=2),
+                partial(_PollingProcess, poll_value=2),
             ),
         ):
             processes = manager.launch_cache_messager(
@@ -659,8 +713,8 @@ class PrefixCacheManagerTest(unittest.TestCase):
         manager = _create_manager(num_gpu_blocks=4, num_cpu_blocks=2)
         manager.cache_config.enable_hierarchical_cache = True
         manager.cache_task_queue = _DummyEngineCacheQueue()
-        manager.free_cpu_executor_pool = types.SimpleNamespace(submit=lambda fn, *args: _ImmediateFuture(fn, *args))
-        manager.free_gpu_executor_pool = types.SimpleNamespace(submit=lambda fn, *args: _ImmediateFuture(fn, *args))
+        manager.free_cpu_executor_pool = types.SimpleNamespace(submit=_ImmediateFuture)
+        manager.free_gpu_executor_pool = types.SimpleNamespace(submit=_ImmediateFuture)
         issued = {}
 
         def _fake_issue(task_id, swap_node_ids, gpu_ids, cpu_ids, event_type, is_sync):
