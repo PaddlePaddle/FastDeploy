@@ -1628,10 +1628,6 @@ class FDConfig:
                 else:
                     self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
 
-        self.scheduler_config.max_chunk_len = (
-            self.scheduler_config.max_num_batched_tokens + self.scheduler_config.max_extra_num_batched_tokens
-        )
-
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.model_config.max_model_len * 0.04)
 
