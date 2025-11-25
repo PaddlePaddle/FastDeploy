@@ -1,4 +1,18 @@
-"""Expert Parallelism Load Balancer (EPLB)"""
+"""
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
 
 from typing import Tuple
 
@@ -9,11 +23,9 @@ def balanced_packing(weight: np.ndarray, num_packs: int) -> Tuple[np.ndarray, np
     """
     Pack n weighted objects to m packs, such that each bin contains exactly n/m objects and the weights of all packs
     are as balanced as possible.
-
     Parameters:
         weight: [X, n], the weight of each item
         num_packs: number of packs
-
     Returns:
         pack_index: [X, n], the pack index of each item
         rank_in_pack: [X, n], the rank of the item in the pack
@@ -49,11 +61,9 @@ def balanced_packing(weight: np.ndarray, num_packs: int) -> Tuple[np.ndarray, np
 def replicate_experts(weight: np.ndarray, num_phy: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Replicate `num_log` experts to `num_phy` replicas, such that the maximum load of all replicas is minimized.
-
     Parameters:
         weight: [X, num_log]
         num_phy: total number of experts after replication
-
     Returns:
         phy2log: [X, num_phy], logical expert id of each physical expert
         rank: [X, num_phy], the replica rank
@@ -88,7 +98,6 @@ def rebalance_experts_intra_node(
         num_groups: number of expert groups
         num_nodes: number of server nodes, where the intra-node network (e.g, NVLink) is faster
         num_gpus: number of GPUs, must be a multiple of `num_nodes`
-
     Returns:
         physical_to_logical_map: [num_moe_layers, num_physical_experts]
         logical_to_physical_map: [num_moe_layers, num_logical_experts, X]
@@ -155,7 +164,6 @@ def rebalance_experts_hierarchical(
         num_groups: number of expert groups
         num_nodes: number of server nodes, where the intra-node network (e.g, NVLink) is faster
         num_gpus: number of GPUs, must be a multiple of `num_nodes`
-
     Returns:
         physical_to_logical_map: [num_moe_layers, num_physical_experts]
         logical_to_physical_map: [num_moe_layers, num_logical_experts, X]
@@ -215,14 +223,12 @@ def rebalance_experts(
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Entry point for expert-parallelism load balancer.
-
     Parameters:
         weight: [layers, num_logical_experts], the load statistics for all logical experts
         num_replicas: number of physical experts, must be a multiple of `num_gpus`
         num_groups: number of expert groups
         num_nodes: number of server nodes, where the intra-node network (e.g, NVLink) is faster
         num_gpus: number of GPUs, must be a multiple of `num_nodes`
-
     Returns:
         physical_to_logical_map: [layers, num_replicas], the expert index of each replica
         logical_to_physical_map: [layers, num_logical_experts, X], the replica indices for each expert
@@ -266,9 +272,6 @@ def main():
     num_replicas = 64
     num_nodes = 4
     num_gpus = 4 * 8
-
-    # model_tokens_per_expert_stats_list = np.ones(
-    #         (num_hidden_layers, num_expert), dtype=int)
 
     model_tokens_per_expert_stats_list = np.random.randint(low=1, high=10, size=(num_hidden_layers, num_expert))
 
