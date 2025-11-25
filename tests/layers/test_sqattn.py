@@ -22,7 +22,7 @@ from paddleformers.transformers import AutoTokenizer, AutoModelForCausalLM, Auto
 
 class DummyArgs:
     def __init__(self):
-        self.model_name_or_path =   "Qwen/Qwen2.5-7B-Instruct"
+        self.model_name_or_path =  "Qwen/Qwen2.5-7B-Instruct"
         self.quant_bits = 4
         self.device = "cuda"
         self.max_eval_samples = 64

@@ -21,7 +21,7 @@ import paddle
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops import (
+    from fastdeploy.model_executor.ops.gpu import (
         append_attention as append_attention_gpu,
     )
     from fastdeploy.model_executor.ops.gpu import (
