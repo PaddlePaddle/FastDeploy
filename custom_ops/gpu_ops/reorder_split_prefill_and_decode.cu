@@ -1,4 +1,4 @@
-// Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cassert>
 #include "helper.h"
 #include "paddle/extension.h"
 
@@ -91,6 +92,7 @@ __global__ void count_decode_tokens_kernel(const int* cu_seqlens,
 
   int64_t seq_len = cu_seqlens[idx + 1] - cu_seqlens[idx];
   int64_t diff = seq_len - prompt_lens[idx];
+  assert(diff >= 0);
   atomicAdd(reinterpret_cast<unsigned long long*>(total_decode),
             static_cast<unsigned long long>(diff));
 }
@@ -166,14 +168,26 @@ std::vector<paddle::Tensor> ReorderSplitPrefillAndDecode(
   auto num_decode_tokens =
       paddle::full({1}, 0, paddle::DataType::INT64, x_remove_padding.place());
 
+#ifdef PADDLE_WITH_COREX
+  int block_size =
+      std::min((total_tokens + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE, 128);
+#else
+  int block_size =
+      min((total_tokens + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE, 128);
+#endif
+
   {
-    int block_size = 256;
     int grid_size = (batch_size + block_size - 1) / block_size;
     count_decode_tokens_kernel<<<grid_size, block_size, 0, stream>>>(
         cu_seqlens_ptr,
         prompt_lens_ptr,
         batch_size,
         num_decode_tokens.data<int64_t>());
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+      PD_THROW("count_decode_tokens_kernel launch failed: ",
+               cudaGetErrorString(err));
+    }
   }
 
   int64_t total_decode =
@@ -183,13 +197,6 @@ std::vector<paddle::Tensor> ReorderSplitPrefillAndDecode(
   const int64_t* x_ptr = x_remove_padding.data<int64_t>();
   int64_t* x_reorder_ptr = x_reorder.data<int64_t>();
   int* batch_id_reorder_ptr = batch_id_reorder.data<int>();
-#ifdef PADDLE_WITH_COREX
-  int block_size =
-      std::min((total_tokens + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE, 128);
-#else
-  int block_size =
-      min((total_tokens + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE, 128);
-#endif
 
   // Launch CUDA kernel to reorder data
   // First pass: collect decode tokens
@@ -205,6 +212,11 @@ std::vector<paddle::Tensor> ReorderSplitPrefillAndDecode(
         batch_size,
         0,
         total_decode);
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+      PD_THROW("reorder_decode_kernel launch failed: ",
+               cudaGetErrorString(err));
+    }
   }
 
   // Second pass: collect prefill tokens
@@ -221,6 +233,11 @@ std::vector<paddle::Tensor> ReorderSplitPrefillAndDecode(
         batch_size,
         total_decode,
         total_prefill);
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+      PD_THROW("reorder_prefill_kernel launch failed: ",
+               cudaGetErrorString(err));
+    }
   }
   return {x_reorder, batch_id_reorder, num_decode_tokens};
 }

@@ -1093,6 +1093,11 @@ class GPUModelRunner(ModelRunnerBase):
         )
         self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
+        self.share_inputs["num_decode"] = paddle.full(
+            [1],
+            0,
+            dtype="int64",
+        )
 
         # Declare AttentionBackend buffers
         self.share_inputs["decoder_batch_ids"] = None
@@ -1268,8 +1273,6 @@ class GPUModelRunner(ModelRunnerBase):
         # NOTE: (changwenbin) Initialized to max_num_seq '-1' before copying, marking illegal positions
         self.share_inputs["batch_id_per_token"][:] = -1
         self.share_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
-        self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
-        self.share_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
 
         # For speculative decoding
         if self.speculative_decoding:
@@ -1283,10 +1286,15 @@ class GPUModelRunner(ModelRunnerBase):
         self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
 
         # Reorder inputs to split prefill and decode tokens
-        if getattr(self.attn_backends[0].get_attention_meta(), "enable_ids_reorder", False):
+        if self.attn_backends and getattr(self.attn_backends[0].get_attention_meta(), "enable_ids_reorder", False):
             ids_remove_padding, batch_id_per_token, num_decode = reorder_split_prefill_and_decode(
                 ids_remove_padding, batch_id_per_token, cu_seqlens_q, self.share_inputs["prompt_lens"]
             )
+            self.share_inputs["num_decode"].copy_(num_decode, False)
+        else:
+            # we can't copy cu_seqlens_q/k if we need to reorder, because reorder will make this info useless
+            self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
+            self.share_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
         self.forward_meta.batch_id_per_token.copy_(batch_id_per_token, False)
 

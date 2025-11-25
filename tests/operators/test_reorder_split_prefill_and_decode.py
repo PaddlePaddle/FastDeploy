@@ -48,7 +48,7 @@ class TestReorderSplitPrefillAndDecode(unittest.TestCase):
 
     def test_empty_input(self):
         """Test empty input case"""
-        with self.assertRaises(Exception):
+        with self.assertRaises(Exception, msg="empty input is not detected"):
             reorder_split_prefill_and_decode(
                 paddle.to_tensor([], dtype="int64"),
                 paddle.to_tensor([], dtype="int32"),

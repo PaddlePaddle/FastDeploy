@@ -73,7 +73,8 @@ void MoeDispatchKernel(
   CubKeyValueSorter sorter_;
   sorter_.update_num_experts(expert_num);
   // Warmup call to ensure sorter internal state is properly initialized
-  // This call initializes the CUB radix sort workspace calculation system
+  // Any int constant num is ok and pass 0 here.
+  // If this code is deleted, getWorkspaceSize will return 0
   sorter_.getWorkspaceSize(0);
 
   const int sorter_ws_size_bytes =
