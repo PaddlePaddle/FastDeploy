@@ -46,3 +46,4 @@ msgspec
 einops
 setproctitle
 aistudio_sdk
+cuda-python==12.8
