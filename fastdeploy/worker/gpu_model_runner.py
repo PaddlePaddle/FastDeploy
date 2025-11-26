@@ -71,9 +71,11 @@ else:
         share_external_data,
         speculate_schedule_cache,
         set_data_ipc,
-        reorder_split_prefill_and_decode,
     )
 
+from fastdeploy.model_executor.layers.attention.ops import (
+    reorder_split_prefill_and_decode,
+)
 from fastdeploy.model_executor.pre_and_post_process import (
     post_process,
     pre_process,
