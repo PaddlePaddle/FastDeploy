@@ -831,7 +831,6 @@ class MTPProposer(Proposer):
                     self.model_inputs,
                 )
 
-                print(f"[MTPProposer] is_dummy_run: {is_dummy_run}")
                 if (
                     not is_dummy_run
                     and self.parallel_config.tensor_parallel_rank == 0
