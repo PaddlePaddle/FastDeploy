@@ -34,6 +34,7 @@ import numpy as np
 import paddle
 from tqdm import tqdm
 
+import fastdeploy.metrics.trace as tracing
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.common_engine import EngineService
 from fastdeploy.engine.expert_service import start_data_parallel_service
@@ -96,6 +97,8 @@ class LLMEngine:
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
         main_process_metrics.set_cache_config_info(obj=self.cfg.cache_config)
+
+        tracing.trace_set_thread_info("engine")
 
     def start(self, api_server_pid=None):
         """

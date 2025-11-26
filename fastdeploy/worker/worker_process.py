@@ -493,7 +493,6 @@ class PaddleDisWorkerProc:
                     f"Rank: {self.local_rank}, num_running_requests: {num_running_requests}, "
                     f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
                 )
-
                 # Process prefill inputs
                 self.worker.preprocess_new_task(req_dicts, num_running_requests)
 

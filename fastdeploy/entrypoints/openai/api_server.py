@@ -30,7 +30,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from gunicorn.app.base import BaseApplication
 from opentelemetry import trace
+from opentelemetry.propagate import extract
 
+import fastdeploy.metrics.trace as tracing
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
 from fastdeploy.engine.expert_service import ExpertService
@@ -58,12 +60,6 @@ from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
 from fastdeploy.envs import environment_variables
 from fastdeploy.metrics.metrics import get_filtered_metrics
-from fastdeploy.metrics.trace_util import (
-    fd_start_span,
-    inject_to_metadata,
-    instrument,
-    lable_span,
-)
 from fastdeploy.utils import (
     ExceptionHandler,
     FlexibleArgumentParser,
@@ -73,6 +69,8 @@ from fastdeploy.utils import (
     is_port_available,
     retrive_model_from_server,
 )
+
+tracing.process_tracing_init()
 
 parser = make_arg_parser(FlexibleArgumentParser())
 args = parser.parse_args()
@@ -246,8 +244,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_exception_handler(RequestValidationError, ExceptionHandler.handle_request_validation_exception)
 app.add_exception_handler(Exception, ExceptionHandler.handle_exception)
-instrument(app)
-
+# instrument(app)
+# FastAPIInstrumentor().instrument_app(app)
 
 env_api_key_func = environment_variables.get("FD_API_KEY")
 env_tokens = env_api_key_func() if env_api_key_func else []
@@ -367,19 +365,23 @@ def wrap_streaming_generator(original_generator: AsyncGenerator):
 
 
 @app.post("/v1/chat/completions")
-async def create_chat_completion(request: ChatCompletionRequest):
+async def create_chat_completion(request: ChatCompletionRequest, req: Request):
     """
     Create a chat completion for the provided prompt and parameters.
     """
     api_server_logger.debug(f"Chat Received request: {request.model_dump_json()}")
+    if req.headers:
+        headers = dict(req.headers)
+        trace_context = extract(headers)
+        request.trace_context = trace_context
     if app.state.dynamic_load_weight:
         status, msg = app.state.engine_client.is_workers_alive()
         if not status:
             return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
     try:
         async with connection_manager():
-            inject_to_metadata(request)
-            lable_span(request)
+            # inject_to_metadata(request)
+            tracing.lable_span(request)
             generator = await app.state.chat_handler.create_chat_completion(request)
             if isinstance(generator, ErrorResponse):
                 api_server_logger.debug(f"release: {connection_semaphore.status()}")
@@ -410,7 +412,7 @@ async def create_completion(request: CompletionRequest):
             return JSONResponse(content={"error": "Worker Service Not Healthy"}, status_code=304)
     try:
         async with connection_manager():
-            lable_span(request)
+            tracing.lable_span(request)
             generator = await app.state.completion_handler.create_completion(request)
             if isinstance(generator, ErrorResponse):
                 connection_semaphore.release()
@@ -537,7 +539,7 @@ def launch_api_server() -> None:
 
     api_server_logger.info(f"launch Fastdeploy api server... port: {args.port}")
     api_server_logger.info(f"args: {args.__dict__}")
-    fd_start_span("FD_START")
+    # fd_start_span("FD_START")
 
     options = {
         "bind": f"{args.host}:{args.port}",

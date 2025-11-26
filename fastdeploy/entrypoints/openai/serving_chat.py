@@ -24,6 +24,7 @@ from typing import List, Optional
 
 import numpy as np
 
+import fastdeploy.metrics.trace as tracing
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -103,6 +104,7 @@ class OpenAIServingChat:
         """
         Create a new chat completion using the specified parameters.
         """
+        tracing.trace_set_thread_info("API Server")
         if not self._check_master():
             err_msg = (
                 f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
@@ -134,6 +136,10 @@ class OpenAIServingChat:
                 request_id = f"chatcmpl-{request.user}-{uuid.uuid4()}"
             else:
                 request_id = f"chatcmpl-{uuid.uuid4()}"
+            # headers = dict(request.headers)
+            # tracing.trace_req_start(rid=request_id, headers=headers, role="fastdeploy")
+            tracing.trace_req_start(rid=request_id, trace_content=request.trace_context, role="FastDeploy")
+            del request.trace_context
             api_server_logger.info(f"create chat completion request: {request_id}")
             prompt_tokens = None
             max_tokens = None
@@ -407,6 +413,19 @@ class OpenAIServingChat:
                         arrival_time=arrival_time,
                     )
                     if res["finished"]:
+                        trace_carrier = res.get("trace_carrier")
+                        if trace_carrier:
+                            tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
+                            start_time = res["metrics"]["llm_engine_recv_token_timestamp"]
+                            tracing.trace_report_span(
+                                tracing.TraceSpanName.POSTPROCESSING,
+                                request_id,
+                                int(start_time * 1e9),
+                                int(time.time() * 1e9),
+                                thread_finish_flag=True,
+                            )
+                            if "trace_carrier" in res:
+                                del res["trace_carrier"]
                         num_choices -= 1
                         main_process_metrics.e2e_request_latency.observe(
                             time.time() - res["metrics"]["request_start_time"]
@@ -475,6 +494,7 @@ class OpenAIServingChat:
             )
             yield f"data: {error_data}\n\n"
         finally:
+            tracing.trace_req_finish(request_id)
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
@@ -617,6 +637,7 @@ class OpenAIServingChat:
                         )
                         choices.append(choice)
         finally:
+            tracing.trace_req_finish(request_id)
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
             api_server_logger.info(f"release {self.engine_client.semaphore.status()}")
