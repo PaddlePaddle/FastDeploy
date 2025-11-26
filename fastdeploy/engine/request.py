@@ -75,8 +75,9 @@ class Request:
         pooling_params: Optional[PoolingParams] = None,
         preprocess_start_time: Optional[float] = None,
         preprocess_end_time: Optional[float] = None,
-        inference_start_time: float = 0,
-        llm_engine_recv_req_timestamp: float = 0,
+        schedule_start_time: Optional[float] = None,
+        inference_start_time: Optional[float] = None,
+        llm_engine_recv_req_timestamp: Optional[float] = None,
         multimodal_inputs: Optional[dict] = None,
         multimodal_data: Optional[dict] = None,
         disable_chat_template: bool = False,
@@ -122,10 +123,9 @@ class Request:
         self.arrival_time = arrival_time
         self.preprocess_start_time = preprocess_start_time
         self.preprocess_end_time = preprocess_end_time
+        self.schedule_start_time = schedule_start_time
         self.inference_start_time = inference_start_time
-        self.llm_engine_recv_req_timestamp = (
-            llm_engine_recv_req_timestamp if llm_engine_recv_req_timestamp else time.time()
-        )
+        self.llm_engine_recv_req_timestamp = llm_engine_recv_req_timestamp or time.time()
         self.disable_chat_template = disable_chat_template
         self.disaggregate_info = disaggregate_info
 

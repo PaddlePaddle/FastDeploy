@@ -702,6 +702,7 @@ class EngineService:
                     batch=num_prefill_batch,
                 )
                 for task in tasks:
+                    task.schedule_start_time = time.time()
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
 
                 if self.cfg.scheduler_config.splitwise_role == "decode":
@@ -814,6 +815,7 @@ class EngineService:
                                 break
                             else:
                                 raise
+
                 # 2. Schedule requests
                 tasks, error_tasks = self.resource_manager.schedule()
 
