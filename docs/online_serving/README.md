@@ -130,6 +130,17 @@ user: Optional[str] = None
 metadata: Optional[dict] = None
 # Additional metadata, used for passing custom information (such as request ID, debug markers, etc.).
 
+n: Optional[int] = 1
+# Number of candidate outputs to generate (i.e., return multiple independent text completions). Default 1 (return only one result).
+
+seed: Optional[int] = Field(default=None, ge=0, le=922337203685477580)
+# Random seed for controlling deterministic generation (same seed + input yields identical results).
+# Must be in range `[0, 922337203685477580]`. Default None means no fixed seed.
+
+stop: Optional[Union[str, List[str]]] = Field(default_factory=list)
+# Stop generation conditions - can be a single string or list of strings.
+# Generation terminates when any stop string is produced (default empty list means disabled).
+
 ```
 
 ### Additional Parameters Added by FastDeploy
@@ -160,6 +171,11 @@ bad_words_token_ids: Optional[List[int]] = None
 
 repetition_penalty: Optional[float] = None
 # Repetition penalty coefficient, reducing the probability of repeating already generated tokens (`>1.0` suppresses repetition, `<1.0` encourages repetition, default None means disabled).
+
+stop_token_ids: Optional[List[int]] = Field(default_factory=list)
+# Stop generation token IDs - list of token IDs that trigger early termination when generated.
+# Typically used alongside `stop` for complementary stopping conditions (default empty list means disabled).
+
 ```
 
 The following extra parameters are supported:
@@ -202,6 +218,19 @@ temp_scaled_logprobs: Optional[bool] = False
 
 top_p_normalized_logprobs: Optional[bool] = False
 # Whether to perform top-p normalization when calculating logprobs (default is False, indicating that top-p normalization is not performed).
+
+include_draft_logprobs: Optional[bool] = False
+# Whether to return log probabilities during draft stages (e.g., pre-generation or intermediate steps)
+# for debugging or analysis of the generation process (default False means not returned).
+
+logits_processors_args: Optional[Dict] = None
+# Additional arguments for logits processors, enabling customization of generation logic
+# (e.g., dynamically adjusting probability distributions).
+
+mm_hashes: Optional[list] = None
+# Hash values for multimodal (e.g., image/audio) inputs, used for verification or tracking.
+# Default None indicates no multimodal input or hash validation required.
+
 ```
 
 ### Differences in Return Fields
@@ -351,6 +380,39 @@ max_tokens: Optional[int] = None
 
 presence_penalty: Optional[float] = None
 # Presence penalty coefficient, reducing the probability of generating new topics (unseen topics) (`>1.0` suppresses new topics, `<1.0` encourages new topics).
+
+echo: Optional[bool] = False
+# Whether to include the input prompt in the generated output (default: `False`, i.e., exclude the prompt).
+
+n: Optional[int] = 1
+# Number of candidate outputs to generate (i.e., return multiple independent text completions). Default 1 (return only one result).
+
+seed: Optional[int] = Field(default=None, ge=0, le=922337203685477580)
+# Random seed for controlling deterministic generation (same seed + input yields identical results).
+# Must be in range `[0, 922337203685477580]`. Default None means no fixed seed.
+
+stop: Optional[Union[str, List[str]]] = Field(default_factory=list)
+# Stop generation conditions - can be a single string or list of strings.
+# Generation terminates when any stop string is produced (default empty list means disabled).
+
+stream: Optional[bool] = False
+# Whether to enable streaming output (return results token by token), default `False` (returns complete results at once).
+
+stream_options: Optional[StreamOptions] = None
+# Additional configurations for streaming output (such as chunk size, timeout, etc.), refer to the specific definition of `StreamOptions`.
+
+temperature: Optional[float] = None
+# Temperature coefficient, controlling generation randomness (`0.0` for deterministic generation, `>1.0` for more randomness, default `None` uses model default).
+
+top_p: Optional[float] = None
+# Nucleus sampling threshold, only retaining tokens whose cumulative probability exceeds `top_p` (default `None` disables).
+
+response_format: Optional[AnyResponseFormat] = None
+# Specifies the output format (such as JSON, XML, etc.), requires passing a predefined format configuration object.
+
+user: Optional[str] = None
+# User identifier, used for tracking or distinguishing requests from different users (default `None` does not pass).
+
 ```
 
 ### Additional Parameters Added by FastDeploy
@@ -379,6 +441,10 @@ bad_words: Optional[List[str]] = None
 bad_words_token_ids: Optional[List[int]] = None
 # List of forbidden token ids that the model should avoid generating (default None means no restriction).
 
+stop_token_ids: Optional[List[int]] = Field(default_factory=list)
+# Stop generation token IDs - list of token IDs that trigger early termination when generated.
+# Typically used alongside `stop` for complementary stopping conditions (default empty list means disabled).
+
 repetition_penalty: Optional[float] = None
 # Repetition penalty coefficient, reducing the probability of repeating already generated tokens (`>1.0` suppresses repetition, `<1.0` encourages repetition, default None means disabled).
 ```
@@ -402,6 +468,25 @@ return_token_ids: Optional[bool] = None
 
 prompt_token_ids: Optional[List[int]] = None
 # Directly passes the token ID list of the prompt, skipping the text encoding step (default None means using text input).
+
+temp_scaled_logprobs: Optional[bool] = False
+# Whether to divide the logits by the temperature coefficient when calculating logprobs (default is False, meaning the logits are not divided by the temperature coefficient).
+
+top_p_normalized_logprobs: Optional[bool] = False
+# Whether to perform top-p normalization when calculating logprobs (default is False, indicating that top-p normalization is not performed).
+
+include_draft_logprobs: Optional[bool] = False
+# Whether to return log probabilities during draft stages (e.g., pre-generation or intermediate steps)
+# for debugging or analysis of the generation process (default False means not returned).
+
+logits_processors_args: Optional[Dict] = None
+# Additional arguments for logits processors, enabling customization of generation logic
+# (e.g., dynamically adjusting probability distributions).
+
+mm_hashes: Optional[list] = None
+# Hash values for multimodal (e.g., image/audio) inputs, used for verification or tracking.
+# Default None indicates no multimodal input or hash validation required.
+
 ```
 
 ### Overview of Return Parameters
