@@ -117,11 +117,12 @@ class LogprobsTensors(NamedTuple):
         Slice rows.
         Keeps the number of max_num_logprobs unchanged.
         """
-        return LogprobsTensors(
-            self.logprob_token_ids[start:end],
-            self.logprobs[start:end],
-            self.selected_token_ranks[start:end],
-        )
+        with paddle.no_grad():
+            return LogprobsTensors(
+                paddle.to_tensor(self.logprob_token_ids[start:end], place=self.logprob_token_ids.place),
+                paddle.to_tensor(self.logprobs[start:end], place=self.logprob_token_ids.place),
+                paddle.to_tensor(self.selected_token_ranks[start:end], place=self.logprob_token_ids.place),
+            )
 
 
 @dataclass
