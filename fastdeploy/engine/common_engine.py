@@ -319,9 +319,6 @@ class EngineService:
                 )
                 self.cfg.cache_config.cache_queue_port = self.cache_task_queue.get_server_port()
 
-        self.llm_logger.info(
-            f"local {min(self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,self.cfg.parallel_config.data_parallel_size - 1)}"
-        )
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
