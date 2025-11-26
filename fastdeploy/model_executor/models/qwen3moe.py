@@ -97,8 +97,6 @@ class Qwen3MLP(nn.Layer):
         prefix: str = "",
     ) -> None:
         super().__init__()
-        self.nranks = fd_config.parallel_config.tensor_parallel_size
-
         self.up_gate_proj = MergedColumnParallelLinear(
             fd_config,
             prefix=f"{prefix}.up_gate_proj",
