@@ -49,8 +49,9 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
                               const paddle::Tensor& seq_lens_decoder,
                               const paddle::Tensor& prompt_lens,
                               int message_flag,  // Target: 3, Draft: 4
-                              int64_t rank_id) {
-  if (rank_id > 0) {
+                              int64_t rank_id,
+                              bool save_each_rank) {
+  if (!save_each_rank && rank_id > 0) {
     return;
   }
   auto sampled_token_ids_cpu =
@@ -203,5 +204,5 @@ PD_BUILD_STATIC_OP(speculate_save_output_topk)
         "seq_lens_decoder",
         "prompt_lens",
     })
-    .Attrs({"message_flag: int", "rank_id: int64_t"})
+    .Attrs({"message_flag: int", "rank_id: int64_t", "save_each_rank: bool"})
     .SetKernelFn(PD_KERNEL(SpeculateSaveOutMmsgTopK));
