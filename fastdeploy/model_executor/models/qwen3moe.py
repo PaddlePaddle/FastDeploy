@@ -416,7 +416,7 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
 
         return logits
 
-    def empty_input_forward(self):
+    def empty_input_forward(self, forward_meta):
         """
         empty_input_forward
         """
@@ -428,7 +428,7 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
             self.fd_config.model_config.moe_layer_start_index,
             self.fd_config.model_config.num_hidden_layers,
         ):
-            self.model.layers[i].mlp.experts(fake_hidden_states, self.model.layers[i].mlp.gate, self.forward_meta)
+            self.model.layers[i].mlp.experts(fake_hidden_states, self.model.layers[i].mlp.gate, forward_meta)
 
     def forward(
         self,

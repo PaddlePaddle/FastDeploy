@@ -754,7 +754,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
 
         return logits
 
-    def empty_input_forward(self):
+    def empty_input_forward(self, forward_meta):
         """
         empty_input_forward
         """
@@ -766,8 +766,8 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             self.fd_config.model_config.moe_layer_start_index,
             self.fd_config.model_config.num_hidden_layers,
         ):
-            self.ernie.layers[i].mlp.text_fused_moe(fake_hidden_states, self.forward_meta)
-            self.ernie.layers[i].mlp.image_fused_moe(fake_hidden_states, self.forward_meta)
+            self.ernie.layers[i].mlp.text_fused_moe(fake_hidden_states, forward_meta)
+            self.ernie.layers[i].mlp.image_fused_moe(fake_hidden_states, forward_meta)
 
     def get_input_embeddings(
         self,
