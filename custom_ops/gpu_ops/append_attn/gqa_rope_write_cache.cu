@@ -64,10 +64,10 @@ __global__ void GQAVariableLengthRotarySplitKernel(
     const int token_idx =
         linear_index / offset;  // token id(第几个token,不分qkv)
     const int ori_bi = batch_id_per_token[token_idx];  // 第几个batch
-    if (seq_lens[ori_bi] == 0) continue;     // 当前batch没token，跳过
-    const int bias = linear_index % offset;  // hidden dim维度的offset
-    const int hi = bias / last_dim;          // head id
-    const int h_bias = bias % last_dim;      // head中对应token的id
+    if (seq_lens[ori_bi] == 0) continue;
+    const int bias = linear_index % offset;
+    const int hi = bias / last_dim;
+    const int h_bias = bias % last_dim;
 
     const int ori_seq_id =
         (token_idx - cu_seqlens_q[ori_bi]) +
@@ -98,7 +98,7 @@ __global__ void GQAVariableLengthRotarySplitKernel(
 
     // TODO check this correct or not
     int64_t new_emb_idx =
-        rope_3d ? emb_idx + ori_bi * half_lastdim * seq_len : emb_idx;
+        rope_3d ? emb_idx + ori_bi * last_dim * seq_len : emb_idx;
     float thread_m2 = 0.0f;
     float warp_m2 = 0.0f;
 
@@ -1173,7 +1173,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
   paddle::Tensor k = GetEmptyTensor(
       {kv_token_num, kv_num_heads, head_dim}, qkv.dtype(), qkv.place());
   paddle::Tensor v = GetEmptyTensor(
-      {kv_token_num + 128, kv_num_heads, head_dim}, qkv.dtype(), qkv.place());
+      {kv_token_num, kv_num_heads, head_dim}, qkv.dtype(), qkv.place());
 
   // rope
   gqa_rotary_qk_split_variable<data_t>(
