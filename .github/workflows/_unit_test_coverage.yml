@@ -105,7 +105,7 @@ jobs:
           FD_CACHE_QUEUE_PORT=$((8098 + DEVICE_PORT * 100))
           FD_ROUTER_PORT=$((8048 + DEVICE_PORT * 100))
           FD_CONNECTOR_PORT=$((8038 + DEVICE_PORT * 100))
-          FD_RDMA_PORT=$((9008 + DEVICE_PORT * 100))
+          FD_RDMA_PORT=$((8028 + DEVICE_PORT * 100))
           echo "Test ENV Parameter:"
           echo "========================================================="
           echo "FLASK_PORT=${FLASK_PORT}"
