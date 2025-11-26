@@ -1820,6 +1820,7 @@ class PrefixCacheManager:
         # reset metrics
         self.metrics.reset_metrics()
         main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
+        main_process_metrics.available_gpu_block_num.set(len(self.gpu_free_block_list))
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
 
     def clear_prefix_cache(self):

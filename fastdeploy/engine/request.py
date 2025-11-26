@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import time
+import traceback
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from typing import Any, Dict, Generic, Optional, Union
@@ -24,7 +25,6 @@ from typing import Any, Dict, Generic, Optional, Union
 import numpy as np
 from typing_extensions import TypeVar
 
-from fastdeploy import envs
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
@@ -75,8 +75,9 @@ class Request:
         pooling_params: Optional[PoolingParams] = None,
         preprocess_start_time: Optional[float] = None,
         preprocess_end_time: Optional[float] = None,
-        inference_start_time: float = 0,
-        llm_engine_recv_req_timestamp: float = 0,
+        schedule_start_time: Optional[float] = None,
+        inference_start_time: Optional[float] = None,
+        llm_engine_recv_req_timestamp: Optional[float] = None,
         multimodal_inputs: Optional[dict] = None,
         multimodal_data: Optional[dict] = None,
         disable_chat_template: bool = False,
@@ -122,10 +123,9 @@ class Request:
         self.arrival_time = arrival_time
         self.preprocess_start_time = preprocess_start_time
         self.preprocess_end_time = preprocess_end_time
+        self.schedule_start_time = schedule_start_time
         self.inference_start_time = inference_start_time
-        self.llm_engine_recv_req_timestamp = (
-            llm_engine_recv_req_timestamp if llm_engine_recv_req_timestamp else time.time()
-        )
+        self.llm_engine_recv_req_timestamp = llm_engine_recv_req_timestamp or time.time()
         self.disable_chat_template = disable_chat_template
         self.disaggregate_info = disaggregate_info
 
@@ -190,6 +190,22 @@ class Request:
             pooling_params = PoolingParams.from_dict(d["pooling_params"])
         else:
             sampling_params = SamplingParams.from_dict(d)
+        if (
+            isinstance(d.get("multimodal_inputs"), dict)
+            and isinstance(d["multimodal_inputs"].get("mm_positions"), list)
+            and len(d["multimodal_inputs"]["mm_positions"]) > 0
+        ):
+            # if mm_positions is not of type ImagePosition, convert to ImagePosition
+            try:
+                for i, mm_pos in enumerate(d["multimodal_inputs"]["mm_positions"]):
+                    d["multimodal_inputs"]["mm_positions"][i] = (
+                        ImagePosition(**mm_pos) if not isinstance(mm_pos, ImagePosition) else mm_pos
+                    )
+            except Exception as e:
+                data_processor_logger.error(
+                    f"Convert mm_positions to ImagePosition error: {e}, {str(traceback.format_exc())}"
+                )
+
         return cls(
             request_id=d["request_id"],
             prompt=d.get("prompt"),
