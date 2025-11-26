@@ -1,4 +1,4 @@
-[简体中文](../zh/get_started/quick_start_qwen.md)
+[简体中文](../zh/get_started/quick_start_qwen25_vl.md)
 
 # Deploy Qwen2.5-VL in 10 Minutes
 

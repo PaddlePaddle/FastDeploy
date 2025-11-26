@@ -1,4 +1,4 @@
-[English](../../get_started/quick_start_qwen.md)
+[English](../../get_started/quick_start_qwen25_vl.md)
 
 # 10分钟完成 Qwen2.5-VL 模型部署
 
