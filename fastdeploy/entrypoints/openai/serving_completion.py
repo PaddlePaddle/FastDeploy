@@ -788,13 +788,13 @@ class OpenAIServingCompletion:
                     [tid], clean_up_tokenization_spaces=False
                 )
                 if "\ufffd" in token_str:
-                    token_bytes = token_str.encode("utf-8", errors="replace")
+                    raw_token = self.engine_client.data_processor.tokenizer.convert_ids_to_tokens(tid)
+                    token_bytes = raw_token.encode("utf-8", errors="replace")
                     token_str = "bytes:" + "".join(f"\\x{byte:02x}" for byte in token_bytes)
                 if idx == 0:
                     tokens.append(token_str)
                     token_logprobs.append(lp)
-                else:
-                    top_logprobs[token_str] = lp
+                top_logprobs[token_str] = lp
                 idx += 1
 
             # Construct the sampled token object (avoid sharing references with top_logprob_entries)
