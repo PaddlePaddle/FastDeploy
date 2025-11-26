@@ -66,6 +66,8 @@ plugins:
             Scheduler: 调度器
             Graceful Shutdown: 服务优雅关闭
             Offline Inference: 离线推理
+            Observability: 可观测性
+            Trace: Trace服务
             CLI: CLI 使用说明
             Chat: Chat命令
             Complete: Complete命令
@@ -173,3 +175,5 @@ nav:
       - Bench: cli/bench.md
       - Run Batch: cli/run-batch.md
       - Tokenizer: cli/tokenizer.md
+  - Observability:
+      - Trace: observability/trace.md

@@ -196,7 +196,7 @@ def main(args: argparse.Namespace) -> None:
 
     # 检查参数
     if not any([args.encode, args.decode, args.vocab_size, args.info, args.vocab_export]):
-        print("请至少指定一个参数：--encode, --decode, --vocab-size, --info, --export-vocab")
+        print("请至少指定一个参数：--encode, --decode, --vocab-size, --info, --vocab-export")
         return
 
     # 初始化tokenizer

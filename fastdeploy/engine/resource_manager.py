@@ -301,6 +301,8 @@ class ResourceManager:
                     f"length of prompt token: {task.prompt_token_ids_len}"
                 )
                 allocated_position += 1
+                # trace_carrier = tracing.trace_get_proc_propagate_context(rid)
+                # task.trace_carrier = trace_carrier
             processing_task_index += 1
 
         # batch size when the statistical engine is inferring

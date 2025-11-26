@@ -97,11 +97,12 @@ def setup_and_run_server():
     ]
 
     # Start subprocess in new process group
-    with open(log_path, "w") as logfile:
+    # with open(log_path, "w") as logfile:
+    with open(log_path, "w"):
         process = subprocess.Popen(
             cmd,
-            stdout=logfile,
-            stderr=subprocess.STDOUT,
+            # stdout=logfile,
+            # stderr=subprocess.STDOUT,
             start_new_session=True,  # Enables killing full group via os.killpg
         )
 
