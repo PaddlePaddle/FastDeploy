@@ -625,7 +625,6 @@ class GPUModelRunner(ModelRunnerBase):
             )
 
             self.share_inputs["first_token_ids"][idx : idx + 1] = self.share_inputs["input_ids"][idx : idx + 1, :1]
-            self.share_inputs["ori_seq_lens_encoder"][idx : idx + 1] = length
 
             if request.get("seed") is not None:
                 self.share_inputs["infer_seed"][idx : idx + 1] = request.get("seed")
@@ -841,7 +840,6 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["stop_flags"][idx : idx + 1] = False
 
             self.share_inputs["first_token_ids"][idx : idx + 1] = self.share_inputs["input_ids"][idx : idx + 1, :1]
-            self.share_inputs["ori_seq_lens_encoder"][idx : idx + 1] = length
 
             if request.get("seed") is not None:
                 self.share_inputs["infer_seed"][idx : idx + 1] = request.get("seed")
@@ -994,7 +992,6 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["stop_flags"][idx : idx + 1] = False
             self.share_inputs["temperature"][idx : idx + 1] = 1
             self.share_inputs["first_token_ids"][idx : idx + 1] = self.share_inputs["input_ids"][idx : idx + 1, :1]
-            self.share_inputs["ori_seq_lens_encoder"][idx : idx + 1] = input_length
 
             self.share_inputs["encoder_block_lens"][idx : idx + 1] = block_num
             self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
@@ -1078,7 +1075,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["used_list_len"] = paddle.full([max_num_seqs], 0, dtype="int32")
         self.share_inputs["infer_seed"] = paddle.full([max_num_seqs, 1], 0, dtype="int64").cpu()
         self.share_inputs["first_token_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
-        self.share_inputs["ori_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["system_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["system_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int32")
 
