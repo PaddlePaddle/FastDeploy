@@ -453,48 +453,88 @@ def test_send_splitwise_tasks_rdma_routes_and_resets_state():
     assert task.disaggregate_info["role"] == "prefill"
 
 
-def test_send_cache_infos_prefill_batches_into_worker_queue():
+def test_send_cache_info_to_messager_batches_prefill_cache():
     cfg = make_cfg()
     worker_queue = FakeEngineWorkerQueue()
     connector = InspectableConnector(cfg, worker_queue, object())
     task = make_task("req-prefill", role="prefill", protocol="ipc")
-    was_decode = connector.send_cache_infos([task], current_id=11)
-    assert not was_decode
+    connector.send_cache_info_to_messager([task], current_id=11)
     assert worker_queue.cache_infos[-1][0]["request_id"] == "req-prefill"
     assert worker_queue.cache_infos[-1][0]["current_id"] == 11
 
 
-def test_send_cache_infos_decode_rdma_triggers_remote_sync():
+def test_send_cache_info_to_prefill_rdma_triggers_remote_sync():
     cfg = make_cfg()
     worker_queue = FakeEngineWorkerQueue()
     connector = InspectableConnector(cfg, worker_queue, object())
     task = make_task("req-decode", role="decode", protocol="rdma")
-    result = connector.send_cache_infos([task], current_id=22)
-    assert result
+    connector.send_cache_info_to_prefill([task])
     assert connector.sent_messages[-1][1] == "cache_sync"
     assert worker_queue.cache_infos == []
 
 
-def test_send_cache_infos_decode_ipc_forwards_to_local_worker():
+def test_send_cache_info_to_prefill_ipc_forwards_to_local_worker():
     cfg = make_cfg()
     worker_queue = FakeEngineWorkerQueue()
     connector = InspectableConnector(cfg, worker_queue, object())
     connector.create_connection(TEST_PORT_DECODE_CACHE)
     task = make_task("req-local", role="decode", protocol="ipc")
     task.disaggregate_info["cache_info"]["ipc"]["port"] = TEST_PORT_DECODE_CACHE
-    connector.send_cache_infos([task], current_id=7)
+    connector.send_cache_info_to_prefill([task])
     assert connector.connect_innode_instances[TEST_PORT_DECODE_CACHE].cache_infos[-1][0]["transfer_protocol"] == "ipc"
 
 
-def test_send_cache_infos_rdma_with_error_message_forwards_reason():
+def test_send_cache_info_to_prefill_rdma_with_error_message_forwards_reason():
     cfg = make_cfg()
     worker_queue = FakeEngineWorkerQueue()
     connector = InspectableConnector(cfg, worker_queue, object())
     task = make_task("req-err", role="decode", protocol="rdma")
     task.error_msg = "remote boom"
-    connector.send_cache_infos([task], current_id=0)
+    connector.send_cache_info_to_prefill([task])
     assert connector.sent_messages[-1][1] == "cache_sync"
     assert "error_msg" in connector.sent_messages[-1][2][0]
+
+
+def test_send_cache_info_to_messager_uses_cached_current_id_when_missing():
+    cfg = make_cfg()
+    worker_queue = FakeEngineWorkerQueue()
+    connector = InspectableConnector(cfg, worker_queue, object())
+    skipped = DummyTask("req-skip", disaggregate_info=None)
+    task = make_task("req-prefill", role="prefill", protocol="ipc")
+    task.disaggregate_info["cache_info"]["ipc"]["current_id"] = 42
+    connector.send_cache_info_to_messager([skipped, task], current_id=-1)
+    assert worker_queue.cache_infos[-1][0]["current_id"] == 42
+
+
+def test_send_splitwise_tasks_innode_creates_connection_if_missing():
+    cfg = make_cfg()
+    worker_queue = FakeEngineWorkerQueue()
+    connector = InspectableConnector(cfg, worker_queue, object())
+    task = make_task("req-create", role="decode", protocol="ipc")
+    selected_port = connector.send_splitwise_tasks_innode([task], TEST_PORT_INNODE_DECODE)
+    assert selected_port == TEST_PORT_INNODE_DECODE
+    assert connector.connect_innode_instances[TEST_PORT_INNODE_DECODE].disaggregated_tasks
+
+
+def test_send_first_token_creates_connection_for_ipc_queue():
+    cfg = make_cfg()
+    worker_queue = FakeEngineWorkerQueue()
+    connector = InspectableConnector(cfg, worker_queue, object())
+    msg = {"transfer_protocol": "ipc", "cache_info": {"ipc": {"port": TEST_PORT_DECODE_FIRST_TOKEN}}}
+    task = make_task("req-first-missing", role="decode", protocol="ipc")
+    connector.send_first_token(msg, [task])
+    assert TEST_PORT_DECODE_FIRST_TOKEN in connector.connect_innode_instances
+
+
+def test_get_push_socket_wraps_zmq_error(monkeypatch):
+    cfg = make_cfg(pd_comm_port=[TEST_PORT_PD_COMM_BASE])
+    worker_queue = FakeEngineWorkerQueue()
+    connector = InspectableConnector(cfg, worker_queue, object())
+    connector.zmq_ctx = types.SimpleNamespace(
+        socket=lambda *_: (_ for _ in ()).throw(splitwise_connector.zmq.ZMQError("boom"))
+    )
+    with pytest.raises(ConnectionError):
+        connector._get_push_socket("1.2.3.4:9999")
 
 
 def test_send_first_token_to_ipc_decode_queue():
