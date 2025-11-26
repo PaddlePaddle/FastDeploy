@@ -59,7 +59,6 @@ class Qwen3Attention(nn.Layer):
         self.head_dim = fd_config.model_config.head_dim
 
         self.qkv_proj = QKVParallelLinear(fd_config, prefix=f"{prefix}.qkv_proj", with_bias=False)
-        nranks = fd_config.parallel_config.tensor_parallel_size
 
         self.o_proj = RowParallelLinear(
             fd_config,
@@ -91,10 +90,10 @@ class Qwen3Attention(nn.Layer):
             begin_norm_axis=2,
         )
 
-        nranks = fd_config.parallel_config.tensor_parallel_size
-        num_kv_heads_replicas = max(1, nranks // fd_config.model_config.num_key_value_heads)
-        self.q_size = fd_config.model_config.num_attention_heads * self.head_dim // nranks
-        self.kv_size = fd_config.model_config.num_key_value_heads * self.head_dim * num_kv_heads_replicas // nranks
+        tp_size = fd_config.parallel_config.tensor_parallel_size
+        num_kv_heads_replicas = max(1, tp_size // fd_config.model_config.num_key_value_heads)
+        self.q_size = fd_config.model_config.num_attention_heads * self.head_dim // tp_size
+        self.kv_size = fd_config.model_config.num_key_value_heads * self.head_dim * num_kv_heads_replicas // tp_size
 
     def load_state_dict(self, state_dict):
         """ """

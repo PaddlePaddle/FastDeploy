@@ -175,13 +175,6 @@ class GCUFusedMoeMethod(UnquantizedFusedMoEMethod):
         fused_moe_out = intermediate_cache3.sum(axis=1)
         fused_moe_out = fused_moe_out.reshape_([token_num, hidden_size])
 
-        if layer.tp_size > 1:
-            from fastdeploy.distributed.communication import (
-                tensor_model_parallel_all_reduce,
-            )
-
-            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out)
-
         return fused_moe_out
 
     def apply(

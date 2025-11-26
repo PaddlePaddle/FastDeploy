@@ -68,11 +68,11 @@ class ParallelLMHead(nn.Layer):
         self.embedding_dim = embedding_dim
         self.tp_group = fd_config.parallel_config.tp_group
         self.column_cut = True
-        self.nranks = fd_config.parallel_config.tensor_parallel_size
+        self.tp_size = fd_config.parallel_config.tensor_parallel_size
         self.fd_config = fd_config
         self.padding_size = padding_size
 
-        if num_embeddings % self.nranks != 0:
+        if num_embeddings % self.tp_size != 0:
             num_embeddings = pad_vocab_size(num_embeddings, self.padding_size)
         self.num_embeddings = num_embeddings
 
