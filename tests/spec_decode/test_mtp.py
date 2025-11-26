@@ -319,8 +319,12 @@ class TestMTPProposer(unittest.TestCase):
         )
 
         with patch.object(proposer, "initialize_kv_cache") as mock_init_cache:
+
             def side_effect(main_model_num_blocks):
-                proposer.num_gpu_blocks = int(main_model_num_blocks * proposer.speculative_config.num_gpu_block_expand_ratio)
+                proposer.num_gpu_blocks = int(
+                    main_model_num_blocks * proposer.speculative_config.num_gpu_block_expand_ratio
+                )
+
             mock_init_cache.side_effect = side_effect
             proposer.update_mtp_block_num(num_gpu_blocks=50)
             mock_init_cache.assert_called_once_with(main_model_num_blocks=50)
@@ -388,6 +392,1029 @@ class TestMTPProposer(unittest.TestCase):
         )
 
         self.assertTrue(proposer.is_chunk_prefill_enabled())
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_initialize_kv_cache_with_prefix_caching(
+        self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader
+    ):
+        """Test initialize_kv_cache with prefix caching enabled"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        # Enable prefix caching
+        self.mock_fd_config.cache_config.enable_prefix_caching = True
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        with patch("fastdeploy.spec_decode.mtp.share_external_data") as mock_share_data:
+            mock_share_data.side_effect = lambda x, y, z: x
+            proposer.initialize_kv_cache(main_model_num_blocks=100)
+            self.assertIn("caches", proposer.model_inputs)
+
+        # Reset
+        self.mock_fd_config.cache_config.enable_prefix_caching = False
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_initialize_kv_cache_with_profile(
+        self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader
+    ):
+        """Test initialize_kv_cache with profile=True"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        proposer.initialize_kv_cache(main_model_num_blocks=100, profile=True)
+        self.assertIn("caches", proposer.model_inputs)
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_insert_tasks_v1_prefill(self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader):
+        """Test insert_tasks_v1 with prefill task"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        with patch("fastdeploy.spec_decode.mtp.share_external_data") as mock_share_data:
+            mock_share_data.side_effect = lambda x, y, z: x
+            proposer.initialize_kv_cache(main_model_num_blocks=100)
+
+        # Create mock request for prefill
+        mock_request = MagicMock()
+        mock_request.request_id = "test_req_1"
+        mock_request.idx = 0
+        mock_request.task_type.value = 0  # RequestType.PREFILL
+        mock_request.prefill_start_index = 0
+        mock_request.prefill_end_index = 10
+        mock_request.prompt_token_ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        mock_request.output_token_ids = []
+        mock_request.block_tables = [0, 1]
+        mock_request.multimodal_inputs = None
+
+        proposer.insert_tasks_v1([mock_request], num_running_requests=1)
+        self.assertFalse(proposer.model_inputs["stop_flags"][0].item())
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_insert_tasks_v1_decode(self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader):
+        """Test insert_tasks_v1 with decode task"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        with patch("fastdeploy.spec_decode.mtp.share_external_data") as mock_share_data:
+            mock_share_data.side_effect = lambda x, y, z: x
+            proposer.initialize_kv_cache(main_model_num_blocks=100)
+
+        # Create mock request for decode
+        mock_request = MagicMock()
+        mock_request.request_id = "test_req_2"
+        mock_request.idx = 0
+        mock_request.task_type.value = 1  # RequestType.DECODE
+        mock_request.block_tables = [0, 1, 2]
+
+        proposer.insert_tasks_v1([mock_request], num_running_requests=1)
+        # Verify block_tables updated
+        self.assertEqual(proposer.model_inputs["encoder_block_lens"][0].item(), 3)
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_insert_tasks_v1_other_type(
+        self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader
+    ):
+        """Test insert_tasks_v1 with other task type (cleanup)"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        with patch("fastdeploy.spec_decode.mtp.share_external_data") as mock_share_data:
+            mock_share_data.side_effect = lambda x, y, z: x
+            proposer.initialize_kv_cache(main_model_num_blocks=100)
+
+        # Create mock request for other type
+        mock_request = MagicMock()
+        mock_request.request_id = "test_req_3"
+        mock_request.idx = 0
+        mock_request.task_type.value = 2  # Other type
+
+        proposer.insert_tasks_v1([mock_request], num_running_requests=1)
+        # Verify cleanup happened
+        self.assertTrue(proposer.model_inputs["stop_flags"][0].item())
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_insert_prefill_inputs_mixed_role(
+        self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader
+    ):
+        """Test insert_prefill_inputs with mixed role"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        # Create mock request without disaggregate_info
+        mock_request = MagicMock()
+        mock_request.idx = 0
+        mock_request.prompt_token_ids = [1, 2, 3, 4, 5]
+        mock_request.disaggregate_info = None
+        mock_request.prefill_chunk_info = None
+        mock_request.get = MagicMock(
+            side_effect=lambda key, default=None: {"seq_lens_decoder": 0, "block_tables": [0, 1]}.get(key, default)
+        )
+
+        proposer.insert_prefill_inputs([mock_request], num_running_requests=1)
+        self.assertEqual(proposer.role, "mixed")
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_insert_prefill_inputs_decode_role(
+        self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader
+    ):
+        """Test insert_prefill_inputs with decode role from disaggregate_info"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        # Create mock request with decode role
+        mock_request = MagicMock()
+        mock_request.idx = 0
+        mock_request.prompt_token_ids = [1, 2, 3, 4, 5]
+        mock_request.draft_token_ids = [0, 6, 7]
+        mock_request.disaggregate_info = {"role": "decode"}
+        mock_request.block_tables = [0, 1]
+
+        proposer.insert_prefill_inputs([mock_request], num_running_requests=1)
+        self.assertEqual(proposer.role, "decode")
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_insert_prefill_inputs_prefill_role(
+        self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader
+    ):
+        """Test insert_prefill_inputs with prefill role from disaggregate_info"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        # Create mock request with prefill role
+        mock_request = MagicMock()
+        mock_request.idx = 0
+        mock_request.prompt_token_ids = [1, 2, 3, 4, 5]
+        mock_request.disaggregate_info = {"role": "prefill"}
+        mock_request.get = MagicMock(
+            side_effect=lambda key, default=None: {"seq_lens_decoder": 0, "block_tables": [0, 1]}.get(key, default)
+        )
+
+        proposer.insert_prefill_inputs([mock_request], num_running_requests=1)
+        self.assertEqual(proposer.role, "prefill")
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_insert_prefill_inputs_with_chunked_prefill(
+        self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader
+    ):
+        """Test insert_prefill_inputs with chunked prefill enabled"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        # Enable chunked prefill
+        self.mock_fd_config.cache_config.enable_chunked_prefill = True
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        # Create mock request with chunked prefill
+        mock_request = MagicMock()
+        mock_request.idx = 0
+        mock_request.prompt_token_ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        mock_request.disaggregate_info = None
+        mock_request.prefill_chunk_info = [5, 5]  # Two chunks of 5 tokens each
+        mock_request.get = MagicMock(
+            side_effect=lambda key, default=None: {"seq_lens_decoder": 0, "block_tables": [0, 1]}.get(key, default)
+        )
+
+        proposer.insert_prefill_inputs([mock_request], num_running_requests=1)
+        self.assertEqual(proposer.model_inputs["seq_lens_encoder"][0].item(), 5)
+
+        # Reset
+        self.mock_fd_config.cache_config.enable_chunked_prefill = False
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_initialize_forward_meta(self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader):
+        """Test _initialize_forward_meta method"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        with patch("fastdeploy.spec_decode.mtp.share_external_data") as mock_share_data:
+            mock_share_data.side_effect = lambda x, y, z: x
+            proposer.initialize_kv_cache(main_model_num_blocks=100)
+
+        proposer._initialize_forward_meta(step_use_cudagraph=False)
+        self.assertIsNotNone(proposer.forward_meta)
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_initialize_forward_meta_with_cudagraph(
+        self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader
+    ):
+        """Test _initialize_forward_meta with cudagraph enabled"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        # Enable cudagraph
+        self.mock_fd_config.graph_opt_config.draft_model_use_cudagraph = True
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        with patch("fastdeploy.spec_decode.mtp.share_external_data") as mock_share_data:
+            mock_share_data.side_effect = lambda x, y, z: x
+            proposer.initialize_kv_cache(main_model_num_blocks=100)
+
+        proposer._initialize_forward_meta(step_use_cudagraph=True)
+        self.assertTrue(proposer.forward_meta.step_use_cudagraph)
+
+        # Reset
+        self.mock_fd_config.graph_opt_config.draft_model_use_cudagraph = False
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    @patch("fastdeploy.spec_decode.mtp.draft_model_preprocess")
+    @patch("fastdeploy.spec_decode.mtp.eagle_get_hidden_states")
+    def test_prepare_inputs(
+        self,
+        mock_eagle_get,
+        mock_preprocess,
+        mock_sampler,
+        mock_get_rope,
+        mock_get_attn_backend,
+        mock_get_model_loader,
+    ):
+        """Test _prepare_inputs method"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        # Mock eagle_get_hidden_states return
+        mock_eagle_get.return_value = paddle.zeros([100, 1024])
+
+        full_hidden_states = paddle.zeros([100, 1024])
+        proposer._prepare_inputs(full_hidden_states)
+
+        mock_preprocess.assert_called_once()
+        mock_eagle_get.assert_called_once()
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    @patch("fastdeploy.spec_decode.mtp.draft_model_update")
+    def test_post_process(
+        self, mock_update, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader
+    ):
+        """Test _post_process method"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        sampled_token_ids = paddle.zeros([8], dtype="int64")
+        proposer._post_process(sampled_token_ids)
+
+        mock_update.assert_called_once()
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    @patch("fastdeploy.spec_decode.mtp.draft_model_update")
+    @patch("fastdeploy.spec_decode.mtp.mtp_save_first_token")
+    def test_post_process_prefill_role(
+        self, mock_save_first, mock_update, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader
+    ):
+        """Test _post_process method with prefill role"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        # Set prefill role
+        proposer.role = "prefill"
+        proposer.parallel_config.tensor_parallel_rank = 0
+
+        sampled_token_ids = paddle.zeros([8], dtype="int64")
+        proposer._post_process(sampled_token_ids)
+
+        mock_update.assert_called_once()
+        mock_save_first.assert_called_once()
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    @patch("fastdeploy.spec_decode.mtp.eagle_get_self_hidden_states")
+    def test_get_self_hidden_states(
+        self, mock_eagle_self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader
+    ):
+        """Test _get_self_hidden_states method"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        # Set num_model_steps > 1 to initialize last_seq_lens_this_time
+        self.mock_fd_config.speculative_config.num_model_steps = 2
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        mock_eagle_self.return_value = paddle.zeros([100, 1024])
+
+        hidden_states = paddle.zeros([100, 1024])
+        proposer._get_self_hidden_states(hidden_states)
+
+        mock_eagle_self.assert_called_once()
+
+        # Reset
+        self.mock_fd_config.speculative_config.num_model_steps = 4
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_update_task_chunk_prefill_complete(
+        self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader
+    ):
+        """Test update_task_chunk_prefill when chunk is complete"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        # Create mock task - chunk complete
+        mock_task = MagicMock()
+        mock_task.idx = 0
+        mock_task.prefill_chunk_info = [5, 5]
+        mock_task.chunk_idx = 2  # All chunks processed
+        mock_task.get = MagicMock(return_value=0)
+
+        proposer.update_task_chunk_prefill(mock_task)
+        self.assertEqual(proposer.model_inputs["seq_lens_encoder"][0].item(), 0)
+        self.assertEqual(proposer.model_inputs["step_idx"][0].item(), 1)
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_update_task_chunk_prefill_middle_chunk(
+        self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader
+    ):
+        """Test update_task_chunk_prefill with middle chunk"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        # Create mock task - middle chunk
+        mock_task = MagicMock()
+        mock_task.idx = 0
+        mock_task.prefill_chunk_info = [5, 5, 5]
+        mock_task.chunk_idx = 1  # Second chunk
+        mock_task.prompt_token_ids = list(range(15))
+        mock_task.get = MagicMock(return_value=0)
+
+        proposer.update_task_chunk_prefill(mock_task)
+        self.assertEqual(proposer.model_inputs["seq_lens_encoder"][0].item(), 5)
+        self.assertEqual(proposer.model_inputs["step_idx"][0].item(), 0)
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_update_task_chunk_prefill_last_chunk(
+        self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader
+    ):
+        """Test update_task_chunk_prefill with last chunk"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        # Create mock task - last chunk
+        mock_task = MagicMock()
+        mock_task.idx = 0
+        mock_task.prefill_chunk_info = [5, 5]
+        mock_task.chunk_idx = 1  # Last chunk
+        mock_task.prompt_token_ids = list(range(10))
+        mock_task.get = MagicMock(return_value=0)
+
+        proposer.update_task_chunk_prefill(mock_task)
+        self.assertEqual(proposer.model_inputs["seq_lens_encoder"][0].item(), 5)
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    @patch("fastdeploy.spec_decode.mtp.draft_model_postprocess")
+    @patch("fastdeploy.spec_decode.mtp.mtp_step_paddle")
+    def test_update_status(
+        self,
+        mock_mtp_step,
+        mock_postprocess,
+        mock_sampler,
+        mock_get_rope,
+        mock_get_attn_backend,
+        mock_get_model_loader,
+    ):
+        """Test _update_status method"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        with patch("fastdeploy.spec_decode.mtp.envs") as mock_envs:
+            mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
+            proposer._update_status()
+
+        mock_postprocess.assert_called_once()
+        mock_mtp_step.assert_called_once()
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    @patch("fastdeploy.spec_decode.mtp.hybrid_mtp_ngram")
+    def test_extend_draft_token_with_ngram_match(
+        self, mock_ngram, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader
+    ):
+        """Test _extend_draft_token_with_ngram_match method"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        # Add required inputs
+        self.mock_target_model_inputs["actual_draft_token_num"] = paddle.zeros([8], dtype="int32")
+
+        proposer._extend_draft_token_with_ngram_match()
+        mock_ngram.assert_called_once()
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_run_impl(self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader):
+        """Test _run_impl method"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        with (
+            patch.object(proposer, "_prepare_inputs") as mock_prepare,
+            patch.object(proposer, "_propose") as mock_propose,
+            patch.object(proposer, "_update_status") as mock_update,
+        ):
+
+            full_hidden_states = paddle.zeros([100, 1024])
+            proposer._run_impl(full_hidden_states)
+
+            mock_prepare.assert_called_once_with(full_hidden_states)
+            mock_propose.assert_called_once()
+            mock_update.assert_called_once()
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_run_impl_with_hybrid_mode(
+        self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader
+    ):
+        """Test _run_impl method with hybrid mode enabled"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        # Enable hybrid mode
+        self.mock_fd_config.speculative_config.mtp_strategy = "with_ngram"
+        self.mock_fd_config.speculative_config.num_speculative_tokens = 10
+        self.mock_fd_config.speculative_config.num_model_steps = 2
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        with (
+            patch.object(proposer, "_prepare_inputs") as mock_prepare,
+            patch.object(proposer, "_propose") as mock_propose,
+            patch.object(proposer, "_update_status") as mock_update,
+            patch.object(proposer, "_extend_draft_token_with_ngram_match") as mock_extend,
+        ):
+
+            full_hidden_states = paddle.zeros([100, 1024])
+            proposer._run_impl(full_hidden_states)
+
+            mock_prepare.assert_called_once()
+            mock_propose.assert_called_once()
+            mock_update.assert_called_once()
+            mock_extend.assert_called_once()
+
+        # Reset
+        self.mock_fd_config.speculative_config.mtp_strategy = "standard"
+        self.mock_fd_config.speculative_config.num_speculative_tokens = 8
+        self.mock_fd_config.speculative_config.num_model_steps = 4
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_padding_cudagraph_inputs(self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader):
+        """Test padding_cudagraph_inputs method"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        with patch("fastdeploy.spec_decode.mtp.share_external_data") as mock_share_data:
+            mock_share_data.side_effect = lambda x, y, z: x
+            proposer.initialize_kv_cache(main_model_num_blocks=100)
+
+        proposer._initialize_forward_meta(step_use_cudagraph=False)
+
+        # Test without cudagraph
+        proposer.padding_cudagraph_inputs()
+        self.assertIsNone(getattr(proposer, "real_token_num", None))
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_padding_cudagraph_inputs_with_cudagraph(
+        self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader
+    ):
+        """Test padding_cudagraph_inputs with cudagraph enabled"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        # Enable cudagraph
+        self.mock_fd_config.graph_opt_config.draft_model_use_cudagraph = True
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        with patch("fastdeploy.spec_decode.mtp.share_external_data") as mock_share_data:
+            mock_share_data.side_effect = lambda x, y, z: x
+            proposer.initialize_kv_cache(main_model_num_blocks=100)
+
+        proposer._initialize_forward_meta(step_use_cudagraph=True)
+
+        # Set ids_remove_padding for test
+        proposer.forward_meta.ids_remove_padding = paddle.zeros([50], dtype="int64")
+
+        proposer.padding_cudagraph_inputs()
+        self.assertEqual(proposer.real_token_num, 50)
+
+        # Reset
+        self.mock_fd_config.graph_opt_config.draft_model_use_cudagraph = False
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.spec_decode.mtp.get_rope")
+    @patch("fastdeploy.spec_decode.mtp.MTPSampler")
+    def test_insert_tasks_v1_with_mm_enabled(
+        self, mock_sampler, mock_get_rope, mock_get_attn_backend, mock_get_model_loader
+    ):
+        """Test insert_tasks_v1 with multimodal enabled"""
+        mock_loader = MagicMock()
+        mock_model = MagicMock()
+        mock_loader.load_model.return_value = mock_model
+        mock_get_model_loader.return_value = mock_loader
+
+        mock_attn_backend = MagicMock()
+        mock_attn_backend.get_kv_cache_shape.return_value = ([1, 16, 16, 64], [1, 16, 16, 64])
+        mock_get_attn_backend.return_value = MagicMock(return_value=mock_attn_backend)
+
+        mock_get_rope.return_value = paddle.zeros([1, 2048, 64])
+        mock_sampler.return_value = MagicMock()
+
+        # Enable multimodal
+        self.mock_fd_config.model_config.enable_mm = True
+
+        proposer = MTPProposer(
+            fd_config=self.mock_fd_config,
+            main_model=self.mock_main_model,
+            local_rank=0,
+            device_id=0,
+            target_model_inputs=self.mock_target_model_inputs,
+        )
+
+        with patch("fastdeploy.spec_decode.mtp.share_external_data") as mock_share_data:
+            mock_share_data.side_effect = lambda x, y, z: x
+            proposer.initialize_kv_cache(main_model_num_blocks=100)
+
+        # Create mock request for prefill with mm
+        mock_request = MagicMock()
+        mock_request.request_id = "test_req_mm"
+        mock_request.idx = 0
+        mock_request.task_type.value = 0  # RequestType.PREFILL
+        mock_request.prefill_start_index = 0
+        mock_request.prefill_end_index = 10
+        mock_request.prompt_token_ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        mock_request.output_token_ids = []
+        mock_request.block_tables = [0, 1]
+        mock_request.multimodal_inputs = {"attention_mask_offset": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
+
+        proposer.insert_tasks_v1([mock_request], num_running_requests=1)
+        self.assertFalse(proposer.model_inputs["stop_flags"][0].item())
+
+        # Reset
+        self.mock_fd_config.model_config.enable_mm = False
 
 
 if __name__ == "__main__":
