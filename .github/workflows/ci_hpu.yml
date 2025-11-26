@@ -15,20 +15,15 @@ jobs:
   check_bypass:
     uses: ./.github/workflows/check-bypass.yml
     secrets:
-      github-token: ${{ secrets.github-token }}
+      github-token: ${{ secrets.GITHUB_TOKEN }}
     with:
       workflow-name: ci_hpu
 
   CI_HPU:
     runs-on: [self-hosted, HPU-8Card]
     needs: check_bypass
+    if: needs.check_bypass.outputs.can-skip-docs != 'true'
     steps:
-      - name: Check bypass if can-skip
-        if: needs.check_bypass.outputs.can-skip == 'true'
-        run: |
-          echo "Check skipped. Marking as success."
-          exit 0
-
       - name: Print current runner name
         run: |
           echo "Current runner name: ${{ runner.name }}"

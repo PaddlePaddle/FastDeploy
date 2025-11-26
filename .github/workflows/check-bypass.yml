@@ -11,6 +11,9 @@ on:
       can-skip:
         description: "Whether the workflow can be skipped."
         value: ${{ jobs.check-bypass.outputs.can-skip }}
+      can-skip-docs:
+        description: "Whether the workflow can be skipped due to docs-only change."
+        value: ${{ jobs.check-bypass.outputs.can-skip-docs }}
 
 jobs:
   check-bypass:
@@ -22,6 +25,7 @@ jobs:
       CI_TEAM_MEMBERS: '["yuanlehome","YuanRisheng","Jiang-Jia-Jun","DDDivano","XieYunshen","EmmonsCurse"]'
     outputs:
       can-skip: ${{ steps.final-output.outputs.can-skip }}
+      can-skip-docs: ${{ steps.final-output.outputs.can-skip-docs }}
     steps:
       - name: Cleanup
         run: |
@@ -56,23 +60,32 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.github-token }}
         run: |
-          files=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files[].path')
+          gh pr view ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --json files --jq '.files[].path'
 
-          can_skip=true
+          can_skip_docs=true
           for f in $files; do
             if [[ ! "$f" =~ \.(md|txt|yaml|yml)$ ]]; then
-              can_skip=false
+              can_skip_docs=false
               break
             fi
           done
 
-          echo "can_skip=$can_skip" >> $GITHUB_OUTPUT
+          echo "can-skip-docs=$can_skip_docs" >> "$GITHUB_OUTPUT"
 
       - id: final-output
         name: Final can-skip result
         run: |
-          if [[ "${{ steps.check-bypass.outputs.can-skip }}" == "true" || "${{ steps.check-only-docs.outputs.can_skip }}" == "true" ]]; then
-            echo "can-skip=true" >> $GITHUB_OUTPUT
-          else
-            echo "can-skip=false" >> $GITHUB_OUTPUT
+          if [[ "${{ steps.check-only-docs.outputs['can-skip-docs'] }}" == "true" ]]; then
+            echo "can-skip=true" >> "$GITHUB_OUTPUT"
+            echo "can-skip-docs=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          if [[ "${{ steps.check-bypass.outputs.can-skip }}" == "true" ]]; then
+            echo "can-skip=true" >> "$GITHUB_OUTPUT"
+            echo "can-skip-docs=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "can-skip=false" >> "$GITHUB_OUTPUT"
+          echo "can-skip-docs=false" >> "$GITHUB_OUTPUT"

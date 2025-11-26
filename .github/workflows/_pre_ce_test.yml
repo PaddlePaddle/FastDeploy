@@ -26,6 +26,9 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      github-token:
+        required: true
 
 jobs:
   check_bypass:
@@ -39,13 +42,8 @@ jobs:
     runs-on: [self-hosted, PRE_CE_RUN_2Card]
     timeout-minutes: 60
     needs: check_bypass
+    if: needs.check_bypass.outputs.can-skip-docs != 'true'
     steps:
-      - name: Check bypass if can-skip
-        if: needs.check_bypass.outputs.can-skip == 'true'
-        run: |
-          echo "Check skipped. Marking as success."
-          exit 0
-
       - name: Print current runner name
         run: |
           echo "Current runner name: ${{ runner.name }}"
