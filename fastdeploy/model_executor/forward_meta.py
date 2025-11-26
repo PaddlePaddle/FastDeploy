@@ -65,8 +65,6 @@ class ForwardMeta:
     ForwardMeta is used to store the global meta information of the model forward.
     """
 
-    # Input tokens IDs
-    input_ids: paddle.Tensor
     # Input tokens IDs of removed padding
     ids_remove_padding: paddle.Tensor
     # Rotation position embedding
@@ -142,6 +140,8 @@ class ForwardMeta:
     block_tables: Optional[paddle.Tensor] = None
     # KV caches
     caches: Optional[list[paddle.Tensor]] = None
+    # Flag of profile run
+    is_dummy_or_profile_run: bool = False
 
     def clear_caches(self):
         """Safely clean up the caches"""
@@ -246,6 +246,8 @@ class XPUForwardMeta(ForwardMeta):
     total_enc_len: Optional[paddle.Tensor] = None
     # position embedding type in rope, supports 'NORMAL' or 'HALF_HEAD_DIM'
     pos_emb_type: Optional[str] = "NORMAL"
+    # for pd_disaggregation
+    kv_signal_sender: Optional[paddle.Tensor] = None
 
 
 @dataclass
@@ -265,7 +267,7 @@ class HPUForwardMeta(ForwardMeta):
     """
 
     #
-    input_ids: paddle.Tensor
+    input_ids: paddle.Tensor = None
 
     # attention meta
     forward_mode: ForwardMode = ForwardMode.MIXED

@@ -57,7 +57,11 @@ export PADDLE_XCCL_BACKEND=intel_hpu
 export HABANA_PROFILE=0
 export HPU_VISIBLE_DEVICES=0
 
+#WARMUP Enabled
 HPU_WARMUP_BUCKET=1 HPU_WARMUP_MODEL_LEN=4096 FD_ATTENTION_BACKEND=HPU_ATTN python -m fastdeploy.entrypoints.openai.api_server --model ERNIE-4.5-21B-A3B-Paddle --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 128
+
+#WARMUP Disabled
+HPU_WARMUP_BUCKET=0 HPU_WARMUP_MODEL_LEN=4096 FD_ATTENTION_BACKEND=HPU_ATTN python -m fastdeploy.entrypoints.openai.api_server --model ERNIE-4.5-21B-A3B-Paddle --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 128 --graph-optimization-config '{"use_cudagraph":false}'
 ```
 
 ### 2. 发送请求

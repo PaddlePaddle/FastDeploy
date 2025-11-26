@@ -14,8 +14,8 @@
 
 #include "append_attn/append_attention_kernel.h"
 #include "append_attn/decoder_write_cache_with_rope_kernel.h"
-#include "append_attn/speculate_write_cache_with_rope_kernel.h"
 #include "append_attn/encoder_write_cache_with_rope_kernel.h"
+#include "append_attn/speculate_write_cache_with_rope_kernel.h"
 
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
@@ -26,16 +26,15 @@ class type2value;
 
 template <>
 class type2value<phi::dtype::bfloat16> {
-    public:
-    static constexpr paddle::DataType value = paddle::DataType::BFLOAT16;
+ public:
+  static constexpr paddle::DataType value = paddle::DataType::BFLOAT16;
 };
 
 template <>
 class type2value<phi::dtype::float16> {
-    public:
-    static constexpr paddle::DataType value = paddle::DataType::FLOAT16;
+ public:
+  static constexpr paddle::DataType value = paddle::DataType::FLOAT16;
 };
-
 
 template <paddle::DataType D>
 void AppendAttentionKernel(
@@ -96,14 +95,12 @@ void AppendAttentionKernel(
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
 
-  // set_max_lengths: max_len_this_time, max_enc_len_this_time, max_dec_len_this_time, max_enc_dec_len_this_time,
-  // max_just_dec_len_this_time, max_just_dec_merged_len_this_time, max_system_len, max_just_dec_len_without_system
-  int max_len_this_time = set_max_lengths.data<int>()[0];
-  int max_enc_len_this_time =set_max_lengths.data<int>()[1];
-  int max_dec_len_this_time = set_max_lengths.data<int>()[2];
-  int max_enc_dec_len_this_time = set_max_lengths.data<int>()[3];
-  int max_just_dec_len_this_time = set_max_lengths.data<int>()[4];
-  int max_kv_len_this_time = set_max_lengths.data<int>()[8];
+  const int max_len_this_time = set_max_lengths.data<int>()[0];
+  const int max_enc_len_this_time = set_max_lengths.data<int>()[1];
+  const int max_dec_len_this_time = set_max_lengths.data<int>()[2];
+  const int max_enc_dec_len_this_time = set_max_lengths.data<int>()[3];
+  const int max_just_dec_len_this_time = set_max_lengths.data<int>()[4];
+  const int max_kv_len_this_time = set_max_lengths.data<int>()[5];
 
   auto main_stream = qkv.stream();
   static cudaEvent_t main_event;
@@ -125,54 +122,56 @@ void AppendAttentionKernel(
     qkv_out = qkv;
   }
 
-  auto dispatch_CascadeAppendAttentionKernel = [&](auto temp_args,
-        const paddle::Tensor& lambda_batch_ids,
-        const paddle::Tensor& lambda_tile_ids_per_batch,
-        const int lambda_num_blocks_data,
-        const int lambda_block_shape_q,
-        const int lambda_max_dec_len,
-        const bool lambda_is_decoder,
-        const bool lambda_enable_prefill,
-        cudaStream_t& lambda_stream
-        ) -> void  {
-        CascadeAppendAttentionKernel<data_t, decltype(temp_args)>(
-          meta_data,
-          qkv_out,
-          key_cache,
-          value_cache,
-          attn_mask,
-          cache_quant_type_str == "block_wise_fp8" ? cache_k_quant_scales : cache_k_dequant_scales,
-          cache_quant_type_str == "block_wise_fp8" ? cache_v_quant_scales : cache_v_dequant_scales,
-          cache_k_zp,
-          cache_v_zp,
-          out_linear_shifts,
-          out_linear_smooths,
-          sinks,
-          seq_lens_this_time,
-          seq_lens_decoder,
-          seq_lens_encoder,
-          batch_id_per_token,
-          cu_seqlens_q,
-          block_tables,
-          lambda_batch_ids,
-          lambda_tile_ids_per_batch,
-          cache_quant_type_str,
-          lambda_num_blocks_data,
-          lambda_block_shape_q,
-          max_input_length,
-          lambda_max_dec_len,
-          quant_max_bound,
-          quant_min_bound,
-          out_linear_in_scale,
-          max_partition_size,
-          encoder_max_partition_size,
-          speculate_max_draft_token_num,
-          causal,
-          lambda_is_decoder,
-          lambda_enable_prefill,
-          lambda_stream,
-          &fmha_out,
-          sliding_window);
+  auto dispatch_CascadeAppendAttentionKernel =
+      [&](auto temp_args,
+          const paddle::Tensor& lambda_batch_ids,
+          const paddle::Tensor& lambda_tile_ids_per_batch,
+          const int lambda_num_blocks_data,
+          const int lambda_block_shape_q,
+          const int lambda_max_dec_len,
+          const bool lambda_is_decoder,
+          const bool lambda_enable_prefill,
+          cudaStream_t& lambda_stream) -> void {
+    CascadeAppendAttentionKernel<data_t, decltype(temp_args)>(
+        meta_data,
+        qkv_out,
+        key_cache,
+        value_cache,
+        attn_mask,
+        cache_quant_type_str == "block_wise_fp8" ? cache_k_quant_scales
+                                                 : cache_k_dequant_scales,
+        cache_quant_type_str == "block_wise_fp8" ? cache_v_quant_scales
+                                                 : cache_v_dequant_scales,
+        cache_k_zp,
+        cache_v_zp,
+        out_linear_shifts,
+        out_linear_smooths,
+        sinks,
+        seq_lens_this_time,
+        seq_lens_decoder,
+        seq_lens_encoder,
+        batch_id_per_token,
+        cu_seqlens_q,
+        block_tables,
+        lambda_batch_ids,
+        lambda_tile_ids_per_batch,
+        cache_quant_type_str,
+        lambda_num_blocks_data,
+        lambda_block_shape_q,
+        max_input_length,
+        lambda_max_dec_len,
+        quant_max_bound,
+        quant_min_bound,
+        out_linear_in_scale,
+        max_partition_size,
+        encoder_max_partition_size,
+        speculate_max_draft_token_num,
+        causal,
+        lambda_is_decoder,
+        lambda_enable_prefill,
+        lambda_stream,
+        &fmha_out,
+        sliding_window);
   };
 
   if (max_enc_len_this_time > 0) {
@@ -182,8 +181,9 @@ void AppendAttentionKernel(
     int encoder_num_blocks_data = encoder_num_blocks.data<int>()[0];
     int kv_num_blocks_data = kv_num_blocks.data<int>()[0];
 
-    auto dispatch_EncoderWriteCacheWithRopeKernel = [&](auto temp_args) -> void  {
-        EncoderWriteCacheWithRopeKernel<data_t, decltype(temp_args)>(
+    auto dispatch_EncoderWriteCacheWithRopeKernel =
+        [&](auto temp_args) -> void {
+      EncoderWriteCacheWithRopeKernel<data_t, decltype(temp_args)>(
           meta_data,
           qkv,
           seq_lens_this_time,
@@ -225,24 +225,50 @@ void AppendAttentionKernel(
     }
     if (out_linear_in_scale > 0.0) {
       switch (fmha_out.dtype()) {
-        case paddle::DataType::INT8:{
+        case paddle::DataType::INT8: {
           int8_t tmp;
-          dispatch_CascadeAppendAttentionKernel(tmp, encoder_batch_ids, encoder_tile_ids_per_batch, encoder_num_blocks_data, encoder_block_shape_q, max_enc_dec_len_this_time, false, true, main_stream);
+          dispatch_CascadeAppendAttentionKernel(tmp,
+                                                encoder_batch_ids,
+                                                encoder_tile_ids_per_batch,
+                                                encoder_num_blocks_data,
+                                                encoder_block_shape_q,
+                                                max_enc_dec_len_this_time,
+                                                false,
+                                                true,
+                                                main_stream);
           break;
         }
-        case paddle::DataType::FLOAT8_E4M3FN:{
+        case paddle::DataType::FLOAT8_E4M3FN: {
           phi::dtype::float8_e4m3fn tmp;
-          dispatch_CascadeAppendAttentionKernel(tmp, encoder_batch_ids, encoder_tile_ids_per_batch, encoder_num_blocks_data, encoder_block_shape_q, max_enc_dec_len_this_time, false, true, main_stream);
+          dispatch_CascadeAppendAttentionKernel(tmp,
+                                                encoder_batch_ids,
+                                                encoder_tile_ids_per_batch,
+                                                encoder_num_blocks_data,
+                                                encoder_block_shape_q,
+                                                max_enc_dec_len_this_time,
+                                                false,
+                                                true,
+                                                main_stream);
           break;
         }
-        default:{
-          PD_THROW("Only supported output fmha_out of quant dtype in ['int8', 'FLOAT8_E4M3FN'].");
+        default: {
+          PD_THROW(
+              "Only supported output fmha_out of quant dtype in ['int8', "
+              "'FLOAT8_E4M3FN'].");
           break;
         }
       }
     } else {
       data_t tmp;
-      dispatch_CascadeAppendAttentionKernel(tmp, encoder_batch_ids, encoder_tile_ids_per_batch, encoder_num_blocks_data, encoder_block_shape_q, max_enc_dec_len_this_time, false, true, main_stream);
+      dispatch_CascadeAppendAttentionKernel(tmp,
+                                            encoder_batch_ids,
+                                            encoder_tile_ids_per_batch,
+                                            encoder_num_blocks_data,
+                                            encoder_block_shape_q,
+                                            max_enc_dec_len_this_time,
+                                            false,
+                                            true,
+                                            main_stream);
     }
   }
 
@@ -370,23 +396,44 @@ void AppendAttentionKernel(
 
     if (out_linear_in_scale > 0.0) {
       switch (fmha_out.dtype()) {
-        case paddle::DataType::INT8:{
-        int8_t tmp;
-        dispatch_CascadeAppendAttentionKernel(tmp, decoder_batch_ids, decoder_tile_ids_per_batch, decoder_num_blocks_data,
-        decoder_block_shape_q, max_kv_len_this_time, !speculate_decoder, !speculate_decoder, exec_stream);
+        case paddle::DataType::INT8: {
+          int8_t tmp;
+          dispatch_CascadeAppendAttentionKernel(tmp,
+                                                decoder_batch_ids,
+                                                decoder_tile_ids_per_batch,
+                                                decoder_num_blocks_data,
+                                                decoder_block_shape_q,
+                                                max_kv_len_this_time,
+                                                !speculate_decoder,
+                                                !speculate_decoder,
+                                                exec_stream);
           break;
         }
-        case paddle::DataType::FLOAT8_E4M3FN:{
-        phi::dtype::float8_e4m3fn tmp;
-        dispatch_CascadeAppendAttentionKernel(tmp, decoder_batch_ids, decoder_tile_ids_per_batch, decoder_num_blocks_data,
-        decoder_block_shape_q, max_kv_len_this_time, !speculate_decoder, !speculate_decoder, exec_stream);
+        case paddle::DataType::FLOAT8_E4M3FN: {
+          phi::dtype::float8_e4m3fn tmp;
+          dispatch_CascadeAppendAttentionKernel(tmp,
+                                                decoder_batch_ids,
+                                                decoder_tile_ids_per_batch,
+                                                decoder_num_blocks_data,
+                                                decoder_block_shape_q,
+                                                max_kv_len_this_time,
+                                                !speculate_decoder,
+                                                !speculate_decoder,
+                                                exec_stream);
           break;
         }
       }
     } else {
-        data_t tmp;
-        dispatch_CascadeAppendAttentionKernel(tmp, decoder_batch_ids, decoder_tile_ids_per_batch, decoder_num_blocks_data,
-        decoder_block_shape_q, max_kv_len_this_time, !speculate_decoder, !speculate_decoder, exec_stream);
+      data_t tmp;
+      dispatch_CascadeAppendAttentionKernel(tmp,
+                                            decoder_batch_ids,
+                                            decoder_tile_ids_per_batch,
+                                            decoder_num_blocks_data,
+                                            decoder_block_shape_q,
+                                            max_kv_len_this_time,
+                                            !speculate_decoder,
+                                            !speculate_decoder,
+                                            exec_stream);
     }
     if (max_enc_len_this_time > 0) {
       cudaEventRecord(decoder_event, exec_stream);
@@ -471,8 +518,14 @@ std::vector<paddle::Tensor> AppendAttention(
   // template dtype generation
   phi::DataType dtype_id;
   switch (qkv.dtype()) {
-    case paddle::DataType::FLOAT16:  {dtype_id = phi::DataType::FLOAT16;  break;}
-    case paddle::DataType::BFLOAT16: {dtype_id = phi::DataType::BFLOAT16; break;}
+    case paddle::DataType::FLOAT16: {
+      dtype_id = phi::DataType::FLOAT16;
+      break;
+    }
+    case paddle::DataType::BFLOAT16: {
+      dtype_id = phi::DataType::BFLOAT16;
+      break;
+    }
     case paddle::DataType::INT32: {
       if (compute_dtype == "bf16") {
         dtype_id = phi::DataType::BFLOAT16;
@@ -498,15 +551,15 @@ std::vector<paddle::Tensor> AppendAttention(
   if (out_linear_in_scale > 0.0) {
     if (fabs(quant_max_bound - 127.0f) < 0.000001) {
       fmha_out = paddle::zeros(
-        {meta_data.token_nums, meta_data.q_num_heads * meta_data.head_dims},
-        paddle::DataType::INT8,
-        qkv.place());
+          {meta_data.token_nums, meta_data.q_num_heads * meta_data.head_dims},
+          paddle::DataType::INT8,
+          qkv.place());
     } else if (fabs(quant_max_bound - 448.0f) < 0.000001) {
       fmha_out = paddle::zeros(
-        {meta_data.token_nums, meta_data.q_num_heads * meta_data.head_dims},
-        paddle::DataType::FLOAT8_E4M3FN,
-        qkv.place());
-    } else{
+          {meta_data.token_nums, meta_data.q_num_heads * meta_data.head_dims},
+          paddle::DataType::FLOAT8_E4M3FN,
+          qkv.place());
+    } else {
       PD_THROW("Only supported attr of quant_max_bound in ['127', '448'].");
     }
   } else {
@@ -521,79 +574,78 @@ std::vector<paddle::Tensor> AppendAttention(
   }
 
   auto dispatch_by_template = [&](auto temp_args) -> void {
-      AppendAttentionKernel<type2value<decltype(temp_args)>::value>(
-          meta_data,
-          qkv,
-          key_cache,
-          value_cache,
-          seq_lens_encoder,
-          seq_lens_decoder,
-          seq_lens_this_time,
-          batch_id_per_token,
-          cu_seqlens_q,
-          block_tables,
-          encoder_batch_ids,
-          encoder_tile_ids_per_batch,
-          encoder_num_blocks,
-          kv_batch_ids,
-          kv_tile_ids_per_batch,
-          kv_num_blocks,
-          decoder_batch_ids,
-          decoder_tile_ids_per_batch,
-          decoder_num_blocks,
-          set_max_lengths,
-          fmha_out,
-          rotary_embs,
-          attn_mask,
-          qkv_bias,
-          qkv_out_scales,
-          cache_k_quant_scales,
-          cache_v_quant_scales,
-          cache_k_dequant_scales,
-          cache_v_dequant_scales,
-          cache_k_zp,
-          cache_v_zp,
-          out_linear_shifts,
-          out_linear_smooths,
-          kv_signal_data,
-          q_norm_weight,
-          k_norm_weight,
-          sinks,
-          rms_norm_eps,
-          cache_quant_type_str,
-          use_neox_rotary_style,
-          rope_3d,
-          max_input_length,
-          quant_max_bound,
-          quant_min_bound,
-          out_linear_in_scale,
-          encoder_block_shape_q,
-          decoder_block_shape_q,
-          max_partition_size,
-          encoder_max_partition_size,
-          speculate_max_draft_token_num,
-          causal,
-          speculate_decoder,
-          sliding_window);
+    AppendAttentionKernel<type2value<decltype(temp_args)>::value>(
+        meta_data,
+        qkv,
+        key_cache,
+        value_cache,
+        seq_lens_encoder,
+        seq_lens_decoder,
+        seq_lens_this_time,
+        batch_id_per_token,
+        cu_seqlens_q,
+        block_tables,
+        encoder_batch_ids,
+        encoder_tile_ids_per_batch,
+        encoder_num_blocks,
+        kv_batch_ids,
+        kv_tile_ids_per_batch,
+        kv_num_blocks,
+        decoder_batch_ids,
+        decoder_tile_ids_per_batch,
+        decoder_num_blocks,
+        set_max_lengths,
+        fmha_out,
+        rotary_embs,
+        attn_mask,
+        qkv_bias,
+        qkv_out_scales,
+        cache_k_quant_scales,
+        cache_v_quant_scales,
+        cache_k_dequant_scales,
+        cache_v_dequant_scales,
+        cache_k_zp,
+        cache_v_zp,
+        out_linear_shifts,
+        out_linear_smooths,
+        kv_signal_data,
+        q_norm_weight,
+        k_norm_weight,
+        sinks,
+        rms_norm_eps,
+        cache_quant_type_str,
+        use_neox_rotary_style,
+        rope_3d,
+        max_input_length,
+        quant_max_bound,
+        quant_min_bound,
+        out_linear_in_scale,
+        encoder_block_shape_q,
+        decoder_block_shape_q,
+        max_partition_size,
+        encoder_max_partition_size,
+        speculate_max_draft_token_num,
+        causal,
+        speculate_decoder,
+        sliding_window);
   };
-
 
   phi::dtype::float16 fp16_dtype;
   phi::dtype::bfloat16 bp16_dtype;
-  switch (dtype_id){
-      case phi::DataType::FLOAT16: {
-        dispatch_by_template(fp16_dtype);
-        return {fmha_out};
-        }
-      case phi::DataType::BFLOAT16: {
-        dispatch_by_template(bp16_dtype);
-        return {fmha_out};
-        }
-      default:
-        PD_THROW(
+  switch (dtype_id) {
+    case phi::DataType::FLOAT16: {
+      dispatch_by_template(fp16_dtype);
+      return {fmha_out};
+    }
+    case phi::DataType::BFLOAT16: {
+      dispatch_by_template(bp16_dtype);
+      return {fmha_out};
+    }
+    default:
+      PD_THROW(
           "NOT supported data type. "
           "Only float16 and bfloat16 are supported. ");
-        break;
+      break;
   }
 
   return {paddle::Tensor{}};
@@ -678,60 +730,60 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
   }
 
   auto dispatch_by_template = [&](auto temp_args) -> void {
-      AppendAttentionKernel<type2value<decltype(temp_args)>::value>(
-          meta_data,
-          qkv,
-          key_cache,
-          value_cache,
-          seq_lens_encoder,
-          seq_lens_decoder,
-          seq_lens_this_time,
-          batch_id_per_token,
-          cu_seqlens_q,
-          block_tables,
-          encoder_batch_ids,
-          encoder_tile_ids_per_batch,
-          encoder_num_blocks,
-          kv_batch_ids,
-          kv_tile_ids_per_batch,
-          kv_num_blocks,
-          decoder_batch_ids,
-          decoder_tile_ids_per_batch,
-          decoder_num_blocks,
-          set_max_lengths,
-          fmha_out,
-          rotary_embs,
-          attn_mask,
-          qkv_bias,
-          qkv_out_scales,
-          cache_k_quant_scales,
-          cache_v_quant_scales,
-          cache_k_dequant_scales,
-          cache_v_dequant_scales,
-          cache_k_zp,
-          cache_v_zp,
-          out_linear_shifts,
-          out_linear_smooths,
-          kv_signal_data,
-          q_norm_weight,
-          k_norm_weight,
-          sinks,
-          rms_norm_eps,
-          cache_quant_type_str,
-          use_neox_rotary_style,
-          rope_3d,
-          max_input_length,
-          quant_max_bound,
-          quant_min_bound,
-          out_linear_in_scale,
-          encoder_block_shape_q,
-          decoder_block_shape_q,
-          max_partition_size,
-          encoder_max_partition_size,
-          speculate_max_draft_token_num,
-          causal,
-          speculate_decoder,
-          sliding_window);
+    AppendAttentionKernel<type2value<decltype(temp_args)>::value>(
+        meta_data,
+        qkv,
+        key_cache,
+        value_cache,
+        seq_lens_encoder,
+        seq_lens_decoder,
+        seq_lens_this_time,
+        batch_id_per_token,
+        cu_seqlens_q,
+        block_tables,
+        encoder_batch_ids,
+        encoder_tile_ids_per_batch,
+        encoder_num_blocks,
+        kv_batch_ids,
+        kv_tile_ids_per_batch,
+        kv_num_blocks,
+        decoder_batch_ids,
+        decoder_tile_ids_per_batch,
+        decoder_num_blocks,
+        set_max_lengths,
+        fmha_out,
+        rotary_embs,
+        attn_mask,
+        qkv_bias,
+        qkv_out_scales,
+        cache_k_quant_scales,
+        cache_v_quant_scales,
+        cache_k_dequant_scales,
+        cache_v_dequant_scales,
+        cache_k_zp,
+        cache_v_zp,
+        out_linear_shifts,
+        out_linear_smooths,
+        kv_signal_data,
+        q_norm_weight,
+        k_norm_weight,
+        sinks,
+        rms_norm_eps,
+        cache_quant_type_str,
+        use_neox_rotary_style,
+        rope_3d,
+        max_input_length,
+        quant_max_bound,
+        quant_min_bound,
+        out_linear_in_scale,
+        encoder_block_shape_q,
+        decoder_block_shape_q,
+        max_partition_size,
+        encoder_max_partition_size,
+        speculate_max_draft_token_num,
+        causal,
+        speculate_decoder,
+        sliding_window);
   };
 
   phi::dtype::float16 fp16_dtype;
@@ -768,7 +820,6 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
 
   return {fmha_out};
 }
-
 
 std::vector<std::vector<int64_t>> AppendAttentionInferShape(
     const std::vector<int64_t>& qkv_shape,
@@ -895,8 +946,9 @@ std::vector<paddle::DataType> AppendAttentionInferDtype(
         return {paddle::DataType::INT8};
       } else if (fabs(quant_max_bound - 448.0f) < 0.000001) {
         return {paddle::DataType::FLOAT8_E4M3FN};
-      }else{
-        PD_THROW("Only supported attr of quant_max_bound in ['127.0', '448.0'].");
+      } else {
+        PD_THROW(
+            "Only supported attr of quant_max_bound in ['127.0', '448.0'].");
       }
     } else {
       return {paddle::DataType::BFLOAT16};
@@ -907,8 +959,9 @@ std::vector<paddle::DataType> AppendAttentionInferDtype(
         return {paddle::DataType::INT8};
       } else if (fabs(quant_max_bound - 448.0f) < 0.000001) {
         return {paddle::DataType::FLOAT8_E4M3FN};
-      }else{
-        PD_THROW("Only supported attr of quant_max_bound in ['127.0', '448.0'].");
+      } else {
+        PD_THROW(
+            "Only supported attr of quant_max_bound in ['127.0', '448.0'].");
       }
     } else {
       return {paddle::DataType::FLOAT16};
@@ -1034,8 +1087,6 @@ std::vector<paddle::DataType> AppendAttentionWithOutputInferDtype(
   return {fmha_out_dtype};
 }
 
-
-
 PD_BUILD_STATIC_OP(append_attention)
     .Inputs({"qkv",
              "key_cache",
@@ -1074,24 +1125,25 @@ PD_BUILD_STATIC_OP(append_attention)
              paddle::Optional("k_norm_weight"),
              paddle::Optional("sinks")})
     .Outputs({"fmha_out"})
-    .Attrs({"rms_norm_eps: float",
-            "compute_type: std::string",
-            "cache_quant_type: std::string",
-            "use_neox_rotary_style: bool",
-            "rope_3d: bool",
-            "max_input_length: int",
-            "quant_max_bound: float",
-            "quant_min_bound: float",
-            "out_linear_in_scale: float",
-            "encoder_block_shape_q: int",
-            "decoder_block_shape_q: int",
-            "max_partition_size: int",
-            "encoder_max_partition_size: int",
-            "speculate_max_draft_token_num: int",
-            "causal: bool",
-            "speculate_decoder: bool",
-            "sliding_window: int",
-            })
+    .Attrs({
+        "rms_norm_eps: float",
+        "compute_type: std::string",
+        "cache_quant_type: std::string",
+        "use_neox_rotary_style: bool",
+        "rope_3d: bool",
+        "max_input_length: int",
+        "quant_max_bound: float",
+        "quant_min_bound: float",
+        "out_linear_in_scale: float",
+        "encoder_block_shape_q: int",
+        "decoder_block_shape_q: int",
+        "max_partition_size: int",
+        "encoder_max_partition_size: int",
+        "speculate_max_draft_token_num: int",
+        "causal: bool",
+        "speculate_decoder: bool",
+        "sliding_window: int",
+    })
     .SetKernelFn(PD_KERNEL(AppendAttention))
     .SetInferShapeFn(PD_INFER_SHAPE(AppendAttentionInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(AppendAttentionInferDtype));
@@ -1136,24 +1188,25 @@ PD_BUILD_STATIC_OP(append_attention_with_output)
              paddle::Optional("sinks")})
     .Outputs({"fmha_out_out"})
     .SetInplaceMap({{"fmha_out", "fmha_out_out"}})
-    .Attrs({"rms_norm_eps: float",
-            "compute_type: std::string",
-            "cache_quant_type: std::string",
-            "use_neox_rotary_style: bool",
-            "rope_3d: bool",
-            "max_input_length: int",
-            "quant_max_bound: float",
-            "quant_min_bound: float",
-            "out_linear_in_scale: float",
-            "encoder_block_shape_q: int",
-            "decoder_block_shape_q: int",
-            "max_partition_size: int",
-            "encoder_max_partition_size: int",
-            "speculate_max_draft_token_num: int",
-            "causal: bool",
-            "speculate_decoder: bool",
-            "sliding_window: int",
-            })
+    .Attrs({
+        "rms_norm_eps: float",
+        "compute_type: std::string",
+        "cache_quant_type: std::string",
+        "use_neox_rotary_style: bool",
+        "rope_3d: bool",
+        "max_input_length: int",
+        "quant_max_bound: float",
+        "quant_min_bound: float",
+        "out_linear_in_scale: float",
+        "encoder_block_shape_q: int",
+        "decoder_block_shape_q: int",
+        "max_partition_size: int",
+        "encoder_max_partition_size: int",
+        "speculate_max_draft_token_num: int",
+        "causal: bool",
+        "speculate_decoder: bool",
+        "sliding_window: int",
+    })
     .SetKernelFn(PD_KERNEL(AppendAttentionWithOutput))
     .SetInferShapeFn(PD_INFER_SHAPE(AppendAttentionWithOutputInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(AppendAttentionWithOutputInferDtype));

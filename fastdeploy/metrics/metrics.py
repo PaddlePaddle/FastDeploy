@@ -164,8 +164,6 @@ class MetricsManager:
     available_gpu_resource: "Gauge"
     requests_number: "Counter"
     send_cache_failed_num: "Counter"
-    first_token_latency: "Gauge"
-    infer_latency: "Gauge"
     cache_config_info: "Gauge"
     available_batch_size: "Gauge"
     hit_req_rate: "Gauge"
@@ -347,18 +345,6 @@ class MetricsManager:
             "type": Counter,
             "name": "fastdeploy:send_cache_failed_num",
             "description": "Total number of failures of sending cache",
-            "kwargs": {},
-        },
-        "first_token_latency": {
-            "type": Gauge,
-            "name": "fastdeploy:first_token_latency",
-            "description": "Latest time to first token in seconds",
-            "kwargs": {},
-        },
-        "infer_latency": {
-            "type": Gauge,
-            "name": "fastdeploy:infer_latency",
-            "description": "Latest time to generate one token in seconds",
             "kwargs": {},
         },
         "available_batch_size": {
