@@ -218,6 +218,7 @@ def setup_and_run_server():
     else:
         print("[TIMEOUT] API server failed to start in 5 minutes. Cleaning up...")
         try:
+            os.killpg(process_router.pid, signal.SIGTERM)
             os.killpg(process_prefill.pid, signal.SIGTERM)
             os.killpg(process_decode.pid, signal.SIGTERM)
             clean_ports(PORTS_TO_CLEAN)
