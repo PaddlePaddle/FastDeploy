@@ -304,6 +304,8 @@ class ModelConfig:
 
         if hasattr(self, "num_experts") and getattr(self, "moe_num_experts") is None:
             self.moe_num_experts = self.num_experts
+        if hasattr(self, "n_routed_experts") and getattr(self, "moe_num_experts") is None:
+            self.moe_num_experts = self.n_routed_experts
 
     def read_from_env(self):
         """

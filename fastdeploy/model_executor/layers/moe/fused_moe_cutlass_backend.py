@@ -206,7 +206,10 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             tmp_ffn_out = recv_x
 
         # 4. EP combine
-        return self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
+        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
+        if self.ep_prefill_runner.ep_engine.async_finish:
+            event.current_stream_wait()
+        return tmp_ffn_out
 
     def apply_ep_decode(
         self,
@@ -242,7 +245,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         if self.moe_quant_type == "w4a8" or self.moe_quant_type == "w4afp8":
             num_local_experts, max_num, _ = permute_input.shape
             expert_idx_per_token = paddle.arange(num_local_experts)[:, None].tile([1, max_num])
-        elif self.moe_quant_type in ["weight_only_int8", "weight_only_int4"]:
+        elif self.moe_quant_type in ["weight_only_int8", "weight_only_int4", "w16a16"]:
             expert_idx_per_token = None
         else:
             raise NotImplementedError

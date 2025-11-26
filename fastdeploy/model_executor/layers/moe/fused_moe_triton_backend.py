@@ -808,7 +808,7 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
             N=hidden_size,
             K=moe_intermediate_size,
             stride_am=x_q.strides[0],
-            stride_ak=x_scale.strides[1],
+            stride_ak=x_q.strides[1],
             stride_be=layer.down_proj_weight.strides[0],
             stride_bk=layer.down_proj_weight.strides[2],
             stride_bn=layer.down_proj_weight.strides[1],
