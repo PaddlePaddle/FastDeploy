@@ -1889,10 +1889,6 @@ class GPUModelRunner(ModelRunnerBase):
                     self.forward_meta,
                 )
             else:
-                print(
-                    "===RyanDebug #1813 of model runner, the self.share_inputs[ids_remove_padding] is:",
-                    self.share_inputs["ids_remove_padding"],
-                )
                 model_output = self.model(
                     self.forward_meta.ids_remove_padding,
                     self.forward_meta,

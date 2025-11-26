@@ -70,9 +70,6 @@ RDMACommunicator::RDMACommunicator(std::string& role,
 
     // Step 1: Initialize KV cache config
     KVCacheConfig::getInstance().displayConfiguration();
-    printf(
-        "====RyanDebugRDMA, Finish  #69 KVCacheConfig::getInstance(). ===== "
-        "\n");
 
     // Step 2: Initialize KV cache structure
     // Validate and set number of layers
@@ -80,7 +77,6 @@ RDMACommunicator::RDMACommunicator(std::string& role,
     if (layer_number <= 0) {
       throw std::runtime_error("Invalid layer number");
     }
-    printf("====RyanDebugRDMA, Finish  #77 layer. ===== \n");
 
     if (local_cache_value_ptr_layer_head_.empty()) {
       has_value_cache_ = false;
@@ -94,12 +90,10 @@ RDMACommunicator::RDMACommunicator(std::string& role,
       }
     }
 
-    printf("====RyanDebugRDMA, Finish  #91 layer. ===== \n");
     // Step 2: Setup cache vectors and pointers
     resize_vectors();
     assign_pointers();
 
-    printf("====RyanDebugRDMA, Finish  #97 layer. ===== \n");
     // Step 3:Initialize the event channel
     rdma_event_channel_epoll_fd = epoll_create1(EPOLL_CLOEXEC);
     if (rdma_event_channel_epoll_fd < 0) {
@@ -107,7 +101,6 @@ RDMACommunicator::RDMACommunicator(std::string& role,
                                std::string(strerror(errno)));
     }
 
-    printf("====RyanDebugRDMA, Finish  #105 layer. ===== \n");
     // Start the server thread (if in decode role)
     if (splitwise_role == "decode") {
       std::thread server_thread([this]() {
@@ -119,7 +112,6 @@ RDMACommunicator::RDMACommunicator(std::string& role,
       });
       server_thread.detach();
     }
-    printf("====RyanDebugRDMA, Finish  #117 layer. ===== \n");
     RDMACommunicator_status = 1;
     INFO("RDMA communicator initialized successfully");
   } catch (const std::exception& e) {
@@ -591,7 +583,7 @@ int RDMACommunicator::connect(const std::string& dst_ip,
     ERR("Couldn't getexchange port infodestinations");
     return static_cast<int>(ConnStatus::kError);
   } else {
-    client_exchange_mr(ctx);
+    client_exchange_mr(ctx, has_value_cache_);
   }
 
   // Allocate RDMA read and register read buffers
@@ -884,10 +876,6 @@ bool RDMACommunicator::server_mr_register_per_layer(RdmaContext* ctx) {
     }
   }
 
-  // 【修复点】：无论是否有 Value Cache，都要赋值给 ctx->conn
-  // 如果没有 Value Cache，write_cache_value_server_mr_list
-  // 是空的，赋值过去也是空的，这是安全的。 如果不赋值，ctx->conn 里的 vector
-  // 可能是未定义的脏状态。
   ctx->conn.write_cache_key_server_mr_list = write_cache_key_server_mr_list;
   ctx->conn.write_cache_value_server_mr_list = write_cache_value_server_mr_list;
 
@@ -972,7 +960,7 @@ int RDMACommunicator::write_cache(const std::string& ip,
     cache_key_remote_addr[block_index] = (uint64_t(
         char_ptr + remote_block_ids[block_index] * total_block_size_byte +
         offset_in_block));
-    
+
     if (has_value_cache_) {
       char_ptr = static_cast<char*>(
           ctx->conn.write_cache_value_remote_ptr_list[layer_idx]);

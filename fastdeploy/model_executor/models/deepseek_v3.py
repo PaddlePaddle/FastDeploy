@@ -340,17 +340,7 @@ class DeepseekV3MLAAttention(nn.Layer):
         fmha_out = None
 
         # NOTE: (changwenbin) qkv_a_proj horizontal fusion
-        paddle.device.synchronize()
-        print("==RyanDebug, the hidden_states is:", hidden_states)  # 这是一个输入，我们假设它没问题，但也可以加上检查
-        print("==RyanDebug, hidden_states contains NaN:", paddle.any(paddle.isnan(hidden_states)).item())
-
         qkv_a_out = self.qkv_a_proj_with_mqa(hidden_states)
-        paddle.device.synchronize()
-
-        # --- NaN Check Start ---
-        print("===RyanDebug, the qkv_a_out is:", qkv_a_out)
-        print("    >>> RyanDebug, qkv_a_out contains NaN:", paddle.any(paddle.isnan(qkv_a_out)).item())
-        # --- NaN Check End ---
 
         query, compressed_kv, key_pe = qkv_a_out.split(
             [self.q_lora_rank, self.kv_lora_rank, self.qk_rope_head_dim], axis=-1
@@ -363,13 +353,10 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         key_pe.reshape_([-1, 1, self.qk_rope_head_dim])
         query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
-        paddle.device.synchronize()
 
         compressed_kv = self.kv_a_layernorm(compressed_kv)[0]
 
-        print("===RyanDebug, in #370, forward_meta.max_len_tensor_cpu[1] is:", forward_meta.max_len_tensor_cpu[1])
         if forward_meta.max_len_tensor_cpu[1]:  # max_enc_len_this_time
-            print("===RyanDebug, in #372, forward_meta.max_len_tensor_cpu[1] is:", forward_meta.max_len_tensor_cpu[1])
             key_value = self.kv_b_proj(compressed_kv)
             key_value.reshape_(
                 [
@@ -402,12 +389,8 @@ class DeepseekV3MLAAttention(nn.Layer):
             fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
 
             fmha_out = fmha_out_prefill
-            print("====RYanDebug, #404, fmha_out after MLA is: ", fmha_out)
 
         if forward_meta.max_len_tensor_cpu[2]:  # max_dec_len_this_time
-            print("===RyanDebug, D in dsv3 !!!!=====")
-            paddle.device.synchronize()
-
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
 
             q_input = paddle.concat([q_nope_out, query_pe], axis=-1)
@@ -418,18 +401,6 @@ class DeepseekV3MLAAttention(nn.Layer):
                 ]
             )
 
-            print("===RyanDebug, the q_input # 435 is:", q_input)
-            print("    >>> RyanDebug, q_input # 435 contains NaN:", paddle.any(paddle.isnan(q_input)).item())
-
-            print("===RyanDebug, the compressed_kv # 435 is:", compressed_kv)
-            print(
-                "    >>> RyanDebug, compressed_kv # 435 contains NaN:", paddle.any(paddle.isnan(compressed_kv)).item()
-            )
-
-            print("===RyanDebug, the key_pe # 435 is:", q_input)
-            print("    >>> RyanDebug, key_pe # 435 contains NaN:", paddle.any(paddle.isnan(key_pe)).item())
-
-            paddle.device.synchronize()
             fmha_out_decode = self.mla_attn(
                 q=q_input,
                 k=None,
@@ -439,19 +410,10 @@ class DeepseekV3MLAAttention(nn.Layer):
                 k_pe=key_pe,
                 forward_meta=forward_meta,
             )
-            paddle.device.synchronize()
-            # --- NaN Check Start ---
-            print("===RyanDebug, the fmha_out_decode # 448 is:", fmha_out_decode)
-            print(
-                "    >>> RyanDebug, fmha_out_decode # 448 contains NaN:",
-                paddle.any(paddle.isnan(fmha_out_decode)).item(),
-            )
 
             fmha_out_decode = fmha_out_decode.reshape([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose(
                 [1, 0, 2]
             )
-
-            paddle.device.synchronize()
 
             fmha_out_decode = (
                 self.kv_b_proj_bmm(fmha_out_decode, proj_type="v")
@@ -459,19 +421,12 @@ class DeepseekV3MLAAttention(nn.Layer):
                 .reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
             )
 
-            # --- NaN Check Start ---
-            print("===RyanDebug, the fmha_out_decode is:", fmha_out_decode)
-            print("    >>> RyanDebug, fmha_out_decode contains NaN:", paddle.any(paddle.isnan(fmha_out_decode)).item())
-            # --- NaN Check End ---
-
-            paddle.device.synchronize()
             if fmha_out is None:
                 fmha_out = fmha_out_decode
             else:
                 fmha_out = fmha_out + fmha_out_decode
 
         output = self.o_proj(fmha_out)
-        paddle.device.synchronize()
         return output
 
     def load_state_dict(self, state_dict):
@@ -559,19 +514,11 @@ class DeepSeekV3DecoderLayer(nn.Layer):
             hidden_states, residual_input=residual, forward_meta=forward_meta
         )
 
-        print("===RyanDebug, the hidden_states before self_attn is :", hidden_states)
         hidden_states = self.self_attn(forward_meta, hidden_states, position_ids, mask_encoder_batch)
 
-        print("==RyanDebug, #563 hidden_states contains NaN:", paddle.any(paddle.isnan(hidden_states)).item())
-
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
-        print("==RyanDebug, #566 hidden_states contains NaN:", paddle.any(paddle.isnan(hidden_states)).item())
         hidden_states = self.mlp(hidden_states)
 
-        print("===RyanDebug, the hidden_states after mlp is :", hidden_states)
-        print(
-            "==RyanDebug, #570 hidden_states after mlp contains NaN:", paddle.any(paddle.isnan(hidden_states)).item()
-        )
         return hidden_states, residual
 
 
@@ -731,7 +678,6 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             loaded_weight_name = loaded_weight_name.replace("deepseek_v3", "model")
-            print(f"loaded_weight_name:{loaded_weight_name}")
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
                     continue

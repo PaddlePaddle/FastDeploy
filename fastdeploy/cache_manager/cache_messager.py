@@ -204,7 +204,6 @@ class CacheMessager:
 
             elif protocol == "rdma":
                 logger.info(f"splitwise_role rdma: {self.splitwise_role}, rank: {self.rank}, gpu_id: {gpu_id}")
-                logger.info(f"====RyanDebug, the cache_v_ptr_list is:{cache_v_ptr_list}")
                 self.messager[protocol] = RDMACommManager(
                     splitwise_role,
                     rank,
@@ -217,7 +216,6 @@ class CacheMessager:
                     nranks,
                     rank,
                 )
-                logger.info("===RyanDebug, #218 Finish RDMACommManager create!!!!!!!")
 
         self.gpu_id = gpu_id
         self.cache_info = dict()
@@ -825,7 +823,6 @@ def main():
     num_extra_layers = speculative_config.num_extra_cache_layer
     key_cache_shape_list = [int(i) for i in args.key_cache_shape.split(",")]
     value_cache_shape_list = []
-    print("===RyanDebug #786 of cache_messager,the args.value_cache_shape is:", args.value_cache_shape)
     if args.value_cache_shape:
         value_cache_shape_list = [int(i) for i in args.value_cache_shape.split(",")]
     total_gpu_blocks = key_cache_shape_list[0]
