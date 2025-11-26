@@ -20,7 +20,6 @@ from paddle.nn.quant import weight_quantize
 from paddleformers.utils.log import logger
 
 import fastdeploy
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.platforms import current_platform
 
 from ..utils import get_tensor
@@ -389,9 +388,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             norm_topk_prob=False if layer.topk_method == "noaux_tc" else True,
             routed_scaling_factor=1.0,
         )
-
-        if layer.reduce_results and layer.tp_size > 1:
-            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out, layer.fd_config.parallel_config.tp_group)
 
         return fused_moe_out
 
