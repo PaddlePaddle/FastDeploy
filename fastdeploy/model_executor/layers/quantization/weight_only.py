@@ -172,14 +172,13 @@ class WINT4Config(WeightOnlyConfig):
     weight only int4 config
     """
 
-    def __init__(
-        self,
-    ) -> None:
-        super().__init__("weight_only_int4")
+    def __init__(self, is_checkpoint_bf16: bool = False) -> None:
+        super().__init__("weight_only_int4", is_checkpoint_bf16)
 
     @classmethod
     def from_config(cls, config: dict) -> "WINT4Config":
-        return cls()
+        is_checkpoint_bf16 = config.get("is_checkpoint_bf16", False)
+        return cls(is_checkpoint_bf16)
 
     def name(self) -> str:
         return "wint4"
@@ -198,7 +197,7 @@ class WeightOnlyLinearMethod(QuantMethodBase):
         self.quant_config = quant_config
 
     def create_weights(self, layer, **extra_weight_attrs):
-        if layer.fd_config.load_config.load_choices == "default_v1":
+        if layer.fd_config.load_config.load_choices == "default_v1" and self.quant_config.is_checkpoint_bf16:
             layer.weight = layer.create_parameter(
                 shape=layer.weight_shape,
                 dtype=layer.weight_dtype,
