@@ -1041,15 +1041,15 @@ def download_from_bos(bos_client, bos_links, retry: int = 0):
             break
 
 
-llm_logger = get_logger("fastdeploy", "fastdeploy.log")
-data_processor_logger = get_logger("data_processor", "data_processor.log")
-scheduler_logger = get_logger("scheduler", "scheduler.log")
-api_server_logger = get_logger("api_server", "api_server.log")
+llm_logger = get_logger("fastdeploy", "fastdeploy.log", print_to_console=True)
+data_processor_logger = get_logger("data_processor", "data_processor.log", print_to_console=True)
+scheduler_logger = get_logger("scheduler", "scheduler.log", print_to_console=True)
+api_server_logger = get_logger("api_server", "api_server.log", print_to_console=True)
 console_logger = get_logger("console", "console.log", print_to_console=True)
-spec_logger = get_logger("speculate", "speculate.log")
-zmq_client_logger = get_logger("zmq_client", "zmq_client.log")
-trace_logger = FastDeployLogger().get_trace_logger("trace_logger", "trace_logger.log")
-router_logger = get_logger("router", "router.log")
+spec_logger = get_logger("speculate", "speculate.log", print_to_console=True)
+zmq_client_logger = get_logger("zmq_client", "zmq_client.log", print_to_console=True)
+trace_logger = FastDeployLogger().get_trace_logger("trace_logger", "trace_logger.log", print_to_console=False)
+router_logger = get_logger("router", "router.log", print_to_console=True)
 
 
 def parse_type(return_type: Callable[[str], T]) -> Callable[[str], T]:

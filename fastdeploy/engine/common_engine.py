@@ -29,8 +29,8 @@ import numpy as np
 import paddle
 import requests
 import zmq
-from opentelemetry import trace
 
+import fastdeploy.metrics.trace as tracing
 from fastdeploy.engine.request import Request, RequestOutput, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
@@ -44,7 +44,6 @@ from fastdeploy.inter_communicator import (
     ZmqTcpServer,
 )
 from fastdeploy.metrics.metrics import main_process_metrics
-from fastdeploy.metrics.trace_util import start_span, start_span_request
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.plugins.token_processor import load_token_processor_plugins
 from fastdeploy.router.utils import check_service_health
@@ -335,13 +334,18 @@ class EngineService:
         """
         if not isinstance(tasks, list):
             tasks = [tasks]
-        for task in tasks:
-            start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
+        # for task in tasks:
+        #     start_span_request("DEQUEUE", task, trace.SpanKind.CONSUMER)
 
         self.resource_manager.check_and_free_block_tables()
 
         need_delete_tasks = []
         for task in tasks:
+            rid = task.request_id.split("_")[0]
+            trace_carrier = task.trace_carrier
+            if trace_carrier:
+                tracing.trace_set_proc_propagate_context(rid, trace_carrier)
+            # tracing.trace_slice_start("scheduler_task_to_worker", rid)
             if self.cfg.scheduler_config.splitwise_role != "mixed":
                 status, msg = self.split_connector.check_decode_allocated(task)
                 if not status:
@@ -364,6 +368,13 @@ class EngineService:
         for item in tasks:
             item.schedule_start_time = time.time()
             trace_print(LoggingEventName.RESOURCE_ALLOCATE_START, item.request_id, getattr(item, "user", ""))
+            tracing.trace_report_span(
+                tracing.TraceSpanName.SCHEDULE_QUEUE_WAIT,
+                item.request_id.split("_")[0],
+                int(item.llm_engine_recv_req_timestamp * 1e9),
+                int(item.schedule_start_time * 1e9),
+            )
+
         available_batch = np.sum(self.resource_manager.stop_flags)
         if len(tasks) > available_batch:
             self.llm_logger.error(f"Inserting batch:{len(tasks)} exceeds the available batch:{available_batch}.")
@@ -607,6 +618,7 @@ class EngineService:
         Insert task to engine thread, monitor scheduler request queue.
         if the engine has resource, insert task to engine
         """
+        tracing.trace_set_thread_info("Scheduler Task to Work")
         current_id = 0
         while getattr(self, "running", True):
             try:
@@ -674,6 +686,7 @@ class EngineService:
         """
         Insert tasks to worker with scheduler v1 (ENABLE_V1_KVCACHE_SCHEDULER=1).
         """
+        tracing.trace_set_thread_info("Scheduler Task to Work")
         get_request_pool = ThreadPoolExecutor(max_workers=1)
         is_fetching = False
 
@@ -892,6 +905,7 @@ class EngineService:
         self.receive_output_thread.start()
 
     def _insert_zmq_task_to_scheduler(self):
+        tracing.trace_set_thread_info("Insert Task to Scheduler")
         added_requests: Dict[str, int] = dict()
         if envs.FD_ENABLE_INTERNAL_ADAPTER:
             if self.cfg.scheduler_config.splitwise_role == "decode":
@@ -912,10 +926,21 @@ class EngineService:
                 results: List[Tuple[str, Optional[str]]] = list()
                 if data:
                     err_msg = None
+                    rid = data.get("request_id").split("_")[0]
+                    zmq_send_time = data.get("preprocess_end_time")
                     try:
                         request = Request.from_dict(data)
+                        tracing.trace_set_proc_propagate_context(rid, request.trace_carrier)
                         request.llm_engine_recv_req_timestamp = time.time()
-                        start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
+                        tracing.trace_report_span(
+                            tracing.TraceSpanName.SUBMIT_TO_INFER_ENGINE,
+                            rid,
+                            int(zmq_send_time * 1e9),
+                            int(time.time() * 1e9),
+                            thread_finish_flag=False,
+                        )
+                        tracing.trace_slice_start("insert_task_to_scheduler", rid)
+                        # start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
                         main_process_metrics.requests_number.inc()
                         self.llm_logger.debug(f"Receive request: {request}")
                         trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))
@@ -926,6 +951,7 @@ class EngineService:
                         self.llm_logger.error(f"Receive request error: {e}, {traceback.format_exc()!s}")
                         err_msg = str(e)
                         results.append((data["request_id"], err_msg))
+                        tracing.trace_slice_end("insert_task_to_scheduler", rid, thread_finish_flag=True)
 
                     if self.guided_decoding_checker is not None and err_msg is None:
                         request, err_msg = self.guided_decoding_checker.schema_format(request)
@@ -934,7 +960,12 @@ class EngineService:
                             results.append((request.request_id, err_msg))
 
                     if err_msg is None:
+                        trace_carrier = tracing.trace_get_proc_propagate_context(rid)
+                        if trace_carrier:
+                            request.trace_carrier = trace_carrier
                         insert_task.append(request)
+
+                    tracing.trace_slice_end("insert_task_to_scheduler", rid, thread_finish_flag=True)
 
                 response = self.scheduler.put_requests(insert_task)
                 results.extend(response)
@@ -996,6 +1027,7 @@ class EngineService:
         """
         Recieve output for zmq
         """
+        tracing.trace_set_thread_info("Zmq Send Response")
         while self.running:
             try:
                 results = self.scheduler.get_results()
@@ -1010,6 +1042,19 @@ class EngineService:
                             if isinstance(content, RequestOutput) and content.outputs is not None:
                                 decode_type = content.outputs.decode_type
                                 delta_text = ""
+                                ts = int(content.metrics.llm_engine_recv_token_timestamp * 1e9)
+                                rid = content.request_id.split("_")[0]
+                                if content.trace_carrier is not None:
+                                    trace_carrier = content.trace_carrier
+                                    tracing.trace_set_proc_propagate_context(rid, trace_carrier, ts)
+                                if content.outputs.send_idx == 0 and content.trace_carrier is not None:
+                                    tracing.trace_report_span(
+                                        "send_response_first",
+                                        rid,
+                                        ts,
+                                        int(time.time() * 1e9),
+                                        thread_finish_flag=False,
+                                    )
                                 if decode_type == 0:
                                     delta_text, token_ids = self._decode_token(
                                         token_ids=content.outputs.token_ids,
@@ -1018,11 +1063,19 @@ class EngineService:
                                     )
                                 else:
                                     token_ids = content.outputs.token_ids
-                                if len(token_ids):
+                                if len(token_ids) and not content.finished:
                                     content.outputs.token_ids = token_ids
                                     content.outputs.text = delta_text
                                     new_step_contents.append(content)
                                 elif content.finished:
+                                    if content.trace_carrier is not None:
+                                        tracing.trace_report_span(
+                                            "send_response_last",
+                                            rid,
+                                            ts,
+                                            int(time.time() * 1e9),
+                                            thread_finish_flag=True,
+                                        )
                                     new_step_contents.append(content)
                                 else:
                                     llm_logger.warning(
@@ -1042,17 +1095,38 @@ class EngineService:
                             if isinstance(content, RequestOutput) and content.outputs is not None:
                                 decode_type = content.outputs.decode_type
                                 delta_text = ""
+                                ts = int(content.metrics.llm_engine_recv_token_timestamp * 1e9)
+                                rid = content.request_id.split("_")[0]
+                                if content.trace_carrier is not None:
+                                    trace_carrier = content.trace_carrier
+                                    tracing.trace_set_proc_propagate_context(rid, trace_carrier, ts)
+                                if content.outputs.send_idx == 0 and content.trace_carrier is not None:
+                                    tracing.trace_report_span(
+                                        "send_response_first",
+                                        rid,
+                                        ts,
+                                        int(time.time() * 1e9),
+                                        thread_finish_flag=False,
+                                    )
                                 if decode_type == 0:
                                     delta_text, token_ids = self._decode_token(
                                         token_ids=content.outputs.token_ids, req_id=request_id, is_end=content.finished
                                     )
                                 else:
                                     token_ids = content.outputs.token_ids
-                                if len(token_ids):
+                                if len(token_ids) and not content.finished:
                                     content.outputs.token_ids = token_ids
                                     content.outputs.text = delta_text
                                     new_contents.append(content)
                                 elif content.finished:
+                                    if content.trace_carrier is not None:
+                                        tracing.trace_report_span(
+                                            "send_response_last",
+                                            rid,
+                                            ts,
+                                            int(time.time() * 1e9),
+                                            thread_finish_flag=True,
+                                        )
                                     new_contents.append(content)
                                 else:
                                     llm_logger.warning(

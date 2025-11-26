@@ -148,6 +148,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ENGINE_TASK_QUEUE_WITH_SHM": lambda: int(os.getenv("FD_ENGINE_TASK_QUEUE_WITH_SHM", "0")),
     "FD_FILL_BITMASK_BATCH": lambda: int(os.getenv("FD_FILL_BITMASK_BATCH", "4")),
     "FD_ENABLE_PDL": lambda: int(os.getenv("FD_ENABLE_PDL", "1")),
+    "FD_OTLP_EXPORTER_SCHEDULE_DELAY_MILLIS": lambda: int(os.getenv("FD_OTLP_EXPORTER_SCHEDULE_DELAY_MILLIS", "500")),
+    "FD_OTLP_EXPORTER_MAX_EXPORT_BATCH_SIZE": lambda: int(os.getenv("FD_OTLP_EXPORTER_MAX_EXPORT_BATCH_SIZE", "64")),
+    "FD_MAX_ACTIVE_REQUESTS": lambda: int(os.getenv("FD_MAX_ACTIVE_REQUESTS", "10000")),
+    "FD_SAMPLING_RATE": lambda: float(os.getenv("FD_SAMPLING_RATE", "1.0")),
 }
 
 

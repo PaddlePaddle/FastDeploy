@@ -1,0 +1,23 @@
+services:
+  otel-collector:
+    image: iregistry.baidu-int.com/lmep-observability/otel-collector:latest
+    volumes:
+      - ./opentelemetry.yaml:/etc/otelcol/config.yaml
+      - /tmp:/tmp
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    depends_on:
+      - jaeger
+    restart: unless-stopped
+
+  jaeger:
+    # image: jaegertracing/all-in-one
+    image: iregistry.baidu-int.com/lmep-observability/jaeger-all-in-one:latest
+    container_name: jaeger
+    ports:
+      # - "16686:16686"
+      - "8083:16686"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    restart: unless-stopped

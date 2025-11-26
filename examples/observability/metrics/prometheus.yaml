@@ -1,0 +1,10 @@
+# prometheus.yaml
+global:
+  scrape_interval: 5s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: 'fastdeploy'
+    static_configs:
+    # 这里改成自己的指标接口地址
+      - targets: ['yq01-sys-rpm36jsah8z.yq01.baidu.com:8019']

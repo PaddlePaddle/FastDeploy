@@ -20,6 +20,7 @@ import time
 
 import numpy as np
 
+import fastdeploy.metrics.trace as tracing
 from fastdeploy.cache_manager.prefix_cache_manager import PrefixCacheManager
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import llm_logger
@@ -239,6 +240,8 @@ class ResourceManager:
                 allocated_position += 1
             if can_insert:
                 task = tasks[processing_task_index]
+                rid = task.request_id.split("_")[0]
+                tracing.trace_slice_start(tracing.TraceSpanName.SCHEDULER_ALLOCATE_RESOURCE, rid)
 
                 if task.get("seed") is None:
                     task.set("seed", random.randint(0, 9223372036854775807))
@@ -301,6 +304,11 @@ class ResourceManager:
                     f"length of prompt token: {task.prompt_token_ids_len}"
                 )
                 allocated_position += 1
+                trace_carrier = tracing.trace_get_proc_propagate_context(rid)
+                task.trace_carrier = trace_carrier
+                tracing.trace_slice_end(
+                    name=tracing.TraceSpanName.SCHEDULER_ALLOCATE_RESOURCE, rid=rid, thread_finish_flag=True
+                )
             processing_task_index += 1
 
         # batch size when the statistical engine is inferring

@@ -25,6 +25,7 @@ from http import HTTPStatus
 import numpy as np
 from filelock import FileLock
 
+import fastdeploy.metrics.trace as tracing
 from fastdeploy import envs
 from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
@@ -306,6 +307,8 @@ class EngineClient:
             chat_template_kwargs = task.get("chat_template_kwargs") or {}
             chat_template_kwargs.update({"chat_template": task.get("chat_template")})
             task["chat_template_kwargs"] = chat_template_kwargs
+            request_id = task.get("request_id").split("_")[0]
+            tracing.trace_slice_start(tracing.TraceSpanName.ENCODE, request_id)
             if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
                 await self.data_processor.process_request_dict(task, self.max_model_len)
             else:
@@ -320,7 +323,7 @@ class EngineClient:
                         "The current service does not support processing requests containing multimodal data when prefix cache is enabled. Please send only text-based requests or disable prefix cache",
                         error_code=400,
                     )
-
+            tracing.trace_slice_end(tracing.TraceSpanName.ENCODE, request_id)
             task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
             input_ids_len = task["prompt_token_ids_len"]
 
@@ -389,10 +392,15 @@ class EngineClient:
             else:
                 request_id = parts[0]
                 index = int(parts[1])
+                trace_carrier = tracing.trace_get_proc_propagate_context(request_id)
+                task["trace_carrier"] = trace_carrier
                 for i in range(index * n, (index + 1) * n):
                     child_task = copy(task)
                     child_task["request_id"] = f"{request_id}_{i}"
                     self._send_task(child_task)
+            tracing.trace_slice_end(
+                tracing.TraceSpanName.PREPROCESS, task.get("request_id").split("_")[0], thread_finish_flag=True
+            )
         except Exception as e:
             api_server_logger.error(f"zmq_client send task error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)

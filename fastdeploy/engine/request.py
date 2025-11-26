@@ -516,6 +516,7 @@ class RequestOutput:
         # for internal adapter
         ic_req_data: Optional[dict] = None,
         prompt_token_ids_len: Optional[int] = 0,
+        trace_carrier: dict = dict(),
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -533,6 +534,7 @@ class RequestOutput:
         self.error_msg = error_msg
         self.ic_req_data = ic_req_data
         self.prompt_token_ids_len = prompt_token_ids_len
+        self.trace_carrier = trace_carrier
 
         if prompt_token_ids is None:
             self.prompt_token_ids = []
@@ -579,6 +581,7 @@ class RequestOutput:
             f"metrics={self.metrics}, "
             f"error_code={self.error_code}, "
             f"error_msg={self.error_msg},"
+            f"trace_carrier={self.trace_carrier}"
         )
 
     @classmethod
@@ -586,7 +589,8 @@ class RequestOutput:
         """Create instance from dict arguments"""
         completion_output = CompletionOutput.from_dict(d.pop("outputs"))
         metrics = RequestMetrics.from_dict(d.pop("metrics"))
-        return RequestOutput(**d, outputs=completion_output, metrics=metrics)
+        trace_carrier = d.pop("trace_carrier")
+        return RequestOutput(**d, outputs=completion_output, metrics=metrics, trace_carrier=trace_carrier)
 
     def to_dict(self):
         """convert RequestOutput into a serializable dict"""
@@ -607,6 +611,7 @@ class RequestOutput:
             "error_msg": self.error_msg,
             "ic_req_data": self.ic_req_data,
             "prompt_token_ids_len": self.prompt_token_ids_len,
+            "trace_carrier": self.trace_carrier,
         }
 
 
