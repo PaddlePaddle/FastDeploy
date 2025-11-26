@@ -43,12 +43,17 @@ jobs:
     runs-on: [self-hosted, GPU-h1z1-2Cards]
     timeout-minutes: 90
     needs: check_cov_skip
-    if: needs.check_cov_skip.outputs.can-skip != 'true'
     outputs:
       all_cov_file_url: ${{ steps.cov_upload.outputs.all_cov_file_url }}
       unittest_failed_url: ${{ steps.cov_upload.outputs.unittest_failed_url }}
       diff_cov_result_json_url: ${{ steps.cov_upload.outputs.diff_cov_result_json_url }}
     steps:
+      - name: Check bypass if can-skip
+        if: needs.check_cov_skip.outputs.can-skip == 'true'
+        run: |
+          echo "Check skipped. Marking as success."
+          exit 0
+
       - name: Code Prepare
         shell: bash
         env:

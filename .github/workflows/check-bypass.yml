@@ -21,7 +21,7 @@ jobs:
     env:
       CI_TEAM_MEMBERS: '["yuanlehome","YuanRisheng","Jiang-Jia-Jun","DDDivano","XieYunshen","EmmonsCurse"]'
     outputs:
-      can-skip: ${{ steps.check-bypass.outputs.can-skip }}
+      can-skip: ${{ steps.final-output.outputs.can-skip }}
     steps:
       - name: Cleanup
         run: |
@@ -49,3 +49,30 @@ jobs:
                 }
               ]
             }
+
+      - id: check-only-docs
+        name: Check if only Docs files changed
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.github-token }}
+        run: |
+          files=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files[].path')
+
+          can_skip=true
+          for f in $files; do
+            if [[ ! "$f" =~ \.(md|txt|yaml|yml)$ ]]; then
+              can_skip=false
+              break
+            fi
+          done
+
+          echo "can_skip=$can_skip" >> $GITHUB_OUTPUT
+
+      - id: final-output
+        name: Final can-skip result
+        run: |
+          if [[ "${{ steps.check-bypass.outputs.can-skip }}" == "true" || "${{ steps.check-only-docs.outputs.can_skip }}" == "true" ]]; then
+            echo "can-skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "can-skip=false" >> $GITHUB_OUTPUT
+          fi

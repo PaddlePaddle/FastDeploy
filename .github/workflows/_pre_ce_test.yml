@@ -28,10 +28,24 @@ on:
         default: ""
 
 jobs:
+  check_bypass:
+    uses: ./.github/workflows/check-bypass.yml
+    secrets:
+      github-token: ${{ secrets.github-token }}
+    with:
+      workflow-name: run_ce_cases
+
   run_ce_cases:
     runs-on: [self-hosted, PRE_CE_RUN_2Card]
     timeout-minutes: 60
+    needs: check_bypass
     steps:
+      - name: Check bypass if can-skip
+        if: needs.check_bypass.outputs.can-skip == 'true'
+        run: |
+          echo "Check skipped. Marking as success."
+          exit 0
+
       - name: Print current runner name
         run: |
           echo "Current runner name: ${{ runner.name }}"

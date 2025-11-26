@@ -30,10 +30,24 @@ on:
         default: ""
 
 jobs:
+  check_bypass:
+    uses: ./.github/workflows/check-bypass.yml
+    secrets:
+      github-token: ${{ secrets.github-token }}
+    with:
+      workflow-name: run_tests_logprob
+
   run_tests_logprob:
     runs-on: [self-hosted, GPU-h20-1Cards]
     timeout-minutes: 60
+    needs: check_bypass
     steps:
+      - name: Check bypass if can-skip
+        if: needs.check_bypass.outputs.can-skip == 'true'
+        run: |
+          echo "Check skipped. Marking as success."
+          exit 0
+
       - name: Code Prepare
         shell: bash
         env:
