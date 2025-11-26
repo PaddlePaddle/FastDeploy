@@ -228,7 +228,6 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
             x, self.quant_config.weight_block_size[0]
         )
         linear_out = paddle.empty((x.shape[0], layer.output_size), dtype=paddle.bfloat16)
-        from fastdeploy.model_executor.ops.gpu import deep_gemm
 
         deep_gemm.gemm_fp8_fp8_bf16_nt(
             (x, x_scale_tensor),

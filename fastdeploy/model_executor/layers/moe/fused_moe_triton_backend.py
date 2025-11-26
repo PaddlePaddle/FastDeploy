@@ -732,8 +732,6 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
             dtype=x.dtype,
         )
 
-        from .triton_moe_kernels import fused_moe_kernel_paddle
-
         x_q, x_scale = scaled_fp8_quant(x, use_per_token_if_dynamic=True)
 
         fused_moe_kernel_paddle[grid](
@@ -1506,7 +1504,6 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             "num_warps": 4,
             "num_stages": 3,
         }
-        from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess_func
 
         sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess_func(
             topk_ids, num_local_experts, config["BLOCK_SIZE_M"]
@@ -1520,8 +1517,6 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             ceil_div(max_num_tokens_padded, config["BLOCK_SIZE_M"])
             * ceil_div(moe_intermediate_size * 2, config["BLOCK_SIZE_N"]),
         )
-
-        from .triton_moe_kernels import fused_moe_kernel_paddle
 
         x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, self.quant_config.weight_block_size[0])
 

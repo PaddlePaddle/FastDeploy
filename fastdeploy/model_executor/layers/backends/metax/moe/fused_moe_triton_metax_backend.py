@@ -21,7 +21,7 @@ import fastdeploy
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
-from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess
+from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess_func
 from fastdeploy.model_executor.utils import TensorTracker, set_weight_attrs
 from fastdeploy.utils import ceil_div
 
@@ -286,7 +286,7 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
             "BLOCK_SIZE_K": 64,
             "GROUP_SIZE_M": 4,
         }
-        sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess(
+        sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess_func(
             topk_ids, num_local_experts, config["BLOCK_SIZE_M"]
         )
         max_possible_num_post_padded = sorted_token_ids.shape[0]

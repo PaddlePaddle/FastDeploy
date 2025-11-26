@@ -373,9 +373,9 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
             "num_warps": 4,
             "num_stages": 16,
         }
-        from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess
+        from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess_func
 
-        sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess(
+        sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess_func(
             topk_ids, E, config["BLOCK_SIZE_M"]
         )
 

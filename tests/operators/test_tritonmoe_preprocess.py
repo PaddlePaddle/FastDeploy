@@ -17,7 +17,7 @@ import unittest
 import numpy as np
 import paddle
 
-from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess
+from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess_func
 
 
 class TestTritonMOEPreprocess(unittest.TestCase):
@@ -28,7 +28,9 @@ class TestTritonMOEPreprocess(unittest.TestCase):
     def _run_op(self, topk_ids_np, num_experts, GEMM_BLOCK_SIZE_M):
         """Convert numpy to Paddle Tensor and run operator"""
         topk_ids = paddle.to_tensor(topk_ids_np, dtype="int64")
-        sorted_ids, expert_ids, num_tokens_post_pad = tritonmoe_preprocess(topk_ids, num_experts, GEMM_BLOCK_SIZE_M)
+        sorted_ids, expert_ids, num_tokens_post_pad = tritonmoe_preprocess_func(
+            topk_ids, num_experts, GEMM_BLOCK_SIZE_M
+        )
         return sorted_ids.numpy(), expert_ids.numpy(), num_tokens_post_pad.numpy()
 
     def _check_output_shapes(
