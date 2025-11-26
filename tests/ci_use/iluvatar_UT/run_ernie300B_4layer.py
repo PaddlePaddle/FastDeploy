@@ -1,40 +1,13 @@
-import functools
+import os
 import sys
-import threading
 
 from fastdeploy import LLM, SamplingParams
 from fastdeploy.utils import set_random_seed
 
+tests_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, tests_dir)
 
-def timeout(seconds):
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            result = [None]
-            exception = [None]
-
-            def target():
-                try:
-                    result[0] = func(*args, **kwargs)
-                except Exception as e:
-                    exception[0] = e
-
-            thread = threading.Thread(target=target)
-            thread.daemon = True
-            thread.start()
-            thread.join(seconds)
-
-            if thread.is_alive():
-                raise TimeoutError(f"Function timed out after {seconds} seconds")
-
-            if exception[0]:
-                raise exception[0]
-
-            return result[0]
-
-        return wrapper
-
-    return decorator
+from ci_use.iluvatar_UT.utils import TIMEOUT_MSG, timeout
 
 
 @timeout(80)
@@ -80,10 +53,7 @@ if __name__ == "__main__":
         result = offline_infer_check()
         sys.exit(0)
     except TimeoutError:
-        print(
-            "The timeout exit may be due to multiple processes sharing the "
-            "same gpu card. You can check this using ixsmi on the device."
-        )
+        print(TIMEOUT_MSG)
         sys.exit(124)
     except Exception:
         sys.exit(1)

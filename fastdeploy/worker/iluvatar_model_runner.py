@@ -38,7 +38,6 @@ class IluvatarModelRunner(GPUModelRunner):
         )
         assert not self.speculative_decoding, "Iluvatar does not support speculative decoding"
         assert self.guided_backend is None, "Iluvatar does not support guided decoding"
-        assert not envs.ENABLE_V1_KVCACHE_SCHEDULER, "Iluvatar does not support v1 kvcache scheduler"
         assert not self.cache_config.enable_prefix_caching, "Iluvatar does not support prefix caching"
         self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
         assert not self.mla_cache, "Iluvatar does not support MLA"
@@ -48,9 +47,9 @@ class IluvatarModelRunner(GPUModelRunner):
                 not self.cache_config.enable_chunked_prefill
             ), "Iluvatar does not support chunked prefill for VL model"
         # VL neox style = True
-        if self.enable_mm:
-            emb_shape = self.share_inputs["rope_emb"].shape
-            emb_shape[-1] *= 2
+        emb_shape = self.share_inputs["rope_emb"].shape
+        if emb_shape[-1] == self.model_config.head_dim // 2:
+            emb_shape[-1] = self.model_config.head_dim
             self.share_inputs["rope_emb"] = paddle.full(
                 shape=emb_shape,
                 fill_value=0,

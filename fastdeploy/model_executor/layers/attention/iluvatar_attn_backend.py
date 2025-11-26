@@ -98,25 +98,26 @@ class IluvatarAttnBackend(AttentionBackend):
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
-        if self.enable_mm:
-            # VL: TODO: The first 0 may need to be replaced with batch_id
-            # of max_num_seqs when running multiple batch case later
-            self.rope_cos = forward_meta.rotary_embs[0, 0, 0, :, :, :]
-            self.rope_sin = forward_meta.rotary_embs[0, 1, 0, :, :, :]
-        else:
-            # text
-            self.rope_cos = forward_meta.rotary_embs[0, 0, :, :, :]
-            self.rope_sin = forward_meta.rotary_embs[1, 0, :, :, :]
         self.prefill_info_dict = {}
         self.decode_info_dict = {}
         self.prefill_info_dict["batch_ids"] = paddle.where(forward_meta.seq_lens_encoder)[0]
         self.decode_info_dict["batch_ids"] = paddle.where(forward_meta.seq_lens_decoder)[0]
         self.prefill_len = len(self.prefill_info_dict["batch_ids"])
         self.decode_len = len(self.decode_info_dict["batch_ids"])
+        if self.enable_mm:
+            num_seqs = self.prefill_len + self.decode_len
+            self.rope_cos = forward_meta.rotary_embs[:num_seqs, 0, 0, :, :, :]
+            self.rope_sin = forward_meta.rotary_embs[:num_seqs, 1, 0, :, :, :]
+        else:
+            # text
+            self.rope_cos = forward_meta.rotary_embs[0, 0, :, :, :]
+            self.rope_sin = forward_meta.rotary_embs[1, 0, :, :, :]
         # only prefill
         if self.decode_len == 0:
-            cu_seq_ids = list(range(self.prefill_len + 1))
-            self.prefill_info_dict["cu_seqlens_q"] = forward_meta.cu_seqlens_q[cu_seq_ids]
+            cu_seq_ids = self.prefill_info_dict["batch_ids"] + 1
+            self.prefill_info_dict["cu_seqlens_q"] = paddle.concat(
+                [forward_meta.cu_seqlens_q[:1], forward_meta.cu_seqlens_q[cu_seq_ids]]
+            )
             self.mixed = False
         # only decode
         elif self.prefill_len == 0:
@@ -141,7 +142,7 @@ class IluvatarAttnBackend(AttentionBackend):
             )
 
             prefill_start, decode_start, start = 0, self.prefill_num_tokens, 0
-            non_zeros_ids = forward_meta.seq_lens_this_time != 0
+            non_zeros_ids = paddle.where(forward_meta.seq_lens_this_time)[0]
             non_zeros_seq_lens = forward_meta.seq_lens_this_time[non_zeros_ids]
             end = non_zeros_seq_lens[0]
             if end > 1:

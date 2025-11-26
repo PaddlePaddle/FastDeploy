@@ -53,11 +53,11 @@ from fastdeploy.platforms import current_platform
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
+        recover_decode_task,
         set_data_ipc,
         set_value_by_flags_and_idx,
     )
 
-    recover_decode_task = None
     share_external_data = None
 elif current_platform.is_dcu():
     from fastdeploy.model_executor.ops.gpu import set_value_by_flags_and_idx
@@ -419,7 +419,7 @@ class GPUModelRunner(ModelRunnerBase):
         if request.with_image:
             if envs.FD_ENABLE_MAX_PREFILL:
                 multi_vision_inputs["images_lst"].append(
-                    inputs["images"][request.image_start : request.image_end].cuda()
+                    inputs["images"][request.image_start : request.image_end].to(self.device)
                 )
                 multi_vision_inputs["grid_thw_lst"].extend(
                     inputs["grid_thw"][request.num_image_start : request.num_image_end]
@@ -448,7 +448,7 @@ class GPUModelRunner(ModelRunnerBase):
 
                     full_image_features_lst = []
                     for mm_hash in inputs["mm_hashes"][request.num_image_start : request.num_image_end]:
-                        feature = self.encoder_cache[mm_hash].cuda()
+                        feature = self.encoder_cache[mm_hash].to(self.device)
                         full_image_features_lst.append(feature)
                     image_features = paddle.concat(full_image_features_lst, axis=0)
                 else:
