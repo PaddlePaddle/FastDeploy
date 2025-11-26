@@ -448,7 +448,6 @@ class RedundantExpertManager:
             if (
                 self.fd_config.scheduler_config.splitwise_role == "mixed"
                 or self.fd_config.scheduler_config.splitwise_role == "decode"
-                or self.fd_config.scheduler_config.splitwise_role == "prefill"
                 or not self.eplb_config.redundant_expert_enable_schedule_cordon
             ):
                 self.logger.info("redundant_expert: allreduce_load_weight_result success, notify infer.py")
