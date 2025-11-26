@@ -27,7 +27,7 @@ sys.modules["llguidance"] = mock_llguidance
 sys.modules["llguidance.hf"] = mock_llguidancehf
 sys.modules["torch"] = mock_torch
 
-# 导入要测试的模块
+# Import the module to be tested
 from fastdeploy.model_executor.guided_decoding.guidance_backend import (
     LLGuidanceBackend,
     LLGuidanceProcessor,
@@ -37,21 +37,21 @@ from fastdeploy.model_executor.guided_decoding.guidance_backend import (
 
 class TestProcessForAdditionalProperties(unittest.TestCase):
     def test_process_json_string(self):
-        # 测试字符串输入
+        # Test string input
         json_str = '{"type": "object", "properties": {"name": {"type": "string"}}}'
         result = process_for_additional_properties(json_str)
         self.assertFalse(result["additionalProperties"])
 
     def test_process_json_dict(self):
-        # 测试字典输入
+        # Test dictionary input
         json_dict = {"type": "object", "properties": {"name": {"type": "string"}}}
         result = process_for_additional_properties(json_dict)
         self.assertFalse(result["additionalProperties"])
-        # 确保原始字典没有被修改
+        # Ensure the original dictionary is not modified
         self.assertNotIn("additionalProperties", json_dict)
 
     def test_nested_objects(self):
-        # 测试嵌套对象
+        # Test nested objects
         json_dict = {
             "type": "object",
             "properties": {"person": {"type": "object", "properties": {"name": {"type": "string"}}}},
@@ -69,7 +69,7 @@ class TestLLGuidanceProcessor(unittest.TestCase):
         self.batch_size = 2
 
     def test_initialization(self, mock_tokenizer, mock_matcher):
-        # 测试初始化
+        # Test initialization
         processor = LLGuidanceProcessor(
             ll_matcher=mock_matcher,
             ll_tokenizer=mock_tokenizer,
@@ -83,7 +83,7 @@ class TestLLGuidanceProcessor(unittest.TestCase):
         self.assertFalse(processor.is_terminated)
 
     def test_reset(self, mock_tokenizer, mock_matcher):
-        # 测试重置功能
+        # Test reset functionality
         processor = LLGuidanceProcessor(
             ll_matcher=mock_matcher,
             ll_tokenizer=mock_tokenizer,
@@ -99,7 +99,7 @@ class TestLLGuidanceProcessor(unittest.TestCase):
         self.assertFalse(processor.is_terminated)
 
     def test_accept_token(self, mock_tokenizer, mock_matcher):
-        # 测试接受token功能
+        # Test accept_token functionality
         mock_matcher.is_stopped.return_value = False
         mock_matcher.consume_tokens.return_value = True
         mock_tokenizer.eos_token = 1
@@ -112,7 +112,7 @@ class TestLLGuidanceProcessor(unittest.TestCase):
             batch_size=self.batch_size,
         )
 
-        # 正常token
+        # Normal token
         result = processor.accept_token(0)
         self.assertTrue(result)
         mock_matcher.consume_tokens.assert_called_with([0])
@@ -127,7 +127,7 @@ class TestLLGuidanceProcessor(unittest.TestCase):
 @patch("llguidance.hf.from_tokenizer")
 class TestLLGuidanceBackend(unittest.TestCase):
     def setUp(self):
-        # 创建一个模拟的FDConfig
+        # Create a mock FDConfig
         self.fd_config = MagicMock()
         self.fd_config.model_config.vocab_size = 100
         self.fd_config.scheduler_config.max_num_seqs = 2
@@ -136,7 +136,7 @@ class TestLLGuidanceBackend(unittest.TestCase):
         self.fd_config.structured_outputs_config.reasoning_parser = None
 
     def test_initialization(self, mock_from_tokenizer, mock_matcher):
-        # 测试后端初始化
+        # Test backend initialization
         mock_tokenizer = MagicMock()
         with patch.object(BackendBase, "_get_tokenizer_hf", return_value=mock_tokenizer):
             backend = LLGuidanceBackend(fd_config=self.fd_config)
@@ -147,11 +147,11 @@ class TestLLGuidanceBackend(unittest.TestCase):
 
     @patch("llguidance.LLMatcher")
     def test_create_processor(self, mock_matcher_class, mock_from_tokenizer, mock_matcher):
-        # 测试创建处理器
+        # Test creating a processor
         with patch.object(LLGuidanceBackend, "__init__", return_value=None):
-            backend = LLGuidanceBackend(fd_config=None)  # 参数不重要，因为 __init__ 被模拟了
+            backend = LLGuidanceBackend(fd_config=None)  # Arguments are not important because __init__ is mocked
 
-            # 手动设置所有需要的属性
+            # Manually set all required attributes
             backend.hf_tokenizer = MagicMock()
             backend.ll_tokenizer = MagicMock()
             backend.vocab_size = 100

@@ -21,7 +21,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# 检查是否可以导入llguidance
+# Check if llguidance can be imported
 HAS_LLGUIDANCE = False
 try:
     import llguidance
@@ -37,13 +37,13 @@ except ImportError:
 
 @pytest.fixture
 def llguidance_checker():
-    """返回一个LLGuidanceChecker实例供测试使用"""
+    """Return an LLGuidanceChecker instance for testing."""
     return LLGuidanceChecker()
 
 
 @pytest.fixture
 def llguidance_checker_with_options():
-    """返回一个配置了特定选项的LLGuidanceChecker实例"""
+    """Return an LLGuidanceChecker instance configured with specific options."""
     return LLGuidanceChecker(disable_any_whitespace=True)
 
 
@@ -62,12 +62,12 @@ def MockRequest():
 
 
 class TestLLGuidanceCheckerMocked:
-    """使用Mock测试LLGuidanceChecker，适用于没有llguidance库的环境"""
+    """Test LLGuidanceChecker using Mock, suitable for environments without the llguidance library."""
 
     @patch("llguidance.LLMatcher.grammar_from_json_schema")
     @patch("llguidance.LLMatcher.validate_grammar")
     def test_serialize_guided_json_as_string(self, mock_validate, mock_from_schema, llguidance_checker):
-        """测试处理guided_json字符串类型"""
+        """Test processing guided_json string type."""
         mock_from_schema.return_value = "serialized_grammar"
         mock_validate.return_value = None
 
@@ -82,7 +82,7 @@ class TestLLGuidanceCheckerMocked:
     @patch("llguidance.LLMatcher.grammar_from_json_schema")
     @patch("llguidance.LLMatcher.validate_grammar")
     def test_serialize_guided_json_as_dict(self, mock_validate, mock_from_schema, llguidance_checker):
-        """测试处理guided_json字典类型"""
+        """Test processing guided_json dictionary type."""
         mock_from_schema.return_value = "serialized_grammar"
         mock_validate.return_value = None
 
@@ -92,13 +92,13 @@ class TestLLGuidanceCheckerMocked:
         grammar = llguidance_checker.serialize_guidance_grammar(request)
 
         mock_from_schema.assert_called_once()
-        assert isinstance(request.guided_json, dict)  # 验证字典已转换为字符串
+        assert isinstance(request.guided_json, dict)  # Verify that the dictionary has been converted to a string
         assert grammar == "serialized_grammar"
 
     @patch("llguidance.LLMatcher.grammar_from_json_schema")
     @patch("llguidance.LLMatcher.validate_grammar")
     def test_serialize_guided_json_object(self, mock_validate, mock_from_schema, llguidance_checker):
-        """测试处理guided_json_object"""
+        """Test processing guided_json_object."""
         mock_from_schema.return_value = "serialized_grammar"
         mock_validate.return_value = None
 
@@ -114,7 +114,7 @@ class TestLLGuidanceCheckerMocked:
     @patch("llguidance.grammar_from")
     @patch("llguidance.LLMatcher.validate_grammar")
     def test_serialize_guided_regex(self, mock_validate, mock_grammar_from, llguidance_checker):
-        """测试处理guided_regex"""
+        """Test processing guided_regex."""
         mock_grammar_from.return_value = "serialized_regex_grammar"
         mock_validate.return_value = None
 
@@ -129,7 +129,7 @@ class TestLLGuidanceCheckerMocked:
     @patch("llguidance.grammar_from")
     @patch("llguidance.LLMatcher.validate_grammar")
     def test_serialize_guided_choice(self, mock_validate, mock_grammar_from, llguidance_checker):
-        """测试处理guided_choice"""
+        """Test processing guided_choice."""
         mock_grammar_from.return_value = "serialized_choice_grammar"
         mock_validate.return_value = None
 
@@ -144,7 +144,7 @@ class TestLLGuidanceCheckerMocked:
     @patch("llguidance.grammar_from")
     @patch("llguidance.LLMatcher.validate_grammar")
     def test_serialize_guided_grammar(self, mock_validate, mock_grammar_from, llguidance_checker):
-        """测试处理guided_grammar"""
+        """Test processing guided_grammar."""
         mock_grammar_from.return_value = "serialized_grammar_spec"
         mock_validate.return_value = None
 
@@ -159,8 +159,8 @@ class TestLLGuidanceCheckerMocked:
     @patch("llguidance.StructTag")
     @patch("llguidance.LLMatcher.grammar_from_json_schema")
     def test_serialize_structural_tag(self, mock_from_schema, mock_struct_tag, llguidance_checker):
-        """测试处理structural_tag"""
-        # 配置mock对象
+        """Test processing structural_tag."""
+        # Configure mock objects
         mock_from_schema.return_value = "serialized_schema"
         mock_struct_tag.to_grammar.return_value = "serialized_structural_grammar"
         struct_tag_instance = MagicMock()
@@ -181,7 +181,7 @@ class TestLLGuidanceCheckerMocked:
 
     @patch("llguidance.StructTag")
     def test_serialize_structural_tag_missing_trigger(self, mock_struct_tag, llguidance_checker):
-        """测试处理structural_tag中缺少触发器的情况"""
+        """Test processing structural_tag when a trigger is missing."""
         request = MockRequest()
         request.structural_tag = {
             "triggers": ["<xml>"],
@@ -193,7 +193,7 @@ class TestLLGuidanceCheckerMocked:
 
     @patch("llguidance.StructTag")
     def test_serialize_structural_tag_empty_structures(self, mock_struct_tag, llguidance_checker):
-        """测试处理structural_tag中结构为空的情况"""
+        """Test processing structural_tag when structures are empty."""
         request = MockRequest()
         request.structural_tag = {"triggers": ["<json>"], "structures": []}
 
@@ -201,9 +201,9 @@ class TestLLGuidanceCheckerMocked:
             llguidance_checker.serialize_guidance_grammar(request)
 
     def test_serialize_invalid_grammar_type(self, llguidance_checker):
-        """测试处理无效的语法类型"""
+        """Test processing invalid grammar types."""
         request = MockRequest()
-        # 没有设置任何语法类型
+        # No grammar type set
 
         with pytest.raises(ValueError, match="grammar is not of valid supported types"):
             llguidance_checker.serialize_guidance_grammar(request)
@@ -211,7 +211,7 @@ class TestLLGuidanceCheckerMocked:
     @patch("llguidance.LLMatcher.grammar_from_json_schema")
     @patch("llguidance.LLMatcher.validate_grammar")
     def test_schema_format_valid_json(self, mock_validate, mock_from_schema, llguidance_checker):
-        """测试schema_format方法处理有效的JSON"""
+        """Test schema_format method processing valid JSON."""
         mock_from_schema.return_value = "serialized_grammar"
         mock_validate.return_value = None
 
@@ -226,7 +226,7 @@ class TestLLGuidanceCheckerMocked:
     @patch("llguidance.LLMatcher.grammar_from_json_schema")
     @patch("llguidance.LLMatcher.validate_grammar")
     def test_schema_format_invalid_grammar(self, mock_validate, mock_from_schema, llguidance_checker):
-        """测试schema_format方法处理无效的语法"""
+        """Test schema_format method processing invalid grammar."""
         mock_from_schema.return_value = "serialized_grammar"
         mock_validate.return_value = "Invalid grammar"
 
@@ -240,7 +240,7 @@ class TestLLGuidanceCheckerMocked:
 
     @patch("llguidance.LLMatcher.grammar_from_json_schema")
     def test_schema_format_json_decode_error(self, mock_from_schema, llguidance_checker):
-        """测试schema_format方法处理JSON解码错误"""
+        """Test schema_format method processing JSON decode error."""
         mock_from_schema.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
 
         request = MockRequest()
@@ -253,7 +253,7 @@ class TestLLGuidanceCheckerMocked:
 
     @patch("llguidance.LLMatcher.grammar_from_json_schema")
     def test_schema_format_unexpected_error(self, mock_from_schema, llguidance_checker):
-        """测试schema_format方法处理意外错误"""
+        """Test schema_format method processing unexpected errors."""
         mock_from_schema.side_effect = Exception("Unexpected error")
 
         request = MockRequest()
@@ -265,7 +265,7 @@ class TestLLGuidanceCheckerMocked:
         assert "An unexpected error occurred during schema validation" in error
 
     def test_init_with_disable_whitespace(self, llguidance_checker_with_options):
-        """测试初始化时设置disable_any_whitespace选项"""
+        """Test setting the disable_any_whitespace option during initialization."""
         assert llguidance_checker_with_options.any_whitespace is False
         assert llguidance_checker_with_options.disable_additional_properties is True
         assert LLGuidanceChecker(disable_any_whitespace=True).any_whitespace is False
@@ -281,24 +281,24 @@ class TestLLGuidanceCheckerMocked:
             assert LLGuidanceChecker().disable_additional_properties is False
 
 
-@pytest.mark.skipif(not HAS_LLGUIDANCE, reason="llguidance库未安装，跳过实际依赖测试")
+@pytest.mark.skipif(not HAS_LLGUIDANCE, reason="llguidance library not installed, skipping actual dependency tests")
 class TestLLGuidanceCheckerReal:
-    """使用实际的llguidance库进行测试，适用于开发环境"""
+    """Test using the actual llguidance library, suitable for development environments."""
 
     def test_serialize_guided_json_string_real(self, llguidance_checker):
-        """使用实际库测试处理guided_json字符串"""
+        """Test processing guided_json string using the actual library."""
         request = MockRequest()
         request.guided_json = '{"type": "object", "properties": {"name": {"type": "string"}}}'
 
         grammar = llguidance_checker.serialize_guidance_grammar(request)
 
-        # 验证返回的grammar是否是一个有效的字符串
+        # Verify if the returned grammar is a valid string
         assert isinstance(grammar, str)
         assert len(grammar) > 0
         print("grammar", grammar)
 
     def test_serialize_guided_json_dict_real(self, llguidance_checker):
-        """使用实际库测试处理guided_json字典"""
+        """Test processing guided_json dictionary using the actual library."""
         request = MockRequest()
         request.guided_json = {"type": "object", "properties": {"name": {"type": "string"}}}
 
@@ -309,7 +309,7 @@ class TestLLGuidanceCheckerReal:
         assert len(grammar) > 0
 
     def test_serialize_guided_json_object_real(self, llguidance_checker):
-        """使用实际库测试处理guided_json_object"""
+        """Test processing guided_json_object using the actual library."""
         request = MockRequest()
         request.guided_json_object = True
 
@@ -320,7 +320,7 @@ class TestLLGuidanceCheckerReal:
         assert len(grammar) > 0
 
     def test_serialize_guided_regex_real(self, llguidance_checker):
-        """使用实际库测试处理guided_regex"""
+        """Test processing guided_regex using the actual library."""
         request = MockRequest()
         request.guided_regex = "[a-zA-Z]+"
 
@@ -330,7 +330,7 @@ class TestLLGuidanceCheckerReal:
         assert len(grammar) > 0
 
     def test_serialize_guided_choice_real(self, llguidance_checker):
-        """使用实际库测试处理guided_choice"""
+        """Test processing guided_choice using the actual library."""
         request = MockRequest()
         request.guided_choice = ["option1", "option2"]
 
@@ -340,9 +340,9 @@ class TestLLGuidanceCheckerReal:
         assert len(grammar) > 0
 
     def test_serialize_guided_grammar_real(self, llguidance_checker):
-        """使用实际库测试处理guided_grammar"""
+        """Test processing guided_grammar using the actual library."""
         request = MockRequest()
-        # 使用简单的CFG文法示例
+        # Use a simple CFG grammar example
         request.guided_grammar = """
         root ::= greeting name
         greeting ::= "Hello" | "Hi"
@@ -355,7 +355,7 @@ class TestLLGuidanceCheckerReal:
         assert len(grammar) > 0
 
     def test_serialize_structural_tag_real(self, llguidance_checker):
-        """使用实际库测试处理structural_tag"""
+        """Test processing structural_tag using the actual library."""
         request = MockRequest()
         request.structural_tag = {
             "triggers": ["<json>"],
@@ -368,7 +368,7 @@ class TestLLGuidanceCheckerReal:
         assert len(grammar) > 0
 
     def test_schema_format_valid_json_real(self, llguidance_checker):
-        """使用实际库测试schema_format方法处理有效的JSON"""
+        """Test schema_format method processing valid JSON using the actual library."""
         request = MockRequest()
         request.guided_json = '{"type": "object", "properties": {"name": {"type": "string"}}}'
 
@@ -379,7 +379,7 @@ class TestLLGuidanceCheckerReal:
         assert result_request.guided_json != '{"type": "object", "properties": {"name": {"type": "string"}}}'
 
     def test_schema_format_invalid_json_real(self, llguidance_checker):
-        """使用实际库测试schema_format方法处理无效的JSON"""
+        """Test schema_format method processing invalid JSON using the actual library."""
         request = MockRequest()
         request.guided_json = "{invalid json}"
 
@@ -389,8 +389,8 @@ class TestLLGuidanceCheckerReal:
         assert "Invalid format for guided decoding" in error
 
     def test_whitespace_flexibility_option_real(self):
-        """使用实际库测试whitespace灵活性选项的影响"""
-        # 创建两个不同配置的实例
+        """Test the impact of the whitespace flexibility option using the actual library."""
+        # Create two instances with different configurations
         flexible = LLGuidanceChecker(disable_any_whitespace=False)
         strict = LLGuidanceChecker(disable_any_whitespace=True)
 
@@ -405,11 +405,11 @@ class TestLLGuidanceCheckerReal:
         print("grammar_flexible", grammar_flexible)
         print("grammar_strict", grammar_strict)
 
-        # 预期两种配置生成的语法应该不同
+        # Expect grammars generated by the two configurations to be different
         assert grammar_flexible != grammar_strict
 
     def test_schema_format_guided_json_object_real(self, llguidance_checker):
-        """测试schema_format处理guided_json_object"""
+        """Test schema_format processing guided_json_object."""
         request = MockRequest()
         request.guided_json_object = True
 
@@ -419,7 +419,7 @@ class TestLLGuidanceCheckerReal:
         assert result_request is request
 
     def test_schema_format_guided_regex_real(self, llguidance_checker):
-        """测试schema_format处理有效的正则表达式"""
+        """Test schema_format processing valid regular expressions."""
         request = MockRequest()
         request.guided_regex = r"[a-zA-Z0-9]+"
 
@@ -427,12 +427,12 @@ class TestLLGuidanceCheckerReal:
 
         assert error is None
         assert result_request is request
-        assert result_request.guided_regex != r"[a-zA-Z0-9]+"  # 应该被转换为grammar格式
+        assert result_request.guided_regex != r"[a-zA-Z0-9]+"  # Should be converted to grammar format
 
     def test_schema_format_invalid_guided_regex_real(self, llguidance_checker):
-        """测试schema_format处理无效的正则表达式"""
+        """Test schema_format processing invalid regular expressions."""
         request = MockRequest()
-        request.guided_regex = r"["  # 无效的正则表达式
+        request.guided_regex = r"["  # Invalid regular expression
 
         result_request, error = llguidance_checker.schema_format(request)
 
@@ -440,7 +440,7 @@ class TestLLGuidanceCheckerReal:
         assert "Invalid format for guided decoding" in error
 
     def test_schema_format_guided_choice_real(self, llguidance_checker):
-        """测试schema_format处理guided_choice"""
+        """Test schema_format processing guided_choice."""
         request = MockRequest()
         request.guided_choice = ["option1", "option2", "option3"]
 
@@ -448,12 +448,16 @@ class TestLLGuidanceCheckerReal:
 
         assert error is None
         assert result_request is request
-        assert result_request.guided_choice != ["option1", "option2", "option3"]  # 应该被转换为grammar格式
+        assert result_request.guided_choice != [
+            "option1",
+            "option2",
+            "option3",
+        ]  # Should be converted to grammar format
 
     def test_schema_format_guided_grammar_real(self, llguidance_checker):
-        """测试schema_format处理guided_grammar"""
+        """Test schema_format processing guided_grammar."""
         request = MockRequest()
-        # 使用LLGuidance支持的正确语法格式
+        # Use the correct grammar format supported by LLGuidance
         request.guided_grammar = """
         start: number
         number: DIGIT+
@@ -467,7 +471,7 @@ class TestLLGuidanceCheckerReal:
         assert isinstance(result_request.guided_grammar, str)
 
     def test_schema_format_structural_tag_real(self, llguidance_checker):
-        """测试schema_format处理structural_tag"""
+        """Test schema_format processing structural_tag."""
         request = MockRequest()
         request.structural_tag = {
             "triggers": ["```json"],
@@ -486,7 +490,7 @@ class TestLLGuidanceCheckerReal:
         assert result_request is request
 
     def test_schema_format_structural_tag_string_real(self, llguidance_checker):
-        """测试schema_format处理字符串形式的structural_tag"""
+        """Test schema_format processing structural_tag in string format."""
         request = MockRequest()
         request.structural_tag = json.dumps(
             {
@@ -507,12 +511,16 @@ class TestLLGuidanceCheckerReal:
         assert result_request is request
 
     def test_schema_format_structural_tag_invalid_trigger_real(self, llguidance_checker):
-        """测试schema_format处理trigger无效的structural_tag"""
+        """Test schema_format processing structural_tag with invalid triggers."""
         request = MockRequest()
         request.structural_tag = {
-            "triggers": ["```xml"],  # 触发器与begin不匹配
+            "triggers": ["```xml"],  # Trigger does not match begin
             "structures": [
-                {"begin": "```json", "schema": {"type": "object"}, "end": "```"}  # 这里不包含任何triggers中的前缀
+                {
+                    "begin": "```json",
+                    "schema": {"type": "object"},
+                    "end": "```",
+                }  # Does not contain any prefix from triggers here
             ],
         }
 
@@ -522,9 +530,9 @@ class TestLLGuidanceCheckerReal:
         assert "Invalid format for guided decoding" in error
 
     def test_schema_format_structural_tag_empty_structures_real(self, llguidance_checker):
-        """测试schema_format处理空structures的structural_tag"""
+        """Test schema_format processing structural_tag with empty structures."""
         request = MockRequest()
-        request.structural_tag = {"triggers": ["```json"], "structures": []}  # 空结构
+        request.structural_tag = {"triggers": ["```json"], "structures": []}  # Empty structure
 
         result_request, error = llguidance_checker.schema_format(request)
 
@@ -532,7 +540,7 @@ class TestLLGuidanceCheckerReal:
         assert "Invalid format for guided decoding" in error
 
     def test_schema_format_json_dict_real(self, llguidance_checker):
-        """测试schema_format处理字典形式的guided_json"""
+        """Test schema_format processing guided_json in dictionary format."""
         request = MockRequest()
         request.guided_json = {"type": "object", "properties": {"name": {"type": "string"}}}
 
@@ -542,7 +550,7 @@ class TestLLGuidanceCheckerReal:
         assert result_request is request
 
     def test_schema_format_disable_additional_properties_real(self):
-        """测试schema_format处理disable_additional_properties参数"""
+        """Test schema_format processing disable_additional_properties parameter."""
         checker = LLGuidanceChecker(disable_additional_properties=True)
         request = MockRequest()
         request.guided_json = {"type": "object", "properties": {"name": {"type": "string"}}}
@@ -553,11 +561,11 @@ class TestLLGuidanceCheckerReal:
         assert result_request is request
 
     def test_schema_format_unexpected_error_real(self, monkeypatch, llguidance_checker):
-        """测试schema_format处理意外错误"""
+        """Test schema_format processing unexpected errors."""
         request = MockRequest()
         request.guided_json = '{"type": "object"}'
 
-        # 模拟意外异常
+        # Mock unexpected exception
         def mock_serialize_grammar(*args, **kwargs):
             raise Exception("Unexpected error")
 
@@ -569,9 +577,9 @@ class TestLLGuidanceCheckerReal:
         assert "An unexpected error occurred during schema validation" in error
 
     def test_schema_format_no_valid_grammar_real(self, llguidance_checker):
-        """测试schema_format处理没有有效语法的请求"""
+        """Test schema_format processing requests without valid grammar."""
         request = MockRequest()
-        # 没有设置任何语法相关的属性
+        # No grammar-related attributes set
 
         with pytest.raises(ValueError, match="grammar is not of valid supported types"):
             llguidance_checker.serialize_guidance_grammar(request)
