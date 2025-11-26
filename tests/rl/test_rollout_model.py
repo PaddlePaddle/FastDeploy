@@ -168,8 +168,10 @@ class TestErnie4_5_MoeForCausalLMRL(unittest.TestCase):
         mock_base_init.return_value = None
         model = Ernie4_5_MoeForCausalLMRL(self.mock_fd_config)
         # Initialize BaseRLModel attributes since __init__ was mocked
-        model._mappings_built = False
-        model.infer_to_train_mapping = {}
+        # Use object.__setattr__ to bypass Paddle's custom __setattr__
+        object.__setattr__(model, "_mappings_built", False)
+        object.__setattr__(model, "infer_to_train_mapping", {})
+        object.__setattr__(model, "fd_config", self.mock_fd_config)
         model.state_dict = MagicMock(return_value={"ernie.layers.8.mlp.gate.weight": None})
 
         mappings = model.get_name_mappings_to_training()
@@ -208,8 +210,10 @@ class TestQwen2ForCausalLMRL(unittest.TestCase):
         mock_base_init.return_value = None
         model = Qwen2ForCausalLMRL(self.mock_fd_config)
         # Initialize BaseRLModel attributes since __init__ was mocked
-        model._mappings_built = False
-        model.infer_to_train_mapping = {}
+        # Use object.__setattr__ to bypass Paddle's custom __setattr__
+        object.__setattr__(model, "_mappings_built", False)
+        object.__setattr__(model, "infer_to_train_mapping", {})
+        object.__setattr__(model, "fd_config", self.mock_fd_config)
         model.state_dict = MagicMock(return_value={"qwen2.layers.0.mlp.up_gate_proj.weight": None})
 
         mappings = model.get_name_mappings_to_training()
@@ -243,8 +247,10 @@ class TestQwen3ForCausalLMRL(unittest.TestCase):
         mock_base_init.return_value = None
         model = Qwen3ForCausalLMRL(self.mock_fd_config)
         # Initialize BaseRLModel attributes since __init__ was mocked
-        model._mappings_built = False
-        model.infer_to_train_mapping = {}
+        # Use object.__setattr__ to bypass Paddle's custom __setattr__
+        object.__setattr__(model, "_mappings_built", False)
+        object.__setattr__(model, "infer_to_train_mapping", {})
+        object.__setattr__(model, "fd_config", self.mock_fd_config)
         model.state_dict = MagicMock(return_value={"model.layers.0.mlp.up_gate_proj.weight": None})
 
         mappings = model.get_name_mappings_to_training()
@@ -280,8 +286,10 @@ class TestQwen3MoeForCausalLMRL(unittest.TestCase):
         mock_base_init.return_value = None
         model = Qwen3MoeForCausalLMRL(self.mock_fd_config)
         # Initialize BaseRLModel attributes since __init__ was mocked
-        model._mappings_built = False
-        model.infer_to_train_mapping = {}
+        # Use object.__setattr__ to bypass Paddle's custom __setattr__
+        object.__setattr__(model, "_mappings_built", False)
+        object.__setattr__(model, "infer_to_train_mapping", {})
+        object.__setattr__(model, "fd_config", self.mock_fd_config)
         model.state_dict = MagicMock(return_value={"model.layers.0.mlp.gate.weight": None})
 
         mappings = model.get_name_mappings_to_training()
@@ -317,8 +325,10 @@ class TestGlm4MoeForCausalLMRL(unittest.TestCase):
         mock_base_init.return_value = None
         model = Glm4MoeForCausalLMRL(self.mock_fd_config)
         # Initialize BaseRLModel attributes since __init__ was mocked
-        model._mappings_built = False
-        model.infer_to_train_mapping = {}
+        # Use object.__setattr__ to bypass Paddle's custom __setattr__
+        object.__setattr__(model, "_mappings_built", False)
+        object.__setattr__(model, "infer_to_train_mapping", {})
+        object.__setattr__(model, "fd_config", self.mock_fd_config)
         model.state_dict = MagicMock(return_value={"model.layers.0.mlp.gate.weight": None})
 
         mappings = model.get_name_mappings_to_training()
@@ -327,4 +337,3 @@ class TestGlm4MoeForCausalLMRL(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
