@@ -212,7 +212,7 @@ def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
     parser.add_argument("--port", default=8000, type=int, help="port to the http server")
     parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
     parser.add_argument("--workers", default=1, type=int, help="number of workers")
-    parser.add_argument("--metrics-port", default=8001, type=int, help="port for metrics server")
+    parser.add_argument("--metrics-port", default=None, type=int, help="port for metrics server")
     parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
     parser.add_argument(
         "--max-waiting-time",
@@ -238,6 +238,8 @@ def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
         type=int,
         help="Workers silent for more than this many seconds are killed and restarted.Value is a positive number or 0. Setting it to 0 has the effect of infinite timeouts by disabling timeouts for all workers entirely.",
     )
+
+    parser.add_argument("--api-key", type=str, action="append", help="API_KEY required for service authentication")
 
     parser = EngineArgs.add_cli_args(parser)
     return parser

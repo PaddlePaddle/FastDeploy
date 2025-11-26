@@ -72,12 +72,14 @@ struct RemoteCacheKvIpc {
     }
 
     void send_signal() {
-      msg_sed.mtext[1] = layer_id_;
-      if ((msgsnd(msgid, &msg_sed, (MAX_BSZ * 3 + 2) * 4, 0)) == -1) {
-        printf("kv signal full msg buffer\n");
+      if (inited) {
+        msg_sed.mtext[1] = layer_id_;
+        if ((msgsnd(msgid, &msg_sed, (MAX_BSZ * 3 + 2) * 4, 0)) == -1) {
+          printf("kv signal full msg buffer\n");
+        }
+        layer_id_ = (layer_id_ + 1);
+        assert(layer_id_ <= num_layers_);
       }
-      layer_id_ = (layer_id_ + 1);
-      assert(layer_id_ <= num_layers_);
     }
   };
 
@@ -91,6 +93,7 @@ struct RemoteCacheKvIpc {
 
   static RemoteCacheKvIpc::save_cache_kv_complete_signal_layerwise_meta_data
   open_shm_and_get_complete_signal_meta_data(const int rank_id,
+                                             const int device_id,
                                              const bool keep_pd_step_flag);
   static void save_cache_kv_complete_signal_layerwise(void* meta_data);
   static void save_cache_kv_complete_signal_layerwise_per_query(

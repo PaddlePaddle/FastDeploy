@@ -26,6 +26,8 @@ from fastdeploy.utils import data_processor_logger
 
 from .process import DataProcessor
 
+_SAMPLING_EPS = 1e-5
+
 
 class Ernie4_5_VLProcessor(Ernie4_5Processor):
     """The processor class for ERNIE MoE VL models."""
@@ -217,7 +219,13 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
             request["bad_words_token_ids"] = bad_words_token_ids
 
-        if request.get("prompt"):
+        if request.get("prompt_token_ids"):
+            messages = request.get("messages")
+            if messages:
+                self._check_mm_limits(messages)
+            request.setdefault("enable_thinking", True)
+            outputs = self.ernie4_5_processor.prompt_token_ids2outputs(request)
+        elif request.get("prompt"):
             multimodal_data = request.get("multimodal_data")
             if multimodal_data is None:
                 multimodal_data = {}
@@ -233,10 +241,18 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             if chat_template_kwargs:
                 if isinstance(chat_template_kwargs, dict):
                     for k, v in chat_template_kwargs.items():
-                        if k not in request:
+                        if k not in request or request[k] is None:
                             request[k] = v
                 else:
                     raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+                options = chat_template_kwargs.get("options")
+                if options:
+                    thinking_mode = options.get("thinking_mode")
+                    if thinking_mode:
+                        if thinking_mode == "close" or thinking_mode == "false":
+                            request["enable_thinking"] = False
+                        else:
+                            request["enable_thinking"] = True
             request.setdefault("enable_thinking", True)
             outputs = self.ernie4_5_processor.request2ids(request)
         else:
@@ -244,14 +260,20 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
 
         if request.get("completion_token_ids"):
             self.append_completion_tokens(outputs, request["completion_token_ids"])
+
         outputs = self.pack_outputs(outputs)
-        request["prompt_token_ids"] = outputs["input_ids"].tolist()
+        request["prompt_token_ids"] = (
+            outputs["input_ids"].tolist()
+            if ("prompt_token_ids" not in request or not request["prompt_token_ids"])
+            else request["prompt_token_ids"]
+        )
         request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
         request["multimodal_inputs"] = outputs
 
         # 截断超过长度限制的prompt
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
         else:
@@ -259,6 +281,9 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         if request.get("reasoning_max_tokens") is None:
             request["reasoning_max_tokens"] = max(int(request["max_tokens"] * 0.8), 1)
         data_processor_logger.info(f"Processed request {request}")
+
+        if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
+            request["top_p"] = _SAMPLING_EPS
 
         return request
 

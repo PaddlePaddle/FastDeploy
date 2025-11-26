@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import math
 import time
 import unittest
@@ -140,7 +156,9 @@ class TestTreeMask(unittest.TestCase):
             .reshape([-1, self.num_q_head, self.head_dim])
         )
 
-    def run_append_c16_attention(self, q_len, kv_len, prefill=False, attn_mask=None, use_qknorm=False):
+    def run_append_c16_attention(
+        self, q_len, kv_len, prefill=False, attn_mask=None, use_qknorm=False, mask_offset=None
+    ):
         if prefill:
             seq_lens_enc = [
                 q_len,
@@ -236,7 +254,6 @@ class TestTreeMask(unittest.TestCase):
             decoder_block_shape_q,
             self.num_q_head // self.num_kv_head,
             self.block_size,
-            decoder_step_token_num,
         )
         s_time = 0
         for i in range(self.run_time + self.warm_up):
@@ -274,7 +291,7 @@ class TestTreeMask(unittest.TestCase):
                 None,  # cache_v_zp
                 None,  # linear_shift
                 None,  # linear_smooth
-                None,  # mask_offset
+                mask_offset,  # mask_offset
                 None,  # kv_signal_data
                 self.q_norm_weight_tensor if use_qknorm else None,  # q_norm_weight
                 self.k_norm_weight_tensor if use_qknorm else None,  # k_norm_weight
@@ -293,7 +310,7 @@ class TestTreeMask(unittest.TestCase):
                 self.max_partition_size,
                 self.encoder_max_partition_size,
                 decoder_step_token_num,
-                True,
+                True if mask_offset is None else False,
                 decoder_step_token_num > 1,
                 0,
             )
@@ -361,6 +378,30 @@ class TestTreeMask(unittest.TestCase):
         self.run_append_c16_attention(prefill_len, 0, True)
         dec_out = self.run_append_c16_attention(dec_len_q, prefill_len, False, mask_append_attn)
         ref_out = self.ref_attention(self.CURRENT_Q[0], self.TOTAL_K, self.TOTAL_V, mask_ref)
+        np.testing.assert_allclose(
+            ref_out.astype("float32").numpy(), dec_out.astype("float32").numpy(), rtol=1e-03, atol=5e-03
+        )
+
+    def test_mask_offset(self):
+        prefill_len = 8192
+        dec_len_q = 5
+        total_len = prefill_len + dec_len_q
+        mask = paddle.tril(paddle.ones((self.bsz, dec_len_q, total_len), dtype="float32"), diagonal=prefill_len)
+        mask = paddle.where(mask == 1, paddle.zeros_like(mask), paddle.full_like(mask, fill_value=float("-inf")))
+        self.run_append_c16_attention(prefill_len, 0, True, use_qknorm=self.use_qknorm)
+
+        mask_offset = paddle.tile(
+            paddle.tensor(
+                [0, prefill_len + 1, 0, prefill_len + 2, 0, prefill_len + 3, 0, prefill_len + 4, 0, prefill_len + 5],
+                dtype="int32",
+            ),
+            [self.bsz],
+        ).astype("int32")
+        dec_out = self.run_append_c16_attention(
+            dec_len_q, prefill_len, False, use_qknorm=self.use_qknorm, mask_offset=mask_offset
+        )
+
+        ref_out = self.ref_attention(self.CURRENT_Q[0], self.TOTAL_K, self.TOTAL_V, mask, use_qknorm=self.use_qknorm)
         np.testing.assert_allclose(
             ref_out.astype("float32").numpy(), dec_out.astype("float32").numpy(), rtol=1e-03, atol=5e-03
         )

@@ -336,6 +336,7 @@ async def benchmark(
         input_requests[0].no,
     )
     test_history_QA = input_requests[0].history_QA
+    response_format = input_requests[0].response_format
 
     test_input = RequestFuncInput(
         model=model_id,
@@ -351,6 +352,7 @@ async def benchmark(
         ignore_eos=ignore_eos,
         debug=debug,
         extra_body=extra_body,
+        response_format=response_format,
     )
 
     print("test_input:", test_input)
@@ -382,6 +384,7 @@ async def benchmark(
             logprobs=logprobs,
             ignore_eos=ignore_eos,
             extra_body=extra_body,
+            response_format=response_format,
         )
         profile_output = await request_func(request_func_input=profile_input)
         if profile_output.success:
@@ -420,6 +423,7 @@ async def benchmark(
             request.no,
         )
         history_QA = request.history_QA
+        response_format = request.response_format
 
         req_model_id, req_model_name = model_id, model_name
         if lora_modules:
@@ -440,6 +444,7 @@ async def benchmark(
             debug=debug,
             ignore_eos=ignore_eos,
             extra_body=extra_body,
+            response_format=response_format,
         )
         tasks.append(asyncio.create_task(limited_request_func(request_func_input=request_func_input, pbar=pbar)))
     outputs: list[RequestFuncOutput] = await asyncio.gather(*tasks)
@@ -455,6 +460,7 @@ async def benchmark(
             api_url=base_url + "/stop_profile",
             output_len=test_output_len,
             logprobs=logprobs,
+            response_format=response_format,
         )
         profile_output = await request_func(request_func_input=profile_input)
         if profile_output.success:
@@ -481,6 +487,9 @@ async def benchmark(
             benchmark_duration = benchmark_outputs[-1].end_timestamp - benchmark_outputs[0].end_timestamp
         else:
             benchmark_duration = 0.0
+            print(f"丢弃前数量: {n}")
+            print(f"丢弃后数量: {len(benchmark_outputs)}, 返回结果异常")
+            exit(8)
 
         print(f"丢弃前数量: {n}")
         print(f"丢弃后数量: {len(benchmark_outputs)}")

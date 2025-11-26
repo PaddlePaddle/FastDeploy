@@ -451,6 +451,8 @@ class CompletionRequest(BaseModel):
     temperature: Optional[float] = Field(default=None, ge=0)
     top_p: Optional[float] = Field(default=None, ge=0, le=1)
     user: Optional[str] = None
+    request_id: Optional[str] = None
+    disaggregate_info: Optional[dict] = None
 
     # doc: begin-completion-sampling-params
     top_k: Optional[int] = None
@@ -486,8 +488,6 @@ class CompletionRequest(BaseModel):
             dict: request parameters in dict format
         """
         req_dict = {}
-        if request_id is not None:
-            req_dict["request_id"] = request_id
 
         # parse request model into dict
         if self.suffix is not None:
@@ -497,6 +497,8 @@ class CompletionRequest(BaseModel):
             if value is not None:
                 req_dict[key] = value
 
+        if request_id is not None:
+            req_dict["request_id"] = request_id
         if prompt is not None:
             req_dict["prompt"] = prompt
 
@@ -604,6 +606,8 @@ class ChatCompletionRequest(BaseModel):
     user: Optional[str] = None
     metadata: Optional[dict] = None
     response_format: Optional[AnyResponseFormat] = None
+    request_id: Optional[str] = None
+    disaggregate_info: Optional[dict] = None
 
     # doc: begin-chat-completion-sampling-params
     top_k: Optional[int] = None
@@ -644,8 +648,6 @@ class ChatCompletionRequest(BaseModel):
             dict: request parameters in dict format
         """
         req_dict = {}
-        if request_id is not None:
-            req_dict["request_id"] = request_id
 
         req_dict["max_tokens"] = self.max_completion_tokens or self.max_tokens
         req_dict["logprobs"] = self.top_logprobs if self.logprobs else None
@@ -666,10 +668,10 @@ class ChatCompletionRequest(BaseModel):
             if value is not None:
                 req_dict[key] = value
 
-        if "prompt_token_ids" in req_dict:
-            if "messages" in req_dict:
-                del req_dict["messages"]
-        else:
+        if request_id is not None:
+            req_dict["request_id"] = request_id
+
+        if "prompt_token_ids" not in req_dict or not req_dict["prompt_token_ids"]:
             # If disable_chat_template is set, then the first message in messages will be used as the prompt.
             assert (
                 len(req_dict["messages"]) > 0

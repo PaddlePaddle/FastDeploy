@@ -111,14 +111,6 @@ class Ernie4_5_MoE(nn.Layer):
         if hasattr(fd_config.quant_config, "moe_quant_type"):
             moe_quant_type = fd_config.quant_config.moe_quant_type
 
-        self.expert_parallel_size = fd_config.parallel_config.expert_parallel_size
-        self.tensor_parallel_size = fd_config.parallel_config.tensor_parallel_size
-        self.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
-        self.tp_group = fd_config.parallel_config.tp_group
-
-        self.use_ep = self.expert_parallel_size > 1
-        self.use_tp = self.tensor_parallel_size > 1
-
         if moe_quant_type == "w4a8" or moe_quant_type == "w4afp8":
             weight_key_map = {
                 "gate_weight_key": f"{prefix}.gate.weight",
@@ -146,7 +138,8 @@ class Ernie4_5_MoE(nn.Layer):
                 "down_proj_expert_code_zp_key": f"{prefix}.experts.{{}}.down_proj.code_zp",
             }
         elif moe_quant_type == "tensor_wise_fp8" or (
-            moe_quant_type == "block_wise_fp8" and fd_config.model_config.is_quantized
+            moe_quant_type == "block_wise_fp8"
+            and (fd_config.model_config.is_quantized or fd_config.model_config.is_moe_quantized)
         ):
             weight_key_map = {
                 "gate_weight_key": f"{prefix}.gate.weight",
@@ -219,32 +212,10 @@ class Ernie4_5_MoE(nn.Layer):
             self.shared_experts.load_state_dict(state_dict)
 
     def update_state_dict(self, state_dict):
-        self.fused_moe.load_state_dict(state_dict, True)
-
-    def split_allgather_out(self, hidden_states: paddle.Tensor, token_num: int):
-        token_num_per_rank = (token_num + self.tensor_parallel_size - 1) // self.tensor_parallel_size
-        # AllGather will hang when the data shapes on multi-ranks are different!
-        part_hidden_states = paddle.zeros(
-            shape=[token_num_per_rank, hidden_states.shape[1]], dtype=hidden_states.dtype
-        )
-        start_offset = self.tensor_parallel_rank * token_num_per_rank
-        end_offset = (self.tensor_parallel_rank + 1) * token_num_per_rank
-        if end_offset > token_num:
-            end_offset = token_num
-        part_hidden_states[: (end_offset - start_offset), :] = hidden_states[start_offset:end_offset, :]
-        out = self.experts(part_hidden_states, self.gate)
-        multi_outs = []
-        paddle.distributed.all_gather(multi_outs, out, self.tp_group)
-        out = paddle.concat(multi_outs, axis=0)
-        out = out[:token_num, :]
-        return out
+        self.experts.load_state_dict(state_dict, True)
 
     def forward(self, hidden_states: paddle.Tensor):
-        token_num = hidden_states.shape[0]
-        if self.use_ep and self.use_tp and token_num >= self.tensor_parallel_size:
-            out = self.split_allgather_out(hidden_states, token_num)
-        else:
-            out = self.experts(hidden_states, self.gate)
+        out = self.experts(hidden_states, self.gate)
         if self.num_shared_experts > 0:
             s_x = self.shared_experts(hidden_states)
             out = out + s_x
@@ -265,6 +236,7 @@ class Ernie4_5_Attention(nn.Layer):
             prefix=f"{prefix}.o_proj",
             input_size=fd_config.model_config.head_dim * fd_config.model_config.num_attention_heads,
             output_size=fd_config.model_config.hidden_size,
+            layer_id=layer_id,
         )
         self.attn = Attention(
             fd_config=fd_config,
@@ -333,6 +305,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
+            layer_id=layer_id,
         )
 
         self.post_attention_layernorm = RMSNorm(
@@ -340,6 +313,7 @@ class Ernie4_5_DecoderLayer(nn.Layer):
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
+            layer_id=layer_id,
         )
 
     def load_state_dict(self, state_dict):
@@ -357,18 +331,19 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         hidden_states: paddle.Tensor,
         residual: paddle.Tensor = None,
     ):
-        if residual is None:
-            residual = hidden_states
-            hidden_states = self.input_layernorm(hidden_states)
-        else:
-            hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        hidden_states, residual = self.input_layernorm(
+            hidden_states, residual_input=residual, forward_meta=forward_meta
+        )
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
             forward_meta=forward_meta,
         )
 
-        hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
+        hidden_states, residual = self.post_attention_layernorm(
+            hidden_states,
+            residual,
+        )
 
         hidden_states = self.mlp(hidden_states)
 
@@ -393,7 +368,7 @@ class Ernie4_5_Model(nn.Layer):
         fd_config.model_config.pretrained_config.prefix_name = "ernie"
         self.fd_config = fd_config
         self.redundant_table_manger = None
-        if fd_config.model_config.enable_redundant_experts is True:
+        if fd_config.eplb_config.enable_eplb is True:
             self.redundant_table_manger = RedundantExpertManger(
                 n_routed_experts=fd_config.model_config.moe_num_experts,
                 num_hidden_layers=fd_config.model_config.num_hidden_layers,
@@ -472,9 +447,7 @@ class Ernie4_5_Model(nn.Layer):
         for i in range(self.num_layers):
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
-        hidden_states = hidden_states + residual
-
-        out = self.norm(hidden_states)
+        out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
         if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
             out = forward_meta.attn_backend.reverse_transpose(out)
@@ -590,7 +563,9 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         )
         params_dict = dict(self.named_parameters())
 
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(
+            dict(self.named_sublayers()), fd_config=self.fd_config
+        )
 
         for loaded_weight_name, loaded_weight in weights_iterator:
             loaded_weight_name = loaded_weight_name.replace("model", "ernie")
@@ -626,7 +601,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings:
-            self.lm_head.load_state_dict({self.lm_head.weight_key: self.ernie.embed_tokens.embeddings.weight})
+            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
@@ -795,7 +770,7 @@ class Ernie4_5_MoePretrainedModel(PretrainedModel):
         """
         get_tensor_parallel_mappings
         """
-        logger.info("erine inference model _get_tensor_parallel_mappings")
+        logger.info("ernie inference model _get_tensor_parallel_mappings")
         from fastdeploy.model_executor.models.tp_utils import (
             build_expanded_keys,
             has_prefix,
