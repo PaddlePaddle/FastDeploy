@@ -543,7 +543,7 @@ class ParallelConfig:
         self.enable_chunked_moe = False
         self.chunked_moe_size = 256
         self.max_moe_num_chunk = 1
-        self.num_chunk = 1
+        self.moe_num_chunk = 1
 
         self.local_data_parallel_id = 0
         # Engine worker queue port

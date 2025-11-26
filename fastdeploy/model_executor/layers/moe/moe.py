@@ -26,7 +26,6 @@ from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import h2d_copy, slice_fn
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
-import time
 
 try:
     from fastdeploy.model_executor.ops.gpu import noaux_tc, noaux_tc_redundant
@@ -649,13 +648,13 @@ class FusedMoE(nn.Layer):
     def forward_chunked_moe(self, x, gate):
         chunk_size = self.fd_config.parallel_config.chunked_moe_size
         token_num = x.shape[0]
-        
-        # input size that are less than a chunk, less than the max size data or empty input 
+
+        # input size that are less than a chunk, less than the max size data or empty input
         # need to be repeated until the max chunk data infer MOE finished.
-        if token_num > chunk_size: # chunked moe
+        if token_num > chunk_size:  # chunked moe
             out = paddle.zeros_like(x)
-            out_split_list = paddle.tensor_split(out, self.fd_config.parallel_config.num_chunk, axis=0)
-            x_split_list = paddle.tensor_split(x, self.fd_config.parallel_config.num_chunk, axis=0)
+            out_split_list = paddle.tensor_split(out, self.fd_config.parallel_config.moe_num_chunk, axis=0)
+            x_split_list = paddle.tensor_split(x, self.fd_config.parallel_config.moe_num_chunk, axis=0)
 
             for i in range(self.fd_config.parallel_config.max_moe_num_chunk):
                 if i <= self.fd_config.parallel_config.moe_num_chunk - 1:
@@ -664,10 +663,10 @@ class FusedMoE(nn.Layer):
                     self.quant_method.apply(self, x, gate)
 
             out = paddle.concat(out_split_list, axis=0)
-        else: 
+        else:
             for i in range(self.fd_config.parallel_config.max_moe_num_chunk):
                 out = self.quant_method.apply(self, x, gate)
-        logger.info(f"======[Layer_{self.layer_idx}] end chunked moe======")
+
         return out
 
     def forward_normal(self, x, gate):

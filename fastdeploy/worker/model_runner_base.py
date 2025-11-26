@@ -24,6 +24,21 @@ from fastdeploy.worker.output import ModelRunnerOutput
 
 logger = get_logger("model_runner_base", "model_runner_base.log")
 
+from dataclasses import dataclass
+from typing import Optional
+
+
+@dataclass
+class DistributedStatus:
+    only_decode: bool = True
+    moe_num_chunk: int = 1
+
+
+@dataclass
+class DistributedOut:
+    if_only_decode: bool = None
+    max_moe_num_chunk: Optional[int] = None
+
 
 class ModelRunnerBase(ABC):
     """
