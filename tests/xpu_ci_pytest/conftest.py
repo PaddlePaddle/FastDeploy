@@ -23,6 +23,7 @@ XPU CI测试框架 - 通用配置和辅助函数
 4. 环境配置 - 设置XPU相关环境变量
 """
 
+import json
 import os
 import subprocess
 import time
@@ -107,11 +108,13 @@ def wait_for_health_check(timeout=900, interval=10):
         bool: 服务是否启动成功
     """
     port_num = get_port_num()
-    endpoint = f"http://0.0.0.0:{port_num}/health"
+    health_endpoint = f"http://0.0.0.0:{port_num}/health"
+    models_endpoint = f"http://0.0.0.0:{port_num}/v1/models"
     start_time = time.time()
 
     print(f"开始服务健康检查,最长等待时间:{timeout}秒")
 
+    # 第一阶段: 等待 /health 返回 200
     while True:
         elapsed = int(time.time() - start_time)
 
@@ -123,7 +126,7 @@ def wait_for_health_check(timeout=900, interval=10):
         # 发送健康检查请求
         try:
             result = subprocess.run(
-                f'curl -s -o /dev/null -w "%{{http_code}}" -m 2 {endpoint}',
+                f'curl -s -o /dev/null -w "%{{http_code}}" -m 2 {health_endpoint}',
                 shell=True,
                 capture_output=True,
                 text=True
@@ -135,9 +138,41 @@ def wait_for_health_check(timeout=900, interval=10):
         print(f"\r服务健康检查中... 已等待 {elapsed} 秒,当前状态码:{http_code}", end="", flush=True)
 
         if http_code == "200":
-            print(f"\n服务启动成功!耗时 {elapsed} 秒")
-            return True
+            print(f"\n健康检查通过!耗时 {elapsed} 秒")
+            break
 
+        time.sleep(interval)
+
+    # 第二阶段: 等待 /v1/models 返回有效模型列表,确保模型完全就绪
+    print("开始验证模型是否就绪...")
+    while True:
+        elapsed = int(time.time() - start_time)
+
+        # 超时判断
+        if elapsed >= timeout:
+            print(f"\n模型就绪超时:经过 {timeout//60} 分钟模型仍未就绪!")
+            return False
+
+        # 检查模型列表
+        try:
+            result = subprocess.run(
+                f'curl -s -m 5 {models_endpoint}',
+                shell=True,
+                capture_output=True,
+                text=True
+            )
+            response = result.stdout.strip()
+            if response:
+                data = json.loads(response)
+                # 检查是否有模型数据
+                if data.get("data") and len(data["data"]) > 0:
+                    model_id = data["data"][0].get("id", "unknown")
+                    print(f"\n模型就绪!模型ID: {model_id}, 总耗时 {elapsed} 秒")
+                    return True
+        except (json.JSONDecodeError, Exception) as e:
+            pass
+
+        print(f"\r等待模型就绪中... 已等待 {elapsed} 秒", end="", flush=True)
         time.sleep(interval)
 
 
