@@ -306,7 +306,8 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
-        h2d_copy(dst=param, src=loaded_weight)
+        loaded_weight = get_tensor(loaded_weight)
+        param.copy_(loaded_weight, False)
 
     return fn
 
