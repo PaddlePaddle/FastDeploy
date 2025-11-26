@@ -87,6 +87,11 @@ def _install_splitwise_stubs(monkeypatch):
     utils_stub.data_processor_logger = _Logger()
     utils_stub.scheduler_logger = _Logger()
     utils_stub.llm_logger = _Logger()
+
+    def _to_tensor(x, *_, **__):
+        return x
+
+    utils_stub.to_tensor = _to_tensor
     monkeypatch.setitem(sys.modules, "fastdeploy.utils", utils_stub)
 
     metrics_pkg = types.ModuleType("fastdeploy.metrics")
