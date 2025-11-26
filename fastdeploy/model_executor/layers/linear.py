@@ -870,10 +870,7 @@ class RowParallelLinear(LinearBase):
             skip_quant=skip_quant,
             weight_dtype=weight_dtype,
         )
-        if add_bias:
-            assert with_bias, "with_bias must be True when add_bias is True."
-            if self.tp_size > 1:
-                set_weight_attrs(self.bias, {"tp_row_bias": True})
+
         assert self.quant_method is not None
         create_weight_kwargs = dict(
             layer=self,
@@ -889,6 +886,11 @@ class RowParallelLinear(LinearBase):
         self.quant_method.create_weights(**create_weight_kwargs)
 
         self.reduce_results = reduce_results and not self.split_token
+
+        if add_bias:
+            assert with_bias, "with_bias must be True when add_bias is True."
+            if self.tp_size > 1 and self.reduce_results:
+                set_weight_attrs(self.bias, {"tp_row_bias": True})
 
     def all2all_transpose(self, x: paddle.Tensor) -> paddle.Tensor:
         token_num = x.shape[0]

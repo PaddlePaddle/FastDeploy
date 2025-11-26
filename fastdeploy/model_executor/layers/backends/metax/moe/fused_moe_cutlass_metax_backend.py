@@ -20,7 +20,6 @@ import paddle
 from paddle import nn
 from paddle.nn.quant import weight_quantize
 
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import (
     MoEMethodBase,
     UnquantizedFusedMoEMethod,
@@ -171,9 +170,6 @@ class MetaxCutlassUnquantizedFusedMoEMethod(UnquantizedFusedMoEMethod):
                 False,
             )
 
-        if layer.reduce_results and layer.tp_size > 1:
-            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out, layer.fd_config.parallel_config.tp_group)
-
         return fused_moe_out
 
 
@@ -300,9 +296,6 @@ class MetaxCutlassMoEMethod(MoEMethodBase):
                 True,
                 False,
             )
-
-        if layer.reduce_results and layer.tp_size > 1:
-            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out, layer.fd_config.parallel_config.tp_group)
 
         return fused_moe_out
 
