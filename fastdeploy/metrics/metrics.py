@@ -161,8 +161,6 @@ class MetricsManager:
     available_gpu_resource: "Gauge"
     requests_number: "Counter"
     send_cache_failed_num: "Counter"
-    first_token_latency: "Gauge"
-    infer_latency: "Gauge"
     cache_config_info: "Gauge"
     available_batch_size: "Gauge"
     hit_req_rate: "Gauge"
