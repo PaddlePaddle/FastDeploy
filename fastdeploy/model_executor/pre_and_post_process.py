@@ -353,6 +353,7 @@ def post_process_specualate(
                 model_output.prompt_lens,
                 3,  # mtype
                 model_output.mp_rank,
+                save_each_rank,
             )
 
     # Update pre_ids through accept tokens

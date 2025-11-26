@@ -706,7 +706,7 @@ class MTPProposer(Proposer):
                 self.parallel_config.use_ep,
             )
 
-    def _propose(self, step_use_cudagraph: bool = False):
+    def _propose(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False):
         """
         Main process for MTP inference.
         Args:
@@ -831,7 +831,13 @@ class MTPProposer(Proposer):
                     self.model_inputs,
                 )
 
-                if substep == 0 and sampler_output.logprobs_tensors is not None:
+                print(f"[MTPProposer] is_dummy_run: {is_dummy_run}")
+                if (
+                    not is_dummy_run
+                    and self.parallel_config.tensor_parallel_rank == 0
+                    and substep == 0
+                    and sampler_output.logprobs_tensors is not None
+                ):
                     real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
                     speculate_save_output_topk(
                         sampler_output.sampled_token_ids,
@@ -845,6 +851,7 @@ class MTPProposer(Proposer):
                         self.model_inputs["prompt_lens"],
                         4,  # mtype
                         self.local_rank,
+                        self.parallel_config.use_ep,
                     )
 
                 if self.parallel_config.tensor_parallel_size > 1:
@@ -952,10 +959,12 @@ class MTPProposer(Proposer):
         self.target_model_inputs["draft_tokens"][:] = draft_tokens.cuda()
         self.target_model_inputs["seq_lens_this_time"][:] = seq_lens_this_time.cuda()
 
-    def _run_impl(self, full_hidden_states: paddle.Tensor, step_use_cudagraph: bool = False):
+    def _run_impl(
+        self, full_hidden_states: paddle.Tensor, step_use_cudagraph: bool = False, is_dummy_run: bool = False
+    ):
         """Execute Draft Model"""
         self._prepare_inputs(full_hidden_states)
-        self._propose(step_use_cudagraph=step_use_cudagraph)
+        self._propose(step_use_cudagraph=step_use_cudagraph, is_dummy_run=is_dummy_run)
         self._update_status()
         if self.hybrid_mode:
             self._extend_draft_token_with_ngram_match()
