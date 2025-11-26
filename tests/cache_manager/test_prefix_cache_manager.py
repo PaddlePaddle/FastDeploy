@@ -17,6 +17,7 @@ import threading
 import types
 import unittest
 from functools import partial
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
