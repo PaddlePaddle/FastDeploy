@@ -645,7 +645,16 @@ class FusedMoE(nn.Layer):
                 out = self.forward_normal(x, gate)
         return out
 
-    def forward_chunked_moe(self, x, gate):
+    def forward_chunked_moe(self, x: paddle.Tensor, gate: nn.Layer):
+        """
+        Split input to multi chunk to reduce the memory usage of moe.
+
+        Args:
+            x (Tensor): Input tensor to the moe layer.
+
+        Returns:
+            Tensor: Output tensor.s
+        """
         chunk_size = self.fd_config.parallel_config.chunked_moe_size
         token_num = x.shape[0]
 
@@ -669,6 +678,16 @@ class FusedMoE(nn.Layer):
 
         return out
 
-    def forward_normal(self, x, gate):
+    def forward_normal(self, x: paddle.Tensor, gate: nn.Layer):
+        """
+        Normal mode of forward.
+
+        Args:
+            x (Tensor): Input tensor to the moe layer.
+
+        Returns:
+            Tensor: Output tensor.s
+
+        """
         out = self.quant_method.apply(self, x, gate)
         return out

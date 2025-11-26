@@ -15,6 +15,8 @@
 """
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Optional
 
 from paddle import nn
 
@@ -23,9 +25,6 @@ from fastdeploy.utils import get_logger
 from fastdeploy.worker.output import ModelRunnerOutput
 
 logger = get_logger("model_runner_base", "model_runner_base.log")
-
-from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -36,7 +35,7 @@ class DistributedStatus:
 
 @dataclass
 class DistributedOut:
-    if_only_decode: bool = None
+    if_only_decode: bool = True
     max_moe_num_chunk: Optional[int] = None
 
 

@@ -86,14 +86,6 @@ class MockQuantMethod:
         return x
 
 
-class MockFusedMoe:
-    def __init__(self):
-        self.quant_method = MockQuantMethod()
-
-    def forward(self, x, gate):
-        return self.quant_method.apply(x, gate)
-
-
 class TestChunkedMoE(unittest.TestCase):
     def setUp(self) -> None:
         self.model_runner = self.setup_model_runner()

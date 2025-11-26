@@ -285,6 +285,7 @@ class GPUModelRunner(ModelRunnerBase):
         # Update Batch type for cuda graph for if_only_decode
         if_only_decode = all(dist_status.only_decode for dist_status in dist_status_list)
 
+        max_moe_num_chunk = None
         if self.fd_config.parallel_config.enable_chunked_moe:
             max_moe_num_chunk = max(dist_status.moe_num_chunk for dist_status in dist_status_list)
 

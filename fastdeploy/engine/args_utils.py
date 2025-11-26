@@ -890,7 +890,7 @@ class EngineArgs:
             "--chunked-moe-size",
             type=int,
             default=EngineArgs.chunked_moe_size,
-            help="chunked size of moe input.",
+            help="Chunked size of moe input.",
         )
 
         # Load group
