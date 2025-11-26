@@ -299,6 +299,8 @@ def _build_stream_transfer_data(
             stream_transfer_datas.append(stream_transfer_data)
     elif pooler_outputs is not None:
         for bid, pooler_output in enumerate(pooler_outputs):
+            if pooler_output is None:
+                continue
             if pooler_output.dtype == paddle.bfloat16:
                 pooler_output = pooler_output.astype("float32")
 
@@ -919,5 +921,6 @@ def post_process_pooling(
 
     if not skip_save_output:
         if save_each_rank or model_output.mp_rank == 0:
+            print("pooler_output.outputs", pooler_output.outputs)
             output = _build_stream_transfer_data(output_tokens=None, pooler_outputs=pooler_output.outputs)
             async_output_queue.put(output)

@@ -2362,8 +2362,8 @@ class GPUModelRunner(ModelRunnerBase):
         seq_lens_cpu = self.share_inputs["seq_lens_this_time"][:num_running_requests]
         pooler_output: list[Optional[paddle.Tensor]] = []
 
-        for raw_output, seq_len, prompt_len in zip(raw_pooler_output, seq_lens_cpu, pooling_metadata.prompt_lens):
-            output = raw_output.data if int(seq_len) == int(prompt_len) else None
+        for seq_len, prompt_len in zip(seq_lens_cpu, pooling_metadata.prompt_lens):
+            output = raw_pooler_output[0].data if int(seq_len) == int(prompt_len) else None
             pooler_output.append(output)
 
         pooler_output = PoolerOutput(
