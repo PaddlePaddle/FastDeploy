@@ -18,11 +18,11 @@ class TestReorderSplitPrefillAndDecode(unittest.TestCase):
         x_remove_padding = paddle.to_tensor([1, 2, 3, 4, 5, 6], dtype="int64", place=self.place)
         batch_id_per_token = paddle.to_tensor([0, 0, 1, 1, 2, 2], dtype="int32", place=self.place)
         cu_seqlens_q = paddle.to_tensor([0, 2, 4, 6], dtype="int32", place=self.place)
-        prompt_lens = paddle.to_tensor([1, 1, 1], dtype="int64", place=self.place)
+        seq_lens_encoder = paddle.to_tensor([1, 1, 1], dtype="int32", place=self.place)
 
         # Call the operator
         x_reorder, batch_id_reorder, num_decode = reorder_split_prefill_and_decode(
-            x_remove_padding, batch_id_per_token, cu_seqlens_q, prompt_lens
+            x_remove_padding, batch_id_per_token, cu_seqlens_q, seq_lens_encoder
         )
 
         # Verify outputs
@@ -37,10 +37,10 @@ class TestReorderSplitPrefillAndDecode(unittest.TestCase):
         x_remove_padding = paddle.to_tensor([10, 11, 12, 20, 21, 22], dtype="int64", place=self.place)
         batch_id_per_token = paddle.to_tensor([0, 0, 0, 1, 1, 1], dtype="int32", place=self.place)
         cu_seqlens_q = paddle.to_tensor([0, 3, 6], dtype="int32", place=self.place)
-        prompt_lens = paddle.to_tensor([1, 2], dtype="int64", place=self.place)
+        seq_lens_encoder = paddle.to_tensor([1, 2], dtype="int32", place=self.place)
 
         x_reorder, _, num_decode = reorder_split_prefill_and_decode(
-            x_remove_padding, batch_id_per_token, cu_seqlens_q, prompt_lens
+            x_remove_padding, batch_id_per_token, cu_seqlens_q, seq_lens_encoder
         )
 
         self.assertEqual(num_decode.numpy()[0], 3)
@@ -73,10 +73,10 @@ class TestReorderSplitPrefillAndDecode(unittest.TestCase):
             [0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 3, 4], dtype="int32", place=self.place
         )
         cu_seqlens_q = paddle.to_tensor([0, 3, 7, 9, 14, 15], dtype="int32", place=self.place)
-        prompt_lens = paddle.to_tensor([1, 2, 1, 3, 1], dtype="int64", place=self.place)
+        seq_lens_encoder = paddle.to_tensor([1, 2, 1, 3, 1], dtype="int32", place=self.place)
 
         x_reorder, batch_id_reorder, num_decode = reorder_split_prefill_and_decode(
-            x_remove_padding, batch_id_per_token, cu_seqlens_q, prompt_lens
+            x_remove_padding, batch_id_per_token, cu_seqlens_q, seq_lens_encoder
         )
 
         # Verify outputs

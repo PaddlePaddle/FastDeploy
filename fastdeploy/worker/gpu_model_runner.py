@@ -1288,7 +1288,7 @@ class GPUModelRunner(ModelRunnerBase):
         # Reorder inputs to split prefill and decode tokens
         if self.attn_backends and getattr(self.attn_backends[0].get_attention_meta(), "enable_ids_reorder", False):
             ids_remove_padding, batch_id_per_token, num_decode = reorder_split_prefill_and_decode(
-                ids_remove_padding, batch_id_per_token, cu_seqlens_q, self.share_inputs["prompt_lens"]
+                ids_remove_padding, batch_id_per_token, cu_seqlens_q, self.share_inputs["seq_lens_encoder"]
             )
             self.share_inputs["num_decode"].copy_(num_decode, False)
         else:

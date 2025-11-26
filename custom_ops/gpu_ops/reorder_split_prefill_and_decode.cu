@@ -23,17 +23,17 @@
 // Helper function to find decode token position
 __device__ int find_decode_position(int output_idx,
                                     const int* cu_seqlens,
-                                    const int64_t* prompt_lens,
+                                    const int* seq_lens_encoder,
                                     int batch_size) {
   int remaining = output_idx;
   for (int i = 0; i < batch_size; ++i) {
     int seq_start = cu_seqlens[i];
     int seq_end = cu_seqlens[i + 1];
-    int prompt_len = prompt_lens[i];
-    int decode_in_seq = seq_end - seq_start - prompt_len;
+    int prefill_token_len = seq_lens_encoder[i];
+    int decode_in_seq = seq_end - seq_start - prefill_token_len;
 
     if (remaining < decode_in_seq) {
-      return seq_start + prompt_len + remaining;
+      return seq_start + prefill_token_len + remaining;
     }
     remaining -= decode_in_seq;
   }
@@ -43,17 +43,17 @@ __device__ int find_decode_position(int output_idx,
 // Helper function to find prefill token position
 __device__ int find_prefill_position(int output_idx,
                                      const int* cu_seqlens,
-                                     const int64_t* prompt_lens,
+                                     const int* seq_lens_encoder,
                                      int batch_size) {
   int remaining = output_idx;
   for (int i = 0; i < batch_size; ++i) {
     int seq_start = cu_seqlens[i];
-    int prompt_len = prompt_lens[i];
+    int prefill_token_len = seq_lens_encoder[i];
 
-    if (remaining < prompt_len) {
+    if (remaining < prefill_token_len) {
       return seq_start + remaining;
     }
-    remaining -= prompt_len;
+    remaining -= prefill_token_len;
   }
   return -1;  // Should not reach here
 }
@@ -64,7 +64,7 @@ __global__ void reorder_decode_kernel(const int64_t* x,
                                       const int* batch_ids,
                                       int* batch_ids_out,
                                       const int* cu_seqlens,
-                                      const int64_t* prompt_lens,
+                                      const int* seq_lens_encoder,
                                       int batch_size,
                                       int output_offset,
                                       int max_output) {
@@ -73,7 +73,7 @@ __global__ void reorder_decode_kernel(const int64_t* x,
 
   // Find corresponding input position for this decode token
   int input_pos =
-      find_decode_position(idx, cu_seqlens, prompt_lens, batch_size);
+      find_decode_position(idx, cu_seqlens, seq_lens_encoder, batch_size);
 
   x_out[output_offset + idx] = x[input_pos];
   batch_ids_out[output_offset + idx] = batch_ids[input_pos];
@@ -82,14 +82,14 @@ __global__ void reorder_decode_kernel(const int64_t* x,
 // CUDA kernel for reordering prefill tokens
 
 __global__ void count_decode_tokens_kernel(const int* cu_seqlens,
-                                           const int64_t* prompt_lens,
+                                           const int* seq_lens_encoder,
                                            int batch_size,
                                            int64_t* total_decode) {
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx >= batch_size) return;
 
   int64_t seq_len = cu_seqlens[idx + 1] - cu_seqlens[idx];
-  int64_t diff = seq_len - prompt_lens[idx];
+  int64_t diff = seq_len - seq_lens_encoder[idx];
   assert(diff >= 0);
   atomicAdd(reinterpret_cast<unsigned long long*>(total_decode),
             static_cast<unsigned long long>(diff));
@@ -100,14 +100,14 @@ __global__ void reorder_prefill_kernel(const int64_t* x,
                                        const int* batch_ids,
                                        int* batch_ids_out,
                                        const int* cu_seqlens,
-                                       const int64_t* prompt_lens,
+                                       const int* seq_lens_encoder,
                                        int batch_size,
                                        int output_offset,
                                        int total_prefill) {
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx >= total_prefill) return;
   int input_pos =
-      find_prefill_position(idx, cu_seqlens, prompt_lens, batch_size);
+      find_prefill_position(idx, cu_seqlens, seq_lens_encoder, batch_size);
   x_out[output_offset + idx] = x[input_pos];
   batch_ids_out[output_offset + idx] = batch_ids[input_pos];
 }
@@ -116,7 +116,7 @@ std::vector<std::vector<int64_t>> ReorderSplitPrefillAndDecodeInferShape(
     const std::vector<int64_t>& x_remove_padding_shape,
     const std::vector<int64_t>& batch_id_per_token_shape,
     const std::vector<int64_t>& cu_seqlens_q_shape,
-    const std::vector<int64_t>& prompt_lens_shape) {
+    const std::vector<int64_t>& seq_lens_encoder_shape) {
   int64_t total_tokens = x_remove_padding_shape[0];
   return {{total_tokens}, {total_tokens}, {1}};
 }
@@ -125,7 +125,7 @@ std::vector<paddle::DataType> ReorderSplitPrefillAndDecodeInferDtype(
     const paddle::DataType& x_remove_padding_dtype,
     const paddle::DataType& batch_id_per_token_dtype,
     const paddle::DataType& cu_seqlens_q_dtype,
-    const paddle::DataType& prompt_lens_dtype) {
+    const paddle::DataType& seq_lens_encoder_dtype) {
   return {x_remove_padding_dtype,
           batch_id_per_token_dtype,
           paddle::DataType::INT64};
@@ -135,7 +135,7 @@ std::vector<paddle::Tensor> ReorderSplitPrefillAndDecode(
     const paddle::Tensor& x_remove_padding,
     const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& cu_seqlens_q,
-    const paddle::Tensor& prompt_lens) {
+    const paddle::Tensor& seq_lens_encoder) {
 // Get device info
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
   auto dev_ctx = static_cast<const phi::CustomContext*>(
@@ -147,7 +147,7 @@ std::vector<paddle::Tensor> ReorderSplitPrefillAndDecode(
 #endif
 
   // Get input data
-  const int64_t* prompt_lens_ptr = prompt_lens.data<int64_t>();
+  const int* seq_lens_encoder_ptr = seq_lens_encoder.data<int>();
   const int* batch_id_ptr = batch_id_per_token.data<int>();
   const int* cu_seqlens_ptr = cu_seqlens_q.data<int>();
   int batch_size = cu_seqlens_q.shape()[0] - 1;
@@ -178,7 +178,7 @@ std::vector<paddle::Tensor> ReorderSplitPrefillAndDecode(
     int grid_size = (batch_size + block_size - 1) / block_size;
     count_decode_tokens_kernel<<<grid_size, block_size, 0, stream>>>(
         cu_seqlens_ptr,
-        prompt_lens_ptr,
+        seq_lens_encoder_ptr,
         batch_size,
         num_decode_tokens.data<int64_t>());
     cudaError_t err = cudaGetLastError();
@@ -207,7 +207,7 @@ std::vector<paddle::Tensor> ReorderSplitPrefillAndDecode(
           batch_id_ptr,
           batch_id_reorder_ptr,
           cu_seqlens_ptr,
-          prompt_lens_ptr,
+          seq_lens_encoder_ptr,
           batch_size,
           0,
           total_decode);
@@ -230,7 +230,7 @@ std::vector<paddle::Tensor> ReorderSplitPrefillAndDecode(
           batch_id_ptr,
           batch_id_reorder_ptr,
           cu_seqlens_ptr,
-          prompt_lens_ptr,
+          seq_lens_encoder_ptr,
           batch_size,
           total_decode,
           total_prefill);
@@ -248,7 +248,7 @@ PD_BUILD_STATIC_OP(reorder_split_prefill_and_decode)
     .Inputs({"x_remove_padding",
              "batch_id_per_token",
              "cu_seqlens_q",
-             "prompt_lens"})
+             "seq_lens_encoder"})
     .Outputs({"x_reorder", "batch_id_reorder", "num_decode_tokens"})
     .SetKernelFn(PD_KERNEL(ReorderSplitPrefillAndDecode))
     .SetInferShapeFn(PD_INFER_SHAPE(ReorderSplitPrefillAndDecodeInferShape))
