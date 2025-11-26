@@ -15,7 +15,6 @@
 """
 
 import copy
-import os
 import threading
 import time
 import traceback
@@ -29,7 +28,7 @@ import zmq
 
 from fastdeploy import envs
 from fastdeploy.engine.request import CompletionOutput, RequestMetrics, RequestOutput
-from fastdeploy.inter_communicator import IPCSignal, ZmqIpcServer
+from fastdeploy.inter_communicator import ZmqIpcServer
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import llm_logger, spec_logger
@@ -96,22 +95,22 @@ class TokenProcessor:
         self.num_accept_requests_per_head = [
             0,
         ] * MAX_DRAFT_TOKENS
-        prefill_time_data = np.zeros([100], dtype=np.float32)
-        self.prefill_time_signal = IPCSignal(
-            name="prefill_time_signal",
-            array=prefill_time_data,
-            dtype=np.float32,
-            suffix=os.getpid(),
-            create=True,
-        )
+        # prefill_time_data = np.zeros([100], dtype=np.float32)
+        # self.prefill_time_signal = IPCSignal(
+        #     name="prefill_time_signal",
+        #     array=prefill_time_data,
+        #     dtype=np.float32,
+        #     suffix=os.getpid(),
+        #     create=True,
+        # )
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.prefill_result_status = dict()
         self._finalizer = weakref.finalize(self, self._cleanup_resources)
 
     def _cleanup_resources(self):
         """Cleaning up shared memory resources"""
-        if hasattr(self, "prefill_time_signal"):
-            self.prefill_time_signal.clear()
+        # if hasattr(self, "prefill_time_signal"):
+        #     self.prefill_time_signal.clear()
 
         if hasattr(self, "executor"):
             self.executor.shutdown(wait=False)
@@ -210,7 +209,7 @@ class TokenProcessor:
                     arrival_time=task.arrival_time,
                     inference_start_time=task.inference_start_time,
                     first_token_time=time.time() - task.inference_start_time,
-                    time_in_queue=task.schedule_start_time - task.preprocess_end_time,
+                    time_in_queue=task.inference_start_time - task.preprocess_end_time,
                     preprocess_cost_time=task.preprocess_end_time - task.preprocess_start_time,
                     request_start_time=task.arrival_time,
                 )
@@ -329,13 +328,13 @@ class TokenProcessor:
                     if self.output_tokens[0, 0] == -2:
                         continue
                     llm_logger.debug(f"rank_id {rank_id} self.output_tokens[0, 0] {self.output_tokens[0, 0]}")
-                self._process_prefill_metrics()
+                # self._process_prefill_metrics()
                 self._process_batch_output()
             except Exception as e:
                 llm_logger.info(f"while get input_data error: {e} {traceback.format_exc()!s}")
 
-    def _process_prefill_metrics(self):
-        """Asynchronous processing prefill time indicators"""
+        # def _process_prefill_metrics(self):
+        #     """Asynchronous processing prefill time indicators"""
 
         def process_metrics():
             try:
@@ -349,7 +348,7 @@ class TokenProcessor:
             except Exception as e:
                 llm_logger.error(f"Error processing prefill metrics: {e}, {str(traceback.format_exc())}")
 
-        self.executor.submit(process_metrics)
+    #     self.executor.submit(process_metrics)
 
     def postprocess(self, batch_result):
         """
@@ -517,7 +516,7 @@ class TokenProcessor:
                     inference_start_time=task.inference_start_time,
                     model_execute_time=time.time() - task.inference_start_time,
                     first_token_time=time.time() - task.inference_start_time,
-                    time_in_queue=task.schedule_start_time - task.preprocess_end_time,
+                    time_in_queue=task.inference_start_time - task.preprocess_end_time,
                     preprocess_cost_time=task.preprocess_end_time - task.preprocess_start_time,
                     request_start_time=task.arrival_time,
                 )
@@ -611,9 +610,9 @@ class TokenProcessor:
     def _record_first_token_metrics(self, task, current_time):
         """Record metrics for first token"""
         task.first_token_time = current_time
-        main_process_metrics.set_value("first_token_latency", current_time - task.inference_start_time)
-        main_process_metrics.obs_value("time_to_first_token", current_time - task.inference_start_time)
-        main_process_metrics.obs_value("request_queue_time", task.schedule_start_time - task.preprocess_end_time)
+        main_process_metrics.obs_value("time_to_first_token", current_time - task.arrival_time)
+        main_process_metrics.obs_value("request_queue_time", task.inference_start_time - task.preprocess_end_time)
+        main_process_metrics.obs_value("request_prefill_time", current_time - task.inference_start_time)
 
     def _record_completion_metrics(self, task, current_time):
         """Record metrics when request completes"""
@@ -623,7 +622,6 @@ class TokenProcessor:
 
         main_process_metrics.dec_value("num_requests_running", 1)
         main_process_metrics.inc_value("request_success_total", 1)
-        main_process_metrics.set_value("infer_latency", current_time - task.inference_start_time)
         main_process_metrics.obs_value("request_inference_time", current_time - task.inference_start_time)
         main_process_metrics.obs_value("request_generation_tokens", self.tokens_counter[task.request_id])
 

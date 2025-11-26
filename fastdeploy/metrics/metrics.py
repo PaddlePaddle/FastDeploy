@@ -32,10 +32,10 @@ from prometheus_client import (
 )
 from prometheus_client.registry import Collector
 
-from fastdeploy.metrics import build_1_2_5_buckets
-from fastdeploy.metrics.work_metrics import work_process_metrics
-from fastdeploy.metrics.interface import MetricsManagerInterface
 from fastdeploy import envs
+from fastdeploy.metrics import build_1_2_5_buckets
+from fastdeploy.metrics.interface import MetricsManagerInterface
+from fastdeploy.metrics.work_metrics import work_process_metrics
 
 
 def cleanup_prometheus_files(is_main: bool, instance_id: str = None):
@@ -52,6 +52,7 @@ def cleanup_prometheus_files(is_main: bool, instance_id: str = None):
     os.makedirs(prom_dir, exist_ok=True)
 
     return prom_dir
+
 
 class SimpleCollector(Collector):
     """
@@ -90,8 +91,8 @@ def get_filtered_metrics(exclude_names: Set[str], extra_register_func=None) -> s
     :param exclude_names: metric.name set to be excluded
     :param extra_register_func: optional, main process custom metric registration method
     :return: filtered metric text (str)
-    
-    generate_latest(filtered_registry) <- filtered_registry.collect <- SimpleCollector.collect 
+
+    generate_latest(filtered_registry) <- filtered_registry.collect <- SimpleCollector.collect
       <- base_registry.collect <- MultiProcessCollector.collect
     """
     # Register a MultiProcessCollector to base registry
@@ -147,6 +148,7 @@ class MetricsManager(MetricsManagerInterface):
     request_queue_time: "Histogram"
     gpu_cache_usage_perc: "Gauge"
     generation_tokens_total: "Counter"
+    prompt_tokens_total: "Counter"
     request_prefill_time: "Histogram"
     request_decode_time: "Histogram"
     request_generation_tokens: "Histogram"
@@ -171,8 +173,6 @@ class MetricsManager(MetricsManagerInterface):
     available_gpu_resource: "Gauge"
     requests_number: "Counter"
     send_cache_failed_num: "Counter"
-    first_token_latency: "Gauge"
-    infer_latency: "Gauge"
     cache_config_info: "Gauge"
     available_batch_size: "Gauge"
     hit_req_rate: "Gauge"
@@ -251,6 +251,12 @@ class MetricsManager(MetricsManagerInterface):
             "type": Gauge,
             "name": "fastdeploy:gpu_cache_usage_perc",
             "description": "GPU KV-cache usage. 1 means 100 percent usage",
+            "kwargs": {},
+        },
+        "prompt_tokens_total": {
+            "type": Counter,
+            "name": "fastdeploy:prompt_tokens_total",
+            "description": "Total number of prompt tokens processed",
             "kwargs": {},
         },
         "generation_tokens_total": {
@@ -354,18 +360,6 @@ class MetricsManager(MetricsManagerInterface):
             "type": Counter,
             "name": "fastdeploy:send_cache_failed_num",
             "description": "Total number of failures of sending cache",
-            "kwargs": {},
-        },
-        "first_token_latency": {
-            "type": Gauge,
-            "name": "fastdeploy:first_token_latency",
-            "description": "Latest time to first token in seconds",
-            "kwargs": {},
-        },
-        "infer_latency": {
-            "type": Gauge,
-            "name": "fastdeploy:infer_latency",
-            "description": "Latest time to generate one token in seconds",
             "kwargs": {},
         },
         "available_batch_size": {
@@ -517,7 +511,7 @@ class MetricsManager(MetricsManagerInterface):
         if workers == 1:
             registry.register(work_process_metrics.e2e_request_latency)
             registry.register(work_process_metrics.request_params_max_tokens)
-            registry.register(work_process_metrics.prompt_tokens_total)
+            # registry.register(work_process_metrics.prompt_tokens_total)
             registry.register(work_process_metrics.request_prompt_tokens)
         if hasattr(main_process_metrics, "spec_decode_draft_acceptance_rate"):
             self.register_speculative_metrics(registry)
