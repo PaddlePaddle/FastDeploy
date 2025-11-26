@@ -1837,8 +1837,7 @@ class GPUModelRunner(ModelRunnerBase):
                 model_output = model_output[: self.real_token_num]
 
             if self.is_pooling_model:
-                hidden_states = model_output
-                self._dummy_pooler_run(hidden_states, model_output)
+                self._dummy_pooler_run(model_output, model_output)
                 break
             else:
                 hidden_states = rebuild_padding(
@@ -2163,8 +2162,7 @@ class GPUModelRunner(ModelRunnerBase):
         prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
 
         if self.is_pooling_model:
-            hidden_states = model_output
-            pooler_output = self._pool(hidden_states, num_running_requests)
+            pooler_output = self._pool(model_output, num_running_requests)
 
             model_output_data = ModelOutputData(
                 next_tokens=self.share_inputs["next_tokens"],
