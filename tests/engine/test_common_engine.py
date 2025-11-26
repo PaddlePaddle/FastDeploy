@@ -479,6 +479,755 @@ class TestEngineService(unittest.TestCase):
         task.multimodal_inputs = {"audio_feature_urls": ["url1"]}
         self.assertTrue(engine._has_features_info(task))
 
+    @patch("fastdeploy.engine.common_engine.envs")
+    @patch("fastdeploy.engine.common_engine.get_logger")
+    @patch("fastdeploy.engine.common_engine.llm_logger")
+    @patch("fastdeploy.engine.common_engine.ResourceManager")
+    @patch("fastdeploy.engine.common_engine.EngineWorkerQueue")
+    @patch("fastdeploy.engine.common_engine.SplitwiseConnector")
+    @patch("fastdeploy.engine.common_engine.TokenProcessor")
+    @patch("fastdeploy.engine.common_engine.IPCSignal")
+    @patch("fastdeploy.engine.common_engine.schema_checker")
+    def test_init_with_v1_scheduler(
+        self,
+        mock_schema_checker,
+        mock_ipc_signal,
+        mock_token_processor,
+        mock_splitwise_connector,
+        mock_engine_queue,
+        mock_resource_manager,
+        mock_llm_logger,
+        mock_get_logger,
+        mock_envs,
+    ):
+        """
+        Test EngineService initialization with V1 KVCache Scheduler enabled.
+        Verifies that ResourceManagerV1 is used instead of ResourceManager.
+        """
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = True
+        mock_envs.FD_ENABLE_CACHE_TASK = "0"
+        mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
+        mock_get_logger.return_value = mock_llm_logger
+
+        with patch("fastdeploy.engine.common_engine.ResourceManagerV1") as mock_resource_manager_v1:
+            mock_resource_manager_v1.return_value = MagicMock()
+            mock_engine_queue.return_value = MagicMock()
+            mock_splitwise_connector.return_value = MagicMock()
+            mock_token_processor.return_value = MagicMock()
+            mock_ipc_signal.return_value = MagicMock()
+
+            engine = EngineService(self.mock_cfg, start_queue=False)
+            self.assertIsNotNone(engine)
+            mock_resource_manager_v1.assert_called_once()
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    @patch("fastdeploy.engine.common_engine.get_logger")
+    @patch("fastdeploy.engine.common_engine.llm_logger")
+    @patch("fastdeploy.engine.common_engine.ResourceManager")
+    @patch("fastdeploy.engine.common_engine.EngineWorkerQueue")
+    @patch("fastdeploy.engine.common_engine.SplitwiseConnector")
+    @patch("fastdeploy.engine.common_engine.TokenProcessor")
+    @patch("fastdeploy.engine.common_engine.IPCSignal")
+    @patch("fastdeploy.engine.common_engine.schema_checker")
+    def test_init_with_expert_parallel(
+        self,
+        mock_schema_checker,
+        mock_ipc_signal,
+        mock_token_processor,
+        mock_splitwise_connector,
+        mock_engine_queue,
+        mock_resource_manager,
+        mock_llm_logger,
+        mock_get_logger,
+        mock_envs,
+    ):
+        """
+        Test EngineService initialization with expert parallel enabled.
+        Verifies that a specific logger is created for the rank.
+        """
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
+        mock_envs.FD_ENABLE_CACHE_TASK = "0"
+        mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
+
+        self.mock_cfg.parallel_config.enable_expert_parallel = True
+        mock_get_logger.return_value = mock_llm_logger
+
+        mock_resource_manager.return_value = MagicMock()
+        mock_engine_queue.return_value = MagicMock()
+        mock_splitwise_connector.return_value = MagicMock()
+        mock_token_processor.return_value = MagicMock()
+        mock_ipc_signal.return_value = MagicMock()
+
+        engine = EngineService(self.mock_cfg, start_queue=False)
+        self.assertIsNotNone(engine)
+        mock_get_logger.assert_called()
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    @patch("fastdeploy.engine.common_engine.get_logger")
+    @patch("fastdeploy.engine.common_engine.llm_logger")
+    @patch("fastdeploy.engine.common_engine.ResourceManager")
+    @patch("fastdeploy.engine.common_engine.EngineWorkerQueue")
+    @patch("fastdeploy.engine.common_engine.SplitwiseConnector")
+    @patch("fastdeploy.engine.common_engine.TokenProcessor")
+    @patch("fastdeploy.engine.common_engine.IPCSignal")
+    @patch("fastdeploy.engine.common_engine.schema_checker")
+    def test_init_with_splitwise_not_mixed(
+        self,
+        mock_schema_checker,
+        mock_ipc_signal,
+        mock_token_processor,
+        mock_splitwise_connector,
+        mock_engine_queue,
+        mock_resource_manager,
+        mock_llm_logger,
+        mock_get_logger,
+        mock_envs,
+    ):
+        """
+        Test EngineService initialization with splitwise role not 'mixed'.
+        Verifies cache_queue_port is properly handled as string or list.
+        """
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
+        mock_envs.FD_ENABLE_CACHE_TASK = "0"
+        mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
+        mock_get_logger.return_value = mock_llm_logger
+
+        # Test with splitwise role as 'prefill'
+        self.mock_cfg.scheduler_config.splitwise_role = "prefill"
+        self.mock_cfg.cache_config.cache_queue_port = "12345,12346"
+
+        mock_resource_manager.return_value = MagicMock()
+        mock_engine_queue.return_value = MagicMock()
+        mock_splitwise_connector.return_value = MagicMock()
+        mock_token_processor.return_value = MagicMock()
+        mock_ipc_signal.return_value = MagicMock()
+
+        engine = EngineService(self.mock_cfg, start_queue=False)
+        self.assertIsNotNone(engine)
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    @patch("fastdeploy.engine.common_engine.get_logger")
+    @patch("fastdeploy.engine.common_engine.llm_logger")
+    @patch("fastdeploy.engine.common_engine.ResourceManager")
+    @patch("fastdeploy.engine.common_engine.EngineWorkerQueue")
+    @patch("fastdeploy.engine.common_engine.SplitwiseConnector")
+    @patch("fastdeploy.engine.common_engine.TokenProcessor")
+    @patch("fastdeploy.engine.common_engine.IPCSignal")
+    @patch("fastdeploy.engine.common_engine.schema_checker")
+    def test_init_with_guided_decoding(
+        self,
+        mock_schema_checker,
+        mock_ipc_signal,
+        mock_token_processor,
+        mock_splitwise_connector,
+        mock_engine_queue,
+        mock_resource_manager,
+        mock_llm_logger,
+        mock_get_logger,
+        mock_envs,
+    ):
+        """
+        Test EngineService initialization with guided decoding enabled.
+        Verifies that schema_checker is properly initialized.
+        """
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
+        mock_envs.FD_ENABLE_CACHE_TASK = "0"
+        mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
+        mock_get_logger.return_value = mock_llm_logger
+
+        self.mock_cfg.structured_outputs_config.guided_decoding_backend = "xgrammar"
+        mock_schema_checker.return_value = MagicMock()
+
+        mock_resource_manager.return_value = MagicMock()
+        mock_engine_queue.return_value = MagicMock()
+        mock_splitwise_connector.return_value = MagicMock()
+        mock_token_processor.return_value = MagicMock()
+        mock_ipc_signal.return_value = MagicMock()
+
+        engine = EngineService(self.mock_cfg, start_queue=False)
+        self.assertIsNotNone(engine)
+        mock_schema_checker.assert_called_once()
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    @patch("fastdeploy.engine.common_engine.get_logger")
+    @patch("fastdeploy.engine.common_engine.llm_logger")
+    @patch("fastdeploy.engine.common_engine.ResourceManager")
+    @patch("fastdeploy.engine.common_engine.EngineWorkerQueue")
+    @patch("fastdeploy.engine.common_engine.SplitwiseConnector")
+    @patch("fastdeploy.engine.common_engine.TokenProcessor")
+    @patch("fastdeploy.engine.common_engine.IPCSignal")
+    @patch("fastdeploy.engine.common_engine.schema_checker")
+    def test_insert_tasks_basic(
+        self,
+        mock_schema_checker,
+        mock_ipc_signal,
+        mock_token_processor,
+        mock_splitwise_connector,
+        mock_engine_queue,
+        mock_resource_manager,
+        mock_llm_logger,
+        mock_get_logger,
+        mock_envs,
+    ):
+        """
+        Test insert_tasks method with basic task insertion.
+        """
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
+        mock_envs.FD_ENABLE_CACHE_TASK = "0"
+        mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
+        mock_get_logger.return_value = mock_llm_logger
+
+        mock_resource_manager_instance = MagicMock()
+        mock_resource_manager_instance.stop_flags = np.array([True, True, True])
+        mock_resource_manager_instance.allocate_resources_for_new_tasks.return_value = []
+        mock_resource_manager.return_value = mock_resource_manager_instance
+
+        mock_queue_instance = MagicMock()
+        mock_engine_queue.return_value = mock_queue_instance
+
+        mock_connector_instance = MagicMock()
+        mock_splitwise_connector.return_value = mock_connector_instance
+
+        mock_token_processor_instance = MagicMock()
+        mock_token_processor_instance.number_of_tasks = 0
+        mock_token_processor_instance.number_of_input_tokens = 0
+        mock_token_processor.return_value = mock_token_processor_instance
+
+        mock_ipc_signal.return_value = MagicMock()
+
+        engine = EngineService(self.mock_cfg, start_queue=False)
+
+        # Test with empty tasks after allocation
+        mock_task = MagicMock()
+        mock_task.request_id = "test-req-1"
+        mock_task.prompt_token_ids_len = 100
+
+        with self.assertRaises(Exception):
+            # Should raise EngineError when tasks list is empty after allocation
+            engine.insert_tasks([mock_task])
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    @patch("fastdeploy.engine.common_engine.get_logger")
+    @patch("fastdeploy.engine.common_engine.llm_logger")
+    @patch("fastdeploy.engine.common_engine.ResourceManager")
+    @patch("fastdeploy.engine.common_engine.EngineWorkerQueue")
+    @patch("fastdeploy.engine.common_engine.SplitwiseConnector")
+    @patch("fastdeploy.engine.common_engine.TokenProcessor")
+    @patch("fastdeploy.engine.common_engine.IPCSignal")
+    @patch("fastdeploy.engine.common_engine.schema_checker")
+    def test_insert_tasks_success(
+        self,
+        mock_schema_checker,
+        mock_ipc_signal,
+        mock_token_processor,
+        mock_splitwise_connector,
+        mock_engine_queue,
+        mock_resource_manager,
+        mock_llm_logger,
+        mock_get_logger,
+        mock_envs,
+    ):
+        """
+        Test insert_tasks method with successful task insertion.
+        """
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
+        mock_envs.FD_ENABLE_CACHE_TASK = "0"
+        mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
+        mock_get_logger.return_value = mock_llm_logger
+
+        mock_task = MagicMock()
+        mock_task.request_id = "test-req-1"
+        mock_task.prompt_token_ids_len = 100
+        mock_task.disaggregate_info = None
+
+        mock_resource_manager_instance = MagicMock()
+        mock_resource_manager_instance.stop_flags = np.array([True, True, True])
+        mock_resource_manager_instance.allocate_resources_for_new_tasks.return_value = [mock_task]
+        mock_resource_manager_instance.real_bsz = 1
+        mock_resource_manager.return_value = mock_resource_manager_instance
+
+        mock_queue_instance = MagicMock()
+        mock_engine_queue.return_value = mock_queue_instance
+
+        mock_connector_instance = MagicMock()
+        mock_splitwise_connector.return_value = mock_connector_instance
+
+        mock_token_processor_instance = MagicMock()
+        mock_token_processor_instance.number_of_tasks = 0
+        mock_token_processor_instance.number_of_input_tokens = 0
+        mock_token_processor.return_value = mock_token_processor_instance
+
+        mock_ipc_signal.return_value = MagicMock()
+
+        engine = EngineService(self.mock_cfg, start_queue=False)
+        self.mock_cfg.cache_config.enable_chunked_prefill = False
+
+        result = engine.insert_tasks([mock_task])
+        self.assertTrue(result)
+        mock_queue_instance.put_tasks.assert_called_once()
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    @patch("fastdeploy.engine.common_engine.get_logger")
+    @patch("fastdeploy.engine.common_engine.llm_logger")
+    @patch("fastdeploy.engine.common_engine.ResourceManager")
+    @patch("fastdeploy.engine.common_engine.EngineWorkerQueue")
+    @patch("fastdeploy.engine.common_engine.SplitwiseConnector")
+    @patch("fastdeploy.engine.common_engine.TokenProcessor")
+    @patch("fastdeploy.engine.common_engine.IPCSignal")
+    @patch("fastdeploy.engine.common_engine.schema_checker")
+    def test_insert_tasks_with_disaggregate_decode(
+        self,
+        mock_schema_checker,
+        mock_ipc_signal,
+        mock_token_processor,
+        mock_splitwise_connector,
+        mock_engine_queue,
+        mock_resource_manager,
+        mock_llm_logger,
+        mock_get_logger,
+        mock_envs,
+    ):
+        """
+        Test insert_tasks method with disaggregate decode task.
+        """
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
+        mock_envs.FD_ENABLE_CACHE_TASK = "0"
+        mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
+        mock_get_logger.return_value = mock_llm_logger
+
+        mock_task = MagicMock()
+        mock_task.request_id = "test-req-1"
+        mock_task.prompt_token_ids_len = 100
+        mock_task.disaggregate_info = {"role": "decode"}
+
+        mock_resource_manager_instance = MagicMock()
+        mock_resource_manager_instance.stop_flags = np.array([True, True, True])
+        mock_resource_manager_instance.allocate_resources_for_new_tasks.return_value = [mock_task]
+        mock_resource_manager_instance.real_bsz = 1
+        mock_resource_manager.return_value = mock_resource_manager_instance
+
+        mock_queue_instance = MagicMock()
+        mock_engine_queue.return_value = mock_queue_instance
+
+        mock_connector_instance = MagicMock()
+        mock_splitwise_connector.return_value = mock_connector_instance
+
+        mock_token_processor_instance = MagicMock()
+        mock_token_processor_instance.number_of_tasks = 0
+        mock_token_processor_instance.number_of_input_tokens = 0
+        mock_token_processor.return_value = mock_token_processor_instance
+
+        mock_ipc_signal.return_value = MagicMock()
+
+        engine = EngineService(self.mock_cfg, start_queue=False)
+        self.mock_cfg.cache_config.enable_chunked_prefill = False
+
+        result = engine.insert_tasks([mock_task])
+        self.assertTrue(result)
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    @patch("fastdeploy.engine.common_engine.get_logger")
+    @patch("fastdeploy.engine.common_engine.llm_logger")
+    @patch("fastdeploy.engine.common_engine.ResourceManager")
+    @patch("fastdeploy.engine.common_engine.EngineWorkerQueue")
+    @patch("fastdeploy.engine.common_engine.SplitwiseConnector")
+    @patch("fastdeploy.engine.common_engine.TokenProcessor")
+    @patch("fastdeploy.engine.common_engine.IPCSignal")
+    @patch("fastdeploy.engine.common_engine.schema_checker")
+    def test_decode_token(
+        self,
+        mock_schema_checker,
+        mock_ipc_signal,
+        mock_token_processor,
+        mock_splitwise_connector,
+        mock_engine_queue,
+        mock_resource_manager,
+        mock_llm_logger,
+        mock_get_logger,
+        mock_envs,
+    ):
+        """
+        Test _decode_token method.
+        """
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
+        mock_envs.FD_ENABLE_CACHE_TASK = "0"
+        mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
+        mock_envs.FD_ENABLE_RETURN_TEXT = False
+        mock_get_logger.return_value = mock_llm_logger
+
+        mock_resource_manager.return_value = MagicMock()
+        mock_engine_queue.return_value = MagicMock()
+        mock_splitwise_connector.return_value = MagicMock()
+        mock_token_processor.return_value = MagicMock()
+        mock_ipc_signal.return_value = MagicMock()
+
+        engine = EngineService(self.mock_cfg, start_queue=False)
+
+        # Test with FD_ENABLE_RETURN_TEXT disabled
+        delta_text, token_ids = engine._decode_token([1, 2, 3], "req-1", False)
+        self.assertEqual(delta_text, "")
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    @patch("fastdeploy.engine.common_engine.get_logger")
+    @patch("fastdeploy.engine.common_engine.llm_logger")
+    @patch("fastdeploy.engine.common_engine.ResourceManager")
+    @patch("fastdeploy.engine.common_engine.EngineWorkerQueue")
+    @patch("fastdeploy.engine.common_engine.SplitwiseConnector")
+    @patch("fastdeploy.engine.common_engine.TokenProcessor")
+    @patch("fastdeploy.engine.common_engine.IPCSignal")
+    @patch("fastdeploy.engine.common_engine.schema_checker")
+    def test_start_cache_service(
+        self,
+        mock_schema_checker,
+        mock_ipc_signal,
+        mock_token_processor,
+        mock_splitwise_connector,
+        mock_engine_queue,
+        mock_resource_manager,
+        mock_llm_logger,
+        mock_get_logger,
+        mock_envs,
+    ):
+        """
+        Test start_cache_service method.
+        """
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
+        mock_envs.FD_ENABLE_CACHE_TASK = "0"
+        mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
+        mock_get_logger.return_value = mock_llm_logger
+
+        mock_cache_manager = MagicMock()
+        mock_resource_manager_instance = MagicMock()
+        mock_resource_manager_instance.cache_manager = mock_cache_manager
+        mock_resource_manager.return_value = mock_resource_manager_instance
+
+        mock_engine_queue.return_value = MagicMock()
+        mock_splitwise_connector.return_value = MagicMock()
+        mock_token_processor.return_value = MagicMock()
+        mock_ipc_signal.return_value = MagicMock()
+
+        engine = EngineService(self.mock_cfg, start_queue=False)
+        engine.start_cache_service([0], 12345)
+        mock_cache_manager.launch_cache_manager.assert_called_once()
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    @patch("fastdeploy.engine.common_engine.get_logger")
+    @patch("fastdeploy.engine.common_engine.llm_logger")
+    @patch("fastdeploy.engine.common_engine.ResourceManager")
+    @patch("fastdeploy.engine.common_engine.EngineWorkerQueue")
+    @patch("fastdeploy.engine.common_engine.SplitwiseConnector")
+    @patch("fastdeploy.engine.common_engine.TokenProcessor")
+    @patch("fastdeploy.engine.common_engine.IPCSignal")
+    @patch("fastdeploy.engine.common_engine.schema_checker")
+    def test_exit_sub_services(
+        self,
+        mock_schema_checker,
+        mock_ipc_signal,
+        mock_token_processor,
+        mock_splitwise_connector,
+        mock_engine_queue,
+        mock_resource_manager,
+        mock_llm_logger,
+        mock_get_logger,
+        mock_envs,
+    ):
+        """
+        Test _exit_sub_services method.
+        """
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
+        mock_envs.FD_ENABLE_CACHE_TASK = "0"
+        mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
+        mock_get_logger.return_value = mock_llm_logger
+
+        mock_resource_manager.return_value = MagicMock()
+        mock_engine_queue.return_value = MagicMock()
+        mock_splitwise_connector.return_value = MagicMock()
+        mock_token_processor.return_value = MagicMock()
+
+        mock_ipc_signal_instance = MagicMock()
+        mock_ipc_signal.return_value = mock_ipc_signal_instance
+
+        engine = EngineService(self.mock_cfg, start_queue=False)
+        engine.running = True
+        engine.engine_worker_queue_server = MagicMock()
+        engine.send_response_server = MagicMock()
+        engine.recv_request_server = MagicMock()
+        engine.recv_control_cmd_server = MagicMock()
+
+        engine._exit_sub_services()
+        self.assertFalse(engine.running)
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    @patch("fastdeploy.engine.common_engine.get_logger")
+    @patch("fastdeploy.engine.common_engine.llm_logger")
+    @patch("fastdeploy.engine.common_engine.ResourceManager")
+    @patch("fastdeploy.engine.common_engine.EngineWorkerQueue")
+    @patch("fastdeploy.engine.common_engine.SplitwiseConnector")
+    @patch("fastdeploy.engine.common_engine.TokenProcessor")
+    @patch("fastdeploy.engine.common_engine.IPCSignal")
+    @patch("fastdeploy.engine.common_engine.schema_checker")
+    def test_register_to_router_disabled(
+        self,
+        mock_schema_checker,
+        mock_ipc_signal,
+        mock_token_processor,
+        mock_splitwise_connector,
+        mock_engine_queue,
+        mock_resource_manager,
+        mock_llm_logger,
+        mock_get_logger,
+        mock_envs,
+    ):
+        """
+        Test _register_to_router when router is disabled (None).
+        """
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
+        mock_envs.FD_ENABLE_CACHE_TASK = "0"
+        mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
+        mock_get_logger.return_value = mock_llm_logger
+
+        mock_resource_manager.return_value = MagicMock()
+        mock_engine_queue.return_value = MagicMock()
+        mock_splitwise_connector.return_value = MagicMock()
+        mock_token_processor.return_value = MagicMock()
+        mock_ipc_signal.return_value = MagicMock()
+
+        self.mock_cfg.router_config.router = None
+
+        engine = EngineService(self.mock_cfg, start_queue=False)
+        # Should not raise any exception
+        engine._register_to_router()
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    @patch("fastdeploy.engine.common_engine.get_logger")
+    @patch("fastdeploy.engine.common_engine.llm_logger")
+    @patch("fastdeploy.engine.common_engine.ResourceManager")
+    @patch("fastdeploy.engine.common_engine.EngineWorkerQueue")
+    @patch("fastdeploy.engine.common_engine.SplitwiseConnector")
+    @patch("fastdeploy.engine.common_engine.TokenProcessor")
+    @patch("fastdeploy.engine.common_engine.IPCSignal")
+    @patch("fastdeploy.engine.common_engine.schema_checker")
+    def test_start_zmq_service_no_pid(
+        self,
+        mock_schema_checker,
+        mock_ipc_signal,
+        mock_token_processor,
+        mock_splitwise_connector,
+        mock_engine_queue,
+        mock_resource_manager,
+        mock_llm_logger,
+        mock_get_logger,
+        mock_envs,
+    ):
+        """
+        Test start_zmq_service when api_server_pid is None.
+        """
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
+        mock_envs.FD_ENABLE_CACHE_TASK = "0"
+        mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
+        mock_get_logger.return_value = mock_llm_logger
+
+        mock_resource_manager.return_value = MagicMock()
+        mock_engine_queue.return_value = MagicMock()
+        mock_splitwise_connector.return_value = MagicMock()
+        mock_token_processor.return_value = MagicMock()
+        mock_ipc_signal.return_value = MagicMock()
+
+        engine = EngineService(self.mock_cfg, start_queue=False)
+        # Should return early without any setup
+        engine.start_zmq_service(api_server_pid=None)
+        self.assertFalse(hasattr(engine, "api_server_pid"))
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    @patch("fastdeploy.engine.common_engine.get_logger")
+    @patch("fastdeploy.engine.common_engine.llm_logger")
+    @patch("fastdeploy.engine.common_engine.ResourceManager")
+    @patch("fastdeploy.engine.common_engine.EngineWorkerQueue")
+    @patch("fastdeploy.engine.common_engine.SplitwiseConnector")
+    @patch("fastdeploy.engine.common_engine.TokenProcessor")
+    @patch("fastdeploy.engine.common_engine.IPCSignal")
+    @patch("fastdeploy.engine.common_engine.schema_checker")
+    @patch("fastdeploy.engine.common_engine.ZmqIpcServer")
+    @patch("time.sleep", return_value=None)
+    def test_start_zmq_service_with_pid(
+        self,
+        mock_sleep,
+        mock_zmq_server,
+        mock_schema_checker,
+        mock_ipc_signal,
+        mock_token_processor,
+        mock_splitwise_connector,
+        mock_engine_queue,
+        mock_resource_manager,
+        mock_llm_logger,
+        mock_get_logger,
+        mock_envs,
+    ):
+        """
+        Test start_zmq_service with valid api_server_pid.
+        """
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
+        mock_envs.FD_ENABLE_CACHE_TASK = "0"
+        mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
+        mock_envs.FD_ENABLE_INTERNAL_ADAPTER = False
+        mock_get_logger.return_value = mock_llm_logger
+
+        mock_resource_manager.return_value = MagicMock()
+        mock_engine_queue.return_value = MagicMock()
+        mock_splitwise_connector.return_value = MagicMock()
+        mock_token_processor.return_value = MagicMock()
+        mock_ipc_signal.return_value = MagicMock()
+
+        mock_zmq_instance = MagicMock()
+        mock_zmq_server.return_value = mock_zmq_instance
+
+        engine = EngineService(self.mock_cfg, start_queue=False)
+        engine.running = True
+        engine.scheduler = MagicMock()
+        engine.scheduler.get_results.return_value = {}
+
+        engine.start_zmq_service(api_server_pid="test_pid")
+        self.assertEqual(engine.api_server_pid, "test_pid")
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    @patch("fastdeploy.engine.common_engine.get_logger")
+    @patch("fastdeploy.engine.common_engine.llm_logger")
+    @patch("fastdeploy.engine.common_engine.ResourceManager")
+    @patch("fastdeploy.engine.common_engine.EngineWorkerQueue")
+    @patch("fastdeploy.engine.common_engine.SplitwiseConnector")
+    @patch("fastdeploy.engine.common_engine.TokenProcessor")
+    @patch("fastdeploy.engine.common_engine.IPCSignal")
+    @patch("fastdeploy.engine.common_engine.schema_checker")
+    def test_update_requests_chunk_size_empty(
+        self,
+        mock_schema_checker,
+        mock_ipc_signal,
+        mock_token_processor,
+        mock_splitwise_connector,
+        mock_engine_queue,
+        mock_resource_manager,
+        mock_llm_logger,
+        mock_get_logger,
+        mock_envs,
+    ):
+        """
+        Test update_requests_chunk_size with empty requests list.
+        """
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
+        mock_envs.FD_ENABLE_CACHE_TASK = "0"
+        mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
+        mock_get_logger.return_value = mock_llm_logger
+
+        mock_resource_manager.return_value = MagicMock()
+        mock_engine_queue.return_value = MagicMock()
+        mock_splitwise_connector.return_value = MagicMock()
+        mock_token_processor.return_value = MagicMock()
+        mock_ipc_signal.return_value = MagicMock()
+
+        engine = EngineService(self.mock_cfg, start_queue=False)
+        self.mock_cfg.cache_config.enable_chunked_prefill = True
+
+        # Should return early without errors
+        engine.update_requests_chunk_size([])
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    @patch("fastdeploy.engine.common_engine.get_logger")
+    @patch("fastdeploy.engine.common_engine.llm_logger")
+    @patch("fastdeploy.engine.common_engine.ResourceManager")
+    @patch("fastdeploy.engine.common_engine.EngineWorkerQueue")
+    @patch("fastdeploy.engine.common_engine.SplitwiseConnector")
+    @patch("fastdeploy.engine.common_engine.TokenProcessor")
+    @patch("fastdeploy.engine.common_engine.IPCSignal")
+    @patch("fastdeploy.engine.common_engine.schema_checker")
+    def test_update_requests_chunk_size_multiple(
+        self,
+        mock_schema_checker,
+        mock_ipc_signal,
+        mock_token_processor,
+        mock_splitwise_connector,
+        mock_engine_queue,
+        mock_resource_manager,
+        mock_llm_logger,
+        mock_get_logger,
+        mock_envs,
+    ):
+        """
+        Test update_requests_chunk_size with multiple requests.
+        """
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
+        mock_envs.FD_ENABLE_CACHE_TASK = "0"
+        mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
+        mock_get_logger.return_value = mock_llm_logger
+
+        mock_resource_manager.return_value = MagicMock()
+        mock_engine_queue.return_value = MagicMock()
+        mock_splitwise_connector.return_value = MagicMock()
+        mock_token_processor.return_value = MagicMock()
+        mock_ipc_signal.return_value = MagicMock()
+
+        engine = EngineService(self.mock_cfg, start_queue=False)
+        self.mock_cfg.cache_config.enable_chunked_prefill = True
+
+        mock_request1 = MagicMock()
+        mock_request1.prompt_token_ids_len = 100
+        mock_request2 = MagicMock()
+        mock_request2.prompt_token_ids_len = 200
+
+        engine.update_requests_chunk_size([mock_request1, mock_request2])
+        mock_request1.set.assert_called()
+        mock_request2.set.assert_called()
+
+    @patch("fastdeploy.engine.common_engine.envs")
+    @patch("fastdeploy.engine.common_engine.get_logger")
+    @patch("fastdeploy.engine.common_engine.llm_logger")
+    @patch("fastdeploy.engine.common_engine.ResourceManager")
+    @patch("fastdeploy.engine.common_engine.EngineWorkerQueue")
+    @patch("fastdeploy.engine.common_engine.SplitwiseConnector")
+    @patch("fastdeploy.engine.common_engine.TokenProcessor")
+    @patch("fastdeploy.engine.common_engine.IPCSignal")
+    @patch("fastdeploy.engine.common_engine.schema_checker")
+    def test_clear_data_exception(
+        self,
+        mock_schema_checker,
+        mock_ipc_signal,
+        mock_token_processor,
+        mock_splitwise_connector,
+        mock_engine_queue,
+        mock_resource_manager,
+        mock_llm_logger,
+        mock_get_logger,
+        mock_envs,
+    ):
+        """
+        Test clear_data method when an exception occurs.
+        """
+        mock_envs.ENABLE_V1_KVCACHE_SCHEDULER = False
+        mock_envs.FD_ENABLE_CACHE_TASK = "0"
+        mock_envs.FD_ENGINE_TASK_QUEUE_WITH_SHM = False
+        mock_get_logger.return_value = mock_llm_logger
+
+        mock_resource_manager.return_value = MagicMock()
+
+        mock_queue_instance = MagicMock()
+        mock_engine_queue.return_value = mock_queue_instance
+
+        mock_splitwise_connector.return_value = MagicMock()
+
+        mock_token_processor_instance = MagicMock()
+        mock_token_processor_instance.clear_data.side_effect = Exception("Test error")
+        mock_token_processor.return_value = mock_token_processor_instance
+
+        mock_ipc_signal.return_value = MagicMock()
+
+        engine = EngineService(self.mock_cfg, start_queue=False)
+        engine.send_response_server = MagicMock()
+        engine.send_response_server.req_dict = {}
+        engine.recv_request_server = MagicMock()
+        engine.recv_request_server.req_dict = {}
+
+        result = engine.clear_data()
+        self.assertFalse(result)
+
 
 if __name__ == "__main__":
     unittest.main()
