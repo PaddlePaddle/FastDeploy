@@ -331,7 +331,7 @@ class Request:
             setattr(self, key, value)
 
     def __repr__(self) -> str:
-        """Safe string representation that ignores private and None fields."""
+        """Sanitized repr without private or None fields."""
         try:
             if not envs.FD_DEBUG:
                 return f"Request(request_id={self.request_id})"
