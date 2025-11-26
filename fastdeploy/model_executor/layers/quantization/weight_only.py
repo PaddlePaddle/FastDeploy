@@ -172,14 +172,13 @@ class WINT4Config(WeightOnlyConfig):
     weight only int4 config
     """
 
-    def __init__(
-        self,
-    ) -> None:
-        super().__init__("weight_only_int4")
+    def __init__(self, is_checkpoint_bf16: bool = False) -> None:
+        super().__init__("weight_only_int4", is_checkpoint_bf16)
 
     @classmethod
     def from_config(cls, config: dict) -> "WINT4Config":
-        return cls()
+        is_checkpoint_bf16 = config.get("is_checkpoint_bf16", False)
+        return cls(is_checkpoint_bf16)
 
     def name(self) -> str:
         return "wint4"
