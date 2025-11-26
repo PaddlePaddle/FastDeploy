@@ -26,7 +26,7 @@ bool RemoteCacheKvIpc::kv_complete_signal_shmem_opened = false;
 
 RemoteCacheKvIpc::save_cache_kv_complete_signal_layerwise_meta_data
 RemoteCacheKvIpc::open_shm_and_get_complete_signal_meta_data(
-    const int rank_id, const bool keep_pd_step_flag) {
+    const int rank_id, const int device_id, const bool keep_pd_step_flag) {
   if (RemoteCacheKvIpc::kv_complete_signal_shmem_opened) {
     if (keep_pd_step_flag) {
       return RemoteCacheKvIpc::kv_complete_signal_meta_data;
@@ -47,12 +47,13 @@ RemoteCacheKvIpc::open_shm_and_get_complete_signal_meta_data(
     std::string iflags_server_uuid_env_str(iflags_server_uuid_env_p);
     flags_server_uuid = iflags_server_uuid_env_str;
   }
+
   std::string step_shm_name =
-      ("splitwise_complete_prefilled_step_" + std::to_string(rank_id) + "_" +
-       flags_server_uuid);
+      ("splitwise_complete_prefilled_step_" + std::to_string(rank_id) + "." +
+       std::to_string(device_id));
   std::string layer_shm_name =
-      ("splitwise_complete_prefilled_layer_" + std::to_string(rank_id) + "_" +
-       flags_server_uuid);
+      ("splitwise_complete_prefilled_layer_" + std::to_string(rank_id) + "." +
+       std::to_string(device_id));
   if (const char* use_ep = std::getenv("ENABLE_EP_DP")) {
     if (std::strcmp(use_ep, "1") == 0) {
       step_shm_name = "splitwise_complete_prefilled_step_tprank0_dprank" +
