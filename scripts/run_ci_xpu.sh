@@ -14,6 +14,8 @@ function stop_processes() {
     for port in $(seq $((8188 + XPU_ID * 100 + 10)) $((8188 + XPU_ID * 100 + 40))); do
         lsof -t -i :${port} | xargs kill -9 || true
     done
+    netstat -tunlp 2>/dev/null | grep $((8190 + XPU_ID * 100)) | awk '{print $NF}' | awk -F'/' '{print $1}' | xargs -r kill -9
+    netstat -tunlp 2>/dev/null | grep $((8190 + XPU_ID * 100)) | awk '{print $(NF-1)}' | cut -d/ -f1 | grep -E '^[0-9]+$' | xargs -r kill -9
 }
 
 stop_processes >kill.log 2>&1
@@ -43,8 +45,8 @@ python -m pip uninstall paddlepaddle-xpu -y
 python -m pip uninstall fastdeploy-xpu -y
 
 # python -m pip install paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
-python -m pip install https://paddle-whl.bj.bcebos.com/nightly/xpu-p800/paddlepaddle-xpu/paddlepaddle_xpu-3.3.0.dev20251112-cp310-cp310-linux_x86_64.whl
-
+# 由于ep并行报错暂时锁死paddle版本
+python -m pip install https://paddle-whl.bj.bcebos.com/nightly/xpu-p800/paddlepaddle-xpu/paddlepaddle_xpu-3.3.0.dev20251123-cp310-cp310-linux_x86_64.whl
 echo "build whl"
 bash custom_ops/xpu_ops/download_dependencies.sh develop
 export CLANG_PATH=$(pwd)/custom_ops/xpu_ops/third_party/xtdk
@@ -86,7 +88,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --num-gpu-blocks-override 16384 \
     --max-model-len 32768 \
     --max-num-seqs 128 \
-    --quantization wint4 > server.log 2>&1 &
+    --quantization wint4 \
+    --enable-prefix-caching \
+    --enable-chunked-prefill > server.log 2>&1 &
 
 sleep 60
 # 探活
@@ -229,19 +233,19 @@ else
 fi
 export port_num=$((8188 + XPU_ID * 100))
 python -m fastdeploy.entrypoints.openai.api_server \
-    --model ${MODEL_PATH}/ERNIE-4.5-VL-28B-A3B-Paddle \
+    --model ${MODEL_PATH}/ERNIE-4.5-VL-28B-A3B-Thinking \
     --port $port_num \
     --engine-worker-queue-port $((port_num + 1)) \
     --metrics-port $((port_num + 2)) \
     --cache-queue-port $((port_num + 47873)) \
     --tensor-parallel-size 4 \
     --max-model-len 32768 \
-    --max-num-seqs 10 \
+    --max-num-seqs 32 \
     --quantization wint8 \
-    --enable-mm \
-    --mm-processor-kwargs '{"video_max_frames": 30}' \
-    --limit-mm-per-prompt '{"image": 10, "video": 3}' \
-    --reasoning-parser ernie-45-vl > server.log 2>&1 &
+    --reasoning-parser ernie-45-vl-thinking \
+    --tool-call-parser ernie-45-vl-thinking \
+    --mm-processor-kwargs '{"image_max_pixels": 12845056 }' \
+    --enable-chunked-prefill > server.log 2>&1 &
 
 sleep 60
 # 探活
