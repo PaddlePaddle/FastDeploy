@@ -163,7 +163,6 @@ jobs:
             python -m pip install --upgrade pip
             python -m pip install -r requirements.txt
             python -m pip install wheel
-            python -m pip install cuda-python
             # 编译RDMA
             export FD_ENABLE_RDMA_COMPILE=1
             bash build.sh 1 python false [${COMPILE_ARCH}]
