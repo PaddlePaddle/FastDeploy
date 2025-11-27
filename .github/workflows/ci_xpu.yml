@@ -28,7 +28,7 @@ jobs:
 
       - name: Code Checkout
         env:
-          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.2.0
+          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:ci
         run: |
           REPO="https://github.com/${{ github.repository }}.git"
           FULL_REPO="${{ github.repository }}"
@@ -59,7 +59,7 @@ jobs:
 
       - name: Run CI unittest
         env:
-          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:2.2.0
+          docker_image: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:ci
         run: |
           runner_name="${{ runner.name }}"
           last_char="${runner_name: -1}"
