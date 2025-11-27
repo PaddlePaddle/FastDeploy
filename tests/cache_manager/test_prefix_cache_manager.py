@@ -21,6 +21,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 import numpy as np
 
 
@@ -35,41 +37,69 @@ class _StubLogger:
 
 def _install_required_stubs():
     if "paddle" not in sys.modules:
-        paddle_mod = types.ModuleType("paddle")
-        sys.modules["paddle"] = paddle_mod
-        dist_mod = types.ModuleType("paddle.distributed")
-        sys.modules["paddle.distributed"] = dist_mod
-        paddle_mod.distributed = dist_mod
-        paddle_mod.is_compiled_with_rocm = lambda: False
-        paddle_mod.is_compiled_with_cuda = lambda: False
-        paddle_mod.is_compiled_with_xpu = lambda: False
-        paddle_mod.is_compiled_with_custom_device = lambda *_: False
-        paddle_mod.Tensor = type("Tensor", (), {})
+        try:
+            import paddle  # noqa: F401
+        except Exception:
+            paddle_mod = types.ModuleType("paddle")
+            sys.modules["paddle"] = paddle_mod
+            dist_mod = types.ModuleType("paddle.distributed")
+            sys.modules["paddle.distributed"] = dist_mod
+            paddle_mod.distributed = dist_mod
+            paddle_mod.is_compiled_with_rocm = lambda: False
+            paddle_mod.is_compiled_with_cuda = lambda: False
+            paddle_mod.is_compiled_with_xpu = lambda: False
+            paddle_mod.is_compiled_with_custom_device = lambda *_: False
+            paddle_mod.Tensor = type("Tensor", (), {})
 
     if "paddleformers" not in sys.modules:
-        paddleformers_mod = types.ModuleType("paddleformers")
-        sys.modules["paddleformers"] = paddleformers_mod
+        try:
+            import paddleformers  # noqa: F401
+        except Exception:
+            paddleformers_mod = types.ModuleType("paddleformers")
+            sys.modules["paddleformers"] = paddleformers_mod
 
-        utils_mod = types.ModuleType("paddleformers.utils")
-        sys.modules["paddleformers.utils"] = utils_mod
-        paddleformers_mod.utils = utils_mod
+            utils_mod = types.ModuleType("paddleformers.utils")
+            sys.modules["paddleformers.utils"] = utils_mod
+            paddleformers_mod.utils = utils_mod
 
-        log_mod = types.ModuleType("paddleformers.utils.log")
-        log_mod.logger = _StubLogger()
-        sys.modules["paddleformers.utils.log"] = log_mod
-        utils_mod.log = log_mod
+            log_mod = types.ModuleType("paddleformers.utils.log")
+            log_mod.logger = _StubLogger()
+            sys.modules["paddleformers.utils.log"] = log_mod
+            utils_mod.log = log_mod
 
-        transformers_mod = types.ModuleType("paddleformers.transformers")
-        sys.modules["paddleformers.transformers"] = transformers_mod
+            transformers_mod = types.ModuleType("paddleformers.transformers")
+            sys.modules["paddleformers.transformers"] = transformers_mod
 
-        config_utils_mod = types.ModuleType("paddleformers.transformers.configuration_utils")
+            config_utils_mod = types.ModuleType("paddleformers.transformers.configuration_utils")
 
-        class _PretrainedConfig:
-            pass
+            class _PretrainedConfig:
+                pass
 
-        config_utils_mod.PretrainedConfig = _PretrainedConfig
-        sys.modules["paddleformers.transformers.configuration_utils"] = config_utils_mod
-        transformers_mod.configuration_utils = config_utils_mod
+            config_utils_mod.PretrainedConfig = _PretrainedConfig
+            sys.modules["paddleformers.transformers.configuration_utils"] = config_utils_mod
+            transformers_mod.configuration_utils = config_utils_mod
+
+    if "fastdeploy.metrics.trace_util" not in sys.modules:
+        real_trace_util = None
+        try:
+            import fastdeploy.metrics.trace_util as _real_trace_util
+            real_trace_util = _real_trace_util
+        except Exception:
+            real_trace_util = None
+
+        trace_util_mod = types.ModuleType("fastdeploy.metrics.trace_util")
+
+        def _noop(*_, **__):
+            return None
+
+        needed_names = ["start_span", "start_span_request"]
+        for name in needed_names:
+            if real_trace_util and hasattr(real_trace_util, name):
+                setattr(trace_util_mod, name, getattr(real_trace_util, name))
+            else:
+                setattr(trace_util_mod, name, _noop)
+
+        sys.modules["fastdeploy.metrics.trace_util"] = trace_util_mod
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -160,6 +190,27 @@ class _DummyThread:
 
     def start(self):
         self.started = True
+
+
+# Tracking thread used to assert expected background tasks are launched.
+class _TrackingThread:
+    instances = []
+
+    def __init__(self, target=None, **kwargs):
+        self.target = target
+        self.kwargs = kwargs
+        self.started = False
+        _TrackingThread.instances.append(self)
+
+    def start(self):
+        self.started = True
+
+
+@pytest.fixture(autouse=True)
+def _clear_tracking_thread_instances():
+    _TrackingThread.instances.clear()
+    yield
+    _TrackingThread.instances.clear()
 
 
 # Immediate future used to synchronously invoke submitted functions.
@@ -392,7 +443,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
-                return_value=["0"],
+                return_value="CUDA_VISIBLE_DEVICES=0",
                 create=True,
             ),
             patch(
@@ -435,7 +486,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
-                return_value=["0"],
+                return_value="CUDA_VISIBLE_DEVICES=0",
                 create=True,
             ),
             patch(
@@ -514,21 +565,6 @@ class PrefixCacheManagerTest(unittest.TestCase):
             created_signals[name] = signal
             return signal
 
-        # Tracking thread used to assert expected background tasks are launched.
-        class _TrackingThread:
-            instances = []
-
-            def __init__(self, target=None, **kwargs):
-                self.target = target
-                self.kwargs = kwargs
-                self.started = False
-                _TrackingThread.instances.append(self)
-
-            def start(self):
-                self.started = True
-
-        self.addCleanup(_TrackingThread.instances.clear)
-
         def _fake_sleep(_):
             ready_signal = created_signals.get("cache_ready_signal")
             if ready_signal is not None and np.sum(ready_signal.value) == 0:
@@ -550,7 +586,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
-                return_value=["0"],
+                return_value="CUDA_VISIBLE_DEVICES=0",
                 create=True,
             ),
             patch(
@@ -591,7 +627,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
-                return_value=["0"],
+                return_value="CUDA_VISIBLE_DEVICES=0",
                 create=True,
             ),
             patch(
@@ -622,7 +658,7 @@ class PrefixCacheManagerTest(unittest.TestCase):
             ),
             patch(
                 "fastdeploy.cache_manager.prefix_cache_manager.get_all_visible_devices",
-                return_value=["0"],
+                return_value="CUDA_VISIBLE_DEVICES=0",
                 create=True,
             ),
             patch(
