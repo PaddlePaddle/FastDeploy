@@ -15,48 +15,20 @@
 import json
 import os
 import signal
-import socket
 import subprocess
 import sys
 import time
 
 import pytest
 import requests
-
-# Read ports from environment variables
-FD_API_PORT = int(os.getenv("FD_API_PORT", 8189))
-FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8134))
-FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8234))
-FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8334))
-
-PORTS_TO_CLEAN = [FD_API_PORT, FD_ENGINE_QUEUE_PORT, FD_METRICS_PORT, FD_CACHE_QUEUE_PORT]
-
-
-def is_port_open(host: str, port: int, timeout=1.0):
-    """Check if a TCP port is open."""
-    try:
-        with socket.create_connection((host, port), timeout):
-            return True
-    except Exception:
-        return False
-
-
-def kill_process_on_port(port: int):
-    """Kill processes listening on the given port."""
-    try:
-        output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
-        for pid in output.splitlines():
-            os.kill(int(pid), signal.SIGKILL)
-            print(f"Killed process on port {port}, pid={pid}")
-    except subprocess.CalledProcessError:
-        pass
-
-
-def clean_ports():
-    """Clean all ports in PORTS_TO_CLEAN."""
-    for port in PORTS_TO_CLEAN:
-        kill_process_on_port(port)
-    time.sleep(2)
+from e2e.utils.serving_utils import (
+    FD_API_PORT,
+    FD_CACHE_QUEUE_PORT,
+    FD_ENGINE_QUEUE_PORT,
+    FD_METRICS_PORT,
+    clean_ports,
+    is_port_open,
+)
 
 
 @pytest.fixture(scope="session", autouse=True)
