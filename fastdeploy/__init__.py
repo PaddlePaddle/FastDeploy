@@ -40,15 +40,17 @@ from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.utils import current_package_version, envs
 
-paddle.compat.enable_torch_proxy()
-paddle.compat.extend_torch_proxy_blocked_modules(
-    {
-        "xgrammar",
-        "paddleformers",
-        # "transformers",  # 内置，无需手动添加
-        # "tvm_ffi",  # 内置，无需手动添加
-    },
-)
+paddle.compat.enable_torch_proxy(scope={"triton"})
+
+# paddle.compat.enable_torch_proxy()
+# paddle.compat.extend_torch_proxy_blocked_modules(
+#     {
+#         "xgrammar",
+#         "paddleformers",
+#         # "transformers",  # 内置，无需手动添加
+#         # "tvm_ffi",  # 内置，无需手动添加
+#     },
+# )
 if envs.FD_DEBUG != 1:
     import logging
 
