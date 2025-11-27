@@ -44,35 +44,58 @@ def get_port_num():
 
 def stop_processes():
     """
-    停止所有相关进程
-
-    这个函数会:
-    1. 停止cache_transfer_manager.py进程
-    2. 停止api_server进程
-    3. 停止占用端口的进程
+    停止所有相关进程（最小改动版，避免误杀 pytest）
     """
     xpu_id = get_xpu_id()
     port_num = get_port_num()
 
+    # 获取 pytest 主进程 PID
+    try:
+        pytest_pids = subprocess.check_output(
+            "pgrep -f pytest || true", shell=True
+        ).decode().strip().split()
+    except subprocess.CalledProcessError:
+        pytest_pids = []
+
+    def safe_kill_cmd(cmd):
+        """执行 kill 命令，但排除 pytest 进程"""
+        try:
+            # 先执行命令获取到候选 PID（kill -9 替换成 cat）
+            list_cmd = cmd.replace("kill -9", "cat")
+            output = subprocess.check_output(
+                list_cmd, shell=True, stderr=subprocess.DEVNULL
+            ).decode().strip().split()
+
+            # 过滤：排除 pytest
+            safe_pids = [pid for pid in output if pid and pid not in pytest_pids]
+
+            # 真正 kill
+            for pid in safe_pids:
+                subprocess.run(f"kill -9 {pid}", shell=True,
+                               stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
     commands = [
-        "ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs kill -9 2>/dev/null || true",
-        "ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 2>/dev/null || true",
-        f"ps -efww | grep -E '{port_num}' | grep -v grep | awk '{{print $2}}' | xargs kill -9 2>/dev/null || true",
-        f"lsof -t -i :{port_num} | xargs kill -9 2>/dev/null || true",
+        "ps -efww | grep -E 'cache_transfer_manager.py' | grep -v grep | awk '{print $2}' | xargs echo",
+        "ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs echo",
+        f"ps -efww | grep -E '{port_num}' | grep -v grep | awk '{{print $2}}' | xargs echo",
+        f"lsof -t -i :{port_num} | xargs echo",
     ]
 
     # Kill additional ports
     for port in range(port_num + 10, port_num + 41):
-        commands.append(f"lsof -t -i :{port} | xargs kill -9 2>/dev/null || true")
+        commands.append(f"lsof -t -i :{port} | xargs echo")
 
     # Kill processes using netstat
     commands.extend([
-        f"netstat -tunlp 2>/dev/null | grep {port_num + 2} | awk '{{print $NF}}' | awk -F'/' '{{print $1}}' | xargs -r kill -9 2>/dev/null || true",
-        f"netstat -tunlp 2>/dev/null | grep {port_num + 2} | awk '{{print $(NF-1)}}' | cut -d/ -f1 | grep -E '^[0-9]+$' | xargs -r kill -9 2>/dev/null || true",
+        f"netstat -tunlp 2>/dev/null | grep {port_num + 2} | awk '{{print $NF}}' | awk -F'/' '{{print $1}}' | xargs echo",
+        f"netstat -tunlp 2>/dev/null | grep {port_num + 2} | awk '{{print $(NF-1)}}' | cut -d/ -f1 | grep -E '^[0-9]+$' | xargs echo",
     ])
 
     for cmd in commands:
-        subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        safe_kill_cmd(cmd)
 
 
 def cleanup_resources():
