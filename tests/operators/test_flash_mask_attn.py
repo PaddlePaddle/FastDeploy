@@ -25,45 +25,38 @@ from fastdeploy.model_executor.ops.gpu import flash_mask_attention
 class TestFlashMaskAttention(unittest.TestCase):
     def setUp(self):
         self.bsz = 1
-        self.num_head = 32
-        self.num_kv_head = 4
-        self.q_seq_len = 38
-        self.k_seq_len = 38
+        self.num_head = 8
+        self.num_kv_head = 1
+        self.q_seq_len = 888
+        self.k_seq_len = 1024
         self.head_dim = 128
         np.random.seed(self.q_seq_len)
 
-    def naive_attn(self, q_input, k_input, v_input):
+    def naive_attn(self, q_input, k_input, v_input, mask):
         gqa_group_size = q_input.shape[2] // k_input.shape[2]
 
         q_cur = q_input.transpose([0, 2, 1, 3])
         k_cur = k_input.transpose([0, 2, 1, 3])
         v_cur = v_input.transpose([0, 2, 1, 3])
-        out = paddle.zeros(q_cur.shape, dtype=q_input.dtype)
+        out = np.zeros(q_cur.shape, dtype=q_input.dtype)
 
         for bsz in range(0, q_cur.shape[0]):
             for hi in range(0, q_cur.shape[1]):
-                qk = paddle.matmul(q_cur[bsz, hi], k_cur[bsz, hi // gqa_group_size].T) * (
-                    1.0 / np.sqrt(q_cur.shape[3])
-                )
+                qk = np.matmul(q_cur[bsz, hi], k_cur[bsz, hi // gqa_group_size].T) * (1.0 / np.sqrt(q_cur.shape[3]))
                 for i in range(0, qk.shape[0]):
-                    qk[i, i + 1 :] = -1000000
+                    qk[i, mask[i] :] = -1000000
 
-                qk_max = qk.max(axis=-1).unsqueeze(-1)
                 qk_max = np.expand_dims(qk.max(axis=-1), -1)
                 qk -= qk_max
+                qk = np.exp(qk)
 
-                qk = qk.exp()
+                exp_sum = np.expand_dims(qk.sum(axis=-1), -1)
+                exp_sum_inv = 1.0 / exp_sum
 
-                qk_sum = qk.sum(axis=-1).unsqueeze(-1)
-
-                exp_sum_inv = 1.0 / qk_sum
-
-                out[bsz, hi] = (paddle.matmul(qk, v_cur[bsz, hi // gqa_group_size]) * exp_sum_inv).astype(
-                    q_input.dtype
-                )
+                out[bsz, hi] = (np.matmul(qk, v_cur[bsz, hi // gqa_group_size]) * exp_sum_inv).astype(q_input.dtype)
         return out
 
-    def paddle_flash_attn_mask(self, q_input, k_input, v_input, attn_out):
+    def paddle_flash_attn_mask(self, q_input, k_input, v_input, attn_out, mask):
         bsz = q_input.shape[0]
         cu_seq_q = paddle.arange(bsz + 1) * q_input.shape[1]
         cu_seq_k = paddle.arange(bsz + 1) * k_input.shape[1]
@@ -76,6 +69,7 @@ class TestFlashMaskAttention(unittest.TestCase):
         v_input = paddle.to_tensor(v_input).astype("bfloat16").reshape([-1, v_input.shape[2], v_input.shape[3]])
         v_input_pad = paddle.zeros([v_input.shape[0] + 128, v_input.shape[1], v_input.shape[2]]).astype("bfloat16")
         v_input_pad[0 : v_input.shape[0]] = v_input
+        mask = paddle.to_tensor(mask).astype("int32")
 
         flash_mask_attention(
             q_input,
@@ -85,7 +79,7 @@ class TestFlashMaskAttention(unittest.TestCase):
             cu_seq_k,
             seq_len_encoder,
             attn_out,
-            None,
+            mask,
             int(q_input.shape[1]),
             int(k_input.shape[1]),
             int(q_input.shape[2]),
@@ -103,30 +97,18 @@ class TestFlashMaskAttention(unittest.TestCase):
             0, 0.5, size=(self.bsz, self.q_seq_len + self.k_seq_len, self.num_kv_head, self.head_dim)
         )
 
-        q_input = paddle.load("/root/paddlejob/workspace/output/yangjianfeng/test_attn/q.tensor").reshape(
-            (self.bsz, self.q_seq_len, self.num_head, self.head_dim)
-        )
-        k_input = paddle.load("/root/paddlejob/workspace/output/yangjianfeng/test_attn/k.tensor").reshape(
-            (self.bsz, self.k_seq_len, self.num_kv_head, self.head_dim)
-        )
-        v_input = paddle.load("/root/paddlejob/workspace/output/yangjianfeng/test_attn/v.tensor").reshape(
-            (self.bsz, self.k_seq_len, self.num_kv_head, self.head_dim)
-        )
+        random_len = np.random.randint(self.q_seq_len // 2, size=2)
+        text_len = random_len[0]
+        image_len = random_len[1]
 
-        # random_len = np.random.randint(self.q_seq_len // 2, size=2)
-        # text_len = self.q_seq_len
-        # image_len = 0
+        mask = np.array([i + 1 for i in range(0, self.q_seq_len)]) + self.k_seq_len
+        mask[text_len : text_len + image_len] = text_len + image_len + self.k_seq_len
 
-        # mask = np.array([i + 1 for i in range(0, self.q_seq_len)]) + self.k_seq_len
-        # mask[text_len : text_len + image_len] = text_len + image_len + self.k_seq_len
-
-        naive_attn_out = self.naive_attn(q_input, k_input, v_input).transpose([0, 2, 1, 3])
+        naive_attn_out = self.naive_attn(q_input, k_input, v_input, mask).transpose([0, 2, 1, 3])
         paddle_attn_out = paddle.zeros(q_input.shape, dtype="bfloat16")
-        self.paddle_flash_attn_mask(q_input, k_input, v_input, paddle_attn_out)
+        self.paddle_flash_attn_mask(q_input, k_input, v_input, paddle_attn_out, mask)
 
         max_diff = float((paddle_attn_out.reshape([-1]) - paddle.to_tensor(naive_attn_out).reshape([-1])).max())
-        print(paddle_attn_out.reshape([38, -1]))
-        # print(paddle_attn_out - paddle.to_tensor(naive_attn_out).reshape(q_input.shape))
         self.assertLessEqual(max_diff, 0.05)
 
 
