@@ -298,6 +298,10 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
             shard_size = (fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, output_dim, shard_offset, shard_size)
 
+        tp_row_bias = getattr(param, "tp_row_bias", None)
+        if tp_row_bias:
+            loaded_weight = loaded_weight / fd_config.parallel_config.tensor_parallel_size
+
         # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
         loaded_weight = fd_cast(loaded_weight, param)
         if param.shape != loaded_weight.shape:

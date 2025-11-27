@@ -180,12 +180,12 @@ class ModelConfig:
     ):
         self.model = ""
         self.is_quantized = False
+        self.is_moe_quantized = False
         self.max_model_len = 0
         self.dtype = "bfloat16"
         self.enable_logprob = False
         self.max_logprobs = 20
         self.logprobs_mode = "raw_logprobs"
-        self.enable_redundant_experts = False
         self.redundant_experts_num = 0
         self.seed = 0
         self.quantization = None
@@ -304,6 +304,8 @@ class ModelConfig:
 
         if hasattr(self, "num_experts") and getattr(self, "moe_num_experts") is None:
             self.moe_num_experts = self.num_experts
+        if hasattr(self, "n_routed_experts") and getattr(self, "moe_num_experts") is None:
+            self.moe_num_experts = self.n_routed_experts
 
     def read_from_env(self):
         """
@@ -1152,20 +1154,54 @@ class EPLBConfig:
 
     def __init__(
         self,
+        args,
     ):
-        self.enable_redundant_experts = envs.FD_ENABLE_REDUNDANT_EXPERTS
-        self.redundant_experts_num = envs.FD_REDUNDANT_EXPERTS_NUM
-        self.redundant_expert_ip_shm_size = envs.FD_REDUNDANT_EXPERT_IP_SHM_SIZE
-        self.redundant_expert_meta_dir = envs.FD_REDUNDANT_EXPERT_META_DIR
-        self.redundant_expert_api_user = envs.FD_REDUNDANT_EXPERT_API_USER
-        self.redundant_expert_api_password = envs.FD_REDUNDANT_EXPERT_API_PASSWORD
-        self.redundant_expert_eplb_strategy = envs.FD_REDUNDANT_EXPERT_EPLB_STRATEGY
-        self.redundant_expert_dump_workload_interval = envs.FD_REDUNDANT_EXPERT_DUMP_WORKLOAD_INTERVAL
-        self.redundant_expert_async_load_model_shmem_size_gb = envs.FD_REDUNDANT_EXPERT_ASYNC_LOAD_MODEL_SHMEM_SIZE_GB
-        self.redundant_expert_enable_schedule_cordon = envs.FD_REDUNDANT_EXPERT_ENABLE_SCHEDULE_CORDON
-        self.model_use_safetensors = envs.FD_MODEL_USE_SAFETENSORS
-        self.model_use_offline_quant = envs.FD_MODEL_USE_OFFLINE_QUANT
-        self.moe_quant_type = envs.FD_MOE_QUANT_TYPE
+        if args is None:
+            args = {}
+
+        # enable eplb
+        self.enable_eplb: bool = False
+        # redundant experts num
+        self.redundant_experts_num: int = 0
+        # expert ip shm size
+        self.redundant_expert_ip_shm_size: int = 1024
+        # expert meta dir
+        self.redundant_expert_meta_dir: str = "/tmp/redundant_expert_meta"
+        # expert api user and password
+        self.redundant_expert_api_user: str = ""
+        self.redundant_expert_api_password: str = ""
+        # expert eplb strategy
+        self.redundant_expert_eplb_strategy: str = ""
+        # expert dump workload interval
+        self.redundant_expert_dump_workload_interval: int = 10
+        # expert async load model shmem size gb
+        self.redundant_expert_async_load_model_shmem_size_gb: int = 0
+        # expert enable schedule cordon
+        self.redundant_expert_enable_schedule_cordon: bool = True
+        # model use safetensors
+        self.model_use_safetensors: bool = True
+        # model use offline quant
+        self.model_use_offline_quant: bool = True
+        # moe quant type
+        self.moe_quant_type: str = "w4a8"
+        for key, value in args.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+
+    def to_json_string(self):
+        """
+        Convert eplb_config to json string.
+        """
+        return json.dumps({key: value for key, value in self.__dict__.items() if value is not None})
+
+    def print(self):
+        """
+        Print all configuration information.
+        """
+        logger.info("EPLB Configuration Information :")
+        for k, v in self.__dict__.items():
+            logger.info("{:<20}:{:<6}{}".format(k, "", v))
+        logger.info("=============================================================")
 
 
 class CacheConfig:
@@ -1538,7 +1574,7 @@ class FDConfig:
             self.max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "3"))
             if current_platform.is_xpu():
                 self.max_prefill_batch = 1
-            if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            if self.model_config is not None and self.model_config.enable_mm:
                 self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
         else:
             self.max_prefill_batch = self.scheduler_config.max_num_seqs
@@ -1567,6 +1603,14 @@ class FDConfig:
         self.check()
         self.print()
 
+    def _disable_sequence_parallel_moe_if_needed(self, mode_name):
+        if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
+            self.parallel_config.use_sequence_parallel_moe = False
+            logger.warning(
+                f"Sequence parallel MoE does not support {mode_name} mode with cudagraph. "
+                "Setting use_sequence_parallel_moe to False."
+            )
+
     def postprocess(self):
         """
         calculate some parameters
@@ -1593,10 +1637,6 @@ class FDConfig:
                     self.scheduler_config.max_num_batched_tokens = 2048
                 else:
                     self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
-
-        self.scheduler_config.max_chunk_len = (
-            self.scheduler_config.max_num_batched_tokens + self.scheduler_config.max_extra_num_batched_tokens
-        )
 
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.model_config.max_model_len * 0.04)
@@ -1655,10 +1695,12 @@ class FDConfig:
             logger.info("Multi-modal models do not support prefix caching when using CUDAGraph!")
 
         if self.scheduler_config.splitwise_role == "mixed":
+            self._disable_sequence_parallel_moe_if_needed("Mixed")
             self.model_config.moe_phase = MoEPhase(phase="prefill")
         elif self.scheduler_config.splitwise_role == "prefill":
             self.model_config.moe_phase = MoEPhase(phase="prefill")
         elif self.scheduler_config.splitwise_role == "decode":
+            self._disable_sequence_parallel_moe_if_needed("PD's decode node")
             self.model_config.moe_phase = MoEPhase(phase="decode")
         else:
             raise NotImplementedError
@@ -1764,6 +1806,15 @@ class FDConfig:
             assert (
                 int(envs.FD_DISABLED_RECOVER) == 0
             ), "FD_DISABLED_RECOVER is not supported while ENABLE_V1_KVCACHE_SCHEDULER is turned on."
+
+        if self.eplb_config is not None and self.eplb_config.enable_eplb:
+            try:
+                import cuda  # noqa
+            except ImportError:
+                raise ImportError(
+                    "cuda-python not installed. Install the version matching your CUDA toolkit:\n"
+                    "  CUDA 12.x → pip install cuda-python==12.*\n"
+                )
 
     def print(self):
         """

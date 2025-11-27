@@ -211,7 +211,7 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         self.speculate_max_draft_token_num: int = llm_config.speculative_config.num_speculative_tokens
         self.keep_pd_step_flag: bool = llm_config.speculative_config.model_type == "mtp"
         self.rank: int = llm_config.parallel_config.tensor_parallel_rank
-        self.nranks = llm_config.parallel_config.tensor_parallel_size
+        self.tp_size = llm_config.parallel_config.tensor_parallel_size
 
         self.kv_num_heads = kv_num_heads
         self.num_heads = num_heads
@@ -325,7 +325,7 @@ class HPUAttentionBackend(AttentionBackend_HPU):
                 softmax_mode=0,
             )
 
-        if self.nranks > 1:
+        if self.tp_size > 1:
             from fastdeploy.distributed.communication import (
                 tensor_model_parallel_all_reduce_custom,
             )
@@ -368,7 +368,7 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         )
 
         # all_reduce
-        if self.nranks > 1:
+        if self.tp_size > 1:
             from fastdeploy.distributed.communication import (
                 tensor_model_parallel_all_reduce_custom,
             )

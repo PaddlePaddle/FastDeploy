@@ -65,7 +65,7 @@ __global__ void speculate_remove_padding(T* output_data,
   }
 }
 
-__global__ void speculate_get_padding_offset(int* padding_offset,
+__global__ void speculate_get_padding_offset(int* batch_id_per_token,
                                              int* cum_offsets_out,
                                              int* cu_seqlens_q,
                                              int* cu_seqlens_k,
@@ -90,8 +90,8 @@ __global__ void speculate_get_padding_offset(int* padding_offset,
     GM2LM(cum_offsets + bi, &cum_offsets_now_ind, sizeof(int));
 
     for (int i = tid; i < seq_lens_now; i += ncores) {
-      LM2GM(&cum_offsets_now,
-            padding_offset + bi * max_seq_len - cum_offsets_now + i,
+      LM2GM(&bi,
+            batch_id_per_token + bi * max_seq_len - cum_offsets_now + i,
             sizeof(int));
     }
     LM2GM(&cum_offsets_now, cum_offsets_out + bi, sizeof(int));
