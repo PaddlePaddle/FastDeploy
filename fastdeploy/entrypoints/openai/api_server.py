@@ -56,7 +56,11 @@ from fastdeploy.entrypoints.openai.serving_embedding import OpenAIServingEmbeddi
 from fastdeploy.entrypoints.openai.serving_models import ModelPath, OpenAIServingModels
 from fastdeploy.entrypoints.openai.serving_reward import OpenAIServingReward
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
-from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
+from fastdeploy.entrypoints.openai.utils import (
+    UVICORN_CONFIG,
+    make_arg_parser,
+    with_cancellation,
+)
 from fastdeploy.envs import environment_variables
 from fastdeploy.metrics.metrics import (
     EXCLUDE_LABELS,
@@ -384,7 +388,8 @@ def wrap_streaming_generator(original_generator: AsyncGenerator):
 
 
 @app.post("/v1/chat/completions")
-async def create_chat_completion(request: ChatCompletionRequest):
+@with_cancellation
+async def create_chat_completion(request: ChatCompletionRequest, raw_request: Request):
     """
     Create a chat completion for the provided prompt and parameters.
     """
