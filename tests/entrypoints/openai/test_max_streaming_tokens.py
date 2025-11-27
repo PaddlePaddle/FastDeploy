@@ -445,7 +445,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         prompt_token_ids = [1, 2]
         prompt_tokens = "test_prompt"
         logprob_contents = [[{"token": "hello", "logprob": 0.1}], [{"token": "hello", "logprob": 0.1}]]
-        draft_logprob_contents = [[], []]
+        draft_logprob_contents = [[{"token": "hello", "logprob": 0.1}], [{"token": "hello", "logprob": 0.1}]]
         mock_response_processor = Mock()
         mock_response_processor.enable_multimodal_content.return_value = False
         completion_token_ids = [[], []]
