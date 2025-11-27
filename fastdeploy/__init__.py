@@ -44,6 +44,7 @@ paddle.compat.enable_torch_proxy()
 paddle.compat.extend_torch_proxy_blocked_modules(
     {
         "xgrammar",
+        "paddleformers",
         # "transformers",  # 内置，无需手动添加
         # "tvm_ffi",  # 内置，无需手动添加
     },
