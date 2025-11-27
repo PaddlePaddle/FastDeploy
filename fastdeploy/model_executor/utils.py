@@ -366,6 +366,9 @@ def h2d_copy(dst, src, blocking=True):
     if not current_platform.is_cuda() or not is_paddle_support_new_h2d():
         # For non-GPU devices, data is transferred to device (H2D) in advance.
         src = get_tensor(src)
+    if len(src.shape) == 1:
+        # TODO (bukejiyu):A recently merged Paddle PR introduced a hang when copying 1-D non-contiguous tensors. This approach serves as a temporary workaround.
+        src = get_tensor(src)
     dst.copy_(src, blocking)
 
 

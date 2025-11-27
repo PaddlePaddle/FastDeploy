@@ -736,12 +736,7 @@ class QKVParallelLinear(ColumnParallelLinear):
                     loaded_weight = loaded_weight.view(param.dtype)
                 else:
                     loaded_weight = loaded_weight.cast(param.dtype)
-            if len(param.shape) == 1:
-                # TODO (bukejiyu):A recently merged Paddle PR introduced a hang when copying 1-D non-contiguous tensors. This approach serves as a temporary workaround.
-                loaded_weight = get_tensor(loaded_weight)
-                param.copy_(loaded_weight, False)
-            else:
-                h2d_copy(param, loaded_weight)
+            h2d_copy(param, loaded_weight)
 
     def load_weight(self, state_dict: dict):
         """
