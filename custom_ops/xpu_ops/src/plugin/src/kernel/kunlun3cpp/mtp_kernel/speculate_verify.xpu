@@ -138,7 +138,8 @@ __global__ void speculate_verify(
     const int max_candidate_len,  // scalar, 每个 verify token
                                   // 的最大候选数（用于验证或采样）
     const int verify_window,  // scalar, TopK 验证窗口（允许连续 top1 匹配次数）
-    const bool prefill_one_step_stop) {
+    const bool prefill_one_step_stop,
+    const bool benchmark_mode) {
   const int cid = core_id();
   const int64_t tid = cluster_id() * core_num() + core_id();
   const int64_t nthreads = cluster_num() * core_num();
@@ -161,6 +162,9 @@ __global__ void speculate_verify(
       // printf("seq_lens_this_time[%d]-1: %d \n",bid,
       // seq_lens_this_time[bid]-1);
       for (; i < seq_lens_this_time[bid] - 1; i++) {
+        if (benchmark_mode) {
+          break;
+        }
         if (seq_lens_encoder[bid] != 0) {
           break;
         }
@@ -326,7 +330,8 @@ __global__ void speculate_verify(
       int max_seq_len,                                              \
       int max_candidate_len,                                        \
       int verify_window,                                            \
-      bool prefill_one_step_stop);
+      bool prefill_one_step_stop,                                   \
+      bool benchmark_mode);
 SPECULATE_VERIFY_INSTANTIATE(true, true)
 SPECULATE_VERIFY_INSTANTIATE(true, false)
 SPECULATE_VERIFY_INSTANTIATE(false, true)

@@ -20,15 +20,15 @@
 namespace xpu3 {
 namespace plugin {
 template <typename TX, typename TY>
-__attribute__((global)) void eb_adjust_batch(TX *src,
-                                             TY *dst,
-                                             int *encoder_seqs_lods,
-                                             int *decoder_seqs_lods,
-                                             int *encoder_batch_map,
-                                             int *decoder_batch_map,
-                                             int en_batch,
-                                             int de_batch,
-                                             int64_t copy_size);
+__attribute__((global)) void eb_mtp_gather_next_token(TX *src,
+                                                      TY *dst,
+                                                      int *encoder_seqs_lods,
+                                                      int *decoder_seqs_lods,
+                                                      int *encoder_batch_map,
+                                                      int *decoder_batch_map,
+                                                      int en_batch,
+                                                      int de_batch,
+                                                      int64_t copy_size);
 }  // namespace plugin
 }  // namespace xpu3
 
@@ -36,7 +36,6 @@ namespace baidu {
 namespace xpu {
 namespace api {
 namespace plugin {
-
 template <typename TX, typename TY>
 static int cpu_wrapper(api::Context *ctx,
                        const TX *x,
@@ -49,39 +48,48 @@ static int cpu_wrapper(api::Context *ctx,
                        int de_batch,
                        int64_t hidden_dim) {
   int ret = 0;
-  int cur_offset = 0;
-  int en_idx = 0;
-  int de_idx = 0;
-  int cur_bs = en_batch + de_batch;
   int encoder_len_total = encoder_seqs_lods[en_batch];
-  for (int i = 0; i < cur_bs; i++) {
-    // get copy size && src_offset
-    int cpy_m = 0;
-    if (de_batch > 0 && decoder_batch_map[de_idx] == i) {
-      cpy_m = decoder_seqs_lods[de_idx + 1] - decoder_seqs_lods[de_idx];
-      ret = api::cast<TX, TY>(
-          ctx,
-          x + cur_offset * hidden_dim,
-          y + (encoder_len_total + decoder_seqs_lods[de_idx]) * hidden_dim,
-          cpy_m * hidden_dim);
-      WRAPPER_ASSERT_SUCCESS(ctx, ret);
-      de_idx++;
+  int decoder_len_total = decoder_seqs_lods[de_batch];
+  int output_token_num = en_batch + decoder_len_total;
+  for (int i = 0; i < output_token_num; i++) {
+    int len = 0;
+    int enc_idx = 0, dec_idx = 0;
+    bool is_enc;
+    while (i >= len) {
+      if (enc_idx >= en_batch) {
+        len += decoder_seqs_lods[dec_idx + 1] - decoder_seqs_lods[dec_idx];
+        dec_idx++;
+        is_enc = false;
+        continue;
+      }
+      if (dec_idx >= de_batch) {
+        len += 1;
+        enc_idx++;
+        is_enc = true;
+        continue;
+      }
+      if ((encoder_batch_map[enc_idx] < decoder_batch_map[dec_idx])) {
+        len += 1;
+        enc_idx++;
+        is_enc = true;
+      } else {
+        len += decoder_seqs_lods[dec_idx + 1] - decoder_seqs_lods[dec_idx];
+        dec_idx++;
+        is_enc = false;
+      }
     }
-    if (en_batch > 0 && encoder_batch_map[en_idx] == i) {
-      cpy_m = encoder_seqs_lods[en_idx + 1] - encoder_seqs_lods[en_idx];
-      ret = api::cast<TX, TY>(ctx,
-                              x + cur_offset * hidden_dim,
-                              y + encoder_seqs_lods[en_idx] * hidden_dim,
-                              cpy_m * hidden_dim);
-      WRAPPER_ASSERT_SUCCESS(ctx, ret);
-      en_idx++;
+    const TX *src = nullptr;
+    if (is_enc) {
+      src = x + (encoder_seqs_lods[enc_idx] - 1) * hidden_dim;
+    } else {
+      src = x + (encoder_len_total + decoder_seqs_lods[dec_idx] - (len - i)) *
+                    hidden_dim;
     }
-    cur_offset += cpy_m;
+    ret = api::cast<TX, TY>(ctx, src, y + i * hidden_dim, hidden_dim);
+    WRAPPER_ASSERT_SUCCESS(ctx, ret);
   }
-  WRAPPER_ASSERT_SUCCESS(ctx, ret);
   return api::SUCCESS;
 }
-
 template <typename TX, typename TY>
 static int xpu3_wrapper(api::Context *ctx,
                         const TX *x,
@@ -93,14 +101,12 @@ static int xpu3_wrapper(api::Context *ctx,
                         int en_batch,
                         int de_batch,
                         int64_t hidden_dim) {
-  using XPU_INDEX_TYPE_TX = typename XPUIndexType<TX>::type;
-  using XPU_INDEX_TYPE_TY = typename XPUIndexType<TY>::type;
-  auto eb_adjust_batch_kernel =
-      xpu3::plugin::eb_adjust_batch<XPU_INDEX_TYPE_TX, XPU_INDEX_TYPE_TY>;
+  auto eb_mtp_gather_next_token_kernel =
+      xpu3::plugin::eb_mtp_gather_next_token<TX, TY>;
   // NOTE: Don't change 16 to 64, because kernel use gsm
-  eb_adjust_batch_kernel<<<ctx->ncluster(), 16, ctx->xpu_stream>>>(
-      reinterpret_cast<XPU_INDEX_TYPE_TX *>(const_cast<TX *>(x)),
-      reinterpret_cast<XPU_INDEX_TYPE_TY *>(y),
+  eb_mtp_gather_next_token_kernel<<<ctx->ncluster(), 16, ctx->xpu_stream>>>(
+      const_cast<TX *>(x),
+      y,
       encoder_seqs_lods.xpu,
       decoder_seqs_lods.xpu,
       encoder_batch_map.xpu,
@@ -112,23 +118,17 @@ static int xpu3_wrapper(api::Context *ctx,
 }
 
 template <typename TX, typename TY>
-int eb_adjust_batch(api::Context *ctx,
-                    const TX *x,
-                    TY *y,
-                    api::VectorParam<int32_t> &encoder_seqs_lods,  // NOLINT
-                    api::VectorParam<int32_t> &decoder_seqs_lods,  // NOLINT
-                    api::VectorParam<int32_t> &encoder_batch_map,  // NOLINT
-                    api::VectorParam<int32_t> &decoder_batch_map,  // NOLINT
-                    int64_t hidden_dim) {
-  // int dev_id = -1;
-  // xpu_current_device(&dev_id);
-  // if (dev_id ==0) {
-  //     ctx->set_debug_level(0xA1);
-  // }
-  // std::cout << decoder_seqs_lods.cpu[0] << " " << decoder_seqs_lods.cpu[1] <<
-  // std::endl;
+int eb_mtp_gather_next_token(
+    api::Context *ctx,
+    const TX *x,
+    TY *y,
+    api::VectorParam<int32_t> &encoder_seqs_lods,  // NOLINT
+    api::VectorParam<int32_t> &decoder_seqs_lods,  // NOLINT
+    api::VectorParam<int32_t> &encoder_batch_map,  // NOLINT
+    api::VectorParam<int32_t> &decoder_batch_map,  // NOLINT
+    int64_t hidden_dim) {
   WRAPPER_CHECK_CTX(ctx);
-  WRAPPER_DUMP_FUNCTION_T2(ctx, "eb_adjust_batch", TX, TY);
+  WRAPPER_DUMP_FUNCTION_T2(ctx, "eb_mtp_gather_next_token", TX, TY);
   WRAPPER_DUMP_PARAM6(ctx,
                       x,
                       y,
@@ -140,12 +140,13 @@ int eb_adjust_batch(api::Context *ctx,
   WRAPPER_DUMP(ctx);
   int encoder_batch = encoder_batch_map.len;
   int decoder_batch = decoder_batch_map.len;
-  int total_batch = encoder_batch + decoder_batch;
   int max_encoder_lod = encoder_seqs_lods.cpu[encoder_batch];
   int max_decoder_lod = decoder_seqs_lods.cpu[decoder_batch];
-  int m = max_encoder_lod + max_decoder_lod;
+  int m = encoder_seqs_lods.cpu[encoder_batch] +
+          decoder_seqs_lods.cpu[decoder_batch];
+  int out_m = encoder_batch + decoder_seqs_lods.cpu[decoder_batch];
   WRAPPER_CHECK_PTR(ctx, TX, m * hidden_dim, x);
-  WRAPPER_CHECK_PTR(ctx, TY, m * hidden_dim, y);
+  WRAPPER_CHECK_PTR(ctx, TY, out_m * hidden_dim, y);
   WRAPPER_ASSERT_GT(ctx, hidden_dim, 0);
   // check VectorParam
   WRAPPER_ASSERT_EQ(ctx, encoder_seqs_lods.len, encoder_batch_map.len + 1);
@@ -154,15 +155,15 @@ int eb_adjust_batch(api::Context *ctx,
   WRAPPER_ASSERT_LE(ctx, encoder_seqs_lods.cpu[0], max_encoder_lod);
   WRAPPER_ASSERT_GE(ctx, decoder_seqs_lods.cpu[0], 0);
   WRAPPER_ASSERT_LE(ctx, decoder_seqs_lods.cpu[0], max_decoder_lod);
+  // 注意: encoder/decoder的batch
+  // map数值上有可能大于batch，因为复原后的batch排布有可能是稀疏的，所以这里只做非负检查
   for (int i = 0; i < encoder_batch_map.len; ++i) {
     WRAPPER_ASSERT_GE(ctx, encoder_batch_map.cpu[i], 0);
-    WRAPPER_ASSERT_LT(ctx, encoder_batch_map.cpu[i], total_batch)
     WRAPPER_ASSERT_GE(ctx, encoder_seqs_lods.cpu[i + 1], 0);
     WRAPPER_ASSERT_LE(ctx, encoder_seqs_lods.cpu[i + 1], max_encoder_lod);
   }
   for (int i = 0; i < decoder_batch_map.len; ++i) {
     WRAPPER_ASSERT_GE(ctx, decoder_batch_map.cpu[i], 0);
-    WRAPPER_ASSERT_LT(ctx, decoder_batch_map.cpu[i], total_batch)
     WRAPPER_ASSERT_GE(ctx, decoder_seqs_lods.cpu[i + 1], 0);
     WRAPPER_ASSERT_LE(ctx, decoder_seqs_lods.cpu[i + 1], max_decoder_lod);
   }
@@ -201,28 +202,25 @@ int eb_adjust_batch(api::Context *ctx,
   }
   WRAPPER_UNIMPLEMENTED(ctx);
 }
+#define INSTANTIATION_EB_MTP_GATHER_NEXT_TOKEN(TX, TY)                       \
+  template int eb_mtp_gather_next_token<TX, TY>(api::Context *,              \
+                                                const TX *,                  \
+                                                TY *,                        \
+                                                api::VectorParam<int32_t> &, \
+                                                api::VectorParam<int32_t> &, \
+                                                api::VectorParam<int32_t> &, \
+                                                api::VectorParam<int32_t> &, \
+                                                int64_t);
 
-#define INSTANTIATION_EB_ADJUST_BATCH(TX, TY)                       \
-  template int eb_adjust_batch<TX, TY>(api::Context *,              \
-                                       const TX *,                  \
-                                       TY *,                        \
-                                       api::VectorParam<int32_t> &, \
-                                       api::VectorParam<int32_t> &, \
-                                       api::VectorParam<int32_t> &, \
-                                       api::VectorParam<int32_t> &, \
-                                       int64_t);
-
-INSTANTIATION_EB_ADJUST_BATCH(float16, float16);
-INSTANTIATION_EB_ADJUST_BATCH(bfloat16, bfloat16);
-INSTANTIATION_EB_ADJUST_BATCH(float, float);
-INSTANTIATION_EB_ADJUST_BATCH(float16, float);
-INSTANTIATION_EB_ADJUST_BATCH(float, float16);
-INSTANTIATION_EB_ADJUST_BATCH(bfloat16, float16);
-INSTANTIATION_EB_ADJUST_BATCH(float16, bfloat16);
-INSTANTIATION_EB_ADJUST_BATCH(bfloat16, float);
-INSTANTIATION_EB_ADJUST_BATCH(float, bfloat16);
-INSTANTIATION_EB_ADJUST_BATCH(int32_t, int32_t);
-INSTANTIATION_EB_ADJUST_BATCH(int64_t, int64_t);
+INSTANTIATION_EB_MTP_GATHER_NEXT_TOKEN(float16, float16);
+INSTANTIATION_EB_MTP_GATHER_NEXT_TOKEN(bfloat16, bfloat16);
+INSTANTIATION_EB_MTP_GATHER_NEXT_TOKEN(float, float);
+INSTANTIATION_EB_MTP_GATHER_NEXT_TOKEN(float16, float);
+INSTANTIATION_EB_MTP_GATHER_NEXT_TOKEN(float, float16);
+INSTANTIATION_EB_MTP_GATHER_NEXT_TOKEN(bfloat16, float16);
+INSTANTIATION_EB_MTP_GATHER_NEXT_TOKEN(float16, bfloat16);
+INSTANTIATION_EB_MTP_GATHER_NEXT_TOKEN(bfloat16, float);
+INSTANTIATION_EB_MTP_GATHER_NEXT_TOKEN(float, bfloat16);
 }  // namespace plugin
 }  // namespace api
 }  // namespace xpu
