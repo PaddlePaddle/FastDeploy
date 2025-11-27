@@ -424,12 +424,14 @@ class GPUModelRunner(ModelRunnerBase):
                 multi_vision_inputs["grid_thw_lst"].extend(
                     inputs["grid_thw"][request.num_image_start : request.num_image_end]
                 )
-                multi_vision_inputs["cu_seqlens"].extend(
-                    inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
-                )
-                multi_vision_inputs["vit_position_ids_lst"].extend(
-                    inputs["vit_position_ids"][request.num_image_start : request.num_image_end]
-                )
+                if hasattr(inputs, "vit_seqlen"):
+                    multi_vision_inputs["cu_seqlens"].extend(
+                        inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
+                    )
+                if hasattr(inputs, "vit_position_ids"):
+                    multi_vision_inputs["vit_seqlens"].extend(
+                        inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
+                    )
             else:
                 vision_inputs = inputs
                 if self.encoder_cache:
@@ -2672,8 +2674,12 @@ class GPUModelRunner(ModelRunnerBase):
 
     def extract_vision_features_qwen(self, inputs: list[paddle.Tensor]) -> paddle.Tensor:
         assert inputs["images"] is not None
-        grid_thw = inputs["grid_thw"]
-        images = inputs["images"]
+        if envs.FD_ENABLE_MAX_PREFILL:
+            images = paddle.concat(inputs["images_lst"]).cast("bfloat16")
+            grid_thw = paddle.to_tensor(inputs["grid_thw_lst"], dtype="int64")
+        else:
+            grid_thw = inputs["grid_thw"]
+            images = inputs["images"]
         with paddle.amp.auto_cast(
             True,
             custom_black_list=self.amp_black,
