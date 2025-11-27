@@ -45,10 +45,15 @@ from fastdeploy.utils import llm_logger, spec_logger
 from fastdeploy.worker.output import LogprobsLists
 
 RECOVERY_STOP_SIGNAL = -3
-MAX_BSZ = 512
-K = 20
 MAX_DRAFT_TOKENS = 6
 SPECULATE_MAX_BSZ = 256
+
+if current_platform.is_xpu():
+    MAX_BSZ = 128
+    K = 5
+else:
+    MAX_BSZ = 512
+    K = 20
 
 
 class TokenProcessor:
@@ -340,7 +345,7 @@ class TokenProcessor:
         """
 
         if current_platform.is_xpu():
-            from fastdeploy.model_executor.ops.xpu import get_output, get_output_ep
+            from fastdeploy.model_executor.ops.xpu import get_output, get_output_ep,get_output_topk
         elif current_platform.is_iluvatar():
             from fastdeploy.model_executor.ops.iluvatar import get_output
         elif current_platform.is_gcu():
