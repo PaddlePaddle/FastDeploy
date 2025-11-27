@@ -304,6 +304,8 @@ class ModelConfig:
 
         if hasattr(self, "num_experts") and getattr(self, "moe_num_experts") is None:
             self.moe_num_experts = self.num_experts
+        if hasattr(self, "n_routed_experts") and getattr(self, "moe_num_experts") is None:
+            self.moe_num_experts = self.n_routed_experts
 
     def read_from_env(self):
         """
@@ -1572,7 +1574,7 @@ class FDConfig:
             self.max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "3"))
             if current_platform.is_xpu():
                 self.max_prefill_batch = 1
-            if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            if self.model_config is not None and self.model_config.enable_mm:
                 self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
         else:
             self.max_prefill_batch = self.scheduler_config.max_num_seqs
@@ -1804,6 +1806,15 @@ class FDConfig:
             assert (
                 int(envs.FD_DISABLED_RECOVER) == 0
             ), "FD_DISABLED_RECOVER is not supported while ENABLE_V1_KVCACHE_SCHEDULER is turned on."
+
+        if self.eplb_config is not None and self.eplb_config.enable_eplb:
+            try:
+                import cuda  # noqa
+            except ImportError:
+                raise ImportError(
+                    "cuda-python not installed. Install the version matching your CUDA toolkit:\n"
+                    "  CUDA 12.x → pip install cuda-python==12.*\n"
+                )
 
     def print(self):
         """

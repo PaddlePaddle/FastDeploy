@@ -319,9 +319,6 @@ class EngineService:
                 )
                 self.cfg.cache_config.cache_queue_port = self.cache_task_queue.get_server_port()
 
-        self.llm_logger.info(
-            f"local {min(self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,self.cfg.parallel_config.data_parallel_size - 1)}"
-        )
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
@@ -694,8 +691,16 @@ class EngineService:
                 else:
                     max_num_batched_tokens = self.cfg.model_config.max_model_len
 
+                # In multi-mode scenarios, using available_block_num to pull requests to prevent heavy rescheduling
+                # in the frequency domain due to insufficient blocks
+                if self.cfg.model_config.enable_mm:
+                    self.resource_manager.check_and_free_block_tables()
+                    available_blocks = self.resource_manager.available_block_num()
+                else:
+                    available_blocks = self.cfg.cache_config.max_block_num_per_seq
+
                 tasks = self.scheduler.get_requests(
-                    available_blocks=self.cfg.cache_config.max_block_num_per_seq,
+                    available_blocks=available_blocks,
                     block_size=self.cfg.cache_config.block_size,
                     reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
                     max_num_batched_tokens=max_num_batched_tokens,
