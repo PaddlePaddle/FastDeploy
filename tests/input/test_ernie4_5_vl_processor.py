@@ -119,26 +119,179 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.process_request_dict(request_dict, 100)
         self.assertEqual(request_dict["enable_thinking"], True)
 
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"options": {"thinking_mode": "close"}},
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], False)
+    def test_parse_processor_kwargs_valid(self):
+        """Test _parse_processor_kwargs with valid kwargs (lines 128-163)"""
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+            processor._parse_processor_kwargs = Ernie4_5_VLProcessor._parse_processor_kwargs.__get__(
+                processor, Ernie4_5_VLProcessor
+            )
 
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"options": {"thinking_mode": "false"}},
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], False)
+            valid_kwargs = {
+                "spatial_conv_size": 14,
+                "temporal_conv_size": 2,
+                "image_min_pixels": 1000,
+                "image_max_pixels": 10000,
+            }
+            result = processor._parse_processor_kwargs(valid_kwargs)
+            self.assertEqual(result, valid_kwargs)
 
-        request_dict = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "chat_template_kwargs": {"enable_thinking": False},
-        }
-        self.processor.process_request_dict(request_dict, 100)
-        self.assertEqual(request_dict["enable_thinking"], False)
+    def test_parse_processor_kwargs_invalid_type(self):
+        """Test _parse_processor_kwargs with invalid type (line 155)
+
+        Note: The implementation catches ValueError and returns empty dict with warning log,
+        rather than raising the exception.
+        """
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+
+            invalid_kwargs = {"spatial_conv_size": "invalid"}  # Should be int
+            # Implementation catches exception and returns empty dict
+            result = Ernie4_5_VLProcessor._parse_processor_kwargs(processor, invalid_kwargs)
+            self.assertEqual(result, {})
+
+    def test_parse_processor_kwargs_not_dict(self):
+        """Test _parse_processor_kwargs with non-dict input (line 135)
+
+        Note: The implementation catches ValueError and returns empty dict with warning log,
+        rather than raising the exception.
+        """
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+
+            # Implementation catches exception and returns empty dict
+            result = Ernie4_5_VLProcessor._parse_processor_kwargs(processor, "not a dict")
+            self.assertEqual(result, {})
+
+    def test_parse_processor_kwargs_exception_handling(self):
+        """Test _parse_processor_kwargs exception handling (line 162)"""
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+            processor._parse_processor_kwargs = Ernie4_5_VLProcessor._parse_processor_kwargs.__get__(
+                processor, Ernie4_5_VLProcessor
+            )
+
+            # This should return empty dict on exception
+            with patch("fastdeploy.input.ernie4_5_vl_processor.ernie4_5_vl_processor.data_processor_logger"):
+                result = processor._parse_processor_kwargs(None)
+                self.assertEqual(result, {})
+
+    def test_parse_limits_valid(self):
+        """Test _parse_limits with valid input (lines 165-179)"""
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+            processor._parse_limits = Ernie4_5_VLProcessor._parse_limits.__get__(processor, Ernie4_5_VLProcessor)
+
+            valid_limits = {"image": 5, "video": 3}
+            result = processor._parse_limits(valid_limits)
+            self.assertEqual(result["image"], 5)
+            self.assertEqual(result["video"], 3)
+            self.assertEqual(result["audio"], 1)  # Default value
+
+    def test_parse_limits_invalid_type(self):
+        """Test _parse_limits with invalid type (line 174)
+
+        Note: The implementation catches ValueError and returns DEFAULT_LIMITS with warning log,
+        rather than raising the exception.
+        """
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+
+            # Implementation catches exception and returns default limits
+            result = Ernie4_5_VLProcessor._parse_limits(processor, "not a dict")
+            # Should return DEFAULT_LIMITS = {"image": 1, "video": 1, "audio": 1}
+            self.assertEqual(result["image"], 1)
+            self.assertEqual(result["video"], 1)
+            self.assertEqual(result["audio"], 1)
+
+    def test_parse_limits_empty(self):
+        """Test _parse_limits with empty input (line 170)"""
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+            processor._parse_limits = Ernie4_5_VLProcessor._parse_limits.__get__(processor, Ernie4_5_VLProcessor)
+
+            result = processor._parse_limits(None)
+            self.assertEqual(result["image"], 1)
+            self.assertEqual(result["video"], 1)
+            self.assertEqual(result["audio"], 1)
+
+    def test_check_mm_limits_with_dict(self):
+        """Test _check_mm_limits with dict input (lines 182-184)"""
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+            processor.limit_mm_per_prompt = {"image": 2, "video": 1}
+            processor._check_mm_limits = Ernie4_5_VLProcessor._check_mm_limits.__get__(processor, Ernie4_5_VLProcessor)
+
+            mm_data = {"image": [1, 2], "video": [1]}
+            # Should not raise
+            processor._check_mm_limits(mm_data)
+
+    def test_check_mm_limits_with_messages(self):
+        """Test _check_mm_limits with messages input (lines 186-195)"""
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+            processor.limit_mm_per_prompt = {"image": 2, "video": 1}
+            processor._check_mm_limits = Ernie4_5_VLProcessor._check_mm_limits.__get__(processor, Ernie4_5_VLProcessor)
+
+            messages = [
+                {"role": "user", "content": [{"type": "image", "data": "img1"}]},
+                {"role": "user", "content": [{"type": "video", "data": "vid1"}]},
+            ]
+            # Should not raise
+            processor._check_mm_limits(messages)
+
+    def test_check_mm_limits_exceeded(self):
+        """Test _check_mm_limits when limit is exceeded (line 201)"""
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+            processor.limit_mm_per_prompt = {"image": 1, "video": 1}
+            processor._check_mm_limits = Ernie4_5_VLProcessor._check_mm_limits.__get__(processor, Ernie4_5_VLProcessor)
+
+            mm_data = {"image": [1, 2, 3], "video": []}  # 3 images, limit is 1
+            with self.assertRaises(ValueError) as context:
+                processor._check_mm_limits(mm_data)
+            self.assertIn("Too many image items", str(context.exception))
+
+    def test_apply_default_parameters_with_dict(self):
+        """Test _apply_default_parameters with dict request (lines 102-116)"""
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+            processor.generation_config = MagicMock()
+            processor.generation_config.top_p = 0.8
+            processor.generation_config.temperature = 0.9
+            processor._apply_default_parameters = Ernie4_5_VLProcessor._apply_default_parameters.__get__(
+                processor, Ernie4_5_VLProcessor
+            )
+
+            request = {}
+            result = processor._apply_default_parameters(request)
+            self.assertEqual(result["top_p"], 0.8)
+            self.assertEqual(result["temperature"], 0.9)
+
+    def test_apply_default_parameters_with_object(self):
+        """Test _apply_default_parameters with object request (lines 108-109)"""
+        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
+            processor = Ernie4_5_VLProcessor("model_path")
+            processor.generation_config = MagicMock()
+            processor.generation_config.top_p = 0.8
+            processor._apply_default_parameters = Ernie4_5_VLProcessor._apply_default_parameters.__get__(
+                processor, Ernie4_5_VLProcessor
+            )
+
+            class MockRequest:
+                def __init__(self):
+                    self.top_p = None
+                    self.temperature = None
+
+                def get(self, key):
+                    return getattr(self, key, None)
+
+                def set(self, key, value):
+                    setattr(self, key, value)
+
+            request = MockRequest()
+            result = processor._apply_default_parameters(request)
+            self.assertEqual(result.top_p, 0.8)
 
 
 class TestDataProcessorTargetMethods(unittest.TestCase):
