@@ -683,7 +683,6 @@ class EngineService:
         def _fetch_request():
             try:
                 nonlocal is_fetching
-                is_fetching = True
                 num_prefill_batch = min(
                     int(self.resource_manager.available_batch()),
                     self.cfg.max_prefill_batch,
@@ -797,6 +796,7 @@ class EngineService:
                     continue
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     if not is_fetching:
+                        is_fetching = True
                         get_request_pool.submit(_fetch_request)
 
                 else:
@@ -807,6 +807,7 @@ class EngineService:
                     ):
                         # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
                         try:
+                            is_fetching = True
                             get_request_pool.submit(_fetch_request)
                         except RuntimeError as e:
                             if "shutdown" in str(e):
