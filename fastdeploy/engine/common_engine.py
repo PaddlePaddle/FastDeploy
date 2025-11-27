@@ -34,6 +34,7 @@ from opentelemetry import trace
 from fastdeploy.engine.request import Request, RequestOutput, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
+from fastdeploy.eplb.utils import init_eplb_signals
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
     EngineCacheQueue,
@@ -141,6 +142,12 @@ class EngineService:
                 disable_any_whitespace=self.cfg.structured_outputs_config.disable_any_whitespace,
             )
         self._init_worker_monitor_signals()
+
+        if self.cfg.eplb_config.enable_eplb:
+            current_suffix = int(
+                self.cfg.parallel_config.engine_worker_queue_port[self.cfg.parallel_config.local_data_parallel_id]
+            )
+            init_eplb_signals(cfg, current_suffix)
 
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
@@ -312,9 +319,6 @@ class EngineService:
                 )
                 self.cfg.cache_config.cache_queue_port = self.cache_task_queue.get_server_port()
 
-        self.llm_logger.info(
-            f"local {min(self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,self.cfg.parallel_config.data_parallel_size - 1)}"
-        )
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
@@ -687,14 +691,23 @@ class EngineService:
                 else:
                     max_num_batched_tokens = self.cfg.model_config.max_model_len
 
+                # In multi-mode scenarios, using available_block_num to pull requests to prevent heavy rescheduling
+                # in the frequency domain due to insufficient blocks
+                if self.cfg.model_config.enable_mm:
+                    self.resource_manager.check_and_free_block_tables()
+                    available_blocks = self.resource_manager.available_block_num()
+                else:
+                    available_blocks = self.cfg.cache_config.max_block_num_per_seq
+
                 tasks = self.scheduler.get_requests(
-                    available_blocks=self.cfg.cache_config.max_block_num_per_seq,
+                    available_blocks=available_blocks,
                     block_size=self.cfg.cache_config.block_size,
                     reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
                     max_num_batched_tokens=max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
                 for task in tasks:
+                    task.schedule_start_time = time.time()
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
 
                 if self.cfg.scheduler_config.splitwise_role == "decode":
@@ -807,6 +820,7 @@ class EngineService:
                                 break
                             else:
                                 raise
+
                 # 2. Schedule requests
                 tasks, error_tasks = self.resource_manager.schedule()
 
@@ -1118,7 +1132,7 @@ class EngineService:
                     # received the request sent by the client
                     waiting_request_outputs.append(req_output)
                     continue
-
+                req_output.finished = False
                 ready_request_outputs.append(req_output)
                 self.llm_logger.debug(f"there are enough resource for prefilled request: {req_output.request_id}")
 
@@ -1138,6 +1152,8 @@ class EngineService:
                         self.resource_manager.pre_recycle_resource(request_id)
                         if request_id in self.token_processor.tokens_counter:
                             del self.token_processor.tokens_counter[request_id]
+                        req_output.finished = True
+                        self.scheduler.put_results([req_output])
                         continue
                     if req_output.error_code != 200:
                         self.llm_logger.warning(
@@ -1149,6 +1165,8 @@ class EngineService:
                         self.scheduler.put_results([req_output])
                         continue
                     self.token_processor.tokens_counter[request_id] = 1
+                    if envs.FD_ENABLE_INTERNAL_ADAPTER:  # first token sent by D instance
+                        self.scheduler.put_results([req_output])
                     self.resource_manager.add_prefilled_request(req_output)
                     self.llm_logger.debug(f"add prefilled request success, {request_id}")
 

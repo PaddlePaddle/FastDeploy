@@ -66,7 +66,6 @@ class Ernie4_5_MLP(nn.Layer):
         reduce_results: bool = True,
     ) -> None:
         super().__init__()
-        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.up_gate_proj = MergedColumnParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.up_gate_proj",
@@ -138,7 +137,8 @@ class Ernie4_5_MoE(nn.Layer):
                 "down_proj_expert_code_zp_key": f"{prefix}.experts.{{}}.down_proj.code_zp",
             }
         elif moe_quant_type == "tensor_wise_fp8" or (
-            moe_quant_type == "block_wise_fp8" and fd_config.model_config.is_quantized
+            moe_quant_type == "block_wise_fp8"
+            and (fd_config.model_config.is_quantized or fd_config.model_config.is_moe_quantized)
         ):
             weight_key_map = {
                 "gate_weight_key": f"{prefix}.gate.weight",
@@ -367,7 +367,7 @@ class Ernie4_5_Model(nn.Layer):
         fd_config.model_config.pretrained_config.prefix_name = "ernie"
         self.fd_config = fd_config
         self.redundant_table_manger = None
-        if fd_config.model_config.enable_redundant_experts is True:
+        if fd_config.eplb_config.enable_eplb is True:
             self.redundant_table_manger = RedundantExpertManger(
                 n_routed_experts=fd_config.model_config.moe_num_experts,
                 num_hidden_layers=fd_config.model_config.num_hidden_layers,
