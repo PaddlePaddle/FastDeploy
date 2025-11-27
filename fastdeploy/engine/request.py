@@ -149,7 +149,7 @@ class Request:
         if pooling_params is not None:
             self.enable_thinking = False
         else:
-            self.enable_thinking = True
+            self.enable_thinking = enable_thinking
         self.reasoning_max_tokens = reasoning_max_tokens
         self.trace_carrier = trace_carrier
 
@@ -196,6 +196,7 @@ class Request:
             sampling_params = SamplingParams.from_dict(d)
 
         enable_thinking = d.get("enable_thinking", None)
+
         if pooling_params is not None:
             enable_thinking = False
         if (
@@ -213,7 +214,6 @@ class Request:
                 data_processor_logger.error(
                     f"Convert mm_positions to ImagePosition error: {e}, {str(traceback.format_exc())}"
                 )
-
         return cls(
             request_id=d["request_id"],
             prompt=d.get("prompt"),
