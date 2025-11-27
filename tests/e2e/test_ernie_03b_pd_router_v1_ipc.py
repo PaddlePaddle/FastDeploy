@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Test splitwise deployment which uses local_scheduler + router,
-# and ENABLE_V1_KVCACHE_SCHEDULER is 0
+# Test splitwise deployment: use local_scheduler + router,
+# set ENABLE_V1_KVCACHE_SCHEDULER is 1, use ipc to transfer cache.
 
 import json
 import os
@@ -109,9 +109,9 @@ def setup_and_run_server():
     print("start prefill...")
     env_prefill = os.environ.copy()
     env_prefill["CUDA_VISIBLE_DEVICES"] = "0"
-    env_prefill["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
+    env_prefill["ENABLE_V1_KVCACHE_SCHEDULER"] = "1"
     env_prefill["FD_LOG_DIR"] = "log_prefill"
-    prefill_log_path = "server_prefill.log"
+    prefill_log_path = "prefill.log"
     prefill_cmd = [
         sys.executable,
         "-m",
@@ -159,9 +159,9 @@ def setup_and_run_server():
     print("start decode...")
     env_decode = os.environ.copy()
     env_decode["CUDA_VISIBLE_DEVICES"] = "1"
-    env_decode["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
+    env_decode["ENABLE_V1_KVCACHE_SCHEDULER"] = "1"
     env_decode["FD_LOG_DIR"] = "log_decode"
-    decode_log_path = "server_decode.log"
+    decode_log_path = "decode.log"
     decode_cmd = [
         sys.executable,
         "-m",
@@ -214,9 +214,10 @@ def setup_and_run_server():
     else:
         print("[TIMEOUT] API server failed to start in 5 minutes. Cleaning up...")
         try:
+            os.killpg(process_router.pid, signal.SIGTERM)
             os.killpg(process_prefill.pid, signal.SIGTERM)
             os.killpg(process_decode.pid, signal.SIGTERM)
-            clean()
+            clean(PORTS_TO_CLEAN)
         except Exception as e:
             print(f"Failed to kill process group: {e}")
         raise RuntimeError(f"API server did not start on port {FD_API_PORT}")
