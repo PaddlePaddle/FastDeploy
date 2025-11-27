@@ -14,14 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-BUILD_WHEEL=${1:-1}
+BUILD_WHEEL=${1:-0}
 PYTHON_VERSION=${2:-"python"}
 export python=$PYTHON_VERSION
 FD_CPU_USE_BF16=${3:-"false"}
 # FD_BUILDING_ARCS: Specify target CUDA architectures for custom ops, e.g., "[80, 90, 100]".
 # For SM90 (Hopper), use 90. For SM100 (Blackwell), use 100.
 # These will be translated to 90a / 100a in setup_ops.py for specific features.
-FD_BUILDING_ARCS=${4:-""}
+FD_BUILDING_ARCS=${4:-"[100]"}
 # FD_USE_PRECOMPILED: Specify whether to use precompiled custom ops.
 # 0 = build ops from source (default)
 # 1 = use precompiled ops

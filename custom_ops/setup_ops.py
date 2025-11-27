@@ -70,7 +70,8 @@ def update_git_repo():
         # apply deep gemm patch
         deep_gemm_dir = "third_party/DeepGEMM"
         dst_path = os.path.join(submodule_dir, deep_gemm_dir)
-        patch = "0001-DeepGEMM-95e81b3.patch"
+        # patch = "0001-DeepGEMM-95e81b3.patch"
+        patch = "0002-DeepGEMM-c9f8b34.patch"
         patch_source = os.path.join(submodule_dir, patch)
         patch_destination = os.path.join(dst_path, patch)
         if not os.path.exists(patch_destination):
@@ -78,6 +79,9 @@ def update_git_repo():
             apply_cmd = ["git", "apply", patch]
             os.chdir(dst_path)
             subprocess.run(apply_cmd, check=True)
+        os.chdir(dst_path)
+        deep_gemm_install_cmd = ["bash", "install.sh"]
+        subprocess.run(deep_gemm_install_cmd, check=True)
         os.chdir(original_dir)
     except subprocess.CalledProcessError:
         raise Exception("Git submodule update and apply patch failed. Maybe network connection is poor.")
@@ -446,11 +450,13 @@ elif paddle.is_compiled_with_cuda():
                 print("SM100 (Blackwell): Applying SM100 configurations.")
                 nvcc_compile_args += [
                     # The gencode for 100a is added in get_gencode_flags
-                    # "-gencode",
-                    # "arch=compute_100a,code=compute_100a",
+                    "-gencode",
+                    "arch=compute_100a,code=compute_100a",
                     "-O3",  # Common optimization flag
                     "-DNDEBUG",  # Common debug flag
                     # Potentially add -DENABLE_SM100_FEATURES if specific macros are identified
+                    # "-DCUTLASS_ARCH_MMA_SM100A_ENABLED",
+                    # "-DCUTE_ARCH_TMA_SM100_ENABLED",
                 ]
                 # Placeholder for SM100-specific kernel auto-generation scripts
                 # These might be needed if Blackwell has new FP8 hardware features
@@ -461,7 +467,7 @@ elif paddle.is_compiled_with_cuda():
 
                 # Add SM100 specific sources if any, e.g., for new hardware intrinsics
                 # sources += ["gpu_ops/cutlass_kernels/w8a8/c4x_sm100.cu"] # Example
-                pass  # No SM100 specific sources identified yet beyond what CUTLASS handles
+                # pass  # No SM100 specific sources identified yet beyond what CUTLASS handles
             else:  # For cc >= 89 but not 90 or 100 (e.g. SM89)
                 print(f"SM{cc}: Running generic FP8 kernel auto-generation.")
                 os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels.py")

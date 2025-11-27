@@ -262,7 +262,8 @@ class Ernie4_5_Attention(nn.Layer):
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
     ):
-        qkv_out = self.qkv_proj(hidden_states)
+
+        qkv_out = self.qkv_proj(hidden_states, forward_meta.block_tables)
 
         attn_out = self.attn(
             qkv=qkv_out,
@@ -270,6 +271,7 @@ class Ernie4_5_Attention(nn.Layer):
         )
 
         output = self.o_proj(attn_out)
+
 
         return output
 
@@ -342,10 +344,12 @@ class Ernie4_5_DecoderLayer(nn.Layer):
             hidden_states, residual_input=residual, forward_meta=forward_meta
         )
 
+
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
             forward_meta=forward_meta,
         )
+
 
         hidden_states, residual = self.post_attention_layernorm(
             hidden_states,
