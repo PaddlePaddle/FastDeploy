@@ -24,6 +24,7 @@ from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 from fastdeploy.engine.pooling_params import PoolingParams
+from fastdeploy.engine.request import Request
 
 
 class InvalidParameterException(Exception):
@@ -540,6 +541,62 @@ class CompletionRequest(BaseModel):
 
         return req_dict
 
+    def to_request_for_infer(self, request_id=None, prompt=None):
+        if request_id is not None:
+            self.request_id = request_id
+        if prompt is not None:
+            self.prompt = prompt
+
+        guided_json_object = None
+        if self.response_format is not None:
+            if self.response_format.type == "json_object":
+                guided_json_object = True
+            elif self.response_format.type == "json_schema":
+                json_schema = self.response_format.json_schema.json_schema
+                assert json_schema is not None, "response_format.json_schema can not be None"
+                if isinstance(json_schema, (BaseModel, type(BaseModel))):
+                    self.guided_json = json_schema.model_json_schema()
+                else:
+                    self.guided_json = json_schema
+        if guided_json_object:
+            self.guided_json_object = guided_json_object
+        request = Request(
+            request_id=self.request_id,
+            prompt_token_ids=self.prompt_token_ids,
+            prompt=self.prompt,
+            disaggregate_info=self.disaggregate_info,
+            guided_json=self.guided_json,
+            guided_regex=self.guided_regex,
+            guided_choice=self.guided_choice,
+            guided_grammar=self.guided_grammar,
+            n=self.n,
+            logprobs=self.logprobs,
+            top_p_normalized_logprobs=self.top_p_normalized_logprobs,
+            temp_scaled_logprobs=self.temp_scaled_logprobs,
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            user=self.user,
+            stop=self.stop,
+            stop_token_ids=self.stop_token_ids,
+            top_k=self.top_k,
+            min_p=self.min_p,
+            min_tokens=self.min_tokens,
+            bad_words=self.bad_words,
+            bad_words_token_ids=self.bad_words_token_ids,
+            frequency_penalty=self.frequency_penalty,
+            presence_penalty=self.presence_penalty,
+            repetition_penalty=self.repetition_penalty,
+            seed=self.seed,
+            response_format=self.response_format,
+            logits_processors_args=self.logits_processors_args,
+            mm_hashes=self.mm_hashes,
+        )
+        if self.suffix is not None:
+            for key, value in self.suffix.items():
+                setattr(request, key, value)
+        return request
+
     @model_validator(mode="before")
     @classmethod
     def validate_stream_options(cls, data):
@@ -715,6 +772,85 @@ class ChatCompletionRequest(BaseModel):
             req_dict["mm_hashes"] = self.mm_hashes
 
         return req_dict
+
+    def to_request_for_infer(self, request_id=None):
+        max_tokens = self.max_completion_tokens or self.max_tokens
+        logprobs = self.top_logprobs if self.logprobs else None
+        if not self.prompt_token_ids:
+            # If disable_chat_template is set, then the first message in messages will be used as the prompt.
+            assert len(self.messages) > 0, "messages can not be an empty list, unless prompt_token_ids is passed"
+            if self.disable_chat_template:
+                self.prompt = self.messages[0]["content"]
+                self.messages = []
+
+        guided_json_object = None
+        if self.response_format is not None:
+            if self.response_format.type == "json_object":
+                guided_json_object = True
+            elif self.response_format.type == "json_schema":
+                json_schema = self.response_format.json_schema.json_schema
+                assert json_schema is not None, "response_format.json_schema can not be None"
+                if isinstance(json_schema, (BaseModel, type(BaseModel))):
+                    self.guided_json = json_schema.model_json_schema()
+                else:
+                    self.guided_json = json_schema
+            elif self.response_format.type == "structural_tag":
+                structural_tag = self.response_format
+                assert structural_tag is not None and isinstance(structural_tag, StructuralTagResponseFormat)
+                self.structural_tag = json.dumps(structural_tag.model_dump(by_alias=True))
+        if guided_json_object:
+            self.guided_json_object = guided_json_object
+        request = Request(
+            request_id=self.request_id,
+            messages=self.messages,
+            tools=self.tools.model_dump(),
+            reasoning_max_tokens=self.reasoning_max_tokens,
+            disable_chat_template=self.disable_chat_template,
+            structural_tag=self.structural_tag,
+            chat_template=self.chat_template,
+            prompt_token_ids=self.prompt_token_ids,
+            disaggregate_info=self.disaggregate_info,
+            guided_json=self.guided_json,
+            guided_choice=self.guided_choice,
+            guided_regex=self.guided_regex,
+            guided_grammar=self.guided_grammar,
+            n=self.n,
+            logprobs=logprobs,
+            top_logprobs=self.top_logprobs,
+            top_p_normalized_logprobs=self.top_p_normalized_logprobs,
+            temp_scaled_logprobs=self.temp_scaled_logprobs,
+            max_tokens=max_tokens,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            user=self.user,
+            stop=self.stop,
+            stop_token_ids=self.stop_token_ids,
+            top_k=self.top_k,
+            min_p=self.min_p,
+            min_tokens=self.min_tokens,
+            bad_words=self.bad_words,
+            bad_words_token_ids=self.bad_words_token_ids,
+            metadata=self.metadata,
+            completion_token_ids=self.completion_token_ids,
+            chat_template_kwargs=self.chat_template_kwargs,
+            frequency_penalty=self.frequency_penalty,
+            presence_penalty=self.presence_penalty,
+            repetition_penalty=self.repetition_penalty,
+            seed=self.seed,
+            response_format=self.response_format,
+            logits_processors_args=self.logits_processors_args,
+            mm_hashes=self.mm_hashes,
+        )
+        if self.metadata is not None:
+            assert (
+                "raw_request" not in self.metadata
+            ), "The parameter `raw_request` is not supported now, please use completion api instead."
+            for key, value in self.metadata.items():
+                setattr(request, key, value)
+            from fastdeploy.utils import api_server_logger
+
+            api_server_logger.warning("The parameter metadata is obsolete.")
+        return request
 
     @model_validator(mode="before")
     @classmethod

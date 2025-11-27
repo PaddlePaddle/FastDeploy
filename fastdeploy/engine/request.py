@@ -27,7 +27,7 @@ from typing_extensions import TypeVar
 
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
-from fastdeploy.entrypoints.openai.protocol import ToolCall
+from fastdeploy.entrypoints.openai.protocol import AnyResponseFormat, ToolCall
 from fastdeploy.utils import data_processor_logger
 from fastdeploy.worker.output import (
     LogprobsLists,
@@ -61,16 +61,16 @@ class ImagePosition:
 class Request:
     def __init__(
         self,
-        request_id: str,
-        prompt: Optional[Union[str, list[str]]],
-        prompt_token_ids: Optional[list[int]],
-        prompt_token_ids_len: Optional[int],
-        messages: Optional[list[list[dict[str, Any]]]],
-        history: Optional[list[list[str]]],
-        tools: Optional[list[Dict]],
-        system: Optional[Union[str, list[str]]],
-        eos_token_ids: Optional[list[int]],
-        arrival_time: float,
+        request_id: Optional[str],
+        prompt: Optional[Union[str, list[str], list[list[int]], list[int]]] = None,
+        prompt_token_ids: Optional[Union[list[int], list[list[int]]]] = None,
+        prompt_token_ids_len: Optional[int] = None,
+        messages: Optional[list[Any]] = None,
+        tools: Optional[list[Dict]] = None,
+        arrival_time: Optional[float] = None,
+        system: Optional[Union[str, list[str]]] = None,
+        history: Optional[list[list[str]]] = None,
+        eos_token_ids: Optional[list[int]] = None,
         sampling_params: Optional[SamplingParams] = None,
         pooling_params: Optional[PoolingParams] = None,
         preprocess_start_time: Optional[float] = None,
@@ -104,6 +104,38 @@ class Request:
         num_computed_tokens: int = 0,
         # for internal adapter
         ic_req_data: Optional[dict] = (None,),
+        # from ChatCompletionRequest or CompletionRequest
+        n: Optional[int] = 1,
+        logprobs: Optional[Union[int, bool]] = None,
+        top_logprobs: Optional[int] = 0,
+        top_p_normalized_logprobs: bool = False,
+        temp_scaled_logprobs: bool = False,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
+        user: Optional[str] = None,
+        stop: Optional[Union[str, list[str]]] = [],
+        stop_token_ids: Optional[list[int]] = [],
+        stop_seqs_len: Optional[list[int]] = [],
+        top_k: Optional[int] = None,
+        min_p: Optional[float] = None,
+        min_tokens: Optional[int] = None,
+        bad_words: Optional[list[str]] = None,
+        bad_words_token_ids: Optional[list[int]] = None,
+        metadata: Optional[dict] = None,
+        completion_token_ids: Optional[list[int]] = None,
+        chat_template_kwargs: Optional[dict] = None,
+        frequency_penalty: Optional[float] = None,
+        presence_penalty: Optional[float] = None,
+        repetition_penalty: Optional[float] = None,
+        prompt_tokens: Optional[str] = None,
+        add_generation_prompt: Optional[bool] = None,
+        seed: Optional[int] = None,
+        response_format: Optional[AnyResponseFormat] = None,
+        logits_processors_args: Optional[Dict] = None,
+        mm_hashes: Optional[list] = None,
+        best_of: Optional[int] = None,
+        suffix: Optional[dict] = None,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -180,6 +212,39 @@ class Request:
         self.async_process_futures = []
         self.error_message = None
         self.error_code = None
+
+        # from ChatCompletionRequest or CompletionRequest
+        self.n = n
+        self.logprobs = logprobs
+        self.top_logprobs = top_logprobs
+        self.top_p_normalized_logprobs = top_p_normalized_logprobs
+        self.temp_scaled_logprobs = temp_scaled_logprobs
+        self.max_tokens = max_tokens
+        self.temperature = temperature
+        self.top_p = top_p
+        self.user = user
+        self.stop = stop
+        self.stop_token_ids = stop_token_ids
+        self.stop_seqs_len = stop_seqs_len
+        self.top_k = top_k
+        self.min_p = min_p
+        self.min_tokens = min_tokens
+        self.bad_words = bad_words
+        self.bad_words_token_ids = bad_words_token_ids
+        self.metadata = metadata
+        self.completion_token_ids = completion_token_ids
+        self.chat_template_kwargs = chat_template_kwargs
+        self.frequency_penalty = frequency_penalty
+        self.presence_penalty = presence_penalty
+        self.repetition_penalty = repetition_penalty
+        self.prompt_tokens = prompt_tokens
+        self.add_generation_prompt = add_generation_prompt
+        self.seed = seed
+        self.response_format = response_format
+        self.logits_processors_args = logits_processors_args
+        self.mm_hashes = mm_hashes
+        self.best_of = best_of
+        self.suffix = suffix
 
     @classmethod
     def from_dict(cls, d: dict):
