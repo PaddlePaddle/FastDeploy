@@ -612,6 +612,9 @@ class FusedMoE(nn.Layer):
         multi_outs = paddle.zeros([token_num_per_rank * self.tp_size, x.shape[1]], dtype=x.dtype)
         paddle.distributed.all_gather(multi_outs, out, self.tp_group)
         out = multi_outs[:token_num, :]
+
+        if self.reduce_results and self.tp_size > 1:
+            out = tensor_model_parallel_all_reduce(out, self.tp_group)
         return out
 
     def forward(self, x: paddle.Tensor, gate: nn.Layer):
@@ -633,16 +636,11 @@ class FusedMoE(nn.Layer):
             and token_num >= self.tp_size
         ):
             out = self.forward_split_allgather(x, gate)
+        elif self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.enable_chunked_moe:
+            out = self.forward_chunked_moe(x, gate)
         else:
-            out = self.quant_method.apply(self, x, gate)
+            out = self.forward_normal(x, gate)
 
-        if self.reduce_results and self.tp_size > 1:
-            out = tensor_model_parallel_all_reduce(out, self.tp_group)
-        else:
-            if self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.enable_chunked_moe:
-                out = self.forward_chunked_moe(x, gate)
-            else:
-                out = self.forward_normal(x, gate)
         return out
 
     def forward_chunked_moe(self, x: paddle.Tensor, gate: nn.Layer):

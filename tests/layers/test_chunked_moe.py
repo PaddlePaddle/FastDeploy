@@ -128,18 +128,20 @@ class TestChunkedMoE(unittest.TestCase):
     def run_model_runner(self):
         self.model_runner.initialize_forward_meta()
 
-        assert (
-            self.model_runner.fd_config.parallel_config.max_moe_num_chunk == 5
-        ), "chunk size is 2, max token_num is 10, max_moe_num_chunk should be 5"
-
+        assert self.model_runner.fd_config.parallel_config.max_moe_num_chunk == 5, (
+            f"chunk size is 2, max token_num is 10, max_moe_num_chunk should be 5, "
+            f"but got {self.model_runner.fd_config.parallel_config.max_moe_num_chunk}"
+        )
         if dist.get_rank() == 0:
-            assert (
-                self.model_runner.fd_config.parallel_config.moe_num_chunk == 5
-            ), "chunk size is 2, token_num is 10, moe_num_chunk in rank 0 should be 5"
+            assert self.model_runner.fd_config.parallel_config.moe_num_chunk == 5, (
+                f"chunk size is 2, token_num is 10, moe_num_chunk in rank 0 should be 5"
+                f"but got {self.model_runner.fd_config.parallel_config.moe_num_chunk}"
+            )
         else:
-            assert (
-                self.model_runner.fd_config.parallel_config.moe_num_chunk == 1
-            ), "chunk size is 2, token_num is 1, moe_num_chunk in rank 1 should be 1"
+            assert self.model_runner.fd_config.parallel_config.moe_num_chunk == 1, (
+                f"chunk size is 2, token_num is 1, moe_num_chunk in rank 1 should be 1"
+                f", but got {self.model_runner.fd_config.parallel_config.moe_num_chunk}"
+            )
 
     def run_fused_moe(self):
         gate = Mock()
