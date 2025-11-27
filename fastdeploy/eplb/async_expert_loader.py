@@ -22,7 +22,6 @@ from typing import List, Tuple
 
 import numpy as np
 import paddle
-from cuda import cudart
 
 from fastdeploy.config import EPLBConfig
 
@@ -89,6 +88,8 @@ def create_mmap(model_name: List, ep_rank: int, ep_size: int, shm_uuid: str, epl
 
         shm_ptr = ctypes.cast(shm_ptr, ctypes.POINTER(ctypes.c_int8))
         addr = ctypes.addressof(shm_ptr.contents)
+
+        from cuda import cudart
 
         # Register memory with CUDA
         (ret,) = cudart.cudaHostRegister(addr, shm_size, 0)
