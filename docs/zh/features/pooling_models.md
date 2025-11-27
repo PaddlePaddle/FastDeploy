@@ -4,7 +4,7 @@
 
 FastDeploy也支持pooling模型，例如嵌入(embedding)和奖励(reward)模型。
 
-在FastDeploy中,池化模型通过[FdModelForPooling][fastdeploy.model_executor.models.interfaces_base.FdModelForPooling]接口。这些模型使用一个[Pooler][fastdeploy.model_executor.layers.pooler.Pooler]来提取输入的最终隐藏状态并返回。
+在FastDeploy中,池化模型通过`FdModelForPooling`接口。这些模型使用一个`Pooler`来提取输入的最终隐藏状态并返回。
 
 ## Configuration
 
@@ -12,7 +12,7 @@ FastDeploy也支持pooling模型，例如嵌入(embedding)和奖励(reward)模�
 
 通过`--runner pooling`选项以池化模型运行模型。
 
-!!! 提示
+!!! 提示<br>
     在绝大多数情况下无需手动设置该选项，因此Fastdeploy可以通过--runner auto(默认值)自动检测合适的runner。
 
 ### Model Conversion
@@ -26,7 +26,7 @@ FastDeploy也支持pooling模型，例如嵌入(embedding)和奖励(reward)模�
 | `*ForTextEncoding`, `*EmbeddingModel`, `*Model` | `embed`     |  `embed`                              |
 | `*ForRewardModeling`, `*RewardModel`            | `reward`    | `reward`                              |
 
-!!! 提示
+!!! 提示<br>
     你可以显示设置`--convert <type>`来制定模型转换方式。
 
 ### Pooler Configuration
@@ -44,14 +44,14 @@ FastDeploy也支持pooling模型，例如嵌入(embedding)和奖励(reward)模�
 | `reward`   | `LAST`        | ❌            | ❌     |
 | `embed`    | `LAST`       | ✅︎            | ❌      |
 
-加载[Sentence Transformers]模型时，其modules.json配置优于默认值，也可以通过@default_pooling_type("LAST")在模型组网时指定。
+加载`Sentence Transformers`模型时，其modules.json配置优于默认值，也可以通过@default_pooling_type("LAST")在模型组网时指定。
 
 ## Online Serving
 
 FastDeploy的OpenAI兼容服务器提供了API的端点和自定义的reward接口
 
-- [Embeddings API]，支持文本和多模态输入
-- [Reward API],给指定的内容打分
+- `Embeddings API`，支持文本和多模态输入
+- `Reward API`,给指定的内容打分
 
 ### Embedding模型:
 ```python
@@ -67,8 +67,8 @@ python -m fastdeploy.entrypoints.openai.api_server --model ${model_path} \
     --no-enable-prefix-caching \
 ```
 
-请求方式:
-A.EmbeddingCompletionRequest 示例（标准文本输入）
+请求方式:<br>
+A. EmbeddingCompletionRequest 示例（标准文本输入）
 
 ```bash
 curl -X POST 'YOUR_SERVICE_URL/v1/embeddings' \
@@ -83,7 +83,7 @@ curl -X POST 'YOUR_SERVICE_URL/v1/embeddings' \
   }'
 ```
 
-B.EmbeddingChatRequest 示例（消息序列输入）
+B. EmbeddingChatRequest 示例（消息序列输入）
 
 ```bash
 curl -X POST 'YOUR_SERVICE_URL/v1/embeddings' \
@@ -115,8 +115,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --no-enable-prefix-caching
 ```
 
-请求方式:
-ChatRewardRequest
+请求方式: ChatRewardRequest
 
 ```bash
 curl --location 'http://xxxx/v1/chat/reward' \

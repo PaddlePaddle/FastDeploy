@@ -4,8 +4,8 @@
 
 FastDeploy also supports pooling models, such as embedding and reward models.
 
-In FastDeploy, pooling models implement the [FdModelForPooling][fastdeploy.model_executor.models.interfaces_base] interface.
-These models use a [Pooler][fastdeploy.model_executor.layers.pooler.Pooler] to extract the final hidden states of the input
+In FastDeploy, pooling models implement the `FdModelForPooling` interface.
+These models use a `Pooler` to extract the final hidden states of the input
 before returning them.
 
 ## Configuration
@@ -14,7 +14,7 @@ before returning them.
 
 Run a model in pooling mode via the option `--runner pooling`.
 
-!!! tip
+!!! tip<br>
     There is no need to set this option in the vast majority of cases as Fastdeploy can automatically
     detect the appropriate model runner via `--runner auto`.
 
@@ -23,7 +23,7 @@ Run a model in pooling mode via the option `--runner pooling`.
 FastDeploy can adapt models for various pooling tasks via the option `--convert <type>`.
 
 If `--runner pooling` has been set (manually or automatically) but the model does not implement the
-[FdModelForPooling][astdeploy.model_executor.models.interfaces_base.FdModelForPooling] interface,
+`FdModelForPooling` interface,
 vLLM will attempt to automatically convert the model according to the architecture names
 shown in the table below.
 
@@ -32,14 +32,14 @@ shown in the table below.
 | `*ForTextEncoding`, `*EmbeddingModel`, `*Model` | `embed`     |         `embed`                       |
 | `*ForRewardModeling`, `*RewardModel`            | `reward`    |         `reward`                      |
 
-!!! tip
+!!! tip<br>
     You can explicitly set `--convert <type>` to specify how to convert the model.
 
 ### Pooler Configuration
 
 #### Predefined models
 
-If the [Pooler][fastdeploy.model_executor.layers.pooler.Pooler] defined by the model accepts `pooler_config`,
+If the `Pooler` defined by the model accepts `pooler_config`,
 you can override some of its attributes via the `--pooler-config` option.
 
 #### Converted models
@@ -90,7 +90,7 @@ curl -X POST 'YOUR_SERVICE_URL/v1/embeddings' \
   }'
 ```
 
-B.EmbeddingChatRequest Example (Message Sequence Input)
+B. EmbeddingChatRequest Example (Message Sequence Input)
 
 ```bash
 curl -X POST 'YOUR_SERVICE_URL/v1/embeddings' \
@@ -121,9 +121,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --convert reward \
     --no-enable-prefix-caching
 ```
-Request Method:
-
-ChatRewardRequest
+Request Method: ChatRewardRequest
 ```bash
 curl --location 'http://xxxx/v1/chat/reward' \
 --header 'Content-Type: application/json' \
