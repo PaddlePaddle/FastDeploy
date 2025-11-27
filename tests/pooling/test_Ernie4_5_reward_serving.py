@@ -222,7 +222,6 @@ def test_reward_model(reward_api_url, headers):
 
     print(f"\n=== Sending request to {reward_api_url} ===")
 
-    # 发送HTTP请求
     response = requests.post(reward_api_url, headers=headers, json=payload, timeout=30)
 
     assert response.status_code == 200, f"API request failed with status {response.status_code}: {response.text}"

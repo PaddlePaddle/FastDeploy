@@ -71,8 +71,8 @@ def build_pooling_cursor(num_scheduled_tokens: list[int], prompt_lens: paddle.Te
 
     n_seq = len(num_scheduled_tokens)
     index = list(range(n_seq))
-    num_scheduled_tokens = paddle.to_tensor(num_scheduled_tokens, dtype="int64", place=paddle.CPUPlace())
-    cumsum = paddle.zeros([n_seq + 1], dtype="int64", device=paddle.CPUPlace())
+    num_scheduled_tokens = paddle.to_tensor(num_scheduled_tokens, dtype="int64")
+    cumsum = paddle.zeros([n_seq + 1], dtype="int64")
 
     paddle.cumsum(num_scheduled_tokens, axis=0, out=cumsum[1:])
     if isinstance(device, paddle.CUDAPlace):
