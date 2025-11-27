@@ -25,6 +25,7 @@ from typing import Any, Dict, Generic, Optional, Union
 import numpy as np
 from typing_extensions import TypeVar
 
+from fastdeploy import envs
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
@@ -75,8 +76,9 @@ class Request:
         pooling_params: Optional[PoolingParams] = None,
         preprocess_start_time: Optional[float] = None,
         preprocess_end_time: Optional[float] = None,
-        inference_start_time: float = 0,
-        llm_engine_recv_req_timestamp: float = 0,
+        schedule_start_time: Optional[float] = None,
+        inference_start_time: Optional[float] = None,
+        llm_engine_recv_req_timestamp: Optional[float] = None,
         multimodal_inputs: Optional[dict] = None,
         multimodal_data: Optional[dict] = None,
         disable_chat_template: bool = False,
@@ -122,10 +124,9 @@ class Request:
         self.arrival_time = arrival_time
         self.preprocess_start_time = preprocess_start_time
         self.preprocess_end_time = preprocess_end_time
+        self.schedule_start_time = schedule_start_time
         self.inference_start_time = inference_start_time
-        self.llm_engine_recv_req_timestamp = (
-            llm_engine_recv_req_timestamp if llm_engine_recv_req_timestamp else time.time()
-        )
+        self.llm_engine_recv_req_timestamp = llm_engine_recv_req_timestamp or time.time()
         self.disable_chat_template = disable_chat_template
         self.disaggregate_info = disaggregate_info
 
@@ -331,8 +332,20 @@ class Request:
             setattr(self, key, value)
 
     def __repr__(self) -> str:
-        """Safe string representation that ignores private and None fields."""
-        return ""
+        """Sanitized repr without private or None fields."""
+        try:
+            if not envs.FD_DEBUG:
+                return f"Request(request_id={self.request_id})"
+            else:
+                attrs_snapshot = dict(vars(self))
+                non_none_fields = [
+                    f"{attr}={value!r}"
+                    for attr, value in attrs_snapshot.items()
+                    if value is not None and not attr.startswith("_")
+                ]
+                return f"Request({', '.join(non_none_fields)})"
+        except Exception as e:
+            return f"<Request repr failed: {e}>"
 
 
 @dataclass(slots=True)
