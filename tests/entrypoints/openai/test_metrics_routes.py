@@ -184,19 +184,6 @@ def test_config_info_process_object_branches():
         assert "without_dict" in data and data["without_dict"] is None
 
 
-def test_setup_metrics_environment_sets_env_var():
-    # Cover 'fastdeploy/__init__.py'
-    import fastdeploy
-
-    # clear PROMETHEUS_MULTIPROC_DIR
-    os.environ.pop("PROMETHEUS_MULTIPROC_DIR")
-    # reload fastdeploy
-    assert os.environ.get("PROMETHEUS_MULTIPROC_DIR") is None
-    importlib.reload(fastdeploy)
-    # check if PROMETHEUS_MULTIPROC_DIR is reinitialized
-    assert os.environ.get("PROMETHEUS_MULTIPROC_DIR").startswith("/tmp/fd_prom")
-
-
 def test_metrics_app_routes_when_metrics_port_diff():
     # Cover metrics_app '/metrics'
     with (

@@ -39,7 +39,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     UsageInfo,
 )
 from fastdeploy.entrypoints.openai.response_processors import ChatResponseProcessor
-from fastdeploy.metrics.work_metrics import work_process_metrics
+from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import (
@@ -382,7 +382,7 @@ class OpenAIServingChat:
                     )
                     if res["finished"]:
                         num_choices -= 1
-                        work_process_metrics.e2e_request_latency.observe(
+                        main_process_metrics.e2e_request_latency.observe(
                             time.time() - res["metrics"]["request_start_time"]
                         )
                         if previous_num_tokens[idx] != max_tokens:
@@ -631,7 +631,7 @@ class OpenAIServingChat:
         output = data["outputs"]
 
         if output is not None and output.get("metrics") and output["metrics"].get("request_start_time"):
-            work_process_metrics.e2e_request_latency.observe(
+            main_process_metrics.e2e_request_latency.observe(
                 time.time() - data.get("metrics").get("request_start_time")
             )
         message = ChatMessage(

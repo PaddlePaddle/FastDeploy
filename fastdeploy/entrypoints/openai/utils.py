@@ -17,12 +17,15 @@
 import asyncio
 import heapq
 import random
+import time
 
 import aiozmq
 import msgpack
 import zmq
 
 from fastdeploy.engine.args_utils import EngineArgs
+from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.metrics.stats import ZMQMetricsStats
 from fastdeploy.utils import FlexibleArgumentParser, api_server_logger
 
 UVICORN_CONFIG = {
@@ -122,6 +125,13 @@ class DealerConnectionManager:
             try:
                 raw_data = await dealer.read()
                 response = msgpack.unpackb(raw_data[-1])
+                _zmq_metrics_stats = ZMQMetricsStats()
+                _zmq_metrics_stats.msg_recv_total += 1
+                if "zmq_send_time" in response:
+                    _zmq_metrics_stats.zmq_latency = time.perf_counter() - response["zmq_send_time"]
+                address = dealer.transport.getsockopt(zmq.LAST_ENDPOINT)
+                main_process_metrics.record_zmq_stats(_zmq_metrics_stats, address)
+
                 request_id = response[-1]["request_id"]
                 if request_id[:4] in ["cmpl", "embd"]:
                     request_id = request_id.rsplit("_", 1)[0]

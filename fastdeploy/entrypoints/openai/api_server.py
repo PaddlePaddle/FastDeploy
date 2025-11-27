@@ -30,7 +30,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from gunicorn.app.base import BaseApplication
 from opentelemetry import trace
-from prometheus_client import CONTENT_TYPE_LATEST
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
@@ -58,11 +57,8 @@ from fastdeploy.entrypoints.openai.serving_reward import OpenAIServingReward
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
 from fastdeploy.envs import environment_variables
-from fastdeploy.metrics.metrics import (
-    EXCLUDE_LABELS,
-    get_filtered_metrics,
-    main_process_metrics,
-)
+from fastdeploy.metrics.metrics import get_filtered_metrics
+from fastdeploy.metrics.metrics_middleware import PrometheusMiddleware
 from fastdeploy.metrics.trace_util import (
     fd_start_span,
     inject_to_metadata,
@@ -270,6 +266,9 @@ env_api_key_func = environment_variables.get("FD_API_KEY")
 env_tokens = env_api_key_func() if env_api_key_func else []
 if tokens := [key for key in (args.api_key or env_tokens) if key]:
     app.add_middleware(AuthenticationMiddleware, tokens)
+
+# add middleware for http metrics
+app.add_middleware(PrometheusMiddleware)
 
 
 @asynccontextmanager
@@ -586,11 +585,8 @@ async def metrics():
     """
     metrics
     """
-    metrics_text = get_filtered_metrics(
-        EXCLUDE_LABELS,
-        extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=args.workers),
-    )
-    return Response(metrics_text, media_type=CONTENT_TYPE_LATEST)
+    metrics_text = get_filtered_metrics()
+    return Response(metrics_text, media_type="text/plain")
 
 
 @metrics_app.get("/config-info")
@@ -629,19 +625,9 @@ def launch_metrics_server():
     if not is_port_available(args.host, args.metrics_port):
         raise Exception(f"The parameter `metrics_port`:{args.metrics_port} is already in use.")
 
-    # Move setting prometheus directory to fastdeploy/__init__.py
-    # prom_dir = cleanup_prometheus_files(True)
-    # os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
     metrics_server_thread = threading.Thread(target=run_metrics_server, daemon=True)
     metrics_server_thread.start()
     time.sleep(1)
-
-
-# NOTE: This is commented out since PROMETHEUS_MULTIPROC_DIR is already set up in fastdeploy/__init__.py
-# def setup_metrics_environment():
-#     """Prepare Prometheus multiprocess directory before starting API workers."""
-#     prom_dir = cleanup_prometheus_files(True)
-#     os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
 
 
 controller_app = FastAPI()
@@ -756,7 +742,6 @@ def main():
         launch_metrics_server()
         console_logger.info(f"Launching metrics service at http://{args.host}:{args.metrics_port}/metrics")
     else:
-        # setup_metrics_environment()
         console_logger.info(f"Launching metrics service at http://{args.host}:{args.port}/metrics")
     console_logger.info(f"Launching chat completion service at http://{args.host}:{args.port}/v1/chat/completions")
     console_logger.info(f"Launching completion service at http://{args.host}:{args.port}/v1/completions")
