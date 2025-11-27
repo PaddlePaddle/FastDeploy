@@ -1,9 +1,28 @@
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import pathlib
 import sys
 import types
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 
 def _install_required_stubs():
@@ -71,13 +90,11 @@ _install_required_stubs()
 
 import fastdeploy.engine.sched.resource_manager_v1 as rm_v1
 from fastdeploy.engine.request import ImagePosition, Request, RequestStatus, RequestType
-from fastdeploy.engine.sched.resource_manager_v1 import (
-    ResourceManagerV1,
-    SignalConsumer,
-)
 
 
 class _MetricRecorder:
+    """Test double used to record metric values in resource manager tests."""
+
     def __init__(self):
         self.value = 0
         self.calls = []
@@ -92,6 +109,8 @@ class _MetricRecorder:
 
 
 class _FakePrefixCacheManager:
+    """Lightweight cache manager stub tracking GPU/CPU block usage."""
+
     def __init__(self, config, tensor_parallel_size, splitwise_role, local_data_parallel_id):
         cache_cfg = config.cache_config
         total_blocks = getattr(cache_cfg, "initial_gpu_blocks", 64)
@@ -141,6 +160,8 @@ class _FakePrefixCacheManager:
 
 
 class _FakeSignal:
+    """IPCSignal stub capturing shared numeric arrays for assertions."""
+
     def __init__(self, name, array, dtype, suffix=None, create=True):
         del name, dtype, suffix, create
         self.value = np.array(array, copy=True)
@@ -218,7 +239,7 @@ def resource_manager_factory():
             ),
             speculative_config=SimpleNamespace(method=speculative_method),
         )
-        return ResourceManagerV1(max_num_seqs, config, tensor_parallel_size=1, splitwise_role=splitwise_role)
+        return rm_v1.ResourceManagerV1(max_num_seqs, config, tensor_parallel_size=1, splitwise_role=splitwise_role)
 
     return _factory
 
@@ -241,12 +262,35 @@ def _make_request(request_id, prompt_token_ids, **kwargs):
     return req
 
 
+def _setup_running_request(manager, request, idx=0, need_block_num=0):
+    """Setup a request in running state with proper internal bookkeeping."""
+
+    request.idx = idx
+    manager.running.append(request)
+    manager.requests[request.request_id] = request
+    manager.req_dict[request.request_id] = idx
+    manager.tasks_list[idx] = request
+    manager.stop_flags[idx] = False
+    if need_block_num:
+        manager.need_block_num_signal.value[idx] = need_block_num
+
+
 def test_signal_consumer_resets_after_limit():
-    consumer = SignalConsumer(signal=3, consume_limit=2)
+    consumer = rm_v1.SignalConsumer(signal=3, consume_limit=2)
     assert consumer.watch() == 3
     assert consumer.consume() == 3
     assert consumer.consume() == 3
     assert consumer.consume() == 0
+
+
+def test_get_new_block_nums_with_speculative_budget(resource_manager_factory):
+    manager = resource_manager_factory(speculative_method="mtp")
+    request = _make_request("spec", list(range(5)))
+    request.num_computed_tokens = 2
+
+    num_blocks = manager.get_new_block_nums(request, num_new_tokens=4)
+
+    assert num_blocks == 3  # extra speculative block added
 
 
 def test_get_num_new_tokens_tracks_patch_boundaries(resource_manager_factory):
@@ -314,6 +358,35 @@ def test_get_num_new_tokens_with_image_regions(resource_manager_factory):
     assert request.image_end == 36
 
 
+def test_get_num_new_tokens_builds_missing_boundaries(resource_manager_factory, monkeypatch):
+    manager = resource_manager_factory(model_enable_mm=True)
+    request = _make_request("image-mm-missing", [99, 5, 99, 6])
+    request.num_computed_tokens = 0
+    request.multimodal_inputs = {
+        "images": [b"a", b"b"],
+        "grid_thw": [[1, 1, 1], [1, 1, 1]],
+        "mm_positions": [ImagePosition(0, 1), ImagePosition(1, 1)],
+        "mm_hashes": [b"x", b"y"],
+        "image_patch_id": 99,
+    }
+
+    class _BoundaryTensor:
+        def numpy(self):
+            return np.array([[2, 4], [1, 2]], dtype=np.int64)
+
+    gpu_mod = types.ModuleType("fastdeploy.model_executor.ops.gpu")
+    gpu_mod.get_img_boundaries = lambda **_: _BoundaryTensor()
+    monkeypatch.setitem(sys.modules, "fastdeploy.model_executor.ops.gpu", gpu_mod)
+
+    num_tokens = manager._get_num_new_tokens(request, token_budget=3)
+
+    assert num_tokens == 4
+    assert bool(request.with_image) is True
+    assert request.num_image_start >= 1
+    assert request.num_image_end >= request.num_image_start
+    assert request.image_start > 0
+
+
 def test_update_mm_hashes_rebuilds_video_positions(resource_manager_factory, monkeypatch):
     manager = resource_manager_factory(model_enable_mm=True)
     request = _make_request("mm-update", [1])
@@ -335,10 +408,28 @@ def test_update_mm_hashes_rebuilds_video_positions(resource_manager_factory, mon
     assert len(request.multimodal_inputs["mm_hashes"]) == 2
 
 
+def test_update_mm_hashes_ignores_missing_inputs(resource_manager_factory):
+    manager = resource_manager_factory(model_enable_mm=True)
+    request = _make_request("mm-empty", [1])
+    request.multimodal_inputs = None
+
+    manager._update_mm_hashes(request)
+
+    assert request.multimodal_inputs is None
+
+
 def test_is_mm_request_detects_feature_urls(resource_manager_factory):
     manager = resource_manager_factory(model_enable_mm=True)
     request = _make_request("mm-flag", [1])
     request.multimodal_inputs = {"video_feature_urls": ["v"], "image_feature_urls": [], "audio_feature_urls": []}
+    assert manager._is_mm_request(request)
+
+
+def test_is_mm_request_detects_image_inputs(resource_manager_factory):
+    manager = resource_manager_factory(model_enable_mm=True)
+    request = _make_request("mm-image", [1])
+    request.multimodal_inputs = {"images": [b"x"], "image_patch_id": 9, "grid_thw": [[1, 1, 1]]}
+
     assert manager._is_mm_request(request)
 
 
@@ -377,17 +468,11 @@ def test_schedule_handles_preempted_request(resource_manager_factory):
 def test_schedule_allocates_extend_blocks(resource_manager_factory):
     manager = resource_manager_factory(enable_prefix=False, max_num_seqs=1)
     request = _make_request("extend-flow", list(range(8)))
-    request.idx = 0
     request.block_tables = manager.cache_manager.allocate_gpu_blocks(4)
     request.num_computed_tokens = request.need_prefill_tokens
     request.output_token_ids = [10, 11, 12, 13]
     request.use_extend_tables = True
-    manager.running.append(request)
-    manager.requests[request.request_id] = request
-    manager.req_dict[request.request_id] = 0
-    manager.tasks_list[0] = request
-    manager.stop_flags[0] = False
-    manager.need_block_num_signal.value[0] = 2
+    _setup_running_request(manager, request, need_block_num=2)
 
     scheduled = manager.schedule()
     extend_tasks = [task for task in scheduled if getattr(task, "task_type", None) == RequestType.EXTEND]
@@ -412,16 +497,13 @@ def test_trigger_preempt_recycles_and_marks_requests(resource_manager_factory):
     manager = resource_manager_factory(enable_prefix=False)
     manager.cache_manager.gpu_free_block_list.clear()
     running_req = _make_request("run", [1, 1, 1])
-    running_req.idx = 0
     running_req.block_tables = [0, 1]
 
     tail_req = _make_request("tail", [2, 2, 2])
-    tail_req.idx = 1
     tail_req.block_tables = [2, 3]
 
-    manager.running.extend([running_req, tail_req])
-    manager.requests = {r.request_id: r for r in manager.running}
-    manager.req_dict = {r.request_id: r.idx for r in manager.running}
+    _setup_running_request(manager, running_req, idx=0)
+    _setup_running_request(manager, tail_req, idx=1)
 
     scheduled, preempted = [], []
     request_to_schedule = _make_request("waiting", [0])
@@ -436,16 +518,46 @@ def test_trigger_preempt_recycles_and_marks_requests(resource_manager_factory):
     assert manager.running == [running_req]
 
 
+def test_trigger_preempt_skips_extend_tables(resource_manager_factory):
+    manager = resource_manager_factory(enable_prefix=False, max_num_seqs=2)
+    manager.cache_manager.gpu_free_block_list.clear()
+    survivor = _make_request("survivor", [1])
+    survivor.block_tables = [0]
+    extender = _make_request("extender", [1])
+    extender.block_tables = [1]
+    extender.use_extend_tables = True
+
+    _setup_running_request(manager, survivor, idx=0)
+    _setup_running_request(manager, extender, idx=1)
+
+    preempted, scheduled = [], []
+    can_schedule = manager._trigger_preempt(extender, 2, preempted, scheduled)
+
+    assert can_schedule is False
+    assert preempted == [survivor]
+    assert scheduled[-1].request_id == survivor.request_id
+    assert extender in manager.running
+
+
+def test_trigger_preempt_stops_when_preempting_self(resource_manager_factory):
+    manager = resource_manager_factory(enable_prefix=False, max_num_seqs=1)
+    manager.cache_manager.gpu_free_block_list.clear()
+    request = _make_request("self", [1])
+    request.block_tables = [0]
+    _setup_running_request(manager, request, idx=0)
+
+    preempted, scheduled = [], []
+    can_schedule = manager._trigger_preempt(request, 1, preempted, scheduled)
+
+    assert can_schedule is False
+    assert preempted[0].request_id == request.request_id
+
+
 def test_trigger_preempt_in_decode_role(resource_manager_factory):
     manager = resource_manager_factory(enable_prefix=False, splitwise_role="decode")
     victim = _make_request("victim", [1, 1])
-    victim.idx = 0
     victim.block_tables = [0, 1]
-    manager.running.append(victim)
-    manager.requests[victim.request_id] = victim
-    manager.req_dict[victim.request_id] = 0
-    manager.tasks_list[0] = victim
-    manager.stop_flags[0] = False
+    _setup_running_request(manager, victim, idx=0)
     manager.cache_manager.gpu_free_block_list.clear()
 
     scheduled, preempted = [], []
@@ -474,6 +586,21 @@ def test_preallocate_resource_in_p_uses_prefix_cache(resource_manager_factory):
     assert manager.requests[request.request_id] is request
 
 
+def test_preallocate_resource_in_p_returns_false_when_exhausted(resource_manager_factory, monkeypatch):
+    manager = resource_manager_factory(
+        splitwise_role="prefill",
+        enable_hierarchical=True,
+        num_cpu_blocks=1,
+        initial_gpu_blocks=1,
+    )
+    request = _make_request("prefill-fail", list(range(6)))
+    request.match_result = ([], 0, {"gpu_match_token_num": 0, "cpu_match_token_num": 0})
+    monkeypatch.setattr(manager.cache_manager, "can_allocate_gpu_blocks", lambda *_: False)
+    monkeypatch.setattr(manager.cache_manager, "allocate_gpu_blocks", lambda *_: [])
+
+    assert manager.preallocate_resource_in_p(request) is False
+
+
 def test_get_prefix_cached_blocks_all_hit(resource_manager_factory):
     manager = resource_manager_factory()
     request = _make_request("cached", list(range(8)))
@@ -485,15 +612,25 @@ def test_get_prefix_cached_blocks_all_hit(resource_manager_factory):
     assert request.num_computed_tokens == total_tokens - manager.config.cache_config.block_size
 
 
+def test_get_prefix_cached_blocks_handles_exception(resource_manager_factory, monkeypatch):
+    manager = resource_manager_factory()
+    request = _make_request("cached-fail", list(range(4)))
+    monkeypatch.setattr(
+        manager.cache_manager,
+        "request_match_blocks",
+        lambda *_, **__: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    success = manager.get_prefix_cached_blocks(request)
+
+    assert success is False
+
+
 def test_finish_requests_releases_blocks(resource_manager_factory):
     manager = resource_manager_factory(enable_prefix=False)
     request = _make_request("to-finish", [1, 2, 3])
-    request.idx = 0
     request.block_tables = manager.cache_manager.allocate_gpu_blocks(2)
-    manager.tasks_list[0] = request
-    manager.stop_flags[0] = False
-    manager.requests[request.request_id] = request
-    manager.running.append(request)
+    _setup_running_request(manager, request, idx=0)
     manager.to_be_rescheduled_request_id_set.add(request.request_id)
 
     manager.finish_requests([request.request_id, "missing"])
@@ -507,15 +644,23 @@ def test_finish_requests_releases_blocks(resource_manager_factory):
     assert len(manager.cache_manager.gpu_free_block_list) >= 2
 
 
+def test_finish_requests_logs_free_block_error(resource_manager_factory, monkeypatch):
+    manager = resource_manager_factory(enable_prefix=False)
+    request = _make_request("finish-error", [1])
+    request.block_tables = manager.cache_manager.allocate_gpu_blocks(1)
+    _setup_running_request(manager, request, idx=0)
+    monkeypatch.setattr(manager, "_free_blocks", lambda *_: (_ for _ in ()).throw(RuntimeError("oops")))
+
+    manager.finish_requests(request.request_id)
+
+    assert manager.stop_flags[0] is True
+
+
 def test_finish_requests_async_and_clear_data(resource_manager_factory):
     manager = resource_manager_factory(enable_prefix=False)
     request = _make_request("async", [1, 2])
-    request.idx = 0
     request.block_tables = manager.cache_manager.allocate_gpu_blocks(1)
-    manager.tasks_list[0] = request
-    manager.stop_flags[0] = False
-    manager.requests[request.request_id] = request
-    manager.running.append(request)
+    _setup_running_request(manager, request, idx=0)
 
     future = manager.finish_requests_async(request.request_id)
     future.result(timeout=1)
@@ -523,6 +668,17 @@ def test_finish_requests_async_and_clear_data(resource_manager_factory):
     manager.waiting.append(_make_request("cleanup", [3]))
     manager.clear_data()
     assert len(manager.waiting) == 0
+
+
+def test_prerelease_resource_removes_req_dict(resource_manager_factory):
+    manager = resource_manager_factory(enable_prefix=False)
+    request = _make_request("prerelease", [1, 2])
+    _setup_running_request(manager, request, idx=0)
+
+    manager.prerelease_resource(request)
+
+    assert request.request_id not in manager.req_dict
+    assert manager.tasks_list[0] is None
 
 
 def test_preallocate_resource_in_d_tracks_disagg_info(resource_manager_factory):
@@ -566,7 +722,7 @@ def test_free_blocks_release_extend_tables(resource_manager_factory):
     request.extend_block_tables = [20, 21, 22, 23]
     manager.using_extend_tables_req_id.add(request.request_id)
     manager.reuse_block_num_map[request.request_id] = 2
-    manager.need_block_num_map[request.request_id] = SignalConsumer(2, 1)
+    manager.need_block_num_map[request.request_id] = rm_v1.SignalConsumer(2, 1)
 
     manager._free_blocks(request)
 
@@ -595,6 +751,17 @@ def test_reschedule_and_prerelease_flow(resource_manager_factory):
     assert request.request_id not in manager.requests
 
 
+def test_add_request_in_p_appends_running(resource_manager_factory):
+    manager = resource_manager_factory(enable_prefix=False)
+    request1 = _make_request("p1", [1])
+    request2 = _make_request("p2", [2])
+
+    manager.add_request_in_p([request1, request2])
+
+    assert request1 in manager.running and request2 in manager.running
+    assert request1.inference_start_time is not None
+
+
 def test_schedule_preempted_waiting_with_prefix_cache(resource_manager_factory):
     manager = resource_manager_factory(enable_hierarchical=True, num_cpu_blocks=1)
     request = _make_request("cached-preempt", list(range(6)))
@@ -616,7 +783,7 @@ def test_schedule_respects_xpu_prefill_gate(resource_manager_factory, monkeypatc
     manager.add_request(req1)
     manager.add_request(req2)
 
-    monkeypatch.setattr(rm_v1.paddle, "is_compiled_with_xpu", lambda: True, raising=False)
+    monkeypatch.setattr(rm_v1.paddle, "is_compiled_with_xpu", lambda: True)
 
     scheduled = manager.schedule()
 
