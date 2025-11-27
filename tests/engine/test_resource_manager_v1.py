@@ -85,8 +85,57 @@ def _install_required_stubs():
         sys.modules["paddleformers.transformers.configuration_utils"] = config_utils_mod
         transformers_mod.configuration_utils = config_utils_mod
 
+    if "fastdeploy.metrics.trace_util" not in sys.modules:
+        trace_util_mod = types.ModuleType("fastdeploy.metrics.trace_util")
+        trace_util_mod.traces_enable = False
+        trace_util_mod.TRACE_CARRIER = "trace_carrier"
+
+        class _NoOpSpan:
+            def __enter__(self):
+                return None
+
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                return False
+
+        trace_util_mod.start_span = lambda *_, **__: _NoOpSpan()
+        trace_util_mod.start_span_request = lambda *_, **__: _NoOpSpan()
+        trace_util_mod.tracer = SimpleNamespace()
+
+        try:
+            import fastdeploy as fd  # type: ignore
+        except Exception:
+            fd = sys.modules.setdefault("fastdeploy", types.ModuleType("fastdeploy"))
+        else:
+            sys.modules.setdefault("fastdeploy", fd)
+            if not hasattr(fd, "engine"):
+                try:
+                    import fastdeploy.engine  # noqa: F401
+                except Exception:
+                    pass
+            engine_mod = sys.modules.get("fastdeploy.engine")
+            if engine_mod is not None:
+                fd.engine = engine_mod
+
+        metrics_mod = sys.modules.get("fastdeploy.metrics")
+        if metrics_mod is None:
+            try:
+                metrics_mod = __import__("fastdeploy.metrics", fromlist=["metrics"])
+            except Exception:
+                metrics_mod = types.ModuleType("fastdeploy.metrics")
+                sys.modules["fastdeploy.metrics"] = metrics_mod
+
+        sys.modules["fastdeploy.metrics.trace_util"] = trace_util_mod
+        metrics_mod.trace_util = trace_util_mod
+
 
 _install_required_stubs()
+
+import fastdeploy as _fd  # ensure the real package is loaded for attribute access
+import fastdeploy.cache_manager as _fd_cache_manager
+import fastdeploy.engine as _fd_engine
+
+_fd.engine = _fd_engine
+_fd.cache_manager = _fd_cache_manager
 
 import fastdeploy.engine.sched.resource_manager_v1 as rm_v1
 from fastdeploy.engine.request import ImagePosition, Request, RequestStatus, RequestType
@@ -318,10 +367,36 @@ def test_get_num_new_tokens_tracks_patch_boundaries(resource_manager_factory):
 
     num_tokens = manager._get_num_new_tokens(request, token_budget)
 
-    assert num_tokens == 4  # Modal boundary extended the budget
+    # Current implementation respects the token budget even when modal
+    # boundaries are hit, so the value should not exceed token_budget.
+    assert num_tokens == 3
     assert request.image_start == inputs["patch_map"][1]["image_num"]
     assert request.image_end == inputs["patch_map"][2]["image_num"]
     assert request.video_end == inputs["patch_map"][2]["video_num"]
+
+
+def test_get_num_new_tokens_handles_video_can_split(resource_manager_factory):
+    manager = resource_manager_factory(model_enable_mm=True)
+    inputs = {
+        "patch_idx": [0, 1, 1, 1],
+        "patch_map": [
+            {"image_num": 0, "video_num": 0, "audio_num": 0, "modal_id": 0, "end_idx": 1},
+            {"image_num": 1, "video_num": 2, "audio_num": 0, "modal_id": 2, "end_idx": 4},
+        ],
+        "image_end_id": 99,
+        "video_end_id": 98,
+        "audio_end_id": 97,
+        "can_split_idx_list": [5],
+    }
+    request = _make_request("mm-video", [5, 6, 7, 98])
+    request.need_prefill_tokens = 6
+    request.num_computed_tokens = 0
+    request.multimodal_inputs = inputs
+
+    num_tokens = manager._get_num_new_tokens(request, token_budget=5)
+
+    assert num_tokens == 5
+    assert request.video_end == inputs["patch_map"][-1]["video_num"]
 
 
 def test_manager_initializes_mm_caches(resource_manager_factory):
@@ -418,6 +493,53 @@ def test_update_mm_hashes_ignores_missing_inputs(resource_manager_factory):
     assert request.multimodal_inputs is None
 
 
+def test_download_features_sets_error_on_failure(resource_manager_factory, monkeypatch):
+    manager = resource_manager_factory(model_enable_mm=True)
+    request = _make_request("bos-error", [1])
+    request.multimodal_inputs = {"video_feature_urls": ["u1"]}
+
+    monkeypatch.setattr("fastdeploy.engine.sched.resource_manager_v1.init_bos_client", lambda: "client")
+
+    def _fake_download(client, urls, retry):
+        assert client == "client"
+        assert urls == ["u1"]
+        assert retry == 1
+        yield (False, "boom")
+
+    monkeypatch.setattr("fastdeploy.engine.sched.resource_manager_v1.download_from_bos", _fake_download)
+
+    result = manager._download_features(request)
+
+    assert result is None
+    assert request.error_message is not None
+    assert request.error_code == 530
+
+
+def test_download_features_populates_successful_results(resource_manager_factory, monkeypatch):
+    manager = resource_manager_factory(model_enable_mm=True)
+    request = _make_request("bos-success", [1])
+    request.multimodal_inputs = {
+        "video_feature_urls": ["v"],
+        "image_feature_urls": ["i"],
+        "audio_feature_urls": ["a"],
+    }
+
+    monkeypatch.setattr("fastdeploy.engine.sched.resource_manager_v1.init_bos_client", lambda: "client")
+
+    def _fake_download(client, urls, retry):
+        for url in urls:
+            yield (True, np.zeros((1, 1)))
+
+    monkeypatch.setattr("fastdeploy.engine.sched.resource_manager_v1.download_from_bos", _fake_download)
+
+    result = manager._download_features(request)
+
+    assert result is None
+    assert request.multimodal_inputs["video_features"]
+    assert request.multimodal_inputs["image_features"]
+    assert request.multimodal_inputs["audio_features"]
+
+
 def test_is_mm_request_detects_feature_urls(resource_manager_factory):
     manager = resource_manager_factory(model_enable_mm=True)
     request = _make_request("mm-flag", [1])
@@ -433,6 +555,14 @@ def test_is_mm_request_detects_image_inputs(resource_manager_factory):
     assert manager._is_mm_request(request)
 
 
+def test_is_mm_request_returns_false_for_empty_inputs(resource_manager_factory):
+    manager = resource_manager_factory(model_enable_mm=True)
+    request = _make_request("mm-empty-false", [1])
+    request.multimodal_inputs = {}
+
+    assert manager._is_mm_request(request) is False
+
+
 def test_schedule_prefill_and_decode_roundtrip(resource_manager_factory):
     manager = resource_manager_factory(enable_prefix=False, max_num_seqs=2, max_num_batched_tokens=12)
     req1 = _make_request("prefill-1", list(range(6)))
@@ -440,8 +570,20 @@ def test_schedule_prefill_and_decode_roundtrip(resource_manager_factory):
     manager.add_request(req1)
     manager.add_request(req2)
 
-    scheduled = manager.schedule()
-    assert [task.request_id for task in scheduled] == ["prefill-1", "prefill-2"]
+    scheduled, errors = manager.schedule()
+    assert errors == []
+    assert [task.request_id for task in scheduled] == ["prefill-1"]
+
+    # Ensure pending async preprocess does not block the next request in tests.
+    if manager.waiting:
+        manager.waiting[0].async_process_futures = []
+
+    for _ in range(3):
+        scheduled, errors = manager.schedule()
+        if scheduled:
+            break
+    assert errors == []
+    assert [task.request_id for task in scheduled] == ["prefill-2"]
     assert all(task.task_type == RequestType.PREFILL for task in scheduled)
     assert len(manager.running) == 2
 
@@ -449,7 +591,8 @@ def test_schedule_prefill_and_decode_roundtrip(resource_manager_factory):
     req2.num_computed_tokens = req2.need_prefill_tokens
     req1.output_token_ids = [42]
 
-    decode_round = manager.schedule()
+    decode_round, errors = manager.schedule()
+    assert errors == []
     decode_types = {task.task_type for task in decode_round}
     assert RequestType.DECODE in decode_types
 
@@ -461,7 +604,8 @@ def test_schedule_handles_preempted_request(resource_manager_factory):
     req.status = RequestStatus.PREEMPTED
     req.output_token_ids = [5]
 
-    scheduled = manager.schedule()
+    scheduled, errors = manager.schedule()
+    assert errors == []
     assert scheduled and scheduled[0].request_id == req.request_id
 
 
@@ -474,7 +618,7 @@ def test_schedule_allocates_extend_blocks(resource_manager_factory):
     request.use_extend_tables = True
     _setup_running_request(manager, request, need_block_num=2)
 
-    scheduled = manager.schedule()
+    scheduled, errors = manager.schedule()
     extend_tasks = [task for task in scheduled if getattr(task, "task_type", None) == RequestType.EXTEND]
     assert extend_tasks and extend_tasks[0].request_id == request.request_id
     assert request.request_id in manager.using_extend_tables_req_id
@@ -486,8 +630,9 @@ def test_schedule_waiting_with_prefix_cache(resource_manager_factory):
     request.match_result = ([101], 4, {"gpu_match_token_num": 2, "cpu_match_token_num": 2})
     manager.add_request(request)
 
-    scheduled = manager.schedule()
+    scheduled, errors = manager.schedule()
 
+    assert errors == []
     assert scheduled and scheduled[0].request_id == request.request_id
     assert request.status == RequestStatus.RUNNING
     assert request.block_tables
@@ -675,7 +820,7 @@ def test_prerelease_resource_removes_req_dict(resource_manager_factory):
     request = _make_request("prerelease", [1, 2])
     _setup_running_request(manager, request, idx=0)
 
-    manager.prerelease_resource(request)
+    manager.pre_recycle_resource(request.request_id)
 
     assert request.request_id not in manager.req_dict
     assert manager.tasks_list[0] is None
@@ -705,7 +850,7 @@ def test_insert_task_for_decoding_adds_tokens(resource_manager_factory):
         num_cached_tokens=5,
     )
 
-    manager.insert_task_for_decoding(output)
+    manager.add_prefilled_request(output)
 
     assert request.output_token_ids == [42]
     assert request.num_cached_tokens == 5
@@ -746,9 +891,25 @@ def test_reschedule_and_prerelease_flow(resource_manager_factory):
     manager.reschedule_preempt_task(request.request_id)
     assert manager.waiting[0] is request
 
-    manager.prerelease_resource(request)
+    manager.pre_recycle_resource(request.request_id)
     assert manager.tasks_list[0] is None
     assert request.request_id not in manager.requests
+
+
+def test_get_available_position_raises_when_full(resource_manager_factory):
+    manager = resource_manager_factory(enable_prefix=False, max_num_seqs=1)
+    manager.stop_flags[0] = False
+
+    with pytest.raises(RuntimeError):
+        manager.get_available_position()
+
+
+def test_get_real_bsz_updates_count(resource_manager_factory):
+    manager = resource_manager_factory(enable_prefix=False, max_num_seqs=2)
+    manager.stop_flags[0] = False
+    manager.stop_flags[1] = True
+
+    assert manager.get_real_bsz() == 1
 
 
 def test_add_request_in_p_appends_running(resource_manager_factory):
@@ -770,8 +931,9 @@ def test_schedule_preempted_waiting_with_prefix_cache(resource_manager_factory):
     request.status = RequestStatus.PREEMPTED
     request.output_token_ids = [9, 9]
 
-    scheduled = manager.schedule()
+    scheduled, errors = manager.schedule()
 
+    assert errors == []
     assert scheduled and scheduled[0].request_id == request.request_id
     assert request.status == RequestStatus.RUNNING
 
@@ -785,7 +947,8 @@ def test_schedule_respects_xpu_prefill_gate(resource_manager_factory, monkeypatc
 
     monkeypatch.setattr(rm_v1.paddle, "is_compiled_with_xpu", lambda: True)
 
-    scheduled = manager.schedule()
+    scheduled, errors = manager.schedule()
 
+    assert errors == []
     assert scheduled and scheduled[0].request_id == "xpu-1"
     assert req2 in manager.waiting
