@@ -33,7 +33,7 @@ __attribute__((global)) void speculate_remove_padding(
     int token_num_data);
 
 __attribute__((global)) void speculate_get_padding_offset(
-    int* padding_offset,
+    int* batch_id_per_token,
     int* cum_offsets_out,
     int* cu_seqlens_q,
     int* cu_seqlens_k,
@@ -78,7 +78,7 @@ static int cpu_wrapper_remove_padding(Context* ctx,
 }
 
 static int cpu_wrapper_get_padding_offset(Context* ctx,
-                                          int* padding_offset,
+                                          int* batch_id_per_token,
                                           int* cum_offsets_out,
                                           int* cu_seqlens_q,
                                           int* cu_seqlens_k,
@@ -89,7 +89,7 @@ static int cpu_wrapper_get_padding_offset(Context* ctx,
   for (int bi = 0; bi < bsz; ++bi) {
     int cum_offset = bi == 0 ? 0 : cum_offsets[bi - 1];
     for (int i = 0; i < seq_lens[bi]; i++) {
-      padding_offset[bi * max_seq_len - cum_offset + i] = cum_offset;
+      batch_id_per_token[bi * max_seq_len - cum_offset + i] = bi;
     }
     cum_offsets_out[bi] = cum_offset;
     int cum_seq_len = (bi + 1) * max_seq_len - cum_offsets[bi];
@@ -129,7 +129,7 @@ static int xpu3_wrapper_remove_padding(Context* ctx,
 }
 
 static int xpu3_wrapper_get_padding_offset(Context* ctx,
-                                           int* padding_offset,
+                                           int* batch_id_per_token,
                                            int* cum_offsets_out,
                                            int* cu_seqlens_q,
                                            int* cu_seqlens_k,
@@ -139,7 +139,7 @@ static int xpu3_wrapper_get_padding_offset(Context* ctx,
                                            int bsz) {
   xpu3::plugin::
       speculate_get_padding_offset<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
-          padding_offset,
+          batch_id_per_token,
           cum_offsets_out,
           cu_seqlens_q,
           cu_seqlens_k,
@@ -215,7 +215,7 @@ int speculate_remove_padding(Context* ctx,
 }
 
 int speculate_get_padding_offset(Context* ctx,
-                                 int* padding_offset,
+                                 int* batch_id_per_token,
                                  int* cum_offsets_out,
                                  int* cu_seqlens_q,
                                  int* cu_seqlens_k,
@@ -227,7 +227,7 @@ int speculate_get_padding_offset(Context* ctx,
 
   WRAPPER_DUMP_FUNCTION_T1(ctx, "speculate_get_padding_offset", float);
   WRAPPER_DUMP_PARAM6(ctx,
-                      padding_offset,
+                      batch_id_per_token,
                       cum_offsets_out,
                       cu_seqlens_q,
                       cu_seqlens_k,
@@ -247,7 +247,7 @@ int speculate_get_padding_offset(Context* ctx,
 
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper_get_padding_offset(ctx,
-                                          padding_offset,
+                                          batch_id_per_token,
                                           cum_offsets_out,
                                           cu_seqlens_q,
                                           cu_seqlens_k,
@@ -258,7 +258,7 @@ int speculate_get_padding_offset(Context* ctx,
   }
   if (ctx->dev().type() == api::kXPU3) {
     return xpu3_wrapper_get_padding_offset(ctx,
-                                           padding_offset,
+                                           batch_id_per_token,
                                            cum_offsets_out,
                                            cu_seqlens_q,
                                            cu_seqlens_k,

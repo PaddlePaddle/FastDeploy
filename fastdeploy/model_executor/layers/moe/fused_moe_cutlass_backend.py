@@ -20,7 +20,6 @@ from paddle.nn.quant import weight_quantize
 from paddleformers.utils.log import logger
 
 import fastdeploy
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.platforms import current_platform
 
 from ..utils import get_tensor
@@ -206,7 +205,10 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             tmp_ffn_out = recv_x
 
         # 4. EP combine
-        return self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
+        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
+        if self.ep_prefill_runner.ep_engine.async_finish:
+            event.current_stream_wait()
+        return tmp_ffn_out
 
     def apply_ep_decode(
         self,
@@ -242,7 +244,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         if self.moe_quant_type == "w4a8" or self.moe_quant_type == "w4afp8":
             num_local_experts, max_num, _ = permute_input.shape
             expert_idx_per_token = paddle.arange(num_local_experts)[:, None].tile([1, max_num])
-        elif self.moe_quant_type in ["weight_only_int8", "weight_only_int4"]:
+        elif self.moe_quant_type in ["weight_only_int8", "weight_only_int4", "w16a16"]:
             expert_idx_per_token = None
         else:
             raise NotImplementedError
@@ -280,46 +282,87 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
             )
-
-            (
-                permute_input,
-                token_nums_per_expert,
-                permute_indices_per_token,
-                topk_weights,
-                topk_idx,
-                expert_idx_per_token,
-                dequant_scale,
-            ) = moe_expert_dispatch(
-                x,
-                gate_out,
-                None,  # Use layer.gate_correction_bias in get_moe_scores.
+            if current_platform.is_iluvatar():
                 (
-                    layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None
-                ),  # if set, permute_input will be int8_t
-                layer.top_k,
-                False,
-                self.moe_quant_type,
-                topk_only_mode=True,
-            )
+                    permute_input,
+                    token_nums_per_expert,
+                    permute_indices_per_token,
+                    topk_weights,
+                    topk_idx,
+                    expert_idx_per_token,
+                ) = moe_expert_dispatch(
+                    x,
+                    gate_out,
+                    None,  # Use layer.gate_correction_bias in get_moe_scores.
+                    (
+                        layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None
+                    ),  # if set, permute_input will be int8_t
+                    layer.top_k,
+                    False,
+                    self.moe_quant_type,
+                    topk_only_mode=True,
+                )
+                dequant_scale = None
+            else:
+                (
+                    permute_input,
+                    token_nums_per_expert,
+                    permute_indices_per_token,
+                    topk_weights,
+                    topk_idx,
+                    expert_idx_per_token,
+                    dequant_scale,
+                ) = moe_expert_dispatch(
+                    x,
+                    gate_out,
+                    None,  # Use layer.gate_correction_bias in get_moe_scores.
+                    (
+                        layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None
+                    ),  # if set, permute_input will be int8_t
+                    layer.top_k,
+                    False,
+                    self.moe_quant_type,
+                    topk_only_mode=True,
+                )
         else:
-            (
-                permute_input,
-                token_nums_per_expert,
-                permute_indices_per_token,
-                topk_weights,
-                topk_idx,
-                expert_idx_per_token,
-                dequant_scale,
-            ) = moe_expert_dispatch(
-                x,
-                gate_out,
-                layer.gate_correction_bias,
-                (layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None),
-                layer.top_k,
-                False,
-                self.moe_quant_type,
-                topk_only_mode=False,
-            )
+            if current_platform.is_iluvatar():
+                (
+                    permute_input,
+                    token_nums_per_expert,
+                    permute_indices_per_token,
+                    topk_weights,
+                    topk_idx,
+                    expert_idx_per_token,
+                ) = moe_expert_dispatch(
+                    x,
+                    gate_out,
+                    layer.gate_correction_bias,
+                    (layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None),
+                    layer.top_k,
+                    False,
+                    self.moe_quant_type,
+                    topk_only_mode=False,
+                )
+                dequant_scale = None
+            else:
+                (
+                    permute_input,
+                    token_nums_per_expert,
+                    permute_indices_per_token,
+                    topk_weights,
+                    topk_idx,
+                    expert_idx_per_token,
+                    dequant_scale,
+                ) = moe_expert_dispatch(
+                    x,
+                    gate_out,
+                    layer.gate_correction_bias,
+                    (layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None),
+                    layer.top_k,
+                    False,
+                    self.moe_quant_type,
+                    topk_only_mode=False,
+                )
 
         if hasattr(layer, "up_gate_proj_in_scale"):
             dequant_scale = None
@@ -345,9 +388,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             norm_topk_prob=False if layer.topk_method == "noaux_tc" else True,
             routed_scaling_factor=1.0,
         )
-
-        if layer.reduce_results and layer.tp_size > 1:
-            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out, layer.fd_config.parallel_config.tp_group)
 
         return fused_moe_out
 
@@ -1049,7 +1089,7 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
             "down_proj_in_scale": weight_key_map.get("down_proj_expert_in_scale_key", None),
         }
         for name, value in scale_key_map.items():
-            if value is None:
+            if hasattr(layer, name) and value is None:
                 raise ValueError(f"scale {name} should not be none in w4a8 mode.")
 
         # 2. Extract scale tensor from state dict
@@ -1070,8 +1110,9 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
 
         for expert_idx in logical_expert_ids:
             for name, scale_key_template in scale_key_map.items():
-                scale_tensor = _extract_scale_tensor(layer, state_dict, scale_key_template, expert_idx)
-                scale_weight_map[name].append(scale_tensor)
+                if hasattr(layer, name):
+                    scale_tensor = _extract_scale_tensor(layer, state_dict, scale_key_template, expert_idx)
+                    scale_weight_map[name].append(scale_tensor)
 
         for i, weight_scale_name in enumerate(["up_gate_proj_weight_scale", "down_proj_weight_scale"]):
             in_scale_name = weight_scale_name.replace("_weight_scale", "_in_scale")
@@ -1111,6 +1152,10 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
         # self.check(layer, up_gate_proj_weights, down_proj_weights)
         up_gate_proj_weight_scale = []
         down_proj_weight_scale = []
+
+        if isinstance(state_dict, list):
+            state_dict = dict(state_dict)
+
         for expert_idx in logical_expert_ids:
             up_gate_proj_weight_scale.append(
                 get_tensor(state_dict.pop(up_gate_proj_expert_weight_scale_key.format(expert_idx)))
