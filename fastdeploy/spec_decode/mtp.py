@@ -355,7 +355,13 @@ class MTPProposer(Proposer):
             self.target_model_inputs["decoder_tile_ids_per_batch"]
         )
         self.model_inputs["target_hidden_states"] = paddle.full(
-            [self.fd_config.scheduler_config.max_chunk_len, self.model_config.hidden_size], 0, dtype="bfloat16"
+            [
+                self.fd_config.scheduler_config.max_num_batched_tokens
+                + self.fd_config.scheduler_config.max_extra_num_batched_tokens,
+                self.model_config.hidden_size,
+            ],
+            0,
+            dtype="bfloat16",
         )
 
         tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
@@ -509,6 +515,12 @@ class MTPProposer(Proposer):
                     self.model_inputs["attn_mask_offsets_decoder"][idx : idx + 1] = (
                         inputs["attention_mask_offset"][prefill_end_index - 1] + 1
                     )
+                if (
+                    self.fd_config.scheduler_config.splitwise_role == "decode"
+                ):  # In PD, we continue to decode after P generates first token
+                    self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
+                    # P-D split need rollback one step
+                    self.model_inputs["mask_rollback"][idx : idx + 1] = 1
 
                 # has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
@@ -793,7 +805,7 @@ class MTPProposer(Proposer):
                         self.model_inputs["is_block_step"],
                         self.model_inputs["decode_states"],
                         self.model_inputs["mask_rollback"],
-                    )[0]
+                    )
                     self.model_inputs["attn_mask_offsets"].copy_(attn_mask_offsets, False)
 
                 # Initialize forward meta data
