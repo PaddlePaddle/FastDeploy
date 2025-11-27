@@ -1814,7 +1814,6 @@ class FDConfig:
                 raise ImportError(
                     "cuda-python not installed. Install the version matching your CUDA toolkit:\n"
                     "  CUDA 12.x → pip install cuda-python==12.*\n"
-                    "  CUDA 11.x → pip install cuda-python==11.*"
                 )
 
     def print(self):
