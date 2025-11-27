@@ -20,6 +20,7 @@ __global__ void ComputeOrderKernel(const int* seq_lens_this_time,
     return;
   }
 
+  // 256 * int
   char lm[6 * 1024];
   int buf_size = 6 * 1024 / (6 * sizeof(int));
   int* lm_base_model_seq_lens_this_time = (int*)lm;
@@ -68,10 +69,7 @@ __global__ void ComputeOrderKernel(const int* seq_lens_this_time,
           in_offset += write_size;
         }
         mfence_lm();
-        // 2. base model encoder. Base step=0
-      } else if (cur_base_model_seq_lens_encoder != 0) {
-        // nothing happens
-        // 3. New end
+        // 2. Base model stop at last verify-step.
       } else if (cur_base_model_seq_lens_this_time != 0 &&
                  cur_seq_lens_this_time == 0) {
         in_offset += cur_base_model_seq_lens_this_time;
@@ -80,26 +78,15 @@ __global__ void ComputeOrderKernel(const int* seq_lens_this_time,
                  cur_seq_lens_this_time == 0) {
         // nothing happens
       } else {
-        if (accept_num <= actual_draft_token_num) {
-          int position_map_val = out_offset;
-          LM2GM(&position_map_val,
-                position_map + in_offset + accept_num - 1,
-                sizeof(int));
-          out_offset++;
-          in_offset += cur_base_model_seq_lens_this_time;
-        } else {
-          int position_map_val_1 = out_offset;
-          LM2GM(&position_map_val_1,
-                position_map + in_offset + accept_num - 2,
-                sizeof(int));
-          out_offset++;
-          int position_map_val_2 = out_offset;
-          LM2GM(&position_map_val_2,
-                position_map + in_offset + accept_num - 1,
-                sizeof(int));
-          out_offset++;
-          in_offset += cur_base_model_seq_lens_this_time;
+        // accept_num << buf_size, so do not need split
+        for (int i = 0; i < accept_num; i++) {
+          lm_position_map[i] = out_offset++;
         }
+        mfence_lm();
+        LM2GM(lm_position_map,
+              position_map + in_offset,
+              accept_num * sizeof(int));
+        in_offset += cur_base_model_seq_lens_this_time;
         mfence_lm();
       }
     }
