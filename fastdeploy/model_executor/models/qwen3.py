@@ -319,7 +319,9 @@ class Qwen3ForCausalLM(ModelForCasualLM):
             process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings and not is_pooling_model:
-            self.lm_head.linear.weight.set_value(self.model.embed_tokens.embeddings.weight.transpose([1, 0]))
+            self.lm_head.linear.weight.set_value(
+                self.model.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
+            )
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict):
