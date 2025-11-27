@@ -60,7 +60,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.github-token }}
         run: |
-          gh pr view ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --json files --jq '.files[].path'
+          files=$(gh pr view ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --json files --jq '.files[].path')
+          echo "$files"
 
           can_skip_docs=true
           for f in $files; do
