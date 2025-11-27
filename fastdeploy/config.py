@@ -37,21 +37,21 @@ from fastdeploy.utils import ceil_div, check_unified_ckpt, get_host_ip, get_logg
 
 logger = get_logger("config", "config.log")
 
-TaskOption = Literal["auto", "generate", "embedding", "embed"]
+TaskOption = Literal["auto", "generate", "embedding", "embed", "reward"]
 
 RunnerType = Literal["generate", "pooling"]
 
 RunnerOption = Literal["auto", "generate", "pooling"]
 
-ConvertOption = Literal["auto", "none", "embed"]
+ConvertOption = Literal["auto", "none", "embed", "reward"]
 
-ConvertType = Literal["none", "embed"]
+ConvertType = Literal["none", "embed", "reward"]
 
-_ResolvedTask = Literal["generate", "encode", "embed"]
+_ResolvedTask = Literal["generate", "encode", "embed", "reward"]
 
 _RUNNER_CONVERTS: dict[RunnerType, list[ConvertType]] = {
     "generate": [],
-    "pooling": ["embed"],
+    "pooling": ["embed", "reward"],
 }
 
 # Some model suffixes are based on auto classes from Transformers:

@@ -83,7 +83,7 @@ class DefaultModelLoaderV1(BaseModelLoader):
                 convert_type = fd_config.model_config.convert_type
                 if convert_type == "none":
                     pass
-                elif convert_type == "embed":
+                elif convert_type == "embed" or convert_type == "reward":
                     model_cls = as_embedding_model(model_cls)
                 else:
                     assert_never(convert_type)
