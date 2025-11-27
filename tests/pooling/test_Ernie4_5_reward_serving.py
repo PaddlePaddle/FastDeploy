@@ -102,7 +102,7 @@ def setup_and_run_reward_server():
         "--runner",
         "pooling",
         "--convert",
-        "embed",
+        "reward",
     ]
 
     with open(log_path, "w") as logfile:
