@@ -1,9 +1,7 @@
 #!/bin/bash
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "$DIR"
-export http_proxy=http://agent.baidu.com:8891
-export https_proxy=http://agent.baidu.com:8891
-export no_proxy=localhost,bj.bcebos.com,su.bcebos.com,pypi.tuna.tsinghua.edu.cn,paddle-ci.gz.bcebos.com
+
 #安装lsof工具
 apt install -y lsof
 
