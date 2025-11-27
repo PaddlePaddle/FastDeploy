@@ -20,9 +20,9 @@ import paddle
 
 from fastdeploy import envs
 from fastdeploy.model_executor.forward_meta import XPUForwardMeta
+from fastdeploy.model_executor.layers.sample.sampler import Sampler
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.output import ModelOutputData
-from fastdeploy.model_executor.layers.sample.sampler import Sampler
 
 if current_platform.is_xpu():
     from fastdeploy.model_executor.ops.xpu import (
@@ -165,7 +165,7 @@ def xpu_process_output(
 
 
 def xpu_post_process_normal(
-    sampler_output:Sampler,
+    sampler_output: Sampler,
     model_output: ModelOutputData,
     share_inputs: Dict[str, paddle.Tensor],
     block_size: int = 64,
@@ -176,10 +176,11 @@ def xpu_post_process_normal(
     """ """
     from fastdeploy.model_executor.ops.xpu import (
         save_output,
+        save_output_topk,
         set_stop_value_multi_ends,
         update_inputs,
-        save_output_topk
     )
+
     sampled_token_ids = sampler_output.sampled_token_ids
 
     if think_end_id > 0:

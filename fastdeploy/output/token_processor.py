@@ -345,7 +345,11 @@ class TokenProcessor:
         """
 
         if current_platform.is_xpu():
-            from fastdeploy.model_executor.ops.xpu import get_output, get_output_ep,get_output_topk
+            from fastdeploy.model_executor.ops.xpu import (
+                get_output,
+                get_output_ep,
+                get_output_topk,
+            )
         elif current_platform.is_iluvatar():
             from fastdeploy.model_executor.ops.iluvatar import get_output
         elif current_platform.is_gcu():
