@@ -1,4 +1,19 @@
-"""Unit tests for :mod:`fastdeploy.scheduler.splitwise_scheduler`.
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+Unit tests for :mod:`fastdeploy.scheduler.splitwise_scheduler`.
 
 To generate a focused coverage report for this module, run::
 
@@ -327,6 +342,14 @@ class _PatchedThread:
         self.started = True
 
 
+class _Writer:
+    def __init__(self) -> None:
+        self.items: list[tuple[str, list[bytes]]] = []
+
+    def put(self, key: str, items: list[bytes]) -> None:
+        self.items.append((key, items))
+
+
 class SplitWiseSchedulerTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.module = _import_splitwise_scheduler()
@@ -507,13 +530,21 @@ class ResultReaderTest(SplitWiseSchedulerTestCase):
         client = sys.modules["redis"].Redis()
         reader = self.module.ResultReader(client, idx=0, batch=10, ttl=1, group="")
         reader.reqs["old"] = {"arrival_time": time.time() - 5}
-        original_sleep = self.module.time.sleep
-        self.module.time.sleep = lambda *_args, **_kwargs: (_ for _ in ()).throw(SystemExit())
-        try:
-            with self.assertRaises(SystemExit):
-                reader.run()
-        finally:
-            self.module.time.sleep = original_sleep
+        reader.reqs["active"] = {"arrival_time": time.time()}
+
+        call_count = {"rpop": 0}
+
+        def _rpop(key: str, batch: int):
+            call_count["rpop"] += 1
+            if call_count["rpop"] > 1:
+                raise SystemExit()
+            return []
+
+        reader.client.rpop = _rpop  # type: ignore[assignment]
+
+        with self.assertRaises(SystemExit):
+            reader.run()
+
         self.assertNotIn("old", reader.reqs)
         self.assertTrue(reader.data)
 
@@ -693,13 +724,6 @@ class InferSchedulerTest(SplitWiseSchedulerTestCase):
         infer.role = "prefill"
         infer.node = self.module.NodeInfo("n", "prefill", "h", {"transfer_protocol": ["ipc"]}, load=0)
 
-        class _Writer:
-            def __init__(self) -> None:
-                self.items: list[tuple[str, list[bytes]]] = []
-
-            def put(self, key: str, items: list[bytes]) -> None:
-                self.items.append((key, items))
-
         infer.writers = [_Writer(), _Writer()]
         infer.node.add_req("req#0#g", 1)
 
@@ -726,13 +750,6 @@ class InferSchedulerTest(SplitWiseSchedulerTestCase):
         infer.role = "decode"
         infer.node = self.module.NodeInfo("n", "decode", "h", {"transfer_protocol": ["ipc"]}, load=0)
 
-        class _Writer:
-            def __init__(self) -> None:
-                self.items = []
-
-            def put(self, key: str, items: list[bytes]) -> None:
-                self.items.append((key, items))
-
         infer.writers = [_Writer()]
         infer.node.add_req("bad#0#", 1)
 
@@ -755,6 +772,35 @@ class InferSchedulerTest(SplitWiseSchedulerTestCase):
         infer = self.module.InferScheduler(config)
         infer.start("prefill", "host", {"transfer_protocol": ["ipc"]})
         self.assertEqual(len(infer.writers), config.writer_parallel)
+
+    def test_get_requests_skips_expired_entries(self) -> None:
+        config = self._make_config()
+        infer = self.module.InferScheduler(config)
+        infer.role = "prefill"
+        infer.node = self.module.NodeInfo("n", "prefill", "h", {"transfer_protocol": ["ipc"]}, load=0)
+
+        expired = self.module.Request("expired", prompt_token_ids_len=1, arrival_time=time.time() - (infer.ttl + 1))
+        infer.node.add_req("expired", 1)
+        infer.reqs_queue.append(expired)
+
+        picked = infer.get_requests(
+            available_blocks=10,
+            block_size=1,
+            reserved_output_blocks=1,
+            max_num_batched_tokens=10,
+            batch=1,
+        )
+
+        self.assertEqual(picked, [])
+        self.assertNotIn("expired", infer.node.reqs)
+
+    def test_check_redis_version_requires_supported_version(self) -> None:
+        config = self._make_config()
+        infer = self.module.InferScheduler(config)
+        infer.client.info = lambda: {"redis_version": "5.0.0"}  # type: ignore[assignment]
+
+        with self.assertRaises(AssertionError):
+            infer.check_redis_version()
 
 
 class SplitWiseSchedulerFacadeTest(SplitWiseSchedulerTestCase):
