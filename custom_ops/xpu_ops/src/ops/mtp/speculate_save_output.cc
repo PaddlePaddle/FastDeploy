@@ -35,7 +35,7 @@ void SpeculateSaveWithOutputMsg(const paddle::Tensor& accept_tokens,
                                 const paddle::Tensor& not_need_stop,
                                 int64_t rank_id,
                                 int msg_queue_id,
-                                int save_each_rank) {
+                                bool save_each_rank) {
   // printf("enter save output");
   if (!save_each_rank && rank_id > 0) {
     return;
