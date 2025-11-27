@@ -29,7 +29,7 @@ from utils.serving_utils import (
     FD_CACHE_QUEUE_PORT,
     FD_ENGINE_QUEUE_PORT,
     FD_METRICS_PORT,
-    clean_ports,
+    clean,
 )
 
 # Read ports from environment variables; use default values if not set
@@ -80,7 +80,7 @@ def setup_and_run_server():
     - Tears down server after all tests finish
     """
     print("Pre-test port cleanup...")
-    clean_ports(PORTS_TO_CLEAN)
+    clean(PORTS_TO_CLEAN)
 
     print("log dir clean ")
     if os.path.exists("log_router") and os.path.isdir("log_router"):
@@ -222,7 +222,7 @@ def setup_and_run_server():
             os.killpg(process_router.pid, signal.SIGTERM)
             os.killpg(process_server_0.pid, signal.SIGTERM)
             os.killpg(process_server_1.pid, signal.SIGTERM)
-            clean_ports(PORTS_TO_CLEAN)
+            clean(PORTS_TO_CLEAN)
         except Exception as e:
             print(f"Failed to kill process group: {e}")
         raise RuntimeError(f"API server did not start on port {FD_API_PORT}")
@@ -234,7 +234,7 @@ def setup_and_run_server():
         os.killpg(process_router.pid, signal.SIGTERM)
         os.killpg(process_server_0.pid, signal.SIGTERM)
         os.killpg(process_server_1.pid, signal.SIGTERM)
-        clean_ports(PORTS_TO_CLEAN)
+        clean(PORTS_TO_CLEAN)
         print(f"server (pid={process_server_0.pid}) terminated")
         print(f"server (pid={process_server_1.pid}) terminated")
     except Exception as e:
