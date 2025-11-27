@@ -6,6 +6,10 @@
 
 <!-- Describe the purpose and goals of this pull request. -->
 
+> :bulb: If this PR is a Cherry Pick, the PR title needs to follow the format by adding the [Cherry-Pick] label at the very beginning and appending the original PR ID at the end. For example, [Cherry-Pick][CI] Add check trigger and logic(#5191)
+
+> :bulb: 如若此PR是Cherry Pick，PR标题需遵循格式，在最开始加上[Cherry-Pick]标签，以及最后面加上原PR ID，例如[Cherry-Pick][CI] Add check trigger and logic(#5191) 
+
 ## Modifications
 
 <!-- Detail the changes made in this pull request. -->
