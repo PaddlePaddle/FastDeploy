@@ -281,8 +281,6 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
 
     def fn(param, loaded_weight, shard_id: Optional[Union[int, str]] = None):
         """fn"""
-        # if not param._is_initialized():
-        #     param.initialize()
         output_dim = getattr(param, "output_dim", None)
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
         if weight_need_transpose:
