@@ -113,8 +113,6 @@ __all__ = [
     "cuda_host_free",
     "open_pinned_shm",
     "create_pinned_shm",
-    "open_pinned_shm",
-    "create_pinned_shm",
     "set_data_ipc",
     "share_external_data_",
     "swap_cache_all_layers",

@@ -169,8 +169,12 @@ class CacheMessager:
             val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
             cache_k.append(key_cache)
             cache_v.append(val_cache)
-            cache_k_ptr_list.append(key_cache.data_ptr())
-            cache_v_ptr_list.append(val_cache.data_ptr())
+            if paddle.is_compiled_with_xpu():
+                cache_k_ptr_list.append(get_peer_mem_addr(key_cache.data_ptr()))
+                cache_v_ptr_list.append(get_peer_mem_addr(val_cache.data_ptr()))
+            else:
+                cache_k_ptr_list.append(key_cache.data_ptr())
+                cache_v_ptr_list.append(val_cache.data_ptr())
         cache_k_ptr_list = np.array(cache_k_ptr_list)
         cache_v_ptr_list = np.array(cache_v_ptr_list)
 
@@ -578,9 +582,6 @@ class CacheMessagerV1:
                             logger.info(f"Get cache info from D, finish add cache task: {current_info}")
                             self.cache_info[info["request_id"]] = current_info
                             self.idx_cache_task_dict[current_info["current_id"]] = current_info
-
-                            # TODO: create connection in advance
-
                         else:
                             logger.info(f"Get cache info from P: {info}")
                             self.cache_info[info["request_id"]] = info
