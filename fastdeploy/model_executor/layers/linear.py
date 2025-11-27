@@ -448,7 +448,17 @@ class ColumnParallelLinear(LinearBase):
             if self.with_bias:
                 # col parallel
                 _set_var_distributed(self.bias, split_axis=1)
-                set_weight_attrs(self.bias, {"output_dim": True})
+                set_weight_attrs(
+                    self.bias,
+                    {
+                        "output_dim": True,
+                        "weight_loader": (
+                            self.weight_loader
+                            if hasattr(self, "weight_loader")
+                            else default_weight_loader(self.fd_config)
+                        ),
+                    },
+                )
 
 
 class MergedColumnParallelLinear(ColumnParallelLinear):
@@ -726,7 +736,12 @@ class QKVParallelLinear(ColumnParallelLinear):
                     loaded_weight = loaded_weight.view(param.dtype)
                 else:
                     loaded_weight = loaded_weight.cast(param.dtype)
-            h2d_copy(param, loaded_weight)
+            if len(param.shape) == 1:
+                # TODO (bukejiyu):A recently merged Paddle PR introduced a hang when copying 1-D non-contiguous tensors. This approach serves as a temporary workaround.
+                loaded_weight = get_tensor(loaded_weight)
+                param.copy_(loaded_weight, False)
+            else:
+                h2d_copy(param, loaded_weight)
 
     def load_weight(self, state_dict: dict):
         """
