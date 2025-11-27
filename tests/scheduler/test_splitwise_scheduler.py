@@ -1,4 +1,3 @@
-"""
 # Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,14 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-Unit tests for :mod:`fastdeploy.scheduler.splitwise_scheduler`.
-
-To generate a focused coverage report for this module, run::
-
-    python -m coverage run -m unittest tests.scheduler.test_splitwise_scheduler
-    python -m coverage report -m --include='fastdeploy/scheduler/splitwise_scheduler.py'
-"""
 
 from __future__ import annotations
 
