@@ -830,6 +830,8 @@ class TokenProcessor:
         num_accepted_tokens = sum([x - 1 for x in real_accept_num])
         self.num_accepted_tokens += num_accepted_tokens
         num_emitted_tokens = sum(real_accept_num)
+        if num_emitted_tokens == 0:
+            return
         self.num_emitted_tokens += num_emitted_tokens
 
         main_process_metrics.spec_decode_num_accepted_tokens_total.inc(num_accepted_tokens)
