@@ -186,7 +186,15 @@ class HPUAttentionBackend(AttentionBackend_HPU):
     HPUAttentionBackend backend implementation.
     """
 
-    def __init__(self, llm_config: FDConfig, kv_num_heads: int, num_heads: int, head_dim: int):
+    def __init__(
+        self,
+        llm_config: FDConfig,
+        kv_num_heads: int,
+        num_heads: int,
+        head_dim: int,
+        encoder_block_shape_q: int = -1,
+        decoder_block_shape_q: int = -1,
+    ):
         """
         HPUAttentionBackend __init__
         """
@@ -203,7 +211,7 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         self.speculate_max_draft_token_num: int = llm_config.speculative_config.num_speculative_tokens
         self.keep_pd_step_flag: bool = llm_config.speculative_config.model_type == "mtp"
         self.rank: int = llm_config.parallel_config.tensor_parallel_rank
-        self.nranks = llm_config.parallel_config.tensor_parallel_size
+        self.tp_size = llm_config.parallel_config.tensor_parallel_size
 
         self.kv_num_heads = kv_num_heads
         self.num_heads = num_heads
@@ -239,11 +247,13 @@ class HPUAttentionBackend(AttentionBackend_HPU):
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,
+        kv_cache_quant_type: Optional[str] = None,
     ):
         """
         Caculate kv cache shape
         """
-        return (max_num_blocks, self.block_size, self.kv_num_heads, self.head_dim)
+        key_cache_shape = value_cache_shape = [max_num_blocks, self.block_size, self.kv_num_heads, self.head_dim]
+        return key_cache_shape, value_cache_shape
 
     def forward_extend(
         self, src, qkv_proj: QKVParallelLinear, o_proj: RowParallelLinear, layer: Attention, forward_meta
@@ -315,7 +325,7 @@ class HPUAttentionBackend(AttentionBackend_HPU):
                 softmax_mode=0,
             )
 
-        if self.nranks > 1:
+        if self.tp_size > 1:
             from fastdeploy.distributed.communication import (
                 tensor_model_parallel_all_reduce_custom,
             )
@@ -358,7 +368,7 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         )
 
         # all_reduce
-        if self.nranks > 1:
+        if self.tp_size > 1:
             from fastdeploy.distributed.communication import (
                 tensor_model_parallel_all_reduce_custom,
             )
