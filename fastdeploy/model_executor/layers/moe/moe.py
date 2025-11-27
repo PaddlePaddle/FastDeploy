@@ -588,7 +588,7 @@ class FusedMoE(nn.Layer):
         out = multi_outs[:token_num, :]
         return out
 
-    def forward(self, x: paddle.Tensor, gate: nn.Layer):
+    def forward(self, x: paddle.Tensor, gate: nn.Layer, block_tables = None):
         """
         Defines the forward computation of the moe layer.
 
@@ -608,5 +608,7 @@ class FusedMoE(nn.Layer):
         ):
             out = self.forward_split_allgather(x, gate)
         else:
-            out = self.quant_method.apply(self, x, gate)
+            # print(f"[FusedMoE] block_tables: {block_tables}")
+            out = self.quant_method.apply(self, x, gate, block_tables)
+            # print(f"[FusedMoE] block_tables: {block_tables}")
         return out

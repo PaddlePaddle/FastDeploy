@@ -81,7 +81,7 @@ class UnquantizedLinearMethod(QuantMethodBase):
             weights = weights.cast(layer.weight.dtype)
         layer.weight.set_value(weights)
 
-    def apply(self, layer: nn.Layer, x: paddle.Tensor) -> paddle.Tensor:
+    def apply(self, layer: nn.Layer, x: paddle.Tensor, block_tables = None) -> paddle.Tensor:
 
         linear_out = paddle.matmul(x, layer.weight)
         if layer.with_bias:
@@ -242,7 +242,7 @@ class LinearBase(nn.Layer):
             bias_tensor = paddle.to_tensor(get_tensor(state_dict.pop(self.bias_key)))
             self.bias.set_value(bias_tensor)
 
-    def forward_cuda(self, x: paddle.Tensor) -> paddle.Tensor:
+    def forward_cuda(self, x: paddle.Tensor, block_tables = None) -> paddle.Tensor:
         """
         Forward function for Linear.
 
@@ -255,7 +255,7 @@ class LinearBase(nn.Layer):
         Raises:
             NotImplementedError: If the weight dtype is not float8 or act dtype is not equal to weight dtype.
         """
-        linear_out = self.quant_method.apply(self, x)
+        linear_out = self.quant_method.apply(self, x, block_tables)
 
         return linear_out
 

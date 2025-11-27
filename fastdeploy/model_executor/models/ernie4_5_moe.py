@@ -95,10 +95,14 @@ class Ernie4_5_MLP(nn.Layer):
         self.up_gate_proj.load_state_dict(state_dict)
         self.down_proj.load_state_dict(state_dict)
 
-    def forward(self, hidden_states: paddle.Tensor):
+    def forward(self, hidden_states: paddle.Tensor, block_tables = None):
+        # print(f"[Ernie4_5_MLP] hidden_states: {hidden_states}")
         gate_up_out = self.up_gate_proj(hidden_states)
+        # print(f"[Ernie4_5_MLP] gate_up_out: {gate_up_out}")
         act_out = self.act_fn(gate_up_out)
+        # print(f"[Ernie4_5_MLP] act_out: {act_out}")
         down_out = self.down_proj(act_out)
+        # print(f"[Ernie4_5_MLP] down_out: {down_out}")
         return down_out
 
 
@@ -213,11 +217,15 @@ class Ernie4_5_MoE(nn.Layer):
     def update_state_dict(self, state_dict):
         self.fused_moe.load_state_dict(state_dict, True)
 
-    def forward(self, hidden_states: paddle.Tensor):
-        out = self.experts(hidden_states, self.gate)
+    def forward(self, hidden_states: paddle.Tensor, block_tables = None):
+        # print(f"[Ernie4_5_MoE] hidden_states: {'⚠️' if paddle.any(paddle.isnan(hidden_states)) else '✅'}")
+        # print(f"[Ernie4_5_MoE] block_tables: {block_tables}")
+        out = self.experts(hidden_states, self.gate, block_tables)
         if self.num_shared_experts > 0:
             s_x = self.shared_experts(hidden_states)
             out = out + s_x
+        # print(f"[Ernie4_5_MoE] out: {'⚠️' if paddle.any(paddle.isnan(out)) else '✅'}")
+        # print(f"[Ernie4_5_MoE] block_tables: {block_tables}")
         return out
 
 
@@ -254,14 +262,24 @@ class Ernie4_5_Attention(nn.Layer):
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
     ):
-        qkv_out = self.qkv_proj(hidden_states)
+        # print(f"[Ernie4_5_Attention] hidden_states: {'⚠️' if paddle.any(paddle.isnan(hidden_states)) else '✅'}")
+        # print(f"[Ernie4_5_Attention] block_tables: {forward_meta.block_tables}")
+
+        qkv_out = self.qkv_proj(hidden_states, forward_meta.block_tables)
+        # print(f"[Ernie4_5_Attention] qkv_out: {'⚠️' if paddle.any(paddle.isnan(qkv_out)) else '✅'}")
+        # print(f"[Ernie4_5_Attention] block_tables: {forward_meta.block_tables}")
 
         attn_out = self.attn(
             qkv=qkv_out,
             forward_meta=forward_meta,
         )
+        # print(f"[Ernie4_5_Attention] attn_out: {'⚠️' if paddle.any(paddle.isnan(attn_out)) else '✅'}")
+        # print(f"[Ernie4_5_Attention] block_tables: {forward_meta.block_tables}")
 
         output = self.o_proj(attn_out)
+        # print(f"[Ernie4_5_Attention] output: {'⚠️' if paddle.any(paddle.isnan(output)) else '✅'}")
+        # print(f"[Ernie4_5_Attention] block_tables: {forward_meta.block_tables}")
+
 
         return output
 
@@ -330,21 +348,41 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         hidden_states: paddle.Tensor,
         residual: paddle.Tensor = None,
     ):
+        # print(f"[Ernie4_5_DecoderLayer] hidden_states: {'⚠️' if paddle.any(paddle.isnan(hidden_states)) else '✅'}")
         hidden_states, residual = self.input_layernorm(
             hidden_states, residual_input=residual, forward_meta=forward_meta
         )
+        # print(
+        #     f"[Ernie4_5_DecoderLayer] hidden_states after pre_norm: {'⚠️' if paddle.any(paddle.isnan(hidden_states)) else '✅'}"
+        # )
+        # print(f"[Ernie4_5_DecoderLayer] block_tables: {forward_meta.block_tables}")
+
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
             forward_meta=forward_meta,
         )
+        # print(
+        #     f"[Ernie4_5_DecoderLayer] hidden_states after attn: {'⚠️' if paddle.any(paddle.isnan(hidden_states)) else '✅'}"
+        # )
+        # print(f"[Ernie4_5_DecoderLayer] block_tables: {forward_meta.block_tables}")
+
 
         hidden_states, residual = self.post_attention_layernorm(
             hidden_states,
             residual,
         )
+        # print(
+        #     f"[Ernie4_5_DecoderLayer] hidden_states after post_norm: {'⚠️' if paddle.any(paddle.isnan(hidden_states)) else '✅'}"
+        # )
+        # print(f"[Ernie4_5_DecoderLayer] block_tables: {forward_meta.block_tables}")
 
-        hidden_states = self.mlp(hidden_states)
+
+        hidden_states = self.mlp(hidden_states, forward_meta.block_tables)
+        # print(
+        #     f"[Ernie4_5_DecoderLayer] hidden_states after mlp: {'⚠️' if paddle.any(paddle.isnan(hidden_states)) else '✅'}"
+        # )
+        # print(f"[Ernie4_5_DecoderLayer] block_tables: {forward_meta.block_tables}")
 
         return hidden_states, residual
 
@@ -437,16 +475,20 @@ class Ernie4_5_Model(nn.Layer):
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
+        # print(f"[Ernie4_5_Model] ids_remove_padding: {ids_remove_padding}")
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding)
+        # print(f"[Ernie4_5_Model] hidden_states: {'⚠️' if paddle.any(paddle.isnan(hidden_states)) else '✅'}")
 
         if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
             hidden_states = forward_meta.attn_backend.transpose(hidden_states)
 
         residual = None
         for i in range(self.num_layers):
+            # print(f"[Ernie4_5_Model] ----------------------- layer {i} -----------------------")
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
+        # print(f"[Ernie4_5_Model] out: {'⚠️' if paddle.any(paddle.isnan(out)) else '✅'}")
 
         if current_platform.is_iluvatar() and forward_meta.attn_backend.mixed:
             out = forward_meta.attn_backend.reverse_transpose(out)

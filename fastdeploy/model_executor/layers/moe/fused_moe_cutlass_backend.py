@@ -243,6 +243,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        block_tables = None,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
@@ -298,6 +299,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 self.moe_quant_type,
                 topk_only_mode=False,
             )
+        print(f"[CutlassFusedMoe] block_tables: {block_tables}")
 
         if not layer.with_bias and self.moe_quant_type != "w4a8" and self.moe_quant_type != "w4afp8":
             # only w4a8 need expert_idx_per_token
@@ -307,7 +309,12 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             expert_idx_per_token = expert_idx_per_token.cast("int64")
 
         ffn_out = self.compute_ffn(layer, permute_input, token_nums_per_expert, expert_idx_per_token)
+        # print(f"[CutlassFusedMoe] block_tables: {block_tables}")
 
+        # print(f"[CutlassFusedMoe] ffn_out: {ffn_out}")
+        # print(f"[CutlassFusedMoe] topk_weights: {topk_weights}")
+        # print(f"[CutlassFusedMoe] permute_indices_per_token: {permute_indices_per_token}")
+        # print(f"[CutlassFusedMoe] topk_idx: {topk_idx}")
         # reduce 中会做 topk 个 weight 的 norm 和 routed_scaling_factor
         fused_moe_out = moe_expert_reduce(
             ffn_out,
@@ -318,6 +325,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             norm_topk_prob=False if layer.topk_method == "noaux_tc" else True,
             routed_scaling_factor=1.0,
         )
+        # print(f"[CutlassFusedMoe] block_tables: {block_tables}")
 
         if layer.reduce_results and layer.tp_size > 1:
             fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out, layer.fd_config.parallel_config.tp_group)
