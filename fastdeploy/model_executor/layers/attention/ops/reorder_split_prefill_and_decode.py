@@ -20,10 +20,8 @@
 
 import paddle
 
-from fastdeploy.platforms import current_platform
 
-
-def reorder_split_prefill_and_decode_python(x_remove_padding, batch_id_per_token, cu_seqlens_q, seq_lens_encoder):
+def reorder_split_prefill_and_decode(x_remove_padding, batch_id_per_token, cu_seqlens_q, seq_lens_encoder):
     """
     Python implementation for reordering tokens by putting decode tokens first and prefill tokens after.
 
@@ -45,6 +43,14 @@ def reorder_split_prefill_and_decode_python(x_remove_padding, batch_id_per_token
     seq_lengths = cu_seqlens_q[1:] - cu_seqlens_q[:-1]
     decode_counts = seq_lengths - seq_lens_encoder
     total_decode = paddle.sum(decode_counts)
+
+    # Early return if all tokens are prefill or decode
+    if total_decode == 0:  # All prefill
+        num_decode_tokens = paddle.to_tensor([0], dtype="int64")
+        return x_remove_padding, batch_id_per_token, num_decode_tokens
+    elif total_decode == total_tokens:  # All decode
+        num_decode_tokens = paddle.to_tensor([total_tokens], dtype="int64")
+        return x_remove_padding, batch_id_per_token, num_decode_tokens
 
     # Create sequence indices for all tokens
     # Generate batch indices for each token using cumsum and searchsorted
@@ -69,30 +75,3 @@ def reorder_split_prefill_and_decode_python(x_remove_padding, batch_id_per_token
     num_decode_tokens = paddle.to_tensor([total_decode], dtype="int64")
 
     return x_reorder, batch_id_reorder, num_decode_tokens
-
-
-def reorder_split_prefill_and_decode(x_remove_padding, batch_id_per_token, cu_seqlens_q, seq_lens_encoder):
-    """
-    Unified interface for reordering tokens, automatically selects GPU or CPU implementation.
-
-    Args:
-        x_remove_padding: Tensor of shape [total_tokens]
-        batch_id_per_token: Tensor of shape [total_tokens]
-        cu_seqlens_q: Tensor of shape [batch_size + 1]
-        seq_lens_encoder: Tensor of shape [batch_size]
-
-    Returns:
-        Tuple of (x_reorder, batch_id_reorder, num_decode_tokens)
-    """
-    if current_platform.is_cuda():
-        from fastdeploy.model_executor.ops.gpu import (
-            reorder_split_prefill_and_decode as reorder_split_prefill_and_decode_cuda,
-        )
-
-        return reorder_split_prefill_and_decode_cuda(
-            x_remove_padding, batch_id_per_token, cu_seqlens_q, seq_lens_encoder
-        )
-    else:
-        return reorder_split_prefill_and_decode_python(
-            x_remove_padding, batch_id_per_token, cu_seqlens_q, seq_lens_encoder
-        )
