@@ -428,6 +428,17 @@ class PrefixCacheManagerTest(unittest.TestCase):
         self.assertEqual(backend.max_num_blocks, 5)
         self.assertEqual(backend.quant_type, "int8")
 
+    def test_format_visible_devices_supports_common_inputs(self):
+        self.assertEqual(
+            PrefixCacheManager._format_visible_devices([0, 1]),
+            "CUDA_VISIBLE_DEVICES=0,1",
+        )
+        self.assertEqual(
+            PrefixCacheManager._format_visible_devices((3,)),
+            "CUDA_VISIBLE_DEVICES=3",
+        )
+        self.assertEqual(PrefixCacheManager._format_visible_devices(5), "5")
+
     def test_launch_cache_manager_initializes_processes(self):
         manager = _create_manager()
         manager.cache_config.enable_hierarchical_cache = False
