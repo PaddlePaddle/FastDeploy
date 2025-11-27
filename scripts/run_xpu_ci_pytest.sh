@@ -22,8 +22,7 @@
 #   XPU_ID: XPU设备ID(0或1)
 #   MODEL_PATH: 模型路径
 
-set -e  # 遇到错误立即退出
-
+set +e 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "脚本目录: $DIR"
 
@@ -58,7 +57,7 @@ export PATH=/workspace/deps/xre/bin:$PATH
 echo "重启XPU卡..."
 xpu-smi -r -i $XPU_VISIBLE_DEVICES
 xpu-smi
-
+set -e
 # ============ Python环境配置 ============
 
 echo "============================Python环境配置============================"
