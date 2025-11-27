@@ -1810,7 +1810,7 @@ class FDConfig:
         if self.eplb_config is not None and self.eplb_config.enable_eplb:
             try:
                 import cuda  # noqa
-            except Exception:
+            except ImportError:
                 raise ImportError(
                     "cuda-python not installed. Install the version matching your CUDA toolkit:\n"
                     "  CUDA 12.x → pip install cuda-python==12.*\n"

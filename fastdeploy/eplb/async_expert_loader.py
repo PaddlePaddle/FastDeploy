@@ -23,6 +23,11 @@ from typing import List, Tuple
 import numpy as np
 import paddle
 
+try:
+    from cuda import cudart
+except ImportError:
+    cudart = None
+
 from fastdeploy.config import EPLBConfig
 
 REARRANGE_EXPERT_MAGIC_NUM = 147183647
@@ -89,7 +94,11 @@ def create_mmap(model_name: List, ep_rank: int, ep_size: int, shm_uuid: str, epl
         shm_ptr = ctypes.cast(shm_ptr, ctypes.POINTER(ctypes.c_int8))
         addr = ctypes.addressof(shm_ptr.contents)
 
-        from cuda import cudart
+        if cudart is None:
+            raise ImportError(
+                "cuda-python not installed. Install the version matching your CUDA toolkit:\n"
+                "  CUDA 12.x → pip install cuda-python==12.*\n"
+            )
 
         # Register memory with CUDA
         (ret,) = cudart.cudaHostRegister(addr, shm_size, 0)
