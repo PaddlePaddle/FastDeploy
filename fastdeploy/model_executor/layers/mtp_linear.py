@@ -56,7 +56,7 @@ class ParallelEHProjection(nn.Layer):
         self.fd_config = fd_config
         self.tp_group = fd_config.parallel_config.tp_group
         self.column_cut = True
-        self.nranks = fd_config.parallel_config.tensor_parallel_size
+        self.tp_size = fd_config.parallel_config.tensor_parallel_size
 
         ColumnParallelLinear = fleet.meta_parallel.ColumnParallelLinear
         RowParallelLinear = fleet.meta_parallel.RowParallelLinear
@@ -84,7 +84,7 @@ class ParallelEHProjection(nn.Layer):
                     self.linear.bias,
                     {"rl_need_attr": {"rl_tp_degree": fd_config.parallel_config.tensor_parallel_size}},
                 )
-            if self.nranks > 1:
+            if self.tp_size > 1:
                 set_weight_attrs(self.linear.weight, {"output_dim": True})
         else:
             self.linear = RowParallelLinear(
@@ -103,7 +103,7 @@ class ParallelEHProjection(nn.Layer):
                     "weight_need_transpose": self.fd_config.model_config.model_format == "torch",
                 },
             )
-            if self.nranks > 1:
+            if self.tp_size > 1:
                 set_weight_attrs(self.linear.weight, {"output_dim": True})
         set_weight_attrs(
             self.linear.weight, {"rl_need_attr": {"rl_tp_degree": fd_config.parallel_config.tensor_parallel_size}}
