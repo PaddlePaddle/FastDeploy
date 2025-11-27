@@ -429,8 +429,8 @@ class GPUModelRunner(ModelRunnerBase):
                         inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
                     )
                 if hasattr(inputs, "vit_position_ids"):
-                    multi_vision_inputs["vit_seqlens"].extend(
-                        inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
+                    multi_vision_inputs["vit_position_ids_lst"].extend(
+                        inputs["vit_position_ids"][request.num_image_start : request.num_image_end]
                     )
             else:
                 vision_inputs = inputs
