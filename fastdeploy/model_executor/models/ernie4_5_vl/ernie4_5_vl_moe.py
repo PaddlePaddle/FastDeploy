@@ -548,7 +548,6 @@ class Ernie4_5_VLModel(nn.Layer):
             )
 
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
-
         return out
 
 
@@ -658,7 +657,6 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             ("qkv_proj", "v_proj", None, "v"),
             ("up_gate_proj", "gate_proj", None, "gate"),
             ("up_gate_proj", "up_proj", None, "up"),
-            ("norm.weight", "ernie.norm.weight", None, None),
         ]
 
         text_expert_params_mapping = []
