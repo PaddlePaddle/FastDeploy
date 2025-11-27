@@ -2342,7 +2342,7 @@ void gqa_rotary_qk_norm_variable(
         dim_head);
   }
   constexpr int HEAD_DIM = 128;
-  constexpr int PackSize = HEAD_DIM / kWarpSize;  // 4
+  constexpr int PackSize = HEAD_DIM / kWarpSize;
   const int pack_num = elem_nums / PackSize;
   const int blocksize = 128;
   int grid_size = 1;
