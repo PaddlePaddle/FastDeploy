@@ -24,6 +24,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import numpy as np
+import pytest
 
 
 # Minimal stub logger used by paddleformers logging utilities.
@@ -83,6 +84,7 @@ def _install_required_stubs():
         real_trace_util = None
         try:
             import fastdeploy.metrics.trace_util as _real_trace_util
+
             real_trace_util = _real_trace_util
         except Exception:
             real_trace_util = None
