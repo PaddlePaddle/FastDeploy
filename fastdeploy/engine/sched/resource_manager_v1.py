@@ -1031,49 +1031,53 @@ class ResourceManagerV1(ResourceManager):
                 self.req_dict[request.request_id] = allocated_position
         return True
 
-    def has_resource_for_prefilled_req(self, request_id: str):
+    def prepare_prefilled_req(self, request_output: RequestOutput):
         """
-        Check whether there are enough slot and gpu resource for the prefilled request,
-        of which the cache is saved in cpu buffer.
-        """
-        assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
-        assert request_id in self.preallocated_reqs, "request_id must be in preallocate"
-        need_blocks_num = len(self.preallocated_reqs[request_id].disaggregate_info["block_tables"])
-        return self.available_batch() > 0 and self.cache_manager.can_allocate_gpu_blocks(need_blocks_num)
-
-    def add_prefilled_request(self, request_output: RequestOutput):
-        """
-        In P/D aggregated deployment, D should continue to decode after receiving first token and cache from P.
-        NOTE: GPU resources should be checked in advance to ensure they are sufficient for the prefilled request.
+        Prepare the resouce for prefilled request, of which the cache is saved in cpu buffer.
+        If there are no available resource, return False.
         """
         assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
         if not self.config.cache_config.enable_splitwise_cache_buffer:
-            if request_output.request_id not in self.requests:
-                self.logger.error(f"Request {request_output.request_id} not found in requests")
-                return
-            request = self.requests[request_output.request_id]
-        else:
-            # allocate gpu block ids, swap cpu buffer to gpu, recycle cpu buffer
-            request_id = request_output.request_id
+            return True
+
+        # allocate gpu block ids, swap cpu buffer to gpu, recycle cpu buffer
+        request_id = request_output.request_id
+        assert request_id in self.preallocated_reqs, "request_id must be in preallocate"
+        request = self.preallocated_reqs[request_id]
+        cpu_block_ids = request.disaggregate_info["block_tables"]
+        with self.lock:
+            if self.available_batch() == 0 or not self.cache_manager.can_allocate_gpu_blocks(len(cpu_block_ids)):
+                return False
+
             request = self.preallocated_reqs.pop(request_id)
-            cpu_block_ids = request.disaggregate_info["block_tables"]
-            with self.lock:
-                gpu_block_ids = self.cache_manager.allocate_gpu_blocks(len(cpu_block_ids))
-                request.block_tables = gpu_block_ids
+            gpu_block_ids = self.cache_manager.allocate_gpu_blocks(len(cpu_block_ids))
+            request.block_tables = gpu_block_ids
+            request.idx = self.get_available_position()
+            self.tasks_list[request.idx] = request
+            self.stop_flags[request.idx] = False
+            self.requests[request.request_id] = request
+            self.req_dict[request.request_id] = request.idx
 
-                request.idx = self.get_available_position()
-                self.tasks_list[request.idx] = request
-                self.stop_flags[request.idx] = False
-                self.requests[request.request_id] = request
-                self.req_dict[request.request_id] = request.idx
+        llm_logger.debug(f"call issue_splitwise_buffer_swap_task {request_id}")
+        tic = time.time()
+        self.cache_manager.issue_splitwise_buffer_swap_task(request_id, gpu_block_ids, cpu_block_ids)
+        llm_logger.debug(f"call issue_splitwise_buffer_swap_task {request_id} done, time: {time.time() - tic:.5f}")
 
-            llm_logger.debug(f"call issue_splitwise_buffer_swap_task {request_id}")
-            tic = time.time()
-            self.cache_manager.issue_splitwise_buffer_swap_task(request_id, gpu_block_ids, cpu_block_ids)
-            llm_logger.debug(f"call issue_splitwise_buffer_swap_task {request_id} done, time: {time.time() - tic:.5f}")
+        with self.lock:
+            self.cache_manager.recycle_splitwise_blocks(cpu_block_ids)
 
-            with self.lock:
-                self.cache_manager.recycle_splitwise_blocks(cpu_block_ids)
+        return True
+
+    def add_prefilled_request(self, request_output: RequestOutput):
+        """
+        In P/D aggregated deployment, D should continue to infer after receiving first token and cache from P.
+        """
+        assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
+        request_id = request_output.request_id
+        if request_id not in self.requests:
+            self.logger.error(f"Request {request_id} not found in requests")
+            return
+        request = self.requests[request_id]
 
         # update request and insert to running
         request.output_token_ids.append(request_output.outputs.token_ids[0])
