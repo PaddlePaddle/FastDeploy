@@ -288,7 +288,7 @@ class GPUModelRunner(ModelRunnerBase):
             # Update Batch type for cuda graph for if_only_decode
             if_only_decode = all(dist_status.only_decode for dist_status in dist_status_list)
 
-        if_only_decode = dist_status_obj.only_decode and not (
+        if_only_decode = if_only_decode and not (
             prefill_exists if prefill_exists is not None else self.exist_prefill()
         )
 
