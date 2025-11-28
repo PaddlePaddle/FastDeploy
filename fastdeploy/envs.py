@@ -148,6 +148,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ENGINE_TASK_QUEUE_WITH_SHM": lambda: int(os.getenv("FD_ENGINE_TASK_QUEUE_WITH_SHM", "0")),
     "FD_FILL_BITMASK_BATCH": lambda: int(os.getenv("FD_FILL_BITMASK_BATCH", "4")),
     "FD_ENABLE_PDL": lambda: int(os.getenv("FD_ENABLE_PDL", "1")),
+    "FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDES": lambda: int(
+        os.getenv("FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDES", "30")
+    ),
 }
 
 

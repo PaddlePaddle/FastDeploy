@@ -24,7 +24,10 @@ class RDMACommunicator {
                    std::vector<int64_t> local_key_cache,
                    std::vector<int64_t> local_value_cache,
                    int block_number,
-                   int block_bytes);
+                   int block_bytes,
+                   bool pd_tp_size_is_same,
+                   int prefill_tp_size,
+                   int prefill_tp_idx);
   ~RDMACommunicator();
 
   // Connection management
@@ -120,6 +123,10 @@ class RDMACommunicator {
   int block_number;                       // Number of blocks
   int block_size_byte;                    // Size of each block in bytes
   int layer_number;                       // Number of layers
+  bool pd_tp_size_is_same;  // whether the tp_size in prefill is same as the
+                            // decode
+  int prefill_tp_size;      // tensor parallelism size for prefill
+  int prefill_tp_idx;       // tensor parallelism index for prefill
 
   std::vector<std::vector<void*>>
       local_cache_key_ptr_per_layer;  // Per-layer key pointers

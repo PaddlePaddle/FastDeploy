@@ -199,7 +199,7 @@ class SplitwiseConnector:
                     f"{task.disaggregate_info['cache_info']['rdma']['ip']}:"
                     + f"{task.disaggregate_info['cache_info']['rdma']['port']}"
                 )
-                self.logger.info(f"send splitwise tasks to port {addr} decode")
+                self.logger.info(f"send splitwise tasks to port {addr} decode, {task.request_id}")
                 self.current_request_ids[task.request_id] = "init"
                 decode_diagg = task.disaggregate_info["cache_info"]
                 task.disaggregate_info["cache_info"] = self.cfg.disaggregate_info["cache_info"]
@@ -271,6 +271,7 @@ class SplitwiseConnector:
         )
 
     def check_decode_allocated(self, task):
+        self.logger.debug(f"start check decode allocated: {task.request_id}")
         start_time = time.time()
         if task.disaggregate_info is None:
             return True, ""
@@ -280,7 +281,7 @@ class SplitwiseConnector:
             return True, ""
         while self.current_request_ids[task.request_id] == "init":
             time.sleep(0.001)
-            if time.time() - start_time > 30:
+            if time.time() - start_time > envs.FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDES:
                 del self.current_request_ids[task.request_id]
                 return False, "timeout"
         msg = self.current_request_ids[task.request_id]
