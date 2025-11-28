@@ -222,7 +222,7 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
         hidden_size = extra_weight_attrs.pop("hidden_size")
         moe_intermediate_size = extra_weight_attrs.pop("moe_intermediate_size")
         self.model_format = extra_weight_attrs.get("model_format")
-        if current_platform.is_cuda() and self.model_format != "torch":
+        if (current_platform.is_cuda() or current_platform.is_intel_hpu()) and self.model_format != "torch":
             self.up_gate_proj_weight_shape = [num_experts, hidden_size, moe_intermediate_size * 2]
             self.down_proj_weight_shape = [num_experts, moe_intermediate_size, hidden_size]
             extra_weight_attrs = {

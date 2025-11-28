@@ -34,6 +34,7 @@ from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
 )
+from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
@@ -219,6 +220,8 @@ def fused_attention_forward(
     qkv_proj: QKVParallelLinear = None,
     o_proj: RowParallelLinear = None,
     forward_meta: HPUForwardMeta = None,
+    q_norm: RMSNorm = None,
+    k_norm: RMSNorm = None,
 ):
     """
     The forward function of attention layer.
@@ -233,6 +236,8 @@ def fused_attention_forward(
         o_proj,
         self,
         forward_meta,
+        q_norm,
+        k_norm,
     )
 
 
@@ -247,6 +252,8 @@ def fused_self_atten_forward(
         qkv_proj=self.qkv_proj,
         o_proj=self.o_proj,
         forward_meta=forward_meta,
+        q_norm=self.q_norm if hasattr(self, "q_norm") else None,
+        k_norm=self.k_norm if hasattr(self, "k_norm") else None,
     )
 
     return atten_out
@@ -259,10 +266,16 @@ def fused_mlp_forward(self, x):
         self.up_gate_proj.weight,
         None,
         self.down_proj.weight,
+        getattr(self.up_gate_proj, "act_scale", None),
+        getattr(self.up_gate_proj, "weight_scale", None),
+        None,
+        getattr(self.down_proj, "act_scale", None),
+        getattr(self.down_proj, "weight_scale", None),
+        False,
     )
 
     # all_reduce
-    if self.nranks > 1:
+    if self.up_gate_proj.tp_size > 1:
         from fastdeploy.distributed.communication import (
             tensor_model_parallel_all_reduce_custom,
         )
