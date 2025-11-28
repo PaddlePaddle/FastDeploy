@@ -11,8 +11,7 @@ concurrency:
 
 jobs:
   CI_ILUVATAR:
-    runs-on:
-      group: IXUCA
+    runs-on: [self-hosted, ILUVATAR_8Card]
     steps:
       - name: Print current runner name
         run: |
