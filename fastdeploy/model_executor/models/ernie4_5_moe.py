@@ -66,7 +66,6 @@ class Ernie4_5_MLP(nn.Layer):
         reduce_results: bool = True,
     ) -> None:
         super().__init__()
-        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.up_gate_proj = MergedColumnParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.up_gate_proj",
@@ -599,7 +598,9 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings:
-            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
+            self.lm_head.linear.weight.set_value(
+                self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
+            )
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)
