@@ -666,7 +666,7 @@ class FusedMoE(nn.Layer):
             out_split_list = [None] * self.fd_config.parallel_config.moe_num_chunk
 
             for i in range(self.fd_config.parallel_config.max_moe_num_chunk):
-                if i <= self.fd_config.parallel_config.moe_num_chunk - 1:
+                if i < self.fd_config.parallel_config.moe_num_chunk:
                     out_split_list[i] = self.quant_method.apply(self, x_split_list[i], gate)
                 else:
                     # empty tensor inference on idle ranks.
