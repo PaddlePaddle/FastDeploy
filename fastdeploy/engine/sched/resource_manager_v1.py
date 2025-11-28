@@ -414,7 +414,6 @@ class ResourceManagerV1(ResourceManager):
         ):
             input_ids_lst = request.prompt_token_ids + request.output_token_ids
             input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
-            input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
             image_patch_id = inputs["image_patch_id"]
 
             if request.multimodal_img_boundaries is None:
