@@ -44,6 +44,7 @@ class MockModelConfig:
     head_dim = 128
     model_type = ["mock"]
     moe_phase = MoEPhase(phase="prefill")
+    hidden_size = 1536
 
 
 class MockCacheConfig:
