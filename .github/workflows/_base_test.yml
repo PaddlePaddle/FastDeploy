@@ -207,7 +207,7 @@ jobs:
           python -m pytest -sv test_max_waiting_time.py || TEST_EXIT_CODE=1
 
           export TEMPLATE=TOKEN_NORMAL
-          curl -X POST http://0.0.0.0:${FLASK_PORT}/start \
+          curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
             -H "Content-Type: application/json" \
             -d "{\"--model\": \"/MODELDATA/ERNIE-4.5-VL-28B-A3B-Thinking\", \"--reasoning-parser\": \"ernie-45-vl-thinking\", \"--tool-call-parser\": \"ernie-45-vl-thinking\", \"--tensor-parallel-size\": 1, \"--quantization\": \"wint4\"}"
           check_service 90
