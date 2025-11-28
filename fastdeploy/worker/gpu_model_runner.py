@@ -263,6 +263,7 @@ class GPUModelRunner(ModelRunnerBase):
         dist_out = DistributedOut()
 
         prefill_exists = None
+        if_only_decode = True
         # mix ep in single node
         if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
             prefill_exists = self.exist_prefill()
