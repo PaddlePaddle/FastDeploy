@@ -262,6 +262,7 @@ class GPUModelRunner(ModelRunnerBase):
         dist_status_obj = DistributedStatus()
         dist_out = DistributedOut()
 
+        prefill_exists = None
         # mix ep in single node
         if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
             prefill_exists = self.exist_prefill()
@@ -279,11 +280,17 @@ class GPUModelRunner(ModelRunnerBase):
 
             dist_status_obj.moe_num_chunk = self.fd_config.parallel_config.moe_num_chunk
 
-        # call once to gather all status
-        paddle.distributed.all_gather_object(dist_status_list, dist_status_obj)
+        # only ep need to collect and sync distributed status
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
+            # call once to gather all status
+            paddle.distributed.all_gather_object(dist_status_list, dist_status_obj)
 
-        # Update Batch type for cuda graph for if_only_decode
-        if_only_decode = all(dist_status.only_decode for dist_status in dist_status_list)
+            # Update Batch type for cuda graph for if_only_decode
+            if_only_decode = all(dist_status.only_decode for dist_status in dist_status_list)
+
+        if_only_decode = dist_status_obj.only_decode and not (
+            prefill_exists if prefill_exists is not None else self.exist_prefill()
+        )
 
         max_moe_num_chunk = None
         if self.fd_config.parallel_config.enable_chunked_moe:
@@ -291,7 +298,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         dist_out = DistributedOut(
             if_only_decode=if_only_decode,
-            max_moe_num_chunk=max_moe_num_chunk if self.fd_config.parallel_config.enable_chunked_moe else None,
+            max_moe_num_chunk=max_moe_num_chunk,
         )
 
         return dist_out
