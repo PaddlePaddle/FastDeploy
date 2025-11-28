@@ -27,8 +27,9 @@ from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import (
 
 class HpuMoEMethod(UnquantizedFusedMoEMethod):
     """
-    Use Cutlass Group Gemm to compute Fused MoE.
-    This method is the oldest way to compute MoE in Paddle.
+    Implements Fused Mixture-of-Experts (MoE) computation using HPU-optimized operations.
+    This method leverages the HPU backend's fused_gate_moe function for efficient expert routing and computation.
+    Designed specifically for PaddlePaddle execution on Habana Processing Units (HPU).
     """
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
