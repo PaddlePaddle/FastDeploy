@@ -238,7 +238,6 @@ std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor &input,
                  "hidden_size must be divisible by 128");
 
   const int hidden_size_scale = hidden_size / block_size;
-
   auto quanted_x = GetEmptyTensor(
       {token_num, hidden_size}, paddle::DataType::FLOAT8_E4M3FN, input.place());
 
