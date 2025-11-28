@@ -820,7 +820,14 @@ class ResourceManagerV1(ResourceManager):
             return None
 
         if self.bos_client is None:
-            self.bos_client = init_bos_client()
+            try:
+                self.bos_client = init_bos_client()
+            except Exception as e:
+                error_msg = f"request {request.request_id} init bos client error: {str(e)}"
+                llm_logger.error(error_msg)
+                request.error_message = error_msg
+                request.error_code = 540
+                return None
 
         inputs = request.multimodal_inputs
         if inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0:
