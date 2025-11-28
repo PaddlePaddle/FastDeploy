@@ -112,7 +112,7 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
         input_embeddings = self.get_input_embeddings(
             ids_remove_padding=ids_remove_padding,
             image_features=image_features,
-            image_token_num=vl_moe_meta.image_token_num.item(),
+            image_token_num=vl_moe_meta.num_image_patch_id.item(),
         )
 
         if forward_meta.step_use_cudagraph:

@@ -2,7 +2,7 @@
 
 # Pooling Models
 
-FastDeploy also supports pooling models, such as embedding and reward models.
+FastDeploy also supports pooling models, such as embedding models.
 
 In FastDeploy, pooling models implement the `FdModelForPooling` interface.
 These models use a `Pooler` to extract the final hidden states of the input
@@ -29,8 +29,7 @@ shown in the table below.
 
 | Architecture                                    | `--convert` | Supported pooling tasks               |
 |-------------------------------------------------|-------------|---------------------------------------|
-| `*ForTextEncoding`, `*EmbeddingModel`, `*Model` | `embed`     |         `embed`                       |
-| `*ForRewardModeling`, `*RewardModel`            | `reward`    |         `reward`                      |
+| `*ForTextEncoding`, `*EmbeddingModel`, `*Model`  `*ForProcessRewardModel`   | `embed`     |         `embed`                       |
 
 !!! tip<br>
     You can explicitly set `--convert <type>` to specify how to convert the model.
@@ -49,7 +48,6 @@ the pooler assigned to each task has the following attributes by default:
 
 | Task       | Pooling Type | Normalization | Softmax |
 |------------|--------------|---------------|---------|
-| `reward`   | `ALL`        | ❌            | ❌     |
 | `embed`    | `LAST`       | ✅︎            | ❌      |
 
 ## Offline Inference
@@ -103,7 +101,7 @@ curl -X POST 'YOUR_SERVICE_URL/v1/embeddings' \
   }'
 ```
 
-### Reward Model:
+### Pooling Model and reward score
 ```python
 model_path=RM_v1008
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -118,7 +116,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --graph-optimization-config '{"use_cudagraph":false}' \
     --load-choices "default_v1" \
     --runner pooling \
-    --convert reward \
+    --convert embed \
     --no-enable-prefix-caching
 ```
 Request Method: ChatRewardRequest

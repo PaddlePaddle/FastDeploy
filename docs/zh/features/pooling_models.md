@@ -2,7 +2,7 @@
 
 # Pooling Models
 
-FastDeploy也支持pooling模型，例如嵌入(embedding)和奖励(reward)模型。
+FastDeploy也支持pooling模型，例如嵌入(embedding)模型。
 
 在FastDeploy中,池化模型通过`FdModelForPooling`接口。这些模型使用一个`Pooler`来提取输入的最终隐藏状态并返回。
 
@@ -23,8 +23,7 @@ FastDeploy也支持pooling模型，例如嵌入(embedding)和奖励(reward)模�
 
 | Architecture                                    | `--convert` | 支持的池化类型               |
 |-------------------------------------------------|-------------|---------------------------------------|
-| `*ForTextEncoding`, `*EmbeddingModel`, `*Model` | `embed`     |  `embed`                              |
-| `*ForRewardModeling`, `*RewardModel`            | `reward`    | `reward`                              |
+| `*ForTextEncoding`, `*EmbeddingModel`, `*Model` `**ForProcessRewardModel`  | `embed`     |  `embed`                              |
 
 !!! 提示<br>
     你可以显示设置`--convert <type>`来制定模型转换方式。
@@ -41,7 +40,6 @@ FastDeploy也支持pooling模型，例如嵌入(embedding)和奖励(reward)模�
 
 | Task       | Pooling Type | Normalization | Softmax |
 |------------|--------------|---------------|---------|
-| `reward`   | `LAST`        | ❌            | ❌     |
 | `embed`    | `LAST`       | ✅︎            | ❌      |
 
 加载`Sentence Transformers`模型时，其modules.json配置优于默认值，也可以通过@default_pooling_type("LAST")在模型组网时指定。
@@ -96,7 +94,7 @@ curl -X POST 'YOUR_SERVICE_URL/v1/embeddings' \
   }'
 ```
 
-### Reward模型:
+### Pooling模型和打分机制
 ```python
 model_path=RM_v1008
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -111,7 +109,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --graph-optimization-config '{"use_cudagraph":false}' \
     --load-choices "default_v1" \
     --runner pooling \
-    --convert reward \
+    --convert embed \
     --no-enable-prefix-caching
 ```
 
