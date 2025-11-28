@@ -290,9 +290,13 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
         no_tp_action_keys = copy.deepcopy(num_local_ffn_keys)
         if fd_config.parallel_config.use_sequence_parallel_moe:
             for i in range(fd_config.model_config.moe_layer_start_index, fd_config.model_config.num_hidden_layers):
-                k = f"ernie.{prefix_layer_name}.{i}.self_attn.o_proj.weight"
-                if k in weight_list:
-                    no_tp_action_keys.append(k)
+                no_tp_keys = [
+                    f"ernie.{prefix_layer_name}.{i}.self_attn.o_proj.weight",
+                    f"ernie.{prefix_layer_name}.{i}.self_attn.o_proj.bias",
+                ]
+                for k in no_tp_keys:
+                    if k in weight_list:
+                        no_tp_action_keys.append(k)
         tp_actions = cls._get_tensor_parallel_mappings(fd_config.model_config.pretrained_config)
         new_actions = {k: v for k, v in tp_actions.items() if k not in no_tp_action_keys}
 
