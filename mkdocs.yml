@@ -59,6 +59,7 @@ plugins:
             ERNIE-4.5-300B-A47B: ERNIE-4.5-300B-A47B快速部署
             ERNIE-4.5-VL-424B-A47B: ERNIE-4.5-VL-424B-A47B快速部署
             Quick Deployment For QWEN: Qwen3-0.6b快速部署
+            Quick Deployment For QWEN2.5-VL: Qwen2.5-VL系列快速部署
             Online Serving: 在线服务
             OpenAI-Compatible API Server: 兼容 OpenAI 协议的服务化部署
             Monitor Metrics: 监控Metrics
@@ -122,6 +123,7 @@ nav:
       - ERNIE-4.5-300B-A47B: get_started/ernie-4.5.md
       - ERNIE-4.5-VL-424B-A47B: get_started/ernie-4.5-vl.md
       - Quick Deployment For QWEN: get_started/quick_start_qwen.md
+      - Quick Deployment For QWEN2.5-VL: get_started/quick_start_qwen25_vl.md
   - Online Serving:
       - OpenAI-Compatible API Server: online_serving/README.md
       - Monitor Metrics: online_serving/metrics.md

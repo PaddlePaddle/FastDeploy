@@ -141,7 +141,10 @@ def get_tensor(input: Union[paddle.Tensor, np.ndarray, str], model_path=None) ->
 
     if isinstance(input, paddle.Tensor):
         if input.place.is_cpu_place():
-            return input.to(paddle.device.get_device())
+            if current_platform.is_cuda():
+                return input.cuda()
+            else:
+                return input.to(paddle.device.get_device())
         return input
     elif isinstance(input, np.ndarray):
         return paddle.to_tensor(input)

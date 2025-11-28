@@ -28,6 +28,17 @@ def is_port_open(host: str, port: int, timeout=1.0):
         return False
 
 
+def _clean_cuda_process():
+    """
+    Kill processes that are using CUDA devices.
+    NOTE: Do not call this function directly, use the `clean` function instead.
+    """
+    try:
+        subprocess.run("fuser -k /dev/nvidia*", shell=True, timeout=5)
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
+
 def kill_process_on_port(port: int):
     """
     Kill processes that are listening on the given port.
@@ -99,6 +110,19 @@ def clean_ports(ports=None):
             print(f"Port {port} still in use, retrying cleanup...")
             kill_process_on_port(port)
             time.sleep(1)
+
+
+def clean(ports=None):
+    """
+    Clean up resources used during testing.
+    """
+    clean_ports(ports)
+
+    # Clean CUDA devices before and after tests.
+    # NOTE: It is dangerous to use this flag on development machines, as it may kill other processes
+    clean_cuda = int(os.getenv("CLEAN_CUDA", "0")) == 1
+    if clean_cuda:
+        _clean_cuda_process()
 
 
 def check_service_health(base_url: str, timeout: int = 3) -> bool:
