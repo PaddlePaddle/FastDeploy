@@ -29,7 +29,10 @@ from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
 )
-from fastdeploy.model_executor.layers.rotary_embedding import get_rope
+from fastdeploy.model_executor.layers.rotary_embedding import (
+    Ernie5RotaryEmbedding3D,
+    get_rope,
+)
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import MTPSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
@@ -76,6 +79,7 @@ class MTPProposer(Proposer):
         self.mtp_strategy = self.speculative_config.mtp_strategy
         self.hybrid_mode = self.mtp_strategy == "with_ngram" and self.max_draft_token_num > self.num_model_steps
         self.enable_logprob = self.model_config.enable_logprob
+        self.enable_mm = self.model_config.enable_mm
 
         # [mixed, prefill, decoder]
         self.role = self.scheduler_config.splitwise_role
@@ -90,6 +94,16 @@ class MTPProposer(Proposer):
 
         self.attn_backends: list[AttentionBackend] = []
         self._initialize_attn_backend()
+
+        if self.enable_mm:
+            self.rotary_emb = Ernie5RotaryEmbedding3D(
+                rotary_dim=self.model_config.head_dim,
+                base=self.model_config.rope_theta,
+                partial_rotary_factor=1.0,
+                max_position=self.max_model_len,
+                mrope_section=self.fd_config.model_config.mrope_section,
+                freq_allocation=getattr(self.model_config, "freq_allocation", 20),
+            )
 
         # Forward meta store the global meta information of the forward
         self.forward_meta: ForwardMeta = None
@@ -366,12 +380,16 @@ class MTPProposer(Proposer):
         )
 
         tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
-        self.model_inputs["rope_emb"] = get_rope(
-            rotary_dim=self.model_config.head_dim,
-            position_ids=tmp_position_ids,
-            base=self.model_config.rope_theta,
-            model_config=self.model_config,
-        )
+        if not self.enable_mm:
+            self.model_inputs["rope_emb"] = get_rope(
+                rotary_dim=self.model_config.head_dim,
+                position_ids=tmp_position_ids,
+                base=self.model_config.rope_theta,
+                model_config=self.model_config,
+            )
+        else:
+            self.model_inputs["rope_emb"] = self.target_model_inputs["rope_emb"]
+
         # self.model_inputs["caches"] = self.cache_kvs
         # Inherit generation hyperparameters from the main model for consistency
         self.model_inputs["prompt_lens"] = self.target_model_inputs["prompt_lens"]
@@ -480,6 +498,18 @@ class MTPProposer(Proposer):
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
+                if self.enable_mm:
+                    inputs = request.multimodal_inputs
+                    if inputs["position_ids"] is not None:
+                        position_ids = paddle.to_tensor(
+                            request.multimodal_inputs["position_ids"],
+                            dtype="int64",
+                        ).unsqueeze([0])
+                    else:
+                        position_ids = None
+                    self.model_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
+                        position_ids, request.get("max_tokens", 2048)
+                    )
 
                 input_ids = request.prompt_token_ids + request.output_token_ids
 
@@ -567,6 +597,18 @@ class MTPProposer(Proposer):
             idx = request.idx
             length = len(request.prompt_token_ids)
             self.input_ids_len[idx] = length - 1
+            if self.enable_mm:
+                inputs = request.multimodal_inputs
+                if inputs["position_ids"] is not None:
+                    position_ids = paddle.to_tensor(
+                        request.multimodal_inputs["position_ids"],
+                        dtype="int64",
+                    ).unsqueeze([0])
+                else:
+                    position_ids = None
+                self.model_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
+                    position_ids, request.get("max_tokens", 2048)
+                )
 
             if req_dicts[i].disaggregate_info is not None and req_dicts[i].disaggregate_info["role"] == "decode":
                 length = len(request.prompt_token_ids)
@@ -1044,3 +1086,16 @@ class MTPProposer(Proposer):
             self.forward_meta.seq_lens_this_time = self.seq_lens_this_time_buffer
             self.real_token_num = self.forward_meta.ids_remove_padding.shape[0]
         return
+
+    @paddle.no_grad()
+    def prepare_rope3d(self, position_ids: paddle.Tensor, max_len: int) -> paddle.Tensor:
+        """prepare_rope3d"""
+        prefix_max_position_ids = paddle.max(position_ids[..., 0]) + 1
+        dec_pos_ids = paddle.tile(
+            paddle.arange(max_len, dtype="int64").unsqueeze(0).unsqueeze(-1),
+            [1, 1, 3],
+        )
+        dec_pos_ids = dec_pos_ids + prefix_max_position_ids
+        position_ids_3d_real = paddle.concat([position_ids, dec_pos_ids], axis=1)
+        rope_emb = self.rotary_emb.get_rope_emb(position_ids_3d_real)
+        return rope_emb
