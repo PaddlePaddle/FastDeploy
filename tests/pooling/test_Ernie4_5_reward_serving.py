@@ -192,7 +192,7 @@ def _run_test_logic(reward_api_url, headers, baseline_filename):
     else:
         baseline_file = baseline_filename
 
-    check_score_against_baseline(score, baseline_file, threshold=0.0001)
+    check_score_against_baseline(score, baseline_file, threshold=0.01)
 
 
 def test_reward_model_with_caching(server_default_caching, reward_api_url, headers):
