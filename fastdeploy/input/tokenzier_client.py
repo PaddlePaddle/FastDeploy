@@ -57,8 +57,6 @@ class AudioEncodeRequest(BaseEncodeRequest):
 class ImageDecodeRequest(BaseModel):
     req_id: str
     data: list[Any]
-    is_gen: bool
-    resolution: int
 
 
 class AudioDecodeRequest(BaseModel):
