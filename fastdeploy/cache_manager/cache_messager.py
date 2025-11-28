@@ -208,6 +208,8 @@ class CacheMessager:
                     max_block_num,
                     block_bytes,
                     rdma_port,
+                    nranks,
+                    rank,
                 )
 
         self.gpu_id = gpu_id
@@ -507,6 +509,8 @@ class CacheMessagerV1:
                     max_block_num,
                     block_bytes,
                     rdma_port,
+                    nranks,
+                    rank,
                 )
 
         self.gpu_id = gpu_id
@@ -634,6 +638,7 @@ class CacheMessagerV1:
                                 current_transfer_protocol = task["transfer_protocol"]
                                 if task["transfer_protocol"] == "rdma":
                                     target_ip = task["ip"]
+                                    decode_tp_size = task.get("decode_tp_size", self.nranks)
                                     if len(task["rdma_ports"]) == self.nranks:
                                         target_id = int(task["rdma_ports"][self.rank])
                                     elif len(task["rdma_ports"]) == 1:
@@ -646,8 +651,13 @@ class CacheMessagerV1:
                                         continue
 
                                     # TODO: use is connected to check if the connection is still alive
-                                    logger.debug(f"rdma, start connect decode, {target_ip}:{target_id}")
-                                    status = self.messager[current_transfer_protocol].connect(target_ip, target_id)
+                                    logger.debug(
+                                        f"rdma, start connect decode, {target_ip}:{target_id}, "
+                                        f"prefill_tp_size:{self.nranks}, decode_tp_size:{decode_tp_size}"
+                                    )
+                                    status = self.messager[current_transfer_protocol].connect(
+                                        target_ip, target_id, decode_tp_size
+                                    )
                                     if status:
                                         logger.info(f"connect to {target_ip}:{target_id} success")
                                     else:
@@ -771,6 +781,7 @@ class CacheMessagerV1:
                 logger.info(f"_handle_connect_task recv task: {task}")
                 task_id = task["task_id"]
                 ip = task["ip"]
+                decode_tp_size = task.get("decode_tp_size", self.nranks)
                 rdma_ports = task["rdma_ports"]
                 rdma_ports_len = len(rdma_ports)
                 if not (rdma_ports_len == 1 or rdma_ports_len == self.nranks):
@@ -779,7 +790,7 @@ class CacheMessagerV1:
                     response = {"task_id": task_id, "success": False}
                 else:
                     port = rdma_ports[self.rank] if rdma_ports_len == 1 else rdma_ports[0]
-                    status = self.messager["rdma"].connect(ip, port)
+                    status = self.messager["rdma"].connect(ip, port, decode_tp_size)
                     if not status:
                         response = {"task_id": task_id, "success": False}
                     else:

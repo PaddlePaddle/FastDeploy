@@ -15,7 +15,6 @@ PYBIND11_MODULE(rdma_comm, m) {
                     std::vector<int64_t>,
                     int,
                     int,
-                    bool,
                     int,
                     int>(),
            py::arg("splitwise_role"),
@@ -25,13 +24,14 @@ PYBIND11_MODULE(rdma_comm, m) {
            py::arg("value_cache_ptrs"),
            py::arg("block_number"),
            py::arg("block_bytes"),
-           py::arg("pd_tp_size_is_same") = true,
            py::arg("prefill_tp_size") = 1,
            py::arg("prefill_tp_idx") = 0)
       .def("connect",
            &RDMACommunicator::connect,
            py::arg("dst_ip"),
            py::arg("dst_port"),
+           py::arg("dst_tp_size") =
+               0,  // 0 means the tp_size of prefill and decode is the same
            py::call_guard<py::gil_scoped_release>())
       .def("is_connected",
            &RDMACommunicator::is_connected,

@@ -52,7 +52,6 @@ RDMACommunicator::RDMACommunicator(std::string& role,
                                    std::vector<int64_t> local_value_cache,
                                    int block_number,
                                    int block_bytes,
-                                   bool pd_tp_size_is_same,
                                    int prefill_tp_size,
                                    int prefill_tp_idx)
     : splitwise_role(role),
@@ -62,7 +61,6 @@ RDMACommunicator::RDMACommunicator(std::string& role,
       local_cache_value_ptr_layer_head_(std::move(local_value_cache)),
       block_number(block_number),
       block_size_byte(block_bytes),
-      pd_tp_size_is_same(pd_tp_size_is_same),
       prefill_tp_size(prefill_tp_size),
       prefill_tp_idx(prefill_tp_idx),
       RDMACommunicator_status(0),
@@ -490,7 +488,8 @@ std::string RDMACommunicator::fetch_local_ip() {
  */
 
 int RDMACommunicator::connect(const std::string& dst_ip,
-                              const std::string& dst_port) {
+                              const std::string& dst_port,
+                              int dest_tp_size = 0) {
   std::string url = dst_ip + ":" + dst_port;
 
   // Initialize IB devices if not already done
@@ -521,6 +520,10 @@ int RDMACommunicator::connect(const std::string& dst_ip,
   ctx->conn.layer_number = layer_number;
   ctx->conn.block_number = block_number;
   ctx->conn.block_byte_size = block_size_byte;
+  if (dest_tp_size > 0)
+    ctx->conn.decode_tp_size = dest_tp_size;
+  else
+    ctx->conn.decode_tp_size = prefill_tp_idx;
 
   // Get port information for the connection
   if (get_port_info(ctx->context, ib_dev->port, &ctx->portinfo)) {
@@ -897,21 +900,22 @@ int RDMACommunicator::write_cache(const std::string& ip,
   uint32_t cache_value_rkey =
       ctx->conn.write_cache_value_remote_rkey_list[layer_idx];
   uint32_t crc_cache_key_rkey, crc_cache_value_rkey;
+  bool pd_tp_size_is_same = prefill_tp_size == ctx->conn.decode_tp_size;
   uint64_t offset_in_block =
       pd_tp_size_is_same ? 0 : block_size_byte * prefill_tp_idx;
-  uint64_t all_tp_block_size_byte =
+  uint64_t total_block_size_byte =
       pd_tp_size_is_same ? block_size_byte : block_size_byte * prefill_tp_size;
 
   for (size_t block_index = 0; block_index < block_num; ++block_index) {
     char* char_ptr = static_cast<char*>(
         ctx->conn.write_cache_key_remote_ptr_list[layer_idx]);
     cache_key_remote_addr[block_index] = (uint64_t(
-        char_ptr + remote_block_ids[block_index] * all_tp_block_size_byte +
+        char_ptr + remote_block_ids[block_index] * total_block_size_byte +
         offset_in_block));
     char_ptr = static_cast<char*>(
         ctx->conn.write_cache_value_remote_ptr_list[layer_idx]);
     cache_value_remote_addr[block_index] = (uint64_t(
-        char_ptr + remote_block_ids[block_index] * all_tp_block_size_byte +
+        char_ptr + remote_block_ids[block_index] * total_block_size_byte +
         offset_in_block));
   }
 

@@ -364,6 +364,7 @@ class SplitwiseConnector:
                         "rdma_ports": self.cfg.disaggregate_info["cache_info"]["rdma"]["rdma_port"],
                         "transfer_protocol": "rdma",
                         "dest_block_ids": dsg_info["block_tables"],
+                        "decode_tp_size": self.cfg.parallel_config.tensor_parallel_size,
                     }
 
                 addr = f"{dsg_info['cache_info']['rdma']['ip']}:" + f"{dsg_info['cache_info']['rdma']['port']}"
