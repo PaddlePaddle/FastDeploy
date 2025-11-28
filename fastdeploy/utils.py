@@ -979,7 +979,7 @@ def init_bos_client():
 
     try:
         client = BosClient(cfg)
-        client.list_buckets(max_keys=1)
+        client.list_buckets()
     except BceServerError as e:
         if e.status_code == 403:
             raise Exception("BOS authentication failed: Invalid AK/SK") from e
