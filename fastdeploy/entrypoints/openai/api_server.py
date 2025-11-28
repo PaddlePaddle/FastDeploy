@@ -175,25 +175,12 @@ async def lifespan(app: FastAPI):
     model_paths = [ModelPath(name=served_model_names, model_path=args.model, verification=verification)]
 
     engine_args = EngineArgs.from_cli_args(args)
-    config = engine_args.create_engine_config(port_availability_check=False)
+    fd_config = engine_args.create_engine_config(port_availability_check=False)
     engine_client = EngineClient(
-        model_name_or_path=args.model,
-        tokenizer=args.tokenizer,
-        max_model_len=args.max_model_len,
-        tensor_parallel_size=args.tensor_parallel_size,
         pid=pid,
         port=int(os.environ.get("INFERENCE_MSG_QUEUE_ID", "0")),
-        limit_mm_per_prompt=args.limit_mm_per_prompt,
-        mm_processor_kwargs=args.mm_processor_kwargs,
-        reasoning_parser=args.reasoning_parser,
-        data_parallel_size=args.data_parallel_size,
-        enable_logprob=args.enable_logprob,
+        fd_config=fd_config,
         workers=args.workers,
-        tool_parser=args.tool_call_parser,
-        enable_prefix_caching=args.enable_prefix_caching,
-        splitwise_role=args.splitwise_role,
-        max_processor_cache=args.max_processor_cache,
-        config=config,
     )
     await engine_client.connection_manager.initialize()
     app.state.dynamic_load_weight = args.dynamic_load_weight
@@ -224,14 +211,14 @@ async def lifespan(app: FastAPI):
     embedding_handler = OpenAIServingEmbedding(
         engine_client,
         app.state.model_handler,
-        config,
+        fd_config,
         pid,
         args.ips,
         args.max_waiting_time,
         chat_template,
     )
     reward_handler = OpenAIServingReward(
-        engine_client, app.state.model_handler, config, pid, args.ips, args.max_waiting_time, chat_template
+        engine_client, app.state.model_handler, fd_config, pid, args.ips, args.max_waiting_time, chat_template
     )
     engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid

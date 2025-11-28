@@ -352,22 +352,12 @@ def create_model_paths(args: Namespace) -> List[ModelPath]:
 async def initialize_engine_client(args: Namespace, pid: int) -> EngineClient:
     """Initialize and configure the engine client."""
     engine_args = EngineArgs.from_cli_args(args)
-    config = engine_args.create_engine_config(port_availability_check=False)
+    fd_config = engine_args.create_engine_config(port_availability_check=False)
     engine_client = EngineClient(
-        model_name_or_path=args.model,
-        tokenizer=args.tokenizer,
-        max_model_len=args.max_model_len,
-        tensor_parallel_size=args.tensor_parallel_size,
         pid=pid,
         port=int(args.engine_worker_queue_port[args.local_data_parallel_id]),
-        limit_mm_per_prompt=args.limit_mm_per_prompt,
-        mm_processor_kwargs=args.mm_processor_kwargs,
-        reasoning_parser=args.reasoning_parser,
-        data_parallel_size=args.data_parallel_size,
-        enable_logprob=args.enable_logprob,
+        fd_config=fd_config,
         workers=args.workers,
-        tool_parser=args.tool_call_parser,
-        config=config,
     )
 
     await engine_client.connection_manager.initialize()
