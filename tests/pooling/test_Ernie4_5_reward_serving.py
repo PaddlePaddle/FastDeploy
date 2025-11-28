@@ -30,13 +30,14 @@ from e2e.utils.serving_utils import (
     is_port_open,
 )
 
+# ==========================
+# Shared Helper Functions
+# ==========================
 
-@pytest.fixture(scope="session", autouse=True)
-def setup_and_run_reward_server():
-    """
-    Start reward model API server for testing.
-    """
-    print("Pre-test port cleanup...")
+
+def _start_server_process(enable_caching: bool, log_filename: str):
+
+    print(f"\n[Server Setup] Cleaning ports before starting (Caching={'ON' if enable_caching else 'OFF'})...")
     clean_ports()
 
     base_path = os.getenv("MODEL_PATH")
@@ -48,7 +49,6 @@ def setup_and_run_reward_server():
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model path not found: {model_path}")
 
-    log_path = "reward_server.log"
     cmd = [
         sys.executable,
         "-m",
@@ -77,7 +77,14 @@ def setup_and_run_reward_server():
         "reward",
     ]
 
-    with open(log_path, "w") as logfile:
+    if enable_caching:
+        cmd.append("--enable-prefix-caching")
+    else:
+        cmd.append("--no-enable-prefix-caching")
+
+    print(f"[Server Setup] Command: {' '.join(cmd)}")
+
+    with open(log_filename, "w") as logfile:
         process = subprocess.Popen(
             cmd,
             stdout=logfile,
@@ -85,70 +92,50 @@ def setup_and_run_reward_server():
             start_new_session=True,
         )
 
-    # Wait for server to start (up to 480 seconds)
+    # Wait for server to start
     for _ in range(300):
         if is_port_open("127.0.0.1", FD_API_PORT):
-            print(f"reward API server is up on port {FD_API_PORT}")
+            print(f"[Server Setup] Server is up on port {FD_API_PORT}")
             break
         time.sleep(1)
     else:
-        print("reward API server failed to start. Cleaning up...")
+        print("[Server Setup] Server failed to start. Cleaning up...")
         try:
             os.killpg(process.pid, signal.SIGTERM)
-        except Exception as e:
-            print(f"Failed to kill process group: {e}")
-        raise RuntimeError(f"reward API server did not start on port {FD_API_PORT}")
+        except Exception:
+            pass
+        if os.path.exists(log_filename):
+            with open(log_filename, "r") as f:
+                print(f"Server Log Tail ({log_filename}):\n{f.read()[-500:]}")
+        raise RuntimeError(f"Server did not start on port {FD_API_PORT}")
 
-    yield
-
-    print("\n===== Post-test reward server cleanup... =====")
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-        print(f"reward API server (pid={process.pid}) terminated")
-    except Exception as e:
-        print(f"Failed to terminate reward API server: {e}")
+    return process
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def reward_api_url():
     """Returns the API endpoint URL for reward."""
     return f"http://0.0.0.0:{FD_API_PORT}/v1/reward"
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def headers():
     """Returns common HTTP request headers."""
     return {"Content-Type": "application/json"}
 
 
-# ==========================
-# Test Cases
-# ==========================
+@pytest.fixture(scope="function")
+def server_default_caching():
+    _start_server_process(enable_caching=True, log_filename="reward_server_caching_on.log")
 
 
-@pytest.fixture
-def consistent_payload():
-    """
-    Returns a fixed payload for reward model consistency testing.
-    Reward models evaluate user-assistant conversation pairs.
-    """
-    return {
-        "model": "default",
-        "messages": [
-            {"role": "user", "content": [{"type": "text", "text": "北京天安门在哪里？"}]},
-            {
-                "role": "assistant",
-                "content": [{"type": "text", "text": "北京天安门在中国北京故宫的前面。"}],
-            },
-        ],
-        "user": "test-user-123",
-    }
+@pytest.fixture(scope="function")
+def server_no_caching():
+    _start_server_process(enable_caching=False, log_filename="reward_server_caching_off.log")
 
 
 def save_score_baseline(score: float, baseline_file: str):
-    """
-    Save reward score to baseline file.
-    """
+    """Save reward score to baseline file."""
     baseline_data = {"score": score}
     with open(baseline_file, "w", encoding="utf-8") as f:
         json.dump(baseline_data, f, indent=2)
@@ -156,9 +143,7 @@ def save_score_baseline(score: float, baseline_file: str):
 
 
 def check_score_against_baseline(current_score: float, baseline_file: str, threshold: float = 0.01):
-    """
-    Check reward score against baseline file.
-    """
+    """Check reward score against baseline file."""
     try:
         with open(baseline_file, "r", encoding="utf-8") as f:
             baseline_data = json.load(f)
@@ -180,9 +165,7 @@ def check_score_against_baseline(current_score: float, baseline_file: str, thres
         )
 
 
-def test_reward_model(reward_api_url, headers):
-    """Test reward model scoring using the chat-style payload."""
-
+def _run_test_logic(reward_api_url, headers, baseline_filename):
     payload = {
         "model": "default",
         "messages": [
@@ -193,34 +176,30 @@ def test_reward_model(reward_api_url, headers):
     }
 
     print(f"\n=== Sending request to {reward_api_url} ===")
-
     response = requests.post(reward_api_url, headers=headers, json=payload, timeout=30)
-
     assert response.status_code == 200, f"API request failed with status {response.status_code}: {response.text}"
 
     result = response.json()
     print(f"Response: {json.dumps(result, indent=2, ensure_ascii=False)}")
 
-    assert "data" in result, f"Response missing 'data' field. Got: {result}"
-    assert len(result["data"]) > 0, "Response 'data' is empty"
-
-    first_item = result["data"][0]
-    assert "score" in first_item, f"Response data item missing 'score' field. Got: {first_item}"
-
-    score_list = first_item["score"]
-    assert isinstance(score_list, list), f"Expected 'score' to be a list, got {type(score_list)}"
-    assert len(score_list) > 0, "Score list is empty"
-
-    score = float(score_list[0])
-
+    assert "data" in result and len(result["data"]) > 0
+    score = float(result["data"][0]["score"][0])
     print(f"✓ Reward Score: {score}")
 
     base_path = os.getenv("MODEL_PATH", "")
-    baseline_filename = "reward_score_baseline.json"
-
     if base_path:
         baseline_file = os.path.join(base_path, baseline_filename)
     else:
         baseline_file = baseline_filename
 
     check_score_against_baseline(score, baseline_file, threshold=0.0001)
+
+
+def test_reward_model_with_caching(server_default_caching, reward_api_url, headers):
+    print("\n>>> Running Test: WITH Prefix Caching")
+    _run_test_logic(reward_api_url, headers, baseline_filename="reward_score_baseline.json")
+
+
+def test_reward_model_without_caching(server_no_caching, reward_api_url, headers):
+    print("\n>>> Running Test: WITHOUT Prefix Caching")
+    _run_test_logic(reward_api_url, headers, baseline_filename="reward_score_baseline_no_caching.json")
