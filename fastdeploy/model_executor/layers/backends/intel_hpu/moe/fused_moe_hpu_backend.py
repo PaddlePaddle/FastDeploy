@@ -14,11 +14,10 @@
 # limitations under the License.
 """
 
-import os
-
 import paddle
 from paddle import nn
 
+from fastdeploy import envs
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce_custom
 from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import (
     UnquantizedFusedMoEMethod,
@@ -80,7 +79,7 @@ class HpuMoEMethod(UnquantizedFusedMoEMethod):
             raise NotImplementedError
 
         # norm_topk_prob = False if layer.topk_method == "noaux_tc" else True
-        chunk_size = int(os.environ.get("HPU_CHUNK_SIZE", 64))
+        chunk_size = envs.FD_HPU_CHUNK_SIZE
         from fastdeploy.model_executor.ops.intel_hpu import fused_gate_moe
 
         fused_moe_out = fused_gate_moe(
@@ -177,7 +176,7 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
 
         # norm_topk_prob = False if layer.topk_method == "noaux_tc" else True
 
-        chunk_size = int(os.environ.get("HPU_CHUNK_SIZE", 64))
+        chunk_size = envs.FD_HPU_CHUNK_SIZE
         from fastdeploy.model_executor.ops.intel_hpu import fused_gate_moe_fp8
 
         fused_moe_out = fused_gate_moe_fp8(
