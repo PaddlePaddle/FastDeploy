@@ -655,24 +655,29 @@ class FusedMoE(nn.Layer):
         """
         chunk_size = self.fd_config.parallel_config.chunked_moe_size
         token_num = x.shape[0]
-
+        fake_x = paddle.empty(
+            shape=[0, self.fd_config.model_config.hidden_size],
+            dtype=paddle.get_default_dtype(),
+        )
         # input size that are less than a chunk, less than the max size data or empty input
         # need to be repeated until the max chunk data infer MOE finished.
         if token_num > chunk_size:  # chunked moe
-            out = paddle.zeros_like(x)
-            out_split_list = paddle.tensor_split(out, self.fd_config.parallel_config.moe_num_chunk, axis=0)
             x_split_list = paddle.tensor_split(x, self.fd_config.parallel_config.moe_num_chunk, axis=0)
+            out_split_list = [None] * self.fd_config.parallel_config.moe_num_chunk
 
             for i in range(self.fd_config.parallel_config.max_moe_num_chunk):
                 if i <= self.fd_config.parallel_config.moe_num_chunk - 1:
                     out_split_list[i] = self.quant_method.apply(self, x_split_list[i], gate)
                 else:
-                    self.quant_method.apply(self, x, gate)
+                    # empty tensor inference on idle ranks.
+                    self.quant_method.apply(self, fake_x, gate)
 
             out = paddle.concat(out_split_list, axis=0)
         else:
-            for i in range(self.fd_config.parallel_config.max_moe_num_chunk):
-                out = self.quant_method.apply(self, x, gate)
+            # just need to infer once, call forward for empty tensor.
+            out = self.quant_method.apply(self, x, gate)
+            for i in range(self.fd_config.parallel_config.max_moe_num_chunk - 1):
+                self.quant_method.apply(self, fake_x, gate)
 
         return out
 
