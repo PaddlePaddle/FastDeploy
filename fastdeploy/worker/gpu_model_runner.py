@@ -2403,8 +2403,16 @@ class GPUModelRunner(ModelRunnerBase):
         pooler_output: list[Optional[paddle.Tensor]] = []
 
         for seq_len, prompt_len in zip(seq_lens_cpu, pooling_metadata.prompt_lens):
-            output = raw_pooler_output[0].data if int(seq_len) == int(prompt_len) else None
-            pooler_output.append(output)
+            if not self.cache_config.enable_prefix_caching:
+                output = raw_pooler_output[0].data if int(seq_len) == int(prompt_len) else None
+                pooler_output.append(output)
+            else:
+                seq_lens_decoder = self.share_inputs["seq_lens_decoder"][:num_running_requests]
+                if int(seq_lens_decoder) + int(seq_len) == int(prompt_len):
+                    output = raw_pooler_output[0].data
+                else:
+                    output = None
+                pooler_output.append(output)
 
         pooler_output = PoolerOutput(
             outputs=pooler_output,

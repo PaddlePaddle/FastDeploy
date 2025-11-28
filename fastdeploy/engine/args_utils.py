@@ -541,9 +541,6 @@ class EngineArgs:
             self.enable_prefix_caching = False
             self.max_encoder_cache = 0
 
-        if self.runner == "pooling" and self.enable_prefix_caching:
-            self.enable_prefix_caching = False
-
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
         """
