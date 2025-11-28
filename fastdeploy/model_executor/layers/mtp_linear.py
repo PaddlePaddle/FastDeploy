@@ -120,10 +120,10 @@ class ParallelEHProjection(nn.Layer):
         weight_tensor = get_tensor(state_dict.pop(self.weight_key)).astype(paddle.get_default_dtype())
         if self.linear.weight.shape != weight_tensor.shape:
             weight_tensor = weight_tensor.transpose([1, 0])
-        self.linear.weight.set_value(weight_tensor)
+        self.linear.weight.set_value(weight_tensor.astype(self.linear.weight.dtype))
 
         if self.bias_key is not None:
-            bias = get_tensor(state_dict.pop(self.bias_key)).astype(paddle.get_default_dtype())
+            bias = get_tensor(state_dict.pop(self.bias_key)).astype(self.linear.bias.dtype)
             self.linear.bias.set_value(bias)
 
     def forward(self, input):
