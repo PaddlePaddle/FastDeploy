@@ -613,8 +613,6 @@ class FusedMoE(nn.Layer):
         paddle.distributed.all_gather(multi_outs, out, self.tp_group)
         out = multi_outs[:token_num, :]
 
-        if self.reduce_results and self.tp_size > 1:
-            out = tensor_model_parallel_all_reduce(out, self.tp_group)
         return out
 
     def forward(self, x: paddle.Tensor, gate: nn.Layer):
@@ -641,6 +639,8 @@ class FusedMoE(nn.Layer):
         else:
             out = self.forward_normal(x, gate)
 
+        if self.reduce_results and self.tp_size > 1:
+            out = tensor_model_parallel_all_reduce(out, self.tp_group)
         return out
 
     def forward_chunked_moe(self, x: paddle.Tensor, gate: nn.Layer):
