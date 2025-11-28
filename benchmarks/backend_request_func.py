@@ -52,6 +52,7 @@ class RequestFuncInput:
     language: Optional[str] = None
     debug: bool = False
     response_format: Optional[dict] = None
+    random_flag: bool = False
 
 
 @dataclass
@@ -102,6 +103,13 @@ async def async_request_eb_openai_chat_completions(
 
         # 超参由yaml传入
         payload.update(request_func_input.hyper_parameters)
+
+        # 随机输入开关
+        if request_func_input.random_flag:
+            payload["max_tokens"] = request_func_input.output_len
+            metadata = payload.get("metadata", {})
+            metadata["min_tokens"] = request_func_input.output_len
+            payload["metadata"] = metadata
 
         if request_func_input.ignore_eos:
             payload["ignore_eos"] = request_func_input.ignore_eos
