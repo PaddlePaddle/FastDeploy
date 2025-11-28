@@ -105,6 +105,7 @@ jobs:
           FD_CACHE_QUEUE_PORT=$((8098 + DEVICE_PORT * 100))
           FD_ROUTER_PORT=$((8048 + DEVICE_PORT * 100))
           FD_CONNECTOR_PORT=$((8038 + DEVICE_PORT * 100))
+          FD_RDMA_PORT=$((8028 + DEVICE_PORT * 100))
           echo "Test ENV Parameter:"
           echo "========================================================="
           echo "FLASK_PORT=${FLASK_PORT}"
@@ -114,6 +115,7 @@ jobs:
           echo "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}"
           echo "FD_ROUTER_PORT=${FD_ROUTER_PORT}"
           echo "FD_CONNECTOR_PORT=${FD_CONNECTOR_PORT}"
+          echo "FD_RDMA_PORT=${FD_RDMA_PORT}"
           echo "DEVICES=${DEVICES}"
           echo "========================================================="
 
@@ -149,9 +151,15 @@ jobs:
             docker rm -f ${runner_name} || true
           fi
 
+          export RDMA_DEVICES=$(find /dev/infiniband/uverbs* -maxdepth 1 -not -type d | xargs -I{} echo '--device {}:{}')
+
           docker run --rm --net=host \
           --name ${runner_name} \
-          --cap-add=SYS_PTRACE --shm-size=64G \
+          --cap-add=SYS_PTRACE --cap-add=IPC_LOCK \
+          --shm-size=64G \
+          ${RDMA_DEVICES} \
+          --device=/dev/infiniband/rdma_cm \
+          --ulimit memlock=-1:-1 \
           -v $(pwd):/workspace -w /workspace \
           -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
           -v "${CACHE_DIR}/.cache:/root/.cache" \
@@ -165,6 +173,8 @@ jobs:
           -e "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}" \
           -e "FD_ROUTER_PORT=${FD_ROUTER_PORT}" \
           -e "FD_CONNECTOR_PORT=${FD_CONNECTOR_PORT}" \
+          -e "FD_RDMA_PORT=${FD_RDMA_PORT}" \
+          -e "CLEAN_CUDA=1" \
           -e TZ="Asia/Shanghai" \
           -e "fd_wheel_url=${fd_wheel_url}" \
           -e "BASE_REF=${BASE_REF}" \
