@@ -669,12 +669,12 @@ class FusedMoE(nn.Layer):
                 if i < self.fd_config.parallel_config.moe_num_chunk:
                     out_split_list[i] = self.quant_method.apply(self, x_split_list[i], gate)
                 else:
-                    # empty tensor inference on idle ranks.
+                    # just need to use real data to infer max_moe_num_chunk times.
                     self.quant_method.apply(self, fake_x, gate)
 
             out = paddle.concat(out_split_list, axis=0)
         else:
-            # just need to infer once, call forward for empty tensor.
+            # when only one chunk, just need to use real data to infer once.
             out = self.quant_method.apply(self, x, gate)
             for i in range(self.fd_config.parallel_config.max_moe_num_chunk - 1):
                 self.quant_method.apply(self, fake_x, gate)
