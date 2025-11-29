@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import copy
 import time
 import traceback
 from dataclasses import asdict, dataclass, fields
@@ -269,6 +270,21 @@ class Request:
 
     def to_dict(self) -> dict:
         """convert Request into a serializable dict"""
+        multimodal_inputs = copy.deepcopy(self.multimodal_inputs)
+        if (
+            isinstance(multimodal_inputs, dict)
+            and isinstance(multimodal_inputs.get("mm_positions"), list)
+            and len(multimodal_inputs["mm_positions"]) > 0
+        ):
+            # if mm_positions is ImagePosition, convert to dict
+            try:
+                for i, mm_pos in enumerate(multimodal_inputs["mm_positions"]):
+                    multimodal_inputs["mm_positions"][i] = (
+                        asdict(mm_pos) if isinstance(mm_pos, ImagePosition) else mm_pos
+                    )
+            except Exception as e:
+                data_processor_logger.error(f"Convert ImagePosition to dict error: {e}, {str(traceback.format_exc())}")
+
         data = {
             "request_id": self.request_id,
             "prompt": self.prompt,
@@ -282,7 +298,7 @@ class Request:
             "arrival_time": self.arrival_time,
             "preprocess_start_time": self.preprocess_start_time,
             "preprocess_end_time": self.preprocess_end_time,
-            "multimodal_inputs": self.multimodal_inputs,
+            "multimodal_inputs": multimodal_inputs,
             "multimodal_data": self.multimodal_data,
             "disable_chat_template": self.disable_chat_template,
             "disaggregate_info": self.disaggregate_info,
