@@ -60,9 +60,9 @@ python -m fastdeploy.entrypoints.openai.api_server --model ${model_path} \
     --port 9412 --engine-worker-queue-port 7142 \
     --metrics-port 7211 --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.9 \
-    --load_choices "default_v1" \
-    --runner pooling
-    --no-enable-prefix-caching \
+    --graph-optimization-config '{"use_cudagraph":false}' \
+    --runner pooling \
+
 ```
 
 请求方式:<br>
@@ -110,7 +110,6 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --load-choices "default_v1" \
     --runner pooling \
     --convert embed \
-    --no-enable-prefix-caching
 ```
 
 请求方式: ChatRewardRequest
