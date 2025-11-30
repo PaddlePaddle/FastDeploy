@@ -1044,3 +1044,10 @@ class MTPProposer(Proposer):
             self.forward_meta.seq_lens_this_time = self.seq_lens_this_time_buffer
             self.real_token_num = self.forward_meta.ids_remove_padding.shape[0]
         return
+
+    def clear_mtp_graphs(self) -> None:
+        """Dynamic model loader use to clear parameters use for RL"""
+        # Clear CUDAGraph
+        if self.fd_config.use_cudagraph:
+            if self.draft_model_use_cudagraph:
+                self.model.clear_grpah_opt_backend()

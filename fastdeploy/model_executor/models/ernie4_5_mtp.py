@@ -466,3 +466,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
         )
 
         return hidden_states
+
+    def clear_grpah_opt_backend(self):
+        """Clear graph optimization backend, the captured cuda graph will be cleaned"""
+        self.ernie.clear_grpah_opt_backend(fd_config=self.fd_config)

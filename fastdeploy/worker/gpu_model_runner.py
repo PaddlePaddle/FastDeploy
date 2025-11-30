@@ -2530,6 +2530,8 @@ class GPUModelRunner(ModelRunnerBase):
         # Clear CUDAGraph
         if self.use_cudagraph:
             self.model.clear_grpah_opt_backend()
+            if self.speculative_method in ["mtp"]:
+                self.proposer.clear_mtp_graphs()
         # Clear parameters and Send single
         self.dynamic_weight_manager.clear_parameters(pid)
         self.clear_cache()
