@@ -14,41 +14,18 @@
 # limitations under the License.
 """
 
-import argparse
-
-from fastdeploy.router.router import start_router
+from fastdeploy.router.router import RouterArgs, launch_router
+from fastdeploy.utils import FlexibleArgumentParser
 from fastdeploy.utils import router_logger as logger
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Router for splitwise deployment testing")
-    parser.add_argument(
-        "--host",
-        type=str,
-        default="0.0.0.0",
-        help="Host address to bind the router server.",
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default="9000",
-        help="Port number to bind the router server",
-    )
-    parser.add_argument(
-        "--splitwise",
-        action="store_true",
-        help="Router uses splitwise deployment",
-    )
-    parser.add_argument(
-        "--request-timeout-secs",
-        type=int,
-        default=1800,
-        help="Request timeout in seconds",
-    )
+    parser = FlexibleArgumentParser()
+    parser = RouterArgs.add_cli_args(parser)
     args = parser.parse_args()
 
     try:
-        start_router(args)
+        launch_router(args)
     except Exception as e:
         logger.error(f"Error starting router: {e}")
         raise e

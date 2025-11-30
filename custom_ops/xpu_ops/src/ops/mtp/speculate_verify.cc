@@ -45,7 +45,10 @@ void SpeculateVerify(const paddle::Tensor &accept_tokens,
                      const paddle::Tensor &topp,
                      int max_seq_len,
                      int verify_window,
-                     bool enable_topp) {
+                     bool enable_topp,
+                     bool benchmark_mode,
+                     bool accept_all_drafts) {
+  // TODO(chenhuan09):support accept_all_drafts
   auto bsz = accept_tokens.shape()[0];
   int real_bsz = seq_lens_this_time.shape()[0];
   auto max_draft_tokens = draft_tokens.shape()[1];
@@ -133,7 +136,8 @@ void SpeculateVerify(const paddle::Tensor &accept_tokens,
           max_seq_len,
           max_candidate_len,
           verify_window,
-          prefill_one_step_stop);
+          prefill_one_step_stop,
+          benchmark_mode);
     } else {
       baidu::xpu::api::plugin::speculate_verify<false, true>(
           ctx,
@@ -161,7 +165,8 @@ void SpeculateVerify(const paddle::Tensor &accept_tokens,
           max_seq_len,
           max_candidate_len,
           verify_window,
-          prefill_one_step_stop);
+          prefill_one_step_stop,
+          benchmark_mode);
     }
   } else {
     if (enable_topp) {
@@ -191,7 +196,8 @@ void SpeculateVerify(const paddle::Tensor &accept_tokens,
           max_seq_len,
           max_candidate_len,
           verify_window,
-          prefill_one_step_stop);
+          prefill_one_step_stop,
+          benchmark_mode);
     } else {
       baidu::xpu::api::plugin::speculate_verify<false, false>(
           ctx,
@@ -219,7 +225,8 @@ void SpeculateVerify(const paddle::Tensor &accept_tokens,
           max_seq_len,
           max_candidate_len,
           verify_window,
-          prefill_one_step_stop);
+          prefill_one_step_stop,
+          benchmark_mode);
     }
   }
 }
@@ -246,7 +253,11 @@ PD_BUILD_STATIC_OP(speculate_verify)
               "accept_num_out",
               "step_idx_out",
               "stop_flags_out"})
-    .Attrs({"max_seq_len: int", "verify_window: int", "enable_topp: bool"})
+    .Attrs({"max_seq_len: int",
+            "verify_window: int",
+            "enable_topp: bool",
+            "benchmark_mode: bool",
+            "accept_all_drafts: bool"})
     .SetInplaceMap({{"accept_tokens", "accept_tokens_out"},
                     {"accept_num", "accept_num_out"},
                     {"step_idx", "step_idx_out"},

@@ -59,10 +59,11 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
         self.head_dtype = paddle.bfloat16
 
         # Persistent buffers for CUDA graphs.
-        self._input_embeddings = paddle.zeros(
-            [fd_config.parallel_config.max_model_len, fd_config.model_config.hidden_size],
-            dtype=fd_config.model_config.dtype,
-        )
+        if fd_config.graph_opt_config.use_cudagraph:
+            self._decoder_input_embeddings = paddle.zeros(
+                [fd_config.graph_opt_config.max_capture_size, fd_config.model_config.hidden_size],
+                dtype=fd_config.model_config.dtype,
+            )
 
         self.rm_head = nn.Sequential(
             (
@@ -112,10 +113,13 @@ class Ernie4_5_VLMoeRewardBaseModel(nn.Layer):
             image_features=image_features,
             image_token_num=vl_moe_meta.image_token_num.item(),
         )
-        self._input_embeddings.copy_(input_embeddings, False)
+
+        if forward_meta.step_use_cudagraph:
+            self._decoder_input_embeddings.copy_(input_embeddings, False)
+            input_embeddings = self._decoder_input_embeddings
 
         hidden_states = self.ernie(
-            input_embeddings=self._input_embeddings,
+            input_embeddings=input_embeddings,
             ids_remove_padding=ids_remove_padding,
             forward_meta=forward_meta,
             vl_moe_meta=vl_moe_meta,
