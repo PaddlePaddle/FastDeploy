@@ -67,7 +67,6 @@ python -m fastdeploy.entrypoints.openai.api_server --model ${model_path} \
     --port 9412 --engine-worker-queue-port 7142 \
     --metrics-port 7211 --tensor-parallel-size 1 \
     --gpu-memory-utilization 0.9 \
-    --graph-optimization-config '{"use_cudagraph":false}' \
     --runner pooling
 ```
 
@@ -112,7 +111,6 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --metrics-port 7531 \
     --tensor-parallel-size 8 \
     --gpu-memory-utilization 0.9 \
-    --graph-optimization-config '{"use_cudagraph":false}' \
     --runner pooling \
     --convert embed
 ```
