@@ -19,7 +19,7 @@ import unittest
 import numpy as np
 import paddle
 
-from fastdeploy.model_executor.ops.gpu import flash_attention_mask
+from fastdeploy.model_executor.ops.gpu import flash_mask_attention
 
 
 class TestFlashMaskAttention(unittest.TestCase):
@@ -27,7 +27,7 @@ class TestFlashMaskAttention(unittest.TestCase):
         self.bsz = 1
         self.num_head = 8
         self.num_kv_head = 1
-        self.q_seq_len = 1024
+        self.q_seq_len = 888
         self.k_seq_len = 1024
         self.head_dim = 128
         np.random.seed(self.q_seq_len)
@@ -56,7 +56,7 @@ class TestFlashMaskAttention(unittest.TestCase):
                 out[bsz, hi] = (np.matmul(qk, v_cur[bsz, hi // gqa_group_size]) * exp_sum_inv).astype(q_input.dtype)
         return out
 
-    def paddle_flash_attn_mask(self, q_input, k_input, v_input, mask):
+    def paddle_flash_attn_mask(self, q_input, k_input, v_input, attn_out, mask):
         bsz = q_input.shape[0]
         cu_seq_q = paddle.arange(bsz + 1) * q_input.shape[1]
         cu_seq_k = paddle.arange(bsz + 1) * k_input.shape[1]
@@ -71,13 +71,14 @@ class TestFlashMaskAttention(unittest.TestCase):
         v_input_pad[0 : v_input.shape[0]] = v_input
         mask = paddle.to_tensor(mask).astype("int32")
 
-        out = flash_attention_mask(
+        flash_mask_attention(
             q_input,
             k_input,
             v_input_pad,
             cu_seq_q,
             cu_seq_k,
             seq_len_encoder,
+            attn_out,
             mask,
             int(q_input.shape[1]),
             int(k_input.shape[1]),
@@ -86,9 +87,8 @@ class TestFlashMaskAttention(unittest.TestCase):
             int(q_input.shape[0]),
             int(k_input.shape[0]),
         )
-        return out
 
-    def test_flash_attention_mask(self):
+    def test_flash_mask_attention(self):
         q_input = np.random.normal(0, 0.5, size=(self.bsz, self.q_seq_len, self.num_head, self.head_dim))
         k_input = np.random.normal(
             0, 0.5, size=(self.bsz, self.q_seq_len + self.k_seq_len, self.num_kv_head, self.head_dim)
@@ -104,8 +104,9 @@ class TestFlashMaskAttention(unittest.TestCase):
         mask = np.array([i + 1 for i in range(0, self.q_seq_len)]) + self.k_seq_len
         mask[text_len : text_len + image_len] = text_len + image_len + self.k_seq_len
 
-        naive_attn_out = self.naive_attn(q_input, k_input, v_input, mask)
-        paddle_attn_out = self.paddle_flash_attn_mask(q_input, k_input, v_input, mask)
+        naive_attn_out = self.naive_attn(q_input, k_input, v_input, mask).transpose([0, 2, 1, 3])
+        paddle_attn_out = paddle.zeros(q_input.shape, dtype="bfloat16")
+        self.paddle_flash_attn_mask(q_input, k_input, v_input, paddle_attn_out, mask)
 
         max_diff = float((paddle_attn_out.reshape([-1]) - paddle.to_tensor(naive_attn_out).reshape([-1])).max())
         self.assertLessEqual(max_diff, 0.05)

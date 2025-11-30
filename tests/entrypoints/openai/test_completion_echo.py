@@ -58,6 +58,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
             prompt_batched_token_ids=[[1, 2]],
             completion_batched_token_ids=[[3, 4, 5]],
             prompt_tokens_list=["test prompt"],
+            max_tokens_list=[100],
         )
 
         self.assertEqual(response.choices[0].text, "test prompt generated text")
@@ -91,6 +92,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
             prompt_batched_token_ids=[[1, 2]],
             completion_batched_token_ids=[[3, 4, 5]],
             prompt_tokens_list=["test prompt"],
+            max_tokens_list=[100],
         )
         self.assertEqual(response.choices[0].text, "decoded_[1, 2, 3] generated text")
 
@@ -124,6 +126,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
             prompt_batched_token_ids=[[1], [2]],
             completion_batched_token_ids=[[1, 2], [3, 4]],
             prompt_tokens_list=["prompt1", "prompt2"],
+            max_tokens_list=[100, 100],
         )
 
         self.assertEqual(len(response.choices), 2)
@@ -160,6 +163,7 @@ class TestCompletionEcho(unittest.IsolatedAsyncioTestCase):
             prompt_batched_token_ids=[[1], [2]],
             completion_batched_token_ids=[[1, 2], [3, 4]],
             prompt_tokens_list=["prompt1", "prompt2"],
+            max_tokens_list=[100, 100],
         )
 
         self.assertEqual(len(response.choices), 2)
