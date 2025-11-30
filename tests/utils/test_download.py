@@ -17,7 +17,7 @@
 import os
 import unittest
 
-from fastdeploy.utils import retrive_model_from_server
+from fastdeploy.utils import init_bos_client, retrive_model_from_server
 
 
 class TestAistudioDownload(unittest.TestCase):
@@ -64,6 +64,70 @@ class TestAistudioDownload(unittest.TestCase):
         with self.assertRaises(Exception):
             retrive_model_from_server(model_name_or_path)
 
+        os.environ.clear()
+
+
+class TestInitBosClient(unittest.TestCase):
+    """
+    Test cases for initializing Baidu Object Storage (BOS) client using FastDeploy utilities.
+    """
+
+    def test_init_bos_client_success(self):
+        """
+        Test case for successful initialization of BOS client with valid environment variables.
+        """
+        from unittest.mock import MagicMock, patch
+
+        # Mock BosClient and related dependencies to skip validation
+        with patch("baidubce.auth.bce_credentials.BceCredentials") as mock_credentials:
+            with patch("baidubce.bce_client_configuration.BceClientConfiguration") as mock_config:
+                with patch("baidubce.services.bos.bos_client.BosClient") as mock_bos_client:
+                    # Additional mock to make list_buckets call succeed
+                    mock_bos_client_instance = MagicMock()
+                    # Mock the list_buckets call to return empty buckets list
+                    mock_bos_client_instance.list_buckets = MagicMock(return_value=MagicMock())
+                    mock_bos_client.return_value = mock_bos_client_instance
+
+                    # Mock the credentials and config
+                    mock_credentials_instance = MagicMock()
+                    mock_credentials.return_value = mock_credentials_instance
+
+                    mock_config_instance = MagicMock()
+                    mock_config.return_value = mock_config_instance
+
+                    # Set up valid environment variables
+                    os.environ["ENCODE_FEATURE_BOS_AK"] = "test_access_key"
+                    os.environ["ENCODE_FEATURE_BOS_SK"] = "test_secret_key"
+                    os.environ["ENCODE_FEATURE_ENDPOINT"] = "http://test.endpoint.com"
+
+                    try:
+                        # Call the function
+                        client = init_bos_client()
+
+                        # Verify that BosClient was created with correct arguments
+                        mock_credentials.assert_called_once_with("test_access_key", "test_secret_key")
+                        mock_config.assert_called_once_with(
+                            credentials=mock_credentials_instance, endpoint="http://test.endpoint.com"
+                        )
+                        mock_bos_client.assert_called_once_with(mock_config_instance)
+
+                        # Verify that the returned client is the mock instance
+                        self.assertEqual(client, mock_bos_client_instance)
+                    finally:
+                        os.environ.clear()
+
+    def test_init_bos_client_missing_envs(self):
+        """
+        Test case for initializing BOS client when necessary environment variables are missing.
+        """
+        # Test with empty environment variables
+        os.environ["ENCODE_FEATURE_BOS_AK"] = ""
+        os.environ["ENCODE_FEATURE_BOS_SK"] = ""
+        os.environ["ENCODE_FEATURE_ENDPOINT"] = ""
+
+        with self.assertRaises(Exception) as context:
+            init_bos_client()
+        self.assertIn("BOS client validation error", str(context.exception))
         os.environ.clear()
 
 

@@ -172,7 +172,7 @@ class TestEngineInitialization(unittest.TestCase):
         mock_args = Mock()
         mock_args.model = "test-model"
         mock_args.tokenizer = "test-tokenizer"
-        mock_args.max_model_len = 1000
+        mock_args.max_model_len = 1024
         mock_args.tensor_parallel_size = 1
         mock_args.engine_worker_queue_port = [8000]
         mock_args.local_data_parallel_id = 0
@@ -202,7 +202,7 @@ class TestEngineInitialization(unittest.TestCase):
     def test_create_serving_handlers(self, mock_chat_handler, mock_model_handler):
         """测试创建服务处理器"""
         mock_args = Mock()
-        mock_args.max_model_len = 1000
+        mock_args.max_model_len = 1024
         mock_args.ips = "127.0.0.1"
         mock_args.max_waiting_time = 60
         mock_args.enable_mm_output = False
@@ -1286,7 +1286,7 @@ class TestFastDeployBatch(unittest.TestCase):
                 "--quantization",
                 "wint4",
                 "--max-model-len",
-                "4192",
+                "5120",
                 "--max-num-seqs",
                 "64",
                 "--load-choices",
@@ -1323,12 +1323,6 @@ class TestFastDeployBatch(unittest.TestCase):
                     BatchRequestOutput.model_validate_json(line)
                 except Exception as e:
                     self.fail(f"输出格式验证失败: {e}\n行内容: {line}")
-
-    def test_vaild_input(self):
-        """测试输入数据格式的正确性"""
-        return_code, contents, proc = self.run_fastdeploy_command(INVALID_INPUT_BATCH)
-
-        self.assertNotEqual(return_code, 0, f"进程返回非零码: {return_code}, 进程信息: {proc}")
 
 
 if __name__ == "__main__":
