@@ -61,7 +61,7 @@ class MockConfig:
         self.enable_prefix_caching = enable_prefix_caching
         self.total_block_num = 1024  # Add total_block_num attribute
         self.num_cpu_blocks = 0  # Add num_cpu_blocks attribute
-        self.cpu_block_num = 0    # Add cpu_block_num attribute
+        self.cpu_block_num = 0  # Add cpu_block_num attribute
         self.bytes_per_layer_per_block = 1024  # Add bytes_per_layer_per_block attribute
         self.bytes_per_block = 2048  # Add bytes_per_block attribute
         self.gpu_memory_utilization = 0.9  # Add gpu_memory_utilization attribute
@@ -93,8 +93,12 @@ class TestResourceManager(unittest.TestCase):
         self.mock_cache_manager.update_cache_config = Mock()
 
         # Patch both the module and the specific import location
-        self.patcher = patch('fastdeploy.cache_manager.prefix_cache_manager.PrefixCacheManager', return_value=self.mock_cache_manager)
-        self.patcher2 = patch('fastdeploy.engine.resource_manager.PrefixCacheManager', return_value=self.mock_cache_manager)
+        self.patcher = patch(
+            "fastdeploy.cache_manager.prefix_cache_manager.PrefixCacheManager", return_value=self.mock_cache_manager
+        )
+        self.patcher2 = patch(
+            "fastdeploy.engine.resource_manager.PrefixCacheManager", return_value=self.mock_cache_manager
+        )
 
         self.patcher.start()
         self.patcher2.start()
@@ -122,7 +126,9 @@ class TestResourceManager(unittest.TestCase):
         config = Mock()
         config.cache_config = MockConfig(enable_prefix_caching=True)
 
-        with patch('fastdeploy.cache_manager.prefix_cache_manager.PrefixCacheManager', return_value=self.mock_cache_manager):
+        with patch(
+            "fastdeploy.cache_manager.prefix_cache_manager.PrefixCacheManager", return_value=self.mock_cache_manager
+        ):
             rm = ResourceManager(self.max_num_seqs, config, self.tensor_parallel_size, self.splitwise_role)
             self.assertTrue(rm.enable_prefix_cache)
 
@@ -341,8 +347,10 @@ class TestResourceManager(unittest.TestCase):
         config = Mock()
         config.cache_config = MockConfig(enable_prefix_caching=True)
 
-        with patch('fastdeploy.cache_manager.prefix_cache_manager.PrefixCacheManager', return_value=self.mock_cache_manager):
-            with patch('fastdeploy.engine.resource_manager.PrefixCacheManager', return_value=self.mock_cache_manager):
+        with patch(
+            "fastdeploy.cache_manager.prefix_cache_manager.PrefixCacheManager", return_value=self.mock_cache_manager
+        ):
+            with patch("fastdeploy.engine.resource_manager.PrefixCacheManager", return_value=self.mock_cache_manager):
                 rm = ResourceManager(self.max_num_seqs, config, self.tensor_parallel_size, self.splitwise_role)
 
         self.mock_cache_manager.gpu_free_block_list = list(range(100))
