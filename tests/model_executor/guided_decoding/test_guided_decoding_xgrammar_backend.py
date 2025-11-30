@@ -193,7 +193,7 @@ mock_utils.llm_logger = Mock()
 # Import the target module
 spec = importlib.util.spec_from_file_location(
     "xgrammar_backend",
-    os.path.join(os.path.dirname(__file__), "../../fastdeploy/model_executor/guided_decoding/xgrammar_backend.py"),
+    os.path.join(os.path.dirname(__file__), "../../../fastdeploy/model_executor/guided_decoding/xgrammar_backend.py"),
 )
 xgrammar_backend = importlib.util.module_from_spec(spec)
 sys.modules["fastdeploy.model_executor.guided_decoding.xgrammar_backend"] = xgrammar_backend
