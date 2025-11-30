@@ -2157,7 +2157,6 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 3. Execute model
         if self.enable_mm:
-            print("self.share_inputs[image_features]", self.share_inputs["image_features"])
             model_output = self.model(
                 self.share_inputs["ids_remove_padding"],
                 self.share_inputs["image_features"],
@@ -2387,8 +2386,6 @@ class GPUModelRunner(ModelRunnerBase):
         prompt_lens = self.share_inputs["prompt_lens"][:num_running_requests]
         prompt_token_ids = self.share_inputs["prompt_ids"]
 
-        print("prompt_lens", prompt_lens)
-        print("prompt_token_ids", prompt_token_ids)
         pooling_metadata = PoolingMetadata(
             prompt_lens=prompt_lens,
             prompt_token_ids=prompt_token_ids,
@@ -2400,10 +2397,8 @@ class GPUModelRunner(ModelRunnerBase):
         device_str = "gpu" if hidden_states.place.is_gpu_place() else "cpu"
         pooling_metadata.build_pooling_cursor(num_scheduled_tokens_list, device=device_str)
 
-        print("hidden_states", hidden_states)
         raw_pooler_output = self.model.pooler(hidden_states=hidden_states, pooling_metadata=pooling_metadata)
 
-        print("raw_pooler_output", raw_pooler_output)
         seq_lens_cpu = self.share_inputs["seq_lens_this_time"][:num_running_requests]
         pooler_output: list[Optional[paddle.Tensor]] = []
 
@@ -2415,9 +2410,6 @@ class GPUModelRunner(ModelRunnerBase):
                 pooler_output.append(output)
             else:
                 current_seq_len_decoder = seq_lens_decoder_batch[i]
-                print("current_seq_len_decoder", current_seq_len_decoder)
-                print("seq_len", seq_len)
-                print("prompt_len", prompt_len)
                 if int(current_seq_len_decoder) + int(seq_len) == int(prompt_len):
                     output = raw_pooler_output[0].data
                 else:
