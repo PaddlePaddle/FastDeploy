@@ -64,6 +64,7 @@ echo "============================Python环境配置============================
 
 # 安装Python依赖
 echo "安装Python依赖..."
+python -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 python -m pip install -r requirements.txt
 
 # 卸载旧版本
