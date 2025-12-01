@@ -418,8 +418,6 @@ void GetStopFlagsMulti(const paddle::Tensor& topk_ids,
                        const paddle::Tensor& step_idx,
                        const paddle::Tensor& stop_seqs,
                        const paddle::Tensor& stop_seqs_len,
-                       const paddle::Tensor& stop_token_ids,
-                       const paddle::Tensor& stop_token_ids_len,
                        const paddle::Tensor& min_tokens,
                        const bool beam_search);
 

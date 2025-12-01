@@ -37,9 +37,6 @@ __global__ void set_value_by_flags(bool *stop_flags,
                                    const int *stop_seqs_len,
                                    const int stop_seqs_bs,
                                    const int stop_seqs_max_len,
-                                   const int64_t *stop_token_ids,
-                                   const int *stop_token_ids_len,
-                                   const int stop_token_ids_max_len,
                                    const int64_t *min_tokens,
                                    bool beam_search,
                                    bool prefill_one_step_stop) {
@@ -48,6 +45,10 @@ __global__ void set_value_by_flags(bool *stop_flags,
   if (tid >= stop_seqs_bs) return;
 
   if (bid < bs) {
+    const int64_t current_step = step_idx[bid];
+    const int64_t min_token_limit = min_tokens[bid];
+    const bool can_stop = (current_step >= min_token_limit);
+
     if (tid == 0) {
       if (prefill_one_step_stop) {
         stop_flags[bid] = true;
@@ -68,52 +69,18 @@ __global__ void set_value_by_flags(bool *stop_flags,
         }
       }
 
-      const int64_t current_step = step_idx[bid];
-      // check min_tokens
-      const int64_t min_token_limit = min_tokens[bid];
-      const bool below_min_tokens = current_step < min_token_limit;
-
-      // If haven't reached min_tokens, cannot stop for any reason
-      if (below_min_tokens) {
-        return;
-      } else {
-        if (!beam_search && is_in_end(topk_ids[bid], end_ids, end_length)) {
-          stop_flags[bid] = true;
-        }
-
-        if (!stop_flags[bid] && stop_token_ids != nullptr &&
-            stop_token_ids_len != nullptr) {
-          const int num_stop_tokens = stop_token_ids_len[bid];
-
-          if (num_stop_tokens > 0) {
-            const int64_t last_token_id = topk_ids[bid];
-
-            if (last_token_id >= 0) {
-              const int64_t *stop_tokens_now =
-                  stop_token_ids + bid * stop_token_ids_max_len;
-
-              for (int i = 0; i < num_stop_tokens; ++i) {
-                const int64_t stop_token = stop_tokens_now[i];
-
-                if (stop_token >= 0 && last_token_id == stop_token) {
-                  stop_flags[bid] = true;
-                  next_tokens[bid] = end_ids[0];
-                  topk_ids[bid] = end_ids[0];
-                  break;
-                }
-              }
-            }
-          }
-        }
+      if (!beam_search && can_stop &&
+          is_in_end(topk_ids[bid], end_ids, end_length)) {
+        stop_flags[bid] = true;
+        topk_ids[bid] = end_ids[0];
+        next_tokens[bid] = end_ids[0];
       }
     }
 
+    if (!can_stop) return;
+
     const int stop_seq_len = (stop_seqs_len + bid * stop_seqs_bs)[tid];
     if (stop_seq_len <= 0) return;
-
-    const int64_t current_step = step_idx[bid];
-    const int64_t min_token_limit = min_tokens[bid];
-    if (current_step < min_token_limit) return;
 
     const int64_t *stop_seq_now =
         stop_seqs + bid * stop_seqs_bs + tid * stop_seqs_max_len;
@@ -129,6 +96,7 @@ __global__ void set_value_by_flags(bool *stop_flags,
         break;
       }
     }
+
     if (is_end) {
       next_tokens[bid] = end_ids[0];
       stop_flags[bid] = true;
@@ -146,14 +114,13 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
                        const paddle::Tensor &step_idx,
                        const paddle::Tensor &stop_seqs,
                        const paddle::Tensor &stop_seqs_len,
-                       const paddle::Tensor &stop_token_ids,
-                       const paddle::Tensor &stop_token_ids_len,
                        const paddle::Tensor &min_tokens,
                        const bool beam_search) {
   PD_CHECK(topk_ids.dtype() == paddle::DataType::INT64);
   PD_CHECK(stop_flags.dtype() == paddle::DataType::BOOL);
   bool prefill_one_step_stop = false;
   if (const char *env_p = std::getenv("PREFILL_NODE_ONE_STEP_STOP")) {
+    // std::cout << "Your PATH is: " << env_p << '\n';
     if (env_p[0] == '1') {
       prefill_one_step_stop = true;
     }
@@ -172,15 +139,6 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
   int64_t end_length = end_ids.shape()[0];
   int stop_seqs_bs = stop_seqs.shape()[1];
   int stop_seqs_max_len = stop_seqs.shape()[2];
-
-  int stop_token_ids_max_len = 0;
-  const int64_t *stop_token_ids_ptr = nullptr;
-  const int *stop_token_ids_len_ptr = nullptr;
-  if (stop_token_ids.is_initialized() && stop_token_ids_len.is_initialized()) {
-    stop_token_ids_max_len = stop_token_ids.shape()[1];  // [bs,max_stop_tokens]
-    stop_token_ids_ptr = stop_token_ids.data<int64_t>();
-    stop_token_ids_len_ptr = stop_token_ids_len.data<int>();
-  }
   int block_size = (stop_seqs_bs + WARP_SIZE - 1) / WARP_SIZE * WARP_SIZE;
   set_value_by_flags<<<bs_now, block_size, 0, cu_stream>>>(
       const_cast<bool *>(stop_flags.data<bool>()),
@@ -197,9 +155,6 @@ void GetStopFlagsMulti(const paddle::Tensor &topk_ids,
       stop_seqs_len.data<int>(),
       stop_seqs_bs,
       stop_seqs_max_len,
-      stop_token_ids_ptr,
-      stop_token_ids_len_ptr,
-      stop_token_ids_max_len,
       min_tokens.data<int64_t>(),
       beam_search,
       prefill_one_step_stop);
@@ -215,8 +170,6 @@ PD_BUILD_STATIC_OP(set_stop_value_multi_ends)
              "step_idx",
              "stop_seqs",
              "stop_seqs_len",
-             "stop_token_ids",
-             "stop_token_ids_len",
              "min_tokens"})
     .Attrs({"beam_search: bool"})
     .Outputs({"topk_ids_out", "stop_flags_out", "next_tokens_out"})

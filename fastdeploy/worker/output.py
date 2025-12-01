@@ -254,7 +254,7 @@ class ModelOutputData:
     """
         the token ids of stop sequence
     """
-    stop_token_ids: paddle.Tensor = None
+    stop_seqs: paddle.Tensor = None
 
     """
         the length of stop sequence
@@ -265,16 +265,6 @@ class ModelOutputData:
         the length of input prompt
     """
     prompt_lens: paddle.Tensor = None
-
-    """
-        the string of stop sequences
-    """
-    stop_seqs: paddle.Tensor = None
-
-    stop_token_ids_len: paddle.Tensor = None
-    """
-        the length of stop_token_ids
-    """
 
     min_tokens: paddle.Tensor = None
     """

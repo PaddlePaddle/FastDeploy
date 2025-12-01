@@ -660,36 +660,31 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
                 self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
 
+            all_stop_seqs = []
+
             if request.get("stop_token_ids") is not None and len(request.get("stop_token_ids")) > 0:
                 stop_token_ids = request.get("stop_token_ids")
-                stop_token_ids_len = len(stop_token_ids)
-                max_stop_token_ids = self.share_inputs["stop_token_ids"].shape[1]
-
-                if stop_token_ids_len > max_stop_token_ids:
-                    logger.warning(
-                        f"Request {request.request_id} has {stop_token_ids_len} stop_token_ids, "
-                        f"but only {max_stop_token_ids} are supported. Truncating."
-                    )
-                    stop_token_ids = stop_token_ids[:max_stop_token_ids]
-                    stop_token_ids_len = max_stop_token_ids
-
-                self.share_inputs["stop_token_ids_len"][idx] = stop_token_ids_len
-                self.share_inputs["stop_token_ids"][idx, :stop_token_ids_len] = paddle.to_tensor(
-                    stop_token_ids, dtype="int64"
-                )
+                for token_id in stop_token_ids:
+                    all_stop_seqs.append([token_id])
 
             if request.get("stop") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
-                for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
-                    request.sampling_params.stop_seqs_len.append(0)
-                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = np.array(
-                    request.sampling_params.stop_seqs_len, dtype="int32"
-                )
-                self.share_inputs["stop_seqs"][idx : idx + 1, :stop_seqs_num, : len(request.get("stop")[0])] = (
-                    np.array(request.get("stop"), dtype="int64")
-                )
+                all_stop_seqs.extend(stop_seqs_num)
+
+            if len(all_stop_seqs) > 0:
+                num_stops = min(len(all_stop_seqs), self.model_config.max_stop_seqs_num)
+
+                for j in range(num_stops):
+                    seq_len = len(all_stop_seqs[j])
+                    self.share_inputs["stop_seqs_len"][idx, j] = seq_len
+                    self.share_inputs["stop_seqs"][idx, j, :seq_len] = paddle.to_tensor(
+                        all_stop_seqs[j], dtype="int64"
+                    )
+
+                for j in range(num_stops, self.model_config.max_stop_seqs_num):
+                    self.share_inputs["stop_seqs_len"][idx, j] = 0
             else:
-                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
+                self.share_inputs["stop_seqs_len"][idx, :] = 0
 
             self.pooling_params = batch_pooling_params
             # For logits processors
@@ -901,35 +896,31 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
                 self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
 
+            all_stop_seqs = []
+
             if request.get("stop_token_ids") is not None and len(request.get("stop_token_ids")) > 0:
                 stop_token_ids = request.get("stop_token_ids")
-                stop_token_ids_len = len(stop_token_ids)
-                max_stop_token_ids = self.share_inputs["stop_token_ids"].shape[1]
-                if stop_token_ids_len > max_stop_token_ids:
-                    logger.warning(
-                        f"Request {request.request_id} has {stop_token_ids_len} stop_token_ids, "
-                        f"but only {max_stop_token_ids} are supported. Truncating."
-                    )
-                    stop_token_ids = stop_token_ids[:max_stop_token_ids]
-                    stop_token_ids_len = max_stop_token_ids
+                for token_id in stop_token_ids:
+                    all_stop_seqs.append([token_id])
 
-                self.share_inputs["stop_token_ids_len"][idx] = stop_token_ids_len
-                self.share_inputs["stop_token_ids"][idx, :stop_token_ids_len] = paddle.to_tensor(
-                    stop_token_ids, dtype="int64"
-                )
-
-            if request.get("stop_seqs") is not None and request.get("stop_seqs_len") is not None:
+            if request.get("stop") is not None and request.get("stop_seqs_len") is not None:
                 stop_seqs_num = len(request.get("stop_seqs_len"))
-                for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
-                    request.sampling_params.stop_seqs_len.append(0)
-                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = np.array(
-                    request.sampling_params.stop_seqs_len, dtype="int32"
-                )
-                self.share_inputs["stop_seqs"][idx : idx + 1, :stop_seqs_num, : len(request.get("stop")[0])] = (
-                    np.array(request.get("stop"), dtype="int64")
-                )
+                all_stop_seqs.extend(stop_seqs_num)
+
+            if len(all_stop_seqs) > 0:
+                num_stops = min(len(all_stop_seqs), self.model_config.max_stop_seqs_num)
+
+                for j in range(num_stops):
+                    seq_len = len(all_stop_seqs[j])
+                    self.share_inputs["stop_seqs_len"][idx, j] = seq_len
+                    self.share_inputs["stop_seqs"][idx, j, :seq_len] = paddle.to_tensor(
+                        all_stop_seqs[j], dtype="int64"
+                    )
+
+                for j in range(num_stops, self.model_config.max_stop_seqs_num):
+                    self.share_inputs["stop_seqs_len"][idx, j] = 0
             else:
-                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
+                self.share_inputs["stop_seqs_len"][idx, :] = 0
 
             self.sampler.apply_logits_processor(idx, logits_info, prefill_tokens)
 
@@ -1206,10 +1197,7 @@ class GPUModelRunner(ModelRunnerBase):
             -1,
             dtype="int64",
         )
-        self.share_inputs["stop_token_ids_len"] = paddle.full([max_num_seqs], 0, dtype="int32")
-        self.share_inputs["stop_token_ids"] = paddle.full(
-            [max_num_seqs, self.model_config.stop_token_ids_max_len], -1, dtype="int64"
-        )
+
         if self.speculative_decoding:
             max_draft_token_num = self.speculative_config.num_speculative_tokens
             self.share_inputs["input_ids_cpu"] = paddle.full(
@@ -1789,8 +1777,6 @@ class GPUModelRunner(ModelRunnerBase):
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
             stop_seqs=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
-            stop_token_ids=self.share_inputs["stop_token_ids"],
-            stop_token_ids_len=self.share_inputs["stop_token_ids_len"],
             min_tokens=self.share_inputs["min_dec_len"],
             prompt_lens=self.share_inputs["prompt_lens"],
             mask_rollback=self.share_inputs["mask_rollback"],
@@ -2234,8 +2220,6 @@ class GPUModelRunner(ModelRunnerBase):
                 accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
                 stop_seqs=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
-                stop_token_ids=self.share_inputs["stop_token_ids"],
-                stop_token_ids_len=self.share_inputs["stop_token_ids_len"],
                 min_tokens=self.share_inputs["min_dec_len"],
                 prompt_lens=self.share_inputs["prompt_lens"],
             )
@@ -2343,8 +2327,6 @@ class GPUModelRunner(ModelRunnerBase):
                 accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
                 stop_seqs=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
-                stop_token_ids=self.share_inputs["stop_token_ids"],
-                stop_token_ids_len=self.share_inputs["stop_token_ids_len"],
                 min_tokens=self.share_inputs["min_dec_len"],
                 prompt_lens=self.share_inputs["prompt_lens"],
                 mask_rollback=self.share_inputs["mask_rollback"],
