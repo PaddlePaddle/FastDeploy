@@ -20,6 +20,7 @@ import time
 import traceback
 
 import pytest
+from e2e.utils.serving_utils import clean
 
 from fastdeploy import LLM, SamplingParams
 
@@ -105,6 +106,9 @@ def llm(model_path):
 
         print(f"Model loaded successfully from {model_path} in {time.time() - start:.2f}s.")
         yield llm
+
+        print("Cleaning up...")
+        clean()
     except Exception:
         print(f"Failed to load model from {model_path}.")
         traceback.print_exc()
