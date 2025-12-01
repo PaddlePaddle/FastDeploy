@@ -664,6 +664,15 @@ class GPUModelRunner(ModelRunnerBase):
 
             if request.get("stop_token_ids") is not None and len(request.get("stop_token_ids")) > 0:
                 stop_token_ids = request.get("stop_token_ids")
+
+                max_stop_token_ids_limit = self.model_config.stop_token_ids_max_len
+                if len(stop_token_ids) > max_stop_token_ids_limit:
+                    logger.warning(
+                        f"Request {request.request_id} has {len(stop_token_ids)} stop_token_ids, "
+                        f"but only {max_stop_token_ids_limit} are supported. Truncating."
+                    )
+                    stop_token_ids = stop_token_ids[:max_stop_token_ids_limit]
+
                 for token_id in stop_token_ids:
                     all_stop_seqs.append([token_id])
 
