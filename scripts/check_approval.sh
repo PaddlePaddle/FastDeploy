@@ -51,17 +51,13 @@ if [ ${HAS_CUSTOM_REGISTRER} ] && [ "${PR_ID}" != "" ]; then
 fi
 
 WORKER_OR_CONFIG_LIST=(
-    "fastdeploy/config.py"
-    "fastdeploy/worker"
     "fastdeploy/model_executor/graph_optimization"
-    "fastdeploy/model_executor/model_loader"
-    "fastdeploy/model_executor/models"
 )
 
 HAS_WORKER_OR_CONFIG_MODIFY=`git diff upstream/$BRANCH  --name-only | grep -E $(printf -- "-e %s " "${WORKER_OR_CONFIG_LIST[@]}") || true`
 if [ "${HAS_WORKER_OR_CONFIG_MODIFY}" != "" ] && [ "${PR_ID}" != "" ]; then
-    echo_line1="You must have one FastDeploy RD (gongshaotian(gongshaotian), yuanlehome(liuyuanle)) approval for modifing [$(IFS=', '; echo "${WORKER_OR_CONFIG_LIST[*]}")]."
-    check_approval "$echo_line1" 1 gongshaotian yuanlehome
+    echo_line1="You must have one FastDeploy RD gongshaotian(gongshaotian) approval for modifing [$(IFS=', '; echo "${WORKER_OR_CONFIG_LIST[*]}")]."
+    check_approval "$echo_line1" 1 gongshaotian
 fi
 
 SPECULATIVE_DECODING_LIST=(
