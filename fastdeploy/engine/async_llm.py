@@ -722,7 +722,7 @@ class AsyncLLMEngine:
             "FLAGS_use_append_attn": 1,
             "NCCL_ALGO": "Ring",
             "FLAGS_max_partition_size": int(os.getenv("FLAGS_max_partition_size", 1024)),
-            "OMP_NUM_THREADS": int(os.getenv("OMP_NUM_THREADS", 3)),
+            "OMP_NUM_THREADS": 3,
         }
         # environment variables needed by Dy2St
         variables.update(
@@ -812,6 +812,7 @@ class AsyncLLMEngine:
             f" --splitwise_role {self.cfg.scheduler_config.splitwise_role}"
             f" --kv_cache_ratio {self.cfg.cache_config.kv_cache_ratio}"
             f" --expert_parallel_size {self.cfg.parallel_config.expert_parallel_size}"
+            f" --chunked_moe_size {self.cfg.parallel_config.chunked_moe_size}"
             f" --data_parallel_size {self.cfg.parallel_config.data_parallel_size}"
             f" --quantization '{json.dumps(self.cfg.model_config.quantization)}'"
             f" --ori_vocab_size {ori_vocab_size}"

@@ -32,7 +32,7 @@ class RouterArgs:
     """
     Host address to bind the router server
     """
-    port: str = "9000"
+    port: int = 9000
     """
     Port to bind the router server.
     """
@@ -55,7 +55,7 @@ class RouterArgs:
         )
         parser.add_argument(
             "--port",
-            type=str,
+            type=int,
             default=RouterArgs.port,
             help="Port number to bind the router server",
         )
