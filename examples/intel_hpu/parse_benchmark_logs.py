@@ -62,10 +62,10 @@ def parse_profile_log_file(file_path):
     return prepare_input_times, model_times, postprocessing_times, steppaddle_times
 
 
-def calculate_times(times, seperate_first):
+def calculate_times(times, separate_first):
     if len(times) < 2:
         return times[0], None
-    if seperate_first:
+    if separate_first:
         first_time = times[0]
         average_time = sum(times[1:]) / len(times[1:])
         return first_time, average_time

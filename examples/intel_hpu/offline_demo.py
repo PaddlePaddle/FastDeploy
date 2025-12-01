@@ -20,7 +20,7 @@ from fastdeploy.entrypoints.llm import LLM
 model_name_or_path = "ERNIE-4.5-21B-A3B-Paddle"
 # model_name_or_path = "ERNIE-4.5-300B-A47B-Paddle"
 
-# 超参设置
+# Hyperparameter settings
 input_bs = 1
 input_seq = None  # 1000
 max_out_tokens = 128

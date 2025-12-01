@@ -15,7 +15,7 @@ log_patterns = [
 
 
 def draw_time_graph(log_dir, log_filename, max_num_seqs, mode):
-    # 用于存储提取的时间和BT值
+    # Store extracted time and BT values
     timestamps_model = []
     times_model = []
     bt_values_model = []
@@ -25,14 +25,14 @@ def draw_time_graph(log_dir, log_filename, max_num_seqs, mode):
     times_pp = []
     bt_values_pp = []
 
-    # 使用正则表达式提取 Model execution time 和 BT 信息
+    # Use regex to extract Model execution time and BT information
     pattern_model = re.compile(
         r"(\d+-\d+-\d+ \d+:\d+:\d+,\d+) .* Model execution time\(ms\): ([\d\.]+), BT=(\d+), block_list_shape=\[(\d+)\], block_indices_shape=\[(\d+)\]"
     )
     pattern_pp = re.compile(
         r"(\d+-\d+-\d+ \d+:\d+:\d+,\d+) .* PostProcessing execution time\(ms\): ([\d\.]+), BT=(\d+)"
     )
-    # 读取日志文件
+    # Read log file
     with open(os.path.join(log_dir, log_filename), "r") as file:
         for line in file:
             match_model = pattern_model.search(line)
@@ -67,11 +67,11 @@ def draw_time_graph(log_dir, log_filename, max_num_seqs, mode):
                     times_pp.append(float(match_pp.group(2)))
                     bt_values_pp.append(bt_value)
 
-    # 绘制图表
+    # Plot graphs
     plt.figure(figsize=(15, 7))
 
     date_format = mdates.DateFormatter("%m-%d %H:%M:%S")
-    # 绘制时间图
+    # Plot time graph
     plt.subplot(2, 1, 1)
     ax1 = plt.gca()
     ax2 = ax1.twinx()
@@ -80,17 +80,17 @@ def draw_time_graph(log_dir, log_filename, max_num_seqs, mode):
     ax1.set_ylabel("Model Execution Time (ms)")
     ax2.set_ylabel("PostProcessing Time (ms)")
     ax1.xaxis.set_major_formatter(date_format)
-    # 合并图例
+    # Merge legends
     lines_1, labels_1 = ax1.get_legend_handles_labels()
     lines_2, labels_2 = ax2.get_legend_handles_labels()
     ax1.legend(lines_1 + lines_2, labels_1 + labels_2)
 
-    # 绘制BT值图
+    # Plot BT value graph
     plt.subplot(2, 1, 2)
     plt.plot(timestamps_model, bt_values_model, label="BT  [" + mode + "]", color="orange")
     plt.ylabel("BT Value")
     plt.xlabel(log_filename, fontsize=8)
-    # plt.xticks(rotation=45)
+
     plt.gca().xaxis.set_major_formatter(date_format)
     plt.legend()
 
@@ -99,7 +99,7 @@ def draw_time_graph(log_dir, log_filename, max_num_seqs, mode):
     plt.savefig(os.path.join(log_dir, output_filename), dpi=300)
     plt.close()
 
-    # 写入CSV文件
+    # Write to CSV file
     if mode == "all":
         csv_filename = log_filename[:-4] + "_analysis.csv"
         with open(os.path.join(log_dir, csv_filename), "w", newline="") as csvfile:

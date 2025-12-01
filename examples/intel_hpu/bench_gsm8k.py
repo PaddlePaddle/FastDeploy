@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Fastdeploy + ERNIE-4.5-Turbo 的指标评估"""
+"""Metric evaluation for Fastdeploy + ERNIE-4.5-Turbo"""
 # adapted from https://github.com/sgl-project/sglang/blob/main/benchmark/gsm8k/bench_other.py
 import argparse
 import ast
@@ -198,7 +198,6 @@ def main(args):
     with open(args.acc_log, "w") as fout:
         for i in range(len(states)):
             preds.append(get_answer_value(states[i]))
-            # Leo
             answer = get_answer_value(states[i])
             fout.write("\n################################################################\n")
             fout.write("-----------prompt--------------\n")
