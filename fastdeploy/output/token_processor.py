@@ -349,6 +349,7 @@ class TokenProcessor:
                 get_output,
                 get_output_ep,
                 get_output_topk,
+                speculate_get_output,
             )
         elif current_platform.is_iluvatar():
             from fastdeploy.model_executor.ops.iluvatar import get_output
