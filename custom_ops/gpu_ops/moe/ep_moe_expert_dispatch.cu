@@ -979,8 +979,8 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
                      paddle::DataType::FLOAT32,
                      place);
 
-  auto m_indices = paddle::full(
-      {token_nums_feed_to_ffn}, -1, paddle::DataType::INT32, place);
+  auto m_indices =
+      GetEmptyTensor({token_nums_feed_to_ffn}, paddle::DataType::INT32, place);
   auto token_nums_per_expert_cumsum =
       GetEmptyTensor({num_experts_per_rank}, paddle::DataType::INT64, place);
   auto token_nums_per_expert_padded_cumsum =
