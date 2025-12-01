@@ -113,6 +113,7 @@ python -m pytest -v -s --tb=short \
     tests/xpu_ci_pytest/test_v1_mode.py \
     tests/xpu_ci_pytest/test_w4a8.py \
     tests/xpu_ci_pytest/test_vl_model.py \
+    tests/xpu_ci_pytest/test_pd_separation.py \
     tests/xpu_ci_pytest/test_ep4tp4_online.py \
     tests/xpu_ci_pytest/test_ep4tp1_online.py \
     tests/xpu_ci_pytest/test_ep4tp4_all2all.py

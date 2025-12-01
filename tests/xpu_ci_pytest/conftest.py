@@ -362,3 +362,293 @@ def download_and_build_xdeepep():
         return False
 
     return True
+
+
+# ============ PD分离相关函数 ============
+
+def get_script_dir():
+    """获取scripts目录路径"""
+    # conftest.py在tests/xpu_ci_pytest/下,scripts在项目根目录下
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(current_dir))
+    return os.path.join(project_root, "scripts")
+
+
+def get_rdma_nics():
+    """
+    获取RDMA网卡配置
+
+    Returns:
+        str: KVCACHE_RDMA_NICS的值,失败返回空字符串
+    """
+    script_path = os.path.join(get_script_dir(), "get_rdma_nics.sh")
+
+    try:
+        result = subprocess.run(
+            f"bash {script_path} xpu",
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        output = result.stdout.strip()
+        # 解析 KVCACHE_RDMA_NICS=xxx 格式
+        if output.startswith("KVCACHE_RDMA_NICS="):
+            return output.split("=", 1)[1]
+        return output
+    except Exception as e:
+        print(f"获取RDMA网卡失败: {e}")
+        return ""
+
+
+def setup_pd_env():
+    """
+    设置PD分离相关环境变量
+
+    Returns:
+        dict: 原始环境变量值,用于后续恢复
+    """
+    original_values = {}
+    env_keys = ["KVCACHE_GDRCOPY_FLUSH_ENABLE", "KVCACHE_RDMA_NICS", "CUDA_ENABLE_P2P_NO_UVA"]
+
+    # 保存原始值
+    for key in env_keys:
+        original_values[key] = os.environ.get(key)
+
+    # 设置新值
+    os.environ["KVCACHE_GDRCOPY_FLUSH_ENABLE"] = "1"
+    os.environ["CUDA_ENABLE_P2P_NO_UVA"] = "1"  # 开启peer mem
+    print("设置环境变量: KVCACHE_GDRCOPY_FLUSH_ENABLE=1")
+    print("设置环境变量: CUDA_ENABLE_P2P_NO_UVA=1")
+
+    # 获取并设置RDMA网卡
+    rdma_nics = get_rdma_nics()
+    if rdma_nics:
+        os.environ["KVCACHE_RDMA_NICS"] = rdma_nics
+        print(f"设置环境变量: KVCACHE_RDMA_NICS={rdma_nics}")
+
+    return original_values
+
+
+def restore_pd_env(original_values):
+    """
+    恢复PD分离相关环境变量
+
+    Args:
+        original_values: setup_pd_env()返回的原始环境变量值
+    """
+    env_keys = ["KVCACHE_GDRCOPY_FLUSH_ENABLE", "KVCACHE_RDMA_NICS", "CUDA_ENABLE_P2P_NO_UVA"]
+
+    for key in env_keys:
+        if key in original_values:
+            if original_values[key] is None:
+                if key in os.environ:
+                    del os.environ[key]
+                    print(f"删除环境变量: {key}")
+            else:
+                os.environ[key] = original_values[key]
+                print(f"恢复环境变量: {key}={original_values[key]}")
+
+
+def wait_for_pd_health_check(port_p, port_d, timeout=600, interval=10):
+    """
+    等待PD分离服务健康检查通过(检查P节点和D节点)
+
+    Args:
+        port_p: Prefill节点端口
+        port_d: Decode节点端口
+        timeout: 超时时间(秒), 默认10分钟
+        interval: 检查间隔(秒), 默认10秒
+
+    Returns:
+        bool: 服务是否启动成功
+    """
+    endpoint_p = f"http://0.0.0.0:{port_p}/health"
+    endpoint_d = f"http://0.0.0.0:{port_d}/health"
+    start_time = time.time()
+
+    print(f"开始PD分离服务健康检查,最长等待时间:{timeout}秒")
+
+    while True:
+        elapsed = int(time.time() - start_time)
+
+        # 超时判断
+        if elapsed >= timeout:
+            print(f"\nPD分离服务启动超时:经过 {timeout//60} 分钟服务仍未启动!")
+            return False
+
+        # 检查P节点
+        try:
+            result_p = subprocess.run(
+                f'curl -s -o /dev/null -w "%{{http_code}}" -m 2 {endpoint_p}',
+                shell=True,
+                capture_output=True,
+                text=True
+            )
+            http_code_p = result_p.stdout.strip()
+        except Exception:
+            http_code_p = "000"
+
+        # 检查D节点
+        try:
+            result_d = subprocess.run(
+                f'curl -s -o /dev/null -w "%{{http_code}}" -m 2 {endpoint_d}',
+                shell=True,
+                capture_output=True,
+                text=True
+            )
+            http_code_d = result_d.stdout.strip()
+        except Exception:
+            http_code_d = "000"
+
+        print(f"\r服务健康检查中... 已等待 {elapsed} 秒,P节点状态码:{http_code_p},D节点状态码:{http_code_d}", end="", flush=True)
+
+        if http_code_p == "200" and http_code_d == "200":
+            print(f"\nPD分离服务启动成功!耗时 {elapsed} 秒")
+            return True
+
+        time.sleep(interval)
+
+
+def print_pd_logs_on_failure():
+    """失败时打印PD分离相关日志"""
+    log_dirs = ["log_router", "log_prefill", "log_decode"]
+
+    for log_dir in log_dirs:
+        nohup_path = os.path.join(log_dir, "nohup")
+        if os.path.exists(nohup_path):
+            print(f"\n========== {nohup_path} ==========")
+            with open(nohup_path, "r") as f:
+                print(f.read())
+
+
+def start_pd_server(model_path, port_num, wait_before_check=60):
+    """
+    启动PD分离服务(Router + Prefill节点 + Decode节点)
+
+    Args:
+        model_path: 模型路径
+        port_num: 基础端口号
+        wait_before_check: 启动后等待多少秒再进行健康检查,默认60秒
+
+    Returns:
+        bool: 服务是否启动成功
+    """
+    xpu_id = get_xpu_id()
+
+    # 停止旧进程
+    stop_processes()
+
+    # 清理资源
+    cleanup_resources()
+
+    # 清理并创建日志目录
+    for log_dir in ["log_router", "log_prefill", "log_decode"]:
+        if os.path.exists(log_dir):
+            shutil.rmtree(log_dir)
+        os.makedirs(log_dir, exist_ok=True)
+
+    # 1. 启动Router
+    print("启动Router...")
+    router_env = os.environ.copy()
+    router_env["FD_LOG_DIR"] = "log_router"
+    router_cmd = [
+        "python", "-m", "fastdeploy.router.launch",
+        "--port", str(port_num),
+        "--splitwise",
+    ]
+
+    with open("log_router/nohup", "w") as log_file:
+        subprocess.Popen(
+            router_cmd,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            env=router_env
+        )
+    print(f"Router启动命令: {' '.join(router_cmd)}")
+    time.sleep(1)
+
+    # 2. 启动Prefill节点
+    print("启动Prefill节点...")
+    prefill_env = os.environ.copy()
+    prefill_env["FD_LOG_DIR"] = "log_prefill"
+    if xpu_id == 0:
+        prefill_env["XPU_VISIBLE_DEVICES"] = "0"
+    else:
+        prefill_env["XPU_VISIBLE_DEVICES"] = "4"
+
+    prefill_cmd = [
+        "python", "-m", "fastdeploy.entrypoints.openai.api_server",
+        "--model", f"{model_path}/ERNIE-4.5-0.3B-Paddle",
+        "--port", str(port_num + 11),
+        "--metrics-port", str(port_num + 12),
+        "--engine-worker-queue-port", str(port_num + 13),
+        "--cache-queue-port", str(port_num + 14),
+        "--tensor-parallel-size", "1",
+        "--max-model-len", "32768",
+        "--splitwise-role", "prefill",
+        "--cache-transfer-protocol", "rdma",
+        "--rdma-comm-ports", str(port_num + 15),
+        "--pd-comm-port", str(port_num + 16),
+        "--router", f"0.0.0.0:{port_num}",
+    ]
+
+    with open("log_prefill/nohup", "w") as log_file:
+        subprocess.Popen(
+            prefill_cmd,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            env=prefill_env
+        )
+    print(f"Prefill节点启动命令: {' '.join(prefill_cmd)}")
+
+    # 3. 启动Decode节点
+    print("启动Decode节点...")
+    decode_env = os.environ.copy()
+    decode_env["FD_LOG_DIR"] = "log_decode"
+    if xpu_id == 0:
+        decode_env["XPU_VISIBLE_DEVICES"] = "1"
+    else:
+        decode_env["XPU_VISIBLE_DEVICES"] = "5"
+
+    decode_cmd = [
+        "python", "-m", "fastdeploy.entrypoints.openai.api_server",
+        "--model", f"{model_path}/ERNIE-4.5-0.3B-Paddle",
+        "--port", str(port_num + 21),
+        "--metrics-port", str(port_num + 22),
+        "--engine-worker-queue-port", str(port_num + 23),
+        "--cache-queue-port", str(port_num + 24),
+        "--tensor-parallel-size", "1",
+        "--max-model-len", "32768",
+        "--splitwise-role", "decode",
+        "--cache-transfer-protocol", "rdma",
+        "--rdma-comm-ports", str(port_num + 25),
+        "--pd-comm-port", str(port_num + 26),
+        "--router", f"0.0.0.0:{port_num}",
+    ]
+
+    with open("log_decode/nohup", "w") as log_file:
+        subprocess.Popen(
+            decode_cmd,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            env=decode_env
+        )
+    print(f"Decode节点启动命令: {' '.join(decode_cmd)}")
+
+    # 等待服务启动
+    print(f"等待 {wait_before_check} 秒让服务初始化...")
+    time.sleep(wait_before_check)
+
+    # 健康检查(检查P节点和D节点)
+    port_p = port_num + 11
+    port_d = port_num + 21
+
+    if not wait_for_pd_health_check(port_p, port_d):
+        print_pd_logs_on_failure()
+        stop_processes()
+        return False
+
+    return True
