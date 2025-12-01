@@ -15,7 +15,6 @@
 """
 
 import copy
-import os
 import threading
 import time
 import traceback
@@ -37,7 +36,7 @@ from fastdeploy.engine.request import (
     RequestMetrics,
     RequestOutput,
 )
-from fastdeploy.inter_communicator import IPCSignal, ZmqIpcServer
+from fastdeploy.inter_communicator import ZmqIpcServer
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
 from fastdeploy.trace.constants import LoggingEventName
@@ -114,14 +113,6 @@ class TokenProcessor:
         self.num_accept_requests_per_head = [
             0,
         ] * MAX_DRAFT_TOKENS
-        prefill_time_data = np.zeros([100], dtype=np.float32)
-        self.prefill_time_signal = IPCSignal(
-            name="prefill_time_signal",
-            array=prefill_time_data,
-            dtype=np.float32,
-            suffix=os.getpid(),
-            create=True,
-        )
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.prefill_result_status = dict()
         self._finalizer = weakref.finalize(self, self._cleanup_resources)
@@ -129,9 +120,6 @@ class TokenProcessor:
 
     def _cleanup_resources(self):
         """Cleaning up shared memory resources"""
-        if hasattr(self, "prefill_time_signal"):
-            self.prefill_time_signal.clear()
-
         if hasattr(self, "executor"):
             self.executor.shutdown(wait=False)
 
@@ -255,7 +243,7 @@ class TokenProcessor:
                     arrival_time=task.arrival_time,
                     inference_start_time=task.inference_start_time,
                     first_token_time=time.time() - task.inference_start_time,
-                    time_in_queue=task.schedule_start_time - task.preprocess_end_time,
+                    time_in_queue=task.inference_start_time - task.preprocess_end_time,
                     preprocess_cost_time=task.preprocess_end_time - task.preprocess_start_time,
                     request_start_time=task.arrival_time,
                 )
@@ -352,7 +340,11 @@ class TokenProcessor:
         """
 
         if current_platform.is_xpu():
-            from fastdeploy.model_executor.ops.xpu import get_output, get_output_ep
+            from fastdeploy.model_executor.ops.xpu import (
+                get_output,
+                get_output_ep,
+                speculate_get_output,
+            )
         elif current_platform.is_iluvatar():
             from fastdeploy.model_executor.ops.iluvatar import get_output
         elif current_platform.is_gcu():
@@ -416,27 +408,9 @@ class TokenProcessor:
                     if self.output_tokens[0, 0] == -2:
                         continue
                     llm_logger.debug(f"rank_id {rank_id} self.output_tokens[0, 0] {self.output_tokens[0, 0]}")
-                self._process_prefill_metrics()
                 self._process_batch_output()
             except Exception as e:
                 llm_logger.info(f"while get input_data error: {e} {traceback.format_exc()!s}")
-
-    def _process_prefill_metrics(self):
-        """Asynchronous processing prefill time indicators"""
-
-        def process_metrics():
-            try:
-                current_index = 0
-                while current_index < len(self.prefill_time_signal.value):
-                    prefill_time = self.prefill_time_signal.value[current_index]
-                    if prefill_time > 0:
-                        main_process_metrics.request_prefill_time.observe(prefill_time)
-                        self.prefill_time_signal.value[current_index] = 0
-                    current_index += 1
-            except Exception as e:
-                llm_logger.error(f"Error processing prefill metrics: {e}, {str(traceback.format_exc())}")
-
-        self.executor.submit(process_metrics)
 
     def postprocess(self, batch_result: List[RequestOutput], mtype=3):
         """
@@ -557,6 +531,60 @@ class TokenProcessor:
                 self.total_step = 0
         self.speculative_stats_step += 1
 
+    def _process_batch_draft_tokens(self, mtype, batch, accept_num, tokens, scores, ranks):
+        """
+        Process batch draft tokens and generate corresponding request outputs
+
+        Args:
+            mtype (int): Message type (3=target token, 4=draft token)
+            batch (int): Batch size
+            accept_num (list): List of accepted token counts per request
+            tokens (paddle.Tensor): Generated draft token IDs tensor
+            scores (paddle.Tensor): Token scores tensor
+            ranks (paddle.Tensor): Token sampling ranks tensor
+
+        Returns:
+            list[RequestOutput]: List containing processed results for all requests
+        """
+        batch_result = list()
+        for i in range(batch):
+            if self.resource_manager.stop_flags[i]:
+                continue
+            task = self.resource_manager.tasks_list[i]
+            task_id = task.request_id
+            result = RequestOutput(
+                request_id=task_id,
+                output_type=mtype,
+                outputs=CompletionOutput(
+                    index=i,
+                    send_idx=None,
+                    token_ids=[],
+                    draft_token_ids=[],
+                ),
+                finished=False,
+                metrics=None,
+            )
+
+            token_ids = tokens[i][:, 0].tolist()[: accept_num[i]]
+            for batch_token_index in range(len(token_ids)):
+                result.outputs.logprob = float(scores[i, batch_token_index, 0])
+                topk_token_ids = tokens[i, batch_token_index, :].tolist()
+                topk_logprobs = scores[i, batch_token_index, :].tolist()
+                sampled_rank = ranks[i, batch_token_index].item()
+
+                if result.outputs.draft_top_logprobs is None:
+                    result.outputs.draft_top_logprobs = LogprobsLists(
+                        logprob_token_ids=[topk_token_ids],
+                        logprobs=[topk_logprobs],
+                        sampled_token_ranks=[sampled_rank],
+                    )
+                else:
+                    result.outputs.draft_top_logprobs.logprob_token_ids.extend([topk_token_ids])
+                    result.outputs.draft_top_logprobs.logprobs.extend([topk_logprobs])
+                    result.outputs.draft_top_logprobs.sampled_token_ranks.extend([sampled_rank])
+            batch_result.append(result)
+        return batch_result
+
     def _process_batch_output(self):
         """
         batch post-processing function
@@ -581,6 +609,12 @@ class TokenProcessor:
                     .reshape([batch, MAX_DRAFT_TOKENS, K + 1])
                 )
                 ranks = self.output_ranks[: batch * MAX_DRAFT_TOKENS].numpy().reshape([batch, MAX_DRAFT_TOKENS])
+
+                # split draft_tokens into standalone post-processing path for MTP + logprobs
+                if mtype == 4:
+                    batch_result = self._process_batch_draft_tokens(mtype, batch, accept_num, tokens, scores, ranks)
+                    self.postprocess(batch_result, mtype)
+                    return
             else:
                 batch = self.output_tokens[1]
                 accept_num = tokens[2 : batch + 2]
@@ -654,7 +688,7 @@ class TokenProcessor:
                     inference_start_time=task.inference_start_time,
                     model_execute_time=time.time() - task.inference_start_time,
                     first_token_time=time.time() - task.inference_start_time,
-                    time_in_queue=task.schedule_start_time - task.preprocess_end_time,
+                    time_in_queue=task.inference_start_time - task.preprocess_end_time,
                     preprocess_cost_time=task.preprocess_end_time - task.preprocess_start_time,
                     request_start_time=task.arrival_time,
                     llm_engine_recv_req_timestamp=task.llm_engine_recv_req_timestamp,
@@ -708,8 +742,7 @@ class TokenProcessor:
                     if not (envs.FD_ENABLE_INTERNAL_ADAPTER and token_id in task.eos_token_ids):
                         result.outputs.token_ids.append(token_id)
 
-                    if mtype == 3:
-                        task.output_token_ids.append(token_id)
+                    task.output_token_ids.append(token_id)
 
                     if self.use_logprobs:
                         if self.cfg.speculative_config.method:
@@ -723,29 +756,18 @@ class TokenProcessor:
                             topk_logprobs = scores[i, :].tolist()
                             sampled_rank = ranks[i].item()
 
-                        if mtype == 3:  # top_logprobs
-                            if result.outputs.top_logprobs is None:
-                                result.outputs.top_logprobs = LogprobsLists(
-                                    logprob_token_ids=[topk_token_ids],
-                                    logprobs=[topk_logprobs],
-                                    sampled_token_ranks=[sampled_rank],
-                                )
-                            else:
-                                result.outputs.top_logprobs.logprob_token_ids.extend([topk_token_ids])
-                                result.outputs.top_logprobs.logprobs.extend([topk_logprobs])
-                                result.outputs.top_logprobs.sampled_token_ranks.extend([sampled_rank])
-                        elif mtype == 4:  # draft_top_logprobs
-                            if result.outputs.draft_top_logprobs is None:
-                                result.outputs.draft_top_logprobs = LogprobsLists(
-                                    logprob_token_ids=[topk_token_ids],
-                                    logprobs=[topk_logprobs],
-                                    sampled_token_ranks=[sampled_rank],
-                                )
-                            else:
-                                result.outputs.draft_top_logprobs.logprob_token_ids.extend([topk_token_ids])
-                                result.outputs.draft_top_logprobs.logprobs.extend([topk_logprobs])
-                                result.outputs.draft_top_logprobs.sampled_token_ranks.extend([sampled_rank])
-                if mtype == 3 and (token_id in task.eos_token_ids or is_prefill or recovery_stop):
+                        if result.outputs.top_logprobs is None:
+                            result.outputs.top_logprobs = LogprobsLists(
+                                logprob_token_ids=[topk_token_ids],
+                                logprobs=[topk_logprobs],
+                                sampled_token_ranks=[sampled_rank],
+                            )
+                        else:
+                            result.outputs.top_logprobs.logprob_token_ids.extend([topk_token_ids])
+                            result.outputs.top_logprobs.logprobs.extend([topk_logprobs])
+                            result.outputs.top_logprobs.sampled_token_ranks.extend([sampled_rank])
+
+                if token_id in task.eos_token_ids or is_prefill or recovery_stop:
                     result.finished = True
                     if recovery_stop:
                         result.error_msg = "Recover is not supported, the result is incomplete!"
@@ -784,9 +806,9 @@ class TokenProcessor:
         task.first_token_time = current_time
         trace_print(LoggingEventName.FIRST_TOKEN_GENERATED, task.request_id, getattr(task, "user", ""))
         trace_print(LoggingEventName.DECODE_START, task.request_id, getattr(task, "user", ""))
-        main_process_metrics.first_token_latency.set(current_time - task.inference_start_time)
-        main_process_metrics.time_to_first_token.observe(current_time - task.inference_start_time)
-        main_process_metrics.request_queue_time.observe(task.schedule_start_time - task.preprocess_end_time)
+        main_process_metrics.time_to_first_token.observe(current_time - task.arrival_time)
+        main_process_metrics.request_queue_time.observe(task.inference_start_time - task.preprocess_end_time)
+        main_process_metrics.request_prefill_time.observe(current_time - task.inference_start_time)
 
     def _record_completion_metrics(self, task, current_time):
         """Record metrics when request completes"""
@@ -797,7 +819,6 @@ class TokenProcessor:
         trace_print(LoggingEventName.POSTPROCESSING_START, task.request_id, getattr(task, "user", ""))
         main_process_metrics.num_requests_running.dec(1)
         main_process_metrics.request_success_total.inc()
-        main_process_metrics.infer_latency.set(current_time - task.inference_start_time)
         main_process_metrics.request_inference_time.observe(current_time - task.inference_start_time)
         main_process_metrics.request_generation_tokens.observe(self.tokens_counter[task.request_id])
 
@@ -813,6 +834,8 @@ class TokenProcessor:
         num_accepted_tokens = sum([x - 1 for x in real_accept_num])
         self.num_accepted_tokens += num_accepted_tokens
         num_emitted_tokens = sum(real_accept_num)
+        if num_emitted_tokens == 0:
+            return
         self.num_emitted_tokens += num_emitted_tokens
 
         main_process_metrics.spec_decode_num_accepted_tokens_total.inc(num_accepted_tokens)

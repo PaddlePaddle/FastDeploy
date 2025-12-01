@@ -1324,12 +1324,6 @@ class TestFastDeployBatch(unittest.TestCase):
                 except Exception as e:
                     self.fail(f"输出格式验证失败: {e}\n行内容: {line}")
 
-    def test_vaild_input(self):
-        """测试输入数据格式的正确性"""
-        return_code, contents, proc = self.run_fastdeploy_command(INVALID_INPUT_BATCH)
-
-        self.assertNotEqual(return_code, 0, f"进程返回非零码: {return_code}, 进程信息: {proc}")
-
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -20,7 +20,6 @@ from paddle.nn.quant import weight_quantize
 from paddleformers.utils.log import logger
 
 import fastdeploy
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.platforms import current_platform
 
 from ..utils import get_tensor, group_wise_int4_weight_quantize, pack, rotate_model
@@ -248,7 +247,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         if self.moe_quant_type == "w4a8" or self.moe_quant_type == "w4afp8":
             num_local_experts, max_num, _ = permute_input.shape
             expert_idx_per_token = paddle.arange(num_local_experts)[:, None].tile([1, max_num])
-        elif self.moe_quant_type in ["weight_only_int8", "weight_only_int4"]:
+        elif self.moe_quant_type in ["weight_only_int8", "weight_only_int4", "w16a16"]:
             expert_idx_per_token = None
         else:
             raise NotImplementedError
@@ -392,9 +391,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             norm_topk_prob=False if layer.topk_method == "noaux_tc" else True,
             routed_scaling_factor=1.0,
         )
-
-        if layer.reduce_results and layer.tp_size > 1:
-            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out, layer.fd_config.parallel_config.tp_group)
 
         return fused_moe_out
 

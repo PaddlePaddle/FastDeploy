@@ -17,7 +17,6 @@
 import paddle
 from paddle import nn
 
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 from fastdeploy.utils import ceil_div
 
@@ -241,7 +240,4 @@ class DCUTritonWeightOnlyMoEMethod(QuantMethodBase):
 
         intermediate_cache3.reshape_([token_num, top_k, hidden_size])
         out = intermediate_cache3.sum(axis=1)
-
-        if layer.tp_size > 1:
-            out = tensor_model_parallel_all_reduce(out)
         return out
