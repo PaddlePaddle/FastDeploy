@@ -969,9 +969,9 @@ PoolingChatRequest = EmbeddingChatRequest
 
 
 class ChatRewardRequest(BaseModel):
-    model: Optional[str] = None  # 指定模型，例如 "default" 或支持 embedding 的 chat 模型
-    messages: Union[List[Any], List[int]]  # 聊天消息列表（必选）
-    user: Optional[str] = None  # 调用方标识符
+    model: Optional[str] = None
+    messages: Union[List[Any], List[int]]
+    user: Optional[str] = None
 
     dimensions: Optional[int] = None
     truncate_prompt_tokens: Optional[Annotated[int, Field(ge=-1)]] = None
@@ -1040,15 +1040,15 @@ class ChatRewardRequest(BaseModel):
 
 
 class ChatRewardData(BaseModel):
-    index: Optional[int] = None  # 数据索引（可选）
-    object: str = "reward"  # 固定为 "reward"
-    score: List[float]  # reward 分数（浮点数列表）
+    index: Optional[int] = None
+    object: str = "reward"
+    score: List[float]
 
 
 class ChatRewardResponse(BaseModel):
-    id: str  # 响应 ID，例如 chat-reward-<uuid>
-    object: str = "object"  # 固定为 "object"
-    created: int  # 创建时间（Unix 时间戳）
-    model: str  # 使用的模型名
-    data: List[ChatRewardData]  # reward 结果列表
-    usage: Optional[UsageInfo] = None  # Token 使用情况
+    id: str
+    object: str = "object"
+    created: int
+    model: str
+    data: List[ChatRewardData]
+    usage: Optional[UsageInfo] = None

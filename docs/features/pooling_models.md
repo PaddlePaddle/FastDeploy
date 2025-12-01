@@ -50,7 +50,28 @@ the pooler assigned to each task has the following attributes by default:
 |------------|--------------|---------------|---------|
 | `embed`    | `LAST`       | ✅︎            | ❌      |
 
-## Offline Inference
+When loading [Sentence Transformers](https://huggingface.co/sentence-transformers) models,
+its Sentence Transformers configuration file (`modules.json`) takes priority over the model's defaults and It can also be specified during model network construction through @default_pooling_type("LAST").
+
+##### Pooling Type
+
+1.LastPool(PoolingType.LAST)
+
+Purpose:Extracts the hidden state of the last token in each sequence
+
+2.AllPool(PoolingType.ALL)
+
+Purpose:Returns the hidden states of all tokens in each sequence
+
+3.CLSPool(PoolingType.CLS)
+
+Purpose:Returns the hidden state of the first token in each sequence (CLS token)
+
+4.MeanPool(PoolingType.MEAN)
+
+Purpose:Computes the average of all token hidden states in each sequence
+
+## Online Serving
 
 FastDeploy's OpenAI-compatible server provides API endpoints and custom reward interfaces.
 

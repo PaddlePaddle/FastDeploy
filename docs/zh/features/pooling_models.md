@@ -32,7 +32,7 @@ FastDeploy也支持pooling模型，例如嵌入(embedding)模型。
 
 #### Predefined models
 
-如果模型定义的[Pooler][fastdeploy.model_executor.layers.pooler.Pooler]接受pooler_config，你可以通过--pooler_config覆盖部分属性。
+如果模型定义的`Pooler`接受pooler_config，你可以通过--pooler_config覆盖部分属性。
 
 #### Converted models
 
@@ -42,7 +42,25 @@ FastDeploy也支持pooling模型，例如嵌入(embedding)模型。
 |------------|--------------|---------------|---------|
 | `embed`    | `LAST`       | ✅︎            | ❌      |
 
-加载`Sentence Transformers`模型时，其modules.json配置优于默认值，也可以通过@default_pooling_type("LAST")在模型组网时指定。
+加载[Sentence Transformers](https://huggingface.co/sentence-transformers)模型时，其`modules.json`配置优于默认值，也可以通过@default_pooling_type("LAST")在模型组网时指定。
+
+#### Pooling Type
+
+1.LastPool(PoolingType.LAST)
+
+作用:提取每个序列的最后一个token的隐藏状态
+
+2.AllPool(PoolingType.ALL)
+
+作用:返回每个序列的所有token的隐藏状态
+
+3.CLSPool(PoolingType.CLS)
+
+作用:返回每个序列的第一个token(CLS token)的隐藏状态
+
+4.MeanPool(PoolingType.MEAN)
+
+作用:计算每个序列所有token隐藏状态的平均值
 
 ## Online Serving
 
