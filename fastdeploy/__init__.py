@@ -33,8 +33,17 @@ if os.getenv("PROMETHEUS_MULTIPROC_DIR", "") == "":
 
 import typing
 
-
 import paddle
+
+
+def _swap_torch_modules_from_cache():
+    for name in list(paddle.compat.proxy.TORCH_MODULES_CACHE):
+        assert paddle.compat.proxy._is_torch_module(name), f"`{name}` is not a PyTorch module"
+        sys.modules[name] = paddle.compat.proxy.TORCH_MODULES_CACHE[name]
+        # del paddle.compat.proxy.TORCH_MODULES_CACHE[name]
+
+
+paddle.compat.proxy._swap_torch_modules_from_cache = _swap_torch_modules_from_cache
 
 # first import prometheus setup to set PROMETHEUS_MULTIPROC_DIR
 # otherwise, the Prometheus package will be imported first,
