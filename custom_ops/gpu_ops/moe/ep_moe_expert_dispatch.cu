@@ -916,7 +916,13 @@ void EPMoeDispatchFP8Kernel(const paddle::Tensor& input,
   auto stream = input.stream();
   auto place = input.place();
   // const int gridx = min(132 * 8, num_rows);
-  const int gridx = 132 * 8;
+  int gridx = 132 * 8;
+
+  char *compute_sms = getenv("COMPUTE_NUM_SMS");
+  if (compute_sms) {
+    gridx = std::stoi(compute_sms);
+  }
+
   DISPATCH_NUM_EXPERTS_PER_RANK(
       num_experts_per_rank,
       NUM_EXPERTS_PER_RANK,
