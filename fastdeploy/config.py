@@ -547,6 +547,11 @@ class ParallelConfig:
         self.expert_parallel_size = 1  # EP degree
         self.data_parallel_size = 1  # DP degree
         self.enable_expert_parallel = False
+        self.enable_chunked_moe = False
+        self.chunked_moe_size = 256
+        self.max_moe_num_chunk = 1
+        self.moe_num_chunk = 1
+
         self.local_data_parallel_id = 0
         # Engine worker queue port
         self.engine_worker_queue_port: str = "9923"
@@ -1890,6 +1895,7 @@ class FDConfig:
             logger.info(f"disaggregate_info: {self.disaggregate_info}")
 
         if self.router_config:
+            # the information for registering this server to router
             self.register_info = {
                 "role": self.scheduler_config.splitwise_role,
                 "host_ip": self.host_ip,
@@ -1899,6 +1905,7 @@ class FDConfig:
                 "engine_worker_queue_port": engine_worker_queue_port,
                 "device_ids": self.local_device_ids,
                 "transfer_protocol": self.cache_config.cache_transfer_protocol.split(","),
+                "tp_size": self.parallel_config.tensor_parallel_size,
             }
             logger.info(f"register_info: {self.register_info}")
 
