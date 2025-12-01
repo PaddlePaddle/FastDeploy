@@ -131,10 +131,37 @@ class GpuWorker(WorkerBase):
                 f"\nPaddle allocated memory: {paddle_allocated_mem_before_run / Gb}",
             )
         )
+        self.model_runner.profile_run()
+        self.model_runner.profile_run()
+        self.model_runner.profile_run()
+        
+        import paddle.profiler as profiler
+        p = profiler.Profiler(
+            targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
+            on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+        )
+        p.start()
+        p.step()
 
         # 2. Profile run
-        self.model_runner.profile_run()
+        for i in range(3):
+            # import datetime
+            # paddle.device.synchronize()
+            # starttime = datetime.datetime.now()
+
+            self.model_runner.profile_run()
+
+            # paddle.device.synchronize()
+            # endtime = datetime.datetime.now()
+            # duringtime = endtime - starttime
+            # time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+            # print(i, "time : ", time_ms, "ms")
+
+        
         set_random_seed(self.fd_config.model_config.seed)
+
+        p.stop()
+        exit(0)
 
         # 3. Statistical memory information
         paddle_reserved_mem_after_run = paddle.device.cuda.max_memory_reserved(local_rank)

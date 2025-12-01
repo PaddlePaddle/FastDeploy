@@ -522,6 +522,7 @@ class EPPrefillRunner(EPRunner):
         topk_idx: paddle.Tensor,
         topk_weights: paddle.Tensor,
         expert_alignment: int = 1,
+        num_worst_tokens: int = 0,
         *args,
         **kwargs,
     ):
@@ -535,7 +536,10 @@ class EPPrefillRunner(EPRunner):
             num_tokens_per_expert,
             is_token_in_rank,
             event,
-        ) = buffer.get_dispatch_layout(topk_idx, self.num_experts, async_finish=self.ep_engine.async_finish)
+        ) = buffer.get_dispatch_layout(topk_idx, self.num_experts,
+                                       previous_event =  kwargs.get("event", None),
+                                       allocate_on_comm_stream = True,
+                                       async_finish=self.ep_engine.async_finish,)
 
         x_scale_tensor = kwargs.get("x_scale_tensor", None)
         dispatch_args = {
@@ -549,6 +553,8 @@ class EPPrefillRunner(EPRunner):
             "topk_idx": topk_idx,
             "topk_weights": topk_weights,
             "expert_alignment": expert_alignment,
+            "num_worst_tokens": num_worst_tokens,
+            "allocate_on_comm_stream": True,
             "previous_event": event,
         }
         return buffer.dispatch(**dispatch_args)
@@ -558,6 +564,7 @@ class EPPrefillRunner(EPRunner):
         tmp_ffn_out: paddle.Tensor,
         handle: tuple,
         recv_topk_weights: paddle.Tensor,
+        event,
     ):
         buffer = self.ep_engine.deepep_engine
         if buffer is None:
@@ -569,6 +576,8 @@ class EPPrefillRunner(EPRunner):
             "config": self.ep_engine.ep_config,
             "async_finish": self.ep_engine.async_finish,
             "topk_weights": recv_topk_weights,
+            "previous_event": event,
+            "allocate_on_comm_stream": False,
         }
         fused_moe_out, _, event = buffer.combine(**combine_args)
         return fused_moe_out, event

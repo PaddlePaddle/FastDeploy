@@ -114,7 +114,8 @@ std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor &input,
       {token_num, hidden_size}, paddle::DataType::FLOAT8_E4M3FN, input.place());
   auto quanted_scale = GetEmptyTensor(
       {token_num, hidden_size_scale}, paddle::DataType::FLOAT32, input.place());
-  const int gridx = min(132 * 8, token_num);
+  const int gridx = min(100, token_num);
+  
   const int blockx = min(1024, hidden_size / 128 * 32);
 
   bool use_finegrained_range = false;
@@ -245,7 +246,9 @@ std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor &input,
                                       {1, padded_token_num},
                                       paddle::DataType::FLOAT32,
                                       input.place());
-  const int gridx = min(132 * 8, token_num);
+  
+  const int gridx = min(132 - 14, token_num);
+
   const int blockx = min(1024, hidden_size / 128 * 32);
 
   bool use_finegrained_range = false;

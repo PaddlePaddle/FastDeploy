@@ -138,8 +138,12 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         """
         Apply the EP prefill method.
         """
+        deep_gemm.set_num_sms(118)
         gate_out = gate(x.cast("float32"))
-        # gate_out = paddle.randn([x.shape[0], layer.num_experts], dtype="float32")
+        gate_out = paddle.randn([x.shape[0], layer.num_experts], dtype="float32")
+
+        from fastdeploy.worker.tbo import let_another_thread_run
+        from paddle.distributed.communication import deep_ep
 
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
@@ -147,6 +151,11 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         x, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
             x, self.quant_config.weight_block_size[0]
         )
+
+        event = deep_ep.Buffer.capture()
+
+        let_another_thread_run()
+        
         # 3. EP Dispatch
         (
             recv_x,
@@ -156,12 +165,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             handle,
             event,
         ) = self.ep_prefill_runner.dispatch(
-            x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128
+            x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128,
+            num_worst_tokens = 0,
+            event = event
         )
-
-        from fastdeploy.worker.tbo import let_another_thread_run
-
-        let_another_thread_run()
 
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
@@ -245,9 +252,11 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             tmp_ffn_out = paddle.cast(recv_x[0], paddle.bfloat16)
 
         # 5. EP combine
-        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
+        event = deep_ep.Buffer.capture()
 
         let_another_thread_run()
+
+        tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights, event)
 
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()

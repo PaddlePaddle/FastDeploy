@@ -607,7 +607,7 @@ class TestFusedMoE(unittest.TestCase):
 
 
 
-            from fastdeploy.model_executor.layers.moe.ep import GLOBAL_THREAD_INFO
+            from fastdeploy.worker.tbo import GLOBAL_THREAD_INFO
             from threading import Thread
             import threading
 
@@ -619,7 +619,6 @@ class TestFusedMoE(unittest.TestCase):
                     GLOBAL_THREAD_INFO[threading.current_thread().name][0].wait()
                     GLOBAL_THREAD_INFO[threading.current_thread().name][0].clear()
                 
-                a = paddle.randn([10000])
                 for j in range(num_layers):
                     out = fused_moe[j % real_weight_layers].fused_moe(cache_hidden_states[idx], gating)
 
@@ -650,22 +649,22 @@ class TestFusedMoE(unittest.TestCase):
             for i in range(num_tests):
                 start_events[i].record()
 
-                t0 = Thread(target=fake_model_run, name="thread0")
-                t1 = Thread(target=fake_model_run, name="thread1")
+                # t0 = Thread(target=fake_model_run, name="thread0")
+                # t1 = Thread(target=fake_model_run, name="thread1")
 
-                GLOBAL_THREAD_INFO[t0.name][0].clear()
-                GLOBAL_THREAD_INFO[t1.name][0].clear()
+                # GLOBAL_THREAD_INFO[t0.name][0].clear()
+                # GLOBAL_THREAD_INFO[t1.name][0].clear()
 
-                t0.start()
-                t1.start()
+                # t0.start()
+                # t1.start()
 
-                GLOBAL_THREAD_INFO[t0.name][0].set()
+                # GLOBAL_THREAD_INFO[t0.name][0].set()
 
-                t0.join()
-                GLOBAL_THREAD_INFO[t0.name][1].set()
-                t1.join()
+                # t0.join()
+                # GLOBAL_THREAD_INFO[t0.name][1].set()
+                # t1.join()
 
-                # fake_model_run()
+                fake_model_run()
 
                 end_events[i].record()
             paddle.device.cuda.synchronize()
