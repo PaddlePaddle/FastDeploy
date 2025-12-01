@@ -540,6 +540,11 @@ class ParallelConfig:
         self.expert_parallel_size = 1  # EP degree
         self.data_parallel_size = 1  # DP degree
         self.enable_expert_parallel = False
+        self.enable_chunked_moe = False
+        self.chunked_moe_size = 256
+        self.max_moe_num_chunk = 1
+        self.moe_num_chunk = 1
+
         self.local_data_parallel_id = 0
         # Engine worker queue port
         self.engine_worker_queue_port: str = "9923"
