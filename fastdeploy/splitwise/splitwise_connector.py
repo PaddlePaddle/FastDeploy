@@ -281,7 +281,7 @@ class SplitwiseConnector:
             return True, ""
         while self.current_request_ids[task.request_id] == "init":
             time.sleep(0.001)
-            if time.time() - start_time > envs.FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDES:
+            if time.time() - start_time > envs.FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS:
                 del self.current_request_ids[task.request_id]
                 return False, "timeout"
         msg = self.current_request_ids[task.request_id]

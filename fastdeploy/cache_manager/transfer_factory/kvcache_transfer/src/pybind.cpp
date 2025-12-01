@@ -31,7 +31,8 @@ PYBIND11_MODULE(rdma_comm, m) {
            py::arg("dst_ip"),
            py::arg("dst_port"),
            py::arg("dst_tp_size") =
-               0,  // 0 means the tp_size of prefill and decode is the same
+               0,  // Default 0: assumes dest has same tp_size as source;
+                   // otherwise specifies decode tp_size
            py::call_guard<py::gil_scoped_release>())
       .def("is_connected",
            &RDMACommunicator::is_connected,

@@ -638,6 +638,7 @@ class CacheMessagerV1:
                                 current_transfer_protocol = task["transfer_protocol"]
                                 if task["transfer_protocol"] == "rdma":
                                     target_ip = task["ip"]
+                                    # Default decode_tp_size to prefill tp_size (self.nranks) if not specified
                                     decode_tp_size = task.get("decode_tp_size", self.nranks)
                                     if len(task["rdma_ports"]) == self.nranks:
                                         target_id = int(task["rdma_ports"][self.rank])
@@ -781,6 +782,7 @@ class CacheMessagerV1:
                 logger.info(f"_handle_connect_task recv task: {task}")
                 task_id = task["task_id"]
                 ip = task["ip"]
+                # Default decode_tp_size to self.nranks (number of ranks) if not specified in the task.
                 decode_tp_size = task.get("decode_tp_size", self.nranks)
                 rdma_ports = task["rdma_ports"]
                 rdma_ports_len = len(rdma_ports)
@@ -789,7 +791,7 @@ class CacheMessagerV1:
                     logger.error(f"rdma_ports length should be 1 or equal to mp_num, but got {rdma_ports_len}")
                     response = {"task_id": task_id, "success": False}
                 else:
-                    port = rdma_ports[self.rank] if rdma_ports_len == 1 else rdma_ports[0]
+                    port = rdma_ports[0] if rdma_ports_len == 1 else rdma_ports[self.rank]
                     status = self.messager["rdma"].connect(ip, port, decode_tp_size)
                     if not status:
                         response = {"task_id": task_id, "success": False}

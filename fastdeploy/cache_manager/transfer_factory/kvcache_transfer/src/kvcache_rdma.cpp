@@ -484,6 +484,8 @@ std::string RDMACommunicator::fetch_local_ip() {
  *
  * @param dst_ip Destination IP address
  * @param dst_port Destination port
+ * @param dest_tp_size Default 0: assumes dest has same tp_size as source;
+ * otherwise specifies decode tp_size
  * @return ConnStatus::kConnected ConnStatus::kError;
  */
 
@@ -523,7 +525,7 @@ int RDMACommunicator::connect(const std::string& dst_ip,
   if (dest_tp_size > 0)
     ctx->conn.decode_tp_size = dest_tp_size;
   else
-    ctx->conn.decode_tp_size = prefill_tp_idx;
+    ctx->conn.decode_tp_size = prefill_tp_size;
 
   // Get port information for the connection
   if (get_port_info(ctx->context, ib_dev->port, &ctx->portinfo)) {
