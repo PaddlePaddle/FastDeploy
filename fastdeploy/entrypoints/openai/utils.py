@@ -18,6 +18,7 @@ import asyncio
 import functools
 import heapq
 import random
+import time
 
 import aiozmq
 import msgpack
@@ -25,6 +26,8 @@ import zmq
 from fastapi import Request
 
 from fastdeploy.engine.args_utils import EngineArgs
+from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.metrics.stats import ZMQMetricsStats
 from fastdeploy.utils import FlexibleArgumentParser, api_server_logger
 
 UVICORN_CONFIG = {
@@ -124,6 +127,13 @@ class DealerConnectionManager:
             try:
                 raw_data = await dealer.read()
                 response = msgpack.unpackb(raw_data[-1])
+                _zmq_metrics_stats = ZMQMetricsStats()
+                _zmq_metrics_stats.msg_recv_total += 1
+                if "zmq_send_time" in response:
+                    _zmq_metrics_stats.zmq_latency = time.perf_counter() - response["zmq_send_time"]
+                address = dealer.transport.getsockopt(zmq.LAST_ENDPOINT)
+                main_process_metrics.record_zmq_stats(_zmq_metrics_stats, address)
+
                 request_id = response[-1]["request_id"]
                 if request_id[:4] in ["cmpl", "embd"]:
                     request_id = request_id.rsplit("_", 1)[0]
@@ -252,13 +262,6 @@ async def listen_for_disconnect(request: Request) -> None:
     while True:
         message = await request.receive()
         if message["type"] == "http.disconnect":
-            # If load tracking is enabled *and* the counter exists, decrement
-            # it. Combines the previous nested checks into a single condition
-            # to satisfy the linter rule.
-            if getattr(request.app.state, "enable_server_load_tracking", False) and hasattr(
-                request.app.state, "server_load_metrics"
-            ):
-                request.app.state.server_load_metrics -= 1
             break
 
 

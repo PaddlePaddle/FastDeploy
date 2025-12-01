@@ -30,7 +30,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from gunicorn.app.base import BaseApplication
 from opentelemetry import trace
-from prometheus_client import CONTENT_TYPE_LATEST
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
@@ -62,11 +61,8 @@ from fastdeploy.entrypoints.openai.utils import (
     with_cancellation,
 )
 from fastdeploy.envs import environment_variables
-from fastdeploy.metrics.metrics import (
-    EXCLUDE_LABELS,
-    get_filtered_metrics,
-    main_process_metrics,
-)
+from fastdeploy.metrics.metrics import get_filtered_metrics
+from fastdeploy.metrics.metrics_middleware import PrometheusMiddleware
 from fastdeploy.metrics.trace_util import (
     fd_start_span,
     inject_to_metadata,
@@ -183,25 +179,12 @@ async def lifespan(app: FastAPI):
     model_paths = [ModelPath(name=served_model_names, model_path=args.model, verification=verification)]
 
     engine_args = EngineArgs.from_cli_args(args)
-    config = engine_args.create_engine_config(port_availability_check=False)
+    fd_config = engine_args.create_engine_config(port_availability_check=False)
     engine_client = EngineClient(
-        model_name_or_path=args.model,
-        tokenizer=args.tokenizer,
-        max_model_len=args.max_model_len,
-        tensor_parallel_size=args.tensor_parallel_size,
         pid=pid,
         port=int(os.environ.get("INFERENCE_MSG_QUEUE_ID", "0")),
-        limit_mm_per_prompt=args.limit_mm_per_prompt,
-        mm_processor_kwargs=args.mm_processor_kwargs,
-        reasoning_parser=args.reasoning_parser,
-        data_parallel_size=args.data_parallel_size,
-        enable_logprob=args.enable_logprob,
+        fd_config=fd_config,
         workers=args.workers,
-        tool_parser=args.tool_call_parser,
-        enable_prefix_caching=args.enable_prefix_caching,
-        splitwise_role=args.splitwise_role,
-        max_processor_cache=args.max_processor_cache,
-        config=config,
     )
     await engine_client.connection_manager.initialize()
     app.state.dynamic_load_weight = args.dynamic_load_weight
@@ -232,14 +215,14 @@ async def lifespan(app: FastAPI):
     embedding_handler = OpenAIServingEmbedding(
         engine_client,
         app.state.model_handler,
-        config,
+        fd_config,
         pid,
         args.ips,
         args.max_waiting_time,
         chat_template,
     )
     reward_handler = OpenAIServingReward(
-        engine_client, app.state.model_handler, config, pid, args.ips, args.max_waiting_time, chat_template
+        engine_client, app.state.model_handler, fd_config, pid, args.ips, args.max_waiting_time, chat_template
     )
     engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid
@@ -274,6 +257,9 @@ env_api_key_func = environment_variables.get("FD_API_KEY")
 env_tokens = env_api_key_func() if env_api_key_func else []
 if tokens := [key for key in (args.api_key or env_tokens) if key]:
     app.add_middleware(AuthenticationMiddleware, tokens)
+
+# add middleware for http metrics
+app.add_middleware(PrometheusMiddleware)
 
 
 @asynccontextmanager
@@ -421,7 +407,8 @@ async def create_chat_completion(request: ChatCompletionRequest, raw_request: Re
 
 
 @app.post("/v1/completions")
-async def create_completion(request: CompletionRequest):
+@with_cancellation
+async def create_completion(request: CompletionRequest, raw_request: Request):
     """
     Create a completion for the provided prompt and parameters.
     """
@@ -591,11 +578,8 @@ async def metrics():
     """
     metrics
     """
-    metrics_text = get_filtered_metrics(
-        EXCLUDE_LABELS,
-        extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=args.workers),
-    )
-    return Response(metrics_text, media_type=CONTENT_TYPE_LATEST)
+    metrics_text = get_filtered_metrics()
+    return Response(metrics_text, media_type="text/plain")
 
 
 @metrics_app.get("/config-info")
@@ -634,19 +618,9 @@ def launch_metrics_server():
     if not is_port_available(args.host, args.metrics_port):
         raise Exception(f"The parameter `metrics_port`:{args.metrics_port} is already in use.")
 
-    # Move setting prometheus directory to fastdeploy/__init__.py
-    # prom_dir = cleanup_prometheus_files(True)
-    # os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
     metrics_server_thread = threading.Thread(target=run_metrics_server, daemon=True)
     metrics_server_thread.start()
     time.sleep(1)
-
-
-# NOTE: This is commented out since PROMETHEUS_MULTIPROC_DIR is already set up in fastdeploy/__init__.py
-# def setup_metrics_environment():
-#     """Prepare Prometheus multiprocess directory before starting API workers."""
-#     prom_dir = cleanup_prometheus_files(True)
-#     os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
 
 
 controller_app = FastAPI()
@@ -761,7 +735,6 @@ def main():
         launch_metrics_server()
         console_logger.info(f"Launching metrics service at http://{args.host}:{args.metrics_port}/metrics")
     else:
-        # setup_metrics_environment()
         console_logger.info(f"Launching metrics service at http://{args.host}:{args.port}/metrics")
     console_logger.info(f"Launching chat completion service at http://{args.host}:{args.port}/v1/chat/completions")
     console_logger.info(f"Launching completion service at http://{args.host}:{args.port}/v1/completions")

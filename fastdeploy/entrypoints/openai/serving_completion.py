@@ -213,7 +213,19 @@ class OpenAIServingCompletion:
                     )
                     api_server_logger.error(error_msg)
                     return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
-
+        except asyncio.CancelledError as e:
+            num = 1
+            if request_prompt_ids is not None:
+                num = len(request_prompt_ids)
+            elif request_prompts is not None:
+                num = len(request_prompts)
+            num = num * 1 if request.n is None else request.n
+            await self.engine_client.abort(f"{request_id}_0", num)
+            error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
+            api_server_logger.error(error_msg)
+            return ErrorResponse(
+                error=ErrorInfo(message=error_msg, type=ErrorType.INVALID_REQUEST_ERROR, code=ErrorCode.CLIENT_ABORTED)
+            )
         except Exception as e:
             error_msg = f"OpenAIServingCompletion create_completion error: {e}, {str(traceback.format_exc())}"
             api_server_logger.error(error_msg)

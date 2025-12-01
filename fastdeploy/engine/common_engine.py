@@ -31,7 +31,7 @@ import requests
 import zmq
 from opentelemetry import trace
 
-from fastdeploy.engine.request import Request, RequestOutput, RequestType
+from fastdeploy.engine.request import Request, RequestOutput, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
 from fastdeploy.eplb.utils import init_eplb_signals
@@ -319,9 +319,6 @@ class EngineService:
                 )
                 self.cfg.cache_config.cache_queue_port = self.cache_task_queue.get_server_port()
 
-        self.llm_logger.info(
-            f"local {min(self.cfg.worker_num_per_node * self.cfg.node_rank + self.cfg.parallel_config.local_data_parallel_id,self.cfg.parallel_config.data_parallel_size - 1)}"
-        )
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
             is_server=False,
@@ -683,7 +680,6 @@ class EngineService:
         def _fetch_request():
             try:
                 nonlocal is_fetching
-                is_fetching = True
                 num_prefill_batch = min(
                     int(self.resource_manager.available_batch()),
                     self.cfg.max_prefill_batch,
@@ -694,14 +690,23 @@ class EngineService:
                 else:
                     max_num_batched_tokens = self.cfg.model_config.max_model_len
 
+                # In multi-mode scenarios, using available_block_num to pull requests to prevent heavy rescheduling
+                # in the frequency domain due to insufficient blocks
+                if self.cfg.model_config.enable_mm:
+                    self.resource_manager.check_and_free_block_tables()
+                    available_blocks = self.resource_manager.available_block_num()
+                else:
+                    available_blocks = self.cfg.cache_config.max_block_num_per_seq
+
                 tasks = self.scheduler.get_requests(
-                    available_blocks=self.cfg.cache_config.max_block_num_per_seq,
+                    available_blocks=available_blocks,
                     block_size=self.cfg.cache_config.block_size,
                     reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
                     max_num_batched_tokens=max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
                 for task in tasks:
+                    task.schedule_start_time = time.time()
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
 
                 if self.cfg.scheduler_config.splitwise_role == "decode":
@@ -797,6 +802,7 @@ class EngineService:
                     continue
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     if not is_fetching:
+                        is_fetching = True
                         get_request_pool.submit(_fetch_request)
 
                 else:
@@ -807,6 +813,7 @@ class EngineService:
                     ):
                         # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
                         try:
+                            is_fetching = True
                             get_request_pool.submit(_fetch_request)
                         except RuntimeError as e:
                             if "shutdown" in str(e):
@@ -814,6 +821,7 @@ class EngineService:
                                 break
                             else:
                                 raise
+
                 # 2. Schedule requests
                 tasks, error_tasks = self.resource_manager.schedule()
 
@@ -903,6 +911,26 @@ class EngineService:
                 request, insert_task = None, []
                 results: List[Tuple[str, Optional[str]]] = list()
                 if data:
+                    status_value = data.get("status", None)
+                    if status_value is not None and status_value == RequestStatus.ABORT.value:
+                        req_id = data["request_id"]
+                        batch_id = self.resource_manager.req_dict[req_id]
+                        abort_res = RequestOutput(
+                            request_id=req_id,
+                            finished=True,
+                            error_code=499,
+                            error_msg=f"Your request with request_id:{req_id} is aborted.",
+                        )
+                        abort_task = self.resource_manager.tasks_list[batch_id]
+                        is_prefill = (
+                            abort_task.disaggregate_info is not None
+                            and abort_task.disaggregate_info["role"] == "prefill"
+                        )
+                        self.token_processor._recycle_resources(
+                            req_id, batch_id, abort_task, abort_res, is_prefill, True
+                        )
+                        self.scheduler.put_results([abort_res])
+                        continue
                     err_msg = None
                     try:
                         request = Request.from_dict(data)
