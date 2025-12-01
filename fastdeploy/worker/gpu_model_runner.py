@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import copy
 import os
 import queue
 import time
@@ -28,7 +29,7 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.pooling_params import PoolingParams
-from fastdeploy.engine.request import Request, RequestType
+from fastdeploy.engine.request import ImagePosition, Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
     GPUMemoryChecker,
     profile_run_guard,
@@ -419,7 +420,11 @@ class GPUModelRunner(ModelRunnerBase):
                         ]
                     grid_thw_list = inputs["grid_thw"][request.num_image_start : request.num_image_end]
                     mm_hashes_list = inputs["mm_hashes"][request.num_image_start : request.num_image_end]
-                    mm_positions_list = inputs["mm_positions"][request.num_image_start : request.num_image_end]
+                    mm_positions_list = self._update_mm_positions(
+                        mm_positions=inputs["mm_positions"][request.num_image_start : request.num_image_end],
+                        prefill_start_index=request.prefill_start_index,
+                        prefill_end_index=request.prefill_end_index,
+                    )
                     image_start_idx = request.num_image_start
 
                     logger.debug(
@@ -432,10 +437,10 @@ class GPUModelRunner(ModelRunnerBase):
                             f"run idx {i} with mm_hash {mm_hash} image_offset: {image_offset} grid_thw: {grid_thw_list[i]}"
                         )
                         if mm_hash in self.encoder_cache:
-                            multi_vision_inputs["encoder_cache_info"].append((mm_hash, None))
+                            multi_vision_inputs["encoder_cache_info"].append((mm_hash, mm_positions_list[i], True))
                             continue
 
-                        multi_vision_inputs["encoder_cache_info"].append((mm_hash, mm_positions_list[i]))
+                        multi_vision_inputs["encoder_cache_info"].append((mm_hash, mm_positions_list[i], False))
                         if envs.FD_ENABLE_MAX_PREFILL:
                             multi_vision_inputs["images_lst"].append(
                                 inputs["images"][image_start_idx : image_start_idx + image_offset].cuda()
@@ -490,10 +495,10 @@ class GPUModelRunner(ModelRunnerBase):
 
                 logger.debug(f"encoder_cache_info: {multi_vision_inputs['encoder_cache_info']}")
                 merge_image_features, feature_idx = [], 0
-                for mm_hash, mm_positions in multi_vision_inputs["encoder_cache_info"]:
-                    if mm_positions is None:
+                for mm_hash, mm_positions, use_cache in multi_vision_inputs["encoder_cache_info"]:
+                    if use_cache:
                         assert mm_hash in self.encoder_cache, f"{mm_hash} not in encoder cache"
-                        merge_image_features.append(self.encoder_cache[mm_hash].cuda())
+                        merge_image_features.append(self.encoder_cache[mm_hash][-mm_positions.length :].cuda())
                     else:
                         assert (
                             image_features_output is not None
@@ -521,6 +526,21 @@ class GPUModelRunner(ModelRunnerBase):
             )
             for i, idx in enumerate(rope_3d_position_ids["position_ids_idx"]):
                 self.share_inputs["rope_emb"][idx : idx + 1, :] = rope_3d_lst[i]
+
+    def _update_mm_positions(
+        self, mm_positions: List[ImagePosition], prefill_start_index: int, prefill_end_index: int
+    ):
+        """
+        When the image is chunked, update the corresponding mm_positions(copy)
+        """
+        mm_positions_list = copy.deepcopy(mm_positions)
+        if mm_positions_list[0].offset < prefill_start_index:
+            mm_positions_list[0].length = prefill_start_index - mm_positions_list[0].offset
+            mm_positions_list[0].offset = prefill_start_index
+        if mm_positions_list[-1].offset + mm_positions_list[-1].length > prefill_end_index:
+            mm_positions_list[-1].length = prefill_end_index - mm_positions_list[-1].offset
+        logger.debug(f"update mm_positions, befor positions: {mm_positions}, after positions: {mm_positions_list}")
+        return mm_positions_list
 
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int = None):
         """
