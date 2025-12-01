@@ -1883,6 +1883,7 @@ class FDConfig:
             logger.info(f"disaggregate_info: {self.disaggregate_info}")
 
         if self.router_config:
+            # the information for registering this server to router
             self.register_info = {
                 "role": self.scheduler_config.splitwise_role,
                 "host_ip": self.host_ip,
@@ -1892,6 +1893,7 @@ class FDConfig:
                 "engine_worker_queue_port": engine_worker_queue_port,
                 "device_ids": self.local_device_ids,
                 "transfer_protocol": self.cache_config.cache_transfer_protocol.split(","),
+                "tp_size": self.parallel_config.tensor_parallel_size,
             }
             logger.info(f"register_info: {self.register_info}")
 

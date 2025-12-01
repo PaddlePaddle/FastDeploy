@@ -14,10 +14,38 @@ PYBIND11_MODULE(rdma_comm, m) {
                     std::vector<int64_t>,
                     std::vector<int64_t>,
                     int,
-                    int>())
-      .def("connect", &RDMACommunicator::connect)
-      .def("is_connected", &RDMACommunicator::is_connected)
-      .def("write_cache", &RDMACommunicator::write_cache);
+                    int,
+                    bool,
+                    int,
+                    int>(),
+           py::arg("splitwise_role"),
+           py::arg("gpu_idx"),
+           py::arg("port"),
+           py::arg("key_cache_ptrs"),
+           py::arg("value_cache_ptrs"),
+           py::arg("block_number"),
+           py::arg("block_bytes"),
+           py::arg("pd_tp_size_is_same") = true,
+           py::arg("prefill_tp_size") = 1,
+           py::arg("prefill_tp_idx") = 0)
+      .def("connect",
+           &RDMACommunicator::connect,
+           py::arg("dst_ip"),
+           py::arg("dst_port"),
+           py::call_guard<py::gil_scoped_release>())
+      .def("is_connected",
+           &RDMACommunicator::is_connected,
+           py::arg("dst_ip"),
+           py::arg("dst_port"),
+           py::call_guard<py::gil_scoped_release>())
+      .def("write_cache",
+           &RDMACommunicator::write_cache,
+           py::arg("dst_ip"),
+           py::arg("dst_port"),
+           py::arg("local_block_ids"),
+           py::arg("remote_block_ids"),
+           py::arg("layer_idx"),
+           py::call_guard<py::gil_scoped_release>());
 
 #ifdef VERSION_INFO
   m.attr("__version__") = VERSION_INFO;
