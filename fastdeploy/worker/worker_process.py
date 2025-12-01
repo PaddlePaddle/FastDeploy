@@ -720,6 +720,17 @@ def parse_args():
         action="store_true",
         help="enable expert parallel",
     )
+    parser.add_argument(
+        "--enable_chunked_moe",
+        action="store_true",
+        help="enable chunked moe",
+    )
+    parser.add_argument(
+        "--chunked_moe_size",
+        type=int,
+        default=256,
+        help="chunk size of moe input",
+    )
     parser.add_argument("--ori_vocab_size", type=int, default=None)
     parser.add_argument("--think_end_id", type=int, default=-1)
     parser.add_argument("--image_patch_id", type=int, default=-1)
