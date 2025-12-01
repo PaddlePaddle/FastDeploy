@@ -281,7 +281,6 @@ class Request:
             "arrival_time": self.arrival_time,
             "preprocess_start_time": self.preprocess_start_time,
             "preprocess_end_time": self.preprocess_end_time,
-            "multimodal_inputs": self.multimodal_inputs,
             "multimodal_data": self.multimodal_data,
             "disable_chat_template": self.disable_chat_template,
             "disaggregate_info": self.disaggregate_info,
@@ -301,6 +300,12 @@ class Request:
             "audio_end": self.audio_end,
             "ic_req_data": self.ic_req_data,
         }
+        if "position_ids" in self.multimodal_inputs:
+            # During multimodal PD separation, position_ids are required
+            data["multimodal_inputs"] = {"position_ids": self.multimodal_inputs["position_ids"]}
+        else:
+            data["multimodal_inputs"] = self.multimodal_inputs
+
         add_params = [
             "guided_json",
             "guided_regex",
