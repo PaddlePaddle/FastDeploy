@@ -17,19 +17,19 @@
 import paddle
 from paddle import nn
 
+from fastdeploy import envs
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce_custom
-from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
+from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import (
+    UnquantizedFusedMoEMethod,
+)
 
 
-class HpuMoEMethod(MoEMethodBase):
+class HpuMoEMethod(UnquantizedFusedMoEMethod):
     """
-    Use Cutlass Group Gemm to compute Fused MoE.
-    This method is the oldest way to compute MoE in Paddle.
+    Implements Fused Mixture-of-Experts (MoE) computation using HPU-optimized operations.
+    This method leverages the HPU backend's fused_gate_moe function for efficient expert routing and computation.
+    Designed specifically for PaddlePaddle execution on Habana Processing Units (HPU).
     """
-
-    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
-        # TODO: split create_parameter from process_loaded_weights
-        return NotImplemented
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
@@ -38,19 +38,11 @@ class HpuMoEMethod(MoEMethodBase):
         # bf16
         up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
 
-        for idx, weights_tensor in enumerate([up_gate_proj_weights, down_proj_weights]):
-            weights_list = []
-            for i in range(layer.num_local_experts):
-                weight_tensor = weights_tensor[i]
-                weight = layer.create_parameter(
-                    shape=weight_tensor.shape,
-                    dtype=weight_tensor.dtype,
-                    default_initializer=paddle.nn.initializer.Constant(0),
-                )
-                weight.set_value(weight_tensor)
-                weights_list.append(weight)
-            weights_name = self.added_weight_attrs[idx]
-            setattr(layer, weights_name, weights_list)
+        stacked_up_gate_proj_weights = paddle.stack(up_gate_proj_weights, axis=0)
+        stacked_down_proj_weights = paddle.stack(down_proj_weights, axis=0)
+
+        layer.up_gate_proj_weight.set_value(stacked_up_gate_proj_weights)
+        layer.down_proj_weight.set_value(stacked_down_proj_weights)
 
     def apply_ep_prefill(
         self,
@@ -87,51 +79,16 @@ class HpuMoEMethod(MoEMethodBase):
             raise NotImplementedError
 
         # norm_topk_prob = False if layer.topk_method == "noaux_tc" else True
-        """
-        weights = paddle.nn.functional.softmax(gate_out, axis=-1)
-        if layer.moe_use_gate_correction_bias:
-            scores = weights + layer.gate_correction_bias
-            _, selected_experts = paddle.topk(scores, layer.top_k, axis=-1)
-            routing_weights = paddle.index_sample(weights, selected_experts)
-        else:
-            routing_weights, selected_experts = paddle.topk(weights, layer.top_k, axis=-1)
-        routing_weights /= paddle.sum(routing_weights, axis=-1, keepdim=True)
-
-        common_inputs = (x, selected_experts, routing_weights.cast("bfloat16"))
-
-        common_params = (
-            False,  #permuted_weights
-            "silu", #activation,
-            0,
-            layer.num_experts - 1,
-        )
-
-        weights = (
-            layer.moe_ffn1_weight,
-            layer.moe_ffn2_weight,
-        )
-
-        fused_moe_out, _ = mixture_of_experts(
-            *common_inputs, *weights, *common_params, False
-        )
-
-        # if norm_topk_prob:
-        #     routing_weights_norm = paddle.sum(routing_weights, axis=-1, keepdim=True).cast("bfloat16")
-        #     fused_moe_out = fused_moe_out / routing_weights_norm
-        """
-        chunk_size = 64
+        chunk_size = envs.FD_HPU_CHUNK_SIZE
         from fastdeploy.model_executor.ops.intel_hpu import fused_gate_moe
 
-        # TODO: fuse matmul to gate_moe
-        gate_out = paddle.matmul(x.cast("float32"), gate.weight)
         fused_moe_out = fused_gate_moe(
             x,
-            gate_out,
+            gate.weight,
             layer.gate_correction_bias,
             layer.up_gate_proj_weight,
             layer.down_proj_weight,
             layer.top_k,
-            layer.moe_use_gate_correction_bias,
             norm_topk_prob=True,
             permuted_weights=False,
             activation="silu",
@@ -219,22 +176,20 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
 
         # norm_topk_prob = False if layer.topk_method == "noaux_tc" else True
 
-        chunk_size = 64
+        chunk_size = envs.FD_HPU_CHUNK_SIZE
         from fastdeploy.model_executor.ops.intel_hpu import fused_gate_moe_fp8
 
-        # TODO: fuse matmul to gate_moe
-        gate_out = paddle.matmul(x.cast("float32"), gate.weight)
         fused_moe_out = fused_gate_moe_fp8(
             x,
-            gate_out,
+            gate.weight,
             layer.gate_correction_bias,
             layer.up_gate_proj_weight,
             layer.down_proj_weight,
-            None,  # intermediate_hidden_states_scales
+            layer.up_gate_proj_in_scale,
+            layer.down_proj_in_scale,
             layer.up_gate_proj_weight_scale,
             layer.down_proj_weight_scale,
             layer.top_k,
-            layer.moe_use_gate_correction_bias,
             norm_topk_prob=True,
             permuted_weights=False,
             activation="silu",
