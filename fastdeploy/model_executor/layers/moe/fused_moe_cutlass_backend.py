@@ -146,8 +146,10 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             recv_topk_weights,
             recv_num_tokens_per_expert_list,
             handle,
-            _,
+            event,
         ) = self.ep_prefill_runner.dispatch(x, topk_idx, topk_weights)
+        if self.ep_prefill_runner.ep_engine.async_finish:
+            event.current_stream_wait()
         token_all_num = sum(recv_num_tokens_per_expert_list)
 
         # 3. Compute ffn
