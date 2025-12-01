@@ -33,6 +33,7 @@ if current_platform.is_xpu():
         limit_thinking_content_length_v1,
         limit_thinking_content_length_v2,
         save_output,
+        save_output_topk,
         set_stop_value_multi_ends,
         speculate_clear_accept_nums,
         speculate_get_output_padding_offset,
@@ -45,7 +46,6 @@ if current_platform.is_xpu():
         step_paddle,
         update_inputs,
         update_inputs_v1,
-        save_output_topk
     )
 
 
