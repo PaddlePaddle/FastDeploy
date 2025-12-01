@@ -27,6 +27,8 @@ FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
 FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 MAX_WAIT_SECONDS = 60
 
+from e2e.utils.serving_utils import clean
+
 
 def is_port_open(host: str, port: int, timeout=1.0):
     """
@@ -105,6 +107,9 @@ def llm(model_path):
 
         print(f"Model loaded successfully from {model_path} in {time.time() - start:.2f}s.")
         yield llm
+
+        print("Cleaning up...")
+        clean()
     except Exception:
         print(f"Failed to load model from {model_path}.")
         traceback.print_exc()
