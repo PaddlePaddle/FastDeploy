@@ -1001,24 +1001,25 @@ class CutlassW4AFP8MoEMethod(CutlassMoEMethod):
                 )
 
         # weight_scales
-        setattr(
-            layer,
-            "up_gate_proj_weight_scale",
-            layer.create_parameter(
-                shape=[layer.num_local_experts, layer.moe_intermediate_size * 2],
-                dtype="float32",
-                default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
-        setattr(
-            layer,
-            "down_proj_weight_scale",
-            layer.create_parameter(
-                shape=[layer.num_local_experts, layer.hidden_size],
-                dtype="float32",
-                default_initializer=paddle.nn.initializer.Constant(0),
-            ),
-        )
+        if layer.is_quantized:
+            setattr(
+                layer,
+                "up_gate_proj_weight_scale",
+                layer.create_parameter(
+                    shape=[layer.num_local_experts, layer.moe_intermediate_size * 2],
+                    dtype="float32",
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            setattr(
+                layer,
+                "down_proj_weight_scale",
+                layer.create_parameter(
+                    shape=[layer.num_local_experts, layer.hidden_size],
+                    dtype="float32",
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
 
     def load_w4afp8_scale_weights(
         self,
