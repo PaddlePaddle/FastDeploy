@@ -308,6 +308,7 @@ class ChatCompletionStreamResponse(BaseModel):
     model: str
     choices: List[ChatCompletionResponseStreamChoice]
     usage: Optional[UsageInfo] = None
+    metrics: Optional[Dict] = None
 
 
 class CompletionResponseChoice(BaseModel):
