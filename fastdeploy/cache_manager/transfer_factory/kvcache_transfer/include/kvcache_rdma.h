@@ -24,11 +24,15 @@ class RDMACommunicator {
                    std::vector<int64_t> local_key_cache,
                    std::vector<int64_t> local_value_cache,
                    int block_number,
-                   int block_bytes);
+                   int block_bytes,
+                   int prefill_tp_size,
+                   int prefill_tp_idx);
   ~RDMACommunicator();
 
   // Connection management
-  int connect(const std::string& dst_ip, const std::string& dst_port);
+  int connect(const std::string& dst_ip,
+              const std::string& dst_port,
+              int dest_tp_size);
   bool is_connected(const std::string& dst_ip, const std::string& dst_port);
 
   // Core functionality
@@ -120,6 +124,8 @@ class RDMACommunicator {
   int block_number;                       // Number of blocks
   int block_size_byte;                    // Size of each block in bytes
   int layer_number;                       // Number of layers
+  int prefill_tp_size;                    // tensor parallelism size for prefill
+  int prefill_tp_idx;  // tensor parallelism index for prefill
 
   std::vector<std::vector<void*>>
       local_cache_key_ptr_per_layer;  // Per-layer key pointers

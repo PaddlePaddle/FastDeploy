@@ -142,6 +142,7 @@ struct Connection {
   int wc_target_count;
 
   // Configuration
+  int decode_tp_size;
   int layer_number;
   int block_number;
   int block_byte_size;
