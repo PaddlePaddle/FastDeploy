@@ -31,6 +31,18 @@ if current_platform.is_xpu():
         get_padding_offset,
         limit_thinking_content_length_v1,
         limit_thinking_content_length_v2,
+        save_output,
+        set_stop_value_multi_ends,
+        speculate_clear_accept_nums,
+        speculate_get_output_padding_offset,
+        speculate_get_padding_offset,
+        speculate_get_seq_lens_output,
+        speculate_save_output,
+        speculate_set_value_by_flags_and_idx,
+        speculate_step_paddle,
+        speculate_update_v3,
+        step_paddle,
+        update_inputs,
         update_inputs_v1,
     )
 
@@ -45,19 +57,53 @@ def xpu_pre_process(
     seq_lens_encoder: Optional[paddle.Tensor] = None,
     seq_lens_decoder: Optional[paddle.Tensor] = None,
     is_profiling: bool = False,
+    forward_meta=None,
 ) -> XPUForwardMeta:
     """ """
     max_len = input_ids.shape[1]
     cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
     token_num = paddle.sum(seq_lens_this_time)
 
-    (
-        ids_remove_padding,
-        cum_offsets,
-        batch_id_per_token,
-        cu_seqlens_q,
-        cu_seqlens_k,
-    ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
+    if use_speculate_method:
+        (
+            ids_remove_padding,
+            cum_offsets,
+            batch_id_per_token,
+            cu_seqlens_q,
+            cu_seqlens_k,
+        ) = speculate_get_padding_offset(
+            input_ids,
+            draft_tokens,
+            cum_offsets_now,
+            token_num,
+            seq_lens_this_time,
+            seq_lens_encoder,
+        )
+        seq_lens_output = speculate_get_seq_lens_output(
+            seq_lens_this_time,
+            seq_lens_encoder,
+            seq_lens_decoder,
+        )
+        if isinstance(seq_lens_output, list):
+            seq_lens_output = seq_lens_output[0]
+        output_token_num = paddle.sum(seq_lens_output)
+        output_cum_offsets_tmp = paddle.cumsum(max_len - seq_lens_output, dtype="int32")
+        output_padding_offset, output_cum_offsets = speculate_get_output_padding_offset(
+            output_cum_offsets_tmp,
+            output_token_num,
+            seq_lens_output,
+            max_len,
+        )
+        share_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
+        share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
+    else:
+        (
+            ids_remove_padding,
+            cum_offsets,
+            batch_id_per_token,
+            cu_seqlens_q,
+            cu_seqlens_k,
+        ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
 
     share_inputs["ids_remove_padding"] = None  # set this after adjust batch
     share_inputs["cum_offsets"] = cum_offsets
@@ -173,11 +219,6 @@ def xpu_post_process_normal(
     line_break_id: int = None,
 ) -> None:
     """ """
-    from fastdeploy.model_executor.ops.xpu import (
-        save_output,
-        set_stop_value_multi_ends,
-        update_inputs,
-    )
 
     if think_end_id > 0:
         limit_strategy = envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR
@@ -277,39 +318,110 @@ def xpu_post_process_normal(
         )
 
 
+def xpu_post_process_specualate(
+    model_output: ModelOutputData, save_each_rank: bool = False, skip_save_output: bool = False
+):
+    """"""
+    speculate_update_v3(
+        model_output.seq_lens_encoder,
+        model_output.seq_lens_decoder,
+        model_output.not_need_stop,
+        model_output.draft_tokens,
+        model_output.actual_draft_token_num,
+        model_output.accept_tokens,
+        model_output.accept_num,
+        model_output.stop_flags,
+        model_output.seq_lens_this_time,
+        model_output.is_block_step,
+        model_output.stop_nums,
+    )
+    if not skip_save_output:
+        speculate_save_output(
+            model_output.accept_tokens,
+            model_output.accept_num,
+            model_output.not_need_stop,
+            model_output.mp_rank,
+            save_each_rank,  # False
+        )
+
+    speculate_clear_accept_nums(model_output.accept_num, model_output.seq_lens_decoder)
+
+    # Update pre_ids through accept tokens
+    speculate_set_value_by_flags_and_idx(
+        model_output.pre_ids,
+        model_output.accept_tokens,
+        model_output.accept_num,
+        model_output.stop_flags,
+        model_output.seq_lens_this_time,
+        model_output.seq_lens_encoder,
+        model_output.seq_lens_decoder,
+        model_output.step_idx,
+    )
+
+
 def step_xpu(
     share_inputs: Dict[str, paddle.Tensor],
     block_size: int,
     enc_dec_block_num: int,
+    speculative_decoding: bool,
+    max_draft_token_num: int,
 ) -> None:
     """
-    TODO(gongshaotian): normalization name
+    TODO(chenhuan09): support PD
     """
-    from fastdeploy.model_executor.ops.xpu import step_paddle
-
-    step_paddle(
-        share_inputs["stop_flags"],
-        share_inputs["seq_lens_this_time"],
-        share_inputs["step_seq_lens_encoder"],
-        share_inputs["seq_lens_encoder"],
-        share_inputs["seq_lens_decoder"],
-        share_inputs["block_tables"],
-        share_inputs["encoder_block_lens"],
-        share_inputs["is_block_step"],
-        share_inputs["step_block_list"],
-        share_inputs["step_lens"],
-        share_inputs["recover_block_list"],
-        share_inputs["recover_lens"],
-        share_inputs["need_block_list"],
-        share_inputs["need_block_len"],
-        share_inputs["used_list_len"],
-        share_inputs["free_list"],
-        share_inputs["free_list_len"],
-        share_inputs["input_ids"],
-        share_inputs["pre_ids"],
-        share_inputs["step_idx"],
-        share_inputs["next_tokens"],
-        share_inputs["first_token_ids"],
-        block_size,
-        enc_dec_block_num,
-    )
+    if speculative_decoding:
+        speculate_step_paddle(
+            share_inputs["stop_flags"],
+            share_inputs["seq_lens_this_time"],
+            share_inputs["step_seq_lens_encoder"],
+            share_inputs["seq_lens_encoder"],
+            share_inputs["seq_lens_decoder"],
+            share_inputs["block_tables"],
+            share_inputs["encoder_block_lens"],
+            share_inputs["is_block_step"],
+            share_inputs["step_block_list"],
+            share_inputs["step_lens"],
+            share_inputs["recover_block_list"],
+            share_inputs["recover_lens"],
+            share_inputs["need_block_list"],
+            share_inputs["need_block_len"],
+            share_inputs["used_list_len"],
+            share_inputs["free_list"],
+            share_inputs["free_list_len"],
+            share_inputs["input_ids"],
+            share_inputs["pre_ids"],
+            share_inputs["step_idx"],
+            share_inputs["next_tokens"],
+            share_inputs["first_token_ids"],
+            share_inputs["accept_num"],
+            block_size,
+            enc_dec_block_num,
+            max_draft_token_num,
+        )
+    else:
+        step_paddle(
+            share_inputs["stop_flags"],
+            share_inputs["seq_lens_this_time"],
+            share_inputs["step_seq_lens_encoder"],
+            share_inputs["seq_lens_encoder"],
+            share_inputs["seq_lens_decoder"],
+            share_inputs["block_tables"],
+            share_inputs["encoder_block_lens"],
+            share_inputs["is_block_step"],
+            share_inputs["step_block_list"],
+            share_inputs["step_lens"],
+            share_inputs["recover_block_list"],
+            share_inputs["recover_lens"],
+            share_inputs["need_block_list"],
+            share_inputs["need_block_len"],
+            share_inputs["used_list_len"],
+            share_inputs["free_list"],
+            share_inputs["free_list_len"],
+            share_inputs["input_ids"],
+            share_inputs["pre_ids"],
+            share_inputs["step_idx"],
+            share_inputs["next_tokens"],
+            share_inputs["first_token_ids"],
+            block_size,
+            enc_dec_block_num,
+        )
