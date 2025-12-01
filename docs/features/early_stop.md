@@ -131,7 +131,7 @@ print(output)
 Before starting the service, set the following environment variables
 
 ```
-FD_STOP_SEQS_MAX_LEN (Maximum length of stop sequences, default is 8)
+FD_STOP_TOKEN_IDS_MAX_LEN (Maximum length of stop token ids, default is 8)
 
 ```
 
@@ -162,7 +162,7 @@ curl -X POST "http://0.0.0.0:13312/v1/chat/completions" \
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
 
-model_name_or_path = "/root/paddlejob/workspace/env_run/output/models/paddle/Qwen/Qwen3-0.6B"
+model_name_or_path = "/Qwen/Qwen3-0.6B"
 
 sampling_params = SamplingParams(temperature=1, seed=1,stop_token_ids=[104208])
 llm = LLM(model=model_name_or_path, tensor_parallel_size=1)
