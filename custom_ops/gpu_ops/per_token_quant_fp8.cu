@@ -167,9 +167,7 @@ __global__ void quant_per_token_per_block_padding(
   const int num_warp = blockDim.x / 32;
   static constexpr int NUM_PER_THREADS = 128 / 32;  // 4
   static constexpr float MAX_VALUE = 448.f;
-
-  const int end_iter = (hidden_size + 255) / 256;  // warp_iter_num
-
+  const int end_iter = hidden_size / 128;  // warp_iter_num
   AlignedVector<T, NUM_PER_THREADS> load_vec;
   AlignedVector<float, NUM_PER_THREADS> load_vec_float;
   AlignedVector<phi::dtype::float8_e4m3fn, NUM_PER_THREADS> res_vec;
