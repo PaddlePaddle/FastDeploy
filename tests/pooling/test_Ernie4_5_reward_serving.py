@@ -69,12 +69,10 @@ def _start_server_process(enable_caching: bool, log_filename: str):
         "8192",
         "--max-num-seqs",
         "256",
-        "--graph-optimization-config",
-        '{"use_cudagraph":false}',
         "--runner",
         "pooling",
         "--convert",
-        "reward",
+        "embed",
     ]
 
     if enable_caching:
