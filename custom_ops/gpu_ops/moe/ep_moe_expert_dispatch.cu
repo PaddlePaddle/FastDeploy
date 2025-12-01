@@ -58,6 +58,11 @@
       __VA_ARGS__                                                              \
       break;                                                                   \
     }                                                                          \
+    case 20: {                                                                 \
+      constexpr size_t NUM_EXPERTS_PER_RANK = 20;                              \
+      __VA_ARGS__                                                              \
+      break;                                                                   \
+    }                                                                          \
     case 32: {                                                                 \
       constexpr size_t NUM_EXPERTS_PER_RANK = 32;                              \
       __VA_ARGS__                                                              \
