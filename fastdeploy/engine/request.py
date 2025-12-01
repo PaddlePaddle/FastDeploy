@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 import traceback
 from dataclasses import asdict, dataclass, fields
@@ -23,11 +24,17 @@ from enum import Enum
 from typing import Any, Dict, Generic, Optional, Union
 
 import numpy as np
+from pydantic import BaseModel
 from typing_extensions import TypeVar
 
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
-from fastdeploy.entrypoints.openai.protocol import AnyResponseFormat, ToolCall
+from fastdeploy.entrypoints.openai.protocol import (
+    ChatCompletionRequest,
+    CompletionRequest,
+    StructuralTagResponseFormat,
+    ToolCall,
+)
 from fastdeploy.utils import data_processor_logger
 from fastdeploy.worker.output import (
     LogprobsLists,
@@ -105,36 +112,15 @@ class Request:
         # for internal adapter
         ic_req_data: Optional[dict] = (None,),
         # from ChatCompletionRequest or CompletionRequest
-        n: Optional[int] = 1,
-        logprobs: Optional[Union[int, bool]] = None,
         top_logprobs: Optional[int] = 0,
-        top_p_normalized_logprobs: bool = False,
-        temp_scaled_logprobs: bool = False,
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
-        top_p: Optional[float] = None,
         user: Optional[str] = None,
-        stop: Optional[Union[str, list[str]]] = [],
-        stop_token_ids: Optional[list[int]] = [],
-        stop_seqs_len: Optional[list[int]] = [],
-        top_k: Optional[int] = None,
-        min_p: Optional[float] = None,
-        min_tokens: Optional[int] = None,
-        bad_words: Optional[list[str]] = None,
-        bad_words_token_ids: Optional[list[int]] = None,
         metadata: Optional[dict] = None,
         completion_token_ids: Optional[list[int]] = None,
         chat_template_kwargs: Optional[dict] = None,
-        frequency_penalty: Optional[float] = None,
-        presence_penalty: Optional[float] = None,
-        repetition_penalty: Optional[float] = None,
         prompt_tokens: Optional[str] = None,
         add_generation_prompt: Optional[bool] = None,
-        seed: Optional[int] = None,
-        response_format: Optional[AnyResponseFormat] = None,
-        logits_processors_args: Optional[Dict] = None,
+        response_format: Optional[dict] = None,
         mm_hashes: Optional[list] = None,
-        best_of: Optional[int] = None,
         suffix: Optional[dict] = None,
     ) -> None:
         self.request_id = request_id
@@ -214,37 +200,161 @@ class Request:
         self.error_code = None
 
         # from ChatCompletionRequest or CompletionRequest
-        self.n = n
-        self.logprobs = logprobs
         self.top_logprobs = top_logprobs
-        self.top_p_normalized_logprobs = top_p_normalized_logprobs
-        self.temp_scaled_logprobs = temp_scaled_logprobs
-        self.max_tokens = max_tokens
-        self.temperature = temperature
-        self.top_p = top_p
         self.user = user
-        self.stop = stop
-        self.stop_token_ids = stop_token_ids
-        self.stop_seqs_len = stop_seqs_len
-        self.top_k = top_k
-        self.min_p = min_p
-        self.min_tokens = min_tokens
-        self.bad_words = bad_words
-        self.bad_words_token_ids = bad_words_token_ids
         self.metadata = metadata
         self.completion_token_ids = completion_token_ids
         self.chat_template_kwargs = chat_template_kwargs
-        self.frequency_penalty = frequency_penalty
-        self.presence_penalty = presence_penalty
-        self.repetition_penalty = repetition_penalty
         self.prompt_tokens = prompt_tokens
         self.add_generation_prompt = add_generation_prompt
-        self.seed = seed
         self.response_format = response_format
-        self.logits_processors_args = logits_processors_args
         self.mm_hashes = mm_hashes
-        self.best_of = best_of
         self.suffix = suffix
+
+    @classmethod
+    def from_chat_completion_request(cls, r: ChatCompletionRequest, request_id=None):
+        max_tokens = r.max_completion_tokens or r.max_tokens
+        logprobs = r.top_logprobs if r.logprobs else r.logprobs
+        if request_id is not None:
+            r.request_id = request_id
+        sampling_params = SamplingParams(
+            n=r.n,
+            presence_penalty=r.presence_penalty,
+            frequency_penalty=r.frequency_penalty,
+            repetition_penalty=r.repetition_penalty,
+            temperature=r.temperature,
+            top_p=r.top_p,
+            top_k=r.top_k if r.top_k is not None else 0,
+            min_p=r.min_p if r.min_p is not None else 0.0,
+            seed=r.seed,
+            stop=r.stop,
+            stop_token_ids=r.stop_token_ids,
+            max_tokens=max_tokens,
+            reasoning_max_tokens=r.reasoning_max_tokens,
+            min_tokens=r.min_tokens if r.min_tokens is not None else 1,
+            logprobs=logprobs,
+            temp_scaled_logprobs=r.temp_scaled_logprobs,
+            top_p_normalized_logprobs=r.top_p_normalized_logprobs,
+            bad_words=r.bad_words,
+            bad_words_token_ids=r.bad_words_token_ids,
+            logits_processors_args=r.logits_processors_args,
+        )
+        if not r.prompt_token_ids:
+            # If disable_chat_template is set, then the first message in messages will be used as the prompt.
+            assert len(r.messages) > 0, "messages can not be an empty list, unless prompt_token_ids is passed"
+            if r.disable_chat_template:
+                r.prompt = r.messages[0]["content"]
+                r.messages = []
+        guided_json_object = None
+        if r.response_format is not None:
+            if r.response_format.type == "json_object":
+                guided_json_object = True
+            elif r.response_format.type == "json_schema":
+                json_schema = r.response_format.json_schema.json_schema
+                assert json_schema is not None, "response_format.json_schema can not be None"
+                if isinstance(json_schema, (BaseModel, type(BaseModel))):
+                    r.guided_json = json_schema.model_json_schema()
+                else:
+                    r.guided_json = json_schema
+            elif r.response_format.type == "structural_tag":
+                structural_tag = r.response_format
+                assert structural_tag is not None and isinstance(structural_tag, StructuralTagResponseFormat)
+                r.structural_tag = json.dumps(structural_tag.model_dump(by_alias=True))
+        if guided_json_object:
+            r.guided_json_object = guided_json_object
+        request = cls(
+            request_id=r.request_id,
+            messages=r.messages,
+            tools=r.tools.model_dump() if r.tools else None,
+            sampling_params=sampling_params,
+            reasoning_max_tokens=r.reasoning_max_tokens,
+            disable_chat_template=r.disable_chat_template,
+            structural_tag=r.structural_tag,
+            chat_template=r.chat_template,
+            prompt_token_ids=r.prompt_token_ids,
+            disaggregate_info=r.disaggregate_info,
+            guided_json=r.guided_json,
+            guided_choice=r.guided_choice,
+            guided_regex=r.guided_regex,
+            guided_grammar=r.guided_grammar,
+            top_logprobs=r.top_logprobs,
+            user=r.user,
+            metadata=r.metadata,
+            completion_token_ids=r.completion_token_ids,
+            chat_template_kwargs=r.chat_template_kwargs,
+            response_format=r.response_format.model_dump() if r.response_format else None,
+            mm_hashes=r.mm_hashes,
+        )
+        if r.metadata is not None:
+            assert (
+                "raw_request" not in r.metadata
+            ), "The parameter `raw_request` is not supported now, please use completion api instead."
+            for key, value in r.metadata.items():
+                setattr(request, key, value)
+            from fastdeploy.utils import api_server_logger
+
+            api_server_logger.warning("The parameter metadata is obsolete.")
+        return request
+
+    @classmethod
+    def from_completion_request(cls, r: CompletionRequest, request_id=None, prompt=None):
+        if request_id is not None:
+            r.request_id = request_id
+        if prompt is not None:
+            r.prompt = prompt
+        sampling_params = SamplingParams(
+            n=r.n,
+            best_of=r.best_of,
+            presence_penalty=r.presence_penalty,
+            frequency_penalty=r.frequency_penalty,
+            repetition_penalty=r.repetition_penalty,
+            temperature=r.temperature,
+            top_p=r.top_p,
+            top_k=r.top_k if r.top_k is not None else 0,
+            min_p=r.min_p if r.min_p is not None else 0.0,
+            seed=r.seed,
+            stop=r.stop,
+            stop_token_ids=r.stop_token_ids,
+            max_tokens=r.max_tokens,
+            min_tokens=r.min_tokens if r.min_tokens is not None else 1,
+            logprobs=r.logprobs,
+            temp_scaled_logprobs=r.temp_scaled_logprobs,
+            top_p_normalized_logprobs=r.top_p_normalized_logprobs,
+            bad_words=r.bad_words,
+            bad_words_token_ids=r.bad_words_token_ids,
+            logits_processors_args=r.logits_processors_args,
+        )
+        guided_json_object = None
+        if r.response_format is not None:
+            if r.response_format.type == "json_object":
+                guided_json_object = True
+            elif r.response_format.type == "json_schema":
+                json_schema = r.response_format.json_schema.json_schema
+                assert json_schema is not None, "response_format.json_schema can not be None"
+                if isinstance(json_schema, (BaseModel, type(BaseModel))):
+                    r.guided_json = json_schema.model_json_schema()
+                else:
+                    r.guided_json = json_schema
+        if guided_json_object:
+            r.guided_json_object = guided_json_object
+        request = Request(
+            request_id=r.request_id,
+            prompt_token_ids=r.prompt_token_ids,
+            prompt=r.prompt,
+            sampling_params=sampling_params,
+            disaggregate_info=r.disaggregate_info,
+            guided_json=r.guided_json,
+            guided_regex=r.guided_regex,
+            guided_choice=r.guided_choice,
+            guided_grammar=r.guided_grammar,
+            user=r.user,
+            response_format=r.response_format.model_dump() if r.response_format else None,
+            mm_hashes=r.mm_hashes,
+        )
+        if r.suffix is not None:
+            for key, value in r.suffix.items():
+                setattr(request, key, value)
+        return request
 
     @classmethod
     def from_dict(cls, d: dict):
