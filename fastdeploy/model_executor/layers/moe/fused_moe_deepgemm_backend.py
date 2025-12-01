@@ -138,7 +138,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         """
         Apply the EP prefill method.
         """
-        deep_gemm.set_num_sms(118)
+
         gate_out = gate(x.cast("float32"))
         gate_out = paddle.randn([x.shape[0], layer.num_experts], dtype="float32")
 
