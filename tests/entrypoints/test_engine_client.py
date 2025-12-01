@@ -242,33 +242,6 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(prompts["max_tokens"], self.engine_client.max_model_len - 1)
 
-    async def test_check_mm_disable_prefix_cache_with_disabled_cache(self):
-        """Test _check_mm_disable_prefix_cache when prefix cache is disabled."""
-        self.engine_client.disable_prefix_mm = False
-        task = {"multimodal_inputs": {"token_type_ids": [1, 2, 3]}}
-
-        result = self.engine_client._check_mm_disable_prefix_cache(task)
-
-        self.assertFalse(result)
-
-    async def test_check_mm_disable_prefix_cache_with_no_multimodal_data(self):
-        """Test _check_mm_disable_prefix_cache with no multimodal inputs."""
-        self.engine_client.disable_prefix_mm = True
-        task = {"multimodal_inputs": []}
-
-        result = self.engine_client._check_mm_disable_prefix_cache(task)
-
-        self.assertFalse(result)
-
-    async def test_check_mm_disable_prefix_cache_with_multimodal_data(self):
-        """Test _check_mm_disable_prefix_cache detects multimodal data."""
-        self.engine_client.disable_prefix_mm = True
-        task = {"multimodal_inputs": {"token_type_ids": [1, 0, 2]}}
-
-        result = self.engine_client._check_mm_disable_prefix_cache(task)
-
-        self.assertTrue(result)
-
     async def test_add_requests_successful_processing(self):
         """Test successful request processing in add_requests."""
         task = {
@@ -660,7 +633,6 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
             patch("fastdeploy.entrypoints.engine_client.IPCSignal") as mock_ipcsignal,
             patch("fastdeploy.entrypoints.engine_client.envs") as mock_envs,
             patch("os.getenv", return_value="50"),
-            patch("fastdeploy.cache_manager.cache_data.is_mm_model_disable_prefix_cache", return_value=True),
         ):
             mock_platform.is_iluvatar.return_value = False
             mock_input_processor = Mock()
@@ -1320,15 +1292,6 @@ class TestEngineClient(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertTrue(client.is_master)  # With 1 tensor_parallel_size, should be master even on Iluvatar
-
-    def test_check_mm_disable_prefix_cache_without_multimodal_data(self):
-        """Test _check_mm_disable_prefix_cache without multimodal data."""
-        self.engine_client.disable_prefix_mm = True
-
-        task = {"multimodal_inputs": {"token_type_ids": [0, 0, 0]}}  # Sum = 0
-
-        result = self.engine_client._check_mm_disable_prefix_cache(task)
-        self.assertFalse(result)
 
     async def test_add_requests_multimodal_prefix_cache_error(self):
         """Test add_requests with multimodal data when prefix cache is enabled."""

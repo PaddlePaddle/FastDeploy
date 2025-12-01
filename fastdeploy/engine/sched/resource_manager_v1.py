@@ -485,9 +485,9 @@ class ResourceManagerV1(ResourceManager):
                 request.image_start = np.sum(np.prod(grid_thw[: request.num_image_start], axis=1))
                 request.image_end = np.sum(np.prod(grid_thw[: request.num_image_end], axis=1))
 
-                cur_mm_hashes = inputs["mm_hashes"][request.num_image_start : request.num_image_end]
-                cur_mm_positions = inputs["mm_positions"][request.num_image_start : request.num_image_end]
                 if self.encoder_cache:
+                    cur_mm_hashes = inputs["mm_hashes"][request.num_image_start : request.num_image_end]
+                    cur_mm_positions = inputs["mm_positions"][request.num_image_start : request.num_image_end]
                     request.evict_mm_hashes = self.encoder_cache.apply_cache(cur_mm_hashes, cur_mm_positions)
 
         # Compatible with scenarios without images and videos.
@@ -648,9 +648,7 @@ class ResourceManagerV1(ResourceManager):
                         break
 
                     request = self.waiting[0]
-                    if (self._is_mm_request(request) and self.exist_mm_prefill(scheduled_reqs)) or (
-                        paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)
-                    ):
+                    if paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs):
                         break
                     if request.status == RequestStatus.WAITING:
                         result = self._waiting_async_process(request)
