@@ -27,23 +27,39 @@ from fastdeploy.utils import data_processor_logger
 class BaseEncodeRequest(BaseModel):
     version: str
     req_id: str
-    is_gen: bool
-    resolution: int
 
 
 class ImageEncodeRequest(BaseEncodeRequest):
     image_url: Union[str, HttpUrl]
+    is_gen: bool
+    resolution: int
 
 
 class VideoEncodeRequest(BaseEncodeRequest):
     video_url: Union[str, HttpUrl]
+    is_gen: bool
+    resolution: int
     start_ts: int
     end_ts: int
     frames: int
     vit_merge: bool
 
 
+class AudioEncodeRequest(BaseEncodeRequest):
+    audio_url: Union[str, HttpUrl]
+    is_add_spk_emb: bool
+    is_pad_aug: bool
+    is_aug: bool
+    audio_start: Optional[float]
+    audio_dur: Optional[float]
+
+
 class ImageDecodeRequest(BaseModel):
+    req_id: str
+    data: list[Any]
+
+
+class AudioDecodeRequest(BaseModel):
     req_id: str
     data: list[Any]
 
@@ -74,8 +90,14 @@ class AsyncTokenizerClient:
     async def encode_video(self, request: VideoEncodeRequest):
         return await self._async_encode_request("video", request.__dict__)
 
+    async def encode_audio(self, request: AudioEncodeRequest):
+        return await self._async_encode_request("audio", request.__dict__)
+
     async def decode_image(self, request: ImageDecodeRequest):
         return await self._async_decode_request("image", request.__dict__)
+
+    async def decode_audio(self, request: AudioDecodeRequest):
+        return await self._async_decode_request("audio", request.__dict__)
 
     async def log_request(self, request):
         data_processor_logger.debug(f">>> Request: {request.method} {request.url}")
@@ -101,6 +123,8 @@ class AsyncTokenizerClient:
                     url = f"{self.base_url}/image/encode"
                 elif type == "video":
                     url = f"{self.base_url}/video/encode"
+                elif type == "audio":
+                    url = f"{self.base_url}/audio/encode"
                 else:
                     raise ValueError("Invalid type")
 
@@ -110,6 +134,7 @@ class AsyncTokenizerClient:
                 raise RuntimeError(f"Failed to create tokenize task: {e}") from e
 
             task_info = resp.json()
+
             if task_info.get("code") != 0:
                 raise RuntimeError(f"Tokenize task creation failed, {task_info.get('message')}")
 
@@ -154,6 +179,8 @@ class AsyncTokenizerClient:
                 url = None
                 if type == "image":
                     url = f"{self.base_url}/image/decode"
+                elif type == "audio":
+                    url = f"{self.base_url}/audio/decode"
                 else:
                     raise ValueError("Invalid type")
 
