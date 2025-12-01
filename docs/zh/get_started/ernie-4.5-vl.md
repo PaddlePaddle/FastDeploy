@@ -69,7 +69,7 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
   ]
 }'
 ```
-
+\
 输入包含图片时，按如下命令发起请求
 
 ```shell
@@ -84,7 +84,15 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
   ]
 }'
 ```
-
+图片url字段同样支持传入base64编码字符串:
+```shell
+{"type":"image_url", "image_url": {"url":"data:image/jpg;base64,this/is/an/example"}
+```
+或本地文件的绝对路径:
+```shell
+{"type":"image_url", "image_url": {"url":"file:///this/is/an/example"}
+```
+\
 输入包含视频时，按如下命令发起请求
 
 ```shell
@@ -99,7 +107,15 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
   ]
 }'
 ```
-
+视频url字段同样支持传入base64编码字符串:
+```shell
+{"type":"video_url", "video_url": {"url":"data:video/mp4;base64,this/is/an/example"}
+```
+或本地文件的绝对路径:
+```shell
+{"type":"video_url", "video_url": {"url":"file:///this/is/an/example"}
+```
+\
 当前ERNIE-4.5-VL模型支持思考模式且默认开启，按如下命令可关闭思考模式
 
 ```shell

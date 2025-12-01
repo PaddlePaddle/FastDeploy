@@ -18,7 +18,6 @@ import paddle
 from paddle import nn
 
 import fastdeploy
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch, moe_expert_reduce
 from fastdeploy.utils import ceil_div
 
@@ -316,9 +315,6 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
             routed_scaling_factor=1.0,
         )
 
-        if layer.tp_size > 1:
-            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out)
-
         return fused_moe_out
 
 
@@ -485,8 +481,5 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
         )
 
         fused_moe_out = paddle.sum(intermediate_cache3, axis=1)
-
-        if layer.tp_size > 1:
-            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out)
 
         return fused_moe_out
