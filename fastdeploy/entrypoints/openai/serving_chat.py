@@ -39,7 +39,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     UsageInfo,
 )
 from fastdeploy.entrypoints.openai.response_processors import ChatResponseProcessor
-from fastdeploy.metrics.work_metrics import work_process_metrics
+from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import (
@@ -382,7 +382,7 @@ class OpenAIServingChat:
                     )
                     if res["finished"]:
                         num_choices -= 1
-                        work_process_metrics.e2e_request_latency.observe(
+                        main_process_metrics.e2e_request_latency.observe(
                             time.time() - res["metrics"]["request_start_time"]
                         )
                         if previous_num_tokens[idx] != max_tokens:
@@ -571,6 +571,7 @@ class OpenAIServingChat:
                             num_input_video_tokens=num_input_video_tokens,
                             num_image_tokens=num_image_tokens,
                             logprob_contents=logprob_contents,
+                            draft_logprob_contents=draft_logprob_contents,
                             response_processor=response_processor,
                             max_tokens=max_tokens,
                         )
@@ -622,6 +623,7 @@ class OpenAIServingChat:
         num_input_video_tokens: list,
         num_image_tokens: list,
         logprob_contents: list,
+        draft_logprob_contents: list,
         response_processor: ChatResponseProcessor,
         max_tokens: int,
     ) -> ChatCompletionResponseChoice:
@@ -629,7 +631,7 @@ class OpenAIServingChat:
         output = data["outputs"]
 
         if output is not None and output.get("metrics") and output["metrics"].get("request_start_time"):
-            work_process_metrics.e2e_request_latency.observe(
+            main_process_metrics.e2e_request_latency.observe(
                 time.time() - data.get("metrics").get("request_start_time")
             )
         message = ChatMessage(
@@ -649,6 +651,9 @@ class OpenAIServingChat:
         logprobs_full_res = None
         if logprob_contents[idx]:
             logprobs_full_res = LogProbs(content=logprob_contents[idx])
+        draft_logprobs_full_res = None
+        if draft_logprob_contents[idx]:
+            draft_logprobs_full_res = LogProbs(content=draft_logprob_contents[idx])
 
         num_cached_tokens[idx] = data.get("num_cached_tokens", 0)
         num_input_image_tokens[idx] = data.get("num_input_image_tokens", 0)
@@ -669,6 +674,7 @@ class OpenAIServingChat:
             index=idx,
             message=message,
             logprobs=logprobs_full_res,
+            draft_logprobs=draft_logprobs_full_res,
             finish_reason=finish_reason,
         )
 
