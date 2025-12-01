@@ -125,6 +125,8 @@ class SplitwiseConnector:
             sock.setsockopt(zmq.SNDHWM, 1000)
             sock.setsockopt(zmq.RECONNECT_IVL, 1000)
             sock.setsockopt(zmq.RECONNECT_IVL_MAX, 5000)
+            if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                sock.setsockopt(zmq.IMMEDIATE, 1)
 
             sock.setsockopt(zmq.TCP_KEEPALIVE, 1)
             sock.setsockopt(zmq.TCP_KEEPALIVE_IDLE, 60)
@@ -143,29 +145,34 @@ class SplitwiseConnector:
     def _send_message(self, addr, msg_type: str, payload):
         if not addr:
             return
-
+        is_successful = True
         try:
             self.logger.info(f"Sent {msg_type} to {addr}")
             message = self._serialize_message(msg_type, payload)
 
             try:
-
                 sock = self._get_push_socket(addr)
-                sock.send_multipart([b"", message])
+                if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                    sock.send_multipart([b"", message], flags=zmq.NOBLOCK)
+                else:
+                    sock.send_multipart([b"", message])
 
                 self.logger.info(f"Sent {msg_type} to {addr}")
 
             except ConnectionError:
                 self.logger.warning(f"Connection to {addr} not established")
+                is_successful = False
             except zmq.Again:
                 self.logger.warning(f"Send queue full for {addr}")
+                is_successful = False
             except Exception as e:
                 self.logger.error(f"Send to {addr} failed: {e}, {str(traceback.format_exc())}")
                 main_process_metrics.inc_value("send_cache_failed_num")
+                is_successful = False
                 self._close_connection(addr)
-
         except Exception as e:
             self.logger.error(f"Message preparation failed: {e}")
+        return is_successful
 
     def _close_connection(self, addr):
         """
@@ -255,6 +262,7 @@ class SplitwiseConnector:
             return
         addr = None
         decode_diagg = None
+        splitwise_task_send_status = {}
         for task in tasks:
             if task.disaggregate_info is None:
                 continue
@@ -276,9 +284,11 @@ class SplitwiseConnector:
                 task.disaggregate_info["cache_info"] = self.cfg.disaggregate_info["cache_info"]
                 task.disaggregate_info["cache_info"]["rdma"]["current_id"] = current_id
                 task.disaggregate_info["role"] = "decode"
-                self._send_message(addr, "prefill", [task])
+                is_successful = self._send_message(addr, "prefill", [task])
+                splitwise_task_send_status[task.request_id] = is_successful
                 task.disaggregate_info["cache_info"] = decode_diagg
             task.disaggregate_info["role"] = "prefill"
+        return splitwise_task_send_status
 
     def send_splitwise_tasks_innode(self, tasks, port):
         """
@@ -309,6 +319,7 @@ class SplitwiseConnector:
         """
         send first token to specific port
         """
+        is_successful = True
         if not isinstance(tasks_list, list):
             tasks_list = [tasks_list]
         self.logger.info("send first token to port decode")
@@ -320,7 +331,8 @@ class SplitwiseConnector:
         else:
             node = f"{prefill_msg['cache_info']['rdma']['ip']}:{prefill_msg['cache_info']['rdma']['port']}"
             self.logger.info(f"send first token to port {node} decode")
-            self._send_message(node, "decode", tasks_list)
+            is_successful = self._send_message(node, "decode", tasks_list)
+        return is_successful
 
     def create_connection(self, port):
         """
@@ -345,7 +357,7 @@ class SplitwiseConnector:
             return True, ""
         while self.current_request_ids[task.request_id] == "init":
             time.sleep(0.001)
-            if time.time() - start_time > 30:
+            if time.time() - start_time > envs.FD_GET_RESPONSE_FROM_D_TIMEOUT:
                 del self.current_request_ids[task.request_id]
                 return False, "timeout"
         msg = self.current_request_ids[task.request_id]
@@ -368,6 +380,7 @@ class SplitwiseConnector:
         """
         is_decode = False
         temp_cache_info = dict()
+        is_successful = True
         for i in range(len(tasks)):
             if tasks[i].disaggregate_info is None:
                 continue
@@ -438,13 +451,13 @@ class SplitwiseConnector:
                 for k, v in temp_cache_info.items():
                     self.logger.info(f"{k} {v}")
                     if ":" in str(k):
-                        self._send_message(k, "cache_sync", v)
+                        is_successful = self._send_message(k, "cache_sync", v)
                     else:
                         if k not in self.connect_innode_instances:
                             self.create_connection(k)
                         self.connect_innode_instances[k].put_cache_info(v)
 
-        return is_decode
+        return is_successful
 
     def _serialize_message(self, msg_type: str, payload) -> bytes:
         # TODO 压缩

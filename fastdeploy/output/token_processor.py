@@ -179,12 +179,12 @@ class TokenProcessor:
                 llm_logger.info(
                     f"Request: {task_id} token ratio: {self.tokens_counter[task_id] / (time.time() - task.inference_start_time)}"
                 )
-                llm_logger.info(f"{self.resource_manager.info()}")
                 if self.cfg.speculative_config.method:
                     self._compute_speculative_status()
                 if not is_prefill:
                     self._record_completion_metrics(task, current_time)
                 self._recycle_resources(task_id, batch_id, task, result, is_prefill)
+                llm_logger.info(f"{self.resource_manager.info()}")
                 break
         return result
 
@@ -581,12 +581,12 @@ class TokenProcessor:
                     llm_logger.info(
                         f"Request: {task_id} token ratio: {self.tokens_counter[task_id] / (time.time() - task.inference_start_time)}"
                     )
-                    llm_logger.info(f"{self.resource_manager.info()}")
                     if self.cfg.speculative_config.method:
                         self._compute_speculative_status()
                     if not is_prefill:
                         self._record_completion_metrics(task, current_time)
                     self._recycle_resources(task_id, i, task, result, is_prefill)
+                    llm_logger.info(f"{self.resource_manager.info()}")
                     break
             if (
                 not is_prefill
