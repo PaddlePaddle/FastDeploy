@@ -15,22 +15,43 @@
 """
 
 import unittest
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from fastdeploy.entrypoints.engine_client import EngineClient
 
 
+class DummyConfig(SimpleNamespace):
+    def __getattr__(self, name):
+        return None
+
+
 class TestEngineClient(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        # 创建 EngineClient 实例的模拟对象
-        with patch.object(EngineClient, "__init__", return_value=None) as mock_init:
-            self.engine_client = EngineClient("model_path")
-            mock_init.side_effect = lambda *args, **kwargs: print(f"__init__ called with {args}, {kwargs}")
 
-        self.engine_client.data_processor = MagicMock()
-        self.engine_client.zmq_client = MagicMock()
-        self.engine_client.max_model_len = 1024
-        self.engine_client.enable_mm = False
+        with (
+            patch("fastdeploy.entrypoints.engine_client.IPCSignal"),
+            patch("fastdeploy.entrypoints.engine_client.DealerConnectionManager"),
+            patch("fastdeploy.entrypoints.engine_client.InputPreprocessor"),
+            patch("fastdeploy.entrypoints.engine_client.FileLock"),
+            patch("fastdeploy.entrypoints.engine_client.StatefulSemaphore"),
+        ):
+            self.engine_config = DummyConfig(
+                model_config=DummyConfig(enable_mm=True, enable_logprob=True, max_model_len=1024),
+                cache_config=DummyConfig(enable_prefix_caching=True, max_processor_cache=10),
+                scheduler_config=DummyConfig(splitwise_role="mixed", max_num_seqs=128),
+                parallel_config=DummyConfig(tensor_parallel_size=1),
+                structured_outputs_config=DummyConfig(reasoning_parser="reasoning_parser"),
+                eplb_config=DummyConfig(enable_eplb=True, eplb_max_tokens=1024),
+            )
+            self.engine_client = EngineClient(pid=10000, port=1234, fd_config=self.engine_config)
+            self.engine_client.zmq_client = MagicMock()
+
+    def test_engine_client_initialized_by_fd_config(self):
+        for config_group_name, config_group in self.engine_config.__dict__.items():
+            for config_name, config_value in config_group.__dict__.items():
+                if hasattr(self.engine_client, config_name):
+                    assert getattr(self.engine_client, config_name) == config_value
 
     async def test_add_request(self):
         request = {

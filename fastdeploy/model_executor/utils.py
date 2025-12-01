@@ -131,16 +131,24 @@ def slice_fn(weight_or_paramter, output_dim, start, end, step=1):
 def process_weight_transpose(layer, weight_name):
     weight = getattr(layer, weight_name)
     if len(weight.shape) == 2:
-        weight_transpose = weight.transpose([1, 0])
+        weight_shape = weight.shape[::-1]
     elif len(weight.shape) == 3:
-        weight_transpose = weight.transpose([0, 2, 1])
-
+        weight_shape = [weight.shape[0]] + list(weight.shape[1:][::-1])
     weight_tmp = layer.create_parameter(
-        shape=weight_transpose.shape,
-        dtype=weight_transpose.dtype,
+        shape=weight_shape,
+        dtype=weight.dtype,
         default_initializer=paddle.nn.initializer.Constant(0),
         is_bias=False,
     )
+    if layer.fd_config.load_config.dynamic_load_weight or layer.fd_config.model_config.enable_cache:
+        free_tensor(weight)
+        setattr(layer, weight_name, weight_tmp)
+        return
+
+    if len(weight.shape) == 2:
+        weight_transpose = weight.transpose([1, 0])
+    elif len(weight.shape) == 3:
+        weight_transpose = weight.transpose([0, 2, 1])
     weight_tmp.copy_(weight_transpose, False)
     free_tensor(weight)
     setattr(layer, weight_name, weight_tmp)
@@ -163,9 +171,16 @@ def process_weights_after_loading(sublayers_dict: dict, fd_config: FDConfig):
         model_sublayer = sublayers_dict[model_sublayer_name]
         if isinstance(model_sublayer, KVBatchLinear):
             model_sublayer.process_weights_after_loading()
+        if fd_config.quant_config and not fd_config.quant_config.is_checkpoint_bf16:
+            # skip for offline quantization
+            return
         if hasattr(model_sublayer, "quant_method"):
             quant_method = getattr(model_sublayer, "quant_method", None)
-            unquant_moe_cls = type(get_moe_method())
+            unquant_moe_layer = get_moe_method()
+            if unquant_moe_layer is None:
+                unquant_moe_cls = object
+            else:
+                unquant_moe_cls = type(unquant_moe_layer)
             if type(quant_method) is UnquantizedLinearMethod or type(quant_method) is unquant_moe_cls:
                 # skip unquantized linear
                 return
@@ -225,18 +240,23 @@ def process_final_after_loading(model, fd_config: FDConfig):
     from fastdeploy.model_executor.layers.moe.moe import get_moe_method
 
     for name, sublayer in model.named_sublayers():
-        quant_method = getattr(sublayer, "quant_method", None)
-        if quant_method is not None:
-            unquant_moe_cls = type(get_moe_method())
-            if not (type(quant_method) is UnquantizedLinearMethod or type(quant_method) is unquant_moe_cls):
-                continue
-            if hasattr(quant_method, "process_weights_after_loading"):
-                quant_method.process_weights_after_loading(sublayer)
         if isinstance(sublayer, KVBatchLinear):
             continue
+        quant_method = getattr(sublayer, "quant_method", None)
+        if quant_method is not None:
+            unquant_moe_layer = get_moe_method()
+            if unquant_moe_layer is None:
+                unquant_moe_cls = object
+            else:
+                unquant_moe_cls = type(unquant_moe_layer)
+            is_unquant_cls = type(quant_method) is UnquantizedLinearMethod or type(quant_method) is unquant_moe_cls
+            is_offline_quantized_ckpt = not (fd_config.quant_config and fd_config.quant_config.is_checkpoint_bf16)
+            if is_unquant_cls or is_offline_quantized_ckpt:
+                if hasattr(quant_method, "process_weights_after_loading"):
+                    quant_method.process_weights_after_loading(sublayer)
+                continue
         if not hasattr(sublayer, "process_weights_after_loading"):
             continue
-        # Only for specific layers, such as lmhead
         sublayer.process_weights_after_loading()
 
 
@@ -261,7 +281,6 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
 
     def fn(param, loaded_weight, shard_id: Optional[Union[int, str]] = None):
         """fn"""
-
         output_dim = getattr(param, "output_dim", None)
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
         if weight_need_transpose:
@@ -278,6 +297,10 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
             shard_size = (fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, output_dim, shard_offset, shard_size)
 
+        tp_row_bias = getattr(param, "tp_row_bias", None)
+        if tp_row_bias:
+            loaded_weight = loaded_weight / fd_config.parallel_config.tensor_parallel_size
+
         # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
         loaded_weight = fd_cast(loaded_weight, param)
         if param.shape != loaded_weight.shape:
@@ -286,7 +309,8 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
-        h2d_copy(dst=param, src=loaded_weight)
+        loaded_weight = get_tensor(loaded_weight)
+        param.copy_(loaded_weight, False)
 
     return fn
 
@@ -345,8 +369,9 @@ def h2d_copy(dst, src, blocking=True):
     if not current_platform.is_cuda() or not is_paddle_support_new_h2d():
         # For non-GPU devices, data is transferred to device (H2D) in advance.
         src = get_tensor(src)
-    if not dst._is_initialized():
-        dst.initialize()
+    if len(src.shape) == 1:
+        # TODO (bukejiyu):A recently merged Paddle PR introduced a hang when copying 1-D non-contiguous tensors. This approach serves as a temporary workaround.
+        src = get_tensor(src)
     dst.copy_(src, blocking)
 
 

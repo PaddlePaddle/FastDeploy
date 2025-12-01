@@ -17,6 +17,7 @@
 import os
 import queue
 import time
+from concurrent.futures import Future
 from threading import Thread
 from typing import List, Optional, cast
 
@@ -287,7 +288,7 @@ class GPUModelRunner(ModelRunnerBase):
         else:
             self.proposer = None
 
-    def _init_logits_processor(self, request):
+    def _init_logits_processor(self, request) -> tuple[Future[LogitsProcessorBase],]:
         """
         init logits processor for guided decoding
         """
@@ -307,7 +308,7 @@ class GPUModelRunner(ModelRunnerBase):
         return (
             self.guided_backend.get_logits_processor(
                 schemata_key=schemata_key,
-                enable_thinking=True,
+                enable_thinking=False,  # TODO cfg
             ),
             schemata_key,
         )
@@ -520,7 +521,28 @@ class GPUModelRunner(ModelRunnerBase):
             if hasattr(request, "pooling_params") and request.pooling_params is not None:
                 batch_pooling_params.append(request.pooling_params)
 
+            logits_info = None
+            prefill_tokens = []
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
+                # guided decoding
+                if (
+                    request.guided_json is not None
+                    or request.guided_regex is not None
+                    or request.structural_tag is not None
+                    or request.guided_grammar is not None
+                ):
+                    logits_info, schemata_key = self._init_logits_processor(request)
+                    request.schemata_key = schemata_key
+
+                    if self.scheduler_config.splitwise_role == "decode":
+                        if (
+                            hasattr(request, "prefill_end_index")
+                            and hasattr(request, "prompt_token_ids")
+                            and request.prefill_end_index > len(request.prompt_token_ids)
+                        ):
+                            if hasattr(request, "output_token_ids"):
+                                prefill_tokens.extend(request.output_token_ids)
+
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
@@ -624,7 +646,6 @@ class GPUModelRunner(ModelRunnerBase):
             )
 
             self.share_inputs["first_token_ids"][idx : idx + 1] = self.share_inputs["input_ids"][idx : idx + 1, :1]
-            self.share_inputs["ori_seq_lens_encoder"][idx : idx + 1] = length
 
             if request.get("seed") is not None:
                 self.share_inputs["infer_seed"][idx : idx + 1] = request.get("seed")
@@ -674,6 +695,8 @@ class GPUModelRunner(ModelRunnerBase):
             # For logits processors
             self.share_inputs["logits_processors_args"][idx] = request.get("logits_processors_args") or {}
 
+            self.sampler.apply_logits_processor(idx, logits_info, prefill_tokens)
+
         if len(multi_vision_inputs["images_lst"]) > 0:
             self.share_inputs["image_features"] = self.extract_vision_features(multi_vision_inputs)
 
@@ -714,6 +737,7 @@ class GPUModelRunner(ModelRunnerBase):
             length = len(request.prompt_token_ids)
             assert length > 0, "The prompt requested must not be empty."
 
+            logits_info = None
             prefill_tokens = []
             if (
                 request.guided_json is not None
@@ -722,7 +746,6 @@ class GPUModelRunner(ModelRunnerBase):
                 or request.guided_grammar is not None
             ):
                 logits_info, schemata_key = self._init_logits_processor(request)
-                request.logits_processor, request.logits_cached = logits_info
                 request.schemata_key = schemata_key
 
             # Is Decode Node
@@ -858,7 +881,6 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["stop_flags"][idx : idx + 1] = False
 
             self.share_inputs["first_token_ids"][idx : idx + 1] = self.share_inputs["input_ids"][idx : idx + 1, :1]
-            self.share_inputs["ori_seq_lens_encoder"][idx : idx + 1] = length
 
             if request.get("seed") is not None:
                 self.share_inputs["infer_seed"][idx : idx + 1] = request.get("seed")
@@ -909,7 +931,7 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
-            self.sampler.apply_logits_processor(idx, request.get("logits_processor"), prefill_tokens)
+            self.sampler.apply_logits_processor(idx, logits_info, prefill_tokens)
 
         self.share_inputs["not_need_stop"][0] = True
 
@@ -1028,7 +1050,6 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["stop_flags"][idx : idx + 1] = False
             self.share_inputs["temperature"][idx : idx + 1] = 1
             self.share_inputs["first_token_ids"][idx : idx + 1] = self.share_inputs["input_ids"][idx : idx + 1, :1]
-            self.share_inputs["ori_seq_lens_encoder"][idx : idx + 1] = input_length
 
             self.share_inputs["encoder_block_lens"][idx : idx + 1] = block_num
             self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
@@ -1112,7 +1133,6 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["used_list_len"] = paddle.full([max_num_seqs], 0, dtype="int32")
         self.share_inputs["infer_seed"] = paddle.full([max_num_seqs, 1], 0, dtype="int64").cpu()
         self.share_inputs["first_token_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
-        self.share_inputs["ori_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["system_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["system_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int32")
 
@@ -1267,7 +1287,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
-    def _prepare_inputs(self) -> None:
+    def _prepare_inputs(self, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
             recover_decode_task(
@@ -1305,6 +1325,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
         # NOTE: (changwenbin) Initialized to max_num_seq '-1' before copying, marking illegal positions
         self.share_inputs["batch_id_per_token"][:] = -1
+        self.share_inputs["batch_id_per_token"].copy_(batch_id_per_token, False)
         self.share_inputs["cu_seqlens_q"].copy_(cu_seqlens_q, False)
         self.share_inputs["cu_seqlens_k"].copy_(cu_seqlens_k, False)
 
@@ -1317,8 +1338,7 @@ class GPUModelRunner(ModelRunnerBase):
         max_bad_tokens_len = np.max(self.share_inputs["bad_tokens_len"].numpy())
 
         # Initialize forward meta data
-        self.initialize_forward_meta()
-        self.forward_meta.batch_id_per_token.copy_(batch_id_per_token, False)
+        self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
 
         # Get sampling metadata
         self.sampling_metadata = SamplingMetadata(
@@ -1372,7 +1392,7 @@ class GPUModelRunner(ModelRunnerBase):
         """Get current model"""
         return self.model
 
-    def initialize_forward_meta(self):
+    def initialize_forward_meta(self, is_dummy_or_profile_run=False):
         """
         Initialize forward meta and attention meta data
         """
@@ -1423,6 +1443,9 @@ class GPUModelRunner(ModelRunnerBase):
         self.forward_meta.step_use_cudagraph = (
             only_prefill_use_cudagraph if self.cudagraph_only_prefill else only_decode_use_cudagraph
         )
+
+        # Set forward_meta.is_dummy_or_profile_run to True to skip init_kv_signal_per_query for attention backends
+        self.forward_meta.is_dummy_or_profile_run = is_dummy_or_profile_run
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
@@ -1485,8 +1508,10 @@ class GPUModelRunner(ModelRunnerBase):
         for i in range(self.model_config.num_hidden_layers):
             # init key cache
             key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
+            key_cache_scales_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device}"
             if value_cache_shape:
                 val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
+                value_cache_scales_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device}"
             if create_cache_tensor:
                 logger.info(f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
                 key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_type)
@@ -1512,12 +1537,25 @@ class GPUModelRunner(ModelRunnerBase):
                 logger.info(f"..attaching kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache = share_external_data(key_cache, key_cache_name, key_cache_shape)
+                if kv_cache_quant_type == "block_wise_fp8":
+                    key_cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
+                    key_cache_scales = share_external_data(
+                        key_cache_scales, key_cache_scales_name, kv_cache_scale_shape
+                    )
                 if value_cache_shape:
                     val_cache = paddle.empty(shape=[], dtype=cache_type)
                     val_cache = share_external_data(val_cache, val_cache_name, value_cache_shape)
                     cache_kvs_list.extend([key_cache, val_cache])
+                    if kv_cache_quant_type == "block_wise_fp8":
+                        val_cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
+                        val_cache_scales = share_external_data(
+                            val_cache_scales, value_cache_scales_name, kv_cache_scale_shape
+                        )
+                        cache_kvs_list.extend([key_cache_scales, val_cache_scales])
                 else:
                     cache_kvs_list.extend([key_cache])
+                    if kv_cache_quant_type == "block_wise_fp8":
+                        cache_kvs_list.extend([key_cache_scales])
 
         self.share_inputs["caches"] = cache_kvs_list
 
@@ -1772,7 +1810,9 @@ class GPUModelRunner(ModelRunnerBase):
         if self.speculative_decoding:
             if self.speculative_method == "mtp":
                 self.proposer.run(
-                    full_hidden_states=model_output, step_use_cudagraph=self.forward_meta.step_use_cudagraph
+                    full_hidden_states=model_output,
+                    step_use_cudagraph=self.forward_meta.step_use_cudagraph,
+                    is_dummy_run=True,
                 )
             else:
                 self.proposer.run(share_inputs=self.share_inputs)
@@ -1781,8 +1821,8 @@ class GPUModelRunner(ModelRunnerBase):
 
     def _dummy_run(
         self,
-        num_tokens: paddle.Tensor,
-        batch_size: paddle.Tensor,
+        num_tokens: int,
+        batch_size: int,
         expected_decode_len: int = 1,
         in_capturing: bool = False,
         capture_prefill: bool = False,
@@ -1819,7 +1859,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         while True:
             # 1. Initialize forward meta and attention meta data
-            self._prepare_inputs()
+            self._prepare_inputs(is_dummy_or_profile_run=True)
 
             # 2. Padding inputs for cuda graph
             self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
@@ -1828,21 +1868,20 @@ class GPUModelRunner(ModelRunnerBase):
             # 3. Run model
             if self.enable_mm:
                 model_output = self.model(
-                    self.share_inputs["ids_remove_padding"],
+                    self.forward_meta.ids_remove_padding,
                     self.share_inputs["image_features"],
                     self.forward_meta,
                 )
             else:
                 model_output = self.model(
-                    ids_remove_padding=self.share_inputs["ids_remove_padding"],
-                    forward_meta=self.forward_meta,
+                    self.forward_meta.ids_remove_padding,
+                    self.forward_meta,
                 )
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
 
             if self.is_pooling_model:
-                hidden_states = model_output
-                self._dummy_pooler_run(hidden_states, model_output)
+                self._dummy_pooler_run(model_output, model_output)
                 break
             else:
                 hidden_states = rebuild_padding(
@@ -1967,7 +2006,12 @@ class GPUModelRunner(ModelRunnerBase):
                     else:
                         assert batch_size % 2 == 0
                         self._dummy_run(
-                            num_tokens=self.scheduler_config.max_num_batched_tokens,
+                            num_tokens=(
+                                self.scheduler_config.max_num_seqs
+                                * (self.speculative_config.num_speculative_tokens + 1)
+                                if self.scheduler_config.splitwise_role == "decode"
+                                else self.scheduler_config.max_num_batched_tokens
+                            ),
                             batch_size=int(batch_size / 2),
                             in_capturing=True,
                             expected_decode_len=1,
@@ -1984,7 +2028,11 @@ class GPUModelRunner(ModelRunnerBase):
                         else:
                             assert batch_size % 2 == 0
                             self._dummy_run(
-                                num_tokens=self.scheduler_config.max_num_batched_tokens,
+                                num_tokens=(
+                                    self.scheduler_config.max_num_seqs
+                                    if self.scheduler_config.splitwise_role == "decode"
+                                    else self.scheduler_config.max_num_batched_tokens
+                                ),
                                 batch_size=int(batch_size / 2),
                                 in_capturing=True,
                                 expected_decode_len=3,
@@ -1996,7 +2044,11 @@ class GPUModelRunner(ModelRunnerBase):
                     # Capture Draft Model with bsz 1
                     if 1 in capture_sizes:
                         self._dummy_run(
-                            num_tokens=self.scheduler_config.max_num_batched_tokens,
+                            num_tokens=(
+                                self.scheduler_config.max_num_seqs
+                                if self.scheduler_config.splitwise_role == "decode"
+                                else self.scheduler_config.max_num_batched_tokens
+                            ),
                             batch_size=int(1),
                             in_capturing=True,
                             expected_decode_len=3,
@@ -2009,7 +2061,11 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 for batch_size in sorted(capture_sizes, reverse=True):
                     self._dummy_run(
-                        num_tokens=self.scheduler_config.max_num_batched_tokens,
+                        num_tokens=(
+                            self.scheduler_config.max_num_seqs
+                            if self.scheduler_config.splitwise_role == "decode"
+                            else self.scheduler_config.max_num_batched_tokens
+                        ),
                         batch_size=batch_size,
                         in_capturing=True,
                         expected_decode_len=expected_decode_len,
@@ -2042,40 +2098,61 @@ class GPUModelRunner(ModelRunnerBase):
         start_time = time.perf_counter()
         for batch_size in self.sot_warmup_sizes:
             self._dummy_run(
-                num_tokens=self.scheduler_config.max_num_batched_tokens,
+                num_tokens=(
+                    self.scheduler_config.max_num_seqs
+                    if self.scheduler_config.splitwise_role == "decode"
+                    else self.scheduler_config.max_num_batched_tokens
+                ),
                 batch_size=batch_size,
             )
             logger.info(f"SOT warmup the model with the batch size:{batch_size}")
         logger.info(f"SOT warmup took {time.perf_counter() - start_time} seconds")
 
-    def _get_skip_idx(self, model_forward_batch: Optional[List[Request]] = None):
+    def _get_p_done_idxs_gd(self, model_forward_batch: Optional[List[Request]], num_running_requests: int):
         """
-        Get the index of the request that needs to be skipped during execution.
-        Args:
-            model_forward_batch: A list of requests to be executed by this runner.
-        Returns:
-            A list of indices corresponding to the requests that need to be skipped.
+        Get indices for guided decoding.
+        When Prefill is done, async compiled logits_processor must be joined.
         """
-        if (
-            not self.cache_config.enable_chunked_prefill
-            or self.guided_backend is None
-            or model_forward_batch is None
-            or envs.ENABLE_V1_KVCACHE_SCHEDULER
-        ):
+        if self.guided_backend is None:
             return []
 
-        skip_idx_list = []
-        for task in model_forward_batch:
-            if task.get("prefill_chunk_info", None) is None or task.chunk_idx >= len(task.prefill_chunk_info):
-                continue
-            skip_idx_list.append(task.idx)
+        prefill_done_idxs = []
+        for idx in range(0, num_running_requests):
+            if self.share_inputs["step_idx"][idx] == 0:
+                prefill_done_idxs.append(idx)
 
-        for task in self.restore_chunked_prefill_request.values():
-            if task.idx in skip_idx_list or task.chunk_idx >= len(task.prefill_chunk_info):
-                continue
-            skip_idx_list.append(task.idx)
+        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            if model_forward_batch is None:
+                return prefill_done_idxs
 
-        return skip_idx_list
+            for task in model_forward_batch:
+                if task.task_type.value != RequestType.PREFILL.value:
+                    continue
+                # in chunk prefill
+                if self.cache_config.enable_chunked_prefill:
+                    if hasattr(task, "prefill_end_index") and hasattr(task, "prompt_token_ids"):
+                        if len(task.prompt_token_ids) > task.prefill_end_index and task.idx in prefill_done_idxs:
+                            prefill_done_idxs.remove(task.idx)
+
+            return prefill_done_idxs
+
+        if self.cache_config.enable_chunked_prefill:
+            if model_forward_batch is not None:
+                for task in model_forward_batch:
+                    # new Request with ChunkPrefill, unfinished, store
+                    if task.chunk_idx < len(task.prefill_chunk_info):
+                        if task.request_id not in self.restore_chunked_prefill_request:
+                            self.restore_chunked_prefill_request[task.request_id] = task
+
+            for id, task in list(self.restore_chunked_prefill_request.items()):
+                # unfinished, remove
+                if task.chunk_idx < len(task.prefill_chunk_info) and task.idx in prefill_done_idxs:
+                    prefill_done_idxs.remove(task.idx)
+                # finished, add
+                if task.chunk_idx == len(task.prefill_chunk_info) and task.idx not in prefill_done_idxs:
+                    prefill_done_idxs.append(task.idx)
+
+        return prefill_done_idxs
 
     def execute_model(
         self,
@@ -2092,9 +2169,10 @@ class GPUModelRunner(ModelRunnerBase):
             num_running_requests: batch_size
         """
         # 1. Prepare inputs of model and sampler.
-        skip_idx_list = self._get_skip_idx(model_forward_batch)
+        p_done_idxs = self._get_p_done_idxs_gd(model_forward_batch, num_running_requests)
+
         self._prepare_inputs()
-        self.sampler.pre_process(skip_idx_list)
+        self.sampler.pre_process(p_done_idxs)
 
         # 1.1 Update state of logits processor
         for proc in self.sampling_metadata.logits_processors:
@@ -2113,14 +2191,14 @@ class GPUModelRunner(ModelRunnerBase):
         # 3. Execute model
         if self.enable_mm:
             model_output = self.model(
-                self.share_inputs["ids_remove_padding"],
+                self.forward_meta.ids_remove_padding,
                 self.share_inputs["image_features"],
                 self.forward_meta,
             )
         else:
             model_output = self.model(
-                ids_remove_padding=self.share_inputs["ids_remove_padding"],
-                forward_meta=self.forward_meta,
+                self.forward_meta.ids_remove_padding,
+                self.forward_meta,
             )
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
@@ -2128,8 +2206,7 @@ class GPUModelRunner(ModelRunnerBase):
         prompt_logprobs_list = self._get_prompt_logprobs_list(model_output)
 
         if self.is_pooling_model:
-            hidden_states = model_output
-            pooler_output = self._pool(hidden_states, num_running_requests)
+            pooler_output = self._pool(model_output, num_running_requests)
 
             model_output_data = ModelOutputData(
                 next_tokens=self.share_inputs["next_tokens"],
@@ -2202,7 +2279,7 @@ class GPUModelRunner(ModelRunnerBase):
                 sampler_output = self.sampler(
                     logits,
                     self.sampling_metadata,
-                    skip_idx_list,
+                    p_done_idxs,
                 )
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
@@ -2292,7 +2369,7 @@ class GPUModelRunner(ModelRunnerBase):
                 line_break_id=self.model_config.line_break_id,
             )
             if self.guided_backend is not None and sampler_output is not None:
-                self.sampler.post_process(sampler_output.sampled_token_ids, skip_idx_list)
+                self.sampler.post_process(sampler_output.sampled_token_ids)
 
             # 6. Speculative decode
             if self.speculative_decoding:
@@ -2316,7 +2393,6 @@ class GPUModelRunner(ModelRunnerBase):
                 )
 
                 self._update_chunked_prefill(model_forward_batch)
-                self._add_cache(model_forward_batch)
             elif self.speculative_decoding:
                 speculate_schedule_cache(
                     self.share_inputs["draft_tokens"],
@@ -2372,24 +2448,6 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         return pooler_output
-
-    def _add_cache(self, model_forward_batch) -> None:
-        """
-        Add cache for guided decoding.
-        """
-        if self.guided_backend is None or model_forward_batch is None:
-            return
-
-        for request in model_forward_batch:
-            logits_cached = request.get("logits_cached", None)
-            if logits_cached is None or logits_cached:
-                continue
-
-            request.logits_cached = True
-            if isinstance(request.logits_processor, LogitsProcessorBase):
-                self.guided_backend.add_cache(request.schemata_key, request.logits_processor)
-            else:
-                self.guided_backend.add_cache(request.schemata_key, request.logits_processor.result())
 
     def _execute_empty_input(self) -> None:
         """

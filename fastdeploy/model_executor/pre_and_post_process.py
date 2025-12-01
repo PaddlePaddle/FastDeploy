@@ -79,6 +79,7 @@ else:
         speculate_step_paddle,
         speculate_step_system_cache,
         speculate_update,
+        speculate_set_stop_value_multi_seqs,
         step_paddle,
         step_system_cache,
         update_inputs,
@@ -291,8 +292,7 @@ def _build_stream_transfer_data(
                 decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
             )
             if logprobs:
-                logprobs = logprobs.slice_rows(bid, bid + 1)
-                stream_transfer_data.logprobs = logprobs
+                stream_transfer_data.logprobs = logprobs.slice_rows(bid, bid + 1)
             if prompt_logprobs_list:
                 stream_transfer_data.prompt_logprobs = prompt_logprobs_list[bid]
             stream_transfer_datas.append(stream_transfer_data)
@@ -474,7 +474,17 @@ def post_process_specualate(
             think_end_id=think_end_id,
             line_break_id=line_break_id,
         )
-
+    speculate_set_stop_value_multi_seqs(
+        model_output.accept_tokens,
+        model_output.accept_num,
+        model_output.pre_ids,
+        model_output.step_idx,
+        model_output.stop_flags,
+        model_output.seq_lens_this_time,
+        model_output.stop_token_ids,
+        model_output.stop_seqs_len,
+        model_output.eos_token_id,
+    )
     speculate_update(
         model_output.seq_lens_encoder,
         model_output.seq_lens_decoder,
@@ -511,8 +521,11 @@ def post_process_specualate(
                 sampler_output.token_num_per_batch,
                 sampler_output.cu_batch_token_offset,
                 model_output.not_need_stop,
+                model_output.seq_lens_decoder,
+                model_output.prompt_lens,
                 3,  # mtype
                 model_output.mp_rank,
+                save_each_rank,
             )
 
     # Update pre_ids through accept tokens

@@ -13,26 +13,29 @@ __global__ void draft_model_preprocess(int64_t* draft_tokens,
                                        int* seq_lens_encoder,
                                        int* seq_lens_decoder,
                                        int64_t* step_idx,
-                                       int* seq_lens_encoder_record,
-                                       int* seq_lens_decoder_record,
                                        bool* not_need_stop,
+                                       bool* is_block_step,
                                        bool* batch_drop,
+                                       int64_t* pre_ids,
                                        const int64_t* accept_tokens,
                                        const int* accept_num,
+                                       const int* base_model_seq_lens_this_time,
                                        const int* base_model_seq_lens_encoder,
                                        const int* base_model_seq_lens_decoder,
                                        const int64_t* base_model_step_idx,
                                        const bool* base_model_stop_flags,
                                        const bool* base_model_is_block_step,
                                        int64_t* base_model_draft_tokens,
-                                       int real_bsz,
-                                       int max_draft_token,
-                                       int accept_tokens_len,
-                                       int draft_tokens_len,
-                                       int input_ids_len,
-                                       int base_model_draft_tokens_len,
-                                       bool truncate_first_token,
-                                       bool splitwise_prefill) {
+                                       const int bsz,
+                                       const int num_model_step,
+                                       const int accept_tokens_len,
+                                       const int draft_tokens_len,
+                                       const int input_ids_len,
+                                       const int base_model_draft_tokens_len,
+                                       const int pre_ids_len,
+                                       const bool truncate_first_token,
+                                       const bool splitwise_prefill,
+                                       const bool kvcache_scheduler_v1) {
   int cid = core_id();
   int ncores = core_num();
   int clusterid = cluster_id();
@@ -46,7 +49,7 @@ __global__ void draft_model_preprocess(int64_t* draft_tokens,
   int64_t value_fu = -1;
 
   if (splitwise_prefill) {
-    for (; tid < real_bsz; tid += ncores * nclusters) {
+    for (; tid < bsz; tid += ncores * nclusters) {
       int64_t base_model_step_idx_now = 0;
       int seq_lens_encoder_now = 0;
       int seq_lens_this_time_now = 0;
@@ -57,35 +60,25 @@ __global__ void draft_model_preprocess(int64_t* draft_tokens,
 
       GM2LM_ASYNC(
           base_model_step_idx + tid, &base_model_step_idx_now, sizeof(int64_t));
-      GM2LM_ASYNC(seq_lens_encoder_record + tid,
-                  &seq_lens_encoder_record_now,
-                  sizeof(int));
+      GM2LM_ASYNC(seq_lens_encoder + tid, &seq_lens_encoder_now, sizeof(int));
       GM2LM(accept_tokens + tid * accept_tokens_len,
             &base_model_first_token,
             sizeof(int64_t));
-
-      if (base_model_step_idx_now == 1 && seq_lens_encoder_record_now > 0) {
+      if (seq_lens_encoder_now > 0) {
         not_stop_flag_sm[cid] += 1;
-        int seq_len_encoder_record = seq_lens_encoder_record_now;
-        seq_lens_encoder_now = seq_len_encoder_record;
-        seq_lens_encoder_record_now = -1;
         stop_flags_now = false;
-        int position = seq_len_encoder_record;
+        int position = seq_lens_encoder_now;
         if (truncate_first_token) {
           position = position - 1;
           input_ids_now = base_model_first_token;
-          seq_lens_this_time_now = seq_len_encoder_record;
+          seq_lens_this_time_now = seq_lens_encoder_now;
         } else {
           input_ids_now = base_model_first_token;
-          seq_lens_this_time_now = seq_len_encoder_record + 1;
+          seq_lens_this_time_now = seq_lens_encoder_now + 1;
         }
         LM2GM_ASYNC(&input_ids_now,
                     input_ids + tid * input_ids_len + position,
                     sizeof(int64_t));
-        LM2GM_ASYNC(&seq_lens_encoder_record_now,
-                    seq_lens_encoder_record + tid,
-                    sizeof(int));
-
       } else {
         stop_flags_now = true;
         seq_lens_this_time_now = 0;
@@ -98,21 +91,23 @@ __global__ void draft_model_preprocess(int64_t* draft_tokens,
       LM2GM(&seq_lens_this_time_now, seq_lens_this_time + tid, sizeof(int));
     }
   } else {
-    for (; tid < real_bsz; tid += ncores * nclusters) {
+    for (; tid < bsz; tid += ncores * nclusters) {
       bool base_model_stop_flags_now = false;
       bool base_model_is_block_step_now = false;
       bool batch_drop_now = false;
       bool stop_flags_now = false;
+      bool is_block_step_now = false;
       int seq_lens_this_time_now = 0;
-      int seq_lens_encoder_record_now = 0;
       int seq_lens_encoder_now = 0;
       int seq_lens_decoder_new = 0;
-      int seq_lens_decoder_record_now = 0;
       int accept_num_now = 0;
       int base_model_seq_lens_decoder_now = 0;
+      int base_model_seq_lens_this_time_now = 0;
       int64_t step_id_now = 0;
       int64_t base_model_step_idx_now;
+      int64_t pre_ids_now;
       mfence();
+      GM2LM_ASYNC(is_block_step + tid, &is_block_step_now, sizeof(bool));
       GM2LM_ASYNC(base_model_stop_flags + tid,
                   &base_model_stop_flags_now,
                   sizeof(bool));
@@ -121,12 +116,6 @@ __global__ void draft_model_preprocess(int64_t* draft_tokens,
                   sizeof(bool));
       GM2LM_ASYNC(batch_drop + tid, &batch_drop_now, sizeof(bool));
       GM2LM_ASYNC(stop_flags + tid, &stop_flags_now, sizeof(bool));
-      GM2LM_ASYNC(seq_lens_encoder_record + tid,
-                  &seq_lens_encoder_record_now,
-                  sizeof(int));
-      GM2LM_ASYNC(seq_lens_decoder_record + tid,
-                  &seq_lens_decoder_record_now,
-                  sizeof(int));
       GM2LM_ASYNC(seq_lens_encoder + tid, &seq_lens_encoder_now, sizeof(int));
       GM2LM_ASYNC(seq_lens_decoder + tid, &seq_lens_decoder_new, sizeof(int));
 
@@ -135,6 +124,9 @@ __global__ void draft_model_preprocess(int64_t* draft_tokens,
                   accept_tokens_len * sizeof(int64_t));
       GM2LM_ASYNC(accept_num + tid, &accept_num_now, sizeof(int));
 
+      GM2LM_ASYNC(base_model_seq_lens_this_time + tid,
+                  &base_model_seq_lens_this_time_now,
+                  sizeof(int));
       GM2LM_ASYNC(base_model_seq_lens_decoder + tid,
                   &base_model_seq_lens_decoder_now,
                   sizeof(int));
@@ -148,57 +140,67 @@ __global__ void draft_model_preprocess(int64_t* draft_tokens,
             base_model_draft_tokens + tid * base_model_draft_tokens_len + i,
             sizeof(int));
       }
-      if (base_model_stop_flags_now && base_model_is_block_step_now) {
-        batch_drop_now = true;
-        stop_flags_now = true;
+      if (kvcache_scheduler_v1) {
+        if (base_model_stop_flags_now && base_model_is_block_step_now) {
+          stop_flags_now = true;
+          is_block_step_now = true;
+        }
+      } else {
+        if (base_model_stop_flags_now && base_model_is_block_step_now) {
+          batch_drop_now = true;
+          stop_flags_now = true;
+        }
       }
 
       if (!(base_model_stop_flags_now || batch_drop_now)) {
         not_stop_flag_sm[cid] += 1;
-        if (base_model_step_idx_now == 0) {
-          seq_lens_this_time_now = 0;
-          not_stop_flag_sm[cid] -= 1;  // 因为上面加过，这次减去，符合=0逻辑
-        } else if (base_model_step_idx_now == 1 &&
-                   seq_lens_encoder_record_now > 0) {
-          int seq_len_encoder_record = seq_lens_encoder_record_now;
-          seq_lens_encoder_now = seq_len_encoder_record;
-          seq_lens_encoder_record_now = -1;
-          seq_lens_decoder_new = seq_lens_decoder_record_now;
-          seq_lens_decoder_record_now = 0;
+        if (seq_lens_encoder_now > 0) {
+          int seq_len_encoder = seq_lens_encoder_now;
           stop_flags_now = false;
           int64_t base_model_first_token = accept_tokens_now[0];
-          int position = seq_len_encoder_record;
+          LM2GM(&base_model_first_token,
+                pre_ids + tid * pre_ids_len,
+                sizeof(int64_t));
+          int position = seq_len_encoder;
           if (truncate_first_token) {
             LM2GM(&base_model_first_token,
                   input_ids + tid * input_ids_len + position - 1,
                   sizeof(int64_t));
-            seq_lens_this_time_now = seq_len_encoder_record;
+            seq_lens_this_time_now = seq_len_encoder;
           } else {
             LM2GM(&base_model_first_token,
                   input_ids + tid * input_ids_len + position,
                   sizeof(int64_t));
-            seq_lens_this_time_now = seq_len_encoder_record + 1;
+            seq_lens_this_time_now = seq_len_encoder + 1;
           }
-        } else if (accept_num_now <= max_draft_token) {
+        } else {
+          if (kvcache_scheduler_v1) {
+            if (!base_model_is_block_step_now && is_block_step_now) {
+              is_block_step_now = false;
+            }
+          }
           if (stop_flags_now) {
             stop_flags_now = false;
-            seq_lens_decoder_new = base_model_seq_lens_decoder_now;
-            step_id_now = base_model_step_idx_now;
-          } else {
-            seq_lens_decoder_new -= max_draft_token - accept_num_now;
-            step_id_now -= max_draft_token - accept_num_now;
-          }
-          int64_t modified_token = accept_tokens_now[accept_num_now - 1];
-          LM2GM(&modified_token,
-                draft_tokens + tid * draft_tokens_len,
-                sizeof(int64_t));
-          seq_lens_this_time_now = 1;
+            seq_lens_decoder_new = base_model_seq_lens_decoder_now -
+                                   base_model_seq_lens_this_time_now;
+            step_id_now =
+                base_model_step_idx_now - base_model_seq_lens_this_time_now;
 
-        } else /*Accept all draft tokens*/ {
-          LM2GM(accept_tokens_now + max_draft_token,
-                draft_tokens + tid * draft_tokens_len + 1,
-                sizeof(int64_t));
-          seq_lens_this_time_now = 2;
+          } else {
+            seq_lens_decoder_new -= num_model_step - 1;
+            step_id_now -= num_model_step - 1;
+          }
+          for (int i = 0; i < accept_num_now; i++) {
+            const int pre_id_pos =
+                base_model_step_idx_now - (accept_num_now - i);
+            LM2GM(accept_tokens_now + i,
+                  draft_tokens + tid * draft_tokens_len + i,
+                  sizeof(int64_t));
+            LM2GM(accept_tokens_now + i,
+                  pre_ids + tid * pre_ids_len + pre_id_pos,
+                  sizeof(int64_t));
+          }
+          seq_lens_this_time_now = accept_num_now;
         }
 
       } else {
@@ -209,17 +211,11 @@ __global__ void draft_model_preprocess(int64_t* draft_tokens,
       }
       LM2GM_ASYNC(&stop_flags_now, stop_flags + tid, sizeof(bool));
       LM2GM_ASYNC(&batch_drop_now, batch_drop + tid, sizeof(bool));
-
+      LM2GM_ASYNC(&is_block_step_now, is_block_step + tid, sizeof(bool));
       LM2GM_ASYNC(&seq_lens_decoder_new, seq_lens_decoder + tid, sizeof(int));
       LM2GM_ASYNC(
           &seq_lens_this_time_now, seq_lens_this_time + tid, sizeof(int));
       LM2GM_ASYNC(&seq_lens_encoder_now, seq_lens_encoder + tid, sizeof(int));
-      LM2GM_ASYNC(&seq_lens_encoder_record_now,
-                  seq_lens_encoder_record + tid,
-                  sizeof(int));
-      LM2GM_ASYNC(&seq_lens_decoder_record_now,
-                  seq_lens_decoder_record + tid,
-                  sizeof(int));
       LM2GM_ASYNC(&step_id_now, step_idx + tid, sizeof(int64_t));
     }
   }
