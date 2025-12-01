@@ -17,6 +17,7 @@ from unittest.mock import Mock
 
 import paddle
 import paddle.distributed as dist
+from paddle.distributed import fleet
 
 from fastdeploy.config import MoEPhase
 from fastdeploy.model_executor.layers.moe import FusedMoE
@@ -62,6 +63,7 @@ class MockFDConfig:
         max_moe_num_chunk = 1
         moe_num_chunk = 1
         use_ep = True
+        use_sequence_parallel_moe = False
 
     class SchedulerConfig:
         name = "default"
@@ -89,6 +91,18 @@ class MockQuantMethod:
 
 class TestChunkedMoE(unittest.TestCase):
     def setUp(self) -> None:
+        paddle.seed(2025)
+
+        strategy = fleet.DistributedStrategy()
+        strategy.hybrid_configs = {
+            "dp_degree": 1,
+            "mp_degree": 2,
+            "pp_degree": 1,
+            "sharding_degree": 1,
+        }
+
+        fleet.init(is_collective=True, strategy=strategy)
+
         self.model_runner = self.setup_model_runner()
         self.fused_moe = self.setup_fused_moe()
 
@@ -122,6 +136,10 @@ class TestChunkedMoE(unittest.TestCase):
         mock_fd_config = MockFDConfig()
 
         fused_moe = FusedMoE.__new__(FusedMoE)
+        fused_moe.ep_size = 2
+        fused_moe.tp_size = 1
+        fused_moe.reduce_results = True
+
         fused_moe.fd_config = mock_fd_config
         fused_moe.quant_method = MockQuantMethod()
         return fused_moe
@@ -151,7 +169,7 @@ class TestChunkedMoE(unittest.TestCase):
         else:
             x = paddle.ones([1])
 
-        out = self.fused_moe.forward_chunked_moe(x, gate)
+        out = self.fused_moe.forward(x, gate)
         assert out.shape == x.shape
 
     def test_case(self):
