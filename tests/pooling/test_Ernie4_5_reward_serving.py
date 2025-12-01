@@ -113,7 +113,7 @@ def _start_server_process(enable_caching: bool, log_filename: str):
 @pytest.fixture(scope="function")
 def reward_api_url():
     """Returns the API endpoint URL for reward."""
-    return f"http://0.0.0.0:{FD_API_PORT}/v1/reward"
+    return f"http://0.0.0.0:{FD_API_PORT}/v1/chat/reward"
 
 
 @pytest.fixture(scope="function")
