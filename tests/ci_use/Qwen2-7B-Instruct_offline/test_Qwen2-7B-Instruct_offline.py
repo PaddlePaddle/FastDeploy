@@ -108,7 +108,7 @@ def llm(model_path):
         yield llm
 
         print("Cleaning up...")
-        clean()
+        clean([FD_ENGINE_QUEUE_PORT, FD_CACHE_QUEUE_PORT])
     except Exception:
         print(f"Failed to load model from {model_path}.")
         traceback.print_exc()

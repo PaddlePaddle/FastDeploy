@@ -653,11 +653,12 @@ class CacheTransferManager:
             raise e
         end_time = time.time()
         elasped_time = end_time - start_time
-        swap_speed = len(gpu_block_ids) * self.bytes_per_block / 1073741824 / elasped_time  # GB/s
-        logger.info(
-            f"finish transfer data: transfer_task_id {transfer_task_id}, blocks_num {len(gpu_block_ids)},"
-            + f"swap speed {swap_speed:.4f} GB/s, elapsed_time {elasped_time:.4f}"
-        )
+        if self.bytes_per_block is not None and elasped_time > 0:
+            swap_speed = len(gpu_block_ids) * self.bytes_per_block / 1073741824 / elasped_time  # GB/s
+            logger.info(
+                f"finish transfer data: transfer_task_id {transfer_task_id}, blocks_num {len(gpu_block_ids)},"
+                + f"swap speed {swap_speed:.4f} GB/s, elapsed_time {elasped_time:.4f}"
+            )
         return (
             swap_node_ids,
             task_gpu_block_id,

@@ -1175,6 +1175,7 @@ class EngineService:
                 self._insert_prefilled_requests(ready_request_outputs)
             else:
                 for req_output in ready_request_outputs:
+                    request_id = req_output.request_id
                     self.token_processor.tokens_counter[request_id] = 1
                     if envs.FD_ENABLE_INTERNAL_ADAPTER:  # first token sent by D instance
                         self.scheduler.put_results([req_output])
