@@ -12,157 +12,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import unittest
-from unittest.mock import Mock
-
-import paddle
-import paddle.distributed as dist
-
-from fastdeploy.config import MoEPhase
-from fastdeploy.model_executor.layers.moe import FusedMoE
-from fastdeploy.worker.gpu_model_runner import GPUModelRunner
+import os
+import subprocess
+import sys
 
 
-class MockStructuredOutputsConfig:
-    logits_processors = []
+def test_fused_moe_launch():
+    """
+    test_fused_moe
+    """
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    chunked_moe_script = os.path.join(current_dir, "chunked_moe.py")
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+    command = [
+        sys.executable,
+        "-m",
+        "paddle.distributed.launch",
+        "--gpus",
+        "0,1",
+        chunked_moe_script,
+    ]
+
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    try:
+        stdout, stderr = process.communicate(timeout=400)
+        return_code = process.returncode
+    except subprocess.TimeoutExpired:
+        process.kill()
+        stdout, stderr = process.communicate()
+        return_code = -1
+    assert return_code == 0, f"Process exited with code {return_code}"
 
 
-class MockModelConfig:
-    max_model_len = 10
-    pad_token_id = 0
-    eos_tokens_lens = 1
-    eos_token_id = 0
-    temperature = 1.0
-    penalty_score = 1.0
-    frequency_score = 1.0
-    min_length = 1
-    vocab_size = 1
-    top_p = 1.0
-    presence_score = 1.0
-    max_stop_seqs_num = 5
-    stop_seqs_max_len = 2
-    head_dim = 128
-    model_type = ["mock"]
-    moe_phase = MoEPhase(phase="prefill")
-    hidden_size = 1536
-
-
-class MockCacheConfig:
-    block_size = 64
-    total_block_num = 256
-    kv_cache_ratio = 0.9
-    enc_dec_block_num = 2
-
-
-class MockFDConfig:
-    class ParallelConfig:
-        enable_expert_parallel = True
-        enable_chunked_moe = True
-        chunked_moe_size = 2
-        max_moe_num_chunk = 1
-        moe_num_chunk = 1
-        use_ep = True
-
-    class SchedulerConfig:
-        name = "default"
-        splitwise_role = "mixed"
-        max_num_seqs = 2
-
-    parallel_config = ParallelConfig()
-    scheduler_config = SchedulerConfig()
-    structured_outputs_config = MockStructuredOutputsConfig()
-    model_config = MockModelConfig()
-
-
-class MockAttentionBackend:
-    def __init__(self):
-        pass
-
-    def init_attention_metadata(self, forward_meta):
-        pass
-
-
-class MockQuantMethod:
-    def apply(self, layer, x, gate):
-        return x
-
-
-class TestChunkedMoE(unittest.TestCase):
-    def setUp(self) -> None:
-        self.model_runner = self.setup_model_runner()
-        self.fused_moe = self.setup_fused_moe()
-
-    def setup_model_runner(self):
-        """Helper method to setup GPUModelRunner with different configurations"""
-        mock_fd_config = MockFDConfig()
-
-        mock_model_config = MockModelConfig()
-        mock_cache_config = MockCacheConfig()
-
-        model_runner = GPUModelRunner.__new__(GPUModelRunner)
-        model_runner.fd_config = mock_fd_config
-        model_runner.model_config = mock_model_config
-        model_runner.cache_config = mock_cache_config
-        model_runner.attn_backends = [MockAttentionBackend()]
-        model_runner.enable_mm = True
-        model_runner.cudagraph_only_prefill = False
-        model_runner.use_cudagraph = False
-        model_runner.speculative_decoding = False
-        model_runner._init_share_inputs(mock_fd_config.scheduler_config.max_num_seqs)
-        model_runner.share_inputs["caches"] = None
-
-        if dist.get_rank() == 0:
-            model_runner.share_inputs["ids_remove_padding"] = paddle.ones([10])
-        else:
-            model_runner.share_inputs["ids_remove_padding"] = paddle.ones([1])
-
-        return model_runner
-
-    def setup_fused_moe(self):
-        mock_fd_config = MockFDConfig()
-
-        fused_moe = FusedMoE.__new__(FusedMoE)
-        fused_moe.fd_config = mock_fd_config
-        fused_moe.quant_method = MockQuantMethod()
-        return fused_moe
-
-    def run_model_runner(self):
-        self.model_runner.initialize_forward_meta()
-
-        assert self.model_runner.fd_config.parallel_config.max_moe_num_chunk == 5, (
-            f"chunk size is 2, max token_num is 10, max_moe_num_chunk should be 5, "
-            f"but got {self.model_runner.fd_config.parallel_config.max_moe_num_chunk}"
-        )
-        if dist.get_rank() == 0:
-            assert self.model_runner.fd_config.parallel_config.moe_num_chunk == 5, (
-                f"chunk size is 2, token_num is 10, moe_num_chunk in rank 0 should be 5"
-                f"but got {self.model_runner.fd_config.parallel_config.moe_num_chunk}"
-            )
-        else:
-            assert self.model_runner.fd_config.parallel_config.moe_num_chunk == 1, (
-                f"chunk size is 2, token_num is 1, moe_num_chunk in rank 1 should be 1"
-                f", but got {self.model_runner.fd_config.parallel_config.moe_num_chunk}"
-            )
-
-    def run_fused_moe(self):
-        gate = Mock()
-        if dist.get_rank() == 0:
-            x = paddle.ones([10])
-        else:
-            x = paddle.ones([1])
-
-        out = self.fused_moe.forward_chunked_moe(x, gate)
-        assert out.shape == x.shape
-
-    def test_fused_moe(self):
-        self.run_model_runner()
-        self.run_fused_moe()
-
-
-def main():
-    dist.init_parallel_env()
-    unittest.main(verbosity=2, buffer=False)
-
-
-if __name__ == "__main__":
-    dist.spawn(main, nprocs=2, gpus="0,1")
+test_fused_moe_launch()
