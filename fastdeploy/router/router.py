@@ -95,7 +95,7 @@ class Router:
     async def register_instance(self, instance_info_dict: dict):
         """Register an instance asynchronously"""
         try:
-            inst_info = InstanceInfo(**instance_info_dict)
+            inst_info = InstanceInfo.from_dict(instance_info_dict)
         except Exception as e:
             logger.error(f"register instance failed: {e}")
             raise
@@ -173,11 +173,17 @@ class Router:
         logger.debug(f"Received request: {request_data}")
         prefill_server, decode_server = await self.select_pd()
 
+        if prefill_server.tp_size != decode_server.tp_size and decode_server.tp_size != 1:
+            raise HTTPException(
+                status_code=400,
+                detail="The tp_size of prefill and decode should be equal or the tp_size of decode is 1",
+            )
+
         # TODO: unify the disaggregate_info in server and remove redundancy params
         is_same_node = prefill_server.host_ip == decode_server.host_ip
-        use_ipc = (
-            is_same_node and "ipc" in prefill_server.transfer_protocol and "ipc" in decode_server.transfer_protocol
-        )
+        is_support_ipc = "ipc" in prefill_server.transfer_protocol and "ipc" in decode_server.transfer_protocol
+        is_same_tp_size = prefill_server.tp_size == decode_server.tp_size
+        use_ipc = is_same_node and is_support_ipc and is_same_tp_size
 
         cache_info = {}
         if use_ipc:
