@@ -31,12 +31,7 @@ from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
 from fastdeploy.utils import data_processor_logger
-from fastdeploy.worker.output import (
-    LogprobsLists,
-    LogprobsTensors,
-    PromptLogprobs,
-    SampleLogprobs,
-)
+from fastdeploy.worker.output import LogprobsLists, PromptLogprobs, SampleLogprobs
 
 
 class RequestStatus(Enum):
@@ -519,7 +514,6 @@ class RequestOutput:
         prompt: Optional[str] = None,
         prompt_token_ids: Optional[list[int]] = None,
         prompt_logprobs: Optional[PromptLogprobs] = None,
-        prompt_logprobs_tensors: Optional[LogprobsTensors] = None,
         output_type: Optional[int] = 3,
         outputs: CompletionOutput = None,
         finished: bool = False,
@@ -537,7 +531,6 @@ class RequestOutput:
         self.prompt = prompt
         self.prompt_token_ids = prompt_token_ids
         self.prompt_logprobs = prompt_logprobs
-        self.prompt_logprobs_tensors = prompt_logprobs_tensors
         self.output_type = output_type
         self.outputs = outputs
         self.finished = finished
