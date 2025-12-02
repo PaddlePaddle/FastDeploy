@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-import os
 from enum import Enum
 from typing import Optional
 
@@ -39,6 +38,7 @@ class KvCacheQuantzationTypes(str, Enum):
     INT8_ZP = "int8_zp"
     INT4_ZP = "int4_zp"
     FP8_ZP = "float8_e4m3fn_zp"
+    DYNAMIC_INT2_ZP = "dynamic_int2_zp"
 
 
 class KvCacheQuantConfig(QuantConfigBase):
@@ -74,6 +74,8 @@ class KvCacheQuantConfig(QuantConfigBase):
             self.max_bound = 448.0
         elif self.quant_type == KvCacheQuantzationTypes.INT4_ZP:
             self.max_bound = 7.0
+        elif self.quant_type == KvCacheQuantzationTypes.DYNAMIC_INT2_ZP:
+            self.max_bound = 3.0
         else:
             raise ValueError(f"Invalid Kvcache type: {kv_cache_quant_type}")
 
@@ -174,6 +176,10 @@ class KVCacheMethodBase(QuantMethodBase):
             layer.cache_quant_type_str = "cache_int4_zp"
             layer.quant_max_bound = 7.0
             layer.quant_min_bound = -7.0
+        elif self.cache_quant_config.quant_type == KvCacheQuantzationTypes.DYNAMIC_INT2_ZP:
+            layer.cache_quant_type_str = "dynamic_int2_zp"
+            layer.quant_max_bound = 3.0
+            layer.quant_min_bound = 0.0
         elif self.cache_quant_config.quant_type == KvCacheQuantzationTypes.BLOCK_WISE_FP8:
             layer.cache_quant_type_str = "block_wise_fp8"
             layer.quant_max_bound = 448.0
@@ -253,10 +259,8 @@ class KVCacheMethodBase(QuantMethodBase):
         self.cache_v_scale_name = layer.prefix + ".cachev_matmul.activation_scale"
         self.cache_k_zp_name = layer.prefix + ".cachek_matmul.activation_zero_point"
         self.cache_v_zp_name = layer.prefix + ".cachev_matmul.activation_zero_point"
-        using_int2_attn = (
-            "FD_ATTENTION_BACKEND" in os.environ and os.environ["FD_ATTENTION_BACKEND"] == "DYNAMIC_QUANT_INT2_ATTN"
-        )
-        if "block_wise" not in layer.cache_quant_type_str and not using_int2_attn:
+
+        if "block_wise" not in layer.cache_quant_type_str and "dynamic" not in layer.cache_quant_type_str:
             self.load_scale(layer, state_dict)
             if self.cache_quant_config.has_zero_point:
                 self.load_zp(layer, state_dict)

@@ -26,7 +26,7 @@ class _Backend(enum.Enum):
     MLA_ATTN = enum.auto()
     FLASH_ATTN = enum.auto()
     BLOCK_ATTN = enum.auto()
-    DYNAMIC_QUANT_INT2_ATTN = enum.auto()
+    DYNAMIC_QUANT_CACHE_ATTN = enum.auto()
     PLAS_ATTN = enum.auto()
     HPU_ATTN = enum.auto()
     FLASH_MASK_ATTN = enum.auto()

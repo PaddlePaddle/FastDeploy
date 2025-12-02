@@ -27,25 +27,22 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
     AttentionMetadata,
 )
-from fastdeploy.platforms import current_platform
-
-if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import (
-        dynamic_quant_get_kv_from_cache,
-        dynamic_quant_int2_decoder_attention,
-        dynamic_quant_int2_write_decoder,
-        dynamic_quant_int2_write_encoder,
-        flash_attention_mask,
-        get_qk_tokens_num,
-        split_qkv_and_rope,
-    )
+from fastdeploy.model_executor.ops.gpu import (
+    dynamic_quant_cache_decoder_attention,
+    dynamic_quant_cache_write_decoder,
+    dynamic_quant_cache_write_encoder,
+    dynamic_quant_get_kv_from_cache,
+    flash_mask_attention,
+    get_qk_tokens_num,
+    split_qkv_and_rope,
+)
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
 
 @dataclass
-class DynamciQuantInt2AttentionMetadata(AttentionMetadata):
+class DynamciQuantCacheAttentionMetadata(AttentionMetadata):
     """
     DynamciQuantCacheAttentionMetadata
     """
@@ -60,13 +57,13 @@ class DynamciQuantInt2AttentionMetadata(AttentionMetadata):
     max_dec_len_this_time: int = 0
 
 
-class DynamciQuantInt2AttentionBackend(AttentionBackend):
+class DynamciQuantCacheAttentionBackend(AttentionBackend):
     """
     FlashAttentionBackend backend implementation
     """
 
     __infer_dynamic_dims_fields__ = ["attention_metadata"]
-    attention_metadata: DynamciQuantInt2AttentionMetadata
+    attention_metadata: DynamciQuantCacheAttentionMetadata
     flash_attn_func: callable = None
 
     def __init__(
@@ -82,14 +79,13 @@ class DynamciQuantInt2AttentionBackend(AttentionBackend):
         FlashAttentionBackend __init__
         """
         super().__init__()
-        self.attention_metadata: DynamciQuantInt2AttentionMetadata = None
+        self.attention_metadata: DynamciQuantCacheAttentionMetadata = None
         self.max_seq_len = fd_config.model_config.max_model_len
         self.kv_num_heads = kv_num_heads
         self.num_heads = num_heads
         self.group_size: int = self.num_heads // self.kv_num_heads
         self.head_dim = fd_config.model_config.head_dim
         self.block_size = fd_config.cache_config.block_size
-        self.attn_block_m = 128
         assert self.block_size == 64
 
     def get_attntion_meta(self):
@@ -104,22 +100,16 @@ class DynamciQuantInt2AttentionBackend(AttentionBackend):
         """
         Calculate kv cache shape
         """
-        key_cache_shape = [
+        kv_cache_shape = (
             max_num_blocks,
             self.kv_num_heads,
             self.block_size // 4 + self.block_size // 32 * 4,
             self.head_dim,
-        ]
-        value_cache_shape = [
-            max_num_blocks,
-            self.kv_num_heads,
-            self.block_size // 4 + self.block_size // 32 * 4,
-            self.head_dim,
-        ]
-        return key_cache_shape, value_cache_shape
+        )
+        return kv_cache_shape, kv_cache_shape
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
-        metadata = DynamciQuantInt2AttentionMetadata()
+        metadata = DynamciQuantCacheAttentionMetadata()
 
         metadata.cu_seqlens_k, qk_token_num = get_qk_tokens_num(
             forward_meta.seq_lens_encoder, forward_meta.seq_lens_this_time, forward_meta.seq_lens_decoder
@@ -131,15 +121,9 @@ class DynamciQuantInt2AttentionBackend(AttentionBackend):
         metadata.q_tokens_num = q_token_num
         metadata.k_tokens_num = k_token_num
 
-        metadata.q_input = paddle.zeros(
-            [q_token_num + self.attn_block_m, self.num_heads * self.head_dim], dtype="float16"
-        )
-        metadata.k_input = paddle.zeros(
-            [k_token_num + self.attn_block_m, self.kv_num_heads * self.head_dim], dtype="float16"
-        )
-        metadata.v_input = paddle.zeros(
-            [k_token_num + self.attn_block_m, self.kv_num_heads * self.head_dim], dtype="float16"
-        )
+        metadata.q_input = paddle.zeros([q_token_num, self.num_heads * self.head_dim], dtype="float16")
+        metadata.k_input = paddle.zeros([k_token_num, self.kv_num_heads * self.head_dim], dtype="float16")
+        metadata.v_input = paddle.zeros([k_token_num, self.kv_num_heads * self.head_dim], dtype="float16")
         self.attention_metadata = metadata
 
     def forward_mixed(
@@ -176,7 +160,7 @@ class DynamciQuantInt2AttentionBackend(AttentionBackend):
                 getattr(layer, "cache_quant_type_str", "none"),
             )
 
-            dynamic_quant_int2_write_encoder(
+            dynamic_quant_cache_write_encoder(
                 metadata.k_input,
                 metadata.v_input,
                 forward_meta.caches[2 * layer.layer_id],
@@ -217,7 +201,7 @@ class DynamciQuantInt2AttentionBackend(AttentionBackend):
                     getattr(layer, "cache_quant_type_str", "none"),
                 )
 
-            flash_attention_mask(
+            flash_mask_attention(
                 metadata.q_input,
                 metadata.k_input,
                 metadata.v_input,
@@ -230,12 +214,12 @@ class DynamciQuantInt2AttentionBackend(AttentionBackend):
                 self.kv_num_heads,
                 self.head_dim,
                 self.max_seq_len,
-                metadata.max_enc_len_this_time,
-                metadata.max_dec_len_this_time,
+                metadata.q_input.shape[0],
+                metadata.k_input.shape[0],
             )
 
         if metadata.max_dec_len_this_time > 0:
-            q_input = dynamic_quant_int2_write_decoder(
+            q_input = dynamic_quant_cache_write_decoder(
                 qkv,
                 forward_meta.rotary_embs,
                 forward_meta.caches[2 * layer.layer_id],
@@ -256,7 +240,7 @@ class DynamciQuantInt2AttentionBackend(AttentionBackend):
                 getattr(layer, "cache_quant_type_str", "none"),
             )[0]
 
-            dynamic_quant_int2_decoder_attention(
+            dynamic_quant_cache_decoder_attention(
                 q_input,
                 forward_meta.caches[2 * layer.layer_id],
                 forward_meta.caches[2 * layer.layer_id + 1],

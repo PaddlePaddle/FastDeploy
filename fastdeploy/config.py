@@ -1301,6 +1301,9 @@ class CacheConfig:
             elif "int8" in self.cache_dtype.lower() or "float8" in self.cache_dtype.lower():
                 self.cache_dtype = "uint8"
                 byte_size = 1
+            elif "int2" in self.cache_dtype.lower():
+                self.cache_dtype = "uint8"
+                byte_size = 0.25
             else:
                 byte_size = 2
             self.each_token_cache_space = int(

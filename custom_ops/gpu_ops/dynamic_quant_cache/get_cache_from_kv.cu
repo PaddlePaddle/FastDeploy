@@ -14,7 +14,7 @@
 #include "paddle/extension.h"
 #include "utils.hpp"
 
-namespace dynamic_quant_cache_attn {
+namespace dynamic_quant_cache {
 
 template <typename T,
           typename ScaleType,
@@ -356,7 +356,7 @@ void GetKVFromCache(const paddle::Tensor &k_input,
   }
 }
 
-}  // namespace dynamic_quant_cache_attn
+}  // namespace dynamic_quant_cache
 
 PD_BUILD_OP(dynamic_quant_get_kv_from_cache)
     .Inputs({"k_input",
@@ -378,4 +378,4 @@ PD_BUILD_OP(dynamic_quant_get_kv_from_cache)
             "cache_quant_type_str: std::string"})
     .Outputs({"k_input_out", "v_input_out"})
     .SetInplaceMap({{"k_input", "k_input_out"}, {"v_input", "v_input_out"}})
-    .SetKernelFn(PD_KERNEL(dynamic_quant_cache_attn::GetKVFromCache));
+    .SetKernelFn(PD_KERNEL(dynamic_quant_cache::GetKVFromCache));

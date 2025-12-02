@@ -15,7 +15,6 @@
 """
 
 import copy
-import os
 import threading
 import time
 import traceback
@@ -358,7 +357,8 @@ class ResourceManagerV1(ResourceManager):
         # TODO: set condition to new _get_num_new_tokens
         num_new_tokens = request.need_prefill_tokens - request.num_computed_tokens
 
-        if "FD_ATTENTION_BACKEND" in os.environ and os.environ["FD_ATTENTION_BACKEND"] == "DYNAMIC_QUANT_INT2_ATTN":
+        # There may be issues with using the current scheduling for dynamic 2-bit quantization cache. During scheduling, if the remaining token for the first query is less than chunk_Size, the token for the second query will be pulled. However, dynamic 2-bit quantization cache cannot support this situation
+        if envs.FD_ATTENTION_BACKEND == "DYNAMIC_QUANT_CACHE_ATTN":
             remain_tokens = request.need_prefill_tokens - request.prefill_end_index
             if remain_tokens < self.config.scheduler_config.max_num_batched_tokens:
                 #  last chunk

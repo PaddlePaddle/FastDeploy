@@ -19,7 +19,7 @@
 #include "paddle/extension.h"
 #include "utils.hpp"
 
-namespace dynamic_quant_cache_attn {
+namespace dynamic_quant_cache {
 struct Block_attn_params {
   void *__restrict__ q_input;
   uint8_t *__restrict__ cache_k_c2;
@@ -122,4 +122,4 @@ struct Block_attn_kernel_traits {
   static constexpr int kShareMemSizeC16 =
       (size(SmemLayoutQ{}) + size(SmemLayoutKV{}) * 2) * sizeof(input_type);
 };
-}  // namespace dynamic_quant_cache_attn
+}  // namespace dynamic_quant_cache

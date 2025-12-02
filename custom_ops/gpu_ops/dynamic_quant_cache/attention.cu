@@ -14,7 +14,7 @@
 
 #include "attention.h"
 
-namespace dynamic_quant_cache_attn {
+namespace dynamic_quant_cache {
 template <bool Is_first,
           int kMiLen,
           typename Tensor0,
@@ -767,9 +767,9 @@ void DecoderAttention(const paddle::Tensor& q_input,
     PD_THROW("gqa_group_size is not supported :%d\n", gqa_group_size);
   }
 }
-}  // namespace dynamic_quant_cache_attn
+}  // namespace dynamic_quant_cache
 
-PD_BUILD_OP(dynamic_quant_int2_decoder_attention)
+PD_BUILD_OP(dynamic_quant_cache_decoder_attention)
     .Inputs({"q_input",
              "cache_k_c2",
              "cache_v_c2",
@@ -789,4 +789,4 @@ PD_BUILD_OP(dynamic_quant_int2_decoder_attention)
             "cache_quant_type_str: std::string"})
     .Outputs({"out"})
     .SetInplaceMap({{"attn_out", "out"}})
-    .SetKernelFn(PD_KERNEL(dynamic_quant_cache_attn::DecoderAttention));
+    .SetKernelFn(PD_KERNEL(dynamic_quant_cache::DecoderAttention));

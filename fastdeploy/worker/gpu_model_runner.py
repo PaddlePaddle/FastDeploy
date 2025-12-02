@@ -1479,10 +1479,6 @@ class GPUModelRunner(ModelRunnerBase):
         # cache_kvs = {}
         max_block_num = self.num_gpu_blocks
 
-        using_int2_attn = (
-            "FD_ATTENTION_BACKEND" in os.environ and os.environ["FD_ATTENTION_BACKEND"] == "DYNAMIC_QUANT_INT2_ATTN"
-        )
-
         # Get kv cache dtype
         cache_type = self.model_config.dtype
         kv_cache_quant_type = None
@@ -1493,9 +1489,6 @@ class GPUModelRunner(ModelRunnerBase):
         ):
             cache_type = "uint8"
             kv_cache_quant_type = self.quant_config.kv_cache_quant_type
-        elif using_int2_attn:
-            cache_type = "uint8"
-            kv_cache_quant_type = "dynamic_int2_zp"
 
         # Get kv cache shape
         key_cache_shape, value_cache_shape = self.attn_backends[0].get_kv_cache_shape(
@@ -2554,13 +2547,8 @@ class GPUModelRunner(ModelRunnerBase):
             and self.quant_config.kv_cache_quant_type is not None
         ):
             cache_quant_dtype = self.quant_config.kv_cache_quant_type
-        using_int2_attn = (
-            "FD_ATTENTION_BACKEND" in os.environ and os.environ["FD_ATTENTION_BACKEND"] == "DYNAMIC_QUANT_INT2_ATTN"
-        )
 
         if cache_quant_dtype is not None:  # int8, int8_zp, fp8, fp8_zp
-            byte_of_dtype = 1
-        elif using_int2_attn:
             byte_of_dtype = 1
         else:  # default
             byte_of_dtype = 2
@@ -2582,10 +2570,11 @@ class GPUModelRunner(ModelRunnerBase):
                 * (self.cache_config.block_size)
                 * num_layers
             )  # compress_kv + k_pe
-        elif using_int2_attn:
-            cache_size = self.cache_config.block_size // 4 * hidden_dim
-            scale_size = self.cache_config.block_size // 32 * hidden_dim * 4
-            required_memory = byte_of_dtype * 2 * (cache_size + scale_size) * num_layers
+        elif cache_quant_dtype is not None and "dynamic" in cache_quant_dtype:
+            if cache_quant_dtype == "dynamic_int2_zp":
+                cache_size = self.cache_config.block_size // 4 * hidden_dim
+                scale_size = self.cache_config.block_size // 32 * hidden_dim * 4
+                required_memory = byte_of_dtype * 2 * (cache_size + scale_size) * num_layers
         else:
             required_memory = byte_of_dtype * 2 * (self.cache_config.block_size * hidden_dim) * num_layers  # k + v
         return required_memory

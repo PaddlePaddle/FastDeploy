@@ -15,7 +15,7 @@
 #include "cache.hpp"
 #include "paddle/extension.h"
 
-namespace dynamic_quant_cache_attn {
+namespace dynamic_quant_cache {
 
 template <typename T,
           typename ScaleType,
@@ -266,9 +266,9 @@ void WriteEncoderCache(const paddle::Tensor &k_input,
     PD_THROW("BF16 is not supported\n");
   }
 }
-}  // namespace dynamic_quant_cache_attn
+}  // namespace dynamic_quant_cache
 
-PD_BUILD_OP(dynamic_quant_int2_write_encoder)
+PD_BUILD_OP(dynamic_quant_cache_write_encoder)
     .Inputs({"k_input",
              "v_input",
              "cache_k_c2",
@@ -294,4 +294,4 @@ PD_BUILD_OP(dynamic_quant_int2_write_encoder)
                     {"cache_v_c2", "cache_v_c2_out"},
                     {"cache_k_c16", "cache_k_c16_out"},
                     {"cache_v_c16", "cache_v_c16_out"}})
-    .SetKernelFn(PD_KERNEL(dynamic_quant_cache_attn::WriteEncoderCache));
+    .SetKernelFn(PD_KERNEL(dynamic_quant_cache::WriteEncoderCache));

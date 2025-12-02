@@ -15,7 +15,7 @@
 #include "paddle/extension.h"
 #include "utils.hpp"
 
-namespace dynamic_quant_cache_attn {
+namespace dynamic_quant_cache {
 template <typename T,
           typename ScaleType,
           int kBlockSize,
@@ -296,8 +296,7 @@ __device__ void write_c2_cache_kernel(T *k_input,
         next_value = HalfMin<T>()(next_value, max_blound);
 
         uint32_t fp8_value =
-            dynamic_quant_cache_attn::Convert_to_fp8<T,
-                                                     cutlass::float_e4m3_t>()(
+            dynamic_quant_cache::Convert_to_fp8<T, cutlass::float_e4m3_t>()(
                 reinterpret_cast<uint32_t *>(&cur_value)[0],
                 reinterpret_cast<uint32_t *>(&next_value)[0]);
 
@@ -399,7 +398,7 @@ __device__ void write_c2_cache_kernel(T *k_input,
       value[1] = HalfMin<T>()(value[1], max_blound);
 
       uint32_t fp8_value =
-          dynamic_quant_cache_attn::Convert_to_fp8<T, cutlass::float_e4m3_t>()(
+          dynamic_quant_cache::Convert_to_fp8<T, cutlass::float_e4m3_t>()(
               reinterpret_cast<uint32_t *>(value)[0],
               reinterpret_cast<uint32_t *>(value)[1]);
 
@@ -485,4 +484,4 @@ __device__ void write_c2_cache_kernel(T *k_input,
     }
   }
 }
-}  // namespace dynamic_quant_cache_attn
+}  // namespace dynamic_quant_cache

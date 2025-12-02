@@ -31,7 +31,7 @@
 #include <cub/cub.cuh>
 #include "../moba_attn/moba_attn_utils.hpp"
 
-namespace dynamic_quant_cache_attn {
+namespace dynamic_quant_cache {
 using namespace cute;
 
 template <typename SrcType, typename DstType>
@@ -333,4 +333,4 @@ inline __device__ void apply_rotary_embedding(Vec<T, PackSize> &vec,
   }
 }
 
-}  // namespace dynamic_quant_cache_attn
+}  // namespace dynamic_quant_cache

@@ -15,7 +15,7 @@
 #include "cache.hpp"
 #include "paddle/extension.h"
 
-namespace dynamic_quant_cache_attn {
+namespace dynamic_quant_cache {
 
 template <typename input_type,
           typename output_type,
@@ -280,9 +280,9 @@ std::vector<paddle::Tensor> WriteDecoderCache(
 
   return {q_input};
 }
-}  // namespace dynamic_quant_cache_attn
+}  // namespace dynamic_quant_cache
 
-PD_BUILD_OP(dynamic_quant_int2_write_decoder)
+PD_BUILD_OP(dynamic_quant_cache_write_decoder)
     .Inputs({"qkv_out",
              "rotary_embs",
              "cache_k_c2",
@@ -310,4 +310,4 @@ PD_BUILD_OP(dynamic_quant_int2_write_decoder)
                     {"cache_v_c2", "cache_v_c2_out"},
                     {"cache_k_c16", "cache_k_c16_out"},
                     {"cache_v_c16", "cache_v_c16_out"}})
-    .SetKernelFn(PD_KERNEL(dynamic_quant_cache_attn::WriteDecoderCache));
+    .SetKernelFn(PD_KERNEL(dynamic_quant_cache::WriteDecoderCache));

@@ -12,18 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import unittest
 
 import numpy as np
 import paddle
 
-from fastdeploy import LLM, SamplingParams
 from fastdeploy.model_executor.ops.gpu import (
+    dynamic_quant_cache_decoder_attention,
+    dynamic_quant_cache_write_decoder,
+    dynamic_quant_cache_write_encoder,
     dynamic_quant_get_kv_from_cache,
-    dynamic_quant_int2_decoder_attention,
-    dynamic_quant_int2_write_decoder,
-    dynamic_quant_int2_write_encoder,
     get_qk_tokens_num,
     split_qkv_and_rope,
 )
@@ -100,7 +98,7 @@ class TestC2Attnention(unittest.TestCase):
             paddle.arange(self.max_seq_len // self.block_size).astype("int32").reshape([self.batch_size, -1])
         )
 
-    def dynamic_quant_int2_decoder_attention_np(self, q_input):
+    def dynamic_quant_cache_decoder_attention_np(self, q_input):
 
         out = paddle.zeros([self.batch_size, self.num_heads, self.head_dim], dtype=q_input.dtype)
         gqa_group_size = self.num_heads // self.kv_num_heads
@@ -119,10 +117,10 @@ class TestC2Attnention(unittest.TestCase):
             out[0, i] = value
         return out
 
-    def dynamic_quant_int2_write_decoder_np(self, qkv_output):
+    def dynamic_quant_cache_write_decoder_np(self, qkv_output):
         return qkv_output[0 : self.batch_size, 0 : self.num_heads]
 
-    def dynamic_quant_int2_write_encoder_np(self, k_input, v_input):
+    def dynamic_quant_cache_write_encoder_np(self, k_input, v_input):
         cachek_c16 = paddle.zeros_like(self.cachek_c16)
         cachev_c16 = paddle.zeros_like(self.cachev_c16)
 
@@ -217,7 +215,7 @@ class TestC2Attnention(unittest.TestCase):
         assert np.allclose(self.k_input, k_input_np)
         assert np.allclose(self.v_input, v_input_np)
 
-        dynamic_quant_int2_write_encoder(
+        dynamic_quant_cache_write_encoder(
             self.k_input,
             self.v_input,
             self.cachek_c2,
@@ -237,7 +235,7 @@ class TestC2Attnention(unittest.TestCase):
             self.cache_quant_type_str,
         )
 
-        cachek_c16_np, cachev_c16_np = self.dynamic_quant_int2_write_encoder_np(self.k_input, self.v_input)
+        cachek_c16_np, cachev_c16_np = self.dynamic_quant_cache_write_encoder_np(self.k_input, self.v_input)
 
         assert np.allclose(self.cachek_c16, cachek_c16_np)
         assert np.allclose(self.cachev_c16, cachev_c16_np)
@@ -269,7 +267,7 @@ class TestC2Attnention(unittest.TestCase):
         qkv_out_decoder = paddle.randn(
             [self.batch_size, self.num_heads + 2 * self.kv_num_heads, self.head_dim], dtype="bfloat16"
         )
-        q_input = dynamic_quant_int2_write_decoder(
+        q_input = dynamic_quant_cache_write_decoder(
             qkv_out_decoder,
             self.rotary_embs,
             self.cachek_c2,
@@ -290,12 +288,12 @@ class TestC2Attnention(unittest.TestCase):
             self.cache_quant_type_str,
         )[0]
 
-        q_input_np = self.dynamic_quant_int2_write_decoder_np(qkv_out_decoder).astype("float16")
+        q_input_np = self.dynamic_quant_cache_write_decoder_np(qkv_out_decoder).astype("float16")
 
         assert np.allclose(q_input, q_input_np)
 
         out = paddle.zeros([qkv_out_decoder.shape[0], self.num_heads * self.head_dim], dtype=qkv_out_decoder.dtype)
-        dynamic_quant_int2_decoder_attention(
+        dynamic_quant_cache_decoder_attention(
             q_input,
             self.cachek_c2,
             self.cachev_c2,
@@ -315,34 +313,8 @@ class TestC2Attnention(unittest.TestCase):
             self.cache_quant_type_str,
         )
 
-        out_np = self.dynamic_quant_int2_decoder_attention_np(q_input).reshape(out.shape).astype("bfloat16")
+        out_np = self.dynamic_quant_cache_decoder_attention_np(q_input).reshape(out.shape).astype("bfloat16")
         assert np.allclose(out, out_np, rtol=0.01, atol=0.01)
-
-    def test_server(self):
-        os.environ["FD_ATTENTION_BACKEND"] = "DYNAMIC_QUANT_INT2_ATTN"
-        base_path = os.getenv("MODEL_PATH")
-        if base_path:
-            model_path = os.path.join(base_path, "./ernie-4_5-21b-a3b-bf16-paddle")
-        else:
-            model_path = "./ernie-4_5-21b-a3b-bf16-paddle"
-
-        llm = LLM(
-            model=model_path,
-            tensor_parallel_size=1,
-            max_model_len=8192,
-            engine_worker_queue_port=int(os.getenv("FD_ENGINE_QUEUE_PORT")),
-            cache_queue_port=int(os.getenv("FD_CACHE_QUEUE_PORT")),
-            max_num_seqs=32,
-            enable_chunked_prefill=True,
-            max_num_batched_tokens=8192,
-        )
-
-        prompts = ["Hello world!"]
-        sampling_params = SamplingParams(temperature=1.0, top_p=0.0, max_tokens=32)
-        outputs = llm.generate(prompts, sampling_params, use_tqdm=True)
-
-        for output in outputs:
-            print(output.outputs.text)
 
 
 if __name__ == "__main__":
