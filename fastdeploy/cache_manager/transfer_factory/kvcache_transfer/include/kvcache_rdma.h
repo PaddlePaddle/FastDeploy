@@ -149,6 +149,7 @@ class RDMACommunicator {
   struct ibv_pd* g_pd = NULL;          // fd
   int RDMACommunicator_status;         // Communicator status flag
   bool start_client_listener = false;  // Client listener flag
+  bool has_value_cache_;               // MLA does not have value cache.
 };
 
 #endif  // KVCACHE_RDMA_H

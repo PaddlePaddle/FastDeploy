@@ -2328,7 +2328,6 @@ class GPUModelRunner(ModelRunnerBase):
                         self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
                         group=self.parallel_config.tp_group,
                     )
-
             # 5. Post Process
             model_output_data = ModelOutputData(
                 next_tokens=self.share_inputs["next_tokens"],

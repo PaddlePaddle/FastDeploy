@@ -712,8 +712,8 @@ bool exchange_mr_vector(struct RdmaContext *ctx,
  * @param ctx The RDMA context
  * @return true on success, false on failure
  */
-bool client_exchange_mr(struct RdmaContext *ctx) {
-  LOGD("verb client exchange mr: start");
+bool client_exchange_mr(struct RdmaContext *ctx, bool has_value_cache) {
+  LOGD("verb client exchange mr: start. has_value_cache=%d", has_value_cache);
 
   if (ctx->conn.layer_number <= 0) {
     ERR("Invalid layer number: %d", ctx->conn.layer_number);
@@ -723,19 +723,27 @@ bool client_exchange_mr(struct RdmaContext *ctx) {
   auto layer_num = ctx->conn.layer_number;
   std::vector<void *> key_ptrs(layer_num);
   std::vector<uint32_t> key_rkeys(layer_num);
-  std::vector<void *> val_ptrs(layer_num);
-  std::vector<uint32_t> val_rkeys(layer_num);
+  std::vector<void *> val_ptrs;
+  std::vector<uint32_t> val_rkeys;
+  if (has_value_cache) {
+    val_ptrs.resize(layer_num);
+    val_rkeys.resize(layer_num);
+  }
 
   if (!exchange_mr_vector(ctx, key_ptrs, true)) return false;
   if (!exchange_mr_vector(ctx, key_rkeys, true)) return false;
-  if (!exchange_mr_vector(ctx, val_ptrs, true)) return false;
-  if (!exchange_mr_vector(ctx, val_rkeys, true)) return false;
+  if (has_value_cache) {
+    if (!exchange_mr_vector(ctx, val_ptrs, true)) return false;
+    if (!exchange_mr_vector(ctx, val_rkeys, true)) return false;
+  }
 
   for (int i = 0; i < layer_num; ++i) {
     ctx->conn.write_cache_key_remote_ptr_list.push_back(key_ptrs[i]);
     ctx->conn.write_cache_key_remote_rkey_list.push_back(key_rkeys[i]);
-    ctx->conn.write_cache_value_remote_ptr_list.push_back(val_ptrs[i]);
-    ctx->conn.write_cache_value_remote_rkey_list.push_back(val_rkeys[i]);
+    if (has_value_cache) {
+      ctx->conn.write_cache_value_remote_ptr_list.push_back(val_ptrs[i]);
+      ctx->conn.write_cache_value_remote_rkey_list.push_back(val_rkeys[i]);
+    }
   }
   return true;
 }
@@ -746,8 +754,8 @@ bool client_exchange_mr(struct RdmaContext *ctx) {
  * @param ctx The RDMA context
  * @return true on success, false on failure
  */
-bool server_exchange_mr(struct RdmaContext *ctx) {
-  LOGD("verbs server exchange mr: start");
+bool server_exchange_mr(struct RdmaContext *ctx, bool has_value_cache) {
+  LOGD("verbs server exchange mr: start. has_value_cache=%d", has_value_cache);
 
   if (ctx->conn.layer_number <= 0) {
     ERR("Invalid layer number: %d", ctx->conn.layer_number);
@@ -759,8 +767,16 @@ bool server_exchange_mr(struct RdmaContext *ctx) {
   auto &val_mrs = ctx->conn.write_cache_value_server_mr_list;
 
   // Verify that server memory regions are properly initialized
-  if (key_mrs.size() != layer_num || val_mrs.size() != layer_num) {
-    ERR("server write cache memory region size error");
+  if (key_mrs.size() != layer_num) {
+    ERR("server write cache KEY memory region size error: %zu vs %d",
+        key_mrs.size(),
+        layer_num);
+    return false;
+  }
+  if (has_value_cache && val_mrs.size() != layer_num) {
+    ERR("server write cache VALUE memory region size error: %zu vs %d",
+        val_mrs.size(),
+        layer_num);
     return false;
   }
 
@@ -772,22 +788,27 @@ bool server_exchange_mr(struct RdmaContext *ctx) {
 
   send_key_ptrs.reserve(layer_num);
   send_key_rkeys.reserve(layer_num);
-  send_val_ptrs.reserve(layer_num);
-  send_val_rkeys.reserve(layer_num);
+  if (has_value_cache) {
+    send_val_ptrs.reserve(layer_num);
+    send_val_rkeys.reserve(layer_num);
+  }
 
   // Collect memory region information from local MRs
   for (int i = 0; i < layer_num; ++i) {
     send_key_ptrs.push_back(reinterpret_cast<uint64_t>(key_mrs[i]->addr));
     send_key_rkeys.push_back(key_mrs[i]->rkey);
-    send_val_ptrs.push_back(reinterpret_cast<uint64_t>(val_mrs[i]->addr));
-    send_val_rkeys.push_back(val_mrs[i]->rkey);
+    if (has_value_cache) {
+      send_val_ptrs.push_back(reinterpret_cast<uint64_t>(val_mrs[i]->addr));
+      send_val_rkeys.push_back(val_mrs[i]->rkey);
+    }
   }
 
-  // Send all vectors to client
   if (!exchange_mr_vector(ctx, send_key_ptrs, false)) return false;
   if (!exchange_mr_vector(ctx, send_key_rkeys, false)) return false;
-  if (!exchange_mr_vector(ctx, send_val_ptrs, false)) return false;
-  if (!exchange_mr_vector(ctx, send_val_rkeys, false)) return false;
+  if (has_value_cache) {
+    if (!exchange_mr_vector(ctx, send_val_ptrs, false)) return false;
+    if (!exchange_mr_vector(ctx, send_val_rkeys, false)) return false;
+  }
 
   return true;
 }

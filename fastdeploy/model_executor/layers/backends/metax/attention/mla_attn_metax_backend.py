@@ -307,6 +307,7 @@ class MetaxMLAAttentionBackend(AttentionBackend):
             forward_meta.batch_id_per_token,
             forward_meta.cu_seqlens_q,
             metadata.block_tables,
+            metadata.kv_signal_data_list[layer.layer_id],
             "none",
             getattr(forward_meta, "max_input_length", -1),
         )
