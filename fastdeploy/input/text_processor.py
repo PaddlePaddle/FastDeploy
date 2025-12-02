@@ -280,63 +280,65 @@ class DataProcessor(BaseDataProcessor):
         """
         data_processor_logger.info(f"Start processing request dict: {request}")
         request = self._apply_default_parameters(request)
-        if not request.get("eos_token_ids"):
-            request["eos_token_ids"] = self.eos_token_ids
+        if not request.eos_token_ids:
+            request.eos_token_ids = self.eos_token_ids
 
         # processing stop_sequences
-        stop_sequences = request.get("stop", [])
+        stop_sequences = request.sampling_params.stop if request.sampling_params.stop else []
         if stop_sequences:
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
-            request["stop_token_ids"] = stop_seqs
-            request["stop_seqs_len"] = stop_seqs_len
+            request.sampling_params.stop_token_ids = stop_seqs
+            request.sampling_params.stop_seqs_len = stop_seqs_len
 
         # processing bad_words
-        bad_words = request.get("bad_words")
-        bad_words_token_ids = request.get("bad_words_token_ids")
+        bad_words = request.sampling_params.bad_words
+        bad_words_token_ids = request.sampling_params.bad_words_token_ids
         if bad_words:
             bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
-            request["bad_words_token_ids"] = bad_words_token_ids
+            request.sampling_params.bad_words_token_ids = bad_words_token_ids
 
         # processing prompt_token_ids
-        if not request.get("prompt_token_ids"):
-            if request.get("prompt"):
-                prompt = request.get("prompt")
+        if not request.prompt_token_ids:
+            if request.prompt:
+                prompt = request.prompt
                 assert isinstance(prompt, str) or (
                     isinstance(prompt, list) and all([isinstance(t, int) for t in prompt])
                 ), f"prompt must be a string or a list of integers, but got {type(prompt)}"
                 if isinstance(prompt, list):  # if prompt is a token id list
-                    request["prompt_token_ids"] = prompt
+                    request.prompt_token_ids = prompt
                 else:
-                    request["prompt_token_ids"] = self.text2ids(request["prompt"], max_model_len).tolist()
-            elif request.get("messages"):
+                    request.prompt_token_ids = self.text2ids(request.prompt, max_model_len).tolist()
+            elif request.messages:
                 if self.tokenizer.chat_template is None:
                     raise ValueError("This model does not support chat_template.")
-                chat_template_kwargs = request.get("chat_template_kwargs", {})
+                chat_template_kwargs = request.chat_template_kwargs if request.chat_template_kwargs else {}
                 if chat_template_kwargs:
                     if isinstance(chat_template_kwargs, dict):
                         for k, v in chat_template_kwargs.items():
-                            if k not in request:
-                                request[k] = v
+                            if not getattr(request, k, None):
+                                setattr(request, k, v)
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-                request.setdefault("enable_thinking", True)
-                request["prompt_token_ids"] = self.messages2ids(request, **chat_template_kwargs)
+                if getattr(request, "enable_thinking") is None:
+                    setattr(request, "enable_thinking", True)
+                request.prompt_token_ids = self.messages2ids(request, **chat_template_kwargs)
+                delattr(request, "chat_template_kwargs")
             else:
                 raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")
 
-        if len(request["prompt_token_ids"]) == 0:
+        if len(request.prompt_token_ids) == 0:
             raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
 
         # truncate prompts that exceed the length limit
-        if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
-            request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
-        if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
-        if request.get("temperature") < _SAMPLING_EPS:
+        if max_model_len is not None and len(request.prompt_token_ids) > max_model_len:
+            request.prompt_token_ids = request.prompt_token_ids[: max_model_len - 1]
+        if request.sampling_params.max_tokens is None:
+            request.sampling_params.max_tokens = max(1, max_model_len - len(request.prompt_token_ids))
+        if request.sampling_params.temperature < _SAMPLING_EPS:
             # zero temperature is equivalent to greedy sampling
-            request["temperature"] = 1
-        if request.get("top_p") < _SAMPLING_EPS:
-            request["top_p"] = _SAMPLING_EPS
+            request.sampling_params.temperature = 1
+        if request.sampling_params.top_p < _SAMPLING_EPS:
+            request.sampling_params.top_p = _SAMPLING_EPS
 
         data_processor_logger.info(f"Processed request dict: {request}")
         return request

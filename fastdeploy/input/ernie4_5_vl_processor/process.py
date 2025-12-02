@@ -27,7 +27,7 @@ import zmq
 from paddleformers.transformers.image_utils import ChannelDimension
 from PIL import Image
 
-from fastdeploy.engine.request import ImagePosition
+from fastdeploy.engine.request import ImagePosition, Request
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
 from fastdeploy.input.utils import IDS_TYPE_FLAG
@@ -245,8 +245,8 @@ class DataProcessor:
 
         return outputs
 
-    def extract_mm_items(self, request: Dict[str, Any]):
-        messages = parse_chat_messages(request.get("messages"))
+    def extract_mm_items(self, request: Request):
+        messages = parse_chat_messages(request.messages)
         mm_items = []
         for msg in messages:
             role = msg.get("role")
@@ -294,7 +294,7 @@ class DataProcessor:
         return images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items
 
     def request2ids(
-        self, request: Dict[str, Any], tgts: List[str] = None
+        self, request: Request, tgts: List[str] = None
     ) -> Dict[str, Union[np.ndarray, List[np.ndarray], None]]:
         """
         Convert chat messages into model inputs.
@@ -305,14 +305,19 @@ class DataProcessor:
         if self.tokenizer.chat_template is None:
             raise ValueError("This model does not support chat template.")
 
-        chat_template_kwargs = request.get("chat_template_kwargs", {})
+        chat_template_kwargs = request.chat_template_kwargs if request.chat_template_kwargs else {}
+        message_dict = {
+            "messages": getattr(request, "messages", None),
+            "tools": getattr(request, "tools", None),
+            "documents": getattr(request, "documents", None),
+        }
         prompt = self.tokenizer.apply_chat_template(
-            request,
+            message_dict,
             tokenize=False,
-            add_generation_prompt=request.get("add_generation_prompt", True),
+            add_generation_prompt=request.add_generation_prompt if request.add_generation_prompt is not None else True,
             **chat_template_kwargs,
         )
-        request["prompt_tokens"] = prompt
+        request.prompt_tokens = prompt
 
         outputs = self.text2ids(prompt, images, videos, image_uuid, video_uuid)
 
@@ -336,7 +341,7 @@ class DataProcessor:
         return outputs
 
     def prompt_token_ids2outputs(
-        self, request: Dict[str, Any], tgts: List[str] = None
+        self, request: Request, tgts: List[str] = None
     ) -> Dict[str, Union[np.ndarray, List[np.ndarray], None]]:
         outputs = {
             "input_ids": [],
@@ -353,9 +358,9 @@ class DataProcessor:
             "mm_positions": [],
             "mm_hashes": [],
         }
-        prompt_token_ids = request.get("prompt_token_ids", [])
+        prompt_token_ids = request.prompt_token_ids if request.prompt_token_ids else []
         prompt_token_ids_len = len(prompt_token_ids)
-        if not request.get("messages"):
+        if not request.messages:
             outputs["input_ids"].extend(prompt_token_ids)
             outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * prompt_token_ids_len)
             for i in range(prompt_token_ids_len):

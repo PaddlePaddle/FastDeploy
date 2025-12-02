@@ -411,8 +411,6 @@ class Ernie4_5Processor(BaseDataProcessor):
         )
         request_or_messages.prompt_tokens = spliced_message
         req_id = getattr(request_or_messages, "request_id", None)
-        # if isinstance(request_or_messages, dict):
-        #     req_id = request_or_messages.get("request_id", None)
         tokens = self.tokenizer.tokenize(spliced_message)
         token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
         data_processor_logger.info(f"req_id:{req_id}, tokens:{tokens}, token_ids: {token_ids}")

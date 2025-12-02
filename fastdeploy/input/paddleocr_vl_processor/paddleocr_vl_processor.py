@@ -207,54 +207,56 @@ class PaddleOCRVLProcessor(TextProcessor):
         """
 
         request = self._apply_default_parameters(request)
-        if not request.get("eos_token_ids"):
-            request["eos_token_ids"] = self.eos_token_ids
+        if not request.eos_token_ids:
+            request.eos_token_ids = self.eos_token_ids
 
-        stop_sequences = request.get("stop", [])
+        stop_sequences = request.sampling_params.stop if request.sampling_params.stop else []
         if stop_sequences:
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
-            request["stop_token_ids"] = stop_seqs
-            request["stop_seqs_len"] = stop_seqs_len
+            request.sampling_params.stop_token_ids = stop_seqs
+            request.sampling_params.stop_seqs_len = stop_seqs_len
 
-        if request.get("prompt"):
-            multimodal_data = request.get("multimodal_data")
+        if request.prompt:
+            multimodal_data = request.multimodal_data
             if multimodal_data is None:
                 multimodal_data = {}
             self._check_mm_limits(multimodal_data)
             images = multimodal_data.get("image", None)
             videos = multimodal_data.get("video", None)
-            outputs = self.processor.text2ids(request["prompt"], images, videos)
+            outputs = self.processor.text2ids(request.prompt, images, videos)
 
-        elif request.get("messages"):
-            messages = request["messages"]
+        elif request.messages:
+            messages = request.messages
             self._check_mm_limits(messages)
             outputs = self.processor.request2ids(request)
 
         else:
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 
-        metadata = request.get("metadata")
+        metadata = request.metadata
         # Handle continuation of previous generation by appending existing tokens
         if metadata and metadata.get("generated_token_ids"):
             self.append_generated_tokens(outputs, metadata["generated_token_ids"])
         outputs = self.pack_outputs(outputs)
 
-        request["prompt_token_ids"] = outputs["input_ids"].tolist()
-        request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
-        request["multimodal_inputs"] = outputs
+        request.prompt_token_ids = outputs["input_ids"].tolist()
+        request.prompt_token_ids_len = len(request.prompt_token_ids)
+        request.multimodal_inputs = outputs
 
         # Handle prompt truncation if exceeds model context length
-        if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
-            request["prompt_token_ids"] = request["prompt_token_ids"][
+        if max_model_len is not None and len(request.prompt_token_ids) > max_model_len:
+            request.prompt_token_ids = request.prompt_token_ids[
                 : max_model_len - 1
             ]  # Leave space for at least 1 new token
 
         # Set default max_tokens if not specified
-        if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))  # Ensure at least 1 token
+        if request.sampling_params.max_tokens is None:
+            request.sampling_params.max_tokens = max(
+                1, max_model_len - len(request.prompt_token_ids)
+            )  # Ensure at least 1 token
 
-        if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
-            request["top_p"] = _SAMPLING_EPS
+        if request.sampling_params.top_p is not None and request.sampling_params.top_p < _SAMPLING_EPS:
+            request.sampling_params.top_p = _SAMPLING_EPS
 
         return request
 

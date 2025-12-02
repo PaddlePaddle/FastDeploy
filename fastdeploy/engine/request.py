@@ -98,7 +98,7 @@ class Request:
         guided_grammar: Optional[Any] = None,
         structural_tag: Optional[Any] = None,
         guided_json_object: Optional[bool] = None,
-        enable_thinking: Optional[bool] = True,
+        enable_thinking: Optional[bool] = None,
         reasoning_max_tokens: Optional[int] = None,
         trace_carrier: dict = dict(),
         dp_rank: Optional[int] = None,
