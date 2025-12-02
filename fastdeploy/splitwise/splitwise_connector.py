@@ -396,7 +396,7 @@ class SplitwiseConnector:
         main_bytes = pickle.dumps(data, protocol=5, buffer_callback=buffers.append)
         return [main_bytes] + buffers
 
-    def _deserialize_message(self, frames: bytes):
+    def _deserialize_message(self, frames: List[bytes]):
         # identity = frames[0]
 
         if len(frames) < 2:
