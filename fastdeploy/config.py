@@ -229,8 +229,15 @@ class ModelConfig:
         self.think_end_id = args.get("think_end_id", -1)
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
-        if self.max_logprobs < -1:
+
+        num_max_logprobs = args.get("max_logprobs", None)
+        if num_max_logprobs is not None and num_max_logprobs < -1:
             raise ValueError(" The possible values for max_logprobs can't be less than -1 ")
+        if self.ori_vocab_size is not None and num_max_logprobs is not None:
+            if num_max_logprobs > self.ori_vocab_size:
+                raise ValueError(
+                    f" The possible values for max_logprobs can't be greater than the vocabulary size {self.ori_vocab_size}"
+                )
 
         self._post_init()
 
@@ -292,7 +299,7 @@ class ModelConfig:
             self.tensor_parallel_size = self.infer_model_mp_num
             del self.infer_model_mp_num
 
-        if hasattr(self, "num_hidden_layers"):
+        if hasattr(self, "num_hidden_layers") and self.runner != "pooling":
             if hasattr(self, "remove_tail_layer"):
                 if self.remove_tail_layer is True:
                     self.num_hidden_layers -= 1
@@ -1888,6 +1895,7 @@ class FDConfig:
             logger.info(f"disaggregate_info: {self.disaggregate_info}")
 
         if self.router_config:
+            # the information for registering this server to router
             self.register_info = {
                 "role": self.scheduler_config.splitwise_role,
                 "host_ip": self.host_ip,
@@ -1897,6 +1905,7 @@ class FDConfig:
                 "engine_worker_queue_port": engine_worker_queue_port,
                 "device_ids": self.local_device_ids,
                 "transfer_protocol": self.cache_config.cache_transfer_protocol.split(","),
+                "tp_size": self.parallel_config.tensor_parallel_size,
             }
             logger.info(f"register_info: {self.register_info}")
 
