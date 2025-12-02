@@ -291,7 +291,7 @@ class TokenProcessor:
                             llm_logger.warning(f"Failed to parse logprobs from StreamTransferData: {e}")
                     if getattr(stream_data, "prompt_logprobs", None) is not None:
                         try:
-                            result.prompt_logprobs_tensors = stream_data.prompt_logprobs
+                            result.prompt_logprobs = stream_data.prompt_logprobs
                         except Exception as e:
                             llm_logger.warning(f"Failed to parse prompt_logprobs from StreamTransferData: {e}")
                 if self.tokens_counter[task_id] == 0:

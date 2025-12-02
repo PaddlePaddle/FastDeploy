@@ -56,10 +56,11 @@ class EngineClient:
     EngineClient is a class that handles the communication between the client and the server.
     """
 
-    def __init__(self, pid: int | str, port: int | str, fd_config: FDConfig, workers: int = 1):
+    def __init__(self, pid: int | str, port: int | str, fd_config: FDConfig, workers: int = 1, max_logprobs: int = 20):
         self.fd_config = fd_config
         self.tensor_parallel_size = self.fd_config.parallel_config.tensor_parallel_size
         self.enable_mm = self.fd_config.model_config.enable_mm
+        self.max_logprobs = max_logprobs
         input_processor = InputPreprocessor(
             self.fd_config.model_config,
             self.fd_config.structured_outputs_config.reasoning_parser,
@@ -70,6 +71,11 @@ class EngineClient:
         )
         self.enable_logprob = self.fd_config.model_config.enable_logprob
         self.data_processor = input_processor.create_processor()
+        self.ori_vocab_size = (
+            len(self.data_processor.tokenizer.sp_model)
+            if hasattr(self.data_processor.tokenizer, "sp_model")
+            else len(self.data_processor.tokenizer.vocab)
+        )
         self.max_model_len = self.fd_config.model_config.max_model_len
         self.enable_prefix_caching = self.fd_config.cache_config.enable_prefix_caching
         self.enable_splitwise = self.fd_config.scheduler_config.splitwise_role != "mixed"
@@ -424,6 +430,53 @@ class EngineClient:
         elif logprobs:
             raise ParameterError("logprobs", "Invalid type for 'logprobs'")
 
+        max_logprobs = self.max_logprobs
+        if max_logprobs == -1:
+            max_logprobs = self.ori_vocab_size
+        if max_logprobs < -1:
+            err_msg = f"Invalid 'max_logprobs': must be >= -1, got {max_logprobs}."
+            api_server_logger.error(err_msg)
+            raise ValueError("max_logprobs", err_msg)
+        if max_logprobs > self.ori_vocab_size:
+            err_msg = f"Invalid 'max_logprobs': must be <= vocab_size {self.ori_vocab_size}, got {max_logprobs}."
+            api_server_logger.error(err_msg)
+            raise ValueError("max_logprobs", err_msg)
+
+        prompt_logprobs = data.get("prompt_logprobs", None)
+
+        if prompt_logprobs is not None:
+            if not self.enable_logprob:
+                err_msg = "`enable_logprob` is disabled, please enable it in startup config."
+                api_server_logger.error(err_msg)
+                raise ParameterError("prompt_logprobs", err_msg)
+
+            if not envs.FD_USE_GET_SAVE_OUTPUT_V1:
+                err_msg = "prompt_logprobs is not support when FD_USE_GET_SAVE_OUTPUT_V1 is disabled."
+                api_server_logger.error(err_msg)
+                raise ParameterError("prompt_logprobs", err_msg)
+
+            if self.enable_prefix_caching:
+                err_msg = "prompt_logprobs is not support when prefix caching is enabled."
+                api_server_logger.error(err_msg)
+                raise ParameterError("prompt_logprobs", err_msg)
+
+            if prompt_logprobs == -1 and self.ori_vocab_size > max_logprobs:
+                err_msg = f"The requested value of ({self.ori_vocab_size}) for prompt_logprobs (-1) exceeds the maximum allowed value of ({max_logprobs})"
+                api_server_logger.error(err_msg)
+                raise ValueError("prompt_logprobs", err_msg)
+
+            if prompt_logprobs < -1:
+                err_msg = (
+                    f"prompt_logprobs must be a non-negative value or -1; the current value is {prompt_logprobs}."
+                )
+                api_server_logger.error(err_msg)
+                raise ValueError("prompt_logprobs", err_msg)
+
+            if prompt_logprobs > max_logprobs:
+                err_msg = f"Number of prompt_logprobs requested ({prompt_logprobs}) exceeds maximum allowed value ({max_logprobs})."
+                api_server_logger.error(err_msg)
+                raise ValueError("prompt_logprobs", err_msg)
+
         # enable_logprob
         if top_logprobs:
             if not self.enable_logprob:
@@ -437,15 +490,26 @@ class EngineClient:
                 api_server_logger.error(err_msg)
                 raise ParameterError("top_logprobs", err_msg)
 
-            if top_logprobs < 0:
-                err_msg = f"Invalid 'top_logprobs': must be >= 0, got {top_logprobs}."
-                api_server_logger.error(err_msg)
-                raise ParameterError("top_logprobs", err_msg)
+            if not envs.FD_USE_GET_SAVE_OUTPUT_V1:
+                if top_logprobs < 0 or top_logprobs > 20:
+                    err_msg = f"top_logprobs must be between 0 and 20; the current value is {top_logprobs}."
+                    api_server_logger.error(err_msg)
+                    raise ValueError("top_logprobs", err_msg)
+            else:
+                if top_logprobs == -1 and self.ori_vocab_size > max_logprobs:
+                    err_msg = f"The requested value of ({self.ori_vocab_size}) for top_logprobs (-1) exceeds the maximum allowed value of ({max_logprobs})"
+                    api_server_logger.error(err_msg)
+                    raise ValueError("top_logprobs", err_msg)
 
-            if top_logprobs > 20:
-                err_msg = "Invalid value for 'top_logprobs': must be <= 20."
-                api_server_logger.error(err_msg)
-                raise ParameterError("top_logprobs", err_msg)
+                if top_logprobs < -1:
+                    err_msg = f"top_logprobs must be a non-negative value or -1; the current value is {top_logprobs}."
+                    api_server_logger.error(err_msg)
+                    raise ValueError("top_logprobs", err_msg)
+
+                if top_logprobs > max_logprobs:
+                    err_msg = f"Number of logprobs requested ({top_logprobs}) exceeds maximum allowed value ({max_logprobs})."
+                    api_server_logger.error(err_msg)
+                    raise ValueError("top_logprobs", err_msg)
 
     def check_health(self, time_interval_threashold=30):
         """

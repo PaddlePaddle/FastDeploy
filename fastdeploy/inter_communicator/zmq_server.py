@@ -153,7 +153,7 @@ class ZmqServerBase(ABC):
         if len(data) > 1:
             for response in data[1:]:
                 result.add(response)
-        result = msgpack.packb([result.to_dict()])
+        result = ForkingPickler.dumps([result.to_dict()])
         return result
 
     def receive_json_once(self, block=False):
@@ -278,12 +278,12 @@ class ZmqServerBase(ABC):
                 if self.aggregate_send:
                     result = self.pack_aggregated_data(new_data)
                 else:
-                    result = msgpack.packb([response.to_dict() for response in new_data])
+                    result = ForkingPickler.dumps([response.to_dict() for response in new_data])
                 with self.response_token_lock:
 
                     _zmq_metrics_stats = ZMQMetricsStats()
                     try:
-                        self.socket.send_multipart([self.req_dict[req_id], b"", result])
+                        self.socket.send_multipart([self.req_dict[req_id], b"", result], copy=False)
                         _zmq_metrics_stats.msg_bytes_send_total += len(result)
                     except Exception as e:
                         _zmq_metrics_stats.msg_send_failed_total += 1

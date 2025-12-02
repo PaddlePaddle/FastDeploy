@@ -181,6 +181,7 @@ async def lifespan(app: FastAPI):
         port=int(os.environ.get("INFERENCE_MSG_QUEUE_ID", "0")),
         fd_config=fd_config,
         workers=args.workers,
+        max_logprobs=args.max_logprobs,
     )
     await engine_client.connection_manager.initialize()
     app.state.dynamic_load_weight = args.dynamic_load_weight

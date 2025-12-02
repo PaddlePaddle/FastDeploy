@@ -37,7 +37,7 @@ opentelemetry-instrumentation-mysql
 opentelemetry-distro
 opentelemetry-exporter-otlp
 opentelemetry-instrumentation-fastapi
-opentelemetry-instrumentation-logging
+opentelemetry-instrumentation-logging>=0.57b0
 partial_json_parser
 msgspec
 safetensors==0.7.0rc0

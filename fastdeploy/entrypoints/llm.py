@@ -335,23 +335,40 @@ class LLM:
                 current_sampling_params = sampling_params[i]
             else:
                 current_sampling_params = sampling_params
-            if kwargs.get("stream") and current_sampling_params.prompt_logprobs is not None:
-                raise ValueError("prompt_logprobs is not supported with streaming.")
+
+            ori_vocab_size = (
+                len(self.llm_engine.data_processor.tokenizer.sp_model)
+                if hasattr(self.llm_engine.data_processor.tokenizer, "sp_model")
+                else len(self.llm_engine.data_processor.tokenizer.vocab)
+            )
             max_logprobs = self.llm_engine.cfg.model_config.max_logprobs
             if max_logprobs == -1:
-                max_logprobs = self.llm_engine.cfg.model_config.ori_vocab_size
+                max_logprobs = ori_vocab_size
+            if max_logprobs < -1:
+                raise ValueError(f"max_logprobs ({max_logprobs}) can't be less than -1.")
+            if max_logprobs > ori_vocab_size:
+                raise ValueError(f"max_logprobs ({max_logprobs}) exceeds vocabulary size ({ori_vocab_size}).")
+
             if current_sampling_params.logprobs is not None:
                 num_logprobs = current_sampling_params.logprobs
-                if num_logprobs == -1:
-                    num_logprobs = self.llm_engine.cfg.model_config.ori_vocab_size
+                if num_logprobs == -1 and ori_vocab_size > max_logprobs:
+                    raise ValueError(
+                        f"Number of logprobs(-1) requested ({ori_vocab_size}) exceeds maximum allowed value ({max_logprobs})."
+                    )
                 if num_logprobs > max_logprobs:
                     raise ValueError(
                         f"Number of logprobs requested ({num_logprobs}) exceeds maximum allowed value ({max_logprobs})."
                     )
             if current_sampling_params.prompt_logprobs is not None:
+                if self.llm_engine.cfg.cache_config.enable_prefix_caching:
+                    raise ValueError("prompt_logprobs is not supported with prefix caching enabled.")
+                if kwargs.get("stream"):
+                    raise ValueError("prompt_logprobs is not supported with streaming.")
                 num_prompt_logprobs = current_sampling_params.prompt_logprobs
-                if num_prompt_logprobs == -1:
-                    num_prompt_logprobs = self.llm_engine.cfg.model_config.ori_vocab_size
+                if num_prompt_logprobs == -1 and ori_vocab_size > max_logprobs:
+                    raise ValueError(
+                        f"Number of prompt_logprobs(-1) requested ({ori_vocab_size}) exceeds maximum allowed value ({max_logprobs})."
+                    )
                 if num_prompt_logprobs > max_logprobs:
                     raise ValueError(
                         f"Number of logprobs requested ({num_prompt_logprobs}) exceeds maximum allowed value ({max_logprobs})."
@@ -436,7 +453,7 @@ class LLM:
         prompt_token_ranks = ranks.tolist()
         prompt_logprobs = logprobs.tolist()
         token_ids = token_ids.tolist()
-        result: Optional[PromptLogprobs] = []
+        result: Optional[PromptLogprobs] = [None]
         # Make Logprob for each position.
         for pos in range(num_prompt_tokens):
             # Handle flattening.
@@ -548,11 +565,11 @@ class LLM:
                         result.outputs.logprobs = self._build_sample_logprobs(
                             result.outputs.top_logprobs, topk_logprobs
                         )
-                    if result.prompt_logprobs_tensors and num_prompt_logprobs:
+                    if result.prompt_logprobs is not None and num_prompt_logprobs is not None:
                         if num_prompt_logprobs == -1:
                             num_prompt_logprobs = self.llm_engine.cfg.model_config.ori_vocab_size
                         result.prompt_logprobs = self._build_prompt_logprobs(
-                            result.prompt_logprobs_tensors, num_prompt_logprobs
+                            result.prompt_logprobs, num_prompt_logprobs
                         )
 
                     output[pos] = result
