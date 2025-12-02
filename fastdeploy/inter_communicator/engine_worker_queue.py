@@ -27,10 +27,9 @@ from queue import Queue
 from typing import Any, List, Tuple
 
 import numpy as np
-import paddle
 
 from fastdeploy import envs
-from fastdeploy.utils import llm_logger
+from fastdeploy.utils import llm_logger, to_tensor
 
 
 class EngineWorkerQueue:
@@ -287,12 +286,6 @@ class EngineWorkerQueue:
                 callable=lambda idx: self.disaggregate_requests[idx],
             )
 
-            self.available_prefill_instances = Queue()
-            QueueManager.register(
-                "get_available_prefill_instances",
-                callable=lambda: self.available_prefill_instances,
-            )
-
             QueueManager.register(
                 "get_finish_request_barrier",
                 callable=lambda idx: self.finish_request_barrier[idx],
@@ -351,7 +344,6 @@ class EngineWorkerQueue:
             QueueManager.register("get_client_read_info_flag")
             QueueManager.register("get_lock_info")
             QueueManager.register("get_disaggregate_requests")
-            QueueManager.register("get_available_prefill_instances")
             QueueManager.register("get_finish_request_barrier")
             QueueManager.register("get_finish_add_cache_task_barrier")
             QueueManager.register("get_connect_task_barrier")
@@ -390,7 +382,6 @@ class EngineWorkerQueue:
 
             # p/d 分离获取
             self.disaggregate_requests = self.manager.get_disaggregate_requests(self.local_data_parallel_id)
-            self.available_prefill_instances = self.manager.get_available_prefill_instances()
             self.finish_request_barrier = self.manager.get_finish_request_barrier(self.local_data_parallel_id)
             self.finish_add_cache_task_barrier = self.manager.get_finish_add_cache_task_barrier(
                 self.local_data_parallel_id
@@ -482,49 +473,6 @@ class EngineWorkerQueue:
                 time.sleep(interval)
         raise ConnectionError(f"TaskQueue cannot connect {self.address}")
 
-    @staticmethod
-    def to_tensor(tasks):
-        """
-        Convert NumPy arrays in multimodal inputs to PaddlePaddle tensors.
-
-        Args:
-            tasks: List of tasks containing multimodal inputs.
-        """
-        try:
-            if envs.FD_ENABLE_MAX_PREFILL:
-                llm_logger.debug(f"Convert image to tensor, type: {type(tasks)}")
-                batch_tasks, _ = tasks
-                for task in batch_tasks:
-                    if not hasattr(task, "multimodal_inputs"):
-                        continue
-                    images = task.multimodal_inputs["images"]
-                    if isinstance(images, np.ndarray):
-                        llm_logger.debug(f"Convert image to tensor, shape: {images.shape}")
-                        task.multimodal_inputs["images"] = paddle.to_tensor(images)
-        except Exception as e:
-            llm_logger.warning(f"Failed to convert to tensor: {e}")
-
-    @staticmethod
-    def to_numpy(tasks):
-        """
-        Convert PaddlePaddle tensors in multimodal inputs to NumPy arrays.
-
-        Args:
-            tasks: List of tasks containing multimodal inputs.
-        """
-        try:
-            if envs.FD_ENABLE_MAX_PREFILL:
-                for batch_tasks, _ in tasks:
-                    for task in batch_tasks:
-                        if not hasattr(task, "multimodal_inputs"):
-                            continue
-                        images = task.multimodal_inputs.get("images", None)
-                        if isinstance(images, paddle.Tensor):
-                            llm_logger.debug(f"Convert image to numpy, shape: {images.shape}")
-                            task.multimodal_inputs["images"] = images.numpy()
-        except Exception as e:
-            llm_logger.warning(f"Failed to convert to numpy: {e}")
-
     def put_tasks(self, tasks: List[Any]) -> None:
         """
         Add tasks to the shared queue in a thread-safe manner.
@@ -539,8 +487,9 @@ class EngineWorkerQueue:
             time.sleep(0.001)
             self.lock.acquire()
 
-        # 多模态输入转换为张量
-        EngineWorkerQueue.to_tensor(tasks)
+        if envs.FD_ENABLE_MAX_PREFILL or envs.FD_ENABLE_E2W_TENSOR_CONVERT:
+            # multimodal input numpy -> tensor
+            to_tensor(tasks[0])
 
         self.tasks[:] = list()
         self.client_read_flag[:] = [0] * self.num_client
@@ -558,9 +507,6 @@ class EngineWorkerQueue:
         self.lock.acquire()
 
         tasks.extend(self.tasks)
-        # 多模态输入转换为numpy
-        # EngineWorkerQueue.to_numpy(tasks)
-
         self.client_read_flag[self.client_id] = 1
         all_client_read: bool = np.sum(self.client_read_flag) == self.num_client
         if all_client_read:
@@ -638,15 +584,6 @@ class EngineWorkerQueue:
         self.connect_task_response_lock.release()
         return task_response
 
-    def get_prefill_instances(self):
-        """
-        check if the prefill queue is empty
-        """
-        if self.available_prefill_instances.qsize() == 0:
-            return 0
-        else:
-            return self.available_prefill_instances.get()
-
     def put_cache_info(self, cache_info) -> None:
         """
         Args:
@@ -662,7 +599,10 @@ class EngineWorkerQueue:
         self.client_read_info_flag[:] = [0] * self.num_client
 
         self.cache_infos.extend(cache_info)
-        llm_logger.debug(f"cache_infos: {self.cache_infos}  local_data_parallel_id:{self.local_data_parallel_id}")
+        llm_logger.debug(
+            f"put cache_infos to engine worker queue: {self.cache_infos}, "
+            f"local_data_parallel_id:{self.local_data_parallel_id}"
+        )
         self.lock_info.release()
 
     def get_cache_info(self) -> List[Any]:
@@ -684,7 +624,10 @@ class EngineWorkerQueue:
             self.cache_infos[:] = list()
         self.lock_info.release()
         if len(cache_infos) != 0:
-            llm_logger.debug(f"get cache infos: {cache_infos}  local_data_parallel_id:{self.local_data_parallel_id}")
+            llm_logger.debug(
+                f"get cache infos from engine worker queue: {cache_infos}, "
+                f"local_data_parallel_id:{self.local_data_parallel_id}"
+            )
         return cache_infos
 
     def num_cache_infos(self) -> int:

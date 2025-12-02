@@ -130,6 +130,15 @@ user: Optional[str] = None
 metadata: Optional[dict] = None
 # 附加元数据，用于传递自定义信息（如请求 ID、调试标记等）。
 
+n: Optional[int] = 1
+# 生成结果的候选数量（即返回多少个独立生成的文本），默认 1（仅返回一个结果）。
+
+seed: Optional[int] = Field(default=None, ge=0, le=922337203685477580)
+# 随机种子，用于控制生成过程的确定性（相同种子和输入会得到相同结果）。范围需在 `[0, 922337203685477580]` 之间，默认 None 表示不固定种子。
+
+stop: Optional[Union[str, List[str]]] = Field(default_factory=list)
+# 停止生成的条件，可以是单个字符串或字符串列表。当模型生成任一停止字符串时，生成过程会提前终止（默认空列表表示不启用）。
+
 ```
 
 ### FastDeploy 增加额外参数
@@ -160,6 +169,10 @@ bad_words_token_ids: Optional[List[int]] = None
 
 repetition_penalty: Optional[float] = None
 # 重复惩罚系数，降低已生成 token 的重复概率（>1.0 抑制重复，<1.0 鼓励重复，默认 None 表示禁用）。
+
+stop_token_ids: Optional[List[int]] = Field(default_factory=list)
+# 停止生成的 token ID 列表，当模型生成任一指定 token 时，生成过程会提前终止（默认空列表表示不启用）。通常与 `stop` 参数互补使用。
+
 ```
 其他参数的支持如下：
 ```python
@@ -201,6 +214,16 @@ temp_scaled_logprobs: Optional[bool] = False
 
 top_p_normalized_logprobs: Optional[bool] = False
 # 计算logprob时是否进行 top_p 归一化（默认 False 表示不进行top_p归一化）。
+
+include_draft_logprobs: Optional[bool] = False
+# 是否在预生成或中间步骤返回对数概率（log probabilities），用于调试或分析生成过程（默认 False 表示不返回）。
+
+logits_processors_args: Optional[Dict] = None
+# 传递给 logits 处理器（logits processors）的额外参数，用于自定义生成过程中的逻辑（如动态调整概率分布）。
+
+mm_hashes: Optional[list] = None
+# 多模态（multimodal）输入的哈希值列表，用于验证或跟踪输入内容（如图像、音频等）。默认 None 表示无多模态输入或无需哈希验证。
+
 ```
 
 ### 返回字段差异
@@ -350,6 +373,37 @@ max_tokens: Optional[int] = None
 
 presence_penalty: Optional[float] = None
 # 存在惩罚系数，降低新主题（未出现过的话题）的生成概率（`>1.0` 抑制新话题，`<1.0` 鼓励新话题）。
+
+echo: Optional[bool] = False
+# 是否将输入的 prompt 包含在输出中（默认 False，即不输出 prompt）。
+
+n: Optional[int] = 1
+# 生成结果的候选数量（即返回多少个独立生成的文本），默认 1（仅返回一个结果）。
+
+seed: Optional[int] = Field(default=None, ge=0, le=922337203685477580)
+# 随机种子，用于控制生成过程的确定性（相同种子和输入会得到相同结果）。范围需在 `[0, 922337203685477580]` 之间，默认 None 表示不固定种子。
+
+stop: Optional[Union[str, List[str]]] = Field(default_factory=list)
+# 停止生成的条件，可以是单个字符串或字符串列表。当模型生成任一停止字符串时，生成过程会提前终止（默认空列表表示不启用）。
+
+stream: Optional[bool] = False
+# 是否启用流式输出（逐 token 返回结果），默认 `False`（一次性返回完整结果）。
+
+stream_options: Optional[StreamOptions] = None
+# 流式输出的额外配置（如分块大小、超时等），需参考 `StreamOptions` 的具体定义。
+
+temperature: Optional[float] = None
+# 温度系数，控制生成随机性（`0.0` 确定性生成，`>1.0` 更随机，默认 `None` 使用模型默认值）。
+
+top_p: Optional[float] = None
+# 核采样（nucleus sampling）阈值，只保留概率累计超过 `top_p` 的 token（默认 `None` 禁用）。
+
+response_format: Optional[AnyResponseFormat] = None
+# 指定输出格式（如 JSON、XML 等），需传入预定义的格式配置对象。
+
+user: Optional[str] = None
+# 用户标识符，用于跟踪或区分不同用户的请求（默认 `None` 不传递）。
+
 ```
 
 ### FastDeploy 增加额外参数
@@ -375,6 +429,12 @@ include_stop_str_in_output: Optional[bool] = False
 bad_words: Optional[List[str]] = None
 # 禁止生成的词汇列表（例如敏感词），模型会避免输出这些词（默认 None 表示不限制）。
 
+bad_words_token_ids: Optional[List[int]] = None
+# 禁止生成的token id列表，模型会避免输出这些词（默认 None 表示不限制）。
+
+stop_token_ids: Optional[List[int]] = Field(default_factory=list)
+# 停止生成的 token ID 列表，当模型生成任一指定 token 时，生成过程会提前终止（默认空列表表示不启用）。通常与 `stop` 参数互补使用。
+
 repetition_penalty: Optional[float] = None
 # 重复惩罚系数，降低已生成 token 的重复概率（>1.0 抑制重复，<1.0 鼓励重复，默认 None 表示禁用）。
 ```
@@ -398,6 +458,20 @@ return_token_ids: Optional[bool] = None
 prompt_token_ids: Optional[List[int]] = None
 # 直接传入 prompt 的 token ID 列表，跳过文本编码步骤（默认 None 表示使用文本输入）。
 
+temp_scaled_logprobs: Optional[bool] = False
+# 计算logprob时是否对logits除以温度系数（默认 False 表示不除以温度系数）。
+
+top_p_normalized_logprobs: Optional[bool] = False
+# 计算logprob时是否进行 top_p 归一化（默认 False 表示不进行top_p归一化）。
+
+include_draft_logprobs: Optional[bool] = False
+# 是否在预生成或中间步骤返回对数概率（log probabilities），用于调试或分析生成过程（默认 False 表示不返回）。
+
+logits_processors_args: Optional[Dict] = None
+# 传递给 logits 处理器（logits processors）的额外参数，用于自定义生成过程中的逻辑（如动态调整概率分布）。
+
+mm_hashes: Optional[list] = None
+# 多模态（multimodal）输入的哈希值列表，用于验证或跟踪输入内容（如图像、音频等）。默认 None 表示无多模态输入或无需哈希验证。
 ```
 
 ### 返回参数总览

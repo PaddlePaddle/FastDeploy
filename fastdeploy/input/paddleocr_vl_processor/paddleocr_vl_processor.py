@@ -22,6 +22,8 @@ from fastdeploy.utils import data_processor_logger
 
 from .process import DataProcessor
 
+_SAMPLING_EPS = 1e-5
+
 
 class PaddleOCRVLProcessor(TextProcessor):
     """
@@ -61,7 +63,6 @@ class PaddleOCRVLProcessor(TextProcessor):
             tool_parser_obj: Tool parser instance
         """
         super().__init__(model_name_or_path, reasoning_parser_obj, tool_parser_obj)
-
         data_processor_logger.info(f"model_name_or_path: {model_name_or_path}")
         processor_kwargs = self._parse_processor_kwargs(mm_processor_kwargs)
         self.processor = DataProcessor(
@@ -251,6 +252,9 @@ class PaddleOCRVLProcessor(TextProcessor):
         # Set default max_tokens if not specified
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))  # Ensure at least 1 token
+
+        if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
+            request["top_p"] = _SAMPLING_EPS
 
         return request
 
