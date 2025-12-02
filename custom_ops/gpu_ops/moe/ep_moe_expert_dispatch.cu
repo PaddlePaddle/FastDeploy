@@ -842,8 +842,11 @@ __global__ void permute_x_fp8_kernel(
       const int start_idx = i == 0 ? 0 : token_nums_per_expert_cum[i - 1];
       const int end_idx = token_nums_per_expert_cum[i];
       if (s_token_idx >= start_idx && s_token_idx < end_idx) {
-        if ((s_token_idx - start_idx) < token_nums_per_expert[i])
+        if ((s_token_idx - start_idx) < token_nums_per_expert[i]) {
           m_indices[s_token_idx] = i;
+        } else {
+          m_indices[s_token_idx] = -1;
+        }
         break;
       }
     }
