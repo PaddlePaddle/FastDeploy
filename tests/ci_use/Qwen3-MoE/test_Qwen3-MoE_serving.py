@@ -334,7 +334,7 @@ def test_thinking_with_stop_token_ids(api_url, headers):
 
     content = response_json.get("choices", [{}])[0].get("message", {}).get("content", "")
 
-    expected_output = "<think>\n好的，用户问“北京天安门"
+    expected_output = "<think>\n好的，用户问“北京天安门在哪里"
     assert content == expected_output, (
         f"Unexpected response content.\n" f"Expected: {expected_output!r}\n" f"Actual:   {content!r}"
     )
