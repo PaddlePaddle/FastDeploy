@@ -25,6 +25,7 @@ from typing import Any, Dict, Generic, Optional, Union
 import numpy as np
 from typing_extensions import TypeVar
 
+from fastdeploy import envs
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
@@ -281,6 +282,7 @@ class Request:
             "arrival_time": self.arrival_time,
             "preprocess_start_time": self.preprocess_start_time,
             "preprocess_end_time": self.preprocess_end_time,
+            "multimodal_inputs": self.multimodal_inputs,
             "multimodal_data": self.multimodal_data,
             "disable_chat_template": self.disable_chat_template,
             "disaggregate_info": self.disaggregate_info,
@@ -300,11 +302,15 @@ class Request:
             "audio_end": self.audio_end,
             "ic_req_data": self.ic_req_data,
         }
-        if "position_ids" in self.multimodal_inputs:
-            # During multimodal PD separation, position_ids are required
-            data["multimodal_inputs"] = {"position_ids": self.multimodal_inputs["position_ids"]}
-        else:
-            data["multimodal_inputs"] = self.multimodal_inputs
+
+        # During multimodal PD separation, position_ids are required
+        allowed_keys = {"position_ids"}
+        if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            allowed_keys.update(["input_ids", "token_type_ids", "images", "image_type_ids", "grid_thw"])
+
+        keys_to_remove = set(data["multimodal_inputs"]) - allowed_keys
+        for key in keys_to_remove:
+            data["multimodal_inputs"].pop(key)
 
         add_params = [
             "guided_json",
