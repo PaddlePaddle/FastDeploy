@@ -85,7 +85,7 @@ class TestMultiApiServer(unittest.TestCase):
         # Verify environment variables are set correctly
         first_call_kwargs = mock_popen.call_args_list[0][1]
         self.assertIn("env", first_call_kwargs)
-        self.assertEqual(first_call_kwargs["env"]["FD_LOG_DIR"], "log/log_0")
+        self.assertEqual(first_call_kwargs["env"]["FD_LOG_DIR"], "log/server_0")
 
     @patch("fastdeploy.entrypoints.openai.multi_api_server.is_port_available")
     def test_check_param_success(self, mock_is_port_available):
