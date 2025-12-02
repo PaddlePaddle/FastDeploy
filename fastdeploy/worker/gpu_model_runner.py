@@ -810,6 +810,8 @@ class GPUModelRunner(ModelRunnerBase):
                     )
                     self.seq_lens_this_time_buffer[idx : idx + 1] = num_prefill_send_token
                 if self.enable_mm:
+                    # Fix for V0 mode: Add position encoding for decode nodes in multimodal models
+                    # to prevent garbled output. Position_ids are transmitted from prefill nodes.
                     if (
                         "position_ids" in request.multimodal_inputs
                         and request.multimodal_inputs["position_ids"] is not None

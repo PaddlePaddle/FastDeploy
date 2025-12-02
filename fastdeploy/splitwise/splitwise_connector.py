@@ -396,13 +396,30 @@ class SplitwiseConnector:
         buffers = []
         # Serialize main data, strip large arrays as references into buffers
         main_bytes = pickle.dumps(data, protocol=5, buffer_callback=buffers.append)
+        # Serialize using pickle protocol 5 which provides efficient handling
+        # of large numpy arrays through out-of-band buffers.
+        # Returns: [main_bytes, buffer1, buffer2, ...]
+        # where main_bytes contains the serialized structure and buffers contain
+        # the actual array data extracted for efficient transmission.
         return [main_bytes] + buffers
 
     def _deserialize_message(self, frames: List[bytes]):
+        """
+        Deserialize message from ZMQ frames using pickle protocol 5.
+
+        Args:
+            frames: List of byte frames where:
+                - frames[0]: Identity frame (sender address)
+                - frames[1]: Main pickled data structure
+                - frames[2:]: Out-of-band buffers (numpy arrays)
+
+        Returns:
+            Tuple of (message_type: str, payload: Any)
+        """
         # identity = frames[0]
 
         if len(frames) < 2:
-            raise ValueError(f"Received frames too short, missing payload {len(frames)}")
+            raise ValueError(f"Received frames too short: expected at least 2 frames but got {len(frames)}")
 
         main_bytes = frames[1]
         buffers = frames[2:]
@@ -411,7 +428,7 @@ class SplitwiseConnector:
         message = pickle.loads(main_bytes, buffers=buffers)
         return message["type"], message["payload"]
 
-    def _process_message(self, frames: bytes):
+    def _process_message(self, frames: List[bytes]):
         """
         process message
         """
