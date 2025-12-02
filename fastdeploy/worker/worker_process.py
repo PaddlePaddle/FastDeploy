@@ -69,8 +69,8 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
     """
     get worker of different device
     """
-    if fd_config.model_config.enable_logprob and not current_platform.is_cuda():
-        raise NotImplementedError("Only CUDA platform supports logprob.")
+    if fd_config.model_config.enable_logprob and not current_platform.is_cuda() and not current_platform.is_xpu():
+        raise NotImplementedError("Only CUDA and XPU platforms support logprob.")
     if current_platform.is_dcu():
         from fastdeploy.worker.dcu_worker import DcuWorker
 
