@@ -441,7 +441,7 @@ std::vector<paddle::Tensor> MoeExpertFFN(
     const std::string& quant_method,
     const int hadamard_blocksize,
     const int valid_token_num) {
-  if (ffn_in.numel() == 0) {
+  if (ffn_in.numel() == 0 || valid_token_num == 0) {
     paddle::Tensor ffn2_out =
         paddle::empty_like(ffn_in, paddle::DataType::BFLOAT16);
     return {ffn2_out};

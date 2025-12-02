@@ -424,7 +424,6 @@ class ResourceManagerV1(ResourceManager):
         ):
             input_ids_lst = request.prompt_token_ids + request.output_token_ids
             input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
-            input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
             image_patch_id = inputs["image_patch_id"]
 
             if request.multimodal_img_boundaries is None:
@@ -524,8 +523,6 @@ class ResourceManagerV1(ResourceManager):
             preempted_reqs: list[Request] = []
             error_reqs: list[tuple[str, str]] = []
             token_budget = self.config.scheduler_config.max_num_batched_tokens
-
-            self.check_and_free_block_tables()
 
             # First, schedule the RUNNING requests.
             req_index = 0
@@ -703,7 +700,6 @@ class ResourceManagerV1(ResourceManager):
                             self.running.append(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             request.inference_start_time = time.time()
-                            request.schedule_start_time = time.time()
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
                             if self.config.cache_config.enable_prefix_caching:
@@ -834,7 +830,14 @@ class ResourceManagerV1(ResourceManager):
             return None
 
         if self.bos_client is None:
-            self.bos_client = init_bos_client()
+            try:
+                self.bos_client = init_bos_client()
+            except Exception as e:
+                error_msg = f"request {request.request_id} init bos client error: {str(e)}"
+                llm_logger.error(error_msg)
+                request.error_message = error_msg
+                request.error_code = 540
+                return None
 
         inputs = request.multimodal_inputs
         if inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0:
@@ -938,7 +941,6 @@ class ResourceManagerV1(ResourceManager):
         with self.lock:
             for request in requests:
                 request.inference_start_time = time.time()
-                request.schedule_start_time = time.time()
                 self.running.append(request)
 
     def preallocate_resource_in_p(self, request: Request):
