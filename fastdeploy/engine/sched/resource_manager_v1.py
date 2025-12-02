@@ -200,6 +200,10 @@ class ResourceManagerV1(ResourceManager):
         self.bos_client = None
         self.async_preprocess_pool = ThreadPoolExecutor(max_workers=4)
 
+        if self.config.scheduler_config.splitwise_role == "decode":
+            self.preallocated_requests_timestamp = {}
+            threading.Thread(target=self._monitor_recycle_block_ids_in_D, daemon=True).start()
+
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
 
@@ -223,6 +227,26 @@ class ResourceManagerV1(ResourceManager):
 
     def _prepare_preempt_task(self, request):
         return ScheduledPreemptTask(idx=request.idx, request_id=request.request_id)
+
+    def _monitor_recycle_block_ids_in_D(self):
+        while True:
+            try:
+                with self.lock:
+                    need_recycle_request_ids = []
+                    for request_id, timestamp in self.preallocated_requests_timestamp.items():
+                        if time.time() - timestamp >= envs.FD_GET_FIRST_TOKEN_FROM_P_TIMEOUT:
+                            need_recycle_request_ids.append(request_id)
+                    for request_id in need_recycle_request_ids:
+                        llm_logger.error(
+                            f"Recycle block ids for request {request_id} forcefully, due to get first token from P timeout."
+                        )
+                        del self.preallocated_requests_timestamp[request_id]
+                        request = self.requests[request_id]
+                        self.prerelease_resource(request)
+                time.sleep(10)
+            except Exception as e:
+                llm_logger.error(f"Monitor recycle block ids in D error: {e}, {str(traceback.format_exc())}")
+                time.sleep(10)
 
     def reschedule_preempt_task(self, request_id):
         with self.lock:
@@ -933,6 +957,14 @@ class ResourceManagerV1(ResourceManager):
                 request.inference_start_time = time.time()
                 self.running.append(request)
 
+    def has_existed_request(self, request_id):
+        """
+        Whether a request with the given request_id has been added to the scheduler.
+        """
+        if request_id in self.requests:
+            return True
+        return False
+
     def preallocate_resource_in_p(self, request: Request):
         """
         In P/D aggregated deployment, preallocate resource for P.
@@ -1018,6 +1050,7 @@ class ResourceManagerV1(ResourceManager):
             self.stop_flags[request.idx] = False
             self.requests[request.request_id] = request
             self.req_dict[request.request_id] = allocated_position
+            self.preallocated_requests_timestamp[request.request_id] = time.time()
         return True
 
     def has_resource_for_prefilled_req(self, request_id: str):
@@ -1037,12 +1070,16 @@ class ResourceManagerV1(ResourceManager):
         """
         assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
         if request_output.request_id not in self.requests:
-            self.logger.error(f"Request {request_output.request_id} not found in requests")
+            llm_logger.error(
+                f"Request {request_output.request_id} with first token from P not found in preallocated resource, please check whether recycled due to timeout."
+            )
             return
         request = self.requests[request_output.request_id]
 
         # update request and insert to running
         request.output_token_ids.append(request_output.outputs.token_ids[0])
+        if request.request_id in self.preallocated_requests_timestamp:
+            del self.preallocated_requests_timestamp[request.request_id]
         request.num_cached_tokens = request_output.num_cached_tokens
         if (
             self.config.speculative_config.method in ["mtp"]
