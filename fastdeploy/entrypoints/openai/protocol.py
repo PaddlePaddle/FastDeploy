@@ -673,6 +673,8 @@ class ChatCompletionRequest(BaseModel):
     completion_token_ids: Optional[List[int]] = None
     # doc: end-chat-completion-extra-params
 
+    collect_metrics: Optional[bool] = False
+
     def to_dict_for_infer(self, request_id=None):
         """
         Convert the request parameters into a dictionary

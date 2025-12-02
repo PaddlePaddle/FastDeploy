@@ -427,8 +427,8 @@ class RequestMetrics:
         preprocess_end_time: The time when the preprocess ended.
         scheduler_recv_req_time: The time when the scheduler received the request.
         engine_get_req_time: The time when the engine got the request.
-        ask_decode_resource_start_time: The time when the engine asked for decode resource.
-        ask_decode_resource_finish_time: The time when the engine asked for decode resource.
+        ask_decode_resource_start_time: The time when the engine asks for decode resource.
+        ask_decode_resource_finish_time: The time when the engine has asked for decode resource.
         inference_start_time: The time when engine adds request to the running queue in resource manager.
         wait_for_sending_cache_time: The time when the engine waited for sending cache.
         send_request_output_to_decode_time: The time when the engine sent request_output to decode.
@@ -459,7 +459,7 @@ class RequestMetrics:
     ask_decode_resource_finish_time: Optional[float] = None  # engine asks decode resource (only valid for prefill)
     add_req_to_resource_manager_time: Optional[float] = None  # engine adds request to resource manager
     inference_start_time: Optional[float] = None  # requests are added into the engine work queue
-    engine_recv_token_time: Optional[float] = None  # receive token from worker
+    engine_recv_latest_token_time: Optional[float] = None  # receive the latest token from worker
     engine_recv_first_token_time: Optional[float] = None  # receive first token from worker
     wait_for_sending_cache_time: Optional[float] = None  # wait for sending cache (only valid for prefill)
     send_request_output_to_decode_time: Optional[float] = (
@@ -487,7 +487,7 @@ class RequestMetrics:
 
     llm_engine_recv_req_timestamp: Optional[float] = None
     llm_engine_send_req_to_engine_timestamp: Optional[float] = None
-    llm_engine_recv_token_timestamp: Optional[float] = None
+    llm_engine_recv_latest_token_timestamp: Optional[float] = None
 
     def __post_init__(self):
         if self.arrival_time is None:
@@ -511,17 +511,20 @@ class RequestMetrics:
 
     def record_recv_first_token(self):
         cur_time = time.time()
+        self.record_recv_token(cur_time)
         self.engine_recv_first_token_time = cur_time
-        self.engine_recv_token_time = cur_time
-        self.llm_engine_recv_token_timestamp = cur_time
 
-    def recode_recv_token(self):
+    def record_recv_token(self, cur_time: float = None):
+        cur_time = time.time() if cur_time is None else cur_time
+        self.engine_recv_latest_token_time = cur_time
+        self.llm_engine_recv_latest_token_timestamp = cur_time
+        self.model_execute_time = cur_time - self.arrival_time
+        self.model_forward_time = cur_time - self.inference_start_time
+
+    def record_decode_recv_second_token(self):
         cur_time = time.time()
-        self.engine_recv_token_time = cur_time
-        self.llm_engine_recv_token_timestamp = cur_time
-
-    def recode_decode_recv_second_token(self):
-        self.decode_recv_second_token_time = time.time()
+        self.record_recv_token(cur_time)
+        self.decode_recv_second_token_time = cur_time
 
     def get_inference_start_time(self, is_decode: bool):
         if is_decode:
@@ -534,7 +537,6 @@ class RequestMetrics:
         self.first_token_time = self.engine_recv_first_token_time - self.inference_start_time
         self.time_in_queue = time.time() - self.preprocess_end_time
         self.preprocess_cost_time = self.preprocess_end_time - self.preprocess_start_time
-        self.model_execute_time = self.engine_recv_first_token_time - self.inference_start_time
         self.request_start_time = self.arrival_time
 
         # for compatibility with old metrics
@@ -615,10 +617,12 @@ class RequestOutput:
         self.outputs.index = next_output.outputs.index
         self.outputs.token_ids.extend(next_output.outputs.token_ids)
 
-        if next_output.metrics.arrival_time is not None and self.metrics.inference_start_time is not None:
-            self.metrics.model_forward_time = next_output.metrics.arrival_time - self.metrics.inference_start_time
-        if next_output.metrics.arrival_time is not None and self.metrics.arrival_time is not None:
-            self.metrics.model_execute_time = next_output.metrics.arrival_time - self.metrics.arrival_time
+        if next_output.metrics.model_forward_time is not None:
+            self.metrics.model_forward_time = next_output.metrics.model_forward_time
+        if next_output.metrics.model_execute_time is not None:
+            self.metrics.model_execute_time = next_output.metrics.model_execute_time
+        if next_output.metrics.engine_recv_latest_token_time is not None:
+            self.metrics.engine_recv_latest_token_time = next_output.metrics.engine_recv_latest_token_time
         if next_output.outputs.top_logprobs is not None:
             self.outputs.top_logprobs.logprob_token_ids.extend(next_output.outputs.top_logprobs.logprob_token_ids)
             self.outputs.top_logprobs.logprobs.extend(next_output.outputs.top_logprobs.logprobs)

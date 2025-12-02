@@ -1059,7 +1059,6 @@ class ResourceManagerV1(ResourceManager):
         request_output.metrics.decode_recv_req_time = request.metrics.decode_recv_req_time
         request_output.metrics.decode_preallocat_req_time = request.metrics.decode_preallocat_req_time
         request.metrics = request_output.metrics
-        llm_logger.debug(f"add prefilled request {request}")
         self.running.append(request)
 
     def _free_blocks(self, request: Request):

@@ -251,11 +251,10 @@ class TokenProcessor:
                 metrics = copy.copy(task.metrics)
                 self._record_first_token_metrics(task, current_time)
             else:
-                task.metrics.recode_recv_token()
+                task.metrics.record_recv_token()
                 if self.tokens_counter[task_id] == 1 and self.cfg.scheduler_config.splitwise_role == "decode":
-                    task.metrics.recode_decode_recv_second_token()
-                metric = copy.copy(task.metrics)
-                metric.arrival_time = time.time()
+                    task.metrics.record_decode_recv_second_token()
+                metrics = copy.copy(task.metrics)
 
             if task.pooling_params is not None:
                 pooler_output = stream_data.pooler_output
@@ -691,12 +690,10 @@ class TokenProcessor:
                 metrics = copy.copy(task.metrics)
                 self._record_first_token_metrics(task, current_time)
             else:
-                task.metrics.recode_recv_token()
+                task.metrics.record_recv_token()
                 if self.tokens_counter[task_id] == 1 and self.cfg.scheduler_config.splitwise_role == "decode":
-                    task.metrics.recode_decode_recv_second_token()
+                    task.metrics.record_decode_recv_second_token()
                 metrics = copy.copy(task.metrics)
-                metrics.arrival_time = time.time()
-                metrics.llm_engine_recv_token_timestamp = time.time()
 
             self.number_of_output_tokens += len(token_ids)
             self._record_metrics(task, current_time, token_ids)

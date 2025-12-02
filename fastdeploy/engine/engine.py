@@ -325,6 +325,7 @@ class LLMEngine:
                 raise EngineError(err_msg, error_code=400)
 
         request.metrics.preprocess_end_time = time.time()
+        request.metrics.scheduler_recv_req_time = time.time()
         self.engine.scheduler.put_requests([request])
         llm_logger.info(f"Cache task with request_id ({request.get('request_id')})")
         llm_logger.debug(f"cache task: {request}")

@@ -436,6 +436,9 @@ class EngineService:
 
             cur_req.prompt_token_ids[0] = req_out.outputs.token_ids[0]
             cur_req.num_cached_tokens = req_out.num_cached_tokens
+            req_out.metrics.decode_recv_req_time = cur_req.metrics.decode_recv_req_time
+            req_out.metrics.decode_preallocat_req_time = cur_req.metrics.decode_preallocat_req_time
+            cur_req.metrics = req_out.metrics
             cur_req.metrics.decode_inference_start_time = time.time()
             if self.cfg.speculative_config.method in ["mtp"] and self.cfg.scheduler_config.splitwise_role == "decode":
                 cur_req.draft_token_ids = copy.deepcopy(req_out.outputs.draft_token_ids)
@@ -945,7 +948,6 @@ class EngineService:
                 if data:
                     err_msg = None
                     try:
-                        self.llm_logger.debug(f"raw input: {data}")
                         request = Request.from_dict(data)
                         request.metrics.scheduler_recv_req_time = time.time()
                         start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
