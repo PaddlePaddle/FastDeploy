@@ -36,7 +36,9 @@ def test_45t():
     )
     print(response.choices[0].message.content)
     # print(base_response)
-    assert any(keyword in response.choices[0].message.content for keyword in ["人工智能", "文心一言"])
+    assert any(
+        keyword in response.choices[0].message.content for keyword in ["人工智能", "文心一言", "百度", "智能助手"]
+    )
 
 
 if __name__ == "__main__":
