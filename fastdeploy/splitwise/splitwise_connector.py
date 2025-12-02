@@ -44,9 +44,9 @@ class SplitwiseConnector:
         resource_manager (object): Resource manager object.
         """
         self.cfg = cfg
-        self.idx = self.cfg.parallel_config.local_data_parallel_id
+        self.local_data_parallel_id = self.cfg.parallel_config.local_data_parallel_id
         if self.cfg.parallel_config.data_parallel_size > 1:
-            self.logger = get_logger("splitwise_connector", f"splitwise_connector_dp{self.idx}.log")
+            self.logger = get_logger("splitwise_connector", f"splitwise_connector_dprank{self.local_data_parallel_id}.log")
         else:
             self.logger = get_logger("splitwise_connector", "splitwise_connector.log")
         self.engine_worker_queue = worker_queue
@@ -216,7 +216,7 @@ class SplitwiseConnector:
             self.create_connection(port)
         for task in tasks:
             task.disaggregate_info["cache_info"]["ipc"]["port"] = self.cfg.parallel_config.engine_worker_queue_port[
-                self.idx
+                self.local_data_parallel_id
             ]
         self.logger.info(f"send_splitwise_tasks_innode: port={port}, tasks={tasks}")
         self.connect_innode_instances[port].put_disaggregated_tasks(("decode", tasks))
@@ -349,9 +349,9 @@ class SplitwiseConnector:
                 else:
                     info = {
                         "request_id": tasks[i].request_id,
-                        "device_ids": self.cfg.parallel_config.device_ids.split(","),
+                        "device_ids": [self.cfg.parallel_config.device_ids.split(",")[self.local_data_parallel_id]],
                         "ip": self.cfg.host_ip,
-                        "rdma_ports": self.cfg.disaggregate_info["cache_info"]["rdma"]["rdma_port"],
+                        "rdma_ports": [self.cfg.disaggregate_info["cache_info"]["rdma"]["rdma_port"][self.local_data_parallel_id]],
                         "transfer_protocol": "rdma",
                         "dest_block_ids": dsg_info["block_tables"],
                         "decode_tp_size": self.cfg.parallel_config.tensor_parallel_size,

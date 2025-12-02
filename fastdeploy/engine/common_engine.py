@@ -84,7 +84,7 @@ class EngineService:
 
         if self.cfg.parallel_config.data_parallel_size > 1:
             self.llm_logger = get_logger(
-                "fastdeploy", f"fastdeploy_dp{self.cfg.parallel_config.local_data_parallel_id}.log"
+                "fastdeploy", f"fastdeploy_dprank{self.cfg.parallel_config.local_data_parallel_id}.log"
             )
         else:
             self.llm_logger = llm_logger

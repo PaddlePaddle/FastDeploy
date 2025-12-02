@@ -6,54 +6,17 @@ set -e
 # v0: using splitwise_scheduler or dp_scheduler
 # v1: using local_scheduler + router
 
-wait_for_health() {
-    IFS=',' read -r -a server_ports <<< "$1"
-    local num_ports=${#server_ports[@]}
-    local total_lines=$((num_ports + 1))
-    local first_run=true
-    local GREEN='\033[0;32m'
-    local RED='\033[0;31m'
-    local NC='\033[0m' # No Color
-    local start_time=$(date +%s)
-
-    while true; do
-        local all_ready=true
-        for port in "${server_ports[@]}"; do
-            status_code=$(curl -s --max-time 1 -o /dev/null -w "%{http_code}" "http://0.0.0.0:${port}/health" || echo "000")
-            if [ "$status_code" -eq 200 ]; then
-                printf "Port %s: ${GREEN}[OK]   200${NC}\033[K\n" "$port"
-            else
-                all_ready=false
-                printf "Port %s: ${RED}[WAIT] %s${NC}\033[K\n" "$port" "$status_code"
-            fi
-        done
-        cur_time=$(date +%s)
-        if [ "$all_ready" = "true" ]; then
-            echo "All services are ready!    [$((cur_time-start_time))s]"
-            break
-        else
-            echo "Waiting for services...    [$((cur_time-start_time))s]"
-            printf "\033[%dA" "$total_lines"  # roll back cursor
-            sleep 1
-        fi
-    done
-}
-
-
-# serving config
-MODEL_NAME="PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle"
+MODEL_NAME="PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
 DATA_PARALLEL_SIZE=2
-TENSOR_PARALLEL_SIZE=1    # NOTE(liyonghua): router DP does not support TP>1 for now
+TENSOR_PARALLEL_SIZE=1
 NUM_GPUS=$(($DATA_PARALLEL_SIZE * $TENSOR_PARALLEL_SIZE))
 LOG_DATE=$(date +%Y%m%d_%H%M%S)
 
-# fastdeploy environment
 export FD_DEBUG=1
 export ENABLE_V1_KVCACHE_SCHEDULER=1
 export KVCACHE_GDRCOPY_FLUSH_ENABLE=1
 export FD_ENABLE_MULTI_API_SERVER=1
 
-# set rdma nics
 SCRIPT_PATH=$(readlink -f "$0")
 SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
 export $(bash ${SCRIPT_DIR}/../../scripts/get_rdma_nics.sh gpu)
@@ -63,11 +26,11 @@ if [ -z "${KVCACHE_RDMA_NICS}" ]; then
   exit 1
 fi
 
-# clean up proxy and files
 unset http_proxy && unset https_proxy
+source ${SCRIPT_DIR}/utils.sh
 
 # start router
-ROUTER_PORT=$(bash $SCRIPT_DIR/get_free_ports.sh 1)
+ROUTER_PORT=$(get_free_ports 1)
 echo "---------------------------"
 echo ROUTER_PORT:  $ROUTER_PORT
 
@@ -83,12 +46,12 @@ sleep 1
 
 
 # start prefill
-P_SERVER_PORTS=$(bash $SCRIPT_DIR/get_free_ports.sh $DATA_PARALLEL_SIZE)
-P_METRICS_PORTS=$(bash $SCRIPT_DIR/get_free_ports.sh $DATA_PARALLEL_SIZE)
-P_ENGINE_WORKER_QUEUE_PORTS=$(bash $SCRIPT_DIR/get_free_ports.sh $DATA_PARALLEL_SIZE)
-P_CACHE_QUEUE_PORTS=$(bash $SCRIPT_DIR/get_free_ports.sh $DATA_PARALLEL_SIZE)
-P_RDMA_COMM_PORTS=$(bash $SCRIPT_DIR/get_free_ports.sh $NUM_GPUS)
-P_PD_COMM_PORTS=$(bash $SCRIPT_DIR/get_free_ports.sh $DATA_PARALLEL_SIZE)
+P_SERVER_PORTS=$(get_free_ports $DATA_PARALLEL_SIZE)
+P_METRICS_PORTS=$(get_free_ports $DATA_PARALLEL_SIZE)
+P_ENGINE_WORKER_QUEUE_PORTS=$(get_free_ports $DATA_PARALLEL_SIZE)
+P_CACHE_QUEUE_PORTS=$(get_free_ports $DATA_PARALLEL_SIZE)
+P_RDMA_COMM_PORTS=$(get_free_ports $NUM_GPUS)
+P_PD_COMM_PORTS=$(get_free_ports $DATA_PARALLEL_SIZE)
 echo "---------------------------"
 echo P_SERVER_PORTS:  $P_SERVER_PORTS
 echo P_METRICS_PORTS:  $P_METRICS_PORTS
@@ -124,12 +87,12 @@ wait_for_health ${P_SERVER_PORTS}
 
 
 # start decode
-D_SERVER_PORTS=$(bash $SCRIPT_DIR/get_free_ports.sh $DATA_PARALLEL_SIZE)
-D_ENGINE_WORKER_QUEUE_PORTS=$(bash $SCRIPT_DIR/get_free_ports.sh $DATA_PARALLEL_SIZE)
-D_CACHE_QUEUE_PORTS=$(bash $SCRIPT_DIR/get_free_ports.sh $DATA_PARALLEL_SIZE)
-D_METRICS_PORTS=$(bash $SCRIPT_DIR/get_free_ports.sh $DATA_PARALLEL_SIZE)
-D_RDMA_COMM_PORTS=$(bash $SCRIPT_DIR/get_free_ports.sh $NUM_GPUS)
-D_PD_COMM_PORTS=$(bash $SCRIPT_DIR/get_free_ports.sh $DATA_PARALLEL_SIZE)
+D_SERVER_PORTS=$(get_free_ports $DATA_PARALLEL_SIZE)
+D_ENGINE_WORKER_QUEUE_PORTS=$(get_free_ports $DATA_PARALLEL_SIZE)
+D_CACHE_QUEUE_PORTS=$(get_free_ports $DATA_PARALLEL_SIZE)
+D_METRICS_PORTS=$(get_free_ports $DATA_PARALLEL_SIZE)
+D_RDMA_COMM_PORTS=$(get_free_ports $NUM_GPUS)
+D_PD_COMM_PORTS=$(get_free_ports $DATA_PARALLEL_SIZE)
 echo "---------------------------"
 echo D_SERVER_PORTS:  $D_SERVER_PORTS
 echo D_ENGINE_WORKER_QUEUE_PORTS:  $D_ENGINE_WORKER_QUEUE_PORTS
@@ -171,8 +134,8 @@ curl -X POST "http://0.0.0.0:${ROUTER_PORT}/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [
-    {"role": "user", "content": "鲁迅是谁"}
+    {"role": "user", "content": "hello"}
   ],
-  "max_tokens": 200,
+  "max_tokens": 100,
   "stream": false
 }'
