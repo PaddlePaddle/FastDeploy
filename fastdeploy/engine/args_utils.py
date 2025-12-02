@@ -46,7 +46,6 @@ from fastdeploy.utils import (
     DeprecatedOptionWarning,
     FlexibleArgumentParser,
     console_logger,
-    is_port_available,
     parse_quantization,
 )
 
@@ -223,7 +222,7 @@ class EngineArgs:
     The amount of CPU memory to offload to.
     """
 
-    cache_queue_port: str = "0"
+    cache_queue_port: str = None
     """
     Port for cache queue.
     """
@@ -261,7 +260,7 @@ class EngineArgs:
     # This optimization is enabled by default, and can be disabled by using this flag.
     """
 
-    engine_worker_queue_port: str = "0"
+    engine_worker_queue_port: str = None
     """
     Port for worker queue communication.
     """
@@ -1259,11 +1258,6 @@ class EngineArgs:
                 else:
                     self.max_num_batched_tokens = self.max_model_len
 
-        if isinstance(self.engine_worker_queue_port, int):
-            self.engine_worker_queue_port = str(self.engine_worker_queue_port)
-        if isinstance(self.engine_worker_queue_port, str):
-            self.engine_worker_queue_port = self.engine_worker_queue_port.split(",")
-
         all_dict = asdict(self)
         all_dict["model_cfg"] = model_cfg
         cache_cfg = CacheConfig(all_dict)
@@ -1278,10 +1272,6 @@ class EngineArgs:
         early_stop_cfg = self.create_early_stop_config()
         early_stop_cfg.update_enable_early_stop(self.enable_early_stop)
         structured_outputs_config: StructuredOutputsConfig = StructuredOutputsConfig(args=all_dict)
-        if port_availability_check:
-            assert is_port_available(
-                "0.0.0.0", int(self.engine_worker_queue_port[parallel_cfg.local_data_parallel_id])
-            ), f"The parameter `engine_worker_queue_port`:{self.engine_worker_queue_port} is already in use."
 
         return FDConfig(
             model_config=model_cfg,

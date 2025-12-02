@@ -613,11 +613,63 @@ def is_port_available(host, port):
         try:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind((host, port))
-            return True
         except OSError as e:
             if e.errno == errno.EADDRINUSE:
                 return False
+        finally:
+            s.close()
             return True
+
+
+def find_free_ports(
+    port_range: tuple[int, int],
+    num_ports: int = 1,
+    host: str = "0.0.0.0",
+) -> list[int]:
+    """
+    Find available TCP ports in a given range, scanning from a random start.
+
+    Args:
+        port_range: (start, end), inclusive, e.g. (20000, 30000).
+        num_ports: number of ports to find.
+        host: host to bind, default "0.0.0.0".
+
+    Returns:
+        List of available ports with length == num_ports.
+
+    Raises:
+        ValueError: invalid port range or num_ports <= 0.
+        RuntimeError: not enough free ports in the range.
+    """
+    start, end = port_range
+    if start < 0 or end > 65535 or start > end:
+        raise ValueError(f"Invalid port range: {port_range}")
+
+    if num_ports <= 0:
+        raise ValueError("num_ports must be a positive integer")
+
+    total_ports = end - start + 1
+    if num_ports > total_ports:
+        raise ValueError("num_ports is larger than range size")
+
+    # Generate all ports and rotate with a random start index
+    ports = list(range(start, end + 1))
+    offset = random.randint(0, total_ports - 1)
+    ports = ports[offset:] + ports[:offset]
+
+    free_ports: list[int] = []
+
+    for port in ports:
+        if is_port_available(host, port):
+            free_ports.append(port)
+
+        if len(free_ports) >= num_ports:
+            break
+
+    if len(free_ports) < num_ports:
+        raise RuntimeError(f"Only found {len(free_ports)} free ports in {port_range}, " f"requested {num_ports}.")
+
+    return free_ports
 
 
 def singleton(cls):

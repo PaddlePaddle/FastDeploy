@@ -33,7 +33,14 @@ from fastdeploy.model_executor.layers.quantization.quant_base import QuantConfig
 from fastdeploy.platforms import current_platform
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.transformer_utils.config import get_pooling_config
-from fastdeploy.utils import ceil_div, check_unified_ckpt, get_host_ip, get_logger
+from fastdeploy.utils import (
+    ceil_div,
+    check_unified_ckpt,
+    find_free_ports,
+    get_host_ip,
+    get_logger,
+    is_port_available,
+)
 
 logger = get_logger("config", "config.log")
 
@@ -547,7 +554,7 @@ class ParallelConfig:
 
         self.local_data_parallel_id = 0
         # Engine worker queue port
-        self.engine_worker_queue_port: str = "9923"
+        self.engine_worker_queue_port: str = None
         # cuda visible devices
         self.device_ids: str = "0"
         # First token id
@@ -567,11 +574,7 @@ class ParallelConfig:
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
-        if isinstance(self.engine_worker_queue_port, str):
-            self.engine_worker_queue_port = [int(port) for port in self.engine_worker_queue_port.split(",")]
-            logger.info(f"engine_worker_queue_port: {self.engine_worker_queue_port}")
-        elif isinstance(self.engine_worker_queue_port, int):
-            self.engine_worker_queue_port = [self.engine_worker_queue_port]
+
         # currently, the expert parallel size is equal data parallel size
         if self.enable_expert_parallel:
             self.expert_parallel_size = self.data_parallel_size * self.tensor_parallel_size
@@ -1602,6 +1605,7 @@ class FDConfig:
 
         self.read_from_config()
         self.postprocess()
+        self.postprocess_all_ports()
         self.init_cache_info()
         if test_mode:
             return
@@ -1709,6 +1713,43 @@ class FDConfig:
             self.model_config.moe_phase = MoEPhase(phase="decode")
         else:
             raise NotImplementedError
+
+    def postprocess_all_ports(self):
+
+        def allocate_ports(name, port_range, num_ports):
+            ports = find_free_ports(port_range=port_range, num_ports=num_ports)
+            logger.info(f"Parameter `{name}` is not specified, found available ports: {ports}")
+            return ports
+
+        def parse_ports(name, ports):
+            if isinstance(ports, int):
+                return [ports]
+            elif isinstance(ports, str):
+                return [int(p) for p in ports.split(",")]
+            elif isinstance(ports, list):
+                return [int(p) for p in ports]
+            else:
+                raise TypeError(f"Invalid type for `{name}`: {type(ports)}. Must be int, str or list.")
+
+        def check_ports(name, ports):
+            for port in ports:
+                assert is_port_available("0.0.0.0", int(port)), f"The parameter `{name}`:{port} is already in use."
+
+        # Ports for EngineWorkerQueue
+        engine_worker_queue_port = self.parallel_config.engine_worker_queue_port
+        if engine_worker_queue_port is None:
+            engine_worker_queue_port = allocate_ports("engine_worker_queue_port", (9000, 9100), 1)
+        engine_worker_queue_port = parse_ports("engine_worker_queue_port", engine_worker_queue_port)
+        check_ports("engine_worker_queue_port", engine_worker_queue_port)
+        self.parallel_config.engine_worker_queue_port = engine_worker_queue_port
+
+        # Ports for EngineCacheQueue
+        cache_queue_port = self.cache_config.cache_queue_port
+        if cache_queue_port is None:
+            cache_queue_port = allocate_ports("cache_queue_port", (9100, 9200), 1)
+        cache_queue_port = parse_ports("cache_queue_port", cache_queue_port)
+        check_ports("cache_queue_port", cache_queue_port)
+        self.cache_config.cache_queue_port = cache_queue_port[self.parallel_config.local_data_parallel_id]
 
     def check(self):
         """
@@ -1857,12 +1898,9 @@ class FDConfig:
         elif self.scheduler_config.name == "local" and self.router_config and self.router_config.router:
             self.splitwise_version = "v1"
 
-        if isinstance(self.parallel_config.engine_worker_queue_port, (int, str)):
-            engine_worker_queue_port = self.parallel_config.engine_worker_queue_port
-        else:
-            engine_worker_queue_port = self.parallel_config.engine_worker_queue_port[
-                self.parallel_config.local_data_parallel_id
-            ]
+        engine_worker_queue_port = self.parallel_config.engine_worker_queue_port[
+            self.parallel_config.local_data_parallel_id
+        ]
         connector_port = self.cache_config.pd_comm_port[0] if self.cache_config.pd_comm_port else None
 
         self.disaggregate_info = {}
