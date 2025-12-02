@@ -129,18 +129,14 @@ class OpenAIServingChat:
             prompt_tokens = None
             max_tokens = None
             try:
-                # current_req_dict = request.to_dict_for_infer(f"{request_id}_0")
                 request_obj = Request.from_chat_completion_request(request, f"{request_id}_0")
                 if request_obj.chat_template is None:
                     request_obj.chat_template = self.chat_template
-                # if "chat_template" not in current_req_dict:
-                #     current_req_dict["chat_template"] = self.chat_template
                 request_obj.arrival_time = time.time()
-                # current_req_dict["arrival_time"] = time.time()
                 # preprocess the req_dict
                 prompt_token_ids = await self.engine_client.format_and_add_data(request_obj)
                 prompt_tokens = request_obj.prompt_tokens
-                max_tokens = request_obj.max_tokens
+                max_tokens = request_obj.sampling_params.max_tokens
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
             except ParameterError as e:
@@ -154,7 +150,6 @@ class OpenAIServingChat:
                 api_server_logger.error(error_msg)
                 self.engine_client.semaphore.release()
                 return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INVALID_REQUEST_ERROR))
-            # del current_req_dict
 
             if request.stream:
                 return self.chat_completion_stream_generator(

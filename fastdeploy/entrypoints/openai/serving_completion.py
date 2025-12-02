@@ -162,14 +162,13 @@ class OpenAIServingCompletion:
                 for idx, prompt in enumerate(request_prompts):
                     request_id_idx = f"{request_id}_{idx}"
                     request_obj = Request.from_completion_request(request, request_id_idx, prompt)
-                    # current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                     request_obj.arrival_time = time.time()
                     prompt_token_ids = await self.engine_client.format_and_add_data(request_obj)  # tokenize
                     if isinstance(prompt_token_ids, np.ndarray):
                         prompt_token_ids = prompt_token_ids.tolist()
                     prompt_tokens_list.append(request_obj.prompt_tokens)
                     prompt_batched_token_ids.append(prompt_token_ids)
-                    max_tokens_list.append(request_obj.max_tokens)
+                    max_tokens_list.append(request_obj.sampling_params.max_tokens)
             except ParameterError as e:
                 api_server_logger.error(f"OpenAIServingCompletion format error: {e}, {e.message}")
                 self.engine_client.semaphore.release()

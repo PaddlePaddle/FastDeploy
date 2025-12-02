@@ -115,7 +115,6 @@ class Request:
         # for internal adapter
         ic_req_data: Optional[dict] = (None,),
         # from ChatCompletionRequest or CompletionRequest
-        top_logprobs: Optional[int] = 0,
         user: Optional[str] = None,
         metadata: Optional[dict] = None,
         completion_token_ids: Optional[list[int]] = None,
@@ -202,7 +201,6 @@ class Request:
         self.error_code = None
 
         # from ChatCompletionRequest or CompletionRequest
-        self.top_logprobs = top_logprobs
         self.user = user
         self.metadata = metadata
         self.completion_token_ids = completion_token_ids
@@ -279,7 +277,8 @@ class Request:
             guided_choice=r.guided_choice,
             guided_regex=r.guided_regex,
             guided_grammar=r.guided_grammar,
-            top_logprobs=r.top_logprobs,
+            # top_logprobs=r.top_logprobs,
+            ic_req_data=getattr(r, "ic_req_data", None),
             user=r.user,
             metadata=r.metadata,
             completion_token_ids=r.completion_token_ids,

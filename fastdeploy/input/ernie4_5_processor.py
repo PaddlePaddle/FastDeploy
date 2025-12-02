@@ -213,6 +213,7 @@ class Ernie4_5Processor(BaseDataProcessor):
                     else:
                         raise ValueError("Invalid input: chat_template_kwargs must be a dict")
                 request.prompt_token_ids = self.messages2ids(request, **chat_template_kwargs)
+                delattr(request, "chat_template_kwargs")
             else:
                 raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")
 
@@ -222,8 +223,8 @@ class Ernie4_5Processor(BaseDataProcessor):
         # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request.prompt_token_ids) > max_model_len:
             request.prompt_token_ids = request.prompt_token_ids[: max_model_len - 1]
-        if getattr(request, "max_tokens", None) is None:
-            request.max_tokens = max(1, max_model_len - len(request.prompt_token_ids))
+        if getattr(request.sampling_params, "max_tokens", None) is None:
+            request.sampling_params.max_tokens = max(1, max_model_len - len(request.prompt_token_ids))
         if request.sampling_params.temperature < _SAMPLING_EPS:
             # zero temperature is equivalent to greedy sampling
             request.sampling_params.temperature = 1

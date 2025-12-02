@@ -57,14 +57,8 @@ class BaseDataProcessor(ABC):
 
         def set_value(req, key, value):
             value = getattr(self.generation_config, key, value)
-            if not getattr(req.sampling_params, key):
+            if getattr(req.sampling_params, key) is None:
                 setattr(req.sampling_params, key, value)
-            # if isinstance(req, dict):
-            #     if key not in req:
-            #         req[key] = value
-            # else:
-            #     if req.get(key) is None:
-            #         req.set(key, value)
 
         set_value(request, "top_p", 0.7)
         set_value(request, "temperature", 1.0)
