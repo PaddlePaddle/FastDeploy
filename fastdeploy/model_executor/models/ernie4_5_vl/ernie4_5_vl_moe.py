@@ -348,12 +348,17 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
                 prefix=f"{prefix}.mlp",
             )
 
+        norm_dtype = None
+        if fd_config.model_config.architectures[0] == "Ernie4_5_VLMoeForProcessRewardModel":
+            norm_dtype = "float32"
+
         self.input_layernorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
             layer_id=layer_id,
+            dtype=norm_dtype,
         )
 
         self.post_attention_layernorm = RMSNorm(
@@ -362,6 +367,7 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
             layer_id=layer_id,
+            dtype=norm_dtype,
         )
 
     def load_state_dict(self, state_dict):
@@ -542,7 +548,6 @@ class Ernie4_5_VLModel(nn.Layer):
             )
 
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
-
         return out
 
 

@@ -19,9 +19,9 @@ import functools
 import heapq
 import random
 import time
+from multiprocessing.reduction import ForkingPickler
 
 import aiozmq
-import msgpack
 import zmq
 from fastapi import Request
 
@@ -126,7 +126,7 @@ class DealerConnectionManager:
         while self.running:
             try:
                 raw_data = await dealer.read()
-                response = msgpack.unpackb(raw_data[-1])
+                response = ForkingPickler.loads(raw_data[-1])
                 _zmq_metrics_stats = ZMQMetricsStats()
                 _zmq_metrics_stats.msg_recv_total += 1
                 if "zmq_send_time" in response:
@@ -284,7 +284,8 @@ def with_cancellation(handler_func):
 
     In the case where a `StreamingResponse` is returned by the handler, this
     wrapper will stop listening for disconnects and instead the response object
-    will start listening for disconnects.
+    will start listening for disconnects.The response object will only correctly
+    listen when the ASGI protocol version used by Uvicorn is less than 2.4.
     """
 
     # Functools.wraps is required for this wrapper to appear to fastapi as a

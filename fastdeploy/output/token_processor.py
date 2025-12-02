@@ -45,10 +45,15 @@ from fastdeploy.utils import llm_logger, spec_logger
 from fastdeploy.worker.output import LogprobsLists
 
 RECOVERY_STOP_SIGNAL = -3
-MAX_BSZ = 512
-K = 20
 MAX_DRAFT_TOKENS = 6
 SPECULATE_MAX_BSZ = 256
+
+if current_platform.is_xpu():
+    MAX_BSZ = 128
+    K = 5
+else:
+    MAX_BSZ = 512
+    K = 20
 
 
 class TokenProcessor:
@@ -291,7 +296,7 @@ class TokenProcessor:
                             llm_logger.warning(f"Failed to parse logprobs from StreamTransferData: {e}")
                     if getattr(stream_data, "prompt_logprobs", None) is not None:
                         try:
-                            result.prompt_logprobs_tensors = stream_data.prompt_logprobs
+                            result.prompt_logprobs = stream_data.prompt_logprobs
                         except Exception as e:
                             llm_logger.warning(f"Failed to parse prompt_logprobs from StreamTransferData: {e}")
                 if self.tokens_counter[task_id] == 0:
@@ -343,6 +348,7 @@ class TokenProcessor:
             from fastdeploy.model_executor.ops.xpu import (
                 get_output,
                 get_output_ep,
+                get_output_topk,
                 speculate_get_output,
             )
         elif current_platform.is_iluvatar():
