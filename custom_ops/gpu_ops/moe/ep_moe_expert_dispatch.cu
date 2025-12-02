@@ -58,6 +58,11 @@
       __VA_ARGS__                                                              \
       break;                                                                   \
     }                                                                          \
+    case 20: {                                                                 \
+      constexpr size_t NUM_EXPERTS_PER_RANK = 20;                              \
+      __VA_ARGS__                                                              \
+      break;                                                                   \
+    }                                                                          \
     case 32: {                                                                 \
       constexpr size_t NUM_EXPERTS_PER_RANK = 32;                              \
       __VA_ARGS__                                                              \
@@ -964,7 +969,7 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
   } else {
     token_rows = input_dims[0];
   }
-  const int num_rows = token_rows;
+
   const int hidden_size = input.dims()[input_dims.size() - 1];
   const int num_experts_per_rank = num_experts_per_rank_tensor.dims()[0];
 
@@ -988,9 +993,9 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
   auto dst_weights = GetEmptyTensor(
       {token_nums_feed_to_ffn}, paddle::DataType::FLOAT32, place);
   auto dst_indices = GetEmptyTensor(
-      {num_rows, num_experts_per_rank}, paddle::DataType::INT32, place);
+      {token_rows, num_experts_per_rank}, paddle::DataType::INT32, place);
   auto permute_indices_per_token = paddle::full(
-      {num_experts_per_rank, num_rows}, -1, paddle::DataType::INT32, place);
+      {num_experts_per_rank, token_rows}, -1, paddle::DataType::INT32, place);
   auto cumsum_idx_gpu =
       paddle::full({num_experts_per_rank}, 0, paddle::DataType::INT32, place);
 
@@ -1001,7 +1006,7 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
                          num_experts_per_rank_tensor,
                          num_experts_per_rank_padded_tensor,
                          moe_topk,
-                         num_rows,
+                         token_rows,
                          -1,
                          -1,
                          hidden_size,

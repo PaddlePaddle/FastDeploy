@@ -35,8 +35,8 @@ struct Flash_mask_params {
   int *seq_len_encoder;
   int head_num;
   int kv_head_num;
-  int max_seq_len_q;
-  int max_seq_len_k;
+  int q_token_num;
+  int k_token_num;
   int batch_size;
   int gqa_group_size;
   float scale_softmax_log2;
