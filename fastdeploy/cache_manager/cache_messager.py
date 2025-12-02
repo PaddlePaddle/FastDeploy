@@ -624,11 +624,9 @@ class CacheMessagerV1:
                     if sended_layer_idx == prefilled_layer_idx:  # computation not in next layer
                         time.sleep(0.01)
                     for layer_idx in range(start_layer_idx, end_layer_idx + 1):
-                        logger.debug(f"sending cache for layer_idx {layer_idx} start_layer_idx {start_layer_idx} end_layer_idx {end_layer_idx}")
                         for i, (block_id_start, block_id_end) in enumerate(block_start_end_list):
                             engine_index = batch_engine_signals[i][0]
                             task = self.idx_cache_task_dict[engine_index]
-                            logger.debug(f"sending cache for layer_idx {layer_idx} block_id_start {block_id_start} block_id_end {block_id_end}, task {task}")
                             req_id = task["request_id"]
                             if (
                                 block_id_start >= block_id_end
