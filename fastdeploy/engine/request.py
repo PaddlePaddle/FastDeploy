@@ -25,6 +25,7 @@ from typing import Any, Dict, Generic, Optional, Union
 import numpy as np
 from typing_extensions import TypeVar
 
+from fastdeploy import envs
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
@@ -301,6 +302,17 @@ class Request:
             "audio_end": self.audio_end,
             "ic_req_data": self.ic_req_data,
         }
+
+        # During multimodal PD separation, position_ids are required
+        if isinstance(data.get("multimodal_inputs"), dict):
+            allowed_keys = {"position_ids"}
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                allowed_keys.update(["input_ids", "token_type_ids", "images", "image_type_ids", "grid_thw"])
+
+            keys_to_remove = set(data["multimodal_inputs"]) - allowed_keys
+            for key in keys_to_remove:
+                data["multimodal_inputs"].pop(key)
+
         add_params = [
             "guided_json",
             "guided_regex",

@@ -14,7 +14,7 @@
 # limitations under the License.
 """
 
-import json
+import pickle
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
@@ -94,12 +94,12 @@ class SplitwiseConnector:
                     if not socks:
                         continue
                     else:
-                        self.logger.debug(f"receive {socks}")
+                        self.logger.debug("receive %s", socks)
 
                     frames = self.router_socket.recv_multipart()
-                    self.logger.debug(f"frames: {frames}")
-                    message = frames[-1]
-                    self.io_executor.submit(self._process_message, message)
+                    self.logger.debug("frames: %s", frames)
+                    # message = frames[-1]
+                    self.io_executor.submit(self._process_message, frames)
                     time.sleep(0.001)
                 else:
                     time.sleep(5)
@@ -150,7 +150,7 @@ class SplitwiseConnector:
             try:
 
                 sock = self._get_push_socket(addr)
-                sock.send_multipart([b"", message])
+                sock.send_multipart(message)
 
                 self.logger.info(f"Sent {msg_type} to {addr}")
 
@@ -387,21 +387,34 @@ class SplitwiseConnector:
         if msg_type == "decode" or msg_type == "prefill":
             payload = [output.to_dict() for output in payload]
 
-        json_data = json.dumps({"type": msg_type, "payload": payload}).encode("utf-8")
-        return json_data
+        # Prepare data
+        data = {"type": msg_type, "payload": payload}
 
-    def _deserialize_message(self, data: bytes):
+        # Pickle protocol 5 supports extracting large arrays (buffers)
+        buffers = []
+        # Serialize main data, strip large arrays as references into buffers
+        main_bytes = pickle.dumps(data, protocol=5, buffer_callback=buffers.append)
+        return [main_bytes] + buffers
 
-        # JSON反序列化
-        message = json.loads(data.decode("utf-8"))
+    def _deserialize_message(self, frames: List[bytes]):
+        # identity = frames[0]
+
+        if len(frames) < 2:
+            raise ValueError(f"Received frames too short, missing payload {len(frames)}")
+
+        main_bytes = frames[1]
+        buffers = frames[2:]
+
+        # Restore data, pickle will automatically fill buffers back into numpy arrays
+        message = pickle.loads(main_bytes, buffers=buffers)
         return message["type"], message["payload"]
 
-    def _process_message(self, message: bytes):
+    def _process_message(self, frames: bytes):
         """
         process message
         """
         try:
-            msg_type, payload = self._deserialize_message(message)
+            msg_type, payload = self._deserialize_message(frames)
             self.logger.info(f"{msg_type}")
 
             if msg_type == "prefill":

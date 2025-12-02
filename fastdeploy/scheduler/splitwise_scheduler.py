@@ -17,6 +17,7 @@
 import copy
 import hashlib
 import math
+import pickle
 import random
 import threading
 import time
@@ -545,7 +546,7 @@ class APIScheduler:
             pkey, dkey = f"ReqQ_{pnode.nodeid}", f"ReqQ_{dnode.nodeid}"
             req_dict = req.to_dict()
             req_dict["group"] = group
-            req_str = orjson.dumps(req_dict)
+            req_str = pickle.dumps(req_dict, protocol=5)
             # logger.info(f"Schedule Req {req_str}")
             self.client.lpush(dkey, req_str)
             self.client.lpush(pkey, req_str)
@@ -795,7 +796,7 @@ class InferScheduler:
                     reqs = [ret[1]]
 
                 for req_str in reqs:
-                    req = orjson.loads(req_str)
+                    req = pickle.loads(req_str)
                     group = req.get("group", "")
                     req = Request.from_dict(req)
                     writer_idx = select_writer(req)

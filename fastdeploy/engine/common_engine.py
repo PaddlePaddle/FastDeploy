@@ -683,7 +683,6 @@ class EngineService:
         def _fetch_request():
             try:
                 nonlocal is_fetching
-                is_fetching = True
                 num_prefill_batch = min(
                     int(self.resource_manager.available_batch()),
                     self.cfg.max_prefill_batch,
@@ -767,8 +766,8 @@ class EngineService:
                         need_check_req_ids = [task.request_id for task in tasks]
                         while need_check_req_ids:
                             req_ids = self.engine_worker_queue.get_finished_add_cache_task_req()
-                            self.llm_logger.info(f"get_finished_add_cache_task_req: {req_ids}")
                             if req_ids:
+                                self.llm_logger.info("get_finished_add_cache_task_req: %s", req_ids)
                                 for req_id in req_ids:
                                     assert req_id in need_check_req_ids
                                     need_check_req_ids.remove(req_id)
@@ -797,6 +796,7 @@ class EngineService:
                     continue
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     if not is_fetching:
+                        is_fetching = True
                         get_request_pool.submit(_fetch_request)
 
                 else:
@@ -807,6 +807,7 @@ class EngineService:
                     ):
                         # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
                         try:
+                            is_fetching = True
                             get_request_pool.submit(_fetch_request)
                         except RuntimeError as e:
                             if "shutdown" in str(e):
