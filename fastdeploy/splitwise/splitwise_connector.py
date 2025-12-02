@@ -400,7 +400,6 @@ class SplitwiseConnector:
         # identity = frames[0]
 
         if len(frames) < 2:
-            # 防御性编程：防止收到空包或异常包
             raise ValueError(f"Received frames too short, missing payload {len(frames)}")
 
         main_bytes = frames[1]

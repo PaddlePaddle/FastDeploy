@@ -304,13 +304,14 @@ class Request:
         }
 
         # During multimodal PD separation, position_ids are required
-        allowed_keys = {"position_ids"}
-        if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            allowed_keys.update(["input_ids", "token_type_ids", "images", "image_type_ids", "grid_thw"])
+        if isinstance(data.get("multimodal_inputs"), dict):
+            allowed_keys = {"position_ids"}
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                allowed_keys.update(["input_ids", "token_type_ids", "images", "image_type_ids", "grid_thw"])
 
-        keys_to_remove = set(data["multimodal_inputs"]) - allowed_keys
-        for key in keys_to_remove:
-            data["multimodal_inputs"].pop(key)
+            keys_to_remove = set(data["multimodal_inputs"]) - allowed_keys
+            for key in keys_to_remove:
+                data["multimodal_inputs"].pop(key)
 
         add_params = [
             "guided_json",

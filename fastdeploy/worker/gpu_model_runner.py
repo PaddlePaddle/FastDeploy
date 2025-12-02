@@ -758,12 +758,9 @@ class GPUModelRunner(ModelRunnerBase):
                             request.multimodal_inputs["position_ids"],
                             dtype="int64",
                         )
-                    else:
-                        position_ids = None
-
-                    self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
-                        position_ids, [request.get("max_tokens", 2048)], [0, position_ids.shape[0]]
-                    )[0]
+                        self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
+                            position_ids, [request.get("max_tokens", 2048)], [0, position_ids.shape[0]]
+                        )[0]
             else:
                 self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 self.share_inputs["step_idx"][idx : idx + 1] = 0
