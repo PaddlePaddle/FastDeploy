@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import copy
 import time
 import traceback
 from dataclasses import asdict, dataclass, fields
@@ -30,12 +31,7 @@ from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
 from fastdeploy.utils import data_processor_logger
-from fastdeploy.worker.output import (
-    LogprobsLists,
-    LogprobsTensors,
-    PromptLogprobs,
-    SampleLogprobs,
-)
+from fastdeploy.worker.output import LogprobsLists, PromptLogprobs, SampleLogprobs
 
 
 class RequestStatus(Enum):
@@ -269,6 +265,21 @@ class Request:
 
     def to_dict(self) -> dict:
         """convert Request into a serializable dict"""
+        multimodal_inputs = copy.deepcopy(self.multimodal_inputs)
+        if (
+            isinstance(multimodal_inputs, dict)
+            and isinstance(multimodal_inputs.get("mm_positions"), list)
+            and len(multimodal_inputs["mm_positions"]) > 0
+        ):
+            # if mm_positions is ImagePosition, convert to dict
+            try:
+                for i, mm_pos in enumerate(multimodal_inputs["mm_positions"]):
+                    multimodal_inputs["mm_positions"][i] = (
+                        asdict(mm_pos) if isinstance(mm_pos, ImagePosition) else mm_pos
+                    )
+            except Exception as e:
+                data_processor_logger.error(f"Convert ImagePosition to dict error: {e}, {str(traceback.format_exc())}")
+
         data = {
             "request_id": self.request_id,
             "prompt": self.prompt,
@@ -282,7 +293,7 @@ class Request:
             "arrival_time": self.arrival_time,
             "preprocess_start_time": self.preprocess_start_time,
             "preprocess_end_time": self.preprocess_end_time,
-            "multimodal_inputs": self.multimodal_inputs,
+            "multimodal_inputs": multimodal_inputs,
             "multimodal_data": self.multimodal_data,
             "disable_chat_template": self.disable_chat_template,
             "disaggregate_info": self.disaggregate_info,
@@ -503,7 +514,6 @@ class RequestOutput:
         prompt: Optional[str] = None,
         prompt_token_ids: Optional[list[int]] = None,
         prompt_logprobs: Optional[PromptLogprobs] = None,
-        prompt_logprobs_tensors: Optional[LogprobsTensors] = None,
         output_type: Optional[int] = 3,
         outputs: CompletionOutput = None,
         finished: bool = False,
@@ -521,7 +531,6 @@ class RequestOutput:
         self.prompt = prompt
         self.prompt_token_ids = prompt_token_ids
         self.prompt_logprobs = prompt_logprobs
-        self.prompt_logprobs_tensors = prompt_logprobs_tensors
         self.output_type = output_type
         self.outputs = outputs
         self.finished = finished
