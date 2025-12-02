@@ -580,7 +580,8 @@ class MetaxCutlassWeightOnlyMoEMethod(MetaxCutlassMoEMethod):
                 quant_weight, scale = weight_quantize(
                     weight_tensor[i], algo=self.moe_quant_type, arch=self.weight_only_linear_arch
                 )
-                quant_weight = paddle.transpose(quant_weight, [1, 0])
+                if self.quant_config.algo != "weight_only_int4":
+                    quant_weight = paddle.transpose(quant_weight, [1, 0])
                 weight_list.append(quant_weight)
                 weight_scale_list.append(scale)
             quanted_weight = paddle.stack(weight_list, axis=0)

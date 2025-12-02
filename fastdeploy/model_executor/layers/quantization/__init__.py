@@ -16,6 +16,7 @@ quantization module
 """
 from typing import Dict, List, Type
 
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import parse_quantization
 
 from .quant_base import QuantConfigBase
@@ -79,7 +80,12 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
             quant_config_name = args.quantization["quantization"]
             quantization_config["quantization"] = quant_config_name
         # Special handling for Ernie models
-        if quant_config_name == "wint4" and is_ernie:
+        if current_platform.is_maca() and quant_config_name == "wint4" and is_ernie:
+            quantization_config["dense_quant_type"] = "wint4"
+            quantization_config["moe_quant_type"] = "wint8"
+            quantization_config["quantization"] = "mix_quant"
+            quant_config_name = "mix_quant"
+        elif quant_config_name == "wint4" and is_ernie:
             quantization_config["dense_quant_type"] = "wint8"
             quantization_config["moe_quant_type"] = "wint4"
             quantization_config["quantization"] = "mix_quant"
