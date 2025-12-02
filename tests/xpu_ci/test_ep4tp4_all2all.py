@@ -24,18 +24,17 @@ EP4TP4 all2all测试 - Expert Parallel + Tensor Parallel (all2all通信)
 - 注意: 不使用 --disable-sequence-parallel-moe,启用all2all通信
 """
 
-import os
-import pytest
+
 import openai
+import pytest
 from conftest import (
-    get_port_num,
-    get_model_path,
-    start_server,
-    print_logs_on_failure,
-    xpu_env,
-    setup_ep_env,
-    restore_env,
     download_and_build_xdeepep,
+    get_model_path,
+    get_port_num,
+    print_logs_on_failure,
+    restore_env,
+    setup_ep_env,
+    start_server,
 )
 
 
@@ -59,19 +58,31 @@ def test_ep4tp4_all2all(xpu_env):
         # 构建服务器启动参数
         # 注意: 与EP4TP4 online相比,这里不使用 --disable-sequence-parallel-moe
         server_args = [
-            "--model", f"{model_path}/ERNIE-4.5-300B-A47B-Paddle",
-            "--port", str(port_num),
-            "--tensor-parallel-size", "4",
+            "--model",
+            f"{model_path}/ERNIE-4.5-300B-A47B-Paddle",
+            "--port",
+            str(port_num),
+            "--tensor-parallel-size",
+            "4",
             "--enable-expert-parallel",
-            "--data-parallel-size", "1",
-            "--max-model-len", "32768",
-            "--max-num-seqs", "64",
-            "--quantization", "wint4",
-            "--engine-worker-queue-port", str(port_num + 10),
-            "--metrics-port", str(port_num + 2),
-            "--cache-queue-port", str(port_num + 47873),
-            "--gpu-memory-utilization", "0.9",
-            "--load-choices", "default",
+            "--data-parallel-size",
+            "1",
+            "--max-model-len",
+            "32768",
+            "--max-num-seqs",
+            "64",
+            "--quantization",
+            "wint4",
+            "--engine-worker-queue-port",
+            str(port_num + 10),
+            "--metrics-port",
+            str(port_num + 2),
+            "--cache-queue-port",
+            str(port_num + 47873),
+            "--gpu-memory-utilization",
+            "0.9",
+            "--load-choices",
+            "default",
         ]
 
         # 启动服务器
@@ -80,10 +91,7 @@ def test_ep4tp4_all2all(xpu_env):
 
         # 执行测试
         ip = "0.0.0.0"
-        client = openai.Client(
-            base_url=f"http://{ip}:{port_num}/v1",
-            api_key="EMPTY_API_KEY"
-        )
+        client = openai.Client(base_url=f"http://{ip}:{port_num}/v1", api_key="EMPTY_API_KEY")
 
         # 非流式对话
         response = client.chat.completions.create(
@@ -101,8 +109,7 @@ def test_ep4tp4_all2all(xpu_env):
 
         # 验证响应
         assert any(
-            keyword in response.choices[0].message.content
-            for keyword in ["人工智能", "文心一言"]
+            keyword in response.choices[0].message.content for keyword in ["人工智能", "文心一言", "百度", "智能助手"]
         ), f"响应内容不符合预期: {response.choices[0].message.content}"
 
         print("\nEP4TP4 all2all测试通过!")

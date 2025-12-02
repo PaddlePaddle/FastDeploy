@@ -25,9 +25,10 @@ XPU CI测试框架 - 通用配置和辅助函数
 
 import json
 import os
+import shutil
 import subprocess
 import time
-import shutil
+
 import pytest
 
 
@@ -51,9 +52,7 @@ def stop_processes():
 
     # 获取 pytest 主进程 PID
     try:
-        pytest_pids = subprocess.check_output(
-            "pgrep -f pytest || true", shell=True
-        ).decode().strip().split()
+        pytest_pids = subprocess.check_output("pgrep -f pytest || true", shell=True).decode().strip().split()
     except subprocess.CalledProcessError:
         pytest_pids = []
 
@@ -62,18 +61,14 @@ def stop_processes():
         try:
             # 先执行命令获取到候选 PID（kill -9 替换成 cat）
             list_cmd = cmd.replace("kill -9", "cat")
-            output = subprocess.check_output(
-                list_cmd, shell=True, stderr=subprocess.DEVNULL
-            ).decode().strip().split()
+            output = subprocess.check_output(list_cmd, shell=True, stderr=subprocess.DEVNULL).decode().strip().split()
 
             # 过滤：排除 pytest
             safe_pids = [pid for pid in output if pid and pid not in pytest_pids]
 
             # 真正 kill
             for pid in safe_pids:
-                subprocess.run(f"kill -9 {pid}", shell=True,
-                               stdout=subprocess.DEVNULL,
-                               stderr=subprocess.DEVNULL)
+                subprocess.run(f"kill -9 {pid}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
             pass
 
@@ -89,10 +84,12 @@ def stop_processes():
         commands.append(f"lsof -t -i :{port} | xargs echo")
 
     # Kill processes using netstat
-    commands.extend([
-        f"netstat -tunlp 2>/dev/null | grep {port_num + 2} | awk '{{print $NF}}' | awk -F'/' '{{print $1}}' | xargs echo",
-        f"netstat -tunlp 2>/dev/null | grep {port_num + 2} | awk '{{print $(NF-1)}}' | cut -d/ -f1 | grep -E '^[0-9]+$' | xargs echo",
-    ])
+    commands.extend(
+        [
+            f"netstat -tunlp 2>/dev/null | grep {port_num + 2} | awk '{{print $NF}}' | awk -F'/' '{{print $1}}' | xargs echo",
+            f"netstat -tunlp 2>/dev/null | grep {port_num + 2} | awk '{{print $(NF-1)}}' | cut -d/ -f1 | grep -E '^[0-9]+$' | xargs echo",
+        ]
+    )
 
     for cmd in commands:
         safe_kill_cmd(cmd)
@@ -115,8 +112,9 @@ def cleanup_resources():
     subprocess.run("rm -f core*", shell=True)
 
     # 清空消息队列
-    subprocess.run("ipcrm --all=msg 2>/dev/null || true", shell=True,
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(
+        "ipcrm --all=msg 2>/dev/null || true", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
 
 
 def wait_for_health_check(timeout=900, interval=10):
@@ -152,7 +150,7 @@ def wait_for_health_check(timeout=900, interval=10):
                 f'curl -s -o /dev/null -w "%{{http_code}}" -m 2 {health_endpoint}',
                 shell=True,
                 capture_output=True,
-                text=True
+                text=True,
             )
             http_code = result.stdout.strip()
         except Exception:
@@ -178,12 +176,7 @@ def wait_for_health_check(timeout=900, interval=10):
 
         # 检查模型列表
         try:
-            result = subprocess.run(
-                f'curl -s -m 5 {models_endpoint}',
-                shell=True,
-                capture_output=True,
-                text=True
-            )
+            result = subprocess.run(f"curl -s -m 5 {models_endpoint}", shell=True, capture_output=True, text=True)
             response = result.stdout.strip()
             if response:
                 data = json.loads(response)
@@ -234,12 +227,7 @@ def start_server(server_args, wait_before_check=60):
 
     # 启动服务(后台运行)
     with open("server.log", "w") as log_file:
-        subprocess.Popen(
-            cmd,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            start_new_session=True
-        )
+        subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT, start_new_session=True)
 
     print(f"服务启动命令: {' '.join(cmd)}")
     print(f"等待 {wait_before_check} 秒...")
@@ -341,10 +329,7 @@ def download_and_build_xdeepep():
         return True
 
     print("下载xDeepEP...")
-    result = subprocess.run(
-        "wget -q https://paddle-qa.bj.bcebos.com/xpu_third_party/xDeepEP.tar.gz",
-        shell=True
-    )
+    result = subprocess.run("wget -q https://paddle-qa.bj.bcebos.com/xpu_third_party/xDeepEP.tar.gz", shell=True)
     if result.returncode != 0:
         print("下载xDeepEP失败")
         return False
@@ -366,6 +351,7 @@ def download_and_build_xdeepep():
 
 # ============ PD分离相关函数 ============
 
+
 def get_script_dir():
     """获取scripts目录路径"""
     # conftest.py在tests/xpu_ci_pytest/下,scripts在项目根目录下
@@ -384,12 +370,7 @@ def get_rdma_nics():
     script_path = os.path.join(get_script_dir(), "get_rdma_nics.sh")
 
     try:
-        result = subprocess.run(
-            f"bash {script_path} xpu",
-            shell=True,
-            capture_output=True,
-            text=True
-        )
+        result = subprocess.run(f"bash {script_path} xpu", shell=True, capture_output=True, text=True)
         output = result.stdout.strip()
         # 解析 KVCACHE_RDMA_NICS=xxx 格式
         if output.startswith("KVCACHE_RDMA_NICS="):

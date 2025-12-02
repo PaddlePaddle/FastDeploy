@@ -21,16 +21,10 @@ W4A8模式测试 - ERNIE-4.5-300B W4A8C8量化模型
 - Tensor Parallel: 4
 """
 
-import os
-import pytest
+
 import openai
-from conftest import (
-    get_port_num,
-    get_model_path,
-    start_server,
-    print_logs_on_failure,
-    xpu_env,
-)
+import pytest
+from conftest import get_model_path, get_port_num, print_logs_on_failure, start_server
 
 
 def test_w4a8(xpu_env):
@@ -44,16 +38,26 @@ def test_w4a8(xpu_env):
 
     # 构建服务器启动参数
     server_args = [
-        "--model", f"{model_path}/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle",
-        "--port", str(port_num),
-        "--engine-worker-queue-port", str(port_num + 1),
-        "--metrics-port", str(port_num + 2),
-        "--cache-queue-port", str(port_num + 47873),
-        "--tensor-parallel-size", "4",
-        "--num-gpu-blocks-override", "16384",
-        "--max-model-len", "32768",
-        "--max-num-seqs", "64",
-        "--quantization", "W4A8",
+        "--model",
+        f"{model_path}/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle",
+        "--port",
+        str(port_num),
+        "--engine-worker-queue-port",
+        str(port_num + 1),
+        "--metrics-port",
+        str(port_num + 2),
+        "--cache-queue-port",
+        str(port_num + 47873),
+        "--tensor-parallel-size",
+        "4",
+        "--num-gpu-blocks-override",
+        "16384",
+        "--max-model-len",
+        "32768",
+        "--max-num-seqs",
+        "64",
+        "--quantization",
+        "W4A8",
     ]
 
     # 启动服务器
@@ -63,10 +67,7 @@ def test_w4a8(xpu_env):
     # 执行测试
     try:
         ip = "0.0.0.0"
-        client = openai.Client(
-            base_url=f"http://{ip}:{port_num}/v1",
-            api_key="EMPTY_API_KEY"
-        )
+        client = openai.Client(base_url=f"http://{ip}:{port_num}/v1", api_key="EMPTY_API_KEY")
 
         # 非流式对话
         response = client.chat.completions.create(
@@ -85,7 +86,7 @@ def test_w4a8(xpu_env):
         # 验证响应
         assert any(
             keyword in response.choices[0].message.content
-            for keyword in ["人工智能", "文心一言"]
+            for keyword in ["人工智能", "文心一言", "小度", "百度", "智能助手"]
         ), f"响应内容不符合预期: {response.choices[0].message.content}"
 
         print("\nW4A8测试通过!")

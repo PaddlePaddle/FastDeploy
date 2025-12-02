@@ -22,7 +22,7 @@
 #   XPU_ID: XPU设备ID(0或1)
 #   MODEL_PATH: 模型路径
 
-set +e 
+set +e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "脚本目录: $DIR"
 

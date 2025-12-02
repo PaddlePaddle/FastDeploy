@@ -26,16 +26,17 @@ import os
 import shutil
 import subprocess
 import time
-import pytest
+
 import openai
+import pytest
 from conftest import (
-    get_xpu_id,
-    get_port_num,
-    get_model_path,
-    stop_processes,
     cleanup_resources,
-    setup_pd_env,
+    get_model_path,
+    get_port_num,
+    get_xpu_id,
     restore_pd_env,
+    setup_pd_env,
+    stop_processes,
 )
 
 
@@ -72,7 +73,7 @@ def wait_for_pd_health_check(port_p, port_d, timeout=600, interval=10):
                 f'curl -s -o /dev/null -w "%{{http_code}}" -m 2 {endpoint_p}',
                 shell=True,
                 capture_output=True,
-                text=True
+                text=True,
             )
             http_code_p = result_p.stdout.strip()
         except Exception:
@@ -84,13 +85,17 @@ def wait_for_pd_health_check(port_p, port_d, timeout=600, interval=10):
                 f'curl -s -o /dev/null -w "%{{http_code}}" -m 2 {endpoint_d}',
                 shell=True,
                 capture_output=True,
-                text=True
+                text=True,
             )
             http_code_d = result_d.stdout.strip()
         except Exception:
             http_code_d = "000"
 
-        print(f"\r服务健康检查中... 已等待 {elapsed} 秒,P节点状态码:{http_code_p},D节点状态码:{http_code_d}", end="", flush=True)
+        print(
+            f"\r服务健康检查中... 已等待 {elapsed} 秒,P节点状态码:{http_code_p},D节点状态码:{http_code_d}",
+            end="",
+            flush=True,
+        )
 
         if http_code_p == "200" and http_code_d == "200":
             print(f"\nPD分离服务启动成功!耗时 {elapsed} 秒")
@@ -142,19 +147,16 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
     router_env = os.environ.copy()
     router_env["FD_LOG_DIR"] = "log_router"
     router_cmd = [
-        "python", "-m", "fastdeploy.router.launch",
-        "--port", str(port_num),
+        "python",
+        "-m",
+        "fastdeploy.router.launch",
+        "--port",
+        str(port_num),
         "--splitwise",
     ]
 
     with open("log_router/nohup", "w") as log_file:
-        subprocess.Popen(
-            router_cmd,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-            env=router_env
-        )
+        subprocess.Popen(router_cmd, stdout=log_file, stderr=subprocess.STDOUT, start_new_session=True, env=router_env)
     print(f"Router启动命令: {' '.join(router_cmd)}")
     time.sleep(1)
 
@@ -168,28 +170,38 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         prefill_env["XPU_VISIBLE_DEVICES"] = "4"
 
     prefill_cmd = [
-        "python", "-m", "fastdeploy.entrypoints.openai.api_server",
-        "--model", f"{model_path}/ERNIE-4.5-0.3B-Paddle",
-        "--port", str(port_num + 11),
-        "--metrics-port", str(port_num + 12),
-        "--engine-worker-queue-port", str(port_num + 13),
-        "--cache-queue-port", str(port_num + 14),
-        "--tensor-parallel-size", "1",
-        "--max-model-len", "32768",
-        "--splitwise-role", "prefill",
-        "--cache-transfer-protocol", "rdma",
-        "--rdma-comm-ports", str(port_num + 15),
-        "--pd-comm-port", str(port_num + 16),
-        "--router", f"0.0.0.0:{port_num}",
+        "python",
+        "-m",
+        "fastdeploy.entrypoints.openai.api_server",
+        "--model",
+        f"{model_path}/ERNIE-4.5-0.3B-Paddle",
+        "--port",
+        str(port_num + 11),
+        "--metrics-port",
+        str(port_num + 12),
+        "--engine-worker-queue-port",
+        str(port_num + 13),
+        "--cache-queue-port",
+        str(port_num + 14),
+        "--tensor-parallel-size",
+        "1",
+        "--max-model-len",
+        "32768",
+        "--splitwise-role",
+        "prefill",
+        "--cache-transfer-protocol",
+        "rdma",
+        "--rdma-comm-ports",
+        str(port_num + 15),
+        "--pd-comm-port",
+        str(port_num + 16),
+        "--router",
+        f"0.0.0.0:{port_num}",
     ]
 
     with open("log_prefill/nohup", "w") as log_file:
         subprocess.Popen(
-            prefill_cmd,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-            env=prefill_env
+            prefill_cmd, stdout=log_file, stderr=subprocess.STDOUT, start_new_session=True, env=prefill_env
         )
     print(f"Prefill节点启动命令: {' '.join(prefill_cmd)}")
 
@@ -203,29 +215,37 @@ def start_pd_server(model_path, port_num, wait_before_check=60):
         decode_env["XPU_VISIBLE_DEVICES"] = "5"
 
     decode_cmd = [
-        "python", "-m", "fastdeploy.entrypoints.openai.api_server",
-        "--model", f"{model_path}/ERNIE-4.5-0.3B-Paddle",
-        "--port", str(port_num + 21),
-        "--metrics-port", str(port_num + 22),
-        "--engine-worker-queue-port", str(port_num + 23),
-        "--cache-queue-port", str(port_num + 24),
-        "--tensor-parallel-size", "1",
-        "--max-model-len", "32768",
-        "--splitwise-role", "decode",
-        "--cache-transfer-protocol", "rdma",
-        "--rdma-comm-ports", str(port_num + 25),
-        "--pd-comm-port", str(port_num + 26),
-        "--router", f"0.0.0.0:{port_num}",
+        "python",
+        "-m",
+        "fastdeploy.entrypoints.openai.api_server",
+        "--model",
+        f"{model_path}/ERNIE-4.5-0.3B-Paddle",
+        "--port",
+        str(port_num + 21),
+        "--metrics-port",
+        str(port_num + 22),
+        "--engine-worker-queue-port",
+        str(port_num + 23),
+        "--cache-queue-port",
+        str(port_num + 24),
+        "--tensor-parallel-size",
+        "1",
+        "--max-model-len",
+        "32768",
+        "--splitwise-role",
+        "decode",
+        "--cache-transfer-protocol",
+        "rdma",
+        "--rdma-comm-ports",
+        str(port_num + 25),
+        "--pd-comm-port",
+        str(port_num + 26),
+        "--router",
+        f"0.0.0.0:{port_num}",
     ]
 
     with open("log_decode/nohup", "w") as log_file:
-        subprocess.Popen(
-            decode_cmd,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-            env=decode_env
-        )
+        subprocess.Popen(decode_cmd, stdout=log_file, stderr=subprocess.STDOUT, start_new_session=True, env=decode_env)
     print(f"Decode节点启动命令: {' '.join(decode_cmd)}")
 
     # 等待服务启动
@@ -269,10 +289,7 @@ def test_pd_separation():
 
         # 执行测试 - 通过Router端口访问
         ip = "0.0.0.0"
-        client = openai.Client(
-            base_url=f"http://{ip}:{port_num}/v1",
-            api_key="EMPTY_API_KEY"
-        )
+        client = openai.Client(base_url=f"http://{ip}:{port_num}/v1", api_key="EMPTY_API_KEY")
 
         # 非流式对话
         response = client.chat.completions.create(
@@ -290,8 +307,7 @@ def test_pd_separation():
 
         # 验证响应
         assert any(
-            keyword in response.choices[0].message.content
-            for keyword in ["AI", "伙伴"]
+            keyword in response.choices[0].message.content for keyword in ["AI", "伙伴"]
         ), f"响应内容不符合预期: {response.choices[0].message.content}"
 
         print("\nPD分离测试通过!")

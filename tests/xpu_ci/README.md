@@ -154,7 +154,6 @@ if __name__ == "__main__":
 
  `scripts/run_xpu_ci_pytest.sh`会自动扫描 tests/xpu_ci/ 目录下 test_ 开头的测试文件进行测试
 
-
 ### 步骤4: 测试验证
 
 ```bash

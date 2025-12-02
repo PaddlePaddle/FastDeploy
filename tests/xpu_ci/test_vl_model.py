@@ -22,16 +22,10 @@ VL模型测试 - ERNIE-4.5-VL-28B 视觉语言模型
 - 特性: reasoning-parser, tool-call-parser, enable-chunked-prefill
 """
 
-import os
-import pytest
+
 import openai
-from conftest import (
-    get_port_num,
-    get_model_path,
-    start_server,
-    print_logs_on_failure,
-    xpu_env,
-)
+import pytest
+from conftest import get_model_path, get_port_num, print_logs_on_failure, start_server
 
 
 def test_vl_model(xpu_env):
@@ -45,18 +39,30 @@ def test_vl_model(xpu_env):
 
     # 构建服务器启动参数
     server_args = [
-        "--model", f"{model_path}/ERNIE-4.5-VL-28B-A3B-Thinking",
-        "--port", str(port_num),
-        "--engine-worker-queue-port", str(port_num + 1),
-        "--metrics-port", str(port_num + 2),
-        "--cache-queue-port", str(port_num + 47873),
-        "--tensor-parallel-size", "4",
-        "--max-model-len", "32768",
-        "--max-num-seqs", "32",
-        "--quantization", "wint8",
-        "--reasoning-parser", "ernie-45-vl-thinking",
-        "--tool-call-parser", "ernie-45-vl-thinking",
-        "--mm-processor-kwargs", '{"image_max_pixels": 12845056 }',
+        "--model",
+        f"{model_path}/ERNIE-4.5-VL-28B-A3B-Thinking",
+        "--port",
+        str(port_num),
+        "--engine-worker-queue-port",
+        str(port_num + 1),
+        "--metrics-port",
+        str(port_num + 2),
+        "--cache-queue-port",
+        str(port_num + 47873),
+        "--tensor-parallel-size",
+        "4",
+        "--max-model-len",
+        "32768",
+        "--max-num-seqs",
+        "32",
+        "--quantization",
+        "wint8",
+        "--reasoning-parser",
+        "ernie-45-vl-thinking",
+        "--tool-call-parser",
+        "ernie-45-vl-thinking",
+        "--mm-processor-kwargs",
+        '{"image_max_pixels": 12845056 }',
         "--enable-chunked-prefill",
     ]
 
@@ -67,10 +73,7 @@ def test_vl_model(xpu_env):
     # 执行测试
     try:
         ip = "0.0.0.0"
-        client = openai.Client(
-            base_url=f"http://{ip}:{port_num}/v1",
-            api_key="EMPTY_API_KEY"
-        )
+        client = openai.Client(base_url=f"http://{ip}:{port_num}/v1", api_key="EMPTY_API_KEY")
 
         # 非流式对话(带图像)
         response = client.chat.completions.create(
@@ -99,8 +102,7 @@ def test_vl_model(xpu_env):
 
         # 验证响应
         assert any(
-            keyword in response.choices[0].message.content
-            for keyword in ["北魏", "北齐", "释迦牟尼", "北朝"]
+            keyword in response.choices[0].message.content for keyword in ["北魏", "北齐", "释迦牟尼", "北朝"]
         ), f"响应内容不符合预期: {response.choices[0].message.content}"
 
         print("\nVL模型测试通过!")
