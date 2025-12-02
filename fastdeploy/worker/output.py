@@ -30,7 +30,6 @@ class Logprob(NamedTuple):
     decoded_token: Optional[str] = None
 
 
-PromptLogprobs = list[dict[int, Logprob] | None]
 # [{token_id, logprob}] for tokens sampled from the top-k
 SampleLogprobs = list[dict[int, Logprob]]
 
@@ -123,6 +122,9 @@ class LogprobsTensors(NamedTuple):
                 paddle.to_tensor(self.logprobs[start:end], place=self.logprob_token_ids.place),
                 paddle.to_tensor(self.selected_token_ranks[start:end], place=self.logprob_token_ids.place),
             )
+
+
+PromptLogprobs = LogprobsTensors | list[dict[int, Logprob] | None]
 
 
 @dataclass
