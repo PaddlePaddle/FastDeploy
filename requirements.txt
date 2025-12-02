@@ -1,4 +1,4 @@
-setuptools>=62.3.0,<80.0
+setuptools
 pre-commit
 yapf
 flake8
@@ -25,10 +25,10 @@ setuptools-scm>=8
 prometheus-client
 decord
 moviepy
-triton==3.3
+triton
 use-triton-in-paddle
 crcmod
-fastsafetensors==0.1.14
+fastsafetensors
 msgpack
 gunicorn
 modelscope
