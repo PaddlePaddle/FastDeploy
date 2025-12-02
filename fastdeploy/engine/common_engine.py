@@ -745,9 +745,12 @@ class EngineService:
                         for task in tasks:
                             if self.cfg.scheduler_config.splitwise_role != "mixed":
                                 # assure fetch block ids from D
+                                self.llm_logger.debug(f"prefill wait decode resource: {task.request_id}")
                                 status, msg = self.split_connector.check_decode_allocated(task)
                                 if not status:
-                                    self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
+                                    self.llm_logger.error(
+                                        f"prefill wait for decode resource failed, {task.request_id}, {msg}."
+                                    )
                                     self.scheduler.put_results(
                                         [
                                             RequestOutput(
@@ -1128,11 +1131,38 @@ class EngineService:
             waiting_request_outputs = []
 
             for req_output in prefilled_request_ouputs:
+                request_id = req_output.request_id
+                if envs.FD_ENABLE_INTERNAL_ADAPTER and not req_output.outputs.token_ids:
+                    # first token is eos in Prefill, just recycle resource and continue
+                    self.llm_logger.warning(f"{request_id} need not decode after first token")
+                    self.resource_manager.pre_recycle_resource(request_id)
+                    if request_id in self.token_processor.tokens_counter:
+                        del self.token_processor.tokens_counter[request_id]
+                    req_output.finished = True
+                    self.scheduler.put_results([req_output])
+                    continue
+                if req_output.error_code != 200:
+                    self.llm_logger.warning(
+                        f"{request_id} prefill failed with msg:{req_output.error_msg}, recycle resource."
+                    )
+                    self.resource_manager.pre_recycle_resource(request_id)
+                    if request_id in self.token_processor.tokens_counter:
+                        del self.token_processor.tokens_counter[request_id]
+                    self.scheduler.put_results([req_output])
+                    continue
+
                 if hasattr(self.scheduler, "has_request") and not self.scheduler.has_request(req_output.request_id):
                     # ensure the api_server and scheduler in decode have
                     # received the request sent by the client
                     waiting_request_outputs.append(req_output)
                     continue
+                if (
+                    self.cfg.cache_config.enable_splitwise_cache_buffer
+                    and not self.resource_manager.prepare_prefilled_req(req_output)
+                ):
+                    waiting_request_outputs.append(req_output)
+                    continue
+
                 req_output.finished = False
                 ready_request_outputs.append(req_output)
                 self.llm_logger.debug(f"there are enough resource for prefilled request: {req_output.request_id}")
@@ -1147,24 +1177,6 @@ class EngineService:
             else:
                 for req_output in ready_request_outputs:
                     request_id = req_output.request_id
-                    if envs.FD_ENABLE_INTERNAL_ADAPTER and not req_output.outputs.token_ids:
-                        # first token is eos in Prefill, just recycle resource and continue
-                        self.llm_logger.warning(f"{request_id} need not decode after first token")
-                        self.resource_manager.pre_recycle_resource(request_id)
-                        if request_id in self.token_processor.tokens_counter:
-                            del self.token_processor.tokens_counter[request_id]
-                        req_output.finished = True
-                        self.scheduler.put_results([req_output])
-                        continue
-                    if req_output.error_code != 200:
-                        self.llm_logger.warning(
-                            f"{request_id} prefill failed with msg:{req_output.error_msg}, recycle resource."
-                        )
-                        self.resource_manager.pre_recycle_resource(request_id)
-                        if request_id in self.token_processor.tokens_counter:
-                            del self.token_processor.tokens_counter[request_id]
-                        self.scheduler.put_results([req_output])
-                        continue
                     self.token_processor.tokens_counter[request_id] = 1
                     if envs.FD_ENABLE_INTERNAL_ADAPTER:  # first token sent by D instance
                         self.scheduler.put_results([req_output])
@@ -1187,6 +1199,7 @@ class EngineService:
         threading.Thread(target=decode_loop, daemon=True).start()
 
     def start_cache_service(self, device_ids, ipc_signal_suffix):
+        self.llm_logger.info("launch cache processes including cache_transfer_manager and cache_messager...")
         return self.resource_manager.cache_manager.launch_cache_manager(
             cache_config=self.cfg.cache_config,
             tensor_parallel_size=self.cfg.parallel_config.tensor_parallel_size,

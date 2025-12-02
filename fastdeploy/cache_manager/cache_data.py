@@ -42,6 +42,7 @@ class CacheStatus(Enum):
     SWAP2CPU = 1
     SWAP2GPU = 2
     CPU = 3
+    SPLITWISE_CPU2GPU = 4
 
 
 class BlockNode:

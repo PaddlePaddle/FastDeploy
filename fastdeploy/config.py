@@ -1241,6 +1241,8 @@ class CacheConfig:
             enable_prefix_caching (bool): Enable prefix caching.
             max_encoder_cache(int): Maximum number of tokens in the encoder cache.
             max_processor_cache(int): Maximum number of bytes in the processor cache.
+            splitwise_cache_buffer_size (float): The amount of CPU memory in decode to receive the cache from prefill (GB).
+                                                 In splitwise deployment, decode uses cpu buffer to receive the cache from prefill.
         """
         self.block_size = 64
         self.gpu_memory_utilization = 0.9
@@ -1257,6 +1259,9 @@ class CacheConfig:
         self.rdma_comm_ports = None
         self.cache_transfer_protocol = None
         self.pd_comm_port = None
+        self.enable_splitwise_cache_buffer = False
+        self.splitwise_cache_buffer_size = 0
+        self.splitwise_cache_buffer_block_num = 0
         self.enable_prefix_caching = False
         self.enable_ssd_cache = False
         self.cache_queue_port = None
@@ -1315,6 +1320,21 @@ class CacheConfig:
                 * byte_size
             )
 
+            if self.splitwise_cache_buffer_size is not None:
+                block_num = int(self.splitwise_cache_buffer_size * 1024**3 / self.bytes_per_block)
+                if block_num > 0:
+                    self.enable_splitwise_cache_buffer = True
+                    self.splitwise_cache_buffer_block_num = block_num
+                    logger.info(
+                        f"splitwise_cache_buffer_size: {self.splitwise_cache_buffer_size} GB, "
+                        f"splitwise_cache_buffer_block_num: {self.splitwise_cache_buffer_block_num}"
+                    )
+                else:
+                    logger.warning(
+                        f"splitwise_cache_buffer_size ({self.splitwise_cache_buffer_size}) "
+                        "is too small, disable it!"
+                    )
+
         if self.swap_space is None:
             self.num_cpu_blocks = 0
         else:
@@ -1330,6 +1350,11 @@ class CacheConfig:
             raise ValueError("GPU memory utilization must be less than 1.0. Got " f"{self.gpu_memory_utilization}.")
         if self.kv_cache_ratio > 1.0:
             raise ValueError("KV cache ratio must be less than 1.0. Got " f"{self.kv_cache_ratio}.")
+
+        if self.splitwise_cache_buffer_size is not None and self.splitwise_cache_buffer_size < 0.0:
+            raise ValueError(
+                "splitwise_cache_buffer_size must be greater than 0.0. Got " f"{self.splitwise_cache_buffer_size}."
+            )
 
     def postprocess(self, num_total_tokens, number_of_tasks):
         """

@@ -26,6 +26,7 @@ class Args:
     value_cache_shape = ""
     create_cache_tensor = False
     cache_dtype = "bfloat16"
+    splitwise_cache_buffer_block_num = 0
 
 
 # ==========================

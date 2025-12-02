@@ -21,12 +21,14 @@ from fastdeploy.platforms import current_platform
 try:
     if current_platform.is_cuda():
         from fastdeploy.model_executor.ops.gpu import (
+            create_pinned_shm,
             cuda_host_alloc,
             cuda_host_free,
             get_data_ptr_ipc,
             get_output_kv_signal,
             ipc_sent_key_value_cache_by_remote_ptr,
             ipc_sent_key_value_cache_by_remote_ptr_block_sync,
+            open_pinned_shm,
             set_data_ipc,
             share_external_data,
             swap_cache_all_layers,
@@ -50,6 +52,8 @@ try:
         )
 
         unset_data_ipc = None
+        open_pinned_shm = None
+        create_pinned_shm = None
         memory_allocated = paddle.device.xpu.memory_allocated
 
         def get_data_ptr_ipc(*args, **kwargs):
@@ -107,6 +111,8 @@ except:
 __all__ = [
     "cuda_host_alloc",
     "cuda_host_free",
+    "open_pinned_shm",
+    "create_pinned_shm",
     "set_data_ipc",
     "share_external_data_",
     "swap_cache_all_layers",
