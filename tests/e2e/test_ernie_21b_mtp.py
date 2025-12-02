@@ -27,7 +27,7 @@ from utils.serving_utils import (
     FD_CACHE_QUEUE_PORT,
     FD_ENGINE_QUEUE_PORT,
     FD_METRICS_PORT,
-    clean_ports,
+    clean,
     is_port_open,
 )
 
@@ -42,7 +42,7 @@ def setup_and_run_server():
     - Tears down server after all tests finish
     """
     print("Pre-test port cleanup...")
-    clean_ports()
+    clean()
 
     print("log dir clean ")
     if os.path.exists("log") and os.path.isdir("log"):
@@ -107,7 +107,7 @@ def setup_and_run_server():
         print("[TIMEOUT] API server failed to start in 5 minutes. Cleaning up...")
         try:
             os.killpg(process.pid, signal.SIGTERM)
-            clean_ports()
+            clean()
         except Exception as e:
             print(f"Failed to kill process group: {e}")
         raise RuntimeError(f"API server did not start on port {FD_API_PORT}")
@@ -117,7 +117,7 @@ def setup_and_run_server():
     print("\n===== Post-test server cleanup... =====")
     try:
         os.killpg(process.pid, signal.SIGTERM)
-        clean_ports()
+        clean()
         print(f"server (pid={process.pid}) terminated")
     except Exception as e:
         print(f"Failed to terminate API server: {e}")
