@@ -36,6 +36,7 @@ from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.quantization.block_wise_fp8 import (
     BlockWiseFP8Config,
 )
+from fastdeploy.model_executor.layers.quantization.weight_only import WeightOnlyConfig, WINT4Config, WINT8Config
 from fastdeploy.scheduler import SchedulerConfig
 from fastdeploy.worker.worker_process import init_distributed_environment
 
