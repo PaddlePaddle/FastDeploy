@@ -16,18 +16,20 @@ class TestFusedMoE(unittest.TestCase):
 
     def test_ffn(self):
         paddle.seed(10)
-        recv_x = paddle.randn([128, 4096], dtype="bfloat16").cast(paddle.float8_e4m3fn)
-        recv_x_scale = paddle.randn([128, 4096 // 128]).cast("float32")
-        gate_out = paddle.randn([128, 8], dtype="float32")
+        num_rows = 2
+        recv_x = paddle.randn([num_rows, 4096], dtype="bfloat16").cast(paddle.float8_e4m3fn)
+        recv_x_scale = paddle.randn([num_rows, 4096 // 128]).cast("float32")
+        local_num_experts = 8
+        gate_out = paddle.randn([num_rows, local_num_experts], dtype="float32")
         recv_topk_idx = paddle.topk(gate_out, k=8, axis=-1)[1]
         recv_topk_idx[:, 3:5] = -1
         recv_topk_weights = paddle.topk(gate_out, k=8, axis=-1)[0]
 
-        tmp0 = [0] * 8
-        tmp1 = [0] * 8
+        tmp0 = [0] * local_num_experts
+        tmp1 = [0] * local_num_experts
         recv_topk_idx_list = recv_topk_idx.flatten().numpy().tolist()
         for ele in recv_topk_idx_list:
-            if ele > 0:
+            if ele >= 0:
                 tmp0[ele] += 1
         for idx in range(len(tmp1)):
             tmp1[idx] = (tmp0[idx] + 127) // 128 * 128
@@ -62,6 +64,14 @@ class TestFusedMoE(unittest.TestCase):
             token_all_num,
         )
         assert (m_indices - baseline_m_indices).abs().sum().item() == 0
+        for i in range(recv_x.shape[0]):
+            for j in range(local_num_experts):
+                dst_pos = permute_indices_per_token[j, i].item()
+                if dst_pos >= 0:
+
+                    a = recv_x[i].cast("float32")
+                    b = permute_input[dst_pos].cast("float32")
+                    assert (a - b).abs().max().item() == 0
 
         def haha():
             for i in range(100):
