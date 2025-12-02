@@ -503,6 +503,7 @@ elif paddle.is_compiled_with_cuda():
         os.system("python gpu_ops/machete/generate.py")
         sources += find_end_files("gpu_ops/machete", ".cu")
         cc_compile_args += ["-DENABLE_MACHETE"]
+        sources += find_end_files("gpu_ops/dynamic_quant_cache/", ".cu")
 
     setup(
         name="fastdeploy_ops",

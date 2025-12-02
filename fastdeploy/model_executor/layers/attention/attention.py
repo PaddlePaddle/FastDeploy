@@ -188,6 +188,29 @@ class Attention(nn.Layer):
                 dtype=paddle.get_default_dtype(),
             )
 
+        if fd_config.quant_config and hasattr(fd_config.quant_config, "kv_cache_quant_type"):
+            if fd_config.quant_config.kv_cache_quant_type == "dynamic_int2_zp":
+                self.c16_remain_seq_len = 128
+                self.block_size = 64
+                self.cache_k_c16 = paddle.zeros(
+                    [
+                        fd_config.scheduler_config.max_num_seqs,
+                        self.c16_remain_seq_len + self.block_size,
+                        self.kv_num_heads,
+                        self.head_dim,
+                    ],
+                    dtype="float16",
+                )
+                self.cache_v_c16 = paddle.zeros(
+                    [
+                        fd_config.scheduler_config.max_num_seqs,
+                        self.c16_remain_seq_len + self.block_size,
+                        self.kv_num_heads,
+                        self.head_dim,
+                    ],
+                    dtype="float16",
+                )
+
     def init_weight(self):
         if self.quant_method is not None:
             self.quant_method.create_weights(
