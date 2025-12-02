@@ -275,11 +275,11 @@ class GPUModelRunner(ModelRunnerBase):
             token_num = self.share_inputs["ids_remove_padding"].shape[0]
 
             if token_num > chunk_size:
-                self.fd_config.parallel_config.moe_num_chunk = (token_num + chunk_size - 1) // chunk_size
+                self.forward_meta.moe_num_chunk = (token_num + chunk_size - 1) // chunk_size
             else:
-                self.fd_config.parallel_config.moe_num_chunk = 1
+                self.forward_meta.moe_num_chunk = 1
 
-            dist_status_obj.moe_num_chunk = self.fd_config.parallel_config.moe_num_chunk
+            dist_status_obj.moe_num_chunk = self.forward_meta.moe_num_chunk
 
         # only ep need to collect and sync distributed status
         if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
