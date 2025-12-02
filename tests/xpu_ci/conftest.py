@@ -47,7 +47,7 @@ def stop_processes():
     """
     停止所有相关进程（最小改动版，避免误杀 pytest）
     """
-    xpu_id = get_xpu_id()
+    xpu_id = get_xpu_id()  # noqa: F841
     port_num = get_port_num()
 
     # 获取 pytest 主进程 PID
@@ -185,7 +185,7 @@ def wait_for_health_check(timeout=900, interval=10):
                     model_id = data["data"][0].get("id", "unknown")
                     print(f"\n模型就绪!模型ID: {model_id}, 总耗时 {elapsed} 秒")
                     return True
-        except (json.JSONDecodeError, Exception) as e:
+        except (json.JSONDecodeError, Exception) as e:  # noqa: F841
             pass
 
         print(f"\r等待模型就绪中... 已等待 {elapsed} 秒", end="", flush=True)
