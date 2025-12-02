@@ -110,14 +110,7 @@ cd "$(dirname "$DIR")"
 # -s: 不捕获输出,直接显示print内容
 # --tb=short: 简短的traceback
 # --junit-xml: 生成junit格式的测试报告
-python -m pytest -v -s --tb=short \
-    tests/xpu_ci_pytest/test_v1_mode.py \
-    tests/xpu_ci_pytest/test_w4a8.py \
-    tests/xpu_ci_pytest/test_vl_model.py \
-    tests/xpu_ci_pytest/test_pd_separation.py \
-    tests/xpu_ci_pytest/test_ep4tp4_online.py \
-    tests/xpu_ci_pytest/test_ep4tp1_online.py \
-    tests/xpu_ci_pytest/test_ep4tp4_all2all.py
+python -m pytest -v -s --tb=short tests/xpu_ci/
 
 # 获取pytest退出码
 exit_code=$?
