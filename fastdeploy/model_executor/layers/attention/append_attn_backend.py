@@ -59,6 +59,7 @@ class AppendAttentionMetadata(AttentionMetadata):
     # pd_disaggregation
     kv_signal_metadata: Optional[paddle.Tensor] = None
     kv_signal_data_list: List[Optional[paddle.Tensor]] = field(default_factory=list)
+    enable_ids_reorder: bool = True
 
 
 def allocate_launch_related_buffer(

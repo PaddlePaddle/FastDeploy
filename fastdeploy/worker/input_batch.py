@@ -1,0 +1,511 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
+import paddle
+from paddleformers.utils.log import logger
+
+from fastdeploy.config import CacheConfig, FDConfig, ModelConfig, SpeculativeConfig
+from fastdeploy.model_executor.layers.rotary_embedding import get_rope
+from fastdeploy.model_executor.logits_processor import build_logits_processors
+
+
+class InputBatch:
+    def __getitem__(self, key):
+        """Support dictionary-style attribute access"""
+        if hasattr(self, key):
+            return getattr(self, key)
+        raise KeyError(f"'{key}' is not a valid attribute of InputBatch")
+
+    def __setitem__(self, key, value):
+        """Support dictionary-style attribute setting, overwrite if exists, add if not exists"""
+        setattr(self, key, value)
+
+    def __contains__(self, key):
+        """Support 'in' operator to check if attribute exists"""
+        return hasattr(self, key)
+
+    def update(self, values: dict):
+        """Batch update attributes, similar to dict's update method"""
+        for key, value in values.items():
+            setattr(self, key, value)
+
+    def pop(self, key, default=None):
+        """
+        Pop an attribute, similar to dict's pop method
+
+        Args:
+            key: Name of the attribute to pop
+            default: Default value to return if attribute does not exist
+
+        Returns:
+            Popped attribute value, or default if attribute doesn't exist and default is provided
+        """
+        if hasattr(self, key):
+            value = getattr(self, key)
+            delattr(self, key)
+            return value
+        elif default is not None:
+            return default
+        else:
+            raise KeyError(f"'{key}' is not a valid attribute of InputBatch")
+
+    def __init__(self, fd_config: FDConfig) -> None:
+        """
+        Initialize all share buffers for model inputs.
+        """
+        self.model_config: ModelConfig = fd_config.model_config
+        self.cache_config: CacheConfig = fd_config.cache_config
+        self.speculative_config: SpeculativeConfig = fd_config.speculative_config
+        self.speculative_decoding = self.speculative_config.method is not None
+        self.enable_mm = self.model_config.enable_mm
+        self.enable_expert_parallel = fd_config.parallel_config.enable_expert_parallel
+
+        max_num_seqs = fd_config.scheduler_config.max_num_seqs
+
+        self.pre_ids = paddle.full(
+            [max_num_seqs, self.model_config.max_model_len],
+            -1,
+            dtype="int64",
+        )
+        self.input_ids = paddle.full(
+            [max_num_seqs, self.model_config.max_model_len],
+            self.model_config.pad_token_id,
+            dtype="int64",
+        )
+        self.prompt_ids = paddle.full(
+            [max_num_seqs, self.model_config.max_model_len],
+            self.model_config.pad_token_id,
+            dtype="int64",
+        )
+        self.eos_token_id = paddle.full([self.model_config.eos_tokens_lens, 1], 0, dtype="int64")
+        self.top_p = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
+        self.top_k = paddle.full([max_num_seqs, 1], 0, dtype="int64")
+        self.top_k_list = [0] * max_num_seqs
+        self.min_p = paddle.full([max_num_seqs, 1], 0.0, dtype="float32")
+        self.min_p_list = [0.0] * max_num_seqs
+        self.temperature = paddle.full([max_num_seqs, 1], self.model_config.temperature, dtype="float32")
+        self.penalty_score = paddle.full([max_num_seqs, 1], self.model_config.penalty_score, dtype="float32")
+        self.frequency_score = paddle.full(
+            [max_num_seqs, 1],
+            self.model_config.frequency_score,
+            dtype="float32",
+        )
+        self.presence_score = paddle.full([max_num_seqs, 1], self.model_config.presence_score, dtype="float32")
+        self.temp_scaled_logprobs = paddle.full([max_num_seqs, 1], False, dtype="bool")
+        self.top_p_normalized_logprobs = paddle.full([max_num_seqs, 1], False, dtype="bool")
+
+        self.min_dec_len = paddle.full([max_num_seqs, 1], self.model_config.min_length, dtype="int64")
+        self.max_dec_len = paddle.full([max_num_seqs, 1], self.model_config.max_model_len, dtype="int64")
+        self.seq_lens_this_time_buffer = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        if self.enable_expert_parallel:
+            self.seq_lens_this_time = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.seq_lens_encoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.seq_lens_decoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.step_seq_lens_encoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.step_seq_lens_decoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.prompt_lens = paddle.full([max_num_seqs, 1], 0, dtype="int64")
+        self.step_idx = paddle.full([max_num_seqs, 1], 0, dtype="int64")
+        self.not_need_stop = paddle.full([1], False, dtype="bool").cpu()
+        self.stop_flags = paddle.full([max_num_seqs, 1], True, dtype="bool")
+        self.stop_nums = paddle.full([1], max_num_seqs, dtype="int64")
+
+        self.bad_tokens = paddle.full([max_num_seqs, self.model_config.vocab_size], -1, dtype="int64")
+        self.bad_tokens_len = paddle.full([max_num_seqs], 1, dtype="int64")
+        self.next_tokens = paddle.full([max_num_seqs, 1], -1, dtype="int64")
+        self.is_block_step = paddle.full([max_num_seqs], False, dtype="bool")
+        self.encoder_block_lens = paddle.full([max_num_seqs], 0, dtype="int32")
+        self.step_block_list = paddle.full([max_num_seqs], -1, dtype="int32")
+        self.step_lens = paddle.full([1], 0, dtype="int32")
+        self.recover_block_list = paddle.full([max_num_seqs], -1, dtype="int32")
+        self.recover_lens = paddle.full([1], 0, dtype="int32")
+        self.need_block_list = paddle.full([max_num_seqs], -1, dtype="int32")
+        self.need_block_len = paddle.full([1], 0, dtype="int32")
+        self.used_list_len = paddle.full([max_num_seqs], 0, dtype="int32")
+        self.infer_seed = paddle.full([max_num_seqs, 1], 0, dtype="int64").cpu()
+        self.first_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64")
+        self.ori_seq_lens_encoder = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.system_lens = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        self.system_ids = paddle.full([max_num_seqs, 1], -1, dtype="int32")
+
+        self.ids_remove_padding = paddle.full(
+            [max_num_seqs * self.model_config.max_model_len],
+            0,
+            dtype="int64",
+        )
+        self.batch_id_per_token = paddle.full([max_num_seqs * self.model_config.max_model_len, 1], 0, dtype="int32")
+        self.cu_seqlens_q = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
+        self.cu_seqlens_k = paddle.full([max_num_seqs + 1, 1], 0, dtype="int32")
+
+        # Declare AttentionBackend buffers
+        self.decoder_batch_ids = None
+        self.decoder_tile_ids_per_batch = None
+        self.decoder_num_blocks_cpu = None  # Pinning Memory
+        self.decoder_num_blocks_device = None
+        self.decoder_chunk_size_device = None
+        self.max_len_tensor_cpu = None  # CPU
+        self.encoder_batch_ids = None
+        self.encoder_tile_ids_per_batch = None
+        self.encoder_num_blocks_x_cpu = None  # CPU
+        self.kv_batch_ids = None
+        self.kv_tile_ids_per_batch = None
+        self.kv_num_blocks_x_cpu = None  # CPU
+
+        # Initialize thinking related buffers
+        self.max_think_lens = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
+        self.limit_think_status = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+
+        # Initialize rotary position embedding
+        if not self.enable_mm:
+            self.rope_emb = get_rope(
+                rotary_dim=self.model_config.head_dim,
+                position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
+                base=self.model_config.rope_theta,
+                model_config=self.model_config,
+                partial_rotary_factor=self.model_config.partial_rotary_factor,
+            )
+
+        # Set block tables
+        pre_max_block_num = (
+            self.model_config.max_model_len + self.cache_config.block_size - 1
+        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
+        self.block_tables = paddle.full([max_num_seqs, pre_max_block_num], -1, dtype="int32")
+
+        # Initialize free list
+        free_list = list(
+            range(
+                self.cache_config.total_block_num - 1,
+                int(self.cache_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
+                -1,
+            )
+        )
+        self.free_list_len = len(free_list)
+        self.free_list = paddle.to_tensor(free_list, dtype="int32")
+        self.free_list_len = paddle.full([1], self.free_list_len, dtype="int32")
+
+        # Initialize stop seqs
+        self.stop_seqs_len = paddle.full([max_num_seqs, self.model_config.max_stop_seqs_num], 0, dtype="int32")
+        self.stop_seqs = paddle.full(
+            [
+                max_num_seqs,
+                self.model_config.max_stop_seqs_num,
+                self.model_config.stop_seqs_max_len,
+            ],
+            -1,
+            dtype="int64",
+        )
+        if self.speculative_decoding:
+            max_draft_token_num = self.speculative_config.num_speculative_tokens
+            self.input_ids_cpu = paddle.full(
+                shape=[max_num_seqs, self.model_config.max_model_len],
+                fill_value=1,
+                dtype="int64",
+            ).cpu()
+            self.accept_tokens = paddle.full(
+                shape=[max_num_seqs, max_draft_token_num + 1],
+                fill_value=0,
+                dtype="int64",
+            )
+            self.accept_num = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32")
+            self.draft_tokens = paddle.full(
+                shape=[max_num_seqs, max_draft_token_num + 1],
+                fill_value=0,
+                dtype="int64",
+            )
+
+            self.actual_draft_token_num = paddle.full(
+                shape=[max_num_seqs],
+                fill_value=max_draft_token_num,
+                dtype="int32",
+            )
+            self.output_cum_offsets = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+            self.output_padding_offset = paddle.full(
+                shape=[max_num_seqs * (max_draft_token_num + 1)],
+                fill_value=0,
+                dtype="int32",
+            )
+            # For V1_KVCACHE_SCHEDULER
+            self.step_draft_tokens = paddle.full(
+                shape=[max_num_seqs, max_draft_token_num + 1],
+                fill_value=0,
+                dtype="int64",
+            )
+            self.step_seq_lens_this_time = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+            # For MTP Logprob
+            self.draft_logits = paddle.full(
+                [max_num_seqs * (self.speculative_config.num_speculative_tokens + 1), self.model_config.vocab_size],
+                -1,
+                dtype="float32",
+            )
+            self.cu_batch_token_offset = paddle.full(shape=[max_num_seqs + 1], fill_value=0, dtype="int32")
+
+        if self.enable_mm:
+            head_dim = self.model_config.head_dim
+            if (
+                "qwen" in self.model_config.model_type or "paddleocr" in self.model_config.model_type
+            ):  # neox style = True
+                rope_head_dim = head_dim
+            else:  # neox style = False
+                rope_head_dim = head_dim // 2
+
+            self.rope_emb = paddle.full(
+                shape=[
+                    max_num_seqs,
+                    2,
+                    1,
+                    self.model_config.max_model_len,
+                    1,
+                    rope_head_dim,
+                ],
+                fill_value=0,
+                dtype="float32",
+            )
+            self.image_features = None
+
+        # For logits processors
+        self.logits_processors = build_logits_processors(fd_config)
+        self.logits_processors_args = [{} for _ in range(max_num_seqs)]
+        logger.info(f"Enabled logits processors: {self.logits_processors}")
+
+        self.mask_rollback = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+
+    def swap_states(self, i1, i2) -> None:
+        """Swap the data at indices i1 and i2 for all array-like attributes"""
+
+        def swap_tensor_slice(tensor, idx1, idx2):
+            """Safely swap tensor slices using clone"""
+            temp = tensor[idx1].clone()
+            tensor[idx1] = tensor[idx2].clone()
+            tensor[idx2] = temp
+
+        swap_tensor_slice(self.pre_ids, i1, i2)
+        swap_tensor_slice(self.input_ids, i1, i2)
+        swap_tensor_slice(self.prompt_ids, i1, i2)
+        swap_tensor_slice(self.top_p, i1, i2)
+        swap_tensor_slice(self.top_k, i1, i2)
+        swap_tensor_slice(self.min_p, i1, i2)
+        swap_tensor_slice(self.temperature, i1, i2)
+        swap_tensor_slice(self.penalty_score, i1, i2)
+        swap_tensor_slice(self.frequency_score, i1, i2)
+        swap_tensor_slice(self.presence_score, i1, i2)
+        swap_tensor_slice(self.temp_scaled_logprobs, i1, i2)
+        swap_tensor_slice(self.top_p_normalized_logprobs, i1, i2)
+        swap_tensor_slice(self.min_dec_len, i1, i2)
+        swap_tensor_slice(self.max_dec_len, i1, i2)
+        swap_tensor_slice(self.seq_lens_this_time_buffer, i1, i2)
+
+        if self.enable_expert_parallel:
+            swap_tensor_slice(self.seq_lens_this_time, i1, i2)
+
+        swap_tensor_slice(self.seq_lens_encoder, i1, i2)
+        swap_tensor_slice(self.seq_lens_decoder, i1, i2)
+        swap_tensor_slice(self.step_seq_lens_encoder, i1, i2)
+        swap_tensor_slice(self.step_seq_lens_decoder, i1, i2)
+        swap_tensor_slice(self.prompt_lens, i1, i2)
+        swap_tensor_slice(self.step_idx, i1, i2)
+        swap_tensor_slice(self.stop_flags, i1, i2)
+
+        # Swap list-based arrays (lists don't need clone)
+        self.top_k_list[i1], self.top_k_list[i2] = self.top_k_list[i2], self.top_k_list[i1]
+        self.min_p_list[i1], self.min_p_list[i2] = self.min_p_list[i2], self.min_p_list[i1]
+
+        # Swap 1D arrays
+        swap_tensor_slice(self.bad_tokens, i1, i2)
+        swap_tensor_slice(self.bad_tokens_len, i1, i2)
+        swap_tensor_slice(self.next_tokens, i1, i2)
+        swap_tensor_slice(self.is_block_step, i1, i2)
+        swap_tensor_slice(self.encoder_block_lens, i1, i2)
+        swap_tensor_slice(self.step_block_list, i1, i2)
+        swap_tensor_slice(self.recover_block_list, i1, i2)
+        swap_tensor_slice(self.need_block_list, i1, i2)
+        swap_tensor_slice(self.used_list_len, i1, i2)
+        swap_tensor_slice(self.infer_seed, i1, i2)
+        swap_tensor_slice(self.first_token_ids, i1, i2)
+        swap_tensor_slice(self.ori_seq_lens_encoder, i1, i2)
+        swap_tensor_slice(self.system_lens, i1, i2)
+        swap_tensor_slice(self.system_ids, i1, i2)
+        swap_tensor_slice(self.max_think_lens, i1, i2)
+        swap_tensor_slice(self.limit_think_status, i1, i2)
+
+        # Swap block tables
+        swap_tensor_slice(self.block_tables, i1, i2)
+
+        # Swap stop sequences
+        swap_tensor_slice(self.stop_seqs_len, i1, i2)
+        swap_tensor_slice(self.stop_seqs, i1, i2)
+
+        # Swap speculative decoding buffers if enabled
+        if self.speculative_decoding:
+            swap_tensor_slice(self.input_ids_cpu, i1, i2)
+            swap_tensor_slice(self.accept_tokens, i1, i2)
+            swap_tensor_slice(self.accept_num, i1, i2)
+            swap_tensor_slice(self.draft_tokens, i1, i2)
+            swap_tensor_slice(self.actual_draft_token_num, i1, i2)
+            swap_tensor_slice(self.output_cum_offsets, i1, i2)
+            swap_tensor_slice(self.step_draft_tokens, i1, i2)
+            swap_tensor_slice(self.step_seq_lens_this_time, i1, i2)
+
+        # Swap mask rollback
+        swap_tensor_slice(self.mask_rollback, i1, i2)
+
+    def swap_states_batch(self, i1, i2) -> None:
+        """Optimized swap function that batches tensors with same shape and dtype"""
+
+        def batch_swap(tensors, idx1, idx2):
+            """Batch swap tensors with same shape and dtype"""
+            if not tensors:
+                return
+
+            # Group by shape and dtype (convert shape to tuple to make it hashable)
+            groups = {}
+            for tensor in tensors:
+                # Convert list shape to tuple for hashability
+                shape_tuple = tuple(tensor[idx1].shape)
+                key = (shape_tuple, tensor.dtype)
+                if key not in groups:
+                    groups[key] = []
+                groups[key].append(tensor)
+
+            # Process each group
+            for (shape_tuple, dtype), tensor_group in groups.items():
+                if len(tensor_group) == 1:
+                    # Single tensor in group - use individual swap
+                    temp = tensor_group[0][idx1].clone()
+                    tensor_group[0][idx1] = tensor_group[0][idx2].clone()
+                    tensor_group[0][idx2] = temp
+                else:
+                    # Batch process
+                    slices_idx1 = [t[idx1].clone() for t in tensor_group]
+                    slices_idx2 = [t[idx2].clone() for t in tensor_group]
+
+                    # Assign back in batch
+                    for t, s1, s2 in zip(tensor_group, slices_idx2, slices_idx1):
+                        t[idx1] = s1
+                        t[idx2] = s2
+
+        # Collect all tensors to swap
+        tensors = [
+            # Main input tensors
+            self.pre_ids,
+            self.input_ids,
+            self.prompt_ids,
+            # Configuration tensors
+            self.top_p,
+            self.top_k,
+            self.min_p,
+            self.temperature,
+            self.penalty_score,
+            self.frequency_score,
+            self.presence_score,
+            self.temp_scaled_logprobs,
+            self.top_p_normalized_logprobs,
+            # Length tensors
+            self.min_dec_len,
+            self.max_dec_len,
+            self.seq_lens_this_time_buffer,
+            self.seq_lens_encoder,
+            self.seq_lens_decoder,
+            self.step_seq_lens_encoder,
+            self.step_seq_lens_decoder,
+            self.prompt_lens,
+            self.step_idx,
+            self.stop_flags,
+            # 1D arrays
+            self.bad_tokens,
+            self.bad_tokens_len,
+            self.next_tokens,
+            self.is_block_step,
+            self.encoder_block_lens,
+            self.step_block_list,
+            self.recover_block_list,
+            self.need_block_list,
+            self.used_list_len,
+            self.infer_seed,
+            self.first_token_ids,
+            self.ori_seq_lens_encoder,
+            self.system_lens,
+            self.system_ids,
+            self.max_think_lens,
+            self.limit_think_status,
+            self.mask_rollback,
+            # Special tensors
+            self.block_tables,
+            self.stop_seqs_len,
+            self.stop_seqs,
+        ]
+
+        # Add expert parallel tensors if enabled
+        if self.enable_expert_parallel:
+            tensors.append(self.seq_lens_this_time)
+
+        # Add speculative decoding tensors if enabled
+        if self.speculative_decoding:
+            tensors.extend(
+                [
+                    self.input_ids_cpu,
+                    self.accept_tokens,
+                    self.draft_tokens,
+                    self.output_cum_offsets,
+                    self.step_draft_tokens,
+                    self.step_seq_lens_this_time,
+                ]
+            )
+
+        # Perform batch swap
+        batch_swap(tensors, i1, i2)
+
+        # Swap list-based arrays (no optimization needed for lists)
+        self.top_k_list[i1], self.top_k_list[i2] = self.top_k_list[i2], self.top_k_list[i1]
+        self.min_p_list[i1], self.min_p_list[i2] = self.min_p_list[i2], self.min_p_list[i1]
+
+        # Swap scalar arrays
+        if self.speculative_decoding:
+            self.accept_num[i1], self.accept_num[i2] = self.accept_num[i2], self.accept_num[i1]
+            self.actual_draft_token_num[i1], self.actual_draft_token_num[i2] = (
+                self.actual_draft_token_num[i2],
+                self.actual_draft_token_num[i1],
+            )
+
+
+def reorder_split_prefill_and_decode(input_batch: InputBatch):
+    """
+    Reorder input_batch data to place decode requests first and prefill requests last.
+
+    Args:
+        input_batch: Input batch data
+
+    Returns:
+        None: Modifies the input_batch data order in place
+    """
+    # 1. Identify decode (prefill_len=0) vs prefill (prefill_len>0) requests
+    decode_mask = input_batch.seq_lens_encoder == 0
+
+    # Get batch size
+    batch_size = decode_mask.shape[0]
+
+    # 2. Use two-pointer algorithm to swap prefill to the back and decode to the front
+    left = 0  # Pointer for decode section start
+    right = batch_size - 1  # Pointer for prefill section start
+
+    while left <= right:
+        if decode_mask[left]:  # Left position is decode request, no swap needed, move right
+            left += 1
+        elif not decode_mask[right]:  # Right position is prefill request, no swap needed, move left
+            right -= 1
+        else:
+            # Swap: left position is prefill, right position is decode, need to swap
+            input_batch.swap_states(left, right)
+            left += 1
+            right -= 1
