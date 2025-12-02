@@ -900,10 +900,11 @@ class EngineService:
         while self.running:
             try:
                 block = True if len(added_requests) == 0 else False
-                if not self.cfg.model_config.enable_mm:
-                    err, data = self.recv_request_server.receive_json_once(block)
-                else:
-                    err, data = self.recv_request_server.receive_pyobj_once(block)
+                err, data = self.recv_request_server.receive_pyobj_once(block)
+                # if not self.cfg.model_config.enable_mm:
+                #     err, data = self.recv_request_server.receive_json_once(block)
+                # else:
+                #     err, data = self.recv_request_server.receive_pyobj_once(block)
                 if err is not None:
                     self.llm_logger.error(f"Engine stops inserting zmq task into scheduler, err:{err}")
                     break
@@ -913,7 +914,8 @@ class EngineService:
                 if data:
                     err_msg = None
                     try:
-                        request = Request.from_dict(data)
+                        # request = Request.from_dict(data)
+                        request = data
                         request.llm_engine_recv_req_timestamp = time.time()
                         start_span("ENQUEUE_ZMQ", data, trace.SpanKind.PRODUCER)
                         main_process_metrics.requests_number.inc()

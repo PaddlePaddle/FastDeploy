@@ -27,6 +27,7 @@ from filelock import FileLock
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
+from fastdeploy.engine.request import Request
 from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
 from fastdeploy.eplb.utils import RedundantExpertWorkload
@@ -244,24 +245,24 @@ class EngineClient:
         self.zmq_client = ZmqIpcClient(model, mode)
         self.zmq_client.connect()
 
-    async def format_and_add_data(self, prompts: dict):
+    async def format_and_add_data(self, request: Request):
         """
         Format the request data and send the request to the server.
         """
-        if "request_id" not in prompts:
+        if request.request_id is None:
             request_id = str(uuid.uuid4())
-            prompts["request_id"] = request_id
+            request.request_id = request_id
 
-        if "max_tokens" not in prompts:
-            prompts["max_tokens"] = self.max_model_len - 1
+        if request.sampling_params.max_tokens is None:
+            request.sampling_params.max_tokens = self.max_model_len - 1
 
-        await self.add_requests(prompts)
-        return prompts["prompt_token_ids"]
+        await self.add_requests(request)
+        return request.prompt_token_ids
 
     def _check_mm_disable_prefix_cache(self, task):
         is_multimodal_data = False
         if self.disable_prefix_mm:
-            multimodal_inputs = task.get("multimodal_inputs", [])
+            multimodal_inputs = task.multimodal_inputs if task.multimodal_inputs else []
             if multimodal_inputs:
                 token_type_ids = multimodal_inputs.get("token_type_ids", [])
                 if token_type_ids:
@@ -280,12 +281,12 @@ class EngineClient:
             None
         """
 
-        task["preprocess_start_time"] = time.time()
-        trace_print(LoggingEventName.PREPROCESSING_START, task["request_id"], task.get("user", ""))
+        task.preprocess_start_time = time.time()
+        trace_print(LoggingEventName.PREPROCESSING_START, task.request_id, task.user if task.user else "")
         try:
-            chat_template_kwargs = task.get("chat_template_kwargs") or {}
-            chat_template_kwargs.update({"chat_template": task.get("chat_template")})
-            task["chat_template_kwargs"] = chat_template_kwargs
+            chat_template_kwargs = task.chat_template_kwargs if task.chat_template_kwargs else {}
+            chat_template_kwargs.update({"chat_template": task.chat_template})
+            task.chat_template_kwargs = chat_template_kwargs
             if inspect.iscoroutinefunction(self.data_processor.process_request_dict):
                 await self.data_processor.process_request_dict(task, self.max_model_len)
             else:
@@ -301,15 +302,15 @@ class EngineClient:
                         error_code=400,
                     )
 
-            task["prompt_token_ids_len"] = len(task["prompt_token_ids"])
-            input_ids_len = task["prompt_token_ids_len"]
+            task.prompt_token_ids_len = len(task.prompt_token_ids)
+            input_ids_len = task.prompt_token_ids_len
 
-            task["max_tokens"] = min(self.max_model_len - input_ids_len, task.get("max_tokens"))
-            min_tokens = task.get("min_tokens", 1)
-            if "messages" in task:
-                del task["messages"]
-            api_server_logger.info(f"task['max_tokens']:{task['max_tokens']}")
-            main_process_metrics.request_params_max_tokens.observe(task["max_tokens"])
+            task.max_tokens = min(self.max_model_len - input_ids_len, task.max_tokens)
+            min_tokens = task.min_tokens if task.min_tokens else 1
+            if task.messages:
+                task.messages = None
+            api_server_logger.info(f"task['max_tokens']:{task.max_tokens}")
+            main_process_metrics.request_params_max_tokens.observe(task.max_tokens)
             main_process_metrics.prompt_tokens_total.inc(input_ids_len)
             main_process_metrics.request_prompt_tokens.observe(input_ids_len)
         except Exception as e:
@@ -331,8 +332,8 @@ class EngineClient:
             api_server_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
 
-        if "stop_seqs_len" in task:
-            stop_seqs_len = task["stop_seqs_len"]
+        if task.stop_seqs_len:
+            stop_seqs_len = task.stop_seqs_len
             max_stop_seqs_num = envs.FD_MAX_STOP_SEQS_NUM
             if len(stop_seqs_len) > max_stop_seqs_num:
                 error_msg = (
@@ -351,18 +352,17 @@ class EngineClient:
                     api_server_logger.error(error_msg)
                     raise EngineError(error_msg, error_code=400)
 
-        task["preprocess_end_time"] = time.time()
-        preprocess_cost_time = task["preprocess_end_time"] - task["preprocess_start_time"]
+        task.preprocess_end_time = time.time()
+        preprocess_cost_time = task.preprocess_end_time - task.preprocess_start_time
         api_server_logger.info(
-            f"Cache request with request_id ({task.get('request_id')}), "
-            f"preprocess time cost {preprocess_cost_time}"
+            f"Cache request with request_id ({task.request_id}), " f"preprocess time cost {preprocess_cost_time}"
         )
 
         self.valid_parameters(task)
         api_server_logger.debug(f"Receive task: {task}")
-        n = task.get("n", 1)
+        n = task.n if task.n else 1
         try:
-            request_id_idx = task.get("request_id")
+            request_id_idx = task.request_id
             parts = request_id_idx.rsplit("_", 1)
             if len(parts) == 1:
                 self._send_task(task)
@@ -371,17 +371,18 @@ class EngineClient:
                 index = int(parts[1])
                 for i in range(index * n, (index + 1) * n):
                     child_task = copy(task)
-                    child_task["request_id"] = f"{request_id}_{i}"
+                    child_task.request_id = f"{request_id}_{i}"
                     self._send_task(child_task)
         except Exception as e:
             api_server_logger.error(f"zmq_client send task error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
     def _send_task(self, task):
-        if not self.enable_mm:
-            self.zmq_client.send_json(task)
-        else:
-            self.zmq_client.send_pyobj(task)
+        self.zmq_client.send_pyobj(task)
+        # if not self.enable_mm:
+        #     self.zmq_client.send_json(task)
+        # else:
+        #     self.zmq_client.send_pyobj(task)
 
     def valid_parameters(self, data):
         """
@@ -390,27 +391,27 @@ class EngineClient:
         前置到了ChatCompletionRequest/CompletionRequest中
         """
 
-        if data.get("max_tokens") is not None:
-            if data["max_tokens"] < 1 or data["max_tokens"] >= self.max_model_len:
+        if data.max_tokens is not None:
+            if data.max_tokens < 1 or data.max_tokens >= self.max_model_len:
                 api_server_logger.error(
-                    f"req_id:{data['request_id']}, max_tokens must be defined [1, {self.max_model_len}), but now it's {data['max_tokens']}."
+                    f"req_id:{data.request_id}, max_tokens must be defined [1, {self.max_model_len}), but now it's {data.max_tokens}."
                 )
                 raise ValueError(
-                    f"max_tokens can be defined [1, {self.max_model_len}), but now it's {data['max_tokens']}."
+                    f"max_tokens can be defined [1, {self.max_model_len}), but now it's {data.max_tokens}."
                 )
 
-        if data.get("reasoning_max_tokens") is not None:
-            if data["reasoning_max_tokens"] < 1:
+        if data.reasoning_max_tokens is not None:
+            if data.reasoning_max_tokens < 1:
                 raise ParameterError("reasoning_max_tokens", "reasoning_max_tokens must be greater than 1")
-            if data["reasoning_max_tokens"] > data["max_tokens"]:
-                data["reasoning_max_tokens"] = data["max_tokens"]
+            if data.reasoning_max_tokens > data.max_tokens:
+                data.reasoning_max_tokens = data.max_tokens
                 api_server_logger.warning(
-                    f"req_id: {data['request_id']}, reasoning_max_tokens exceeds max_tokens, the value of reasoning_max_tokens will be adjusted to {data['max_tokens']}"
+                    f"req_id: {data.request_id}, reasoning_max_tokens exceeds max_tokens, the value of reasoning_max_tokens will be adjusted to {data.max_tokens}"
                 )
-        if data.get("temperature") is not None and abs(data["temperature"]) < 1e-6:
-            data["temperature"] = 1e-6
+        if data.temperature is not None and abs(data.temperature) < 1e-6:
+            data.temperature = 1e-6
         # logprobs
-        logprobs = data.get("logprobs")
+        logprobs = data.logprobs
         top_logprobs = None
 
         if isinstance(logprobs, bool) and logprobs:
@@ -418,7 +419,7 @@ class EngineClient:
                 err_msg = "Logprobs is disabled, please enable it in startup config."
                 api_server_logger.error(err_msg)
                 raise ParameterError("logprobs", err_msg)
-            top_logprobs = data.get("top_logprobs")
+            top_logprobs = data.top_logprobs
         elif isinstance(logprobs, int):
             top_logprobs = logprobs
         elif logprobs:
