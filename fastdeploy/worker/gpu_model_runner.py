@@ -810,7 +810,10 @@ class GPUModelRunner(ModelRunnerBase):
                     )
                     self.seq_lens_this_time_buffer[idx : idx + 1] = num_prefill_send_token
                 if self.enable_mm:
-                    if "position_ids" in request.multimodal_inputs and request.multimodal_inputs["position_ids"] is not None:
+                    if (
+                        "position_ids" in request.multimodal_inputs
+                        and request.multimodal_inputs["position_ids"] is not None
+                    ):
                         position_ids = paddle.to_tensor(
                             request.multimodal_inputs["position_ids"],
                             dtype="int64",
