@@ -1448,7 +1448,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         if_only_decode = dist_status.if_only_decode
         if self.fd_config.parallel_config.enable_chunked_moe:
-            self.fd_config.parallel_config.max_moe_num_chunk = dist_status.max_moe_num_chunk
+            self.forward_meta.max_moe_num_chunk = dist_status.max_moe_num_chunk
 
         only_decode_use_cudagraph = self.use_cudagraph and if_only_decode
 
