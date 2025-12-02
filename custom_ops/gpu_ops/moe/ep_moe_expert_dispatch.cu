@@ -847,8 +847,11 @@ __global__ void permute_x_fp8_kernel(
       const int start_idx = i == 0 ? 0 : token_nums_per_expert_cum[i - 1];
       const int end_idx = token_nums_per_expert_cum[i];
       if (s_token_idx >= start_idx && s_token_idx < end_idx) {
-        if ((s_token_idx - start_idx) < token_nums_per_expert[i])
+        if ((s_token_idx - start_idx) < token_nums_per_expert[i]) {
           m_indices[s_token_idx] = i;
+        } else {
+          m_indices[s_token_idx] = -1;
+        }
         break;
       }
     }
@@ -984,8 +987,8 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
                      paddle::DataType::FLOAT32,
                      place);
 
-  auto m_indices = paddle::full(
-      {token_nums_feed_to_ffn}, -1, paddle::DataType::INT32, place);
+  auto m_indices =
+      GetEmptyTensor({token_nums_feed_to_ffn}, paddle::DataType::INT32, place);
   auto token_nums_per_expert_cumsum =
       GetEmptyTensor({num_experts_per_rank}, paddle::DataType::INT64, place);
   auto token_nums_per_expert_padded_cumsum =
