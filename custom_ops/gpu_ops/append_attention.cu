@@ -569,6 +569,11 @@ std::vector<paddle::Tensor> AppendAttention(
         qkv.place());
   }
 
+  if (meta_data.token_nums <= 0 || meta_data.batch_size <= 0) {
+    // Note(ZKK) support zero dims tensor.
+    return return {fmha_out};
+  }
+
   if (mask_offset) {
     meta_data.mask_offset = mask_offset.get().data<int>();
   }
