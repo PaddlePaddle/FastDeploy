@@ -286,6 +286,16 @@ class EngineArgs:
     Enable expert parallelism.
     """
 
+    enable_chunked_moe: bool = False
+    """
+    Whether use chunked moe.
+    """
+
+    chunked_moe_size: int = 256
+    """
+    Chunk size of moe input.
+    """
+
     cache_transfer_protocol: str = "ipc"
     """
     Protocol to use for cache transfer.
@@ -467,6 +477,16 @@ class EngineArgs:
     Url for router server, such as `0.0.0.0:30000`.
     """
 
+    enable_eplb: bool = False
+    """
+    Flag to enable eplb
+    """
+
+    eplb_config: Optional[Dict[str, Any]] = None
+    """
+    Configuration for eplb.
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -523,9 +543,7 @@ class EngineArgs:
                         f"= {expected_ports}, but got {len(self.rdma_comm_ports)}."
                     )
 
-        if not current_platform.is_cuda() and not current_platform.is_xpu():
-            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-        if self.guided_decoding_backend != "off":
+        if not (current_platform.is_cuda() or current_platform.is_xpu() or current_platform.is_maca()):
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
         if "PaddleOCR" in get_model_architecture(self.model, self.model_config_name):
@@ -850,6 +868,30 @@ class EngineArgs:
             default=EngineArgs.enable_expert_parallel,
             help="Enable expert parallelism.",
         )
+        parallel_group.add_argument(
+            "--enable-eplb",
+            action="store_true",
+            default=EngineArgs.enable_eplb,
+            help="Enable eplb.",
+        )
+        parallel_group.add_argument(
+            "--eplb-config",
+            type=json.loads,
+            default=EngineArgs.eplb_config,
+            help="Config of eplb.",
+        )
+        parallel_group.add_argument(
+            "--enable-chunked-moe",
+            action="store_true",
+            default=EngineArgs.enable_chunked_moe,
+            help="Use chunked moe.",
+        )
+        parallel_group.add_argument(
+            "--chunked-moe-size",
+            type=int,
+            default=EngineArgs.chunked_moe_size,
+            help="Chunked size of moe input.",
+        )
 
         # Load group
         load_group = parser.add_argument_group("Load Configuration")
@@ -1126,7 +1168,7 @@ class EngineArgs:
 
     def create_scheduler_config(self) -> SchedulerConfig:
         """
-        Create and retuan a SchedulerConfig object based on the current settings.
+        Create and return a SchedulerConfig object based on the current settings.
         """
         prefix = "scheduler_"
         prefix_len = len(prefix)
@@ -1173,13 +1215,22 @@ class EngineArgs:
                 early_stop_args[k] = v
         return EarlyStopConfig(early_stop_args)
 
+    def create_eplb_config(self) -> EPLBConfig:
+        """
+        Create and retuan an EPLBConfig object based on the current settings.
+        """
+        eplb_args = asdict(self)
+        if self.eplb_config is not None:
+            for k, v in self.eplb_config.items():
+                eplb_args[k] = v
+        eplb_args["enable_eplb"] = self.enable_eplb
+        return EPLBConfig(eplb_args)
+
     def create_engine_config(self, port_availability_check=True) -> FDConfig:
         """
         Create and return a Config object based on the current settings.
         """
         all_dict = asdict(self)
-        eplb_cfg = EPLBConfig()
-        all_dict["enable_redundant_experts"] = eplb_cfg.enable_redundant_experts
         model_cfg = ModelConfig(all_dict)
 
         # XPU currently disable prefix cache for VL model
@@ -1221,6 +1272,7 @@ class EngineArgs:
         scheduler_cfg = self.create_scheduler_config()
         graph_opt_cfg = self.create_graph_optimization_config()
         plas_attention_config = self.create_plas_attention_config()
+        eplb_cfg = self.create_eplb_config()
         router_config = RouterConfig(all_dict)
 
         early_stop_cfg = self.create_early_stop_config()

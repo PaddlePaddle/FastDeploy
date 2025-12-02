@@ -29,6 +29,7 @@ class _Backend(enum.Enum):
     DYNAMIC_QUANT_INT2_ATTN = enum.auto()
     PLAS_ATTN = enum.auto()
     HPU_ATTN = enum.auto()
+    FLASH_MASK_ATTN = enum.auto()
 
 
 class Platform:

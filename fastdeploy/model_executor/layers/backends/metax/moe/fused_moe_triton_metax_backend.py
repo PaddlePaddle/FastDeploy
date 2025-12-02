@@ -18,7 +18,6 @@ import paddle
 from paddle import nn
 
 import fastdeploy
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess
@@ -393,6 +392,4 @@ class MetaxTritonWeightOnlyMoEMethod(QuantMethodBase):
 
         down_proj_out.reshape_([token_num, top_k, hidden_size])
         out = down_proj_out.sum(axis=1)
-        if layer.reduce_results and layer.tp_size > 1:
-            out = tensor_model_parallel_all_reduce(out, layer.fd_config.parallel_config.tp_group)
         return out
