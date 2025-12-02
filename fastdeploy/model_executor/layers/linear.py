@@ -508,7 +508,7 @@ class QKVParallelLinear(ColumnParallelLinear):
     QKVParallelLinear Layer.
     """
 
-    def __init__(self, fd_config, prefix, with_bias=False, add_bias=True):
+    def __init__(self, fd_config, prefix, with_bias=False, add_bias=True, skip_quant=False):
         """
         Initialize the QKV Linear layer with given parameters.
 
@@ -542,6 +542,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             output_size=output_size,
             with_bias=with_bias,
             add_bias=add_bias,
+            skip_quant=skip_quant,
         )
 
     def _get_shard_size_mapping(self, loaded_shard_id: str):
