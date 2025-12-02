@@ -27,15 +27,19 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
     AttentionMetadata,
 )
-from fastdeploy.model_executor.ops.gpu import (
-    dynamic_quant_cache_decoder_attention,
-    dynamic_quant_cache_write_decoder,
-    dynamic_quant_cache_write_encoder,
-    dynamic_quant_get_kv_from_cache,
-    flash_mask_attention,
-    get_qk_tokens_num,
-    split_qkv_and_rope,
-)
+
+try:
+    from fastdeploy.model_executor.ops.gpu import (
+        dynamic_quant_cache_decoder_attention,
+        dynamic_quant_cache_write_decoder,
+        dynamic_quant_cache_write_encoder,
+        dynamic_quant_get_kv_from_cache,
+        flash_mask_attention,
+        get_qk_tokens_num,
+        split_qkv_and_rope,
+    )
+except:
+    pass
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
