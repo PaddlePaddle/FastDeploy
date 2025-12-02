@@ -374,4 +374,4 @@ def launch_router(router_args: RouterArgs):
         app.state.router = Router(app.state.router_args)
         asyncio.create_task(app.state.router.monitor_instance_health(interval_secs=5))
 
-    uvicorn.run(app, host=router_args.host, port=router_args.port)
+    uvicorn.run(app, host=router_args.host, port=int(router_args.port))

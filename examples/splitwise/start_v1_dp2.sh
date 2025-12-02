@@ -43,7 +43,7 @@ wait_for_health() {
 # serving config
 MODEL_NAME="PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle"
 DATA_PARALLEL_SIZE=2
-TENSOR_PARALLEL_SIZE=1
+TENSOR_PARALLEL_SIZE=1    # NOTE(liyonghua): router DP does not support TP>1 for now
 NUM_GPUS=$(($DATA_PARALLEL_SIZE * $TENSOR_PARALLEL_SIZE))
 LOG_DATE=$(date +%Y%m%d_%H%M%S)
 
@@ -97,7 +97,7 @@ echo P_CACHE_QUEUE_PORTS:  $P_CACHE_QUEUE_PORTS
 echo P_RDMA_COMM_PORTS:  $P_RDMA_COMM_PORTS
 echo P_PD_COMM_PORTS:  $P_PD_COMM_PORTS
 
-export CUDA_VISIBLE_DEVICES="4,5"
+export CUDA_VISIBLE_DEVICES="0,1"
 export FD_LOG_DIR="log/$LOG_DATE/prefill"
 rm -rf $FD_LOG_DIR
 mkdir -p ${FD_LOG_DIR}
@@ -138,7 +138,7 @@ echo D_METRICS_PORTS:  $D_METRICS_PORTS
 echo D_RDMA_COMM_PORTS:  $D_RDMA_COMM_PORTS
 echo D_PD_COMM_PORTS:  $D_PD_COMM_PORTS
 
-export CUDA_VISIBLE_DEVICES="6,7"
+export CUDA_VISIBLE_DEVICES="2,3"
 export FD_LOG_DIR="log/$LOG_DATE/decode"
 rm -rf $FD_LOG_DIR
 mkdir -p ${FD_LOG_DIR}

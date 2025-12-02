@@ -34,9 +34,9 @@ void GetOutput(const paddle::Tensor& x,
                int64_t rank_id,
                bool wait_flag,
                int msg_queue_id) {
-  // if (rank_id > 0) {
-  //     return;
-  // }
+  if (rank_id > 0) {
+      return;
+  }
   static struct msgdata msg_rcv;
   if (const char* inference_msg_queue_id_env_p =
           std::getenv("INFERENCE_MSG_QUEUE_ID")) {
