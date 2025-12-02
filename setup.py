@@ -275,20 +275,31 @@ setup(
     url="https://github.com/PaddlePaddle/FastDeploy",
     packages=find_packages(),
     package_dir={"fastdeploy": "fastdeploy/"},
+    # For deprecated method (egg-based installation), `.so` files are placed in the `model_executor/ops/XXX` directory.
+    # For modern method (PEP 517/518-based installation), `.so` files are placed in the `model_executor/ops/XXX/fastdeploy_ops` directory.
+    # Therefore, the `fastdeploy_ops` directory should be included for modern Python packaging.
     package_data={
         "fastdeploy": [
             "model_executor/ops/gpu/*",
+            "model_executor/ops/gpu/fastdeploy_ops/*",
             "model_executor/ops/gpu/deep_gemm/include/**/*",
             "model_executor/ops/cpu/*",
+            "model_executor/ops/cpu/fastdeploy_cpu_ops/*",
             "model_executor/ops/xpu/*",
+            "model_executor/ops/xpu/fastdeploy_ops/*",
             "model_executor/ops/xpu/libs/*",
+            "model_executor/ops/xpu/fastdeploy_ops/libs/*",
             "model_executor/ops/npu/*",
+            "model_executor/ops/npu/fastdeploy_ops/*",
             "model_executor/ops/base/*",
+            "model_executor/ops/base/fastdeploy_ops/*",
             "model_executor/ops/iluvatar/*",
+            "model_executor/ops/iluvatar/fastdeploy_ops/*",
             "model_executor/models/*",
             "model_executor/layers/*",
             "input/ernie4_5_vl_processor/utils/*",
             "model_executor/ops/gcu/*",
+            "model_executor/ops/gcu/fastdeploy_ops/*",
             "version.txt",
         ]
     },

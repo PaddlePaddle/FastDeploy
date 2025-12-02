@@ -105,7 +105,8 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
                 moe_quant_type = fd_config.quant_config.moe_quant_type
 
         if moe_quant_type == "tensor_wise_fp8" or (
-            moe_quant_type == "block_wise_fp8" and fd_config.model_config.is_quantized
+            moe_quant_type == "block_wise_fp8"
+            and (fd_config.model_config.is_quantized or fd_config.model_config.is_moe_quantized)
         ):
             weight_key_map = {
                 "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
@@ -347,12 +348,17 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
                 prefix=f"{prefix}.mlp",
             )
 
+        norm_dtype = None
+        if fd_config.model_config.architectures[0] == "Ernie4_5_VLMoeForProcessRewardModel":
+            norm_dtype = "float32"
+
         self.input_layernorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
             layer_id=layer_id,
+            dtype=norm_dtype,
         )
 
         self.post_attention_layernorm = RMSNorm(
@@ -361,6 +367,7 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
             layer_id=layer_id,
+            dtype=norm_dtype,
         )
 
     def load_state_dict(self, state_dict):
@@ -541,7 +548,6 @@ class Ernie4_5_VLModel(nn.Layer):
             )
 
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
-
         return out
 
 
@@ -719,7 +725,9 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             )
             process_weights_after_loading_fn(model_sublayer_name, param)
         if self.tie_word_embeddings:
-            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]))
+            self.lm_head.linear.weight.set_value(
+                self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
+            )
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
