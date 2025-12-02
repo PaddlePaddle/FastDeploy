@@ -198,8 +198,8 @@ int get_port_info(struct ibv_context* Context,
 int parse_port_ib_info();
 
 // Memory region exchange
-bool client_exchange_mr(struct RdmaContext* ctx);
-bool server_exchange_mr(struct RdmaContext* ctx);
+bool client_exchange_mr(struct RdmaContext* ctx, bool has_value_cache);
+bool server_exchange_mr(struct RdmaContext* ctx, bool has_value_cache);
 bool server_send_memory_region(struct RdmaContext* ctx,
                                void* local_mr,
                                int byte_num);

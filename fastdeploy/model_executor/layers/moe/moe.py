@@ -258,10 +258,10 @@ class FusedMoE(nn.Layer):
         else:
             SHARD_ID_TO_SHARDED_DIM = {"gate": 0, "down": 1, "up": 0}
 
-        if not param._is_initialized():
-            param.initialize()
         if not (expert_id - self.expert_id_offset >= 0 and expert_id - self.expert_id_offset < self.num_local_experts):
             return
+        if not param._is_initialized():
+            param.initialize()
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
         if shard_id is None:
             # 1.gate up fused in disk
