@@ -1128,7 +1128,7 @@ class EngineService:
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                     if self.resource_manager.preallocate_resource_in_d(task):
                         self.llm_logger.debug(
-f"D has preallocated resources, send cache infos now for task {task.request_id}"
+                            f"D has preallocated resources, send cache infos now for task {task.request_id}"
                         )
                         self.split_connector.send_cache_info_to_prefill([task])
                         self.llm_logger.debug(f"D has successfully sent cache infos for task {task.request_id}")

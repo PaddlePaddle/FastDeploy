@@ -46,7 +46,9 @@ class SplitwiseConnector:
         self.cfg = cfg
         self.local_data_parallel_id = self.cfg.parallel_config.local_data_parallel_id
         if self.cfg.parallel_config.data_parallel_size > 1:
-            self.logger = get_logger("splitwise_connector", f"splitwise_connector_dprank{self.local_data_parallel_id}.log")
+            self.logger = get_logger(
+                "splitwise_connector", f"splitwise_connector_dprank{self.local_data_parallel_id}.log"
+            )
         else:
             self.logger = get_logger("splitwise_connector", "splitwise_connector.log")
         self.engine_worker_queue = worker_queue
@@ -351,7 +353,9 @@ class SplitwiseConnector:
                         "request_id": tasks[i].request_id,
                         "device_ids": [self.cfg.parallel_config.device_ids.split(",")[self.local_data_parallel_id]],
                         "ip": self.cfg.host_ip,
-                        "rdma_ports": [self.cfg.disaggregate_info["cache_info"]["rdma"]["rdma_port"][self.local_data_parallel_id]],
+                        "rdma_ports": [
+                            self.cfg.disaggregate_info["cache_info"]["rdma"]["rdma_port"][self.local_data_parallel_id]
+                        ],
                         "transfer_protocol": "rdma",
                         "dest_block_ids": dsg_info["block_tables"],
                         "decode_tp_size": self.cfg.parallel_config.tensor_parallel_size,
