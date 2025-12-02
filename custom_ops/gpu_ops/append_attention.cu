@@ -572,6 +572,8 @@ std::vector<paddle::Tensor> AppendAttention(
   if (mask_offset) {
     meta_data.mask_offset = mask_offset.get().data<int>();
   }
+  
+  // return {fmha_out};
 
   auto dispatch_by_template = [&](auto temp_args) -> void {
     AppendAttentionKernel<type2value<decltype(temp_args)>::value>(

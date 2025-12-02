@@ -539,7 +539,7 @@ class TestFusedMoE(unittest.TestCase):
         self.moe_intermediate_size = 3584
         self.moe_num_experts = 384
         self.moe_k = 8
-        self.num_layers = 5
+        self.num_layers = 81
         self.num_attention_heads = -1
         self.model_config = self.build_model_config()
 
@@ -590,7 +590,7 @@ class TestFusedMoE(unittest.TestCase):
         paddle.seed(ep_rank + 100)
 
         num_layers = self.num_layers
-        real_weight_layers = num_layers // 2
+        real_weight_layers = 4
         fused_moe = [None] * real_weight_layers
         for i in range(real_weight_layers):
             fused_moe[i] = FuseMoEWrapper(self.model_config, tp_size, tp_rank, ep_size, ep_rank, nnodes=nnodes)
@@ -649,22 +649,23 @@ class TestFusedMoE(unittest.TestCase):
             for i in range(num_tests):
                 start_events[i].record()
 
-                # t0 = Thread(target=fake_model_run, name="thread0")
-                # t1 = Thread(target=fake_model_run, name="thread1")
+                t0 = Thread(target=fake_model_run, name="thread0")
+                t1 = Thread(target=fake_model_run, name="thread1")
 
-                # GLOBAL_THREAD_INFO[t0.name][0].clear()
-                # GLOBAL_THREAD_INFO[t1.name][0].clear()
+                GLOBAL_THREAD_INFO[t0.name][0].clear()
+                GLOBAL_THREAD_INFO[t1.name][0].clear()
 
-                # t0.start()
-                # t1.start()
+                t0.start()
+                t1.start()
 
-                # GLOBAL_THREAD_INFO[t0.name][0].set()
+                GLOBAL_THREAD_INFO[t0.name][0].set()
 
-                # t0.join()
-                # GLOBAL_THREAD_INFO[t0.name][1].set()
-                # t1.join()
+                t0.join()
+                GLOBAL_THREAD_INFO[t0.name][1].set()
+                t1.join()
 
-                fake_model_run()
+                # fake_model_run()
+                # fake_model_run()
 
                 end_events[i].record()
             paddle.device.cuda.synchronize()

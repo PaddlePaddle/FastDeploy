@@ -13,8 +13,7 @@ GLOBAL_THREAD_INFO["thread1"] = [event1, event0]
 
 GLOBAL_ATTN_BUFFERS = {}
 
-from mm_custom_ops import calculate_decode_states_token_num
-def split_batch(forward_meta: ForwardMeta, inputs):
+def split_batch(forward_meta: ForwardMeta):
     split_num = 2
     real_bs = forward_meta.seq_lens_this_time.shape[0]
 
@@ -23,10 +22,8 @@ def split_batch(forward_meta: ForwardMeta, inputs):
 
     res = [forward_meta] * split_num
 
-    inputs_res = [inputs] * split_num
-
     if real_bs < split_num:
-        return res, inputs_res
+        return res
 
     mc_bs = (real_bs + split_num - 1) // split_num
 
@@ -73,33 +70,8 @@ def split_batch(forward_meta: ForwardMeta, inputs):
 
         if forward_meta.attn_mask_offsets is not None:
             res[i].attn_mask_offsets = forward_meta.attn_mask_offsets[start_token_id*2:end_token_id*2]
-        
-        inputs_res[i] = {}
-        inputs_res[i]["ids_remove_padding"] = inputs["ids_remove_padding"][start_token_id:end_token_id]
-        inputs_res[i]["decode_states"] = inputs["decode_states"][start_bs:end_bs]
 
-        inputs_res[i]["image_features"] = None
-        inputs_res[i]["video_features"] = None
-        inputs_res[i]["audio_features"] = None
-        inputs_res[i]["image_grid_thws"] = None
-        inputs_res[i]["video_grid_thws"] = None
-
-        out = calculate_decode_states_token_num(
-            inputs_res[i]["decode_states"], 
-            res[i].seq_lens_this_time
-        )
-        text_token_num, audio_token_num, vision_token_num = out[0].item(), out[1].item(), out[2].item()
-
-        assert audio_token_num == 0
-        assert vision_token_num == 0
-
-        res[i].text_token_num = text_token_num
-        res[i].audio_token_num = 0
-        res[i].vision_token_num = 0
-        res[i].num_speculative_token = 0
-        res[i].image_scale_idx = forward_meta.image_scale_idx[start_bs:end_bs]
-
-    return res, inputs_res
+    return res
 
 
 def let_another_thread_run():
