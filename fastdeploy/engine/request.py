@@ -187,6 +187,7 @@ class Request:
             pooling_params = PoolingParams.from_dict(d["pooling_params"])
         else:
             sampling_params = SamplingParams.from_dict(d)
+
         if (
             isinstance(d.get("multimodal_inputs"), dict)
             and isinstance(d["multimodal_inputs"].get("mm_positions"), list)
@@ -202,7 +203,6 @@ class Request:
                 data_processor_logger.error(
                     f"Convert mm_positions to ImagePosition error: {e}, {str(traceback.format_exc())}"
                 )
-
         return cls(
             request_id=d["request_id"],
             prompt=d.get("prompt"),
