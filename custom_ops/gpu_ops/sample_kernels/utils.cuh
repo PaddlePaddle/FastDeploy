@@ -275,7 +275,7 @@ __forceinline__ __device__ float ptx_rcp(float x) {
 #ifdef PADDLE_WITH_COREX
   return __ivcorex_rcpf(x);
 #else
-#if defined(__MC_PLATFORM_MXCC__) || defined(__MCC__) || defined(__MXCC__)
+#ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
   return __frcp_rn(x);
 #else
   float y;

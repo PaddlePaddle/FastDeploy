@@ -228,8 +228,7 @@ __device__ __forceinline__ void DeviceSamplingFromProb(
     prob_greater_than_threshold[j] = pred(prob_vec[j]) ? prob_vec[j] : 0;
     valid[j] = pred(prob_vec[j]) && (i * BLOCK_THREADS + tx) * VEC_SIZE + j < d;
   }
-#if defined(PADDLE_WITH_COREX) || defined(__MC_PLATFORM_MXCC__) || \
-    defined(__MCC__) || defined(__MXCC__)
+#if defined(PADDLE_WITH_COREX) || defined(PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU)
   float aggregate_local = BlockReduce<float, BLOCK_THREADS, REDUCE_ALGORITHM>(
                               temp_storage->block_prim.reduce)
                               .Sum(prob_greater_than_threshold);
@@ -252,8 +251,7 @@ __device__ __forceinline__ void DeviceSamplingFromProb(
                                 REDUCE_ALGORITHM>(
           prob_greater_than_threshold, inclusive_cdf, temp_storage);
     } else {
-#if defined(PADDLE_WITH_COREX) || defined(__MC_PLATFORM_MXCC__) || \
-    defined(__MCC__) || defined(__MXCC__)
+#if defined(PADDLE_WITH_COREX) || defined(PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU)
       BlockScan<float, BLOCK_THREADS, SCAN_ALGORITHM>(
           temp_storage->block_prim.scan)
           .InclusiveSum(prob_greater_than_threshold, inclusive_cdf);
@@ -273,8 +271,7 @@ __device__ __forceinline__ void DeviceSamplingFromProb(
 
     bool greater_than_u_diff[VEC_SIZE];
 #ifdef SAMPLING_CUB_SUBTRACTLEFT_DEFINED
-#if defined(PADDLE_WITH_COREX) || defined(__MC_PLATFORM_MXCC__) || \
-    defined(__MCC__) || defined(__MXCC__)
+#if defined(PADDLE_WITH_COREX) || defined(PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU)
     BlockAdjacentDifference<bool, BLOCK_THREADS>(
         temp_storage->block_prim.adj_diff)
         .SubtractLeft(greater_than_u, greater_than_u_diff, BoolDiffOp());
@@ -285,8 +282,7 @@ __device__ __forceinline__ void DeviceSamplingFromProb(
             greater_than_u, greater_than_u_diff, BoolDiffOp());
 #endif
 #else
-#if defined(PADDLE_WITH_COREX) || defined(__MC_PLATFORM_MXCC__) || \
-    defined(__MCC__) || defined(__MXCC__)
+#if defined(PADDLE_WITH_COREX) || defined(PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU)
     BlockAdjacentDifference<bool, BLOCK_THREADS>(
         temp_storage->block_prim.adj_diff)
         .FlagHeads(greater_than_u_diff, greater_than_u, BoolDiffOp(), 0);
@@ -423,8 +419,7 @@ __global__ void TopKTopPSamplingFromProbKernel(DType* probs,
                                 (i * BLOCK_THREADS + tx) * VEC_SIZE + j < d)};
       }
 
-#if defined(PADDLE_WITH_COREX) || defined(__MC_PLATFORM_MXCC__) || \
-    defined(__MCC__) || defined(__MXCC__)
+#if defined(PADDLE_WITH_COREX) || defined(PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU)
       aggregate_gt_pivot_0 += BlockReduce<ValueCount<float>, BLOCK_THREADS>(
                                   temp_storage.block_prim.reduce_value_count)
                                   .Sum(probs_gt_pivot_0);
@@ -563,8 +558,7 @@ __global__ void TopPSamplingFromProbKernel(DType* probs,
         probs_gt_pivot_1[j] = (probs_vec[j] > pivot_1) ? probs_vec[j] : 0;
       }
 
-#if defined(PADDLE_WITH_COREX) || defined(__MC_PLATFORM_MXCC__) || \
-    defined(__MCC__) || defined(__MXCC__)
+#if defined(PADDLE_WITH_COREX) || defined(PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU)
       aggregate_gt_pivot_0 +=
           BlockReduce<float, BLOCK_THREADS>(temp_storage.block_prim.reduce)
               .Sum(probs_gt_pivot_0);
@@ -638,8 +632,7 @@ __device__ __forceinline__ float GetMaxValue(float* in_data,
     for (uint32_t j = 0; j < VEC_SIZE; ++j) {
       in_data_[j] = in_data_vec[j];
     }
-#if defined(PADDLE_WITH_COREX) || defined(__MC_PLATFORM_MXCC__) || \
-    defined(__MCC__) || defined(__MXCC__)
+#if defined(PADDLE_WITH_COREX) || defined(PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU)
     max_val = max(max_val,
                   BlockReduce<float, BLOCK_THREADS, REDUCE_ALGORITHM>(
                       temp_storage.block_prim.reduce)
@@ -748,8 +741,7 @@ __global__ void TopKRenormProbKernel(DType* probs,
   const uint32_t bx = blockIdx.x, tx = threadIdx.x;
   const uint32_t row_idx = bx;
   const uint32_t k = top_k_arr[row_idx] == 0 ? d : top_k_arr[row_idx];
-#if defined(PADDLE_WITH_COREX) || defined(__MC_PLATFORM_MXCC__) || \
-    defined(__MCC__) || defined(__MXCC__)
+#if defined(PADDLE_WITH_COREX) || defined(PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU)
   double pivot = std::numeric_limits<float>::infinity(), normalizer = 1;
 #else
   double pivot = -cuda::std::numeric_limits<float>::infinity(), normalizer = 1;
@@ -817,8 +809,7 @@ __global__ void TopKRenormProbKernel(DType* probs,
           }
         }
 
-#if defined(PADDLE_WITH_COREX) || defined(__MC_PLATFORM_MXCC__) || \
-    defined(__MCC__) || defined(__MXCC__)
+#if defined(PADDLE_WITH_COREX) || defined(PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU)
         aggregate_gt_pivot_0 +=
             BlockReduce<ValueCount<float>, BLOCK_THREADS, REDUCE_ALGORITHM>(
                 temp_storage.block_prim.reduce_value_count)
