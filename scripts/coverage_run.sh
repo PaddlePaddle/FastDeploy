@@ -29,6 +29,17 @@ for file in $TEST_FILES; do
     if [ "$status" -ne 0 ]; then
         echo "$file" >> "$failed_tests_file"
         failed_pytest=$((failed_pytest+1))
+        if [ -f "$run_path/server.log" ]; then
+            echo "---------------- server.log ----------------"
+            tail -n 25 "$run_path/server.log"
+            echo "--------------------------------------------"
+        fi
+
+        if [ -f "$run_path/log/workerlog.0" ]; then
+            echo "---------------- log/workerlog.0 -------------------"
+            tail -n 25 "$run_path/log/workerlog.0"
+            echo "----------------------------------------------------"
+        fi
     else
         success_pytest=$((success_pytest+1))
     fi
