@@ -94,7 +94,7 @@ class Ernie4_5_MLP(nn.Layer):
         self.up_gate_proj.load_state_dict(state_dict)
         self.down_proj.load_state_dict(state_dict)
 
-    def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta):
+    def forward(self, hidden_states: paddle.Tensor):
         gate_up_out = self.up_gate_proj(hidden_states)
         act_out = self.act_fn(gate_up_out)
         down_out = self.down_proj(act_out)
@@ -224,7 +224,7 @@ class Ernie4_5_MoE(nn.Layer):
             forward_meta=forward_meta,
         )
         if self.num_shared_experts > 0:
-            s_x = self.shared_experts(hidden_states, forward_meta)
+            s_x = self.shared_experts(hidden_states)
             out = out + s_x
         return out
 

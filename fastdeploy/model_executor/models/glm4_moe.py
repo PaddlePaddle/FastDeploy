@@ -85,7 +85,7 @@ class Glm4MoeMLP(nn.Layer):
             act_method=fd_config.model_config.hidden_act,
         )
 
-    def forward(self, x, forward_meta):
+    def forward(self, x):
         """ """
         gate_up_out = self.up_gate_proj(x)
         act_out = self.act_fn(gate_up_out)
@@ -497,7 +497,7 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
 
         return logits
 
-    def empty_input_forward(self):
+    def empty_input_forward(self, forward_meta):
         """
         empty_input_forward
         """
@@ -509,7 +509,7 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
             self.fd_config.model_config.first_k_dense_replace,
             self.fd_config.model_config.num_hidden_layers,
         ):
-            self.model.layers[i].mlp.experts(fake_hidden_states, self.model.layers[i].mlp.gate)
+            self.model.layers[i].mlp.experts(fake_hidden_states, self.model.layers[i].mlp.gate, forward_meta)
 
     def forward(
         self,
