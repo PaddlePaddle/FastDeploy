@@ -434,14 +434,14 @@ __global__ void TopKTopPSamplingFromProbKernel(DType* probs,
       __syncthreads();
       aggregate_gt_pivot_0 = temp_storage.block_aggregate.pair;
 
-#ifdef PADDLE_WITH_COREX
+#if defined(PADDLE_WITH_COREX) || defined(PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU)
       aggregate_gt_pivot_1 += BlockReduce<ValueCount<float>, BLOCK_THREADS>(
                                   temp_storage.block_prim.reduce_value_count)
                                   .Sum(probs_gt_pivot_1);
 #else
       aggregate_gt_pivot_1 += BlockReduce<ValueCount<float>, BLOCK_THREADS>(
                                   temp_storage.block_prim.reduce_value_count)
-                                  .Sum(probs_gt_pivot_1);
+                                  .Sum<VEC_SIZE>(probs_gt_pivot_1);
 #endif
       if (tx == 0) {
         temp_storage.block_aggregate.pair = aggregate_gt_pivot_1;
@@ -573,14 +573,14 @@ __global__ void TopPSamplingFromProbKernel(DType* probs,
       __syncthreads();
       aggregate_gt_pivot_0 = temp_storage.block_aggregate.value;
 
-#ifdef PADDLE_WITH_COREX
+#if defined(PADDLE_WITH_COREX) || defined(PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU)
       aggregate_gt_pivot_1 +=
           BlockReduce<float, BLOCK_THREADS>(temp_storage.block_prim.reduce)
               .Sum(probs_gt_pivot_1);
 #else
       aggregate_gt_pivot_1 +=
           BlockReduce<float, BLOCK_THREADS>(temp_storage.block_prim.reduce)
-              .Sum(probs_gt_pivot_1);
+              .Sum<VEC_SIZE>(probs_gt_pivot_1);
 #endif
       if (tx == 0) {
         temp_storage.block_aggregate.value = aggregate_gt_pivot_1;
@@ -822,7 +822,7 @@ __global__ void TopKRenormProbKernel(DType* probs,
 #endif
         __syncthreads();
 
-#ifdef PADDLE_WITH_COREX
+#if defined(PADDLE_WITH_COREX) || defined(PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU)
         aggregate_gt_pivot_1 +=
             BlockReduce<ValueCount<float>, BLOCK_THREADS, REDUCE_ALGORITHM>(
                 temp_storage.block_prim.reduce_value_count)
@@ -831,7 +831,7 @@ __global__ void TopKRenormProbKernel(DType* probs,
         aggregate_gt_pivot_1 +=
             BlockReduce<ValueCount<float>, BLOCK_THREADS, REDUCE_ALGORITHM>(
                 temp_storage.block_prim.reduce_value_count)
-                .Sum(probs_gt_pivot_1_pair);
+                .Sum<VEC_SIZE>(probs_gt_pivot_1_pair);
 #endif
         __syncthreads();
       }
