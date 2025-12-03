@@ -95,6 +95,7 @@ class ResourceManagerV1(ResourceManager):
 
         self.using_extend_tables_req_id = set()
         if self.config.scheduler_config.splitwise_role == "decode":
+            self.preallocated_requests_timestamp = {}
             threading.Thread(target=self._monitor_recycle_block_ids_in_D, daemon=True).start()
 
     def allocated_slots(self, request: Request):
