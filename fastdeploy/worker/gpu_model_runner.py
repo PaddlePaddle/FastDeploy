@@ -752,7 +752,7 @@ class GPUModelRunner(ModelRunnerBase):
                 for j in range(num_stops, self.model_config.max_stop_seqs_num):
                     self.share_inputs["stop_seqs_len"][idx, j] = 0
             else:
-                self.share_inputs["stop_seqs_len"][idx, :] = 0
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
             self.pooling_params = batch_pooling_params
             # For logits processors
@@ -997,7 +997,7 @@ class GPUModelRunner(ModelRunnerBase):
                 for j in range(num_stops, self.model_config.max_stop_seqs_num):
                     self.share_inputs["stop_seqs_len"][idx, j] = 0
             else:
-                self.share_inputs["stop_seqs_len"][idx, :] = 0
+                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
             self.sampler.apply_logits_processor(idx, logits_info, prefill_tokens)
 
@@ -1497,7 +1497,6 @@ class GPUModelRunner(ModelRunnerBase):
             self.fd_config.parallel_config.max_moe_num_chunk = dist_status.max_moe_num_chunk
 
         # Update Batch type for cuda graph for only_decode_batch
-        if_only_decode = self.only_decode()
         only_decode_use_cudagraph = self.use_cudagraph and if_only_decode
 
         # Update config about moe for better performance
