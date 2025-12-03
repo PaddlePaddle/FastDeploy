@@ -286,6 +286,16 @@ class EngineArgs:
     Enable expert parallelism.
     """
 
+    enable_chunked_moe: bool = False
+    """
+    Whether use chunked moe.
+    """
+
+    chunked_moe_size: int = 256
+    """
+    Chunk size of moe input.
+    """
+
     cache_transfer_protocol: str = "ipc"
     """
     Protocol to use for cache transfer.
@@ -493,8 +503,8 @@ class EngineArgs:
         # if self.dynamic_load_weight:
         #     self.enable_prefix_caching = False
         if self.enable_logprob:
-            if not current_platform.is_cuda():
-                raise NotImplementedError("Only CUDA platform supports logprob.")
+            if not current_platform.is_cuda() and not current_platform.is_xpu():
+                raise NotImplementedError("Only CUDA and XPU platforms support logprob.")
             if self.speculative_config is not None and self.logprobs_mode.startswith("processed"):
                 raise NotImplementedError("processed_logprobs not support in speculative.")
             if self.speculative_config is not None and self.max_logprobs == -1:
@@ -534,8 +544,6 @@ class EngineArgs:
                     )
 
         if not (current_platform.is_cuda() or current_platform.is_xpu() or current_platform.is_maca()):
-            envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-        if self.guided_decoding_backend != "off":
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
         if "PaddleOCR" in get_model_architecture(self.model, self.model_config_name):
@@ -871,6 +879,18 @@ class EngineArgs:
             type=json.loads,
             default=EngineArgs.eplb_config,
             help="Config of eplb.",
+        )
+        parallel_group.add_argument(
+            "--enable-chunked-moe",
+            action="store_true",
+            default=EngineArgs.enable_chunked_moe,
+            help="Use chunked moe.",
+        )
+        parallel_group.add_argument(
+            "--chunked-moe-size",
+            type=int,
+            default=EngineArgs.chunked_moe_size,
+            help="Chunked size of moe input.",
         )
 
         # Load group

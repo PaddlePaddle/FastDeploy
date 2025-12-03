@@ -164,7 +164,7 @@ class PoolingParams(
                 self.softmax = True
         elif self.task == "reward":
             if self.normalize is None:
-                self.normalize = True
+                self.normalize = False
         else:
             raise ValueError(f"Unknown pooling task: {self.task}")
 

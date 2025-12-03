@@ -17,7 +17,6 @@
 import paddle
 from paddle import nn
 
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
 from fastdeploy.model_executor.layers.quantization.weight_only import WeightOnlyConfig
 from fastdeploy.model_executor.layers.utils import get_tensor
@@ -255,8 +254,6 @@ class XPUMoEMethod(MoEMethodBase):
             layer.top_k,
             False,  # moe group, used in deepseek
         )
-        if layer.reduce_results and layer.tp_size > 1:
-            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out)
 
         return fused_moe_out
 
@@ -314,8 +311,6 @@ class XPUMoEMethod(MoEMethodBase):
             permute_indices_per_token.shape[1],
         )
 
-        if layer.reduce_results and layer.tp_size > 1:
-            tmp_ffn_out = tensor_model_parallel_all_reduce(tmp_ffn_out)
         return tmp_ffn_out
 
     def apply_tp(

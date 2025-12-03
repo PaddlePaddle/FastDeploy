@@ -51,17 +51,13 @@ if [ ${HAS_CUSTOM_REGISTRER} ] && [ "${PR_ID}" != "" ]; then
 fi
 
 WORKER_OR_CONFIG_LIST=(
-    "fastdeploy/config.py"
-    "fastdeploy/worker"
     "fastdeploy/model_executor/graph_optimization"
-    "fastdeploy/model_executor/model_loader"
-    "fastdeploy/model_executor/models"
 )
 
 HAS_WORKER_OR_CONFIG_MODIFY=`git diff upstream/$BRANCH  --name-only | grep -E $(printf -- "-e %s " "${WORKER_OR_CONFIG_LIST[@]}") || true`
 if [ "${HAS_WORKER_OR_CONFIG_MODIFY}" != "" ] && [ "${PR_ID}" != "" ]; then
-    echo_line1="You must have one FastDeploy RD (gongshaotian(gongshaotian), yuanlehome(liuyuanle)) approval for modifing [$(IFS=', '; echo "${WORKER_OR_CONFIG_LIST[*]}")]."
-    check_approval "$echo_line1" 1 gongshaotian yuanlehome
+    echo_line1="You must have one FastDeploy RD gongshaotian(gongshaotian) approval for modifing [$(IFS=', '; echo "${WORKER_OR_CONFIG_LIST[*]}")]."
+    check_approval "$echo_line1" 1 gongshaotian
 fi
 
 SPECULATIVE_DECODING_LIST=(
@@ -73,6 +69,30 @@ HAS_SPECULATIVE_DECODING_MODIFY=`git diff upstream/$BRANCH  --name-only | grep -
 if [ "${HAS_SPECULATIVE_DECODING_MODIFY}" != "" ] && [ "${PR_ID}" != "" ]; then
     echo_line1="You must have one FastDeploy RD (freeliuzc(liuzichang01), Deleter-D(wangyanpeng04)) approval for modifing [$(IFS=', '; echo "${SPECULATIVE_DECODING_LIST[*]}")]."
     check_approval "$echo_line1" 1 freeliuzc Deleter-D
+fi
+
+ENV_FILE="fastdeploy/envs.py"
+
+HAS_ENV_MODIFY=$(git diff upstream/$BRANCH --name-only | grep -E "^${ENV_FILE}$" || true)
+if [ "${HAS_ENV_MODIFY}" != "" ] && [ "${PR_ID}" != "" ]; then
+    echo_line1="You must have one FastDeploy RD (yuanlehome(liuyuanle), rainyfly(chenjian26), Wanglongzhi2001(wanglongzhi)) approval for modifying [${ENV_FILE}]."
+    check_approval "$echo_line1" 1 yuanlehome rainyfly Wanglongzhi2001
+fi
+
+if [[ "${BRANCH}" != "develop" ]] && [[ -n "${PR_ID}" ]]; then
+    pr_info=$(curl -H "Authorization: token ${GITHUB_TOKEN}" \
+        https://api.github.com/repos/PaddlePaddle/FastDeploy/pulls/${PR_ID})
+
+    pr_title=$(echo "$pr_info" | jq -r '.title')
+    echo "==> PR title: ${pr_title}"
+
+    has_cp_tag=$(echo "$pr_title" | grep -o "\[Cherry-Pick\]" || true)
+    has_pr_number=$(echo "$pr_title" | grep -oE "#[0-9]{2,6}" || true)
+
+    if [[ -z "$has_cp_tag" ]] || [[ -z "$has_pr_number" ]]; then
+        echo_line="Cherry-Pick PR must come from develop and the title must contain [Cherry-Pick] and the original develop PR number (e.g., #5010). Approval required from FastDeploy RD: qingqing01(dangqingqing), Jiang-Jia-Jun(jiangjiajun), heavengate(dengkaipeng)."
+        check_approval "$echo_line" 1 qingqing01 Jiang-Jia-Jun heavengate
+    fi
 fi
 
 if [ -n "${echo_list}" ];then

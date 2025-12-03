@@ -229,8 +229,15 @@ class ModelConfig:
         self.think_end_id = args.get("think_end_id", -1)
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
-        if self.max_logprobs < -1:
+
+        num_max_logprobs = args.get("max_logprobs", None)
+        if num_max_logprobs is not None and num_max_logprobs < -1:
             raise ValueError(" The possible values for max_logprobs can't be less than -1 ")
+        if self.ori_vocab_size is not None and num_max_logprobs is not None:
+            if num_max_logprobs > self.ori_vocab_size:
+                raise ValueError(
+                    f" The possible values for max_logprobs can't be greater than the vocabulary size {self.ori_vocab_size}"
+                )
 
         self._post_init()
 
@@ -292,7 +299,7 @@ class ModelConfig:
             self.tensor_parallel_size = self.infer_model_mp_num
             del self.infer_model_mp_num
 
-        if hasattr(self, "num_hidden_layers"):
+        if hasattr(self, "num_hidden_layers") and self.runner != "pooling":
             if hasattr(self, "remove_tail_layer"):
                 if self.remove_tail_layer is True:
                     self.num_hidden_layers -= 1
@@ -304,6 +311,8 @@ class ModelConfig:
 
         if hasattr(self, "num_experts") and getattr(self, "moe_num_experts") is None:
             self.moe_num_experts = self.num_experts
+        if hasattr(self, "n_routed_experts") and getattr(self, "moe_num_experts") is None:
+            self.moe_num_experts = self.n_routed_experts
 
     def read_from_env(self):
         """
@@ -538,6 +547,11 @@ class ParallelConfig:
         self.expert_parallel_size = 1  # EP degree
         self.data_parallel_size = 1  # DP degree
         self.enable_expert_parallel = False
+        self.enable_chunked_moe = False
+        self.chunked_moe_size = 256
+        self.max_moe_num_chunk = 1
+        self.moe_num_chunk = 1
+
         self.local_data_parallel_id = 0
         # Engine worker queue port
         self.engine_worker_queue_port: str = "9923"
@@ -1572,7 +1586,7 @@ class FDConfig:
             self.max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "3"))
             if current_platform.is_xpu():
                 self.max_prefill_batch = 1
-            if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            if self.model_config is not None and self.model_config.enable_mm:
                 self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
         else:
             self.max_prefill_batch = self.scheduler_config.max_num_seqs
@@ -1600,6 +1614,14 @@ class FDConfig:
             return
         self.check()
         self.print()
+
+    def _disable_sequence_parallel_moe_if_needed(self, mode_name):
+        if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
+            self.parallel_config.use_sequence_parallel_moe = False
+            logger.warning(
+                f"Sequence parallel MoE does not support {mode_name} mode with cudagraph. "
+                "Setting use_sequence_parallel_moe to False."
+            )
 
     def postprocess(self):
         """
@@ -1685,10 +1707,12 @@ class FDConfig:
             logger.info("Multi-modal models do not support prefix caching when using CUDAGraph!")
 
         if self.scheduler_config.splitwise_role == "mixed":
+            self._disable_sequence_parallel_moe_if_needed("Mixed")
             self.model_config.moe_phase = MoEPhase(phase="prefill")
         elif self.scheduler_config.splitwise_role == "prefill":
             self.model_config.moe_phase = MoEPhase(phase="prefill")
         elif self.scheduler_config.splitwise_role == "decode":
+            self._disable_sequence_parallel_moe_if_needed("PD's decode node")
             self.model_config.moe_phase = MoEPhase(phase="decode")
         else:
             raise NotImplementedError
@@ -1795,6 +1819,15 @@ class FDConfig:
                 int(envs.FD_DISABLED_RECOVER) == 0
             ), "FD_DISABLED_RECOVER is not supported while ENABLE_V1_KVCACHE_SCHEDULER is turned on."
 
+        if self.eplb_config is not None and self.eplb_config.enable_eplb:
+            try:
+                import cuda  # noqa
+            except ImportError:
+                raise ImportError(
+                    "cuda-python not installed. Install the version matching your CUDA toolkit:\n"
+                    "  CUDA 12.x → pip install cuda-python==12.*\n"
+                )
+
     def print(self):
         """
         print all config
@@ -1862,6 +1895,7 @@ class FDConfig:
             logger.info(f"disaggregate_info: {self.disaggregate_info}")
 
         if self.router_config:
+            # the information for registering this server to router
             self.register_info = {
                 "role": self.scheduler_config.splitwise_role,
                 "host_ip": self.host_ip,
@@ -1871,6 +1905,7 @@ class FDConfig:
                 "engine_worker_queue_port": engine_worker_queue_port,
                 "device_ids": self.local_device_ids,
                 "transfer_protocol": self.cache_config.cache_transfer_protocol.split(","),
+                "tp_size": self.parallel_config.tensor_parallel_size,
             }
             logger.info(f"register_info: {self.register_info}")
 

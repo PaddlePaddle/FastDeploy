@@ -39,6 +39,8 @@ def gqa_rope_write_cache(
     cache_batch_ids: paddle.Tensor,
     cache_tile_ids_per_batch: paddle.Tensor,
     cache_num_blocks: paddle.Tensor,
+    q_norm_weight: Optional[paddle.Tensor] = None,
+    k_norm_weight: Optional[paddle.Tensor] = None,
     cache_k_quant_scales: Optional[paddle.Tensor] = None,
     cache_v_quant_scales: Optional[paddle.Tensor] = None,
     cache_k_dequant_scales: Optional[paddle.Tensor] = None,
@@ -48,6 +50,7 @@ def gqa_rope_write_cache(
     kv_signal_data: Optional[paddle.Tensor] = None,
     kv_token_num: int = 1,
     max_seq_len: int = 0,
+    rms_norm_eps: float = 1e-6,
     cache_quant_type: str = "none",
     rope_3d: bool = False,
 ):
@@ -72,6 +75,8 @@ def gqa_rope_write_cache(
             cache_batch_ids,
             cache_tile_ids_per_batch,
             cache_num_blocks,
+            q_norm_weight,
+            k_norm_weight,
             cache_k_quant_scales,
             cache_v_quant_scales,
             cache_k_dequant_scales,
@@ -81,6 +86,7 @@ def gqa_rope_write_cache(
             kv_signal_data,
             kv_token_num,
             max_seq_len,
+            rms_norm_eps,
             cache_quant_type,
             rope_3d,
         )

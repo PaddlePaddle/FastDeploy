@@ -69,8 +69,8 @@ def get_worker(fd_config: FDConfig, local_rank: int, rank: int) -> WorkerBase:
     """
     get worker of different device
     """
-    if fd_config.model_config.enable_logprob and not current_platform.is_cuda():
-        raise NotImplementedError("Only CUDA platform supports logprob.")
+    if fd_config.model_config.enable_logprob and not current_platform.is_cuda() and not current_platform.is_xpu():
+        raise NotImplementedError("Only CUDA and XPU platforms support logprob.")
     if current_platform.is_dcu():
         from fastdeploy.worker.dcu_worker import DcuWorker
 
@@ -720,6 +720,17 @@ def parse_args():
         action="store_true",
         help="enable expert parallel",
     )
+    parser.add_argument(
+        "--enable_chunked_moe",
+        action="store_true",
+        help="enable chunked moe",
+    )
+    parser.add_argument(
+        "--chunked_moe_size",
+        type=int,
+        default=256,
+        help="chunk size of moe input",
+    )
     parser.add_argument("--ori_vocab_size", type=int, default=None)
     parser.add_argument("--think_end_id", type=int, default=-1)
     parser.add_argument("--image_patch_id", type=int, default=-1)
@@ -967,9 +978,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     if not (current_platform.is_cuda() or current_platform.is_xpu() or current_platform.is_maca()):
         logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported.")
-        envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
-    if structured_outputs_config.guided_decoding_backend != "off":
-        logger.info("Set ENABLE_V1_KVCACHE_SCHEDULER to 0 due to not supported guided_decoding.")
         envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
 
     if envs.ENABLE_V1_KVCACHE_SCHEDULER and args.splitwise_role == "prefill":
