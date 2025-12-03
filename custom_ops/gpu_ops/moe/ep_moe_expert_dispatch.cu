@@ -838,6 +838,7 @@ __global__ void permute_x_fp8_kernel(
   const int token_nums_feed_to_ffn =
       token_nums_per_expert_cum[NUM_EXPERTS_PER_RANK - 1];
   // prmt
+  // 1
   for (int64_t s_token_idx = src_token_idx;
        s_token_idx < token_nums_feed_to_ffn;
        s_token_idx += gridDim.x) {
@@ -846,10 +847,13 @@ __global__ void permute_x_fp8_kernel(
     for (int i = threadIdx.x; i < NUM_EXPERTS_PER_RANK; i += blockDim.x) {
       const int start_idx = i == 0 ? 0 : token_nums_per_expert_cum[i - 1];
       const int end_idx = token_nums_per_expert_cum[i];
-      if ((s_token_idx - start_idx) < token_nums_per_expert[i]) {
-        m_indices[s_token_idx] = i;
-      } else {
-        m_indices[s_token_idx] = -1;
+      if (s_token_idx >= start_idx && s_token_idx < end_idx) {
+        if ((s_token_idx - start_idx) < token_nums_per_expert[i]) {
+          m_indices[s_token_idx] = i;
+        } else {
+          m_indices[s_token_idx] = -1;
+        }
+        break;
       }
     }
 
