@@ -429,8 +429,6 @@ class EngineArgs:
             self.tokenizer = self.model
         if self.splitwise_role == "decode":
             self.enable_prefix_caching = False
-        if self.speculative_config is not None:
-            self.enable_prefix_caching = False
         if not current_platform.is_cuda():
             self.enable_prefix_caching = False
         if self.dynamic_load_weight:
