@@ -329,6 +329,9 @@ class OpenAIServingChat:
                             else:
                                 choice.delta.content = ""
 
+                            if res["outputs"].get("audio_content", None) is not None:
+                                choice.delta.audio_content = res["outputs"]["audio_content"]
+
                             if request.return_token_ids:
                                 choice.delta.prompt_token_ids = list(prompt_token_ids)
                                 choice.delta.prompt_tokens = prompt_tokens
@@ -389,6 +392,10 @@ class OpenAIServingChat:
                         delta_message.multimodal_content = output["multipart"]
                     else:
                         delta_message.content = output["text"]
+
+                    if output.get("audio_content", None) is not None:
+                        delta_message.audio_content = output["audio_content"]
+
                     if not res["finished"] and "delta_message" in output:
                         delta_message_output = output["delta_message"]
                         if delta_message_output is None:
@@ -688,6 +695,9 @@ class OpenAIServingChat:
             message.multimodal_content = output.get("multipart")
         else:
             message.content = output["text"]
+
+        if output.get("audio_content", None) is not None:
+            message.audio_content = output["audio_content"]
 
         logprobs_full_res = None
         draft_logprobs_full_res = None
