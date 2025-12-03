@@ -40,11 +40,11 @@ class RDMACommManager:
         try:
             import rdma_comm
         except:
-            logger.error(
+            raise RuntimeError(
                 "The installation of the RDMA library failed."
                 "Confirm whether your network card supports RDMA transmission."
             )
-            return
+
         try:
             import os
             import subprocess

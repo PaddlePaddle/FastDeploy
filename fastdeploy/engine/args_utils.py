@@ -502,8 +502,8 @@ class EngineArgs:
         if not current_platform.is_cuda() and not current_platform.is_xpu() and not current_platform.is_intel_hpu():
             self.enable_prefix_caching = False
         if self.enable_logprob:
-            if not current_platform.is_cuda():
-                raise NotImplementedError("Only CUDA platform supports logprob.")
+            if not current_platform.is_cuda() and not current_platform.is_xpu():
+                raise NotImplementedError("Only CUDA and XPU platforms support logprob.")
             if self.speculative_config is not None and self.logprobs_mode.startswith("processed"):
                 raise NotImplementedError("processed_logprobs not support in speculative.")
             if self.speculative_config is not None and self.max_logprobs == -1:
@@ -1280,10 +1280,6 @@ class EngineArgs:
         """
         all_dict = asdict(self)
         model_cfg = ModelConfig(all_dict)
-
-        # XPU currently disable prefix cache for VL model
-        if current_platform.is_xpu() and (self.enable_mm or model_cfg.enable_mm):
-            self.enable_prefix_caching = False
 
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size

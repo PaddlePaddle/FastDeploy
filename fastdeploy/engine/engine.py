@@ -755,8 +755,9 @@ class LLMEngine:
                             local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                         )
                     )
+                    ctx = multiprocessing.get_context("spawn")
                     self.dp_processed.append(
-                        multiprocessing.Process(
+                        ctx.Process(
                             target=start_data_parallel_service,
                             args=(
                                 self.cfg,
