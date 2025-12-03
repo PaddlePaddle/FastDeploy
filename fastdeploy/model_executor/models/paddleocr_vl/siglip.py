@@ -537,19 +537,8 @@ class SiglipEncoder(nn.Layer):
             sin_emb=sin_emb,
         )
 
-    @paddle.jit.to_static  # (backend=None) # ...
-    # @paddle.jit.to_static(input_spec=[
-    #     None, # encoder_states,
-    #     paddle.static.InputSpec(shape=[-1], dtype=paddle.int32, name="attn_cu_seqlens"), # attn_cu_seqlens,
-    #     False, # output_hidden_states,
-    #     None, # reversed_window_indices,
-    #     False, # use_window_attn,
-    #     paddle.static.InputSpec(shape=[1, -1, 1152], dtype=paddle.bfloat16, name="hidden_states"), # hidden_states,
-    #     None, # attention_mask,
-    #     False, # output_attentions,
-    #     paddle.static.InputSpec(shape=[-1, 1, 72], dtype=paddle.float32, name="cos_emb"), # cos_emb,
-    #     paddle.static.InputSpec(shape=[-1, 1, 72], dtype=paddle.float32, name="sin_emb"), # sin_emb,
-    # ], full_graph=True)#(backend=None) # ...
+    # This function will be compiled with CINN when graph_opt_level >= 2
+    # TODO(SigureMo): Use a new decorator to mark the function for CINN compilation
     def _run_encoder_layer(
         self,
         encoder_states,
@@ -564,7 +553,7 @@ class SiglipEncoder(nn.Layer):
         cos_emb,
         sin_emb,
     ):
-        max_seqlen = (attn_cu_seqlens[1:] - attn_cu_seqlens[:-1]).max()
+        max_seqlen = (attn_cu_seqlens[1:] - attn_cu_seqlens[:-1]).max().cpu()
 
         for encoder_layer in self.layers:
             if output_hidden_states:

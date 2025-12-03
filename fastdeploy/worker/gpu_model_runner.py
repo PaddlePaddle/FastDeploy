@@ -1905,7 +1905,6 @@ class GPUModelRunner(ModelRunnerBase):
         if not self.use_cudagraph:
             logger.info("Skipping CUDA graph capture. Please check GraphOptimizationConfig")
             return
-        self._dummy_run_extract_vision_features()
         time_before_capture = time.perf_counter()
         expected_decode_len = 1
         capture_sizes = self.cudagraph_capture_sizes.copy()
@@ -2016,6 +2015,29 @@ class GPUModelRunner(ModelRunnerBase):
 
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
+
+    def vision_encoder_compile(self):
+        if self.graph_opt_config.graph_opt_level == 0:
+            return
+        # Currently only PaddleOCR-VL model is supported for vision encoder layer
+        if self.model_config.model_type != "paddleocr_vl":
+            return
+
+        from fastdeploy.model_executor.models.paddleocr_vl import SiglipEncoder
+
+        # Compile for paddleocr_vl vision encoder layer
+        compile_region = SiglipEncoder._run_encoder_layer
+        backend = "CINN" if self.graph_opt_config.graph_opt_level >= 2 else None
+        compile_region = paddle.jit.to_static(
+            compile_region,
+            full_graph=False,
+            backend=backend,
+        )
+        SiglipEncoder._run_encoder_layer = compile_region
+
+        # Warmup for paddleocr_vl vision encoder layer
+        logger.info("Warmup for paddleocr_vl compile region...")
+        self._dummy_run_extract_vision_features()
 
     @sot_warmup_guard(True)
     def sot_warmup(self) -> None:
@@ -2688,8 +2710,6 @@ class GPUModelRunner(ModelRunnerBase):
 
     @paddle.no_grad()
     def _dummy_run_extract_vision_features(self):
-        if "paddleocr" not in self.model_config.model_type:
-            return
         grid_thw_list = ([(1, 10, 88), (1, 10, 80)], [(1, 14, 62), (1, 20, 42), (1, 14, 60)])
         for grid_thw in grid_thw_list:
             images = []
