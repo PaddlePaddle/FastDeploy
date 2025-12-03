@@ -1287,7 +1287,7 @@ class XPUModelRunner(ModelRunnerBase):
             ),
             accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
-            stop_token_ids=self.share_inputs["stop_seqs"],
+            stop_seqs=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
         )
         if self.speculative_decoding:
