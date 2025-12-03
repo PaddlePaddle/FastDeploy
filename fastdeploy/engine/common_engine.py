@@ -777,7 +777,7 @@ class EngineService:
                         finished_ids, delete_tasks_list = [], []
                         while need_check_req_ids:
                             finished_ids.extend(self.engine_worker_queue.get_finished_add_cache_task_req())
-                            self.llm_logger.info(f"get_finished_add_cache_task_req: {finished_ids}")
+                            self.llm_logger.debug(f"get_finished_add_cache_task_req: {finished_ids}")
                             if finished_ids:
                                 for task in tasks:
                                     result = self.resource_manager.waiting_async_process(task)
