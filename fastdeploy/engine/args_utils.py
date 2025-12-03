@@ -295,7 +295,7 @@ class EngineArgs:
     Chunk size of moe input.
     """
 
-    cache_transfer_protocol: str = "ipc"
+    cache_transfer_protocol: str = "ipc,rdma"
     """
     Protocol to use for cache transfer.
     """
@@ -520,27 +520,6 @@ class EngineArgs:
                     f"When using {self.splitwise_role} role and the {self.scheduler_name} "
                     f"scheduler, please provide --router argument."
                 )
-
-            if "rdma" in self.cache_transfer_protocol:
-                if self.rdma_comm_ports is None:
-                    raise ValueError(
-                        "Please set --rdma_comm_ports argument when using " "rdma cache transfer protocol."
-                    )
-                num_nodes = len(self.ips) if self.ips else 1
-                if self.data_parallel_size % num_nodes != 0:
-                    raise ValueError(
-                        f"data_parallel_size ({self.data_parallel_size}) must be divisible by "
-                        f"num_nodes ({num_nodes})."
-                    )
-                dp_per_node = self.data_parallel_size // num_nodes
-                expected_ports = self.tensor_parallel_size * dp_per_node
-                if len(self.rdma_comm_ports) != expected_ports:
-                    raise ValueError(
-                        f"The number of rdma_comm_ports must equal "
-                        f"tensor_parallel_size * (data_parallel_size / num_nodes) = "
-                        f"{self.tensor_parallel_size} * ({self.data_parallel_size} / {num_nodes}) "
-                        f"= {expected_ports}, but got {len(self.rdma_comm_ports)}."
-                    )
 
         if not (current_platform.is_cuda() or current_platform.is_xpu() or current_platform.is_maca()):
             envs.ENABLE_V1_KVCACHE_SCHEDULER = 0
