@@ -182,19 +182,19 @@ def test_caching_output():
     resource_manager_v1.add_request(req1)
     # step 1
     assert len(resource_manager_v1.waiting) == 1
-    scheduler_reqs = resource_manager_v1.schedule()
+    scheduler_reqs, _ = resource_manager_v1.schedule()
     assert len(scheduler_reqs) == 1
     assert scheduler_reqs[0].request_id == "req1"
     assert scheduler_reqs[0].prefill_start_index == 0
     assert scheduler_reqs[0].prefill_end_index == 3200
     assert len(resource_manager_v1.running) == 1
-    scheduler_reqs = resource_manager_v1.schedule()
+    _, _ = resource_manager_v1.schedule()
     req1.output_token_ids.extend([1] * 129)
     resource_manager_v1.cache_output_tokens(req1)
     # step 2
     req2 = Request.from_dict({"request_id": "req2", "prompt_token_ids": [1] * 3329, "prompt_token_ids_len": 3329})
     resource_manager_v1.add_request(req2)
-    scheduler_reqs = resource_manager_v1.schedule()
+    scheduler_reqs, _ = resource_manager_v1.schedule()
     assert scheduler_reqs[1].request_id == "req2"
     assert scheduler_reqs[1].prefill_start_index == 3328
     assert scheduler_reqs[1].prefill_end_index == 3329
