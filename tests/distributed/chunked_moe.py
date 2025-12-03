@@ -138,6 +138,7 @@ class TestChunkedMoE(unittest.TestCase):
         fused_moe = FusedMoE.__new__(FusedMoE)
         fused_moe.ep_size = 2
         fused_moe.tp_size = 1
+        fused_moe.attn_tp_size = 1
         fused_moe.reduce_results = True
 
         fused_moe.fd_config = mock_fd_config
