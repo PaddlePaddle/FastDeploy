@@ -35,16 +35,6 @@ import typing
 
 import paddle
 
-
-def _swap_torch_modules_from_cache():
-    for name in list(paddle.compat.proxy.TORCH_MODULES_CACHE):
-        assert paddle.compat.proxy._is_torch_module(name), f"`{name}` is not a PyTorch module"
-        sys.modules[name] = paddle.compat.proxy.TORCH_MODULES_CACHE[name]
-        # del paddle.compat.proxy.TORCH_MODULES_CACHE[name]
-
-
-paddle.compat.proxy._swap_torch_modules_from_cache = _swap_torch_modules_from_cache
-
 # first import prometheus setup to set PROMETHEUS_MULTIPROC_DIR
 # otherwise, the Prometheus package will be imported first,
 # which will prevent correct multi-process setup
@@ -63,15 +53,7 @@ from fastdeploy.utils import current_package_version, envs
 
 paddle.compat.enable_torch_proxy(scope={"triton"})
 
-# paddle.compat.enable_torch_proxy()
-# paddle.compat.extend_torch_proxy_blocked_modules(
-#     {
-#         "xgrammar",
-#         "paddleformers",
-#         # "transformers",  # 内置，无需手动添加
-#         # "tvm_ffi",  # 内置，无需手动添加
-#     },
-# )
+
 if envs.FD_DEBUG != 1:
     import logging
 

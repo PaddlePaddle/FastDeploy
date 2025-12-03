@@ -25,7 +25,7 @@ setuptools-scm>=8
 prometheus-client
 decord
 moviepy
-triton==3.3
+triton
 use-triton-in-paddle
 crcmod
 fastsafetensors==0.1.14
