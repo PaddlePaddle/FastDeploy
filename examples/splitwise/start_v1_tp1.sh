@@ -14,26 +14,16 @@ export KVCACHE_GDRCOPY_FLUSH_ENABLE=1
 
 SCRIPT_PATH=$(readlink -f "$0")
 SCRIPT_DIR=$(dirname "$SCRIPT_PATH")
-export $(bash ${SCRIPT_DIR}/../../scripts/get_rdma_nics.sh gpu)
-echo "KVCACHE_RDMA_NICS:${KVCACHE_RDMA_NICS}"
-if [ -z "${KVCACHE_RDMA_NICS}" ]; then
-  echo "KVCACHE_RDMA_NICS is empty, please check the output of get_rdma_nics.sh"
-  exit 1
-fi
+source ${SCRIPT_DIR}/utils.sh
 
 unset http_proxy && unset https_proxy
 rm -rf log_*
-source ${SCRIPT_DIR}/utils.sh
 
 P_PORT=52400
 D_PORT=52500
 ROUTER_PORT=52700
 
-ports=(
-    $P_PORT $((P_PORT + 1)) $((P_PORT + 2)) $((P_PORT + 3)) $((P_PORT + 4)) $((P_PORT + 5))
-    $D_PORT $((D_PORT + 1)) $((D_PORT + 2)) $((D_PORT + 3)) $((D_PORT + 4)) $((D_PORT + 5))
-    $ROUTER_PORT
-)
+ports=($P_PORT $D_PORT $ROUTER_PORT)
 check_ports "${ports[@]}" || {
     echo "❌ Some ports are in use. Please release them."
     exit 1
@@ -56,7 +46,6 @@ mkdir -p ${FD_LOG_DIR}
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
        --port "${P_PORT}" \
-       --max-model-len 32768 \
        --splitwise-role "prefill" \
        --router "0.0.0.0:${ROUTER_PORT}" \
        2>&1 >${FD_LOG_DIR}/nohup &
@@ -71,7 +60,6 @@ mkdir -p ${FD_LOG_DIR}
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
        --port "${D_PORT}" \
-       --max-model-len 32768 \
        --splitwise-role "decode" \
        --router "0.0.0.0:${ROUTER_PORT}" \
        2>&1 >${FD_LOG_DIR}/nohup &
