@@ -305,10 +305,8 @@ class InputBatch:
         swap_tensor_slice(self.min_dec_len, i1, i2)
         swap_tensor_slice(self.max_dec_len, i1, i2)
         swap_tensor_slice(self.seq_lens_this_time_buffer, i1, i2)
-
         if self.enable_expert_parallel:
             swap_tensor_slice(self.seq_lens_this_time, i1, i2)
-
         swap_tensor_slice(self.seq_lens_encoder, i1, i2)
         swap_tensor_slice(self.seq_lens_decoder, i1, i2)
         swap_tensor_slice(self.step_seq_lens_encoder, i1, i2)
@@ -317,7 +315,7 @@ class InputBatch:
         swap_tensor_slice(self.step_idx, i1, i2)
         swap_tensor_slice(self.stop_flags, i1, i2)
 
-        # Swap list-based arrays (lists don't need clone)
+        # # Swap list-based arrays (lists don't need clone)
         self.top_k_list[i1], self.top_k_list[i2] = self.top_k_list[i2], self.top_k_list[i1]
         self.min_p_list[i1], self.min_p_list[i2] = self.min_p_list[i2], self.min_p_list[i1]
 
@@ -339,10 +337,10 @@ class InputBatch:
         swap_tensor_slice(self.max_think_lens, i1, i2)
         swap_tensor_slice(self.limit_think_status, i1, i2)
 
-        # Swap block tables
+        # # Swap block tables
         swap_tensor_slice(self.block_tables, i1, i2)
 
-        # Swap stop sequences
+        # # Swap stop sequences
         swap_tensor_slice(self.stop_seqs_len, i1, i2)
         swap_tensor_slice(self.stop_seqs, i1, i2)
 
@@ -360,124 +358,6 @@ class InputBatch:
         # Swap mask rollback
         swap_tensor_slice(self.mask_rollback, i1, i2)
 
-    def swap_states_batch(self, i1, i2) -> None:
-        """Optimized swap function that batches tensors with same shape and dtype"""
-
-        def batch_swap(tensors, idx1, idx2):
-            """Batch swap tensors with same shape and dtype"""
-            if not tensors:
-                return
-
-            # Group by shape and dtype (convert shape to tuple to make it hashable)
-            groups = {}
-            for tensor in tensors:
-                # Convert list shape to tuple for hashability
-                shape_tuple = tuple(tensor[idx1].shape)
-                key = (shape_tuple, tensor.dtype)
-                if key not in groups:
-                    groups[key] = []
-                groups[key].append(tensor)
-
-            # Process each group
-            for (shape_tuple, dtype), tensor_group in groups.items():
-                if len(tensor_group) == 1:
-                    # Single tensor in group - use individual swap
-                    temp = tensor_group[0][idx1].clone()
-                    tensor_group[0][idx1] = tensor_group[0][idx2].clone()
-                    tensor_group[0][idx2] = temp
-                else:
-                    # Batch process
-                    slices_idx1 = [t[idx1].clone() for t in tensor_group]
-                    slices_idx2 = [t[idx2].clone() for t in tensor_group]
-
-                    # Assign back in batch
-                    for t, s1, s2 in zip(tensor_group, slices_idx2, slices_idx1):
-                        t[idx1] = s1
-                        t[idx2] = s2
-
-        # Collect all tensors to swap
-        tensors = [
-            # Main input tensors
-            self.pre_ids,
-            self.input_ids,
-            self.prompt_ids,
-            # Configuration tensors
-            self.top_p,
-            self.top_k,
-            self.min_p,
-            self.temperature,
-            self.penalty_score,
-            self.frequency_score,
-            self.presence_score,
-            self.temp_scaled_logprobs,
-            self.top_p_normalized_logprobs,
-            # Length tensors
-            self.min_dec_len,
-            self.max_dec_len,
-            self.seq_lens_this_time_buffer,
-            self.seq_lens_encoder,
-            self.seq_lens_decoder,
-            self.step_seq_lens_encoder,
-            self.step_seq_lens_decoder,
-            self.prompt_lens,
-            self.step_idx,
-            self.stop_flags,
-            # 1D arrays
-            self.bad_tokens,
-            self.bad_tokens_len,
-            self.next_tokens,
-            self.is_block_step,
-            self.encoder_block_lens,
-            self.step_block_list,
-            self.recover_block_list,
-            self.need_block_list,
-            self.used_list_len,
-            self.infer_seed,
-            self.first_token_ids,
-            self.ori_seq_lens_encoder,
-            self.system_lens,
-            self.system_ids,
-            self.max_think_lens,
-            self.limit_think_status,
-            self.mask_rollback,
-            # Special tensors
-            self.block_tables,
-            self.stop_seqs_len,
-            self.stop_seqs,
-        ]
-
-        # Add expert parallel tensors if enabled
-        if self.enable_expert_parallel:
-            tensors.append(self.seq_lens_this_time)
-
-        # Add speculative decoding tensors if enabled
-        if self.speculative_decoding:
-            tensors.extend(
-                [
-                    self.input_ids_cpu,
-                    self.accept_tokens,
-                    self.draft_tokens,
-                    self.output_cum_offsets,
-                    self.step_draft_tokens,
-                    self.step_seq_lens_this_time,
-                ]
-            )
-
-        # Perform batch swap
-        batch_swap(tensors, i1, i2)
-
-        # Swap list-based arrays (no optimization needed for lists)
-        self.top_k_list[i1], self.top_k_list[i2] = self.top_k_list[i2], self.top_k_list[i1]
-        self.min_p_list[i1], self.min_p_list[i2] = self.min_p_list[i2], self.min_p_list[i1]
-
-        # Swap scalar arrays
-        if self.speculative_decoding:
-            self.accept_num[i1], self.accept_num[i2] = self.accept_num[i2], self.accept_num[i1]
-            self.actual_draft_token_num[i1], self.actual_draft_token_num[i2] = (
-                self.actual_draft_token_num[i2],
-                self.actual_draft_token_num[i1],
-            )
-
 
 def reorder_split_prefill_and_decode(input_batch: InputBatch):
     """
@@ -493,7 +373,7 @@ def reorder_split_prefill_and_decode(input_batch: InputBatch):
     decode_mask = input_batch.seq_lens_encoder == 0
 
     # Get batch size
-    batch_size = decode_mask.shape[0]
+    batch_size = input_batch.seq_lens_this_time.shape[0]
 
     # 2. Use two-pointer algorithm to swap prefill to the back and decode to the front
     left = 0  # Pointer for decode section start
