@@ -681,8 +681,9 @@ class GPUModelRunner(ModelRunnerBase):
                     all_stop_seqs.append([token_id])
 
             if request.get("stop") is not None and request.get("stop_seqs_len") is not None:
-                stop_seqs_num = len(request.get("stop_seqs_len"))
-                all_stop_seqs.extend(stop_seqs_num)
+                stop = request.get("stop")
+                stop_list = stop if isinstance(stop, list) else [stop]
+                all_stop_seqs.extend(stop_list)
 
             if len(all_stop_seqs) > 0:
                 num_stops = min(len(all_stop_seqs), self.model_config.max_stop_seqs_num)
