@@ -104,7 +104,7 @@ class DeepSeekV3MLP(nn.Layer):
         self.up_gate_proj.load_state_dict(state_dict)
         self.down_proj.load_state_dict(state_dict)
 
-    def forward(self, x):
+    def forward(self, x, forward_meta=None):
         """ """
         gate_up_out = self.up_gate_proj(x)
         act_out = self.act_fn(gate_up_out)

@@ -94,7 +94,7 @@ class Ernie4_5_MLP(nn.Layer):
         self.up_gate_proj.load_state_dict(state_dict)
         self.down_proj.load_state_dict(state_dict)
 
-    def forward(self, hidden_states: paddle.Tensor):
+    def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta = None):
         gate_up_out = self.up_gate_proj(hidden_states)
         act_out = self.act_fn(gate_up_out)
         down_out = self.down_proj(act_out)

@@ -85,7 +85,7 @@ class Glm4MoeMLP(nn.Layer):
             act_method=fd_config.model_config.hidden_act,
         )
 
-    def forward(self, x):
+    def forward(self, x, forward_meta=None):
         """ """
         gate_up_out = self.up_gate_proj(x)
         act_out = self.act_fn(gate_up_out)
