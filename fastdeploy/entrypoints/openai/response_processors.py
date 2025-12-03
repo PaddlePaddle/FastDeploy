@@ -85,49 +85,49 @@ class ChatResponseProcessor:
             api_server_logger.debug(f"request_output {request_output}")
             if not self.enable_mm_output:
                 outputs = request_output.get("outputs", None)
-                if outputs is None:
-                    decode_type = 0
-                else:
+                token_ids = outputs.get("token_ids", None) if outputs is not None else None
+                req_id = request_output.get("request_id", None)
+                if outputs is not None and token_ids is not None and req_id is not None:
                     decode_type = request_output["outputs"].get("decode_type", 0) or 0
-                req_id = request_output["request_id"]
-                if decode_type == 0:  # text
-                    tts = req_id in self._audio_buffer
-                    if outputs is None:
-                        all_audio_tokens = None
-                    else:
-                        token_ids = request_output["outputs"]["token_ids"]
+                    if decode_type == 0:  # text
+                        tts = req_id in self._audio_buffer
                         if token_ids[-1] == self.eos_token_id:
                             all_audio_tokens = self._audio_buffer.pop(req_id, [])
                         else:
                             all_audio_tokens = None
-
-                    if inspect.iscoroutinefunction(self.data_processor.process_response_dict):
-                        response = await self.data_processor.process_response_dict(
-                            response_dict=request_output,
-                            stream=stream,
-                            enable_thinking=enable_thinking,
-                            include_stop_str_in_output=include_stop_str_in_output,
-                            audio_tokens=all_audio_tokens,
-                            tts=tts,
-                        )
-                    else:
-                        response = self.data_processor.process_response_dict(
-                            response_dict=request_output,
-                            stream=stream,
-                            enable_thinking=enable_thinking,
-                            include_stop_str_in_output=include_stop_str_in_output,
-                            audio_tokens=all_audio_tokens,
-                            tts=tts,
-                        )
-                    yield response
-                elif decode_type == 2:  # audio
-                    token_ids = request_output["outputs"]["token_ids"]
-                    if self.eoa_token_id is not None and self.eoa_token_id in token_ids:
-                        continue
-                    if req_id in self._audio_buffer:
-                        self._audio_buffer[req_id].append(token_ids)
-                    else:
-                        self._audio_buffer[req_id] = [token_ids]
+                        if inspect.iscoroutinefunction(self.data_processor.process_response_dict):
+                            response = await self.data_processor.process_response_dict(
+                                response_dict=request_output,
+                                stream=stream,
+                                enable_thinking=enable_thinking,
+                                include_stop_str_in_output=include_stop_str_in_output,
+                                audio_tokens=all_audio_tokens,
+                                tts=tts,
+                            )
+                        else:
+                            response = self.data_processor.process_response_dict(
+                                response_dict=request_output,
+                                stream=stream,
+                                enable_thinking=enable_thinking,
+                                include_stop_str_in_output=include_stop_str_in_output,
+                                audio_tokens=all_audio_tokens,
+                                tts=tts,
+                            )
+                        yield response
+                    elif decode_type == 2:  # audio
+                        if self.eoa_token_id is not None and self.eoa_token_id in token_ids:
+                            continue
+                        if req_id in self._audio_buffer:
+                            self._audio_buffer[req_id].append(token_ids)
+                        else:
+                            self._audio_buffer[req_id] = [token_ids]
+                else:
+                    yield self.data_processor.process_response_dict(
+                        response_dict=request_output,
+                        stream=stream,
+                        enable_thinking=enable_thinking,
+                        include_stop_str_in_output=include_stop_str_in_output,
+                    )
             elif stream:
                 decode_type = request_output["outputs"].get("decode_type", 0)
                 token_ids = request_output["outputs"]["token_ids"]

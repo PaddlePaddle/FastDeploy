@@ -1002,6 +1002,7 @@ class EngineService:
                 if len(results) == 0:
                     time.sleep(0.005)
                     continue
+                self.llm_logger.info(f"results: {results}")
                 if envs.FD_ENABLE_INTERNAL_ADAPTER:
                     new_contents = []
                     for step_batch_results in results:
