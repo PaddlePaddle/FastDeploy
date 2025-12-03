@@ -30,7 +30,7 @@ import paddle
 from fastdeploy.engine.request import Request, RequestOutput, RequestStatus, RequestType
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.metrics.metrics import main_process_metrics
-from fastdeploy.utils import llm_logger
+from fastdeploy.utils import envs, llm_logger
 
 
 @dataclass
@@ -94,6 +94,9 @@ class ResourceManagerV1(ResourceManager):
         main_process_metrics.set_value("max_batch_size", max_num_seqs)
 
         self.using_extend_tables_req_id = set()
+        if self.config.scheduler_config.splitwise_role == "decode":
+            self.preallocated_requests_timestamp = {}
+            threading.Thread(target=self._monitor_recycle_block_ids_in_D, daemon=True).start()
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
@@ -607,6 +610,26 @@ class ResourceManagerV1(ResourceManager):
                 request.inference_start_time = time.time()
                 self.running.append(request)
 
+    def _monitor_recycle_block_ids_in_D(self):
+        while True:
+            try:
+                with self.lock:
+                    need_recycle_request_ids = []
+                    for request_id, timestamp in self.preallocated_requests_timestamp.items():
+                        if time.time() - timestamp >= envs.FD_GET_FIRST_TOKEN_FROM_P_TIMEOUT:
+                            need_recycle_request_ids.append(request_id)
+                    for request_id in need_recycle_request_ids:
+                        llm_logger.error(
+                            f"Recycle block ids for request {request_id} forcefully, due to get first token from P timeout."
+                        )
+                        del self.preallocated_requests_timestamp[request_id]
+                        request = self.requests[request_id]
+                        self.prerelease_resource(request)
+                time.sleep(10)
+            except Exception as e:
+                llm_logger.error(f"Monitor recycle block ids in D error: {e}, {str(traceback.format_exc())}")
+                time.sleep(10)
+
     def preallocate_resource_in_p(self, request: Request):
         """
         In P/D aggregated deployment, preallocate resource for P.
@@ -689,8 +712,17 @@ class ResourceManagerV1(ResourceManager):
                 self.stop_flags[request.idx] = False
                 self.requests[request.request_id] = request
                 self.req_dict[request.request_id] = allocated_position
+                self.preallocated_requests_timestamp[request.request_id] = time.time()
                 return True
             return False
+
+    def has_existed_request(self, request_id):
+        """
+        Whether a request with the given request_id has been added to the scheduler.
+        """
+        if request_id in self.requests:
+            return True
+        return False
 
     def insert_task_for_decoding(self, request_output_in_p: RequestOutput):
         """
@@ -698,8 +730,15 @@ class ResourceManagerV1(ResourceManager):
         """
         assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
         with self.lock:
+            if request_output_in_p.request_id not in self.requests:
+                llm_logger.error(
+                    f"request {request_output_in_p.request_id} with first token from P not found in preallocated resource, please check whether recycled due to timeout."
+                )
+                return
             request = self.requests[request_output_in_p.request_id]
             request.output_token_ids.append(request_output_in_p.outputs.token_ids[0])
+            if request.request_id:
+                del self.preallocated_requests_timestamp[request.request_id]
             request.num_cached_tokens = request_output_in_p.num_cached_tokens
             if (
                 self.config.speculative_config.method in ["mtp"]
