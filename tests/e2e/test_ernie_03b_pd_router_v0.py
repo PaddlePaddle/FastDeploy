@@ -12,23 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Test splitwise deployment which uses local_scheduler + router,
+# and ENABLE_V1_KVCACHE_SCHEDULER is 0
+
 import json
 import os
 import shutil
 import signal
-import socket
 import subprocess
 import sys
 import time
 
 import pytest
 import requests
+from utils.serving_utils import (
+    FD_API_PORT,
+    FD_CACHE_QUEUE_PORT,
+    FD_ENGINE_QUEUE_PORT,
+    FD_METRICS_PORT,
+    clean,
+    get_registered_number,
+)
 
 # Read ports from environment variables; use default values if not set
-FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
-FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8133))
-FD_METRICS_PORT = int(os.getenv("FD_METRICS_PORT", 8233))
-FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
+FD_CONNECTOR_PORT = int(os.getenv("FD_CONNECTOR_PORT", 8433))
+FD_ROUTER_PORT = int(os.getenv("FD_ROUTER_PORT", 8533))
 
 # List of ports to clean before and after tests
 PORTS_TO_CLEAN = [
@@ -36,93 +44,14 @@ PORTS_TO_CLEAN = [
     FD_ENGINE_QUEUE_PORT,
     FD_METRICS_PORT,
     FD_CACHE_QUEUE_PORT,
+    FD_CONNECTOR_PORT,
     FD_API_PORT + 1,
     FD_ENGINE_QUEUE_PORT + 1,
     FD_METRICS_PORT + 1,
     FD_CACHE_QUEUE_PORT + 1,
+    FD_CONNECTOR_PORT + 1,
+    FD_ROUTER_PORT,
 ]
-
-
-def is_port_open(host: str, port: int, timeout=1.0):
-    """
-    Check if a TCP port is open on the given host.
-    Returns True if connection succeeds, False otherwise.
-    """
-    try:
-        with socket.create_connection((host, port), timeout):
-            return True
-    except Exception:
-        return False
-
-
-def kill_process_on_port(port: int):
-    """
-    Kill processes that are listening on the given port.
-    Uses multiple methods to ensure thorough cleanup.
-    """
-    current_pid = os.getpid()
-    parent_pid = os.getppid()
-
-    # Method 1: Use lsof to find processes
-    try:
-        output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
-        for pid in output.splitlines():
-            pid = int(pid)
-            if pid in (current_pid, parent_pid):
-                print(f"Skip killing current process (pid={pid}) on port {port}")
-                continue
-            try:
-                # First try SIGTERM for graceful shutdown
-                os.kill(pid, signal.SIGTERM)
-                time.sleep(1)
-                # Then SIGKILL if still running
-                os.kill(pid, signal.SIGKILL)
-                print(f"Killed process on port {port}, pid={pid}")
-            except ProcessLookupError:
-                pass  # Process already terminated
-    except subprocess.CalledProcessError:
-        pass
-
-    # Method 2: Use netstat and fuser as backup
-    try:
-        # Find processes using netstat and awk
-        cmd = f"netstat -tulpn 2>/dev/null | grep :{port} | awk '{{print $7}}' | cut -d'/' -f1"
-        output = subprocess.check_output(cmd, shell=True).decode().strip()
-        for pid in output.splitlines():
-            if pid and pid.isdigit():
-                pid = int(pid)
-                if pid in (current_pid, parent_pid):
-                    continue
-                try:
-                    os.kill(pid, signal.SIGKILL)
-                    print(f"Killed process (netstat) on port {port}, pid={pid}")
-                except ProcessLookupError:
-                    pass
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        pass
-
-    # Method 3: Use fuser if available
-    try:
-        subprocess.run(f"fuser -k {port}/tcp", shell=True, timeout=5)
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
-        pass
-
-
-def clean_ports():
-    """
-    Kill all processes occupying the ports listed in PORTS_TO_CLEAN.
-    """
-    print(f"Cleaning ports: {PORTS_TO_CLEAN}")
-    for port in PORTS_TO_CLEAN:
-        kill_process_on_port(port)
-
-    # Double check and retry if ports are still in use
-    time.sleep(2)
-    for port in PORTS_TO_CLEAN:
-        if is_port_open("127.0.0.1", port, timeout=0.1):
-            print(f"Port {port} still in use, retrying cleanup...")
-            kill_process_on_port(port)
-            time.sleep(1)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -135,9 +64,11 @@ def setup_and_run_server():
     - Tears down server after all tests finish
     """
     print("Pre-test port cleanup...")
-    clean_ports()
+    clean(PORTS_TO_CLEAN)
 
     print("log dir clean ")
+    if os.path.exists("log_router") and os.path.isdir("log_router"):
+        shutil.rmtree("log_router")
     if os.path.exists("log_prefill") and os.path.isdir("log_prefill"):
         shutil.rmtree("log_prefill")
     if os.path.exists("log_decode") and os.path.isdir("log_decode"):
@@ -150,14 +81,37 @@ def setup_and_run_server():
         model_path = "baidu/ERNIE-4.5-0.3B-Paddle"
     print(f"model_path: {model_path}")
 
+    # router
+    print("start router...")
+    env_router = os.environ.copy()
+    env_router["FD_LOG_DIR"] = "log_router"
+    router_log_path = "router.log"
+
+    router_cmd = [
+        sys.executable,
+        "-m",
+        "fastdeploy.router.launch",
+        "--port",
+        str(FD_ROUTER_PORT),
+        "--splitwise",
+    ]
+
+    with open(router_log_path, "w") as logfile:
+        process_router = subprocess.Popen(
+            router_cmd,
+            stdout=logfile,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,  # Enables killing full group via os.killpg
+            env=env_router,
+        )
+
     # prefill实例
     print("start prefill...")
     env_prefill = os.environ.copy()
     env_prefill["CUDA_VISIBLE_DEVICES"] = "0"
     env_prefill["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
     env_prefill["FD_LOG_DIR"] = "log_prefill"
-    env_prefill["INFERENCE_MSG_QUEUE_ID"] = str(FD_API_PORT)
-    prefill_log_path = "server.log"
+    prefill_log_path = "server_prefill.log"
     prefill_cmd = [
         sys.executable,
         "-m",
@@ -182,6 +136,12 @@ def setup_and_run_server():
         "wint8",
         "--splitwise-role",
         "prefill",
+        "--cache-transfer-protocol",
+        "ipc",
+        "--pd-comm-port",
+        str(FD_CONNECTOR_PORT),
+        "--router",
+        f"0.0.0.0:{FD_ROUTER_PORT}",
     ]
 
     # Start subprocess in new process group
@@ -193,16 +153,15 @@ def setup_and_run_server():
             start_new_session=True,  # Enables killing full group via os.killpg
             env=env_prefill,
         )
-    time.sleep(3)
+    time.sleep(1)
 
     # decode实例
     print("start decode...")
     env_decode = os.environ.copy()
     env_decode["CUDA_VISIBLE_DEVICES"] = "1"
-    env_prefill["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
-    env_decode["INFERENCE_MSG_QUEUE_ID"] = str(FD_API_PORT + 1)
+    env_decode["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
     env_decode["FD_LOG_DIR"] = "log_decode"
-    decode_log_path = "decode_server.log"
+    decode_log_path = "server_decode.log"
     decode_cmd = [
         sys.executable,
         "-m",
@@ -227,8 +186,12 @@ def setup_and_run_server():
         "wint8",
         "--splitwise-role",
         "decode",
-        "--innode-prefill-ports",
-        str(FD_ENGINE_QUEUE_PORT),
+        "--cache-transfer-protocol",
+        "ipc",
+        "--pd-comm-port",
+        str(FD_CONNECTOR_PORT + 1),
+        "--router",
+        f"0.0.0.0:{FD_ROUTER_PORT}",
     ]
 
     # Start subprocess in new process group
@@ -242,19 +205,18 @@ def setup_and_run_server():
         )
 
     # Wait up to 300 seconds for API server to be ready
-    for _ in range(300):
-        if is_port_open("127.0.0.1", FD_API_PORT):
-            if is_port_open("127.0.0.1", FD_API_PORT + 1):
-                print(f"Prefill server is up on port {FD_API_PORT}")
-                print(f"Decode server is up on port {FD_API_PORT + 1}")
-                break
-        time.sleep(1)
+    for _ in range(60):
+        registered_numbers = get_registered_number(f"0.0.0.0:{FD_ROUTER_PORT}")
+        if registered_numbers["prefill"] >= 1 and registered_numbers["decode"] >= 1:
+            print("Prefill and decode servers are both online")
+            break
+        time.sleep(5)
     else:
         print("[TIMEOUT] API server failed to start in 5 minutes. Cleaning up...")
         try:
             os.killpg(process_prefill.pid, signal.SIGTERM)
             os.killpg(process_decode.pid, signal.SIGTERM)
-            clean_ports()
+            clean()
         except Exception as e:
             print(f"Failed to kill process group: {e}")
         raise RuntimeError(f"API server did not start on port {FD_API_PORT}")
@@ -263,9 +225,10 @@ def setup_and_run_server():
 
     print("\n===== Post-test server cleanup... =====")
     try:
+        os.killpg(process_router.pid, signal.SIGTERM)
         os.killpg(process_prefill.pid, signal.SIGTERM)
         os.killpg(process_decode.pid, signal.SIGTERM)
-        clean_ports()
+        clean(PORTS_TO_CLEAN)
         print(f"Prefill server (pid={process_prefill.pid}) terminated")
         print(f"Decode server (pid={process_decode.pid}) terminated")
     except Exception as e:
@@ -277,7 +240,7 @@ def api_url(request):
     """
     Returns the API endpoint URL for chat completions.
     """
-    return f"http://0.0.0.0:{FD_API_PORT}/v1/chat/completions", f"http://0.0.0.0:{FD_API_PORT + 1}/v1/chat/completions"
+    return f"http://0.0.0.0:{FD_ROUTER_PORT}/v1/chat/completions"
 
 
 @pytest.fixture(scope="session")
@@ -364,15 +327,12 @@ def test_chat_usage_stream(api_url):
         "stream_options": {"include_usage": True, "continuous_usage_stats": True},
         "metadata": {"min_tokens": 10},
     }
-    _, d_url = api_url  # Only the decode server receives the request
 
-    response = send_request(url=d_url, payload=payload)
+    response = send_request(url=api_url, payload=payload)
     chunks = get_stream_chunks(response)
     result = "".join([x["choices"][0]["delta"]["content"] for x in chunks[:-1]])
     print("Decode Response:", result)
     assert result != "", "结果为空"
-    # for idx, chunk in enumerate(chunks):
-    #     print(f"\nchunk[{idx}]:\n{json.dumps(chunk, indent=2, ensure_ascii=False)}")
     usage = chunks[-1]["usage"]
     total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
     assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
@@ -395,9 +355,8 @@ def test_chat_usage_non_stream(api_url):
         "stream": False,
         "metadata": {"min_tokens": 10},
     }
-    _, d_url = api_url
 
-    response = send_request(url=d_url, payload=payload).json()
+    response = send_request(url=api_url, payload=payload).json()
     usage = response["usage"]
     result = response["choices"][0]["message"]["content"]
     assert result != "", "结果为空"
@@ -420,10 +379,9 @@ def test_non_chat_usage_stream(api_url):
         "stream_options": {"include_usage": True, "continuous_usage_stats": True},
         "metadata": {"min_tokens": 10},
     }
-    _, d_url = api_url
-    d_url = d_url.replace("chat/completions", "completions")
+    api_url = api_url.replace("chat/completions", "completions")
 
-    response = send_request(url=d_url, payload=payload)
+    response = send_request(url=api_url, payload=payload)
     chunks = get_stream_chunks(response)
     result = "".join([x["choices"][0]["text"] for x in chunks[:-1]])
     print("Decode Response:", result)
@@ -447,10 +405,9 @@ def test_non_chat_usage_non_stream(api_url):
         "stream": False,
         "metadata": {"min_tokens": 10},
     }
-    _, d_url = api_url
-    d_url = d_url.replace("chat/completions", "completions")
+    api_url = api_url.replace("chat/completions", "completions")
 
-    response = send_request(url=d_url, payload=payload).json()
+    response = send_request(url=api_url, payload=payload).json()
     usage = response["usage"]
     result = response["choices"][0]["text"]
     print("Decode Response:", result)

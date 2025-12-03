@@ -20,7 +20,6 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 import fastdeploy
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func, deep_gemm
 
@@ -87,6 +86,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         # self.check(layer, up_gate_proj_weights, down_proj_weights)
         up_gate_proj_weight_scale = []
         down_proj_weight_scale = []
+
+        if isinstance(state_dict, list):
+            state_dict = dict(state_dict)
+
         for expert_idx in logical_expert_ids:
             up_gate_proj_expert_weight_scale_key_name = up_gate_proj_expert_weight_scale_key.format(expert_idx)
             down_proj_expert_weight_scale_key_name = down_proj_expert_weight_scale_key.format(expert_idx)
@@ -358,6 +361,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         tmp = count_tokens_per_expert_func(topk_ids, layer.num_experts)
 
         # recv_x, recv_x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, 128)
+        print('=====aaaaaaaaaaaa moe x', x)
+        print(f'=====aaaaaaaaaaaa moe w1 = {getattr(layer, self.added_weight_attrs[0])}')
+        print(f'=====aaaaaaaaaaaa moe w1 scale = {getattr(layer, self.added_scale_attrs[0])}')
         recv_x, recv_x_scale = deep_gemm.utils.math.per_token_cast_to_fp8(x, use_ue8m0=True)
 
         (
@@ -397,7 +403,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             m_indices,
             disable_ue8m0_cast=False,
         )
-        # print('=====aaaaaaaaaaaa ffn1 _out', ffn_out)
+        print('=====aaaaaaaaaaaa ffn1 _out', ffn_out)
         # swiglu
         ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out)
 
@@ -420,7 +426,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             m_indices,
             disable_ue8m0_cast=False,
         )
-        # print('=====aaaaaaaaaaaa ffn2 _out', ffn_out)
+        print('=====aaaaaaaaaaaa ffn2 _out', ffn_out)
         # prmt back per rank
         tmp_ffn_out = fastdeploy.model_executor.ops.gpu.ep_moe_expert_combine(
             ffn_out,
@@ -431,7 +437,4 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             False,  # norm_topk_prob
             1.0,
         )[0]
-        if layer.tp_size > 1:
-            tmp_ffn_out = tensor_model_parallel_all_reduce(tmp_ffn_out)
-        # print('=====aaaaaaaaaaaa tmp_ffn_out', tmp_ffn_out)
         return tmp_ffn_out
