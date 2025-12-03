@@ -71,6 +71,14 @@ if [ "${HAS_SPECULATIVE_DECODING_MODIFY}" != "" ] && [ "${PR_ID}" != "" ]; then
     check_approval "$echo_line1" 1 freeliuzc Deleter-D
 fi
 
+ENV_FILE="fastdeploy/envs.py"
+
+HAS_ENV_MODIFY=$(git diff upstream/$BRANCH --name-only | grep -E "^${ENV_FILE}$" || true)
+if [ "${HAS_ENV_MODIFY}" != "" ] && [ "${PR_ID}" != "" ]; then
+    echo_line1="You must have one FastDeploy RD (yuanlehome(liuyuanle), rainyfly(chenjian26), Wanglongzhi2001(wanglongzhi)) approval for modifying [${ENV_FILE}]."
+    check_approval "$echo_line1" 1 yuanlehome rainyfly Wanglongzhi2001
+fi
+
 if [[ "${BRANCH}" != "develop" ]] && [[ -n "${PR_ID}" ]]; then
     pr_info=$(curl -H "Authorization: token ${GITHUB_TOKEN}" \
         https://api.github.com/repos/PaddlePaddle/FastDeploy/pulls/${PR_ID})

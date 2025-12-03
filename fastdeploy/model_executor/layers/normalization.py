@@ -176,6 +176,8 @@ class RMSNorm(nn.Layer):
             paddle.Tensor: Gathered tensor.
         """
         token_num_per_rank = out.shape[0]
+        if token_num_per_rank == 0:
+            return out
         multi_outs = paddle.zeros([token_num_per_rank * self.tp_size, out.shape[1]], dtype=out.dtype)
         paddle.distributed.all_gather(multi_outs, out, self.tp_group)
         return multi_outs[:token_num, :]
