@@ -602,6 +602,19 @@ def get_random_port():
                 continue
 
 
+def parse_ports(ports):
+    if ports is None:
+        return []
+    elif isinstance(ports, int):
+        return [ports]
+    elif isinstance(ports, str):
+        return [int(p) for p in ports.split(",")]
+    elif isinstance(ports, list):
+        return [int(p) for p in ports]
+    else:
+        raise TypeError(f"Cannot parse ports into List[int]: {ports}")
+
+
 def is_port_available(host, port):
     """
     Check the port is available

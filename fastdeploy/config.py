@@ -36,10 +36,9 @@ from fastdeploy.transformer_utils.config import get_pooling_config
 from fastdeploy.utils import (
     ceil_div,
     check_unified_ckpt,
-    find_free_ports,
     get_host_ip,
     get_logger,
-    is_port_available,
+    parse_ports,
 )
 
 logger = get_logger("config", "config.log")
@@ -554,7 +553,7 @@ class ParallelConfig:
 
         self.local_data_parallel_id = 0
         # Engine worker queue port
-        self.engine_worker_queue_port: str = None
+        self.engine_worker_queue_port: Union[int, str, list] = None
         # cuda visible devices
         self.device_ids: str = "0"
         # First token id
@@ -574,6 +573,8 @@ class ParallelConfig:
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+
+        self.engine_worker_queue_port = parse_ports(self.engine_worker_queue_port)
 
         # currently, the expert parallel size is equal data parallel size
         if self.enable_expert_parallel:
@@ -1271,6 +1272,11 @@ class CacheConfig:
             if hasattr(self, key):
                 setattr(self, key, value)
 
+        # post init all ports
+        self.cache_queue_port = parse_ports(self.cache_queue_port)
+        self.rdma_comm_ports = parse_ports(self.rdma_comm_ports)
+        self.pd_comm_port = parse_ports(self.pd_comm_port)
+
         if self.swap_space is None:
             self.enable_hierarchical_cache = False
         else:
@@ -1599,7 +1605,6 @@ class FDConfig:
 
         self.read_from_config()
         self.postprocess()
-        self.postprocess_all_ports()
         self.init_cache_info()
         if test_mode:
             return
@@ -1707,71 +1712,6 @@ class FDConfig:
             self.model_config.moe_phase = MoEPhase(phase="decode")
         else:
             raise NotImplementedError
-
-    def postprocess_all_ports(self):
-
-        def allocate_ports(name, port_range, num_ports):
-            ports = find_free_ports(port_range=port_range, num_ports=num_ports)
-            logger.info(f"Parameter `{name}` is not specified, found available ports: {ports}")
-            return ports
-
-        def parse_ports(name, ports):
-            if isinstance(ports, int):
-                return [ports]
-            elif isinstance(ports, str):
-                return [int(p) for p in ports.split(",")]
-            elif isinstance(ports, list):
-                return [int(p) for p in ports]
-            else:
-                raise TypeError(f"Invalid type for `{name}`: {type(ports)}. Must be int, str or list.")
-
-        def check_ports(name, ports, expected_num_ports=None):
-            if expected_num_ports is not None and len(ports) != expected_num_ports:
-                raise ValueError(
-                    f"Parameter `{name}` expected {expected_num_ports} ports, but got {len(ports)}: {ports}."
-                )
-            for port in ports:
-                assert is_port_available("0.0.0.0", int(port)), f"Parameter `{name}`:{port} is already in use."
-
-        # Ports for EngineWorkerQueue
-        engine_worker_queue_port = self.parallel_config.engine_worker_queue_port
-        if engine_worker_queue_port is None:
-            engine_worker_queue_port = allocate_ports("engine_worker_queue_port", (9000, 9100), 1)
-        engine_worker_queue_port = parse_ports("engine_worker_queue_port", engine_worker_queue_port)
-        check_ports("engine_worker_queue_port", engine_worker_queue_port)
-        self.parallel_config.engine_worker_queue_port = engine_worker_queue_port
-
-        # Ports for EngineCacheQueue
-        cache_queue_port = self.cache_config.cache_queue_port
-        if cache_queue_port is None:
-            cache_queue_port = allocate_ports("cache_queue_port", (9100, 9200), 1)
-        cache_queue_port = parse_ports("cache_queue_port", cache_queue_port)
-        check_ports("cache_queue_port", cache_queue_port)
-        self.cache_config.cache_queue_port = cache_queue_port[self.parallel_config.local_data_parallel_id]
-
-        # Ports for RDMACommunicator
-        rdma_comm_ports = self.cache_config.rdma_comm_ports
-        num_nodes = len(self.ips) if self.ips else 1
-        if self.parallel_config.data_parallel_size % num_nodes != 0:
-            raise ValueError(
-                f"data_parallel_size ({self.parallel_config.data_parallel_size}) must be divisible by "
-                f"num_nodes ({num_nodes})."
-            )
-        dp_per_node = self.parallel_config.data_parallel_size // num_nodes
-        expected_ports = self.parallel_config.tensor_parallel_size * dp_per_node
-        if rdma_comm_ports is None:
-            rdma_comm_ports = allocate_ports("rdma_comm_ports", (9300, 9400), expected_ports)
-        rdma_comm_ports = parse_ports("rdma_comm_ports", rdma_comm_ports)
-        check_ports("rdma_comm_ports", rdma_comm_ports, expected_num_ports=expected_ports)
-        self.cache_config.rdma_comm_ports = rdma_comm_ports
-
-        # Ports for SplitwiseConnector
-        pd_comm_port = self.cache_config.pd_comm_port
-        if pd_comm_port is None:
-            pd_comm_port = allocate_ports("pd_comm_port", (9400, 9500), 1)
-        pd_comm_port = parse_ports("pd_comm_port", pd_comm_port)
-        check_ports("pd_comm_port", pd_comm_port)
-        self.cache_config.pd_comm_port = pd_comm_port
 
     def check(self):
         """

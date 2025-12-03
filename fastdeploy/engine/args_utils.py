@@ -46,6 +46,8 @@ from fastdeploy.utils import (
     DeprecatedOptionWarning,
     FlexibleArgumentParser,
     console_logger,
+    find_free_ports,
+    is_port_available,
     parse_quantization,
 )
 
@@ -222,7 +224,7 @@ class EngineArgs:
     The amount of CPU memory to offload to.
     """
 
-    cache_queue_port: str = None
+    cache_queue_port: Optional[Union[int, str, list]] = None
     """
     Port for cache queue.
     """
@@ -260,7 +262,7 @@ class EngineArgs:
     # This optimization is enabled by default, and can be disabled by using this flag.
     """
 
-    engine_worker_queue_port: str = None
+    engine_worker_queue_port: Optional[Union[int, str, list]] = None
     """
     Port for worker queue communication.
     """
@@ -300,12 +302,12 @@ class EngineArgs:
     Protocol to use for cache transfer.
     """
 
-    pd_comm_port: Optional[List[int]] = None
+    pd_comm_port: Optional[Union[int, str, list]] = None
     """
     Port for splitwise communication.
     """
 
-    rdma_comm_ports: Optional[List[int]] = None
+    rdma_comm_ports: Optional[Union[int, str, list]] = None
     """
     Ports for rdma communication.
     """
@@ -499,8 +501,6 @@ class EngineArgs:
             self.enable_prefix_caching = False
         if not current_platform.is_cuda() and not current_platform.is_xpu() and not current_platform.is_intel_hpu():
             self.enable_prefix_caching = False
-        # if self.dynamic_load_weight:
-        #     self.enable_prefix_caching = False
         if self.enable_logprob:
             if not current_platform.is_cuda():
                 raise NotImplementedError("Only CUDA platform supports logprob.")
@@ -528,6 +528,76 @@ class EngineArgs:
             envs.FD_ENABLE_MAX_PREFILL = 1
             self.enable_prefix_caching = False
             self.max_encoder_cache = 0
+
+        self.post_init_all_ports()
+
+    def post_init_all_ports(self):
+
+        def allocate_ports(name, port_range, num_ports):
+            ports = find_free_ports(port_range=port_range, num_ports=num_ports)
+            console_logger.info(f"Parameter `{name}` is not specified, found {num_ports} available ports: {ports}")
+            return ports
+
+        def parse_ports(name, ports):
+            if isinstance(ports, int):
+                return [ports]
+            elif isinstance(ports, str):
+                return [int(p) for p in ports.split(",")]
+            elif isinstance(ports, list):
+                return [int(p) for p in ports]
+            else:
+                raise TypeError(f"Invalid type for `{name}`: {type(ports)}. Must be int, str or list.")
+
+        def check_ports(name, ports, expected_num_ports=None):
+            if expected_num_ports is not None and len(ports) != expected_num_ports:
+                raise ValueError(
+                    f"Parameter `{name}` expected {expected_num_ports} ports, but got {len(ports)}: {ports}."
+                )
+            for port in ports:
+                assert is_port_available("0.0.0.0", int(port)), f"Parameter `{name}`:{port} is already in use."
+
+        # Ports for EngineWorkerQueue
+        engine_worker_queue_port = self.engine_worker_queue_port
+        expected_ports = self.data_parallel_size
+        if engine_worker_queue_port is None:
+            engine_worker_queue_port = allocate_ports("engine_worker_queue_port", (9000, 9100), expected_ports)
+        engine_worker_queue_port = parse_ports("engine_worker_queue_port", engine_worker_queue_port)
+        check_ports("engine_worker_queue_port", engine_worker_queue_port, expected_num_ports=expected_ports)
+        self.engine_worker_queue_port = engine_worker_queue_port
+        console_logger.info(f"Use engine_worker_queue_port: {self.engine_worker_queue_port}")
+
+        # Ports for EngineCacheQueue
+        cache_queue_port = self.cache_queue_port
+        expected_ports = self.data_parallel_size
+        if cache_queue_port is None:
+            cache_queue_port = allocate_ports("cache_queue_port", (9100, 9200), expected_ports)
+        cache_queue_port = parse_ports("cache_queue_port", cache_queue_port)
+        check_ports("cache_queue_port", cache_queue_port, expected_num_ports=expected_ports)
+        self.cache_queue_port = cache_queue_port
+
+        # Ports for RDMACommunicator
+        rdma_comm_ports = self.rdma_comm_ports
+        num_nodes = len(self.ips) if self.ips else 1
+        if self.data_parallel_size % num_nodes != 0:
+            raise ValueError(
+                f"data_parallel_size ({self.data_parallel_size}) must be divisible by num_nodes ({num_nodes})."
+            )
+        dp_per_node = self.data_parallel_size // num_nodes
+        expected_ports = self.tensor_parallel_size * dp_per_node
+        if rdma_comm_ports is None:
+            rdma_comm_ports = allocate_ports("rdma_comm_ports", (9300, 9400), expected_ports)
+        rdma_comm_ports = parse_ports("rdma_comm_ports", rdma_comm_ports)
+        check_ports("rdma_comm_ports", rdma_comm_ports, expected_num_ports=expected_ports)
+        self.rdma_comm_ports = rdma_comm_ports
+
+        # Ports for SplitwiseConnector
+        pd_comm_port = self.pd_comm_port
+        expected_ports = self.data_parallel_size
+        if pd_comm_port is None:
+            pd_comm_port = allocate_ports("pd_comm_port", (9400, 9500), expected_num_ports=expected_ports)
+        pd_comm_port = parse_ports("pd_comm_port", pd_comm_port)
+        check_ports("pd_comm_port", pd_comm_port)
+        self.pd_comm_port = pd_comm_port
 
     @staticmethod
     def add_cli_args(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:

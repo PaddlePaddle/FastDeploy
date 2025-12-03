@@ -23,7 +23,7 @@ fi
 
 unset http_proxy && unset https_proxy
 rm -rf log_*
-source ./utils.sh
+source ${SCRIPT_DIR}/utils.sh
 
 P_PORT=52400
 D_PORT=52500
@@ -56,14 +56,8 @@ mkdir -p ${FD_LOG_DIR}
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
        --port "${P_PORT}" \
-       --metrics-port "$((P_PORT + 1))" \
-       --engine-worker-queue-port "$((P_PORT + 2))" \
-       --cache-queue-port "$((P_PORT + 3))" \
        --max-model-len 32768 \
        --splitwise-role "prefill" \
-       --cache-transfer-protocol "rdma" \
-       --rdma-comm-ports "$((P_PORT + 4))" \
-       --pd-comm-port "$((P_PORT + 5))" \
        --router "0.0.0.0:${ROUTER_PORT}" \
        2>&1 >${FD_LOG_DIR}/nohup &
 
@@ -77,14 +71,8 @@ mkdir -p ${FD_LOG_DIR}
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
        --port "${D_PORT}" \
-       --metrics-port "$((D_PORT + 2))" \
-       --engine-worker-queue-port "$((D_PORT + 3))" \
-       --cache-queue-port "$((D_PORT + 1))" \
        --max-model-len 32768 \
        --splitwise-role "decode" \
-       --cache-transfer-protocol "rdma" \
-       --rdma-comm-ports "$((D_PORT + 4))" \
-       --pd-comm-port "$((D_PORT + 5))" \
        --router "0.0.0.0:${ROUTER_PORT}" \
        2>&1 >${FD_LOG_DIR}/nohup &
 

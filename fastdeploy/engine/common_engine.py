@@ -302,7 +302,7 @@ class EngineService:
                 self.cache_task_queue = EngineCacheQueue(
                     address=(
                         self.cfg.master_ip,
-                        self.cfg.cache_config.cache_queue_port,
+                        self.cfg.cache_config.cache_queue_port[self.cfg.parallel_config.local_data_parallel_id],
                     ),
                     authkey=b"cache_queue_service",
                     is_server=True,

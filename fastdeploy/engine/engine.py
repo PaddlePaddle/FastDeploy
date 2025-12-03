@@ -522,7 +522,7 @@ class LLMEngine:
         image_patch_id = self.data_processor.tokenizer.get_vocab().get("<|IMAGE_PLACEHOLDER|>", -1)
         line_break_id = self.data_processor.tokenizer.get_vocab().get("\n", -1)
 
-        ports = ",".join(self.cfg.parallel_config.engine_worker_queue_port)
+        ports = ",".join(map(str, self.cfg.parallel_config.engine_worker_queue_port))
         ips = None
         if self.cfg.ips is not None:
             ips = ",".join(self.cfg.ips)
