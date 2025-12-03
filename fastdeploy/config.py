@@ -1665,13 +1665,27 @@ class FDConfig:
 
         if (
             self.structured_outputs_config is not None
-            and self.structured_outputs_config.guided_decoding_backend == "auto"
+            and self.structured_outputs_config.guided_decoding_backend != "off"
         ):
             if current_platform.is_xpu() or self.speculative_config.method is not None:
                 logger.warning("Speculative Decoding and XPU currently do not support Guided decoding, set off.")
                 self.structured_outputs_config.guided_decoding_backend = "off"
-            else:
+            elif self.structured_outputs_config.guided_decoding_backend in ["auto", "xgrammar"]:
                 self.structured_outputs_config.guided_decoding_backend = "xgrammar"
+            elif self.structured_outputs_config.guided_decoding_backend == "guidance":
+                try:
+                    import llguidance.torch
+
+                    llguidance.torch
+                except ImportError:
+                    raise ImportError(
+                        "The 'llguidance' package is required for using guidance as the guided decoding backend. "
+                        "Please install it via the appropriate method."
+                    )
+            else:
+                raise NotImplementedError(
+                    f"Guided decoding backend '{self.structured_outputs_config.guided_decoding_backend}' is not implemented. [auto, xgrammar, guidance, off]"
+                )
 
         if self.model_config.enable_mm:
             if self.cache_config.max_encoder_cache is None or self.cache_config.max_encoder_cache < 0:
@@ -1695,9 +1709,9 @@ class FDConfig:
             logger.info(
                 "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
             )
-        if self.device_config is not None and self.device_config.device_type != "cuda":
+        if not current_platform.is_cuda():
             self.graph_opt_config.use_cudagraph = False
-            logger.info(f"CUDAGraph only support on GPU, current device type is {self.device_config.device_type}!")
+            logger.info("CUDAGraph currently only support on GPU!")
         if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
             if self.scheduler_config.max_num_seqs < self.parallel_config.tensor_parallel_size:
                 self.parallel_config.use_sequence_parallel_moe = False
@@ -1791,7 +1805,8 @@ class FDConfig:
                 "XGrammar",
                 "auto",
                 "off",
-            ], f"Only support xgrammar、auto guided decoding backend, but got {self.structured_outputs_config.guided_decoding_backend}."
+                "guidance",
+            ], f"Only support [auto, xgrammar, guidance, off] guided decoding backend, but got {self.structured_outputs_config.guided_decoding_backend}."
 
             if self.structured_outputs_config.guided_decoding_backend != "off":
                 # TODO: speculative decoding support guided_decoding
