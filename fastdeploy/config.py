@@ -1586,7 +1586,11 @@ class FDConfig:
             self.max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "3"))
             if current_platform.is_xpu():
                 self.max_prefill_batch = 1
-            if self.model_config is not None and self.model_config.enable_mm:
+            if (
+                int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 0
+                and self.model_config is not None
+                and self.model_config.enable_mm
+            ):
                 self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
         else:
             self.max_prefill_batch = self.scheduler_config.max_num_seqs
