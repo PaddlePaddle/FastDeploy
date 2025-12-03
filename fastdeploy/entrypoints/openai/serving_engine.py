@@ -256,7 +256,6 @@ class ZmqOpenAIServing(OpenAIServing):
         chat_template_kwargs.update(
             {
                 "chat_template": request_dict.get("chat_template"),
-                "add_generation_prompt": request_dict.get("add_generation_prompt"),
                 "add_stop_sequences": request_dict.get("add_stop_sequences"),
             }
         )
