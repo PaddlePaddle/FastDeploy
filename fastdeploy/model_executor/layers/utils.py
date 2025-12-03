@@ -45,7 +45,12 @@ if cache_params != "none":
     c8_state_dict = paddle.load(cache_params, return_numpy=True)
 
 
-def per_block_cast_to_fp8(x: Tensor, block_size: list = [128, 128]) -> Tuple[Tensor, Tensor]:
+def ceil_to_ue8m0(x):
+    pow_exp = paddle.ceil(paddle.log2(paddle.abs(x)))
+    return paddle.exp(pow_exp * 0.6931471805599453)  # ln2
+
+
+def per_block_cast_to_fp8(x: Tensor, block_size: list = [128, 128], use_ue8m0: bool = True) -> Tuple[Tensor, Tensor]:
     """
     Only used in deep_gemm block wise quant weight.
     copy from FastDeploy/custom_ops/gpu_ops/fp8_deep_gemm/tests/test_core.py.
@@ -70,10 +75,19 @@ def per_block_cast_to_fp8(x: Tensor, block_size: list = [128, 128]) -> Tuple[Ten
     x_abs = paddle.abs(x_view).astype(paddle.float32)
     x_amax = paddle.amax(x_abs, axis=(1, 3), keepdim=True)
     x_amax = paddle.clip(x_amax, min=1e-4)
-    x_scaled = (x_view * (448.0 / x_amax)).astype(paddle.float8_e4m3fn)
 
-    return x_scaled.view_as(x_padded)[:m, :n].contiguous(), (
-        paddle.view(x_amax / 448.0, (x_view.shape[0], x_view.shape[2]))
+    # x_scaled = (x_view * (448.0 / x_amax)).astype(paddle.float8_e4m3fn)
+    sf = x_amax / 448.0  # baseline scale
+
+    if use_ue8m0:
+        sf = ceil_to_ue8m0(sf)
+
+    x_scaled = (x_view * (1.0 / sf)).astype(paddle.float8_e4m3fn)
+
+    # 6. return quanted + scale
+    return (
+        x_scaled.view_as(x_padded)[:m, :n].contiguous(),
+        paddle.view(sf, (x_view.shape[0], x_view.shape[2])),
     )
 
 
