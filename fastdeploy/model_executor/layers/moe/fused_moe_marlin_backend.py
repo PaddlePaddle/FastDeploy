@@ -18,7 +18,6 @@ import paddle
 from paddle import nn
 
 import fastdeploy
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.ops.gpu import (
     MoeWna16MarlinGemmApi,
     tritonmoe_preprocess_func,
@@ -350,8 +349,5 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
 
         ffn_out.reshape_([token_num, -1, hidden_size])
         ffn_out = ffn_out.sum(axis=1)
-
-        if layer.reduce_results and layer.tp_size > 1:
-            ffn_out = tensor_model_parallel_all_reduce(ffn_out)
 
         return ffn_out

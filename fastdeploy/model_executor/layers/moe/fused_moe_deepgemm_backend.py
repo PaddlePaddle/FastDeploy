@@ -19,7 +19,6 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 import fastdeploy
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func, deep_gemm
 
@@ -86,6 +85,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         # self.check(layer, up_gate_proj_weights, down_proj_weights)
         up_gate_proj_weight_scale = []
         down_proj_weight_scale = []
+
+        if isinstance(state_dict, list):
+            state_dict = dict(state_dict)
+
         for expert_idx in logical_expert_ids:
             up_gate_proj_expert_weight_scale_key_name = up_gate_proj_expert_weight_scale_key.format(expert_idx)
             down_proj_expert_weight_scale_key_name = down_proj_expert_weight_scale_key.format(expert_idx)
@@ -419,7 +422,5 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             False,  # norm_topk_prob
             1.0,
         )[0]
-        if layer.tp_size > 1:
-            tmp_ffn_out = tensor_model_parallel_all_reduce(tmp_ffn_out)
 
         return tmp_ffn_out

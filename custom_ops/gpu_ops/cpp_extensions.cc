@@ -178,6 +178,8 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::Tensor& cache_batch_ids,
     const paddle::Tensor& cache_tile_ids,
     const paddle::Tensor& cache_num_blocks,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
     const paddle::optional<paddle::Tensor>& cache_k_quant_scales,
     const paddle::optional<paddle::Tensor>& cache_v_quant_scales,
     const paddle::optional<paddle::Tensor>& cache_k_dequant_scales,
@@ -187,6 +189,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::optional<paddle::Tensor>& kv_signal_data,
     const int kv_token_num,
     const int max_seq_len,
+    const float rms_norm_eps,
     const std::string& cache_quant_type,
     const bool rope_3d);
 
@@ -381,8 +384,7 @@ void GetBlockShapeAndSplitKVBlock(
     const int encoder_block_shape_q,
     const int decoder_block_shape_q,
     const int group_size,
-    const int block_size,
-    const int decoder_step_token_num);
+    const int block_size);
 
 std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor& input_ids,
                                              const paddle::Tensor& token_num,
@@ -525,6 +527,7 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
     const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
+    const paddle::optional<paddle::Tensor>& kv_signal_data,
     const std::string& cache_quant_type_str,
     const int max_seq_len);
 
@@ -647,6 +650,19 @@ std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& scores,
                                     int topk,
                                     bool renormalize,
                                     float routed_scaling_factor);
+
+std::vector<paddle::Tensor> NoauxTcRedundant(
+    paddle::Tensor& scores,
+    paddle::Tensor& scores_with_bias,
+    paddle::Tensor& expert_id_to_ep_rank_array,
+    paddle::Tensor& expert_in_rank_num_list,
+    paddle::Tensor& tokens_per_expert_stats_list,
+    int n_group,
+    int topk_group,
+    int topk,
+    bool renormalize,
+    float routed_scaling_factor,
+    int redundant_ep_rank_num_plus_one);
 
 #ifdef ENABLE_FP8
 paddle::Tensor cutlass_fp8_fp8_half_gemm_func(
@@ -1485,6 +1501,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         "multi_head_latent_attention function");
 
   m.def("noaux_tc", &NoauxTc, "noaux_tc for Deepseekv3 MoE compute");
+
+  m.def("noaux_tc_redundant",
+        &NoauxTcRedundant,
+        "noaux_tc_redundant for MoE compute");
 
 #ifdef ENABLE_FP8
   m.def("cutlass_fp8_fp8_half_gemm_fused",

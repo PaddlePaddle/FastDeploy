@@ -40,6 +40,7 @@ from fastdeploy.engine.request import (
     RequestType,
 )
 from fastdeploy.engine.resource_manager import ResourceManager
+from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.multimodal.hasher import MultimodalHasher
@@ -165,6 +166,7 @@ class ResourceManagerV1(ResourceManager):
         # Priority queues for requests.
         self.waiting: deque[Request] = deque()
         self.running: list[Request] = []
+        self.preallocated_reqs: dict[str, Request] = {}
         self.enable_max_prefill = envs.FD_ENABLE_MAX_PREFILL
         self.finish_execution_pool = ThreadPoolExecutor(max_workers=1)
         self.lock = threading.Lock()
@@ -391,8 +393,15 @@ class ResourceManagerV1(ResourceManager):
                     end_patch_idx -= 1
             end_patch_map = inputs["patch_map"][end_patch_idx]
             end_modal_id = end_patch_map["modal_id"]
-            if end_modal_id > 0:
+            if end_modal_id > 0 and end_modal_id != IDS_TYPE_FLAG["video"]:
                 new_end_idx = end_patch_map["end_idx"]  # 当前模态结束位置
+
+            if end_modal_id == IDS_TYPE_FLAG["video"] and "can_split_idx_list" in inputs:
+                can_split_idx_list = inputs["can_split_idx_list"]
+                for i in range(len(can_split_idx_list)):
+                    if can_split_idx_list[i] >= new_end_idx:
+                        new_end_idx = can_split_idx_list[i]
+                        break
             num_new_tokens = new_end_idx - pre_end_idx
 
             request.image_end = end_patch_map["image_num"]
@@ -404,7 +413,6 @@ class ResourceManagerV1(ResourceManager):
             and inputs.get("grid_thw", None) is not None
         ):
             input_ids_lst = request.prompt_token_ids + request.output_token_ids
-            input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
             input_ids = paddle.to_tensor(input_ids_lst, dtype="int64")
             image_patch_id = inputs["image_patch_id"]
 
@@ -682,7 +690,6 @@ class ResourceManagerV1(ResourceManager):
                             self.running.append(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                             request.inference_start_time = time.time()
-                            request.schedule_start_time = time.time()
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
                             if self.config.cache_config.enable_prefix_caching:
@@ -799,7 +806,7 @@ class ResourceManagerV1(ResourceManager):
 
         def download_bos_features(bos_client, features_urls):
             result_list = []
-            for status, feature in download_from_bos(self.bos_client, features_urls):
+            for status, feature in download_from_bos(self.bos_client, features_urls, retry=1):
                 if status:
                     llm_logger.info(f"request {request.request_id} async download feature: {feature.shape}")
                     result_list.append(feature)
@@ -809,11 +816,18 @@ class ResourceManagerV1(ResourceManager):
                     return error_msg
             return result_list
 
-        if not self.config.parallel_config.enable_async_download_features or not self._has_features_info(request):
+        if not self._has_features_info(request):
             return None
 
         if self.bos_client is None:
-            self.bos_client = init_bos_client()
+            try:
+                self.bos_client = init_bos_client()
+            except Exception as e:
+                error_msg = f"request {request.request_id} init bos client error: {str(e)}"
+                llm_logger.error(error_msg)
+                request.error_message = error_msg
+                request.error_code = 540
+                return None
 
         inputs = request.multimodal_inputs
         if inputs.get("video_feature_urls") is not None and len(inputs["video_feature_urls"]) > 0:
@@ -898,24 +912,25 @@ class ResourceManagerV1(ResourceManager):
             self.waiting.append(request)
             self.requests[request.request_id] = request
 
-    def prerelease_resource(self, request: Request):
+    def pre_recycle_resource(self, request_id: str):
         """
-        Release resource in P or D before finished due to unexpected error.
+        Recycle resource in P or D before finished due to unexpected error.
         """
         with self.lock:
-            self.tasks_list[request.idx] = None
-            self.stop_flags[request.idx] = True
-            if request.request_id in self.requests:
-                del self.requests[request.request_id]
-            if request.request_id in self.req_dict:
-                del self.req_dict[request.request_id]
-            self._free_blocks(request)
+            if request_id not in self.requests:
+                return
+            req = self.requests[request_id]
+            self.tasks_list[req.idx] = None
+            self.stop_flags[req.idx] = True
+            self._free_blocks(req)
+            del self.requests[request_id]
+            if request_id in self.req_dict:
+                del self.req_dict[request_id]
 
     def add_request_in_p(self, requests: list[Request]):
         with self.lock:
             for request in requests:
                 request.inference_start_time = time.time()
-                request.schedule_start_time = time.time()
                 self.running.append(request)
 
     def preallocate_resource_in_p(self, request: Request):
@@ -943,7 +958,7 @@ class ResourceManagerV1(ResourceManager):
                 if not success:
                     self._free_blocks(request)
                     return False
-                # consider for mtp, plus enc_dec_block_num
+
                 need_extra_prefill_blocks = need_prealloc_prefill_blocks - request.cache_info[0]
                 if self.cache_manager.can_allocate_gpu_blocks(need_extra_prefill_blocks):
                     request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(need_extra_prefill_blocks))
@@ -979,49 +994,65 @@ class ResourceManagerV1(ResourceManager):
         If can not, return False
         """
         assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
+        if request.reasoning_max_tokens is not None:
+            request.reasoning_max_tokens -= 1
+        request.need_prefill_tokens = len(request.prompt_token_ids)
+        need_prealloc_prefill_blocks = (
+            request.need_prefill_tokens + self.config.cache_config.block_size - 1
+        ) // self.config.cache_config.block_size + self.config.cache_config.enc_dec_block_num
+
         with self.lock:
             if len(self.waiting) > 0:
                 return False
             if self.available_batch() == 0:
                 return False
-            if request.reasoning_max_tokens is not None:
-                request.reasoning_max_tokens -= 1
-            request.need_prefill_tokens = len(request.prompt_token_ids)
-            need_prealloc_prefill_blocks = (
-                request.need_prefill_tokens + self.config.cache_config.block_size - 1
-            ) // self.config.cache_config.block_size + self.config.cache_config.enc_dec_block_num  # consider for mtp, plus enc_dec_block_num
-            if self.cache_manager.can_allocate_gpu_blocks(need_prealloc_prefill_blocks):
-                request.block_tables.extend(self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks))
-                request.num_computed_tokens = request.need_prefill_tokens
-                request.disaggregate_info["block_tables"] = request.block_tables
-                allocated_position = self.get_available_position()
-                request.idx = allocated_position
-                self.tasks_list[request.idx] = request
-                self.stop_flags[request.idx] = False
-                self.requests[request.request_id] = request
-                self.req_dict[request.request_id] = allocated_position
-                return True
-            return False
+            if not self.cache_manager.can_allocate_gpu_blocks(need_prealloc_prefill_blocks):
+                return False
 
-    def insert_task_for_decoding(self, request_output_in_p: RequestOutput):
+            request.block_tables = self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks)
+            request.num_computed_tokens = request.need_prefill_tokens
+            request.disaggregate_info["block_tables"] = request.block_tables
+            allocated_position = self.get_available_position()
+            request.idx = allocated_position
+            self.tasks_list[request.idx] = request
+            self.stop_flags[request.idx] = False
+            self.requests[request.request_id] = request
+            self.req_dict[request.request_id] = allocated_position
+        return True
+
+    def has_resource_for_prefilled_req(self, request_id: str):
         """
-        In P/D aggregated deployment, D should continue to decode after recieving first token and cache from P.
+        Check whether there are enough slot and gpu resource for the prefilled request,
+        of which the cache is saved in cpu buffer.
         """
         assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
-        with self.lock:
-            request = self.requests[request_output_in_p.request_id]
-            request.output_token_ids.append(request_output_in_p.outputs.token_ids[0])
-            request.num_cached_tokens = request_output_in_p.num_cached_tokens
-            if (
-                self.config.speculative_config.method in ["mtp"]
-                and self.config.scheduler_config.splitwise_role == "decode"
-            ):
-                request.draft_token_ids = copy.deepcopy(request_output_in_p.outputs.draft_token_ids)
-            # update request.need_prefill_tokens
-            request.need_prefill_tokens = len(request.prompt_token_ids) + 1
-            request.inference_start_time = time.time()
-            request.schedule_start_time = time.time()
-            self.running.append(request)
+        assert request_id in self.preallocated_reqs, "request_id must be in preallocate"
+        need_blocks_num = len(self.preallocated_reqs[request_id].disaggregate_info["block_tables"])
+        return self.available_batch() > 0 and self.cache_manager.can_allocate_gpu_blocks(need_blocks_num)
+
+    def add_prefilled_request(self, request_output: RequestOutput):
+        """
+        In P/D aggregated deployment, D should continue to decode after receiving first token and cache from P.
+        NOTE: GPU resources should be checked in advance to ensure they are sufficient for the prefilled request.
+        """
+        assert self.config.scheduler_config.splitwise_role == "decode", "Only D instance can call this method"
+        if request_output.request_id not in self.requests:
+            self.logger.error(f"Request {request_output.request_id} not found in requests")
+            return
+        request = self.requests[request_output.request_id]
+
+        # update request and insert to running
+        request.output_token_ids.append(request_output.outputs.token_ids[0])
+        request.num_cached_tokens = request_output.num_cached_tokens
+        if (
+            self.config.speculative_config.method in ["mtp"]
+            and self.config.scheduler_config.splitwise_role == "decode"
+        ):
+            request.draft_token_ids = copy.deepcopy(request_output.outputs.draft_token_ids)
+        request.need_prefill_tokens = len(request.prompt_token_ids) + 1
+        request.inference_start_time = time.time()
+        request.schedule_start_time = time.time()
+        self.running.append(request)
 
     def _free_blocks(self, request: Request):
         if self.config.cache_config.enable_prefix_caching:

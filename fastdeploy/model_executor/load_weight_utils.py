@@ -68,7 +68,9 @@ def load_weights_from_cache(model, weights_iterator):
             )
         param.copy_(loaded_weight, False)
         if "embeddings" in loaded_weight_name and getattr(model, "tie_word_embeddings", False):
-            model.lm_head.linear.weight.set_value(loaded_weight.transpose([1, 0]))
+            model.lm_head.linear.weight.set_value(
+                loaded_weight.transpose([1, 0]).astype(model.lm_head.linear.weight.dtype)
+            )
         for _, model_sublayer in model.named_sublayers():
             if isinstance(model_sublayer, KVBatchLinear):
                 model_sublayer.process_weights_after_loading()
@@ -288,9 +290,13 @@ def load_ep_checkpoint(cls: PretrainedModel, model_path: str, fd_config: FDConfi
         no_tp_action_keys = copy.deepcopy(num_local_ffn_keys)
         if fd_config.parallel_config.use_sequence_parallel_moe:
             for i in range(fd_config.model_config.moe_layer_start_index, fd_config.model_config.num_hidden_layers):
-                k = f"ernie.{prefix_layer_name}.{i}.self_attn.o_proj.weight"
-                if k in weight_list:
-                    no_tp_action_keys.append(k)
+                no_tp_keys = [
+                    f"ernie.{prefix_layer_name}.{i}.self_attn.o_proj.weight",
+                    f"ernie.{prefix_layer_name}.{i}.self_attn.o_proj.bias",
+                ]
+                for k in no_tp_keys:
+                    if k in weight_list:
+                        no_tp_action_keys.append(k)
         tp_actions = cls._get_tensor_parallel_mappings(fd_config.model_config.pretrained_config)
         new_actions = {k: v for k, v in tp_actions.items() if k not in no_tp_action_keys}
 
@@ -475,15 +481,16 @@ def deal_state_dict(state_dict):
             src_tensor._share_data_with(dst_tensor)
 
 
-def load_cache_scale(model_path, fd_config, state_dict):
-    file_path = os.path.join(model_path, "kv_cache_scale.json")
+def load_cache_scale(fd_config, state_dict):
+    file_path = fd_config.model_config.kv_cache_quant_scale_path
+    prefix_layer_name = fd_config.model_config.prefix_layer_name
     if os.path.exists(file_path):
         with open(file_path, "r") as f:
             data = json.load(f)
             for i in range(fd_config.model_config.num_hidden_layers):
 
-                k_scale_name = f"ernie.layers.{i}.self_attn.cachek_matmul.activation_scale"
-                v_scale_name = f"ernie.layers.{i}.self_attn.cachev_matmul.activation_scale"
+                k_scale_name = f"ernie.{prefix_layer_name}.{i}.self_attn.cachek_matmul.activation_scale"
+                v_scale_name = f"ernie.{prefix_layer_name}.{i}.self_attn.cachev_matmul.activation_scale"
 
                 k_scale = data[k_scale_name]
                 k_scale_tensor = paddle.to_tensor(k_scale, dtype=paddle.get_default_dtype())
@@ -547,6 +554,6 @@ def load_composite_checkpoint(
     if hasattr(fd_config.quant_config, "kv_cache_quant_type"):
         kv_cache_quant_type = fd_config.quant_config.kv_cache_quant_type
         if kv_cache_quant_type == "float8_e4m3fn":
-            load_cache_scale(model_path, fd_config, state_dict)
+            load_cache_scale(fd_config, state_dict)
 
     return state_dict
