@@ -503,8 +503,8 @@ class EngineArgs:
         # if self.dynamic_load_weight:
         #     self.enable_prefix_caching = False
         if self.enable_logprob:
-            if not current_platform.is_cuda():
-                raise NotImplementedError("Only CUDA platform supports logprob.")
+            if not current_platform.is_cuda() and not current_platform.is_xpu():
+                raise NotImplementedError("Only CUDA and XPU platforms support logprob.")
             if self.speculative_config is not None and self.logprobs_mode.startswith("processed"):
                 raise NotImplementedError("processed_logprobs not support in speculative.")
             if self.speculative_config is not None and self.max_logprobs == -1:
