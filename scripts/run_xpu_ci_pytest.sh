@@ -74,8 +74,7 @@ python -m pip uninstall fastdeploy-xpu -y
 
 # 安装PaddlePaddle
 echo "安装PaddlePaddle..."
-python -m pip install https://paddle-whl.bj.bcebos.com/nightly/xpu-p800/paddlepaddle-xpu/paddlepaddle_xpu-3.3.0.dev20251123-cp310-cp310-linux_x86_64.whl
-
+python -m pip install paddlepaddle-xpu==3.2.1 -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
 # ============ 编译项目 ============
 
 echo "============================编译项目============================"
