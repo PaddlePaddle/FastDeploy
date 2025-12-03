@@ -184,7 +184,7 @@ class SplitwiseConnector:
             if task.disaggregate_info["transfer_protocol"] == "ipc":
                 addr = task.disaggregate_info["cache_info"]["ipc"]["port"]
                 task.disaggregate_info["cache_info"]["ipc"]["current_id"] = current_id
-                self.logger.info(f"send_splitwise_tasks: protocol=ipc, addr={addr}, task={task}")
+                self.logger.info(f"send_splitwise_tasks: protocol=ipc, addr={addr}, task={task.request_id}")
                 self.send_splitwise_tasks_innode([task], addr)
             else:
 
@@ -197,7 +197,7 @@ class SplitwiseConnector:
                 task.disaggregate_info["cache_info"] = self.cfg.disaggregate_info["cache_info"]
                 task.disaggregate_info["cache_info"]["rdma"]["current_id"] = current_id
                 task.disaggregate_info["role"] = "decode"
-                self.logger.info(f"send_splitwise_tasks: protocol=rdma, addr={addr}, task={task}")
+                self.logger.info(f"send_splitwise_tasks: protocol=rdma, addr={addr}, task={task.request_id}")
                 self._send_message(addr, "prefill", [task])
                 task.disaggregate_info["cache_info"] = decode_diagg
             task.disaggregate_info["role"] = "prefill"
@@ -220,7 +220,7 @@ class SplitwiseConnector:
             task.disaggregate_info["cache_info"]["ipc"]["port"] = self.cfg.parallel_config.engine_worker_queue_port[
                 self.local_data_parallel_id
             ]
-        self.logger.info(f"send_splitwise_tasks_innode: port={port}, tasks={tasks}")
+        self.logger.info(f"send_splitwise_tasks_innode: port={port}, tasks={[task.request_id for task in tasks]}")
         self.connect_innode_instances[port].put_disaggregated_tasks(("decode", tasks))
         for task in tasks:
             task.disaggregate_info["cache_info"]["ipc"]["port"] = port

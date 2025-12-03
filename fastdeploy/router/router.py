@@ -171,10 +171,10 @@ class Router:
             return await self._generate(request_data, [mixed_server.url()], endpoint=endpoint_name)
 
     async def handle_splitwise_request(self, request_data: dict, endpoint_name: str):
-        logger.info(f"Received request: {request_data}")
+        logger.debug(f"Received request: {request_data}")
         prefill_server, decode_server = await self.select_pd()
-        logger.info(f"Selected prefill server: {prefill_server}")
-        logger.info(f"Selected decode server: {decode_server}")
+        logger.debug(f"Selected prefill server: {prefill_server}")
+        logger.debug(f"Selected decode server: {decode_server}")
 
         if prefill_server.tp_size != decode_server.tp_size and decode_server.tp_size != 1:
             raise HTTPException(
