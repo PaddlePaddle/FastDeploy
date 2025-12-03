@@ -154,19 +154,6 @@ class XPUModelRunner(ModelRunnerBase):
         # Forward meta store the global meta information of the forward
         self.forward_meta: ForwardMeta = None
 
-        # Initialize shared memory and barrier for only_decode optimization
-        if self.fd_config.parallel_config.use_ep:
-            import multiprocessing
-            from threading import Barrier
-
-            # Create shared memory list for all processes
-            group_size = self.parallel_config.expert_parallel_size
-            self.shared_only_decode_list = [multiprocessing.Value("i", 0) for _ in range(group_size)]
-            self.shared_not_need_stop_list = [multiprocessing.Value("i", 0) for _ in range(group_size)]
-
-            # Create barrier for synchronization with timeout
-            self.decode_barrier = Barrier(group_size, timeout=10.0)
-
         self.pd_disaggregation_mode: str = self.fd_config.parallel_config.pd_disaggregation_mode
 
     def exist_prefill(self):
@@ -375,33 +362,8 @@ class XPUModelRunner(ModelRunnerBase):
 
     def only_decode(self):
         """
-        check whether decode only using shared memory and barrier for all devices
+        Update Batch type for if_only_decode.
         """
-        # Use shared memory to avoid d2h copy
-        if hasattr(self, "shared_only_decode_list") and self.fd_config.parallel_config.use_ep:
-            try:
-                world_size = self.parallel_config.expert_parallel_size
-                rank = self.rank % world_size
-
-                # Combined check in one Barrier round
-                no_need_stop = self.not_need_stop()
-                self.shared_not_need_stop_list[rank].value = 1 if not no_need_stop else 0
-                self.shared_only_decode_list[rank].value = self.forward_meta.len_info_cpu[0] <= 0
-
-                # Single Barrier for both checks
-                self.decode_barrier.wait()
-
-                if_all_device_empty = all(p.value == 1 for p in self.shared_not_need_stop_list)
-                if_only_decode = all(p.value for p in self.shared_only_decode_list)
-
-                # Single Barrier for reset
-                self.decode_barrier.wait()
-
-                return False if if_all_device_empty else if_only_decode
-            except Exception as e:
-                logger.warning(f"Shared memory only_decode failed: {e}, fallback to original implementation")
-
-        # Fallback to original implementation
         if_only_decode = True
         prefill_exists = None
         if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
@@ -982,10 +944,10 @@ class XPUModelRunner(ModelRunnerBase):
         if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
             self.forward_meta.kv_signal_sender = self.kv_signal_sender
 
-        if_only_decode = self.only_decode()
         if (
             self.fd_config.scheduler_config.splitwise_role == "mixed"
         ):  # Centralized scenario: the phase is initialized as "prefill" by default. During inference runtime, different types of batches can achieve phase switching at this point.
+            if_only_decode = self.only_decode()
             self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
         # Get sampling metadata
