@@ -594,9 +594,9 @@ class EngineArgs:
         pd_comm_port = self.pd_comm_port
         expected_ports = self.data_parallel_size
         if pd_comm_port is None:
-            pd_comm_port = allocate_ports("pd_comm_port", (9400, 9500), expected_num_ports=expected_ports)
+            pd_comm_port = allocate_ports("pd_comm_port", (9400, 9500), expected_ports)
         pd_comm_port = parse_ports("pd_comm_port", pd_comm_port)
-        check_ports("pd_comm_port", pd_comm_port)
+        check_ports("pd_comm_port", pd_comm_port, expected_num_ports=expected_ports)
         self.pd_comm_port = pd_comm_port
 
     @staticmethod

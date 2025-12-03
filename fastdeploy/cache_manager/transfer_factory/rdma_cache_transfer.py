@@ -45,6 +45,32 @@ class RDMACommManager:
                 "Confirm whether your network card supports RDMA transmission."
             )
             return
+        try:
+            import os
+            import subprocess
+
+            from fastdeploy.platforms import current_platform
+
+            get_rdma_nics = os.path.join(os.path.dirname(__file__), "get_rdma_nics.sh")
+            nic_type = current_platform.device_name
+            result = subprocess.run(
+                ["bash", get_rdma_nics, nic_type],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                logger.error(f"Failed to execute script `get_rdma_nics.sh`: {result.stderr.strip()}")
+                return
+            env_name, env_value = result.stdout.strip().split("=")
+            assert env_name == "KVCACHE_RDMA_NICS"
+            os.environ[env_name] = env_value
+            logger.info(f"Setting environment variable: export {env_name}={env_value}")
+        except Exception as e:
+            logger.error(f"Failed to export KVCACHE_RDMA_NICS: {str(e)}")
+            return
+
         self.messager = rdma_comm.RDMACommunicator(
             splitwise_role,
             gpu_id,
