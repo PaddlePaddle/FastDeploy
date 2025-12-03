@@ -8,7 +8,7 @@ aiozmq
 openai>=1.93.0
 tqdm
 pynvml
-uvicorn
+uvicorn>=0.38.0
 fastapi
 paddleformers>=0.3.1
 redis
@@ -28,11 +28,10 @@ moviepy
 triton
 use-triton-in-paddle
 crcmod
-fastsafetensors
 msgpack
 gunicorn
 modelscope
-safetensors==0.7.0rc0
+safetensors>=0.7.0rc0
 opentelemetry-api>=1.24.0
 opentelemetry-sdk>=1.24.0
 opentelemetry-instrumentation-redis
