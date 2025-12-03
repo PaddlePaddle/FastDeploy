@@ -994,7 +994,7 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
   } else {
     // Note(ZKK)
     // In TP, we must init m_indices with -1,
-    // because we allocate to much space.
+    // because we allocate too much space.
     // token_rows * moe_topk + num_experts_per_rank * (128 - 1)
     // Later will optimize this.
     m_indices = paddle::full(
