@@ -838,7 +838,6 @@ __global__ void permute_x_fp8_kernel(
   const int token_nums_feed_to_ffn =
       token_nums_per_expert_cum[NUM_EXPERTS_PER_RANK - 1];
   // prmt
-  // 1
   for (int64_t s_token_idx = src_token_idx;
        s_token_idx < token_nums_feed_to_ffn;
        s_token_idx += gridDim.x) {
@@ -988,8 +987,15 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
                      paddle::DataType::FLOAT32,
                      place);
 
-  auto m_indices =
-      GetEmptyTensor({token_nums_feed_to_ffn}, paddle::DataType::INT32, place);
+  paddle::Tensor m_indices;
+  if (use_in_ep) {
+    m_indices = GetEmptyTensor(
+        {token_nums_feed_to_ffn}, paddle::DataType::INT32, place);
+  } else {
+    m_indices = paddle::full(
+        {token_nums_feed_to_ffn}, -1, paddle::DataType::INT32, place);
+  }
+
   auto token_nums_per_expert_cumsum =
       GetEmptyTensor({num_experts_per_rank}, paddle::DataType::INT64, place);
   auto token_nums_per_expert_padded_cumsum =
