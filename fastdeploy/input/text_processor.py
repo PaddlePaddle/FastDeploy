@@ -542,19 +542,21 @@ class DataProcessor(BaseDataProcessor):
         Returns:
             List[int]: ID sequences
         """
-
+        message_dict = {
+            "messages": getattr(request, "messages", None),
+            "tools": getattr(request, "tools", None),
+            "documents": getattr(request, "documents", None),
+        }
         spliced_message = self.tokenizer.apply_chat_template(
-            request,
+            message_dict,
             tokenize=False,
             split_special_tokens=False,
             add_special_tokens=False,
             **kwargs,
         )
-        request["prompt_tokens"] = spliced_message
-        req_id = None
+        request.prompt_tokens = spliced_message
         tokens = self.tokenizer.tokenize(spliced_message)
-        if isinstance(request, dict):
-            req_id = request.get("request_id", None)
+        req_id = getattr(request, "request_id", None)
         token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
         data_processor_logger.info(f"req_id:{req_id}, tokens:{tokens}, token_ids: {token_ids}")
         return token_ids

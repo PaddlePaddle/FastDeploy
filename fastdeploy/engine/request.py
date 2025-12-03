@@ -265,7 +265,7 @@ class Request:
         request = cls(
             request_id=r.request_id,
             messages=r.messages,
-            tools=r.tools.model_dump() if r.tools else None,
+            tools=[tool.model_dump() for tool in r.tools] if r.tools else None,
             sampling_params=sampling_params,
             reasoning_max_tokens=r.reasoning_max_tokens,
             disable_chat_template=r.disable_chat_template,

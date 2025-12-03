@@ -262,7 +262,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         outputs = self.pack_outputs(outputs)
         request.prompt_token_ids = (
             outputs["input_ids"].tolist()
-            if ("prompt_token_ids" not in request or not request.prompt_token_ids)
+            if not getattr(request, "prompt_token_ids", None)
             else request.prompt_token_ids
         )
         request.prompt_token_ids_len = len(request.prompt_token_ids)
