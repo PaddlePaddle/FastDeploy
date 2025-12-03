@@ -30,8 +30,12 @@ try:
     HAS_LLGUIDANCE = True
 except ImportError:
     mock_llguidance = MagicMock()
+    mock_llguidancehf = MagicMock()
+    mock_llguidancetorch = MagicMock()
     mock_torch = MagicMock()
     sys.modules["llguidance"] = mock_llguidance
+    sys.modules["llguidance.hf"] = mock_llguidancehf
+    sys.modules["llguidance.torch"] = mock_llguidancetorch
     sys.modules["torch"] = mock_torch
 
 

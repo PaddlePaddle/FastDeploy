@@ -19,21 +19,20 @@ import json
 import traceback
 from typing import Any, Optional, Tuple, Union
 
+import llguidance
+import llguidance.hf
+import llguidance.torch
+import torch
+
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.envs import FD_GUIDANCE_DISABLE_ADDITIONAL, FD_LLGUIDANCE_LOG_LEVEL
-from fastdeploy.lazy_loader import LazyLoader
 from fastdeploy.model_executor.guided_decoding import (
     BackendBase,
     BaseChecker,
     LogitsProcessorBase,
 )
 from fastdeploy.utils import llm_logger
-
-torch = LazyLoader("torch", globals(), "torch")
-llguidance = LazyLoader("llguidance", globals(), "llguidance")
-llguidance_hf = LazyLoader("llguidance.hf", globals(), "llguidance.hf")
-llguidance_torch = LazyLoader("llguidance.torch", globals(), "llguidance.torch")
 
 
 class LLGuidanceProcessor(LogitsProcessorBase):
@@ -74,14 +73,14 @@ class LLGuidanceProcessor(LogitsProcessorBase):
         """
         Allocate a token bitmask tensor for grammar constraints.
         """
-        return llguidance_torch.allocate_token_bitmask(self.batch_size, self.vocab_size)
+        return llguidance.torch.allocate_token_bitmask(self.batch_size, self.vocab_size)
 
     def fill_token_bitmask(self, token_bitmask: torch.Tensor, idx: int) -> None:
         """
         Fill the token bitmask with allowed tokens for the given index.
         This will automatically provide an EOS mask if the matcher is stopped.
         """
-        llguidance_torch.fill_next_token_bitmask(self.matcher, token_bitmask, idx)
+        llguidance.torch.fill_next_token_bitmask(self.matcher, token_bitmask, idx)
         self._check_error()
 
     def reset(self) -> None:
@@ -126,7 +125,7 @@ class LLGuidanceBackend(BackendBase):
 
         llm_logger.info(f"LLGuidanceBackend vocab_size={self.vocab_size} batch_size={self.batch_size}")
         try:
-            self.ll_tokenizer = llguidance_hf.from_tokenizer(self.hf_tokenizer, self.vocab_size)
+            self.ll_tokenizer = llguidance.hf.from_tokenizer(self.hf_tokenizer, self.vocab_size)
         except Exception as e:
             import traceback
 

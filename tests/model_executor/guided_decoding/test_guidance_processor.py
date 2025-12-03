@@ -99,7 +99,7 @@ class TestLLGuidanceProcessorMocked(unittest.TestCase):
         self.processor._check_error()
         mock_log_warning.assert_called_once()
 
-    @patch("fastdeploy.model_executor.guided_decoding.guidance_backend.llguidance_torch")
+    @patch("fastdeploy.model_executor.guided_decoding.guidance_backend.llguidance.torch")
     def test_allocate_token_bitmask(self, mock_backend_torch):
         """
         Test the allocation of token bitmask.
@@ -113,7 +113,7 @@ class TestLLGuidanceProcessorMocked(unittest.TestCase):
         mock_backend_torch.allocate_token_bitmask.assert_called_once_with(4, 1000)
         self.assertEqual(result, "fake_bitmask_tensor")
 
-    @patch("fastdeploy.model_executor.guided_decoding.guidance_backend.llguidance_torch")
+    @patch("fastdeploy.model_executor.guided_decoding.guidance_backend.llguidance.torch")
     def test_fill_token_bitmask(self, mock_backend_torch):
         """Test the filling of token bitmask"""
         mock_bitmask = MagicMock()

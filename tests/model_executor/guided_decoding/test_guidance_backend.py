@@ -22,9 +22,14 @@ from fastdeploy.model_executor.guided_decoding import BackendBase
 
 mock_llguidance = MagicMock()
 mock_llguidancehf = MagicMock()
+mock_llguidancetorch = MagicMock()
 mock_torch = MagicMock()
+
+setattr(mock_llguidance, "hf", mock_llguidancehf)
+
 sys.modules["llguidance"] = mock_llguidance
 sys.modules["llguidance.hf"] = mock_llguidancehf
+sys.modules["llguidance.torch"] = mock_llguidancetorch
 sys.modules["torch"] = mock_torch
 
 # Import the module to be tested
