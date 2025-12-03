@@ -20,6 +20,7 @@ import paddle
 
 from fastdeploy import envs
 from fastdeploy.model_executor.forward_meta import XPUForwardMeta
+from fastdeploy.model_executor.layers.sample.sampler import Sampler
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.output import ModelOutputData
 
@@ -32,6 +33,7 @@ if current_platform.is_xpu():
         limit_thinking_content_length_v1,
         limit_thinking_content_length_v2,
         save_output,
+        save_output_topk,
         set_stop_value_multi_ends,
         speculate_clear_accept_nums,
         speculate_get_output_padding_offset,
@@ -210,7 +212,7 @@ def xpu_process_output(
 
 
 def xpu_post_process_normal(
-    sampled_token_ids: paddle.Tensor,
+    sampler_output: Sampler,
     model_output: ModelOutputData,
     share_inputs: Dict[str, paddle.Tensor],
     block_size: int = 64,
@@ -219,6 +221,8 @@ def xpu_post_process_normal(
     line_break_id: int = None,
 ) -> None:
     """ """
+
+    sampled_token_ids = sampler_output.sampled_token_ids
 
     if think_end_id > 0:
         limit_strategy = envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR
@@ -310,12 +314,27 @@ def xpu_post_process_normal(
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
     if not skip_save_output:
-        save_output(
-            sampled_token_ids,
-            model_output.not_need_stop,
-            model_output.mp_rank,
-            False,  # use_ep
-        )
+        if sampler_output.logprobs_tensors is None:
+            save_output(
+                sampled_token_ids,
+                model_output.not_need_stop,
+                model_output.mp_rank,
+                False,  # use_ep
+            )
+        else:
+            if save_output_topk is None:
+                raise ImportError(
+                    "save_output_topk operator is not available. "
+                    "Please rebuild the XPU operators with the new get_output_msg_with_topk.cc and save_output_msg_with_topk.cc files."
+                )
+            save_output_topk(
+                sampled_token_ids,
+                sampler_output.logprobs_tensors.logprob_token_ids,
+                sampler_output.logprobs_tensors.logprobs,
+                sampler_output.logprobs_tensors.selected_token_ranks,
+                model_output.not_need_stop,
+                model_output.mp_rank,
+            )
 
 
 def xpu_post_process_specualate(

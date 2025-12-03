@@ -498,8 +498,8 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
         """
         empty_input_forward
         """
-        fake_hidden_states = paddle.ones(
-            shape=[1, self.fd_config.model_config.hidden_size],
+        fake_hidden_states = paddle.empty(
+            shape=[0, self.fd_config.model_config.hidden_size],
             dtype=paddle.get_default_dtype(),
         )
         for i in range(

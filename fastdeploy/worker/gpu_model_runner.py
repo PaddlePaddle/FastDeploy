@@ -95,7 +95,11 @@ from fastdeploy.model_executor.logits_processor import build_logits_processors
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.model_executor.models.interfaces_base import FdModelForPooling
 from fastdeploy.output.pooler import PoolerOutput
-from fastdeploy.worker.model_runner_base import ModelRunnerBase
+from fastdeploy.worker.model_runner_base import (
+    DistributedOut,
+    DistributedStatus,
+    ModelRunnerBase,
+)
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, ModelRunnerOutput
 
 
@@ -249,6 +253,56 @@ class GPUModelRunner(ModelRunnerBase):
         if_only_prefill = if_only_prefill and not (decode_exists if decode_exists is not None else self.exist_decode())
 
         return if_only_prefill
+
+    def collect_distributed_status(self):
+        """
+        Collect distributed status
+        """
+        dist_status_list = []
+        dist_status_obj = DistributedStatus()
+        dist_out = DistributedOut()
+
+        prefill_exists = None
+        if_only_decode = True
+        # mix ep in single node
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
+            prefill_exists = self.exist_prefill()
+            dist_status_obj.only_decode = not prefill_exists
+
+        # whether chunked moe
+        if self.fd_config.parallel_config.enable_chunked_moe:
+            chunk_size = self.fd_config.parallel_config.chunked_moe_size
+            token_num = self.share_inputs["ids_remove_padding"].shape[0]
+
+            if token_num > chunk_size:
+                self.fd_config.parallel_config.moe_num_chunk = (token_num + chunk_size - 1) // chunk_size
+            else:
+                self.fd_config.parallel_config.moe_num_chunk = 1
+
+            dist_status_obj.moe_num_chunk = self.fd_config.parallel_config.moe_num_chunk
+
+        # only ep need to collect and sync distributed status
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
+            # call once to gather all status
+            paddle.distributed.all_gather_object(dist_status_list, dist_status_obj)
+
+            # Update Batch type for cuda graph for if_only_decode
+            if_only_decode = all(dist_status.only_decode for dist_status in dist_status_list)
+
+        if_only_decode = if_only_decode and not (
+            prefill_exists if prefill_exists is not None else self.exist_prefill()
+        )
+
+        max_moe_num_chunk = None
+        if self.fd_config.parallel_config.enable_chunked_moe:
+            max_moe_num_chunk = max(dist_status.moe_num_chunk for dist_status in dist_status_list)
+
+        dist_out = DistributedOut(
+            if_only_decode=if_only_decode,
+            max_moe_num_chunk=max_moe_num_chunk,
+        )
+
+        return dist_out
 
     def only_decode(self):
         """
@@ -488,7 +542,11 @@ class GPUModelRunner(ModelRunnerBase):
         rope_3d_position_ids["position_ids_offset"].append(
             position_ids.shape[0] + rope_3d_position_ids["position_ids_offset"][-1]
         )
-        rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
+
+        if self.is_pooling_model:
+            rope_3d_position_ids["max_tokens_lst"].append(0)
+        else:
+            rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
 
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int = None):
         """
@@ -1355,7 +1413,7 @@ class GPUModelRunner(ModelRunnerBase):
 
     def initialize_forward_meta(self, is_dummy_or_profile_run=False):
         """
-        Initialize forward meta and attention meta data
+        Initialize forward meta, attention meta data and update some config.
         """
         # Initialize forward meta
         self.forward_meta = ForwardMeta(
@@ -1386,8 +1444,12 @@ class GPUModelRunner(ModelRunnerBase):
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
         )
 
-        # Update Batch type for cuda graph for only_decode_batch
-        if_only_decode = self.only_decode()
+        dist_status = self.collect_distributed_status()
+
+        if_only_decode = dist_status.if_only_decode
+        if self.fd_config.parallel_config.enable_chunked_moe:
+            self.fd_config.parallel_config.max_moe_num_chunk = dist_status.max_moe_num_chunk
+
         only_decode_use_cudagraph = self.use_cudagraph and if_only_decode
 
         # Update config about moe for better performance
@@ -2270,7 +2332,6 @@ class GPUModelRunner(ModelRunnerBase):
                         self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
                         group=self.parallel_config.tp_group,
                     )
-
             # 5. Post Process
             model_output_data = ModelOutputData(
                 next_tokens=self.share_inputs["next_tokens"],
@@ -2371,7 +2432,6 @@ class GPUModelRunner(ModelRunnerBase):
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
 
         num_scheduled_tokens = int(self.share_inputs["seq_lens_this_time"][:num_running_requests].sum())
-
         hidden_states = hidden_states[:num_scheduled_tokens]
 
         prompt_lens = self.share_inputs["prompt_lens"][:num_running_requests]
@@ -2389,11 +2449,23 @@ class GPUModelRunner(ModelRunnerBase):
         pooling_metadata.build_pooling_cursor(num_scheduled_tokens_list, device=device_str)
 
         raw_pooler_output = self.model.pooler(hidden_states=hidden_states, pooling_metadata=pooling_metadata)
+
         seq_lens_cpu = self.share_inputs["seq_lens_this_time"][:num_running_requests]
         pooler_output: list[Optional[paddle.Tensor]] = []
-        for raw_output, seq_len, prompt_len in zip(raw_pooler_output, seq_lens_cpu, pooling_metadata.prompt_lens):
-            output = raw_output.data if int(seq_len) == int(prompt_len) else None
-            pooler_output.append(output)
+
+        seq_lens_decoder_batch = self.share_inputs["seq_lens_decoder"][:num_running_requests]
+
+        for i, (seq_len, prompt_len) in enumerate(zip(seq_lens_cpu, pooling_metadata.prompt_lens)):
+            if not self.cache_config.enable_prefix_caching:
+                output = raw_pooler_output[i].data if int(seq_len) == int(prompt_len) else None
+                pooler_output.append(output)
+            else:
+                current_seq_len_decoder = seq_lens_decoder_batch[i]
+                if int(current_seq_len_decoder) + int(seq_len) == int(prompt_len):
+                    output = raw_pooler_output[i].data
+                else:
+                    output = None
+                pooler_output.append(output)
 
         pooler_output = PoolerOutput(
             outputs=pooler_output,

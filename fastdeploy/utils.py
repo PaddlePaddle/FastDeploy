@@ -52,6 +52,7 @@ from typing_extensions import TypeIs, assert_never
 from fastdeploy import envs
 from fastdeploy.entrypoints.openai.protocol import ErrorInfo, ErrorResponse
 from fastdeploy.logger.logger import FastDeployLogger
+from fastdeploy.worker.output import PromptLogprobs
 
 T = TypeVar("T")
 from typing import Callable, List, Optional
@@ -1071,6 +1072,21 @@ def optional_type(return_type: Callable[[str], T]) -> Callable[[str], Optional[T
         return parse_type(return_type)(val)
 
     return _optional_type
+
+
+def clamp_prompt_logprobs(
+    prompt_logprobs: PromptLogprobs | None,
+) -> PromptLogprobs | None:
+    if prompt_logprobs is None:
+        return prompt_logprobs
+
+    for logprob_dict in prompt_logprobs:
+        if logprob_dict is None:
+            continue
+        for logprob_values in logprob_dict.values():
+            if logprob_values.logprob == float("-inf"):
+                logprob_values.logprob = -9999.0
+    return prompt_logprobs
 
 
 def to_numpy(tasks: List[Any]):
