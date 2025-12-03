@@ -992,6 +992,11 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
     m_indices = GetEmptyTensor(
         {token_nums_feed_to_ffn}, paddle::DataType::INT32, place);
   } else {
+    // Note(ZKK)
+    // In TP, we must init m_indices with -1,
+    // because we allocate to much space.
+    // token_rows * moe_topk + num_experts_per_rank * (128 - 1)
+    // Later will optimize this.
     m_indices = paddle::full(
         {token_nums_feed_to_ffn}, -1, paddle::DataType::INT32, place);
   }
