@@ -18,7 +18,6 @@ from typing import Optional
 
 import paddle
 
-import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.linear import (
     MergedColumnParallelLinear,
@@ -176,11 +175,8 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
             # quanted_weight_tensor, weight_block_scale_tensor = deep_gemm.utils.math.per_block_cast_to_fp8(
             #     weight_tensor, use_ue8m0=True
             # )
-
-
-            #======新加的
-            #=======aaaaaaaaaaaaaaaaaaaaa 以下是调试代码新加的
-
+            # ======新加的
+            # =======aaaaaaaaaaaaaaaaaaaaa 以下是调试代码新加的
 
             def _get_mn_major_tma_aligned_packed_ue8m0_tensor_torch_impl(
                 x: paddle.Tensor,
@@ -205,9 +201,7 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
                 padded = padded.view(-1).view(dtype=paddle.int).view(b, aligned_mn, aligned_k // 4)
 
                 # Finally, transpose
-                transposed = paddle.zeros(
-                    (b, aligned_k // 4, aligned_mn), device=x.device, dtype=paddle.int
-                ).mT
+                transposed = paddle.zeros((b, aligned_k // 4, aligned_mn), device=x.device, dtype=paddle.int).mT
                 transposed[:, :, :] = padded
                 aligned_x = transposed[:, :mn, :]
                 return aligned_x.squeeze(0) if remove_dim else aligned_x
@@ -216,7 +210,8 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
                 x_q_block,
                 x_s,
                 block_size,
-                dtype,):
+                dtype,
+            ):
                 """This function converts block-wise quantization to unquantized.
                 The inputs are block-wise quantization tensor `x_q_block`, block-wise quantization scale
                 and the block size.
@@ -226,9 +221,7 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
                 *_, n, k = x_q_block.shape
 
                 # ... n_scale k_scale -> ... (n_scale block_n) (k_scale block_k)
-                x_scale_repeat = x_s.repeat_interleave(block_n, dim=-2).repeat_interleave(
-                    block_k, dim=-1
-                )
+                x_scale_repeat = x_s.repeat_interleave(block_n, dim=-2).repeat_interleave(block_k, dim=-1)
                 x_scale_repeat = x_scale_repeat[..., :n, :k]
 
                 return (x_q_block.to(paddle.float32) * x_scale_repeat).to(dtype)
@@ -258,20 +251,16 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
 
                 return out_w, out_s
 
-
-            def quant_weight_ue8m0(
-                weight_dequant,
-                weight_block_size
-            ):
+            def quant_weight_ue8m0(weight_dequant, weight_block_size):
                 assert weight_block_size == [128, 128]
-                assert (
-                    weight_dequant.dtype == paddle.bfloat16
-                ), f"{weight_dequant.dtype=} {weight_dequant.shape=}"
+                assert weight_dequant.dtype == paddle.bfloat16, f"{weight_dequant.dtype=} {weight_dequant.shape=}"
 
                 *batch_dims, n, k = weight_dequant.shape
 
                 weight_dequant_flat = weight_dequant.view((-1, k))
-                out_w_flat, out_s_flat = deep_gemm.utils.math.per_block_cast_to_fp8(weight_dequant_flat, use_ue8m0=True)
+                out_w_flat, out_s_flat = deep_gemm.utils.math.per_block_cast_to_fp8(
+                    weight_dequant_flat, use_ue8m0=True
+                )
 
                 out_w = out_w_flat.view((*batch_dims, n, k))
                 out_s = out_s_flat.view(
@@ -293,11 +282,11 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
                 sf = get_mn_major_tma_aligned_packed_ue8m0_tensor(sf)
                 return sf
 
-            #======aaaaaaaaa 以上是调试代码新加的
+            # ======aaaaaaaaa 以上是调试代码新加的
             quanted_weight_tensor, weight_block_scale_tensor = requant_weight_ue8m0(
                 quanted_weight_tensor.to(weight_block_scale_tensor.place), weight_block_scale_tensor, [128, 128]
             )
-            #======新加的
+            # ======新加的
 
             if hasattr(layer.weight, "tensor_track"):
                 layer.weight.tensor_track = None
@@ -323,7 +312,6 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
             #     is_bias=False,
             #     default_initializer=paddle.nn.initializer.Constant(0),
             # )
-            
 
             layer.weight.copy_(quanted_weight_tensor, False)
             layer.weight_scale_inv.copy_(weight_block_scale_tensor, False)
@@ -358,7 +346,7 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         weight_scale = weight_scale.transpose([1, 0])
         layer.weight_scale_inv.set_value(weight_scale)
 
-    def apply(self, layer, x, block_tables=None):
+    def apply(self, layer, x):
         # print(f"[FP8Linear] x: {x}")
         # print(f"[FP8Linear] block_tables 1: {block_tables}")
         # import os
@@ -381,7 +369,7 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
 
         x, x_scale_tensor = deep_gemm.utils.math.per_token_cast_to_fp8(x, use_ue8m0=True)
 
-        linear_out: Tensor = paddle.empty((x.shape[0], layer.output_size), dtype=paddle.bfloat16)
+        linear_out: paddle.Tensor = paddle.empty((x.shape[0], layer.output_size), dtype=paddle.bfloat16)
 
         # print(f"[FP8Linear] x_quantized: {x}")
         # print(f"[FP8Linear] x_scale_tensor: {x_scale_tensor}")

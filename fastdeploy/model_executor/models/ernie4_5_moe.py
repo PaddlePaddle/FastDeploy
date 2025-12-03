@@ -272,7 +272,6 @@ class Ernie4_5_Attention(nn.Layer):
 
         output = self.o_proj(attn_out)
 
-
         return output
 
 
@@ -344,12 +343,10 @@ class Ernie4_5_DecoderLayer(nn.Layer):
             hidden_states, residual_input=residual, forward_meta=forward_meta
         )
 
-
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
             forward_meta=forward_meta,
         )
-
 
         hidden_states, residual = self.post_attention_layernorm(
             hidden_states,
