@@ -84,15 +84,22 @@ class ChatResponseProcessor:
         for request_output in request_outputs:
             api_server_logger.debug(f"request_output {request_output}")
             if not self.enable_mm_output:
-                decode_type = request_output["outputs"].get("decode_type", 0) or 0
+                outputs = request_output.get("outputs", None)
+                if outputs is None:
+                    decode_type = 0
+                else:
+                    decode_type = request_output["outputs"].get("decode_type", 0) or 0
                 req_id = request_output["request_id"]
                 if decode_type == 0:  # text
-                    token_ids = request_output["outputs"]["token_ids"]
                     tts = req_id in self._audio_buffer
-                    if token_ids[-1] == self.eos_token_id:
-                        all_audio_tokens = self._audio_buffer.pop(req_id, [])
-                    else:
+                    if outputs is None:
                         all_audio_tokens = None
+                    else:
+                        token_ids = request_output["outputs"]["token_ids"]
+                        if token_ids[-1] == self.eos_token_id:
+                            all_audio_tokens = self._audio_buffer.pop(req_id, [])
+                        else:
+                            all_audio_tokens = None
 
                     if inspect.iscoroutinefunction(self.data_processor.process_response_dict):
                         response = await self.data_processor.process_response_dict(
