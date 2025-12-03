@@ -416,6 +416,7 @@ class CompletionOutput:
             f"send_idx={self.send_idx}, "
             f"text={self.text!r}, "
             f"token_ids={self.token_ids}, "
+            f"decode_type={self.decode_type}, "
             f"draft_token_ids={self.draft_token_ids}, "
             f"reasoning_content={self.reasoning_content!r}, "
             f"logprobs={self.logprobs}, "

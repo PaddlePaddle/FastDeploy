@@ -1,0 +1,3 @@
+xgrammar==0.1.25
+llguidance==1.3.0
+torch==2.8.0
