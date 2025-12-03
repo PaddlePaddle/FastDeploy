@@ -1496,7 +1496,6 @@ class GPUModelRunner(ModelRunnerBase):
         if self.fd_config.parallel_config.enable_chunked_moe:
             self.fd_config.parallel_config.max_moe_num_chunk = dist_status.max_moe_num_chunk
 
-        # Update Batch type for cuda graph for only_decode_batch
         only_decode_use_cudagraph = self.use_cudagraph and if_only_decode
 
         # Update config about moe for better performance
