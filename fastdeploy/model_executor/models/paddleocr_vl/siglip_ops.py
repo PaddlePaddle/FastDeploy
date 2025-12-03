@@ -61,17 +61,17 @@ def native_neox_rope_embedding(qkv, cos, sin, num_heads):
 def neox_rope_embedding(
     qkv: paddle.Tensor, cos_emb: paddle.Tensor, sin_emb: paddle.Tensor, num_heads: int, head_dim: int
 ) -> List[paddle.Tensor]:
-    # if current_platform.is_cuda():
-    #     return fused_neox_rope_embedding(qkv, cos_emb, sin_emb, num_heads, head_dim)
-    # else:
-    return native_neox_rope_embedding(qkv, cos_emb, sin_emb, num_heads)
+    if current_platform.is_cuda() and paddle.in_dynamic_mode():
+        return fused_neox_rope_embedding(qkv, cos_emb, sin_emb, num_heads, head_dim)
+    else:
+        return native_neox_rope_embedding(qkv, cos_emb, sin_emb, num_heads)
 
 
 def get_activation_fn(hidden_act: str):
     if hidden_act == "gelu_pytorch_tanh":
-        # if current_platform.is_cuda():
-        #     return gelu_tanh
-        # else:
-        return ACT2FN["gelu_new"]
+        if current_platform.is_cuda() and paddle.in_dynamic_mode():
+            return gelu_tanh
+        else:
+            return ACT2FN["gelu_new"]
     else:
         return ACT2FN[hidden_act]
