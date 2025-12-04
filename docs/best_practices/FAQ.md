@@ -38,8 +38,6 @@ export ENABLE_V1_KVCACHE_SCHEDULER=1
 
 2. Check whether the KVCache blocks allocated by the automatic profile are as expected. If the automatic profile is affected by the fluctuation of video memory and may result in less allocation, you can manually set the `num_gpu_blocks_override` parameter to expand the KVCache block.
 
-Here is the polished English translation:
-
 ## 3. Inference Request Stalls After Enabling logprobs
 
 When **logprobs** is enabled, the inference output includes the log-probability of each token, which **significantly increases the size of each message body**. Under default settings, this may exceed the limits of the **System V Message Queue**, causing the inference request to **stall**.
