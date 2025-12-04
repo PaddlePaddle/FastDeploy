@@ -590,7 +590,7 @@ class EPPrefillRunner(EPRunner):
         tmp_ffn_out: paddle.Tensor,
         handle: tuple,
         recv_topk_weights: paddle.Tensor,
-        event,
+        event=None,
     ):
         buffer = self.ep_engine.deepep_engine
         if buffer is None:
