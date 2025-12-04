@@ -1223,6 +1223,7 @@ class FDConfig:
         self.moba_attention_config: Optional[MobaAttentionConfig] = moba_attention_config
         self.enable_attention_dp_balance = enable_attention_dp_balance
         self.attention_dp_time_out_iters = attention_dp_time_out_iters
+
         # Initialize cuda graph capture list
         max_capture_shape = self.parallel_config.max_num_seqs
         if self.speculative_config is not None and self.speculative_config.method == "mtp":
@@ -1279,6 +1280,7 @@ class FDConfig:
         if isinstance(engine_worker_queue_port, int):
             self.engine_worker_queue_port = str(engine_worker_queue_port)
         self._str_to_list("engine_worker_queue_port", str)
+        self.enable_routing_replay = True
 
         if envs.FD_FOR_TORCH_MODEL_FORMAT:
             self.model_config.model_format = "torch"

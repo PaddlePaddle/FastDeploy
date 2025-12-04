@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+from functools import partial
 from typing import Optional
 
 import numpy as np
@@ -22,6 +23,10 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
+from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
+    _record_routing_native,
+)
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import slice_fn
 from fastdeploy.platforms import current_platform
@@ -532,7 +537,7 @@ class FusedMoE(nn.Layer):
         else:
             self.quant_method.process_loaded_weights(self, state_dict)
 
-    def forward(self, x: paddle.Tensor, gate: nn.Layer):
+    def forward(self, x: paddle.Tensor, gate: nn.Layer, forward_meta: Optional[ForwardMeta] = None):
         """
         Defines the forward computation of the moe layer.
 
@@ -543,5 +548,13 @@ class FusedMoE(nn.Layer):
             Tensor: Output tensor.s
 
         """
-        out = self.quant_method.apply(self, x, gate)
+        topk_ids_hookfunc = partial(
+            _record_routing_native,
+            routing_replay_table=forward_meta.routing_replay_table,
+            seq_lens_decoder=forward_meta.seq_lens_decoder,
+            seq_lens_this_time=forward_meta.seq_lens_this_time,
+            cu_seqlens_q=forward_meta.cu_seqlens_q,
+            layer_id=self.layer_idx,
+        )
+        out = self.quant_method.apply(self, x, gate, topk_ids_hookfunc)
         return out
