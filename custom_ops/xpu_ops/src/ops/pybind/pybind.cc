@@ -143,6 +143,8 @@ std::vector<paddle::Tensor> WeightOnlyLinear(
     const int arch,
     const int group_size);
 
+std::vector<paddle::Tensor> Quant2dPerToken(const paddle::Tensor& x);
+
 std::vector<paddle::Tensor> MoeEPCombine(const paddle::Tensor& ffn_out,
                                          const paddle::Tensor& moe_index,
                                          const paddle::Tensor& weights,
@@ -1274,6 +1276,9 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("weight_dtype"),
         py::arg("arch"),
         py::arg("group_size") = -1);
+
+  m.def(
+      "quant2d_per_token", &Quant2dPerToken, py::arg("x"), "quant x per token");
 
   m.def("xpu_moe_layer",
         &MoeLayer,
