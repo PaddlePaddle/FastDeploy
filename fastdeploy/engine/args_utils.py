@@ -48,6 +48,7 @@ from fastdeploy.utils import (
     console_logger,
     find_free_ports,
     is_port_available,
+    parse_ports,
     parse_quantization,
 )
 
@@ -533,21 +534,6 @@ class EngineArgs:
 
     def post_init_all_ports(self):
 
-        def allocate_ports(name, port_range, num_ports):
-            ports = find_free_ports(port_range=port_range, num_ports=num_ports)
-            console_logger.info(f"Parameter `{name}` is not specified, found {num_ports} available ports: {ports}")
-            return ports
-
-        def parse_ports(name, ports):
-            if isinstance(ports, int):
-                return [ports]
-            elif isinstance(ports, str):
-                return [int(p) for p in ports.split(",")]
-            elif isinstance(ports, list):
-                return [int(p) for p in ports]
-            else:
-                raise TypeError(f"Invalid type for `{name}`: {type(ports)}. Must be int, str or list.")
-
         def check_ports(name, ports, expected_num_ports=None):
             if expected_num_ports is not None and len(ports) != expected_num_ports:
                 raise ValueError(
@@ -560,8 +546,11 @@ class EngineArgs:
         engine_worker_queue_port = self.engine_worker_queue_port
         expected_ports = self.data_parallel_size
         if engine_worker_queue_port is None:
-            engine_worker_queue_port = allocate_ports("engine_worker_queue_port", (9000, 9100), expected_ports)
-        engine_worker_queue_port = parse_ports("engine_worker_queue_port", engine_worker_queue_port)
+            engine_worker_queue_port = find_free_ports(num_ports=expected_ports)
+            console_logger.info(
+                f"Parameter `engine_worker_queue_port` is not specified, found available ports: {engine_worker_queue_port}"
+            )
+        engine_worker_queue_port = parse_ports(engine_worker_queue_port)
         check_ports("engine_worker_queue_port", engine_worker_queue_port, expected_num_ports=expected_ports)
         self.engine_worker_queue_port = engine_worker_queue_port
         console_logger.info(f"Use engine_worker_queue_port: {self.engine_worker_queue_port}")
@@ -570,8 +559,11 @@ class EngineArgs:
         cache_queue_port = self.cache_queue_port
         expected_ports = self.data_parallel_size
         if cache_queue_port is None:
-            cache_queue_port = allocate_ports("cache_queue_port", (9100, 9200), expected_ports)
-        cache_queue_port = parse_ports("cache_queue_port", cache_queue_port)
+            cache_queue_port = find_free_ports(num_ports=expected_ports)
+            console_logger.info(
+                f"Parameter `cache_queue_port` is not specified, found available ports: {cache_queue_port}"
+            )
+        cache_queue_port = parse_ports(cache_queue_port)
         check_ports("cache_queue_port", cache_queue_port, expected_num_ports=expected_ports)
         self.cache_queue_port = cache_queue_port
 
@@ -585,8 +577,11 @@ class EngineArgs:
         dp_per_node = self.data_parallel_size // num_nodes
         expected_ports = self.tensor_parallel_size * dp_per_node
         if rdma_comm_ports is None:
-            rdma_comm_ports = allocate_ports("rdma_comm_ports", (9300, 9400), expected_ports)
-        rdma_comm_ports = parse_ports("rdma_comm_ports", rdma_comm_ports)
+            rdma_comm_ports = find_free_ports(num_ports=expected_ports)
+            console_logger.info(
+                f"Parameter `rdma_comm_ports` is not specified, found available ports: {rdma_comm_ports}"
+            )
+        rdma_comm_ports = parse_ports(rdma_comm_ports)
         check_ports("rdma_comm_ports", rdma_comm_ports, expected_num_ports=expected_ports)
         self.rdma_comm_ports = rdma_comm_ports
 
@@ -594,8 +589,9 @@ class EngineArgs:
         pd_comm_port = self.pd_comm_port
         expected_ports = self.data_parallel_size
         if pd_comm_port is None:
-            pd_comm_port = allocate_ports("pd_comm_port", (9400, 9500), expected_ports)
-        pd_comm_port = parse_ports("pd_comm_port", pd_comm_port)
+            pd_comm_port = find_free_ports(num_ports=expected_ports)
+            console_logger.info(f"Parameter `pd_comm_port` is not specified, found available ports: {pd_comm_port}")
+        pd_comm_port = parse_ports(pd_comm_port)
         check_ports("pd_comm_port", pd_comm_port, expected_num_ports=expected_ports)
         self.pd_comm_port = pd_comm_port
 

@@ -636,7 +636,7 @@ def is_port_available(host, port):
 
 
 def find_free_ports(
-    port_range: tuple[int, int],
+    port_range: tuple[int, int] = (8000, 65535),
     num_ports: int = 1,
     host: str = "0.0.0.0",
 ) -> list[int]:
@@ -681,7 +681,7 @@ def find_free_ports(
             break
 
     if len(free_ports) < num_ports:
-        raise RuntimeError(f"Only found {len(free_ports)} free ports in {port_range}, " f"requested {num_ports}.")
+        raise RuntimeError(f"Only found {len(free_ports)} free ports in {port_range}, requested {num_ports}.")
 
     return free_ports
 
