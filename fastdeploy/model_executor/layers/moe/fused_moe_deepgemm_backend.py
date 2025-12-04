@@ -24,7 +24,8 @@ from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func, deep
 
 from .fused_moe_backend_base import MoEMethodBase
 from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
-
+from fastdeploy.worker.tbo import let_another_thread_run
+from paddle.distributed.communication import deep_ep
 
 class DeepGemmFusedMoeMethod(MoEMethodBase):
     """
@@ -145,9 +146,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         gate_out = gate(x.cast("float32"))
         gate_out = paddle.randn([x.shape[0], layer.num_experts], dtype="float32")
 
-        from fastdeploy.worker.tbo import let_another_thread_run
-        from paddle.distributed.communication import deep_ep
-
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
         # 2. Dynamic compute blockwise quantization scales
@@ -156,7 +154,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         )
 
         event = deep_ep.Buffer.capture()
-
         let_another_thread_run()
         
         # 3. EP Dispatch
@@ -255,7 +252,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         # 5. EP combine
         event = deep_ep.Buffer.capture()
-
         let_another_thread_run()
 
         tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights, event)
