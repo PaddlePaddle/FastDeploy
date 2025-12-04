@@ -1926,10 +1926,9 @@ class GPUModelRunner(ModelRunnerBase):
 
                 model_output[thread_name] = tmp_output
 
-                return model_output
+                return tmp_output
             
             # model_output = haha(self.forward_meta)
-            # model_output = model_output[list(model_output.keys())[0]]
 
             split_res = split_batch(self.forward_meta)
             real_token_num = self.forward_meta.ids_remove_padding.shape[0]
@@ -2275,7 +2274,6 @@ class GPUModelRunner(ModelRunnerBase):
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
 
-<<<<<<< HEAD
         model_output = {}
 
         def haha(forward_meta):
@@ -2291,19 +2289,6 @@ class GPUModelRunner(ModelRunnerBase):
             tmp_output = self.model(
                 forward_meta.ids_remove_padding,
                 forward_meta,
-=======
-        # 3. Execute model
-        if self.enable_mm:
-            model_output = self.model(
-                self.forward_meta.ids_remove_padding,
-                self.share_inputs["image_features"],
-                self.forward_meta,
-            )
-        else:
-            model_output = self.model(
-                self.forward_meta.ids_remove_padding,
-                self.forward_meta,
->>>>>>> origin/develop
             )
 
             model_output[thread_name] = tmp_output
@@ -2315,6 +2300,11 @@ class GPUModelRunner(ModelRunnerBase):
 
         split_res = split_batch(self.forward_meta)
         real_token_num = self.forward_meta.ids_remove_padding.shape[0]
+
+        from fastdeploy.model_executor.ops.gpu import deep_gemm
+        import os
+        deep_gemm.set_num_sms(118)
+        os.environ["COMPUTE_NUM_SMS"] = "118"
 
         t0 = Thread(target=haha, name="thread0", args=(split_res[0],))
         t1 = Thread(target=haha, name="thread1", args=(split_res[1],))
