@@ -504,6 +504,7 @@ class EPPrefillRunner(EPRunner):
     """
     EPPrefillRunner
     """
+
     allocate_on_comm_stream = False
 
     def __init__(
@@ -533,9 +534,11 @@ class EPPrefillRunner(EPRunner):
             ep_group=ep_group,
             use_internode_ll_two_stage=use_internode_ll_two_stage,
         )
-    
+
     def set_allocate_on_comm_stream(allocate_on_comm_stream: bool = False):
-        logger.info(f"set allocate_on_comm_stream to {allocate_on_comm_stream}, this will force Prefill dispatch's output tensor is allocated on communication stream")
+        logger.info(
+            f"set allocate_on_comm_stream to {allocate_on_comm_stream}, this will force Prefill dispatch's output tensor is allocated on communication stream"
+        )
         EPPrefillRunner.allocate_on_comm_stream = allocate_on_comm_stream
 
     def dispatch(
@@ -557,10 +560,13 @@ class EPPrefillRunner(EPRunner):
             num_tokens_per_expert,
             is_token_in_rank,
             event,
-        ) = buffer.get_dispatch_layout(topk_idx, self.num_experts,
-                                       previous_event =  kwargs.get("previous_event", None),
-                                       allocate_on_comm_stream = EPPrefillRunner.allocate_on_comm_stream,
-                                       async_finish=self.ep_engine.async_finish,)
+        ) = buffer.get_dispatch_layout(
+            topk_idx,
+            self.num_experts,
+            previous_event=kwargs.get("previous_event", None),
+            allocate_on_comm_stream=EPPrefillRunner.allocate_on_comm_stream,
+            async_finish=self.ep_engine.async_finish,
+        )
 
         x_scale_tensor = kwargs.get("x_scale_tensor", None)
         dispatch_args = {
