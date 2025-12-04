@@ -83,8 +83,6 @@ from fastdeploy.model_executor.pre_and_post_process import (
 if not (current_platform.is_dcu() or current_platform.is_iluvatar()):
     from fastdeploy.spec_decode import MTPProposer, NgramProposer
 
-import threading
-
 import zmq
 
 from fastdeploy import envs
@@ -97,13 +95,8 @@ from fastdeploy.model_executor.logits_processor import build_logits_processors
 from fastdeploy.model_executor.models.ernie4_5_vl.modeling_resampler import ScatterOp
 from fastdeploy.model_executor.models.interfaces_base import FdModelForPooling
 from fastdeploy.output.pooler import PoolerOutput
-from fastdeploy.worker.model_runner_base import (
-    DistributedOut,
-    DistributedStatus,
-    ModelRunnerBase,
-)
+from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, ModelRunnerOutput
-from fastdeploy.worker.tbo import GLOBAL_ATTN_BUFFERS, GLOBAL_THREAD_INFO, split_batch
 
 
 class GPUModelRunner(ModelRunnerBase):
@@ -256,56 +249,6 @@ class GPUModelRunner(ModelRunnerBase):
         if_only_prefill = if_only_prefill and not (decode_exists if decode_exists is not None else self.exist_decode())
 
         return if_only_prefill
-
-    def collect_distributed_status(self):
-        """
-        Collect distributed status
-        """
-        dist_status_list = []
-        dist_status_obj = DistributedStatus()
-        dist_out = DistributedOut()
-
-        prefill_exists = None
-        if_only_decode = True
-        # mix ep in single node
-        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
-            prefill_exists = self.exist_prefill()
-            dist_status_obj.only_decode = not prefill_exists
-
-        # whether chunked moe
-        if self.fd_config.parallel_config.enable_chunked_moe:
-            chunk_size = self.fd_config.parallel_config.chunked_moe_size
-            token_num = self.share_inputs["ids_remove_padding"].shape[0]
-
-            if token_num > chunk_size:
-                self.fd_config.parallel_config.moe_num_chunk = (token_num + chunk_size - 1) // chunk_size
-            else:
-                self.fd_config.parallel_config.moe_num_chunk = 1
-
-            dist_status_obj.moe_num_chunk = self.fd_config.parallel_config.moe_num_chunk
-
-        # only ep need to collect and sync distributed status
-        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
-            # call once to gather all status
-            paddle.distributed.all_gather_object(dist_status_list, dist_status_obj)
-
-            # Update Batch type for cuda graph for if_only_decode
-            if_only_decode = all(dist_status.only_decode for dist_status in dist_status_list)
-
-        if_only_decode = if_only_decode and not (
-            prefill_exists if prefill_exists is not None else self.exist_prefill()
-        )
-
-        max_moe_num_chunk = None
-        if self.fd_config.parallel_config.enable_chunked_moe:
-            max_moe_num_chunk = max(dist_status.moe_num_chunk for dist_status in dist_status_list)
-
-        dist_out = DistributedOut(
-            if_only_decode=if_only_decode,
-            max_moe_num_chunk=max_moe_num_chunk,
-        )
-
-        return dist_out
 
     def only_decode(self):
         """
@@ -545,11 +488,7 @@ class GPUModelRunner(ModelRunnerBase):
         rope_3d_position_ids["position_ids_offset"].append(
             position_ids.shape[0] + rope_3d_position_ids["position_ids_offset"][-1]
         )
-
-        if self.is_pooling_model:
-            rope_3d_position_ids["max_tokens_lst"].append(0)
-        else:
-            rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
+        rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
 
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int = None):
         """
@@ -1006,20 +945,15 @@ class GPUModelRunner(ModelRunnerBase):
         """
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
         max_dec_len = expected_decode_len + 1
-        if batch_size == 0:
-            input_length = 1
-        else:
-            input_length = min(
-                num_tokens // (1 if capture_prefill else batch_size),
-                self.model_config.max_model_len - max_dec_len,
-            )
+        input_length = min(
+            num_tokens // (1 if capture_prefill else batch_size),
+            self.model_config.max_model_len - max_dec_len,
+        )
 
         # NOTE(wanglongzhi): When the full length is too large, DeepEP's buffer size will not be enough to cause the result to appear nan.
         # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
         if self.fd_config.parallel_config.enable_expert_parallel:
             input_length = min(input_length, 32)
-        
-        input_length = 4096
 
         block_num = (
             input_length + self.cache_config.block_size - 1
@@ -1421,7 +1355,7 @@ class GPUModelRunner(ModelRunnerBase):
 
     def initialize_forward_meta(self, is_dummy_or_profile_run=False):
         """
-        Initialize forward meta, attention meta data and update some config.
+        Initialize forward meta and attention meta data
         """
         # Initialize forward meta
         self.forward_meta = ForwardMeta(
@@ -1452,12 +1386,8 @@ class GPUModelRunner(ModelRunnerBase):
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
         )
 
-        dist_status = self.collect_distributed_status()
-
-        if_only_decode = dist_status.if_only_decode
-        if self.fd_config.parallel_config.enable_chunked_moe:
-            self.fd_config.parallel_config.max_moe_num_chunk = dist_status.max_moe_num_chunk
-
+        # Update Batch type for cuda graph for only_decode_batch
+        if_only_decode = self.only_decode()
         only_decode_use_cudagraph = self.use_cudagraph and if_only_decode
 
         # Update config about moe for better performance
@@ -1623,19 +1553,6 @@ class GPUModelRunner(ModelRunnerBase):
             block_size=self.fd_config.cache_config.block_size,
         )
         self.share_inputs.update(res_buffer)
-
-        # Note(ZKK) This is so strange, later will remove.
-        for j in range(2):
-            GLOBAL_ATTN_BUFFERS[j] = allocate_launch_related_buffer(
-                max_batch_size=self.scheduler_config.max_num_seqs,
-                max_model_len=self.model_config.max_model_len,
-                encoder_block_shape_q=encoder_block_shape_q,
-                decoder_block_shape_q=decoder_block_shape_q,
-                decoder_step_token_num=self.speculative_config.num_speculative_tokens + 1,
-                num_heads=num_heads,
-                kv_num_heads=self.model_config.kv_num_heads,
-                block_size=self.fd_config.cache_config.block_size,
-            )
 
         # Get the attention backend
         attn_cls = get_attention_backend()
@@ -1851,9 +1768,7 @@ class GPUModelRunner(ModelRunnerBase):
         if self.speculative_decoding:
             if self.speculative_method == "mtp":
                 self.proposer.run(
-                    full_hidden_states=model_output,
-                    step_use_cudagraph=self.forward_meta.step_use_cudagraph,
-                    is_dummy_run=True,
+                    full_hidden_states=model_output, step_use_cudagraph=self.forward_meta.step_use_cudagraph
                 )
             else:
                 self.proposer.run(share_inputs=self.share_inputs)
@@ -1906,63 +1821,18 @@ class GPUModelRunner(ModelRunnerBase):
             self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
             self.padding_cudagraph_inputs()
 
-
-            model_output = {}
-
-            def haha(forward_meta):
-
-                thread_name = threading.current_thread().name
-                is_tbo_thread = thread_name in GLOBAL_THREAD_INFO.keys()
-
-                if is_tbo_thread:
-                    GLOBAL_THREAD_INFO[thread_name][0].wait()
-                    GLOBAL_THREAD_INFO[thread_name][0].clear()
-
-                # 3. Run model
-                tmp_output = self.model(
-                    forward_meta.ids_remove_padding,
-                    forward_meta,
+            # 3. Run model
+            if self.enable_mm:
+                model_output = self.model(
+                    self.forward_meta.ids_remove_padding,
+                    self.share_inputs["image_features"],
+                    self.forward_meta,
                 )
-
-                model_output[thread_name] = tmp_output
-
-                return tmp_output
-            
-            model_output = haha(self.forward_meta)
-
-            # split_res = split_batch(self.forward_meta)
-            # real_token_num = self.forward_meta.ids_remove_padding.shape[0]
-
-            # from fastdeploy.model_executor.ops.gpu import deep_gemm
-            # import os
-            # deep_gemm.set_num_sms(118)
-            # os.environ["COMPUTE_NUM_SMS"] = "118"
-
-            # t0 = Thread(target=haha, name="thread0", args=(split_res[0],))
-            # t1 = Thread(target=haha, name="thread1", args=(split_res[1],))
-
-            # GLOBAL_THREAD_INFO[t0.name][0].clear()
-            # GLOBAL_THREAD_INFO[t1.name][0].clear()
-
-            # t0.start()
-            # t1.start()
-
-            # # 主线程记得先让t0跑起来跑！
-            # GLOBAL_THREAD_INFO[t0.name][0].set()
-
-            # t0.join()
-            # # to先结束，他结束完了的话要记得让t1可以结束！
-            # GLOBAL_THREAD_INFO[t0.name][1].set()
-            # t1.join()
-
-            # model_output0 = model_output["thread0"]
-            # model_output1 = model_output["thread1"]
-            # model_output = paddle.concat([model_output0, model_output1], axis=0)
-            # model_output = model_output[:real_token_num]
-
-            paddle.distributed.barrier()
-            break
-
+            else:
+                model_output = self.model(
+                    self.forward_meta.ids_remove_padding,
+                    self.forward_meta,
+                )
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
 
@@ -2267,70 +2137,25 @@ class GPUModelRunner(ModelRunnerBase):
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
         # when there is data on other runner, the current runner is required to execute part of the model.
-        # if not self.not_need_stop():
-        #     self._execute_empty_input()
-        #     return None
+        if not self.not_need_stop():
+            self._execute_empty_input()
+            return None
 
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
 
-        model_output = {}
-
-        def haha(forward_meta):
-
-            thread_name = threading.current_thread().name
-            is_tbo_thread = thread_name in GLOBAL_THREAD_INFO.keys()
-
-            if is_tbo_thread:
-                GLOBAL_THREAD_INFO[thread_name][0].wait()
-                GLOBAL_THREAD_INFO[thread_name][0].clear()
-
-            # 3. Run model
-            tmp_output = self.model(
-                forward_meta.ids_remove_padding,
-                forward_meta,
+        # 3. Execute model
+        if self.enable_mm:
+            model_output = self.model(
+                self.forward_meta.ids_remove_padding,
+                self.share_inputs["image_features"],
+                self.forward_meta,
             )
-
-            model_output[thread_name] = tmp_output
-
-            return model_output
-        
-        # model_output = haha(self.forward_meta)
-        # model_output = model_output[list(model_output.keys())[0]]
-
-        split_res = split_batch(self.forward_meta)
-        real_token_num = self.forward_meta.ids_remove_padding.shape[0]
-
-        from fastdeploy.model_executor.ops.gpu import deep_gemm
-        import os
-        deep_gemm.set_num_sms(118)
-        os.environ["COMPUTE_NUM_SMS"] = "118"
-
-        t0 = Thread(target=haha, name="thread0", args=(split_res[0],))
-        t1 = Thread(target=haha, name="thread1", args=(split_res[1],))
-
-        GLOBAL_THREAD_INFO[t0.name][0].clear()
-        GLOBAL_THREAD_INFO[t1.name][0].clear()
-
-        t0.start()
-        t1.start()
-
-        # 主线程记得先让t0跑起来跑！
-        GLOBAL_THREAD_INFO[t0.name][0].set()
-
-        t0.join()
-        # to先结束，他结束完了的话要记得让t1可以结束！
-        GLOBAL_THREAD_INFO[t0.name][1].set()
-        t1.join()
-
-        model_output0 = model_output["thread0"]
-        model_output1 = model_output["thread1"]
-        model_output = paddle.concat([model_output0, model_output1], axis=0)
-        model_output = model_output[:real_token_num]
-
-        if not self.not_need_stop():
-            return None
-
+        else:
+            model_output = self.model(
+                self.forward_meta.ids_remove_padding,
+                self.forward_meta,
+            )
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
 
@@ -2443,6 +2268,7 @@ class GPUModelRunner(ModelRunnerBase):
                         self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
                         group=self.parallel_config.tp_group,
                     )
+
             # 5. Post Process
             model_output_data = ModelOutputData(
                 next_tokens=self.share_inputs["next_tokens"],
@@ -2543,6 +2369,7 @@ class GPUModelRunner(ModelRunnerBase):
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
 
         num_scheduled_tokens = int(self.share_inputs["seq_lens_this_time"][:num_running_requests].sum())
+
         hidden_states = hidden_states[:num_scheduled_tokens]
 
         prompt_lens = self.share_inputs["prompt_lens"][:num_running_requests]
@@ -2560,23 +2387,11 @@ class GPUModelRunner(ModelRunnerBase):
         pooling_metadata.build_pooling_cursor(num_scheduled_tokens_list, device=device_str)
 
         raw_pooler_output = self.model.pooler(hidden_states=hidden_states, pooling_metadata=pooling_metadata)
-
         seq_lens_cpu = self.share_inputs["seq_lens_this_time"][:num_running_requests]
         pooler_output: list[Optional[paddle.Tensor]] = []
-
-        seq_lens_decoder_batch = self.share_inputs["seq_lens_decoder"][:num_running_requests]
-
-        for i, (seq_len, prompt_len) in enumerate(zip(seq_lens_cpu, pooling_metadata.prompt_lens)):
-            if not self.cache_config.enable_prefix_caching:
-                output = raw_pooler_output[i].data if int(seq_len) == int(prompt_len) else None
-                pooler_output.append(output)
-            else:
-                current_seq_len_decoder = seq_lens_decoder_batch[i]
-                if int(current_seq_len_decoder) + int(seq_len) == int(prompt_len):
-                    output = raw_pooler_output[i].data
-                else:
-                    output = None
-                pooler_output.append(output)
+        for raw_output, seq_len, prompt_len in zip(raw_pooler_output, seq_lens_cpu, pooling_metadata.prompt_lens):
+            output = raw_output.data if int(seq_len) == int(prompt_len) else None
+            pooler_output.append(output)
 
         pooler_output = PoolerOutput(
             outputs=pooler_output,
@@ -2608,55 +2423,14 @@ class GPUModelRunner(ModelRunnerBase):
         # 1. Profile with multimodal encoder & encoder cache
 
         # 2. Dummy run
-
-        for i in range(5):
-            self._dummy_run(
-                num_tokens=(
-                    self.scheduler_config.max_num_seqs
-                    if self.scheduler_config.splitwise_role == "decode"
-                    else self.scheduler_config.max_num_batched_tokens
-                ),
-                batch_size=self.scheduler_config.max_num_seqs,
-            )
-
-
-        # import paddle.profiler as profiler
-        # p = profiler.Profiler(
-        #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
-        #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
-        # )
-        # p.start()
-        # p.step()
-        
-
-        total_time = 0
-
-        for i in range(100):
-
-            import datetime
-            paddle.device.synchronize()
-            starttime = datetime.datetime.now()
-
-            self._dummy_run(
-                num_tokens=(
-                    self.scheduler_config.max_num_seqs
-                    if self.scheduler_config.splitwise_role == "decode"
-                    else self.scheduler_config.max_num_batched_tokens
-                ),
-                batch_size=self.scheduler_config.max_num_seqs,
-            )
-
-            paddle.device.synchronize()
-            endtime = datetime.datetime.now()
-            duringtime = endtime - starttime
-            time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
-            total_time += (time_ms / 1000)
-            print(i, "time : ", time_ms, "ms")
-        
-        print("total_time", total_time)
-
-        p.stop()
-        exit(0)
+        self._dummy_run(
+            num_tokens=(
+                self.scheduler_config.max_num_seqs
+                if self.scheduler_config.splitwise_role == "decode"
+                else self.scheduler_config.max_num_batched_tokens
+            ),
+            batch_size=self.scheduler_config.max_num_seqs,
+        )
 
         # 3. gc
         self.clear_cache()
