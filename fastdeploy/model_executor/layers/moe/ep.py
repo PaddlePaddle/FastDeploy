@@ -539,7 +539,6 @@ class EPPrefillRunner(EPRunner):
         topk_idx: paddle.Tensor,
         topk_weights: paddle.Tensor,
         expert_alignment: int = 1,
-        num_worst_tokens: int = 0,
         *args,
         **kwargs,
     ):
@@ -554,7 +553,7 @@ class EPPrefillRunner(EPRunner):
             is_token_in_rank,
             event,
         ) = buffer.get_dispatch_layout(topk_idx, self.num_experts,
-                                       previous_event =  kwargs.get("event", None),
+                                       previous_event =  kwargs.get("previous_event", None),
                                        allocate_on_comm_stream = True,
                                        async_finish=self.ep_engine.async_finish,)
 
@@ -570,7 +569,6 @@ class EPPrefillRunner(EPRunner):
             "topk_idx": topk_idx,
             "topk_weights": topk_weights,
             "expert_alignment": expert_alignment,
-            "num_worst_tokens": num_worst_tokens,
             "allocate_on_comm_stream": True,
             "previous_event": event,
         }
