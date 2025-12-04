@@ -122,6 +122,10 @@ class TokenProcessor:
         self.prefill_result_status = dict()
         self._finalizer = weakref.finalize(self, self._cleanup_resources)
         self._batch_result_buffer = None
+        # health monitor
+        self.timestamp_for_alive_before_handle_batch = None
+        self.timestamp_for_alive_after_handle_batch = None
+        self.health_lock = threading.Lock()
 
     def _cleanup_resources(self):
         """Cleaning up shared memory resources"""
@@ -153,6 +157,18 @@ class TokenProcessor:
 
         self.worker.daemon = True
         self.worker.start()
+
+    def healthy(self):
+        """
+        whether token processor is healthy
+        """
+        with self.health_lock:
+            if self.timestamp_for_alive_after_handle_batch is None:  # has entered handle batch
+                if time.time() - self.timestamp_for_alive_before_handle_batch > envs.FD_TOKEN_PROCESSOR_HEALTH_TIMEOUT:
+                    return False
+                else:
+                    return True
+            return True
 
     def _reschedule_preempt_task_use_zmq(self, datas):
         """reschedule when real batch size is smaller than the insert position of preemted_task"""
@@ -213,12 +229,12 @@ class TokenProcessor:
                 llm_logger.info(
                     f"Request: {task_id} token ratio: {self.tokens_counter[task_id] / (time.time() - task.inference_start_time)}"
                 )
-                llm_logger.info(f"{self.resource_manager.info()}")
                 if self.cfg.speculative_config.method:
                     self._compute_speculative_status()
                 if not is_prefill:
                     self._record_completion_metrics(task, current_time)
                 self._recycle_resources(task_id, batch_id, task, result, is_prefill)
+                llm_logger.info(f"{self.resource_manager.info()}")
                 break
         return result
 
@@ -332,8 +348,14 @@ class TokenProcessor:
                         llm_logger.debug(f"token_processor receive_data {receive_datas}")
 
                     self._reschedule_preempt_task_use_zmq(receive_datas)
-
+                    with self.health_lock:
+                        self.timestamp_for_alive_before_handle_batch = time.time()
+                        self.timestamp_for_alive_after_handle_batch = None
                     batch_result = self._process_batch_output_use_zmq(receive_datas)
+                    with self.health_lock:
+                        self.timestamp_for_alive_before_handle_batch = None
+                        self.timestamp_for_alive_after_handle_batch = time.time()
+
                     self.postprocess(batch_result)
             except Exception as e:
                 llm_logger.error(f"Recieve message error: {e}")
@@ -414,7 +436,13 @@ class TokenProcessor:
                     if self.output_tokens[0, 0] == -2:
                         continue
                     llm_logger.debug(f"rank_id {rank_id} self.output_tokens[0, 0] {self.output_tokens[0, 0]}")
+                with self.health_lock:
+                    self.timestamp_for_alive_before_handle_batch = time.time()
+                    self.timestamp_for_alive_after_handle_batch = None
                 self._process_batch_output()
+                with self.health_lock:
+                    self.timestamp_for_alive_before_handle_batch = None
+                    self.timestamp_for_alive_after_handle_batch = time.time()
             except Exception as e:
                 llm_logger.info(f"while get input_data error: {e} {traceback.format_exc()!s}")
 
@@ -784,12 +812,12 @@ class TokenProcessor:
                     llm_logger.info(
                         f"Request: {task_id} token ratio: {self.tokens_counter[task_id] / (time.time() - task.inference_start_time)}"
                     )
-                    llm_logger.info(f"{self.resource_manager.info()}")
                     if self.cfg.speculative_config.method:
                         self._compute_speculative_status()
                     if not is_prefill:
                         self._record_completion_metrics(task, current_time)
                     self._recycle_resources(task_id, i, task, result, is_prefill)
+                    llm_logger.info(f"{self.resource_manager.info()}")
                     break
 
             llm_logger.debug(f"get response from infer: {result}")
