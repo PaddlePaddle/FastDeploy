@@ -251,7 +251,7 @@ def test_request_and_response(zmq_req_client):
         "prompt_token_ids": prompt_token_ids,
         "prompt_token_ids_len": len(prompt_token_ids),
         "eos_token_ids": [2],
-        "stop_token_ids": [2],
+        "stop": [2],
         "max_dec_len": 32 * 1024,
         "max_tokens": 32 * 1024,
         "min_dec_len": 1,

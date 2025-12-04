@@ -330,7 +330,7 @@ class DataProcessorTestCase(unittest.TestCase):
         processed = self.processor.process_request_dict(request, max_model_len=5)
 
         self.assertEqual(processed["prompt_token_ids"], [2])
-        self.assertEqual(processed["stop_token_ids"], [[4]])
+        self.assertEqual(processed["stop"], [[4]])
         self.assertEqual(processed["stop_seqs_len"], [1])
         self.assertEqual(processed["temperature"], 1)
         self.assertAlmostEqual(processed["top_p"], 1e-5)
@@ -361,7 +361,7 @@ class DataProcessorTestCase(unittest.TestCase):
 
         self.assertEqual(processed.prompt_token_ids, [1, 2, 3, 4])
         self.assertEqual(processed.sampling_params.max_tokens, 1)
-        self.assertEqual(processed.sampling_params.stop_token_ids, [[4]])
+        self.assertEqual(processed.sampling_params.stop, [[4]])
         self.assertEqual(set(processed.sampling_params.bad_words_token_ids), {2, 3})
         self.assertEqual(processed.sampling_params.temperature, 1)
         self.assertAlmostEqual(processed.sampling_params.top_p, 1e-5)
