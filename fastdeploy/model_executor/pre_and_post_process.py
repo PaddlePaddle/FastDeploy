@@ -298,6 +298,8 @@ def _build_stream_transfer_data(
             stream_transfer_datas.append(stream_transfer_data)
     elif pooler_outputs is not None:
         for bid, pooler_output in enumerate(pooler_outputs):
+            if pooler_output is None:
+                continue
             if pooler_output.dtype == paddle.bfloat16:
                 pooler_output = pooler_output.astype("float32")
 
@@ -514,8 +516,11 @@ def post_process_specualate(
                 sampler_output.token_num_per_batch,
                 sampler_output.cu_batch_token_offset,
                 model_output.not_need_stop,
+                model_output.seq_lens_decoder,
+                model_output.prompt_lens,
                 3,  # mtype
                 model_output.mp_rank,
+                save_each_rank,
             )
 
     # Update pre_ids through accept tokens
