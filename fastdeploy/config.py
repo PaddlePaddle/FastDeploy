@@ -1112,7 +1112,6 @@ class LoadConfig:
         args,
     ):
         self.load_choices: Union[str, LoadChoices] = LoadChoices.DEFAULT.value
-        self.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
         self.dynamic_load_weight: bool = False
         self.load_strategy: Optional[Literal["ipc", "ipc_snapshot", "meta", "normal"]] = "normal"
         for key, value in args.items():
