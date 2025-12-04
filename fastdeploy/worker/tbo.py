@@ -83,7 +83,7 @@ def let_another_thread_run():
         GLOBAL_THREAD_INFO[thread_name][0].clear()
 
 
-def split_batch_eb5_layers(forward_meta: ForwardMeta):
+def split_batch_decoder_layers(forward_meta: ForwardMeta):
     split_num = 2
     real_bs = forward_meta.seq_lens_this_time.shape[0]
 
@@ -104,7 +104,6 @@ def split_batch_eb5_layers(forward_meta: ForwardMeta):
             continue
 
         start_token_id = forward_meta.cu_seqlens_q[start_bs].item()
-
         end_token_id = forward_meta.cu_seqlens_q[end_bs].item()
 
         if start_token_id >= end_token_id:
