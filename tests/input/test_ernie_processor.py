@@ -109,6 +109,31 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.assertEqual(result["outputs"]["text"], "Mock final text")
         self.assertIn("completion_tokens", result["outputs"])
 
+    def test_think_status(self):
+        """测试 思考机制"""
+        request = {
+            "prompt": "hello",
+            "request_id": "test_1",
+            "prompt_token_ids": [1, 2, 3],
+            "temperature": 0.7,
+            "top_p": 0.9,
+        }
+        self.processor.reasoning_parser = MagicMock()
+        self.processor.reasoning_parser.get_model_status.return_value = "think_start"
+        self.processor.model_status_dict = {}
+        self.processor.process_request_dict(request, max_model_len=512)
+        self.assertEqual(request["enable_thinking"], True)
+
+        request = {
+            "prompt": "hello",
+            "request_id": "test",
+            "prompt_token_ids": [1, 2, 3],
+            "temperature": 0.7,
+            "top_p": 0.9,
+        }
+        self.processor.process_request_dict(request, max_model_len=512)
+        self.assertEqual(request["enable_thinking"], True)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -71,6 +71,27 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.mock_tool_parser_obj.return_value = self.mock_tool_parser
         self.processor.tool_parser_obj = self.mock_tool_parser_obj
 
+    def test_think_status(self):
+        """测试 思考机制"""
+        request = {
+            "prompt": "hello",
+            "request_id": "test_1",
+            "prompt_token_ids": [1, 2, 3],
+        }
+        self.processor.reasoning_parser = MagicMock()
+        self.processor.reasoning_parser.get_model_status.return_value = "think_start"
+        self.processor.model_status_dict = {}
+        self.processor.process_request_dict(request, max_model_len=512)
+        self.assertEqual(request["enable_thinking"], True)
+
+        request = {
+            "prompt": "hello",
+            "request_id": "test",
+            "prompt_token_ids": [1, 2, 3],
+        }
+        self.processor.process_request_dict(request, max_model_len=512)
+        self.assertEqual(request["enable_thinking"], True)
+
 
 class TestDataProcessorTargetMethods(unittest.TestCase):
     def setUp(self):

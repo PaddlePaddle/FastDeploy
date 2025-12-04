@@ -386,6 +386,9 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
         self.test_request = ChatCompletionRequest(
             model="ernie-test", messages=[{"role": "user", "content": "test prompt"}]
         )
+        self.parser.token_status_mapping = {
+            100: "think_start",
+        }
 
     def test_streaming_non_reasoning(self):
         result = self.parser.extract_reasoning_content_streaming(
@@ -621,6 +624,19 @@ class TestErnie45VLThinkingReasoningParser(unittest.TestCase):
         )
         self.assertEqual(reasoning, "")
         self.assertEqual(content, "")
+
+    def test_find_last_special_token(self):
+        result = self.parser.find_last_special_token([100, 110, 120, 130])
+        self.assertEqual(result, 100)
+        result = self.parser.find_last_special_token([0])
+        self.assertEqual(result, -1)
+
+    def test_get_model_status(self):
+        result = self.parser.get_model_status([100, 110, 120, 130])
+        self.assertEqual(result, "think_start")
+
+        result = self.parser.get_model_status([0])
+        self.assertEqual(result, "think_start")
 
 
 class TestErnieVLReasoningParser(unittest.TestCase):
