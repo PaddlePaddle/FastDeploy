@@ -29,17 +29,22 @@ for file in $TEST_FILES; do
     if [ "$status" -ne 0 ]; then
         echo "$file" >> "$failed_tests_file"
         failed_pytest=$((failed_pytest+1))
-        if [ -f "$run_path/server.log" ]; then
-            echo "---------------- server.log ----------------"
-            tail -n 25 "$run_path/server.log"
-            echo "--------------------------------------------"
-        fi
+        log_files=(
+            "$run_path/server.log"
+            "$run_path/server_prefill.log"
+            "$run_path/server_decode.log"
+            "$run_path/log/workerlog.0"
+            "$run_path/log_prefill/workerlog.0"
+            "$run_path/log_decode/workerlog.0"
+        )
 
-        if [ -f "$run_path/log/workerlog.0" ]; then
-            echo "---------------- log/workerlog.0 -------------------"
-            tail -n 25 "$run_path/log/workerlog.0"
-            echo "----------------------------------------------------"
-        fi
+        for log in "${log_files[@]}"; do
+            if [ -f "$log" ]; then
+                echo "---------------- $(basename "$log") ----------------"
+                tail -n 25 "$log"
+                echo "----------------------------------------------------"
+            fi
+        done
     else
         success_pytest=$((success_pytest+1))
     fi
