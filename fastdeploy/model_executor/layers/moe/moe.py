@@ -21,7 +21,10 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
+from fastdeploy.distributed.communication import (
+    tensor_model_parallel_all_reduce,
+    tensor_model_parallel_all_reduce_custom,
+)
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import h2d_copy, slice_fn
 from fastdeploy.platforms import current_platform
@@ -643,7 +646,10 @@ class FusedMoE(nn.Layer):
             out = self.forward_normal(x, gate)
 
         if self.reduce_results and self.tp_size > 1:
-            out = tensor_model_parallel_all_reduce(out, self.tp_group)
+            if current_platform.is_intel_hpu():
+                tensor_model_parallel_all_reduce_custom(out)
+            else:
+                out = tensor_model_parallel_all_reduce(out, self.tp_group)
         return out
 
     def forward_chunked_moe(self, x: paddle.Tensor, gate: nn.Layer):
