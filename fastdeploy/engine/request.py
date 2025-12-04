@@ -519,7 +519,8 @@ class RequestMetrics:
         self.engine_recv_latest_token_time = cur_time
         self.llm_engine_recv_latest_token_timestamp = cur_time
         self.model_execute_time = cur_time - self.arrival_time
-        self.model_forward_time = cur_time - self.inference_start_time
+        if self.inference_start_time:
+            self.model_forward_time = cur_time - self.inference_start_time
 
     def record_decode_recv_second_token(self):
         cur_time = time.time()
@@ -534,9 +535,11 @@ class RequestMetrics:
 
     def cal_cost_time(self):
         """Calculates various timing metrics based on the recorded times"""
-        self.first_token_time = self.engine_recv_first_token_time - self.inference_start_time
-        self.time_in_queue = time.time() - self.preprocess_end_time
-        self.preprocess_cost_time = self.preprocess_end_time - self.preprocess_start_time
+        if self.engine_recv_first_token_time and self.inference_start_time:
+            self.first_token_time = self.engine_recv_first_token_time - self.inference_start_time
+        if self.preprocess_end_time and self.preprocess_start_time:
+            self.time_in_queue = time.time() - self.preprocess_end_time
+            self.preprocess_cost_time = self.preprocess_end_time - self.preprocess_start_time
         self.request_start_time = self.arrival_time
 
         # for compatibility with old metrics
