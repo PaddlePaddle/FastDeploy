@@ -44,9 +44,10 @@ class SplitwiseConnector:
         resource_manager (object): Resource manager object.
         """
         self.cfg = cfg
-        if self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1:
+        self.local_data_parallel_id = self.cfg.parallel_config.local_data_parallel_id
+        if self.cfg.parallel_config.data_parallel_size > 1:
             self.logger = get_logger(
-                "splitwise_connector", f"splitwise_connector_{self.cfg.parallel_config.local_data_parallel_id}.log"
+                "splitwise_connector", f"splitwise_connector_dprank{self.local_data_parallel_id}.log"
             )
         else:
             self.logger = get_logger("splitwise_connector", "splitwise_connector.log")
@@ -54,7 +55,6 @@ class SplitwiseConnector:
         self.resource_manager = resource_manager
         self.connect_innode_instances = {}
         self.current_request_ids = dict()
-        self.idx = self.cfg.parallel_config.local_data_parallel_id
         self.enable_decode_cache_task = envs.FD_ENABLE_CACHE_TASK == "1"
 
         if self.cfg.cache_config.pd_comm_port is not None:
@@ -74,7 +74,7 @@ class SplitwiseConnector:
         self.router_socket.setsockopt(zmq.SNDHWM, 1000)
         self.router_socket.setsockopt(zmq.ROUTER_MANDATORY, 1)
         self.router_socket.bind(f"tcp://*:{self.cfg.cache_config.pd_comm_port[0]}")
-        self.logger.info(f"bind {self.cfg.cache_config.pd_comm_port}")
+        self.logger.info(f"_init_network: bind {self.cfg.cache_config.pd_comm_port}")
 
         self.poller = zmq.Poller()
         self.poller.register(self.router_socket, zmq.POLLIN)
@@ -94,17 +94,17 @@ class SplitwiseConnector:
                     if not socks:
                         continue
                     else:
-                        self.logger.debug(f"receive {socks}")
+                        self.logger.debug(f"start_receiver: receive {socks}")
 
                     frames = self.router_socket.recv_multipart()
-                    self.logger.debug(f"frames: {frames}")
+                    self.logger.debug(f"start_receiver: frames: {frames}")
                     message = frames[-1]
                     self.io_executor.submit(self._process_message, message)
                     time.sleep(0.001)
                 else:
                     time.sleep(5)
             except Exception as e:
-                self.logger.error(f"Receiver error: {e}, {str(traceback.format_exc())}")
+                self.logger.error(f"start_receiver: Receiver error: {e}, {str(traceback.format_exc())}")
                 time.sleep(1)
 
     def _get_push_socket(self, addr):
@@ -116,7 +116,7 @@ class SplitwiseConnector:
                 return sock
 
         try:
-            self.logger.info(f"Establishing new connection to {addr}")
+            self.logger.info(f"_get_push_socket: Establishing new connection to {addr}")
             sock = self.zmq_ctx.socket(zmq.DEALER)
 
             # 设置连接参数
@@ -135,36 +135,29 @@ class SplitwiseConnector:
             return sock
 
         except zmq.ZMQError as e:
-            self.logger.error(f"Connection to {addr} failed: {e}")
+            self.logger.error(f"_get_push_socket: Connection to {addr} failed: {e}")
 
             raise ConnectionError(f"Failed to connect to {addr}") from e
 
     def _send_message(self, addr, msg_type: str, payload):
         if not addr:
             return
-
         try:
-            self.logger.info(f"Sent {msg_type} to {addr}")
             message = self._serialize_message(msg_type, payload)
-
             try:
-
+                self.logger.info(f"_send_message: msg_type={msg_type} addr={addr}")
                 sock = self._get_push_socket(addr)
                 sock.send_multipart([b"", message])
-
-                self.logger.info(f"Sent {msg_type} to {addr}")
-
             except ConnectionError:
-                self.logger.warning(f"Connection to {addr} not established")
+                self.logger.warning(f"_send_message: Connection to {addr} not established")
             except zmq.Again:
-                self.logger.warning(f"Send queue full for {addr}")
+                self.logger.warning(f"_send_message: Send queue full for {addr}")
             except Exception as e:
-                self.logger.error(f"Send to {addr} failed: {e}, {str(traceback.format_exc())}")
+                self.logger.error(f"_send_message: Send to {addr} failed: {e}, {str(traceback.format_exc())}")
                 main_process_metrics.send_cache_failed_num.inc()
                 self._close_connection(addr)
-
         except Exception as e:
-            self.logger.error(f"Message preparation failed: {e}")
+            self.logger.error(f"_send_message: Message preparation failed: {e}")
 
     def _close_connection(self, addr):
         """
@@ -191,21 +184,20 @@ class SplitwiseConnector:
             if task.disaggregate_info["transfer_protocol"] == "ipc":
                 addr = task.disaggregate_info["cache_info"]["ipc"]["port"]
                 task.disaggregate_info["cache_info"]["ipc"]["current_id"] = current_id
+                self.logger.info(f"send_splitwise_tasks: protocol=ipc, addr={addr}, task={task.request_id}")
                 self.send_splitwise_tasks_innode([task], addr)
-
             else:
 
                 addr = (
                     f"{task.disaggregate_info['cache_info']['rdma']['ip']}:"
                     + f"{task.disaggregate_info['cache_info']['rdma']['port']}"
                 )
-                self.logger.info(f"send splitwise tasks to port {addr} decode, {task.request_id}")
                 self.current_request_ids[task.request_id] = "init"
                 decode_diagg = task.disaggregate_info["cache_info"]
                 task.disaggregate_info["cache_info"] = self.cfg.disaggregate_info["cache_info"]
                 task.disaggregate_info["cache_info"]["rdma"]["current_id"] = current_id
                 task.disaggregate_info["role"] = "decode"
-                self.logger.debug(f"send task to coupled instance, {addr}, {task}")
+                self.logger.info(f"send_splitwise_tasks: protocol=rdma, addr={addr}, task={task.request_id}")
                 self._send_message(addr, "prefill", [task])
                 task.disaggregate_info["cache_info"] = decode_diagg
             task.disaggregate_info["role"] = "prefill"
@@ -226,12 +218,12 @@ class SplitwiseConnector:
             self.create_connection(port)
         for task in tasks:
             task.disaggregate_info["cache_info"]["ipc"]["port"] = self.cfg.parallel_config.engine_worker_queue_port[
-                self.idx
+                self.local_data_parallel_id
             ]
+        self.logger.info(f"send_splitwise_tasks_innode: port={port}, tasks={[task.request_id for task in tasks]}")
         self.connect_innode_instances[port].put_disaggregated_tasks(("decode", tasks))
         for task in tasks:
             task.disaggregate_info["cache_info"]["ipc"]["port"] = port
-        self.logger.info(f"send splitwise tasks to port {port} decode")
         current_port = port
         return current_port
 
@@ -241,7 +233,7 @@ class SplitwiseConnector:
         """
         if not isinstance(tasks_list, list):
             tasks_list = [tasks_list]
-        self.logger.info(f"send first token to decode, {[x.request_id for x in tasks_list]}")
+        self.logger.info(f"send_first_token: send first token to decode, {[x.request_id for x in tasks_list]}")
         if prefill_msg["transfer_protocol"] == "ipc":
             port = prefill_msg["cache_info"]["ipc"]["port"]
             if port not in self.connect_innode_instances:
@@ -249,7 +241,7 @@ class SplitwiseConnector:
             self.connect_innode_instances[port].put_disaggregated_tasks(("decode", tasks_list))
         else:
             node = f"{prefill_msg['cache_info']['rdma']['ip']}:{prefill_msg['cache_info']['rdma']['port']}"
-            self.logger.info(f"send first token to port {node} decode")
+            self.logger.info(f"send_first_token: send first token to port {node} decode")
             self._send_message(node, "decode", tasks_list)
 
     def create_connection(self, port):
@@ -288,7 +280,7 @@ class SplitwiseConnector:
         del self.current_request_ids[task.request_id]
         if msg == "finished":
             return True, ""
-        self.logger.error(f"Receive_decode_allocated error: {msg}")
+        self.logger.error(f"check_decode_allocated: Receive_decode_allocated error: {msg}")
         return False, msg
 
     def send_cache_info_to_messager(self, tasks: List[Request], current_id):
@@ -359,9 +351,11 @@ class SplitwiseConnector:
                 else:
                     info = {
                         "request_id": tasks[i].request_id,
-                        "device_ids": self.cfg.parallel_config.device_ids.split(","),
+                        "device_ids": [self.cfg.parallel_config.device_ids.split(",")[self.local_data_parallel_id]],
                         "ip": self.cfg.host_ip,
-                        "rdma_ports": self.cfg.disaggregate_info["cache_info"]["rdma"]["rdma_port"],
+                        "rdma_ports": [
+                            self.cfg.disaggregate_info["cache_info"]["rdma"]["rdma_port"][self.local_data_parallel_id]
+                        ],
                         "transfer_protocol": "rdma",
                         "dest_block_ids": dsg_info["block_tables"],
                         "decode_tp_size": self.cfg.parallel_config.tensor_parallel_size,
@@ -404,7 +398,7 @@ class SplitwiseConnector:
         """
         try:
             msg_type, payload = self._deserialize_message(message)
-            self.logger.info(f"{msg_type}")
+            self.logger.info(f"_process_message: {msg_type}")
 
             if msg_type == "prefill":
                 self._handle_prefill(payload)
@@ -412,7 +406,7 @@ class SplitwiseConnector:
                 self._handle_decode(payload)
             elif msg_type == "cache_sync":
                 for task in payload:
-                    self.logger.info(f"cache_sync task: {task}")
+                    self.logger.info(f"_process_message: cache_sync task: {task}")
                     current_status = task.get("error_msg", "finished")
                     self.current_request_ids[task["request_id"]] = current_status
                     if self.enable_decode_cache_task:
@@ -421,13 +415,13 @@ class SplitwiseConnector:
                         self.engine_worker_queue.put_cache_info(payload)
 
         except Exception as e:
-            self.logger.error(f"Message processing failed: {e}, {str(traceback.format_exc())}")
+            self.logger.error(f"_process_message: Message processing failed: {e}, {str(traceback.format_exc())}")
 
     def _handle_prefill(self, tasks):
         """
         Handle prefill tasks from other nodes.
         """
-        self.logger.debug(f"_handle_prefill function receive {tasks}")
+        self.logger.debug(f"_handle_prefill: receive payload {tasks}")
         tasks_data = [Request.from_dict(task) for task in tasks]
         self.engine_worker_queue.put_disaggregated_tasks(("decode", tasks_data))
 
@@ -435,7 +429,7 @@ class SplitwiseConnector:
         """
         Handle decode tasks from other nodes.
         """
-        self.logger.debug(f"_handle_decode function receive {payload}")
+        self.logger.debug(f"_handle_decode: receive payload {payload}")
         tasks = []
         for task in payload:
             tasks.append(RequestOutput.from_dict(task))
