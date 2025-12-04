@@ -551,6 +551,7 @@ class ParallelConfig:
         self.tensor_parallel_size = 1  # TP degree
         self.expert_parallel_rank = 0  # EP rank ID
         self.expert_parallel_size = 1  # EP degree
+        self.data_parallel_rank = 0  # DP rank ID
         self.data_parallel_size = 1  # DP degree
         self.enable_expert_parallel = False
         self.enable_chunked_moe = False
