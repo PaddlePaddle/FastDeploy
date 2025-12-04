@@ -3,14 +3,14 @@
 is_port_free() {
   local port=$1
   if ss -ltn | awk '{print $4}' | grep -q ":${port}$"; then
-    return 1  # 占用
+    return 1  # Port is occupied
   fi
-  return 0  # 空闲
+  return 0  # Port is free
 }
 
 check_ports() {
     for port in "$@"; do
-        if $(is_port_free $port); then
+        if ! is_port_free $port; then
             echo "❌ Port $port is already in use"
             return 1
         fi
@@ -67,7 +67,7 @@ get_free_ports() {
   used_ports2=$(netstat -an | grep -E "(0.0.0.0|127.0.0.1|${POD_IP}|tcp6)" | awk '{n=split($5,a,":"); if(a[n]~/^[0-9]+$/) print a[n];}' | sort -u)
   all_used_ports=$(printf "%s\n" "${used_ports1}" "${used_ports2}" | sort -u)
 
-  # 生成0到32767之间的随机数
+  # Generate random number between 0 and 32767
   random_num=$(( RANDOM ))
   port=$(( random_num % (end_port - start_port + 1) + start_port ))
 

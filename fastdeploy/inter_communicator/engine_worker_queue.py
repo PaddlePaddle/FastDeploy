@@ -497,7 +497,6 @@ class EngineWorkerQueue:
         self.lock.release()
 
         llm_logger.debug(f"put_tasks: tasks={tasks}")
-        return
 
     def get_tasks(self) -> Tuple[List[Any], bool]:
         """

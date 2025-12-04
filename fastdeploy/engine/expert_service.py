@@ -61,7 +61,6 @@ class ExpertService:
                 ]
         self.cfg.local_device_ids = self.cfg.parallel_config.device_ids.split(",")[start_pos:end_pos]
         llm_logger.info(f"local_data_parallel_id: {local_data_parallel_id}")
-        # self.cfg.disaggregate_info = None
 
         if self.cfg.cache_config.num_gpu_blocks_override is None:
             self.do_profile = True
