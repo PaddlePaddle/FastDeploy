@@ -1057,7 +1057,7 @@ class ResourceManagerV1(ResourceManager):
         request.need_prefill_tokens = len(request.prompt_token_ids) + 1
 
         request_output.metrics.decode_recv_req_time = request.metrics.decode_recv_req_time
-        request_output.metrics.decode_preallocat_req_time = request.metrics.decode_preallocat_req_time
+        request_output.metrics.decode_preallocate_req_time = request.metrics.decode_preallocate_req_time
         request.metrics = request_output.metrics
         self.running.append(request)
 

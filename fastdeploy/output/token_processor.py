@@ -618,7 +618,7 @@ class TokenProcessor:
             else:
                 batch = self.output_tokens[1]
                 accept_num = tokens[2 : batch + 2]
-            self._record_speculative_decoding_mertics(accept_num)
+            self._record_speculative_decoding_metrics(accept_num)
         elif self.use_logprobs:
             batch = self.output_tokens[1, 0]
             tokens = tokens[2 : batch * (K + 1) + 2].reshape([batch, K + 1])[:, : (K + 1)]
@@ -819,7 +819,7 @@ class TokenProcessor:
         main_process_metrics.request_inference_time.observe(current_time - metrics.inference_start_time)
         main_process_metrics.request_generation_tokens.observe(self.tokens_counter[task.request_id])
 
-    def _record_speculative_decoding_mertics(self, accept_num):
+    def _record_speculative_decoding_metrics(self, accept_num):
         """Record metrics of speculative decoding"""
         if not hasattr(main_process_metrics, "spec_decode_draft_acceptance_rate"):
             main_process_metrics._init_speculative_metrics(

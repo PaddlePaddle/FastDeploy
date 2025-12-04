@@ -437,7 +437,7 @@ class EngineService:
             cur_req.prompt_token_ids[0] = req_out.outputs.token_ids[0]
             cur_req.num_cached_tokens = req_out.num_cached_tokens
             req_out.metrics.decode_recv_req_time = cur_req.metrics.decode_recv_req_time
-            req_out.metrics.decode_preallocat_req_time = cur_req.metrics.decode_preallocat_req_time
+            req_out.metrics.decode_preallocate_req_time = cur_req.metrics.decode_preallocate_req_time
             cur_req.metrics = req_out.metrics
             cur_req.metrics.decode_inference_start_time = time.time()
             if self.cfg.speculative_config.method in ["mtp"] and self.cfg.scheduler_config.splitwise_role == "decode":
@@ -1140,7 +1140,8 @@ class EngineService:
 
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                     if self.resource_manager.preallocate_resource_in_d(task):
-                        task.metrics.decode_preallocat_req_time = time.time()
+                        task.metrics.decode_preallocate_req_time = time.time()
+                        self.llm_logger.info(f"Resource available, processing task {task.request_id}")
                         self.split_connector.send_cache_info_to_prefill([task])
                         self.llm_logger.debug(f"D has successfully sent cache infos for task {task.request_id}")
                         processed_indices.append(idx)
@@ -1149,7 +1150,7 @@ class EngineService:
                     if self.resource_manager.is_resource_sufficient(task.prompt_token_ids_len):
                         self.llm_logger.debug(f"D Resource available, processing task {task.request_id}")
                         self.insert_tasks([task])
-                        task.metrics.decode_preallocat_req_time = time.time()
+                        task.metrics.decode_preallocate_req_time = time.time()
                         processed_indices.append(idx)
                         is_success = True
 

@@ -433,7 +433,7 @@ class RequestMetrics:
         wait_for_sending_cache_time: The time when the engine waited for sending cache.
         send_request_output_to_decode_time: The time when the engine sent request_output to decode.
         decode_recv_req_time: The time when the decode received the request.
-        decode_preallocat_req_time: The time when the decode preallocated the request.
+        decode_preallocate_req_time: The time when the decode has preallocated resource for the request.
         decode_recv_first_token_time: The time when the decode received the first token.
         decode_inference_start_time: The time when the decode sent the request to worker.
         decode_recv_second_token_time: The time when the decode received the second token.
@@ -456,7 +456,7 @@ class RequestMetrics:
     scheduler_recv_req_time: Optional[float] = None  # scheduler receives request and add to scheduler
     engine_get_req_time: Optional[float] = None  # engine gets request from scheduler
     ask_decode_resource_start_time: Optional[float] = None  # engine asks decode resource (only valid for prefill)
-    ask_decode_resource_finish_time: Optional[float] = None  # engine asks decode resource (only valid for prefill)
+    ask_decode_resource_finish_time: Optional[float] = None  # engine has got decode resource (only valid for prefill)
     add_req_to_resource_manager_time: Optional[float] = None  # engine adds request to resource manager
     inference_start_time: Optional[float] = None  # requests are added into the engine work queue
     engine_recv_latest_token_time: Optional[float] = None  # receive the latest token from worker
@@ -467,7 +467,9 @@ class RequestMetrics:
     )
 
     decode_recv_req_time: Optional[float] = None  # decode receive request from prefill (only valid for decode)
-    decode_preallocat_req_time: Optional[float] = None  # decode preallocate resource for req (only valid for decode)
+    decode_preallocate_req_time: Optional[float] = (
+        None  # decode has preallocatee resource for req (only valid for decode)
+    )
     decode_recv_first_token_time: Optional[float] = (
         None  # decode receive request_output with first token from prefill (only valid for decode)
     )
@@ -537,8 +539,9 @@ class RequestMetrics:
         """Calculates various timing metrics based on the recorded times"""
         if self.engine_recv_first_token_time and self.inference_start_time:
             self.first_token_time = self.engine_recv_first_token_time - self.inference_start_time
+        if self.inference_start_time and self.preprocess_end_time:
+            self.time_in_queue = self.inference_start_time - self.preprocess_end_time
         if self.preprocess_end_time and self.preprocess_start_time:
-            self.time_in_queue = time.time() - self.preprocess_end_time
             self.preprocess_cost_time = self.preprocess_end_time - self.preprocess_start_time
         self.request_start_time = self.arrival_time
 

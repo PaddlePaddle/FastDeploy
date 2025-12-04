@@ -232,7 +232,7 @@ mm_hashes: Optional[list] = None
 # Default None indicates no multimodal input or hash validation required.
 
 collect_metrics: Optional[bool] = False
-# Whether to return metric information, for performance analysis or debugging (default is False, meaning no metrics are returned).
+# Whether to return metrics information, for performance analysis or debugging (default is False, meaning no metrics are returned).
 ```
 
 ### Differences in Return Fields
