@@ -173,7 +173,11 @@ class PaddleDisWorkerProc:
             model_weights_status:
         """
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        if self.parallel_config.data_parallel_size > 1 and not envs.FD_ENABLE_MULTI_API_SERVER:
+        if (
+            self.parallel_config.enable_expert_parallel
+            and self.parallel_config.data_parallel_size > 1
+            and not envs.FD_ENABLE_MULTI_API_SERVER
+        ):
             launched_expert_service_signal_data = np.zeros(
                 shape=[self.parallel_config.data_parallel_size // self.fd_config.nnode], dtype=np.int32
             )
@@ -905,6 +909,12 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
 
     parallel_config.tensor_parallel_rank = local_rank % parallel_config.tensor_parallel_size
     parallel_config.data_parallel_rank = local_rank // parallel_config.tensor_parallel_size
+    # config for DP
+    if parallel_config.data_parallel_size > 1:
+        max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
+        parallel_config.local_data_parallel_id = parallel_config.data_parallel_rank % (
+            max_chips_per_node // parallel_config.tensor_parallel_size
+        )
     # config for EP
     if parallel_config.expert_parallel_size > 1:
         expert_parallel_rank = int(local_rank % parallel_config.expert_parallel_size)
@@ -914,11 +924,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
             num_experts = model_config.moe_num_experts
         num_experts_per_rank = num_experts // parallel_config.expert_parallel_size
         num_experts_start_offset = expert_parallel_rank * num_experts_per_rank
-        max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
-        parallel_config.local_data_parallel_id = parallel_config.data_parallel_rank % (
-            max_chips_per_node // parallel_config.tensor_parallel_size
-        )
-
         parallel_config.expert_parallel_rank = expert_parallel_rank
         parallel_config.num_experts_per_rank = num_experts_per_rank
         parallel_config.num_experts_start_offset = num_experts_start_offset

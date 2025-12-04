@@ -496,6 +496,8 @@ class EngineWorkerQueue:
         self.tasks.append(tasks)
         self.lock.release()
 
+        llm_logger.debug(f"put_tasks: tasks={tasks}")
+
     def get_tasks(self) -> Tuple[List[Any], bool]:
         """
         Retrieve tasks from the shared queue and update read status.
@@ -512,6 +514,7 @@ class EngineWorkerQueue:
         if all_client_read:
             self.tasks[:] = list()
         self.lock.release()
+        llm_logger.debug(f"get_tasks: tasks={tasks}")
         return tasks, all_client_read
 
     def num_tasks(self) -> int:
@@ -600,8 +603,7 @@ class EngineWorkerQueue:
 
         self.cache_infos.extend(cache_info)
         llm_logger.debug(
-            f"put cache_infos to engine worker queue: {self.cache_infos}, "
-            f"local_data_parallel_id:{self.local_data_parallel_id}"
+            f"put_cache_info: cache_info={cache_info}, local_data_parallel_id={self.local_data_parallel_id}"
         )
         self.lock_info.release()
 

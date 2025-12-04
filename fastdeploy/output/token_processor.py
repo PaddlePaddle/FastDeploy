@@ -402,12 +402,8 @@ class TokenProcessor:
                             rank_id,
                             is_blocking,
                         )
-                    elif (
-                        self.cfg.parallel_config.enable_expert_parallel
-                        and self.cfg.parallel_config.data_parallel_size > 1
-                    ):
+                    elif self.cfg.parallel_config.data_parallel_size > 1:
                         get_output_ep(self.output_tokens, rank_id, is_blocking)
-
                     else:
                         get_output(self.output_tokens, rank_id, is_blocking)
 

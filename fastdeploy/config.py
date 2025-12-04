@@ -545,6 +545,7 @@ class ParallelConfig:
         self.tensor_parallel_size = 1  # TP degree
         self.expert_parallel_rank = 0  # EP rank ID
         self.expert_parallel_size = 1  # EP degree
+        self.data_parallel_rank = 0  # DP rank ID
         self.data_parallel_size = 1  # DP degree
         self.enable_expert_parallel = False
         self.enable_chunked_moe = False
@@ -1887,7 +1888,11 @@ class FDConfig:
             engine_worker_queue_port = self.parallel_config.engine_worker_queue_port[
                 self.parallel_config.local_data_parallel_id
             ]
-        connector_port = self.cache_config.pd_comm_port[0] if self.cache_config.pd_comm_port else None
+        connector_port = (
+            self.cache_config.pd_comm_port[self.parallel_config.local_data_parallel_id]
+            if self.cache_config.pd_comm_port
+            else None
+        )
 
         self.disaggregate_info = {}
         if self.scheduler_config.splitwise_role != "mixed":

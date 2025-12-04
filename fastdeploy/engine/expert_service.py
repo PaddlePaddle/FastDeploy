@@ -61,7 +61,6 @@ class ExpertService:
                 ]
         self.cfg.local_device_ids = self.cfg.parallel_config.device_ids.split(",")[start_pos:end_pos]
         llm_logger.info(f"local_data_parallel_id: {local_data_parallel_id}")
-        self.cfg.disaggregate_info = None
 
         if self.cfg.cache_config.num_gpu_blocks_override is None:
             self.do_profile = True
@@ -127,17 +126,18 @@ class ExpertService:
         local_rank = local_data_parallel_id % self.cfg.worker_num_per_node
 
         if not envs.FD_ENABLE_MULTI_API_SERVER:
-            launched_expert_service_signal_data = np.zeros(
-                shape=[self.cfg.parallel_config.data_parallel_size // self.cfg.nnode], dtype=np.int32
-            )
-            self.launched_expert_service_signal = IPCSignal(
-                name="launched_expert_service_signal",
-                array=launched_expert_service_signal_data,
-                dtype=np.int32,
-                suffix=ipc_signal_suffix,
-                create=False,
-            )
-            self.launched_expert_service_signal.value[local_rank] = 1
+            if self.cfg.parallel_config.enable_expert_parallel:
+                launched_expert_service_signal_data = np.zeros(
+                    shape=[self.cfg.parallel_config.data_parallel_size // self.cfg.nnode], dtype=np.int32
+                )
+                self.launched_expert_service_signal = IPCSignal(
+                    name="launched_expert_service_signal",
+                    array=launched_expert_service_signal_data,
+                    dtype=np.int32,
+                    suffix=ipc_signal_suffix,
+                    create=False,
+                )
+                self.launched_expert_service_signal.value[local_rank] = 1
         if self.do_profile:
             get_profile_block_num = np.zeros([1], dtype=np.int32)
             while True:

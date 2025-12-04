@@ -214,6 +214,9 @@ class ZmqServerBase(ABC):
             except zmq.Again:
                 time.sleep(0.001)
                 continue
+            except zmq.error.ZMQError as e:
+                llm_logger.error(f"recv_result_handle get zmq error: {e}")
+                break
             except Exception as e:
                 llm_logger.error(f"recv_result_handle get unknown exception: {e}")
                 continue
