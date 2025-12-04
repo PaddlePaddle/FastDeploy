@@ -187,7 +187,7 @@ class MoEMethodBase(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
-        block_tables = None,
+        block_tables=None,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
@@ -199,7 +199,6 @@ class MoEMethodBase(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
-        block_tables = None,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
@@ -215,7 +214,7 @@ class MoEMethodBase(QuantMethodBase):
                     self.ep_decoder_runner.clean_low_latency_buffer()
                 return self.apply_ep_decode(layer, x, gate)
         else:
-            return self.apply_tp(layer, x, gate, block_tables)
+            return self.apply_tp(layer, x, gate)
 
 
 class UnquantizedFusedMoEMethod(MoEMethodBase):
@@ -224,7 +223,7 @@ class UnquantizedFusedMoEMethod(MoEMethodBase):
         hidden_size = extra_weight_attrs.pop("hidden_size")
         moe_intermediate_size = extra_weight_attrs.pop("moe_intermediate_size")
         self.model_format = extra_weight_attrs.get("model_format")
-        if current_platform.is_cuda() and self.model_format != "torch":
+        if (current_platform.is_cuda() or current_platform.is_intel_hpu()) and self.model_format != "torch":
             self.up_gate_proj_weight_shape = [num_experts, hidden_size, moe_intermediate_size * 2]
             self.down_proj_weight_shape = [num_experts, moe_intermediate_size, hidden_size]
             extra_weight_attrs = {

@@ -97,8 +97,6 @@ class Qwen3MLP(nn.Layer):
         prefix: str = "",
     ) -> None:
         super().__init__()
-        self.nranks = fd_config.parallel_config.tensor_parallel_size
-
         self.up_gate_proj = MergedColumnParallelLinear(
             fd_config,
             prefix=f"{prefix}.up_gate_proj",
@@ -423,7 +421,7 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
         empty_input_forward
         """
         fake_hidden_states = paddle.empty(
-            shape=[1, self.fd_config.model_config.hidden_size],
+            shape=[0, self.fd_config.model_config.hidden_size],
             dtype=paddle.get_default_dtype(),
         )
         for i in range(

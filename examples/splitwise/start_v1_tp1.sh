@@ -2,29 +2,14 @@
 set -e
 
 # Test splitwise deployment
-# v0 requires prefill and decode in one node and it uses local scheduler
-# v1 supports prefill and decode in multi node and it uses splitwise scheduler
-# v2 supports prefill and decode in multi node and it uses router and local scheduler
-
-wait_for_health() {
-       local server_port=$1
-       while true; do
-       status_code=$(curl -s -o /dev/null -w "%{http_code}" "http://0.0.0.0:${server_port}/health" || echo "000")
-       if [ "$status_code" -eq 200 ]; then
-              break
-       else
-              echo "Service not ready. Retrying in 2s..."
-              sleep 2
-       fi
-       done
-}
+# There are two methods for splitwise deployment:
+# v0: using splitwise_scheduler or dp_scheduler
+# v1: using local_scheduler + router
 
 # prepare environment
-MODEL_NAME="PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
-# MODEL_NAME="baidu/ERNIE-4.5-21B-A3B-Paddle"
-
+export MODEL_NAME="PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
 export FD_DEBUG=1
-export ENABLE_V1_KVCACHE_SCHEDULER=0
+export ENABLE_V1_KVCACHE_SCHEDULER=1
 export KVCACHE_GDRCOPY_FLUSH_ENABLE=1
 
 SCRIPT_PATH=$(readlink -f "$0")
@@ -38,16 +23,30 @@ fi
 
 unset http_proxy && unset https_proxy
 rm -rf log_*
+source ./utils.sh
 
-# start redis
-if ! redis-cli ping &>/dev/null; then
-    echo "Redis is not running. Starting redis-server..."
-    redis-server --daemonize yes
-    sleep 1
-else
-    echo "Redis is already running."
-fi
-sleep 1
+P_PORT=52400
+D_PORT=52500
+ROUTER_PORT=52700
+
+ports=(
+    $P_PORT $((P_PORT + 1)) $((P_PORT + 2)) $((P_PORT + 3)) $((P_PORT + 4)) $((P_PORT + 5))
+    $D_PORT $((D_PORT + 1)) $((D_PORT + 2)) $((D_PORT + 3)) $((D_PORT + 4)) $((D_PORT + 5))
+    $ROUTER_PORT
+)
+check_ports "${ports[@]}" || {
+    echo "❌ Some ports are in use. Please release them."
+    exit 1
+}
+
+# start router
+export FD_LOG_DIR="log_router"
+mkdir -p ${FD_LOG_DIR}
+
+nohup python -m fastdeploy.router.launch \
+    --port ${ROUTER_PORT} \
+    --splitwise \
+    2>&1 >${FD_LOG_DIR}/nohup &
 
 # start prefill
 export CUDA_VISIBLE_DEVICES=0
@@ -56,21 +55,19 @@ mkdir -p ${FD_LOG_DIR}
 
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
-       --port 8100 \
-       --metrics-port 8101 \
-       --engine-worker-queue-port 8102 \
-       --cache-queue-port 8103 \
+       --port "${P_PORT}" \
+       --metrics-port "$((P_PORT + 1))" \
+       --engine-worker-queue-port "$((P_PORT + 2))" \
+       --cache-queue-port "$((P_PORT + 3))" \
        --max-model-len 32768 \
        --splitwise-role "prefill" \
-       --cache-transfer-protocol "rdma,ipc" \
-       --rdma-comm-ports 8104 \
-       --pd-comm-port 8105 \
-       --scheduler-name "splitwise" \
-       --scheduler-host "127.0.0.1" \
-       --scheduler-port 6379 \
-       --scheduler-ttl 9000 \
+       --cache-transfer-protocol "rdma" \
+       --rdma-comm-ports "$((P_PORT + 4))" \
+       --pd-comm-port "$((P_PORT + 5))" \
+       --router "0.0.0.0:${ROUTER_PORT}" \
        2>&1 >${FD_LOG_DIR}/nohup &
-wait_for_health 8100
+
+wait_for_health ${P_PORT}
 
 # start decode
 export CUDA_VISIBLE_DEVICES=1
@@ -79,18 +76,29 @@ mkdir -p ${FD_LOG_DIR}
 
 nohup python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_NAME} \
-       --port 9000 \
-       --metrics-port 9001 \
-       --engine-worker-queue-port 9002 \
-       --cache-queue-port 9003 \
+       --port "${D_PORT}" \
+       --metrics-port "$((D_PORT + 2))" \
+       --engine-worker-queue-port "$((D_PORT + 3))" \
+       --cache-queue-port "$((D_PORT + 1))" \
        --max-model-len 32768 \
        --splitwise-role "decode" \
-       --cache-transfer-protocol "rdma,ipc" \
-       --rdma-comm-ports 9004 \
-       --pd-comm-port 9005 \
-       --scheduler-name "splitwise" \
-       --scheduler-host "127.0.0.1" \
-       --scheduler-port 6379 \
-       --scheduler-ttl 9000 \
+       --cache-transfer-protocol "rdma" \
+       --rdma-comm-ports "$((D_PORT + 4))" \
+       --pd-comm-port "$((D_PORT + 5))" \
+       --router "0.0.0.0:${ROUTER_PORT}" \
        2>&1 >${FD_LOG_DIR}/nohup &
-wait_for_health 9000
+
+wait_for_health ${D_PORT}
+
+# send request
+sleep 10  # make sure server is registered to router
+echo "send request..."
+curl -X POST "http://0.0.0.0:${ROUTER_PORT}/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "hello"}
+  ],
+  "max_tokens": 100,
+  "stream": false
+}'

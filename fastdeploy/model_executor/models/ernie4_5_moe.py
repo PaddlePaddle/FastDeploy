@@ -66,7 +66,6 @@ class Ernie4_5_MLP(nn.Layer):
         reduce_results: bool = True,
     ) -> None:
         super().__init__()
-        self.nranks = fd_config.parallel_config.tensor_parallel_size
         self.up_gate_proj = MergedColumnParallelLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.up_gate_proj",
@@ -95,7 +94,7 @@ class Ernie4_5_MLP(nn.Layer):
         self.up_gate_proj.load_state_dict(state_dict)
         self.down_proj.load_state_dict(state_dict)
 
-    def forward(self, hidden_states: paddle.Tensor, block_tables = None):
+    def forward(self, hidden_states: paddle.Tensor):
         # print(f"[Ernie4_5_MLP] hidden_states: {hidden_states}")
         gate_up_out = self.up_gate_proj(hidden_states)
         # print(f"[Ernie4_5_MLP] gate_up_out: {gate_up_out}")
@@ -142,7 +141,8 @@ class Ernie4_5_MoE(nn.Layer):
                 "down_proj_expert_code_zp_key": f"{prefix}.experts.{{}}.down_proj.code_zp",
             }
         elif moe_quant_type == "tensor_wise_fp8" or (
-            moe_quant_type == "block_wise_fp8" and fd_config.model_config.is_quantized
+            moe_quant_type == "block_wise_fp8"
+            and (fd_config.model_config.is_quantized or fd_config.model_config.is_moe_quantized)
         ):
             weight_key_map = {
                 "gate_weight_key": f"{prefix}.gate.weight",
@@ -215,17 +215,13 @@ class Ernie4_5_MoE(nn.Layer):
             self.shared_experts.load_state_dict(state_dict)
 
     def update_state_dict(self, state_dict):
-        self.fused_moe.load_state_dict(state_dict, True)
+        self.experts.load_state_dict(state_dict, True)
 
-    def forward(self, hidden_states: paddle.Tensor, block_tables = None):
-        # print(f"[Ernie4_5_MoE] hidden_states: {'⚠️' if paddle.any(paddle.isnan(hidden_states)) else '✅'}")
-        # print(f"[Ernie4_5_MoE] block_tables: {block_tables}")
-        out = self.experts(hidden_states, self.gate, block_tables)
+    def forward(self, hidden_states: paddle.Tensor):
+        out = self.experts(hidden_states, self.gate)
         if self.num_shared_experts > 0:
             s_x = self.shared_experts(hidden_states)
             out = out + s_x
-        # print(f"[Ernie4_5_MoE] out: {'⚠️' if paddle.any(paddle.isnan(out)) else '✅'}")
-        # print(f"[Ernie4_5_MoE] block_tables: {block_tables}")
         return out
 
 
@@ -262,24 +258,15 @@ class Ernie4_5_Attention(nn.Layer):
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
     ):
-        # print(f"[Ernie4_5_Attention] hidden_states: {'⚠️' if paddle.any(paddle.isnan(hidden_states)) else '✅'}")
-        # print(f"[Ernie4_5_Attention] block_tables: {forward_meta.block_tables}")
 
-        qkv_out = self.qkv_proj(hidden_states, forward_meta.block_tables)
-        # print(f"[Ernie4_5_Attention] qkv_out: {'⚠️' if paddle.any(paddle.isnan(qkv_out)) else '✅'}")
-        # print(f"[Ernie4_5_Attention] block_tables: {forward_meta.block_tables}")
+        qkv_out = self.qkv_proj(hidden_states)
 
         attn_out = self.attn(
             qkv=qkv_out,
             forward_meta=forward_meta,
         )
-        # print(f"[Ernie4_5_Attention] attn_out: {'⚠️' if paddle.any(paddle.isnan(attn_out)) else '✅'}")
-        # print(f"[Ernie4_5_Attention] block_tables: {forward_meta.block_tables}")
 
         output = self.o_proj(attn_out)
-        # print(f"[Ernie4_5_Attention] output: {'⚠️' if paddle.any(paddle.isnan(output)) else '✅'}")
-        # print(f"[Ernie4_5_Attention] block_tables: {forward_meta.block_tables}")
-
 
         return output
 
@@ -352,37 +339,18 @@ class Ernie4_5_DecoderLayer(nn.Layer):
         hidden_states, residual = self.input_layernorm(
             hidden_states, residual_input=residual, forward_meta=forward_meta
         )
-        # print(
-        #     f"[Ernie4_5_DecoderLayer] hidden_states after pre_norm: {'⚠️' if paddle.any(paddle.isnan(hidden_states)) else '✅'}"
-        # )
-        # print(f"[Ernie4_5_DecoderLayer] block_tables: {forward_meta.block_tables}")
-
 
         hidden_states = self.self_attn(
             hidden_states=hidden_states,
             forward_meta=forward_meta,
         )
-        # print(
-        #     f"[Ernie4_5_DecoderLayer] hidden_states after attn: {'⚠️' if paddle.any(paddle.isnan(hidden_states)) else '✅'}"
-        # )
-        # print(f"[Ernie4_5_DecoderLayer] block_tables: {forward_meta.block_tables}")
-
 
         hidden_states, residual = self.post_attention_layernorm(
             hidden_states,
             residual,
         )
-        # print(
-        #     f"[Ernie4_5_DecoderLayer] hidden_states after post_norm: {'⚠️' if paddle.any(paddle.isnan(hidden_states)) else '✅'}"
-        # )
-        # print(f"[Ernie4_5_DecoderLayer] block_tables: {forward_meta.block_tables}")
 
-
-        hidden_states = self.mlp(hidden_states, forward_meta.block_tables)
-        # print(
-        #     f"[Ernie4_5_DecoderLayer] hidden_states after mlp: {'⚠️' if paddle.any(paddle.isnan(hidden_states)) else '✅'}"
-        # )
-        # print(f"[Ernie4_5_DecoderLayer] block_tables: {forward_meta.block_tables}")
+        hidden_states = self.mlp(hidden_states)
 
         return hidden_states, residual
 
@@ -405,7 +373,7 @@ class Ernie4_5_Model(nn.Layer):
         fd_config.model_config.pretrained_config.prefix_name = "ernie"
         self.fd_config = fd_config
         self.redundant_table_manger = None
-        if fd_config.model_config.enable_redundant_experts is True:
+        if fd_config.eplb_config.enable_eplb is True:
             self.redundant_table_manger = RedundantExpertManger(
                 n_routed_experts=fd_config.model_config.moe_num_experts,
                 num_hidden_layers=fd_config.model_config.num_hidden_layers,
@@ -642,7 +610,9 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             process_weights_after_loading_fn(model_sublayer_name, param)
 
         if self.tie_word_embeddings:
-            self.lm_head.linear.weight.set_value(self.ernie.embed_tokens.embeddings.weight)
+            self.lm_head.linear.weight.set_value(
+                self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
+            )
 
     def compute_logits(self, hidden_states: paddle.Tensor):
         logits = self.lm_head(hidden_states)

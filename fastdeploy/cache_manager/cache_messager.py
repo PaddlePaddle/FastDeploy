@@ -25,6 +25,13 @@ import traceback
 import numpy as np
 import paddle
 
+from fastdeploy.cache_manager.ops import (
+    get_output_kv_signal,
+    get_peer_mem_addr,
+    memory_allocated,
+    set_data_ipc,
+    set_device,
+)
 from fastdeploy.cache_manager.transfer_factory import IPCCommManager, RDMACommManager
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.inter_communicator import (
@@ -32,7 +39,6 @@ from fastdeploy.inter_communicator import (
     IPCSignal,
     shared_memory_exists,
 )
-from fastdeploy.model_executor.ops.gpu import get_output_kv_signal, set_data_ipc
 from fastdeploy.utils import envs, get_logger
 
 logger = get_logger("cache_messager", "cache_messager.log")
@@ -49,13 +55,13 @@ def parse_args():
         default="mixed",
         help="splitwise role, can be decode, prefill or mixed",
     )
-    parser.add_argument("--rank", type=int, default=0, help="current rank")
+    parser.add_argument("--rank", type=int, default=0, help="local tp rank id")
     parser.add_argument("--device_id", type=int, default=0, help="device id")
     parser.add_argument("--num_layers", type=int, default=1, help="model num layers")
     parser.add_argument("--key_cache_shape", type=str, default="", help="key cache shape")
     parser.add_argument("--value_cache_shape", type=str, default="", help="value cache shape")
     parser.add_argument("--rdma_port", type=str, default="", help="rmda port")
-    parser.add_argument("--mp_num", type=int, default=1, help="number of model parallel")
+    parser.add_argument("--mp_num", type=int, default=1, help="number of model parallel, i.e. tp_size, tp_num")
     parser.add_argument("--engine_pid", type=str, default=None, help="engine pid")
     parser.add_argument(
         "--protocol",
@@ -153,12 +159,22 @@ class CacheMessager:
         cache_v = []
         self.messager = {}
         for layer_idx in range(self.num_layers):
+            # value cache
+            val_cache_key = f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"
+            if val_cache_key in self.gpu_cache_kvs:
+                val_cache = self.gpu_cache_kvs[val_cache_key]
+                cache_v.append(val_cache)
+                if paddle.is_compiled_with_xpu():
+                    cache_v_ptr_list.append(get_peer_mem_addr(val_cache.data_ptr()))
+                else:
+                    cache_v_ptr_list.append(val_cache.data_ptr())
+            # key cache
             key_cache = self.gpu_cache_kvs[f"key_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
-            val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
             cache_k.append(key_cache)
-            cache_v.append(val_cache)
-            cache_k_ptr_list.append(key_cache.data_ptr())
-            cache_v_ptr_list.append(val_cache.data_ptr())
+            if paddle.is_compiled_with_xpu():
+                cache_k_ptr_list.append(get_peer_mem_addr(key_cache.data_ptr()))
+            else:
+                cache_k_ptr_list.append(key_cache.data_ptr())
         cache_k_ptr_list = np.array(cache_k_ptr_list)
         cache_v_ptr_list = np.array(cache_v_ptr_list)
 
@@ -166,7 +182,7 @@ class CacheMessager:
         cache_shape = key_cache.shape
         max_block_num = cache_shape[0]
         block_bytes = math.prod(cache_shape[1:])
-        if key_cache.dtype == paddle.bfloat16:
+        if key_cache.dtype == paddle.bfloat16 or key_cache.dtype == paddle.float16:
             block_bytes *= 2
         logger.info(
             f"layers {num_layers} cache_shape: {cache_shape}, max_block_num: {max_block_num}, "
@@ -188,7 +204,6 @@ class CacheMessager:
 
             elif protocol == "rdma":
                 logger.info(f"splitwise_role rdma: {self.splitwise_role}, rank: {self.rank}, gpu_id: {gpu_id}")
-
                 self.messager[protocol] = RDMACommManager(
                     splitwise_role,
                     rank,
@@ -198,6 +213,8 @@ class CacheMessager:
                     max_block_num,
                     block_bytes,
                     rdma_port,
+                    nranks,
+                    rank,
                 )
 
         self.gpu_id = gpu_id
@@ -448,12 +465,22 @@ class CacheMessagerV1:
         cache_v = []
         self.messager = {}
         for layer_idx in range(self.num_layers):
+            # value cache
+            val_cache_key = f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"
+            if val_cache_key in self.gpu_cache_kvs:
+                val_cache = self.gpu_cache_kvs[val_cache_key]
+                cache_v.append(val_cache)
+                if paddle.is_compiled_with_xpu():
+                    cache_v_ptr_list.append(get_peer_mem_addr(val_cache.data_ptr()))
+                else:
+                    cache_v_ptr_list.append(val_cache.data_ptr())
+            # key cache
             key_cache = self.gpu_cache_kvs[f"key_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
-            val_cache = self.gpu_cache_kvs[f"value_caches_{layer_idx}_rank{self.rank}_device{gpu_id}"]
             cache_k.append(key_cache)
-            cache_v.append(val_cache)
-            cache_k_ptr_list.append(key_cache.data_ptr())
-            cache_v_ptr_list.append(val_cache.data_ptr())
+            if paddle.is_compiled_with_xpu():
+                cache_k_ptr_list.append(get_peer_mem_addr(key_cache.data_ptr()))
+            else:
+                cache_k_ptr_list.append(key_cache.data_ptr())
         cache_k_ptr_list = np.array(cache_k_ptr_list)
         cache_v_ptr_list = np.array(cache_v_ptr_list)
 
@@ -493,6 +520,8 @@ class CacheMessagerV1:
                     max_block_num,
                     block_bytes,
                     rdma_port,
+                    nranks,
+                    rank,
                 )
 
         self.gpu_id = gpu_id
@@ -581,6 +610,7 @@ class CacheMessagerV1:
                         block_id_end = prefilled_token_num // self.block_size  # [block_id_start, block_id_end)
                     block_start_end_list.append((block_id_start, block_id_end))
                     current_prefilled_token_num_list.append(prefilled_token_num)
+
                 while True:  # from layer0 to last layer
                     sended_layer_idx = self.idx_cache_task_dict[batch_engine_signals[0][0]]["sended_layer_id"]
                     start_layer_idx = sended_layer_idx + 1
@@ -619,11 +649,30 @@ class CacheMessagerV1:
                                 current_transfer_protocol = task["transfer_protocol"]
                                 if task["transfer_protocol"] == "rdma":
                                     target_ip = task["ip"]
-                                    target_id = int(task["rdma_ports"][self.rank])
+                                    # Default decode_tp_size to prefill tp_size (self.nranks) if not specified
+                                    decode_tp_size = task.get("decode_tp_size", self.nranks)
+                                    if len(task["rdma_ports"]) == self.nranks:
+                                        target_id = int(task["rdma_ports"][self.rank])
+                                    elif len(task["rdma_ports"]) == 1:
+                                        target_id = task["rdma_ports"][0]
+                                    else:
+                                        task["status"] = "the tp_size of prefill and decode is mismatch"
+                                        continue
+
                                     if "error" in task["status"]:
                                         continue
-                                    status = self.messager[current_transfer_protocol].connect(target_ip, target_id)
-                                    if not status:
+
+                                    # TODO: use is connected to check if the connection is still alive
+                                    logger.debug(
+                                        f"rdma, start connect decode, {target_ip}:{target_id}, "
+                                        f"prefill_tp_size:{self.nranks}, decode_tp_size:{decode_tp_size}"
+                                    )
+                                    status = self.messager[current_transfer_protocol].connect(
+                                        target_ip, target_id, decode_tp_size
+                                    )
+                                    if status:
+                                        logger.info(f"connect to {target_ip}:{target_id} success")
+                                    else:
                                         logger.error(f"connect to {target_ip}:{target_id} failed")
                                         task["status"] = "connection error"
                                         continue
@@ -682,8 +731,8 @@ class CacheMessagerV1:
                             for engine_idx, _ in batch_engine_signals:
                                 task = self.idx_cache_task_dict[engine_idx]
                                 if task["status"] == "finished" or ("error" in task["status"]):
-                                    target_id = int(task["rdma_ports"][self.rank])
                                     if task["transfer_protocol"] == "ipc":
+                                        target_id = int(task["device_ids"][self.rank])
                                         self.messager["ipc"].write_block_by_sync(target_id)
                                     self.engine_worker_queue.finish_send_cache_barrier.wait()
                                     self.engine_worker_queue.put_finished_req([[task["request_id"], task["status"]]])
@@ -743,22 +792,32 @@ class CacheMessagerV1:
                     self.engine_worker_queue.connect_task_barrier.wait()
                 logger.info(f"_handle_connect_task recv task: {task}")
                 task_id = task["task_id"]
-                ip, rdma_port = task["ip"], task["rdma_ports"][self.rank]
-                status = self.messager["rdma"].connect(ip, rdma_port)
-                if not status:
+                ip = task["ip"]
+                # Default decode_tp_size to self.nranks (number of ranks) if not specified in the task.
+                decode_tp_size = task.get("decode_tp_size", self.nranks)
+                rdma_ports = task["rdma_ports"]
+                rdma_ports_len = len(rdma_ports)
+                if not (rdma_ports_len == 1 or rdma_ports_len == self.nranks):
+                    # TODO: support other cases
+                    logger.error(f"rdma_ports length should be 1 or equal to mp_num, but got {rdma_ports_len}")
                     response = {"task_id": task_id, "success": False}
                 else:
-                    response = {"task_id": task_id, "success": True}
+                    port = rdma_ports[0] if rdma_ports_len == 1 else rdma_ports[self.rank]
+                    status = self.messager["rdma"].connect(ip, port, decode_tp_size)
+                    if not status:
+                        response = {"task_id": task_id, "success": False}
+                    else:
+                        response = {"task_id": task_id, "success": True}
                 self.engine_worker_queue.connect_task_response_barrier.wait()
                 self.engine_worker_queue.put_connect_rdma_task_response(response)
             except Exception as e:
-                logger.error(f"handle_connect_task has exception: {e}")
+                logger.error(f"handle_connect_task has exception: {e}, {traceback.format_exc()}")
 
 
 def main():
     device = args.device_id
     rank = args.rank
-    paddle.set_device(f"gpu:{device}")
+    set_device(device)
     cache_type = args.cache_dtype
     speculative_config = SpeculativeConfig(args.speculative_config)
     num_extra_layers = speculative_config.num_extra_cache_layer
@@ -818,7 +877,7 @@ def main():
     cache_kv_size_byte = sum([tmp.numel() * 1 for key, tmp in gpu_cache_kvs.items()])
     logger.info(f"device :{device}")
     logger.info(f"cache_kv_size_byte : {cache_kv_size_byte}")
-    logger.info(f"done init cache (full) gmem alloc : {paddle.device.cuda.memory_allocated()}")
+    logger.info(f"done init cache (full) gmem alloc : {memory_allocated}")
 
     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
         cache_messager = CacheMessagerV1(
@@ -870,7 +929,6 @@ if __name__ == "__main__":
     args = parse_args()
     rank_id = args.rank + args.local_data_parallel_id * args.mp_num
     logger = get_logger("cache_messager", f"cache_messager_rank{rank_id}.log")
-
     logger.info("create cache messager...")
     logger.info(f"{args}")
     main()

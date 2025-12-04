@@ -219,7 +219,13 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
             request["bad_words_token_ids"] = bad_words_token_ids
 
-        if request.get("prompt"):
+        if request.get("prompt_token_ids"):
+            messages = request.get("messages")
+            if messages:
+                self._check_mm_limits(messages)
+            request.setdefault("enable_thinking", True)
+            outputs = self.ernie4_5_processor.prompt_token_ids2outputs(request)
+        elif request.get("prompt"):
             multimodal_data = request.get("multimodal_data")
             if multimodal_data is None:
                 multimodal_data = {}
@@ -254,14 +260,20 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
 
         if request.get("completion_token_ids"):
             self.append_completion_tokens(outputs, request["completion_token_ids"])
+
         outputs = self.pack_outputs(outputs)
-        request["prompt_token_ids"] = outputs["input_ids"].tolist()
+        request["prompt_token_ids"] = (
+            outputs["input_ids"].tolist()
+            if ("prompt_token_ids" not in request or not request["prompt_token_ids"])
+            else request["prompt_token_ids"]
+        )
         request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
         request["multimodal_inputs"] = outputs
 
         # 截断超过长度限制的prompt
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+
         if request.get("max_tokens") is None:
             request["max_tokens"] = max(1, max_model_len - len(request["prompt_token_ids"]))
         else:

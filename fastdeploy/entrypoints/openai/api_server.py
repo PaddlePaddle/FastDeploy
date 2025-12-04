@@ -30,7 +30,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from gunicorn.app.base import BaseApplication
 from opentelemetry import trace
-from prometheus_client import CONTENT_TYPE_LATEST
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
@@ -58,12 +57,7 @@ from fastdeploy.entrypoints.openai.serving_reward import OpenAIServingReward
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.entrypoints.openai.utils import UVICORN_CONFIG, make_arg_parser
 from fastdeploy.envs import environment_variables
-from fastdeploy.metrics.metrics import (
-    EXCLUDE_LABELS,
-    cleanup_prometheus_files,
-    get_filtered_metrics,
-    main_process_metrics,
-)
+from fastdeploy.metrics.metrics import get_filtered_metrics
 from fastdeploy.metrics.trace_util import (
     fd_start_span,
     inject_to_metadata,
@@ -179,23 +173,14 @@ async def lifespan(app: FastAPI):
         verification = False
     model_paths = [ModelPath(name=served_model_names, model_path=args.model, verification=verification)]
 
+    engine_args = EngineArgs.from_cli_args(args)
+    fd_config = engine_args.create_engine_config(port_availability_check=False)
     engine_client = EngineClient(
-        model_name_or_path=args.model,
-        tokenizer=args.tokenizer,
-        max_model_len=args.max_model_len,
-        tensor_parallel_size=args.tensor_parallel_size,
         pid=pid,
         port=int(os.environ.get("INFERENCE_MSG_QUEUE_ID", "0")),
-        limit_mm_per_prompt=args.limit_mm_per_prompt,
-        mm_processor_kwargs=args.mm_processor_kwargs,
-        reasoning_parser=args.reasoning_parser,
-        data_parallel_size=args.data_parallel_size,
-        enable_logprob=args.enable_logprob,
+        fd_config=fd_config,
         workers=args.workers,
-        tool_parser=args.tool_call_parser,
-        enable_prefix_caching=args.enable_prefix_caching,
-        splitwise_role=args.splitwise_role,
-        max_processor_cache=args.max_processor_cache,
+        max_logprobs=args.max_logprobs,
     )
     await engine_client.connection_manager.initialize()
     app.state.dynamic_load_weight = args.dynamic_load_weight
@@ -223,19 +208,17 @@ async def lifespan(app: FastAPI):
         args.max_waiting_time,
     )
 
-    engine_args = EngineArgs.from_cli_args(args)
-    config = engine_args.create_engine_config(port_availability_check=False)
     embedding_handler = OpenAIServingEmbedding(
         engine_client,
         app.state.model_handler,
-        config,
+        fd_config,
         pid,
         args.ips,
         args.max_waiting_time,
         chat_template,
     )
     reward_handler = OpenAIServingReward(
-        engine_client, app.state.model_handler, config, pid, args.ips, args.max_waiting_time, chat_template
+        engine_client, app.state.model_handler, fd_config, pid, args.ips, args.max_waiting_time, chat_template
     )
     engine_client.create_zmq_client(model=pid, mode=zmq.PUSH)
     engine_client.pid = pid
@@ -515,6 +498,36 @@ def clear_load_weight(request: Request) -> Response:
         return Response(content="Dynamic Load Weight Disabled.", status_code=404)
 
 
+@app.post("/rearrange_experts")
+async def rearrange_experts(request: Request):
+    """
+    rearrange experts
+    """
+    request_dict = await request.json()
+    content, status_code = await app.state.engine_client.rearrange_experts(request_dict=request_dict)
+    return JSONResponse(content, status_code=status_code)
+
+
+@app.post("/get_per_expert_tokens_stats")
+async def get_per_expert_tokens_stats(request: Request):
+    """
+    get per expert tokens stats
+    """
+    request_dict = await request.json()
+    content, status_code = await app.state.engine_client.get_per_expert_tokens_stats(request_dict=request_dict)
+    return JSONResponse(content, status_code=status_code)
+
+
+@app.post("/check_redundant")
+async def check_redundant(request: Request):
+    """
+    check redundant
+    """
+    request_dict = await request.json()
+    content, status_code = await app.state.engine_client.check_redundant(request_dict=request_dict)
+    return JSONResponse(content, status_code=status_code)
+
+
 def launch_api_server() -> None:
     """
     启动http服务
@@ -543,17 +556,21 @@ def launch_api_server() -> None:
 
 metrics_app = FastAPI()
 
+# Be tolerant to tests that monkeypatch/partially mock args.
+_metrics_port = getattr(args, "metrics_port", None)
+_main_port = getattr(args, "port", None)
+
+if _metrics_port is None or (_main_port is not None and _metrics_port == _main_port):
+    metrics_app = app
+
 
 @metrics_app.get("/metrics")
 async def metrics():
     """
     metrics
     """
-    metrics_text = get_filtered_metrics(
-        EXCLUDE_LABELS,
-        extra_register_func=lambda reg: main_process_metrics.register_all(reg, workers=args.workers),
-    )
-    return Response(metrics_text, media_type=CONTENT_TYPE_LATEST)
+    metrics_text = get_filtered_metrics()
+    return Response(metrics_text, media_type="text/plain")
 
 
 @metrics_app.get("/config-info")
@@ -592,8 +609,6 @@ def launch_metrics_server():
     if not is_port_available(args.host, args.metrics_port):
         raise Exception(f"The parameter `metrics_port`:{args.metrics_port} is already in use.")
 
-    prom_dir = cleanup_prometheus_files(True)
-    os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
     metrics_server_thread = threading.Thread(target=run_metrics_server, daemon=True)
     metrics_server_thread.start()
     time.sleep(1)
@@ -707,13 +722,16 @@ def main():
         if not load_data_service():
             return
     api_server_logger.info("FastDeploy LLM engine initialized!\n")
-    console_logger.info(f"Launching metrics service at http://{args.host}:{args.metrics_port}/metrics")
+    if args.metrics_port is not None and args.metrics_port != args.port:
+        launch_metrics_server()
+        console_logger.info(f"Launching metrics service at http://{args.host}:{args.metrics_port}/metrics")
+    else:
+        console_logger.info(f"Launching metrics service at http://{args.host}:{args.port}/metrics")
     console_logger.info(f"Launching chat completion service at http://{args.host}:{args.port}/v1/chat/completions")
     console_logger.info(f"Launching completion service at http://{args.host}:{args.port}/v1/completions")
 
     launch_worker_monitor()
     launch_controller_server()
-    launch_metrics_server()
     launch_api_server()
 
 
