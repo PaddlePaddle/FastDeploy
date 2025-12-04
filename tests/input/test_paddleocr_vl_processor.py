@@ -777,6 +777,8 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
         self.processor.processor = MagicMock()
         self.processor.limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
         self.processor.eos_token_ids = [1]
+        self.processor.reasoning_parser = None
+        self.processor.model_status_dict = {}
 
         # 模拟 _apply_default_parameters
         def mock_apply_default_parameters(request_or_dict):
@@ -955,6 +957,7 @@ class TestPaddleOCRVLProcessor(unittest.TestCase):
             "prompt": "test prompt",
             "multimodal_data": {"image": ["image1"]},
             "metadata": {"generated_token_ids": []},
+            "request_id": "test-request",
         }
         request_obj.to_dict.return_value = request_dict
 
