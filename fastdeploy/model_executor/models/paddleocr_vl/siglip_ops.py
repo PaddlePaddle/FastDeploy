@@ -27,6 +27,8 @@ if current_platform.is_cuda():
 
 def rotate_half(x):
     Dh = x.shape[-1]
+    if Dh == -1:
+        Dh = paddle.shape(x)[-1]
     x1 = x[..., : Dh // 2]
     x2 = x[..., Dh // 2 :]
     return paddle.concat([-x2, x1], axis=-1)
