@@ -144,7 +144,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         """
 
         gate_out = gate(x.cast("float32"))
-        gate_out = paddle.randn([x.shape[0], layer.num_experts], dtype="float32")
 
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
