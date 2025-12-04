@@ -468,16 +468,38 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
                 self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
 
-            if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
-                stop_seqs_num = len(request.get("stop_seqs_len"))
-                for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
-                    request.sampling_params.stop_seqs_len.append(0)
-                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = np.array(
-                    request.sampling_params.stop_seqs_len, dtype="int32"
-                )
-                self.share_inputs["stop_seqs"][
-                    idx : idx + 1, :stop_seqs_num, : len(request.get("stop_token_ids")[0])
-                ] = np.array(request.get("stop_token_ids"), dtype="int64")
+            all_stop_seqs = []
+            if request.get("stop_token_ids") is not None and len(request.get("stop_token_ids")) > 0:
+                stop_token_ids = request.get("stop_token_ids")
+
+                max_stop_token_ids_limit = self.model_config.stop_token_ids_max_len
+                if len(stop_token_ids) > max_stop_token_ids_limit:
+                    logger.warning(
+                        f"Request {request.request_id} has {len(stop_token_ids)} stop_token_ids, "
+                        f"but only {max_stop_token_ids_limit} are supported. Truncating."
+                    )
+                    stop_token_ids = stop_token_ids[:max_stop_token_ids_limit]
+
+                for token_id in stop_token_ids:
+                    all_stop_seqs.append([token_id])
+
+            if request.get("stop") is not None and request.get("stop_seqs_len") is not None:
+                stop = request.get("stop")
+                stop_list = stop if isinstance(stop, list) else [stop]
+                all_stop_seqs.extend(stop_list)
+
+            if len(all_stop_seqs) > 0:
+                num_stops = min(len(all_stop_seqs), self.model_config.max_stop_seqs_num)
+
+                for j in range(num_stops):
+                    seq_len = len(all_stop_seqs[j])
+                    self.share_inputs["stop_seqs_len"][idx, j] = seq_len
+                    self.share_inputs["stop_seqs"][idx, j, :seq_len] = paddle.to_tensor(
+                        all_stop_seqs[j], dtype="int64"
+                    )
+
+                for j in range(num_stops, self.model_config.max_stop_seqs_num):
+                    self.share_inputs["stop_seqs_len"][idx, j] = 0
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 

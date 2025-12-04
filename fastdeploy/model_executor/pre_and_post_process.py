@@ -479,7 +479,7 @@ def post_process_specualate(
         model_output.step_idx,
         model_output.stop_flags,
         model_output.seq_lens_this_time,
-        model_output.stop_token_ids,
+        model_output.stop_seqs,
         model_output.stop_seqs_len,
         model_output.eos_token_id,
     )
