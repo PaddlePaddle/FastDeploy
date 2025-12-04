@@ -1120,10 +1120,11 @@ class HPUModelRunner(ModelRunnerBase):
 
         max_prefill_length = self.cache_config.block_size + warmup_max_model_len
         prefill_context_block_step = int(os.environ.get("CONTEXT_BLOCK_STEP_PREFILL", 1))
+        prefill_batchs.reverse()
+        prefill_length_with_contexts = list(range(self.cache_config.block_size, max_prefill_length, prefill_seq_step))
+        prefill_length_with_contexts.reverse()
         for prefill_batch in prefill_batchs:
-            for prefill_length_with_context in range(
-                self.cache_config.block_size, max_prefill_length, prefill_seq_step
-            ):
+            for prefill_length_with_context in prefill_length_with_contexts:
                 if prefill_length_with_context * prefill_batch > self.scheduler_config.max_num_batched_tokens:
                     continue
                 for context_len in range(
@@ -1171,6 +1172,8 @@ class HPUModelRunner(ModelRunnerBase):
             current_decode_block_num += decode_block_num_step
 
         logger.info(f"warmup decode_batchs: {decode_batchs}, decode_block_nums: {decode_block_nums} start")
+        decode_batchs.reverse()
+        decode_block_nums.reverse()
         for decode_batch in decode_batchs:
             for decode_block_num in decode_block_nums:
                 if decode_block_num < decode_batch:
@@ -1358,14 +1361,14 @@ class HPUModelRunner(ModelRunnerBase):
             self.prof.step()
         return None
 
-    def _execute_empty_input(self) -> None:
+    def _execute_empty_input(self, forward_meta) -> None:
         """
         In certain scenarios, such as during EP,
         the runner needs to execute partial modules of the model without input data.
         This requires the model to implement the `empty_input_forward` method.
         """
         if hasattr(self.model, "empty_input_forward"):
-            self.model.empty_input_forward()
+            self.model.empty_input_forward(forward_meta)
         else:
             raise ValueError(f"{type(self.model)} has no attribute 'empty_input_forward")
 
