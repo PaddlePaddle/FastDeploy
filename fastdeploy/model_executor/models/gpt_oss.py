@@ -124,8 +124,8 @@ class GptOssMoe(nn.Layer):
             model_format="",
         )
 
-    def forward(self, hidden_states: paddle.Tensor):
-        expert_output = self.experts(hidden_states, self.router)
+    def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta):
+        expert_output = self.experts(hidden_states, self.router, forward_meta)
         return expert_output
 
 
@@ -173,7 +173,7 @@ class GptOssDecoderLayer(nn.Layer):
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
 
-        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp(hidden_states, forward_meta)
         return hidden_states, residual
 
 
