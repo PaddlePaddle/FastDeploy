@@ -32,6 +32,7 @@ class TestW4AFP8(unittest.TestCase):
             act_scale_dict={"layer.activation_scale": 1.0},
             is_permuted=False,
             hadamard_block_size=128,
+            is_quantized=True,
         )
         self.method = W4AFP8LinearMethod(self.config)
 

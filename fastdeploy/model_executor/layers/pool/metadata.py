@@ -15,11 +15,13 @@
 """
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
 
 import paddle
 
 from fastdeploy.engine.pooling_params import PoolingParams
+
+Device = Union[paddle.CPUPlace, paddle.CUDAPlace, paddle.XPUPlace]
 
 
 @dataclass
@@ -60,21 +62,21 @@ class PoolingMetadata:
             pooling_cursor=None if self.pooling_cursor is None else self.pooling_cursor[indices],
         )
 
-    def build_pooling_cursor(self, num_scheduled_tokens: list[int], device: str):
+    def build_pooling_cursor(self, num_scheduled_tokens: list[int], device: Device):
         self.pooling_cursor = build_pooling_cursor(num_scheduled_tokens, self.prompt_lens, device)
 
 
-def build_pooling_cursor(num_scheduled_tokens: list[int], prompt_lens: paddle.Tensor, device: str):
+def build_pooling_cursor(num_scheduled_tokens: list[int], prompt_lens: paddle.Tensor, device: Device):
     assert len(prompt_lens) == len(num_scheduled_tokens)
 
     n_seq = len(num_scheduled_tokens)
     index = list(range(n_seq))
-    num_scheduled_tokens = paddle.to_tensor(num_scheduled_tokens)
+    num_scheduled_tokens = paddle.to_tensor(num_scheduled_tokens, dtype="int64")
     cumsum = paddle.zeros([n_seq + 1], dtype="int64")
 
     paddle.cumsum(num_scheduled_tokens, axis=0, out=cumsum[1:])
-    if device == "gpu":
-        cumsum_device = cumsum.cuda()
+    if isinstance(device, paddle.CUDAPlace):
+        cumsum_device = paddle.assign(cumsum).cuda(device.get_device_id())
     else:
         cumsum_device = cumsum
     return PoolingCursor(

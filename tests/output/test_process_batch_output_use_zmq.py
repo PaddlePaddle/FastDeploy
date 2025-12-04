@@ -137,7 +137,7 @@ class TestTokenProcessorLogprobs(unittest.TestCase):
             result = self.processor._process_batch_output_use_zmq([stream_data])
 
             self.assertEqual(len(result), 1)
-            self.assertIsNone(getattr(result[0], "prompt_logprobs_tensors", None))
+            self.assertIsNone(getattr(result[0], "prompt_logprobs", None))
 
     def test_process_batch_with_stop_flag(self):
         """Test processing when stop flag is True"""

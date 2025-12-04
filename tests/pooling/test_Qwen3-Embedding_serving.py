@@ -79,7 +79,7 @@ def setup_and_run_embedding_server():
         model_path = "./Qwen3-Embedding-0.6B"
 
     if not os.path.exists(model_path):
-        pytest.skip(f"Model path not found: {model_path}")
+        raise FileNotFoundError(f"Model path not found: {model_path}")
 
     log_path = "embedding_server.log"
     cmd = [
