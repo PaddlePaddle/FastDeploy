@@ -29,6 +29,7 @@ from typing import Any, List, Tuple
 import numpy as np
 
 from fastdeploy import envs
+from fastdeploy.inter_communicator.ipc_signal import IPCSignal
 from fastdeploy.utils import llm_logger, to_tensor
 
 
@@ -82,6 +83,9 @@ class EngineWorkerQueue:
 
             self.lock_init: List[threading.Lock] = [threading.Lock() for _ in range(self.local_data_parallel_size)]
             self.read_finish_flag_init: List[Value] = [Value("i", 0) for _ in range(self.local_data_parallel_size)]
+            self.exist_tasks_inter_signal_init: List[Value] = [
+                Value("i", 0) for _ in range(self.local_data_parallel_size)
+            ]
             self.connected_client_counter_init: List[Value] = [
                 Value("i", 0) for _ in range(self.local_data_parallel_size)
             ]
@@ -200,6 +204,11 @@ class EngineWorkerQueue:
             QueueManager.register(
                 "get_read_finish_flag",
                 callable=lambda idx: self.read_finish_flag_init[idx],
+                proxytype=ValueProxy,
+            )
+            QueueManager.register(
+                "get_exist_tasks_inter_signal",
+                callable=lambda idx: self.exist_tasks_inter_signal_init[idx],
                 proxytype=ValueProxy,
             )
             QueueManager.register(
@@ -337,6 +346,7 @@ class EngineWorkerQueue:
             QueueManager.register("get_client_read_flag")
             QueueManager.register("get_lock")
             QueueManager.register("get_read_finish_flag")
+            QueueManager.register("get_exist_tasks_inter_signal")
             QueueManager.register("get_connected_client_counter")
             QueueManager.register("get_finish_request_queue")
             QueueManager.register("get_finish_add_cache_task_queue")
@@ -373,6 +383,9 @@ class EngineWorkerQueue:
             self.client_read_flag: ListProxy = self.manager.get_client_read_flag(self.local_data_parallel_id)
             self.lock: AcquirerProxy = self.manager.get_lock(self.local_data_parallel_id)
             self.read_finish_flag: ValueProxy = self.manager.get_read_finish_flag(self.local_data_parallel_id)
+            self.exist_tasks_inter_signal: ValueProxy = self.manager.get_exist_tasks_inter_signal(
+                self.local_data_parallel_id
+            )
             self.connected_client_counter: ValueProxy = self.manager.get_connected_client_counter(
                 self.local_data_parallel_id
             )
@@ -433,6 +446,15 @@ class EngineWorkerQueue:
 
             assert self.num_client == len(self.client_read_flag)
 
+        exist_tasks_intra_signal_data = np.zeros([1], dtype=np.int32)
+        self.exist_tasks_intra_signal = IPCSignal(
+            name="exist_tasks_intra_signal",
+            array=exist_tasks_intra_signal_data,
+            dtype=np.int32,
+            suffix=self.get_server_port() if is_server else address[1],
+            create=is_server,
+        )
+
         if is_server:
             llm_logger.info("EngineWorkerQueue server started.")
         else:
@@ -453,6 +475,19 @@ class EngineWorkerQueue:
         if not self.is_server:
             raise RuntimeError("Only the server instance can provide the port.")
         return self.address[1]
+
+    def exist_tasks(self):
+        if self.address[0] == "0.0.0.0":
+            return self.exist_tasks_intra_signal.value[0] == 1
+        else:
+            return self.exist_tasks_inter_signal.get() == 1
+
+    def set_exist_tasks(self, flag):
+        value = 1 if flag else 0
+        if self.address[0] == "0.0.0.0":
+            self.exist_tasks_intra_signal.value[0] = value
+        else:
+            self.exist_tasks_inter_signal.set(value)
 
     def _connect_with_retry(self, max_retries: int = 5, interval: int = 3) -> None:
         """
@@ -494,6 +529,7 @@ class EngineWorkerQueue:
         self.tasks[:] = list()
         self.client_read_flag[:] = [0] * self.num_client
         self.tasks.append(tasks)
+        self.set_exist_tasks(True)
         self.lock.release()
 
         llm_logger.debug(f"put_tasks: tasks={tasks}")
@@ -513,6 +549,7 @@ class EngineWorkerQueue:
         all_client_read: bool = np.sum(self.client_read_flag) == self.num_client
         if all_client_read:
             self.tasks[:] = list()
+        self.set_exist_tasks(False)
         self.lock.release()
         llm_logger.debug(f"get_tasks: tasks={tasks}")
         return tasks, all_client_read
