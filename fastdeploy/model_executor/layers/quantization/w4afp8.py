@@ -31,7 +31,7 @@ class W4AFP8Config(QuantConfigBase):
     quantization config for weight 4bits and activation fp8
     """
 
-    def __init__(self, weight_scale_dict, act_scale_dict, is_permuted, hadamard_block_size) -> None:
+    def __init__(self, weight_scale_dict, act_scale_dict, is_permuted, hadamard_block_size, is_quantized) -> None:
         super().__init__()
         self.weight_scale_dict = weight_scale_dict
         self.act_scale_dict = act_scale_dict
@@ -40,6 +40,7 @@ class W4AFP8Config(QuantConfigBase):
         self.quant_round_type = 1
         self.is_permuted = is_permuted
         self.hadamard_block_size = hadamard_block_size
+        self.is_quantized = is_quantized
 
     def name(self) -> str:
         return "w4afp8"
@@ -50,7 +51,8 @@ class W4AFP8Config(QuantConfigBase):
         act_scale_dict = config.get("act_scale_dict", None)
         is_permuted = config.get("is_permuted", True)
         hadamard_block_size = config.get("hadamard_block_size", 128)
-        return cls(weight_scale_dict, act_scale_dict, is_permuted, hadamard_block_size)
+        is_quantized = config.get("is_quantized", False)
+        return cls(weight_scale_dict, act_scale_dict, is_permuted, hadamard_block_size, is_quantized)
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if isinstance(layer, FusedMoE):

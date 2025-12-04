@@ -245,6 +245,15 @@ class PrefixCacheManager:
         log_dir = envs.FD_LOG_DIR
         cache_manager_processes = []
         visible_devices = get_all_visible_devices()
+
+        val_cache_arg_str = ""
+        if val_cache_shape:
+            if isinstance(val_cache_shape, list):
+                val_shape_str = ",".join(map(str, val_cache_shape))
+            else:
+                val_shape_str = str(val_cache_shape)
+            val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
+
         for i in range(tensor_parallel_size):
             launch_cmd = (
                 "FLAGS_allocator_strategy=auto_growth "
@@ -259,7 +268,7 @@ class PrefixCacheManager:
                 + f" --mp_num {tensor_parallel_size}"
                 + f" --cache_dtype {cache_config.cache_dtype}"
                 + f" --key_cache_shape {key_cache_shape}"
-                + f" --value_cache_shape {val_cache_shape}"
+                + val_cache_arg_str
                 + f" --cache_queue_port {cache_config.cache_queue_port}"
                 + f" --enable_splitwise {int(self.enable_splitwise)}"
                 + f" --pod_ip {pod_ip}"
@@ -332,6 +341,15 @@ class PrefixCacheManager:
         log_dir = envs.FD_LOG_DIR
         cache_messager_processes = []
         visible_devices = get_all_visible_devices()
+
+        val_cache_arg_str = ""
+        if value_cache_shape:
+            if isinstance(value_cache_shape, list):
+                val_shape_str = ",".join(map(str, value_cache_shape))
+            else:
+                val_shape_str = str(value_cache_shape)
+            val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
+
         for i in range(tensor_parallel_size):
             launch_cmd = (
                 "FLAGS_allocator_strategy=auto_growth "
@@ -345,7 +363,7 @@ class PrefixCacheManager:
                 + f" --mp_num {tensor_parallel_size}"
                 + f" --cache_dtype {cache_config.cache_dtype}"
                 + f" --key_cache_shape {key_cache_shape}"
-                + f" --value_cache_shape {value_cache_shape}"
+                + val_cache_arg_str
                 + f" --pod_ip {pod_ip}"
                 + f" --cache_queue_port {cache_config.cache_queue_port}"
                 + f" --engine_worker_queue_port {engine_worker_queue_port}"
