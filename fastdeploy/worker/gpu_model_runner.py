@@ -2023,20 +2023,21 @@ class GPUModelRunner(ModelRunnerBase):
         if self.model_config.model_type != "paddleocr_vl":
             return
 
+        # Compile for paddleocr_vl vision encoder layer
+        def apply_compile(fn):
+            backend = "CINN" if self.graph_opt_config.graph_opt_level >= 2 else None
+            return paddle.jit.to_static(
+                fn,
+                full_graph=False,
+                backend=backend,
+            )
+
         from fastdeploy.model_executor.models.paddleocr_vl import SiglipEncoder
 
-        # Compile for paddleocr_vl vision encoder layer
-        compile_region = SiglipEncoder._run_encoder_layer
-        backend = "CINN" if self.graph_opt_config.graph_opt_level >= 2 else None
-        compile_region = paddle.jit.to_static(
-            compile_region,
-            full_graph=False,
-            backend=backend,
-        )
-        SiglipEncoder._run_encoder_layer = compile_region
+        SiglipEncoder._run_encoder_layer = apply_compile(SiglipEncoder._run_encoder_layer)
 
         # Warmup for paddleocr_vl vision encoder layer
-        logger.info("Warmup for paddleocr_vl compile region...")
+        logger.info(f"Warmup for {self.model_config.model_type} compile...")
         self._dummy_run_extract_vision_features()
 
     @sot_warmup_guard(True)
