@@ -38,7 +38,41 @@ export ENABLE_V1_KVCACHE_SCHEDULER=1
 
 2. Check whether the KVCache blocks allocated by the automatic profile are as expected. If the automatic profile is affected by the fluctuation of video memory and may result in less allocation, you can manually set the `num_gpu_blocks_override` parameter to expand the KVCache block.
 
-## 3. Inference Request Stalls After Enabling logprobs
+## 3. How much concurrency can the service support?
+
+1. It is recommended to configure the following environment variable when deploying the service:
+
+   ```
+   export ENABLE_V1_KVCACHE_SCHEDULER=1
+   ```
+
+2. When starting the service, you need to configure `max-num-seqs`.
+   This parameter specifies the maximum batch size during the Decode phase.
+   If the concurrency exceeds this value, the extra requests will be queued.
+   Under normal circumstances, you can set `max-num-seqs` to **128** to keep it relatively high; the actual concurrency is determined by the load-testing client.
+
+3. `max-num-seqs` represents only the upper limit you configure.
+   The **actual** concurrency the service can handle depends on the size of the **KVCache**.
+   After the service starts, check `log/worker_process.log` and look for logs similar to:
+
+   ```
+   num_blocks_global: 17131
+   ```
+
+   This indicates that the current service has **17131 KVCache blocks**.
+   With `block_size = 64` (default), the total number of tokens that can be cached is:
+
+   ```
+   17131 * 64 = 1,096,384 tokens
+   ```
+
+   If the average total number of tokens per request (input + output) is **20K**, then the service can actually support approximately:
+
+   ```
+   1,096,384 / 20,000 ≈ 53 concurrent requests
+   ```
+
+## 4. Inference Request Stalls After Enabling logprobs
 
 When **logprobs** is enabled, the inference output includes the log-probability of each token, which **significantly increases the size of each message body**. Under default settings, this may exceed the limits of the **System V Message Queue**, causing the inference request to **stall**.
 
