@@ -93,7 +93,9 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta):
         if forward_meta.attn_mask_offsets is not None:
             res[i].attn_mask_offsets = forward_meta.attn_mask_offsets[start_token_id * 2 : end_token_id * 2]
 
-        res[i].hidden_states = forward_meta.hidden_states[start_token_id:end_token_id]
-        res[i].decode_states = forward_meta.decode_states[start_bs:end_bs]
+        # This is to  adapt 5
+        if hasattr(forward_meta, "hidden_states"):
+            res[i].hidden_states = forward_meta.hidden_states[start_token_id:end_token_id]
+            res[i].decode_states = forward_meta.decode_states[start_bs:end_bs]
 
     return res
