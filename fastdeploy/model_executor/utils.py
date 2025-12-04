@@ -281,7 +281,6 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
 
     def fn(param, loaded_weight, shard_id: Optional[Union[int, str]] = None):
         """fn"""
-
         output_dim = getattr(param, "output_dim", None)
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
         if weight_need_transpose:
@@ -298,6 +297,10 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
             shard_size = (fd_config.parallel_config.tensor_parallel_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, output_dim, shard_offset, shard_size)
 
+        tp_row_bias = getattr(param, "tp_row_bias", None)
+        if tp_row_bias:
+            loaded_weight = loaded_weight / fd_config.parallel_config.tensor_parallel_size
+
         # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
         loaded_weight = fd_cast(loaded_weight, param)
         if param.shape != loaded_weight.shape:
@@ -306,7 +309,8 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
-        h2d_copy(dst=param, src=loaded_weight)
+        loaded_weight = get_tensor(loaded_weight)
+        param.copy_(loaded_weight, False)
 
     return fn
 
@@ -365,8 +369,9 @@ def h2d_copy(dst, src, blocking=True):
     if not current_platform.is_cuda() or not is_paddle_support_new_h2d():
         # For non-GPU devices, data is transferred to device (H2D) in advance.
         src = get_tensor(src)
-    if not dst._is_initialized():
-        dst.initialize()
+    if len(src.shape) == 1:
+        # TODO (bukejiyu):A recently merged Paddle PR introduced a hang when copying 1-D non-contiguous tensors. This approach serves as a temporary workaround.
+        src = get_tensor(src)
     dst.copy_(src, blocking)
 
 

@@ -44,7 +44,7 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```disable_sequence_parallel_moe``` | `bool` | Disable sequence parallel moe, default: False |
 | ```splitwise_role``` | `str` | Whether to enable splitwise inference, default value: mixed, supported parameters: ["mixed", "decode", "prefill"] |
 | ```innode_prefill_ports``` | `str` | Internal engine startup ports for prefill instances (only required for single-machine PD separation), default: None |
-| ```guided_decoding_backend``` | `str` | Specify the guided decoding backend to use, supports `auto`, `xgrammar`, `off`, default: `off` |
+| ```guided_decoding_backend``` | `str` | Specify the guided decoding backend to use, supports `auto`, `xgrammar`, `guidance`, `off`, default: `off` |
 | ```guided_decoding_disable_any_whitespace``` | `bool` | Whether to disable whitespace generation during guided decoding, default: False |
 | ```speculative_config``` | `dict[str]` | Speculative decoding configuration, only supports standard format JSON string, default: None |
 | ```dynamic_load_weight``` | `int` | Whether to enable dynamic weight loading, default: 0 |

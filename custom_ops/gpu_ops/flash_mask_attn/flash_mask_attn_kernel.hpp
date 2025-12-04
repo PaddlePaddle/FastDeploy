@@ -59,19 +59,26 @@ __global__ void __launch_bounds__(Ktraits::kNWarps *cutlass::NumThreadsPerWarp,
   auto &shared_storage =
       *reinterpret_cast<typename Ktraits::SharedStorage *>(shared_memory);
 
-  __align__(16) __shared__ int mask[kBlockM];
+  __align__(16) __shared__ int mask_end[kBlockM];
+  __align__(16) __shared__ int mask_start[kBlockM];
 
   const int m_block = blockIdx.x;
   const int bidh = blockIdx.y;
   const int bidb = blockIdx.z;
+  if (data_params.seq_len_encoder[bidb] <= 0) {
+    return;
+  }
 
   if constexpr (NeedMask) {
-    const int *mask_this_batch =
-        data_params.mask + data_params.cu_seq_q[bidb] + m_block * kBlockM;
+    const int2 *mask_this_batch =
+        reinterpret_cast<int2 *>(data_params.mask) +
+        (data_params.cu_seq_q[bidb] + m_block * kBlockM);
 
     for (int i = threadIdx.x; i < kBlockM;
          i += Ktraits::kNWarps * cutlass::NumThreadsPerWarp) {
-      mask[i] = mask_this_batch[i];
+      int2 mask_value = mask_this_batch[i];
+      mask_start[i] = mask_value.x;
+      mask_end[i] = mask_value.y;
     }
   }
 
@@ -119,7 +126,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps *cutlass::NumThreadsPerWarp,
 
   const int n_block_max =
       NeedMask
-          ? cute::ceil_div(mask[min(kBlockM - 1, real_seq - 1)], kBlockN)
+          ? cute::ceil_div(mask_end[min(kBlockM - 1, real_seq - 1)], kBlockN)
           : min(cute::ceil_div((m_block + 1) * kBlockM + seq_len_k - seq_len_q,
                                kBlockN),
                 cute::ceil_div(seq_len_k, kBlockN));
@@ -170,7 +177,7 @@ __global__ void __launch_bounds__(Ktraits::kNWarps *cutlass::NumThreadsPerWarp,
                             smem_pipe_read_v,
                             tOrO,
                             softmax,
-                            mask,
+                            mask_end,
                             n_block_max,
                             threadIdx.x - NumCopyThreads,
                             m_block,
@@ -207,18 +214,15 @@ void run_flash_mask(Flash_mask_params &params, cudaStream_t stream) {
   typename CollectiveMainloop::Params mainloop_params =
       CollectiveMainloop::to_underlying_arguments(
           {static_cast<Element const *>(params.q_ptr),
-           get_gmem_layout<kHeadDim>(params.max_seq_len_q * params.batch_size,
-                                     params.head_num),
+           get_gmem_layout<kHeadDim>(params.q_token_num, params.head_num),
            static_cast<Element const *>(params.k_ptr),
-           get_gmem_layout<kHeadDim>(params.max_seq_len_k * params.batch_size,
-                                     params.kv_head_num),
+           get_gmem_layout<kHeadDim>(params.k_token_num, params.kv_head_num),
            static_cast<Element const *>(params.v_ptr),
-           get_gmem_layout<kHeadDim>(params.max_seq_len_k * params.batch_size,
-                                     params.kv_head_num),
+           get_gmem_layout<kHeadDim>(params.k_token_num, params.kv_head_num),
            params.scale_softmax_log2});
 
   int num_blocks_m =
-      cutlass::ceil_div(params.max_seq_len_q, Kernel_traits::kBlockM);
+      cutlass::ceil_div(params.q_token_num, Kernel_traits::kBlockM);
 
   num_blocks_m = cutlass::ceil_div(num_blocks_m, size<0>(ClusterShape{})) *
                  size<0>(ClusterShape{});
