@@ -859,7 +859,7 @@ class InferScheduler:
                         self.reqs_queue.appendleft(req)
                         break
                 else:
-                    if current_prefill_tokens > max_num_batched_tokens:
+                    if current_prefill_tokens > max_num_batched_tokens and len(reqs) > 0:
                         self.reqs_queue.appendleft(req)
                         break
                 # logger.info(f"Get Requests from Scheduler: {req.request_id}")

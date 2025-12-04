@@ -45,10 +45,15 @@ from fastdeploy.utils import llm_logger, spec_logger
 from fastdeploy.worker.output import LogprobsLists
 
 RECOVERY_STOP_SIGNAL = -3
-MAX_BSZ = 512
-K = 20
 MAX_DRAFT_TOKENS = 6
 SPECULATE_MAX_BSZ = 256
+
+if current_platform.is_xpu():
+    MAX_BSZ = 128
+    K = 5
+else:
+    MAX_BSZ = 512
+    K = 20
 
 
 class TokenProcessor:
@@ -291,7 +296,7 @@ class TokenProcessor:
                             llm_logger.warning(f"Failed to parse logprobs from StreamTransferData: {e}")
                     if getattr(stream_data, "prompt_logprobs", None) is not None:
                         try:
-                            result.prompt_logprobs_tensors = stream_data.prompt_logprobs
+                            result.prompt_logprobs = stream_data.prompt_logprobs
                         except Exception as e:
                             llm_logger.warning(f"Failed to parse prompt_logprobs from StreamTransferData: {e}")
                 if self.tokens_counter[task_id] == 0:
@@ -343,6 +348,7 @@ class TokenProcessor:
             from fastdeploy.model_executor.ops.xpu import (
                 get_output,
                 get_output_ep,
+                get_output_topk,
                 speculate_get_output,
             )
         elif current_platform.is_iluvatar():
@@ -396,12 +402,8 @@ class TokenProcessor:
                             rank_id,
                             is_blocking,
                         )
-                    elif (
-                        self.cfg.parallel_config.enable_expert_parallel
-                        and self.cfg.parallel_config.data_parallel_size > 1
-                    ):
+                    elif self.cfg.parallel_config.data_parallel_size > 1:
                         get_output_ep(self.output_tokens, rank_id, is_blocking)
-
                     else:
                         get_output(self.output_tokens, rank_id, is_blocking)
 
@@ -743,7 +745,15 @@ class TokenProcessor:
                         result.outputs.token_ids.append(token_id)
 
                     task.output_token_ids.append(token_id)
-
+                    if (
+                        envs.ENABLE_V1_KVCACHE_SCHEDULER
+                        and self.cfg.cache_config.enable_prefix_caching
+                        and self.cfg.cache_config.enable_output_caching
+                    ):
+                        if (task.num_total_tokens - 1) % self.cfg.cache_config.block_size == 0:
+                            self.resource_manager.cache_output_tokens(
+                                task
+                            )  # when enable prefix caching, cache kv cache for output tokens
                     if self.use_logprobs:
                         if self.cfg.speculative_config.method:
                             result.outputs.logprob = float(scores[i, batch_token_index, 0])
