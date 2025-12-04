@@ -79,3 +79,9 @@ class ModelRunnerBase(ABC):
         Execute a forward pass with dummy inputs to profile the memory usage of the model."
         """
         raise NotImplementedError
+
+    def vision_encoder_compile(self):
+        """
+        Perform the vision encoder compile if applicable
+        """
+        logger.info(f"No vision encoder compile for base {self.__class__.__name__}")

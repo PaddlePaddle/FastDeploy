@@ -22,10 +22,7 @@ from paddleformers.transformers.activations import ACT2FN
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import (  # noqa: F401
-        fused_neox_rope_embedding,
-        gelu_tanh,
-    )
+    from fastdeploy.model_executor.ops.gpu import fused_neox_rope_embedding, gelu_tanh
 
 
 def rotate_half(x):
