@@ -421,6 +421,11 @@ class EngineArgs:
     Configuration for eplb.
     """
 
+    enable_rollout_routing_replay: bool = False
+    """
+    Flag to enable rollout routing replay(r3)
+    """
+
     def __post_init__(self):
         """
         Post-initialization processing to set default tokenizer if not provided.
@@ -730,6 +735,12 @@ class EngineArgs:
             type=json.loads,
             default=EngineArgs.eplb_config,
             help="Config of eplb.",
+        )
+        parallel_group.add_argument(
+            "--enable-rollout-routing-replay",
+            action="store_true",
+            default=EngineArgs.enable_rollout_routing_replay,
+            help="Flag to enable rollout routing replay(r3).",
         )
 
         # Load group
@@ -1163,4 +1174,5 @@ class EngineArgs:
             early_stop_config=early_stop_cfg,
             enable_attention_dp_balance=self.enable_attention_dp_balance,
             attention_dp_time_out_iters=self.attention_dp_time_out_iters,
+            enable_rollout_routing_replay=self.enable_rollout_routing_replay,
         )

@@ -840,6 +840,12 @@ def parse_args():
         help="EPLB Configuration.",
     )
 
+    parser.add_argument(
+        "--enable_rollout_routing_replay",
+        action="store_true",
+        help="enable rollout routing replay(r3)",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -998,6 +1004,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         enable_attention_dp_balance=args.enable_attention_dp_balance,
         attention_dp_time_out_iters=args.attention_dp_time_out_iters,
         eplb_config=eplb_config,
+        enable_rollout_routing_replay=args.enable_rollout_routing_replay,
     )
     update_fd_config_for_mm(fd_config)
 

@@ -477,6 +477,7 @@ class LLMEngine:
             "enable_logprob": self.cfg.model_config.enable_logprob,
             "lm_head_fp32": self.cfg.model_config.lm_head_fp32,
             "enable_attention_dp_balance": self.cfg.enable_attention_dp_balance,
+            "enable_rollout_routing_replay": self.cfg.enable_rollout_routing_replay,
         }
         for worker_flag, value in worker_append_flag.items():
             if value:
