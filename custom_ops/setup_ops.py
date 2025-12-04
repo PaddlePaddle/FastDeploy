@@ -71,7 +71,8 @@ def update_git_repo():
         deep_gemm_dir = "third_party/DeepGEMM"
         dst_path = os.path.join(submodule_dir, deep_gemm_dir)
         # patch = "0001-DeepGEMM-95e81b3.patch"
-        patch = "0002-DeepGEMM-c9f8b34.patch"
+        # patch = "0002-DeepGEMM-c9f8b34.patch"
+        patch = "0003-DeepGEMM-c9f8b34.patch"
         patch_source = os.path.join(submodule_dir, patch)
         patch_destination = os.path.join(dst_path, patch)
         if not os.path.exists(patch_destination):

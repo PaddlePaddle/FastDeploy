@@ -187,7 +187,7 @@ class MoEMethodBase(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
-        block_tables = None,
+        block_tables=None,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
@@ -199,7 +199,6 @@ class MoEMethodBase(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
-        block_tables = None,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
@@ -215,7 +214,7 @@ class MoEMethodBase(QuantMethodBase):
                     self.ep_decoder_runner.clean_low_latency_buffer()
                 return self.apply_ep_decode(layer, x, gate)
         else:
-            return self.apply_tp(layer, x, gate, block_tables)
+            return self.apply_tp(layer, x, gate)
 
 
 class UnquantizedFusedMoEMethod(MoEMethodBase):

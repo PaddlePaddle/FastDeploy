@@ -452,7 +452,7 @@ class Ernie4_5_Model(nn.Layer):
 
         residual = None
         for i in range(self.num_layers):
-            print(f"[Ernie4_5_Model] ----------------------- layer {i} -----------------------")
+            # print(f"[Ernie4_5_Model] ----------------------- layer {i} -----------------------")
             hidden_states, residual = self.layers[i](forward_meta, hidden_states, residual)
 
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
