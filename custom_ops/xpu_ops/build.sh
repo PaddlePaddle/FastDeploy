@@ -54,6 +54,8 @@ elif [ -d "${LEGACY_PACKAGE_DIR}" ]; then
     CUSTOM_OP_DLL_PATH="${TMP_PACKAGE_DIR}/fastdeploy_ops_pd_.so"
 else
     echo -e "${RED}[Error]${NONE} Neither modern nor legacy directory for xpu ops found in ${OPS_TMP_DIR}"
+    echo -e "${BLUE}[INFO]${NONE} Maybe the compilation failed, please clean the build directory and try again."
+    exit 1
 fi
 
 mkdir -p ${TMP_PACKAGE_DIR}/libs
