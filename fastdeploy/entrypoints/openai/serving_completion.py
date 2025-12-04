@@ -562,6 +562,7 @@ class OpenAIServingCompletion:
                             created=created_time,
                             model=model_name,
                             choices=choices,
+                            metrics=res["metrics"] if request.collect_metrics else None,
                         )
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                         choices = []
@@ -588,6 +589,7 @@ class OpenAIServingCompletion:
                                         image_tokens=num_image_tokens[idx], reasoning_tokens=reasoning_tokens[idx]
                                     ),
                                 ),
+                                metrics=res["metrics"] if request.collect_metrics else None,
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
                         api_server_logger.info(f"Completion Streaming response last send: {chunk.model_dump_json()}")

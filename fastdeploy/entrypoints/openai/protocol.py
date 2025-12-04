@@ -388,6 +388,7 @@ class CompletionStreamResponse(BaseModel):
     model: str
     choices: List[CompletionResponseStreamChoice]
     usage: Optional[UsageInfo] = None
+    metrics: Optional[Dict] = None
 
 
 class StreamOptions(BaseModel):
@@ -499,6 +500,8 @@ class CompletionRequest(BaseModel):
 
     mm_hashes: Optional[list] = None
     # doc: end-completion-extra-params
+
+    collect_metrics: Optional[bool] = False
 
     def to_dict_for_infer(self, request_id=None, prompt=None):
         """
