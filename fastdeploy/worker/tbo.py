@@ -21,6 +21,7 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta
 event0 = threading.Event()
 event1 = threading.Event()
 
+
 GLOBAL_THREAD_INFO = {}
 
 GLOBAL_THREAD_INFO["thread0"] = [event0, event1]
@@ -28,6 +29,7 @@ GLOBAL_THREAD_INFO["thread1"] = [event1, event0]
 
 
 GLOBAL_ATTN_BUFFERS = {}
+
 
 def let_another_thread_run():
     thread_name = threading.current_thread().name
