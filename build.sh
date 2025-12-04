@@ -96,6 +96,9 @@ function copy_ops(){
         TMP_PACKAGE_DIR="${LEGACY_PACKAGE_DIR}"
     else
         echo -e "${RED}[Error]${NONE} Neither modern nor legacy directory for gpu ops found in ${OPS_TMP_DIR}"
+        echo -e "${BLUE}[Info]${NONE} Maybe the compilation failed, please clean the build directory (currently ${BUILD_DIR}) and egg directory (currently ${EGG_DIR}) and try again."
+        echo -e "${BLUE}[Info]${NONE} If the build still fails, please try to use a clean FastDeploy code and a clean environment to compile again."
+        exit 1
     fi
 
     # Handle CPU ops directory compatibility between modern and legacy naming
