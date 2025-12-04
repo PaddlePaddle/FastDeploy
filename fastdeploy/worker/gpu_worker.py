@@ -131,8 +131,8 @@ class GpuWorker(WorkerBase):
                 f"\nPaddle allocated memory: {paddle_allocated_mem_before_run / Gb}",
             )
         )
-
-        self.model_runner.profile_run()        
+        # 2. Profile run
+        self.model_runner.profile_run()
         set_random_seed(self.fd_config.model_config.seed)
 
         # 3. Statistical memory information
