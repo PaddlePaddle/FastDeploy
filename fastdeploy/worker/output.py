@@ -20,7 +20,8 @@ from typing import NamedTuple, Optional
 import paddle
 
 
-class Logprob(NamedTuple):
+@dataclass
+class Logprob:
     """
     A named tuple containing information about a token's log probability.
     """

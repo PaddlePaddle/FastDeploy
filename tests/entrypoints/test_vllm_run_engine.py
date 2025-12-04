@@ -10,9 +10,10 @@ from fastdeploy.worker.output import Logprob, LogprobsTensors
 
 
 class DummyModelConfig:
-    def __init__(self, max_logprobs=10, ori_vocab_size=50):
+    def __init__(self, max_logprobs=10, ori_vocab_size=50, enable_logprob=True):
         self.max_logprobs = max_logprobs
         self.ori_vocab_size = ori_vocab_size
+        self.enable_logprob = enable_logprob
 
 
 class DummyCacheConfig:

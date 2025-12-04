@@ -418,13 +418,16 @@ class EngineClient:
         # logprobs
         logprobs = data.get("logprobs")
         top_logprobs = None
+        is_chat = False
 
-        if isinstance(logprobs, bool) and logprobs:
-            if not self.enable_logprob:
-                err_msg = "Logprobs is disabled, please enable it in startup config."
-                api_server_logger.error(err_msg)
-                raise ParameterError("logprobs", err_msg)
-            top_logprobs = data.get("top_logprobs")
+        if isinstance(logprobs, bool):
+            if logprobs:
+                is_chat = True
+                if not self.enable_logprob:
+                    err_msg = "Logprobs is disabled, please enable it in startup config."
+                    api_server_logger.error(err_msg)
+                    raise ParameterError("logprobs", err_msg)
+                top_logprobs = data.get("top_logprobs")
         elif isinstance(logprobs, int):
             top_logprobs = logprobs
         elif logprobs:
@@ -478,38 +481,40 @@ class EngineClient:
                 raise ValueError("prompt_logprobs", err_msg)
 
         # enable_logprob
-        if top_logprobs:
+        if top_logprobs is not None:
             if not self.enable_logprob:
                 err_msg = "Logprobs is disabled, please enable it in startup config."
                 api_server_logger.error(err_msg)
-                raise ParameterError("logprobs", err_msg)
+                raise ParameterError("top_logprobs" if is_chat else "logprobs", err_msg)
 
             if not isinstance(top_logprobs, int):
                 err_type = type(top_logprobs).__name__
-                err_msg = f"Invalid type for 'top_logprobs': expected int but got {err_type}."
+                err_msg = (
+                    f"Invalid type for {'top_logprobs' if is_chat else 'logprobs'}: expected int but got {err_type}."
+                )
                 api_server_logger.error(err_msg)
-                raise ParameterError("top_logprobs", err_msg)
+                raise ParameterError("top_logprobs" if is_chat else "logprobs", err_msg)
+
+            if top_logprobs > max_logprobs:
+                err_msg = f"Number of {'top_logprobs' if is_chat else 'logprobs'} requested ({top_logprobs}) exceeds maximum allowed value ({max_logprobs})."
+                api_server_logger.error(err_msg)
+                raise ValueError("top_logprobs" if is_chat else "logprobs", err_msg)
 
             if not envs.FD_USE_GET_SAVE_OUTPUT_V1:
-                if top_logprobs < 0 or top_logprobs > 20:
-                    err_msg = f"top_logprobs must be between 0 and 20; the current value is {top_logprobs}."
+                if top_logprobs < 0 or top_logprobs > max_logprobs:
+                    err_msg = f"{'top_logprobs' if is_chat else 'logprobs'} must be between 0 and {max_logprobs}; the current value is {top_logprobs}."
                     api_server_logger.error(err_msg)
-                    raise ValueError("top_logprobs", err_msg)
+                    raise ValueError("top_logprobs" if is_chat else "logprobs", err_msg)
             else:
                 if top_logprobs == -1 and self.ori_vocab_size > max_logprobs:
-                    err_msg = f"The requested value of ({self.ori_vocab_size}) for top_logprobs (-1) exceeds the maximum allowed value of ({max_logprobs})"
+                    err_msg = f"The requested value of ({self.ori_vocab_size}) for {'top_logprobs' if is_chat else 'logprobs'} (-1) exceeds the maximum allowed value of ({max_logprobs})"
                     api_server_logger.error(err_msg)
-                    raise ValueError("top_logprobs", err_msg)
+                    raise ValueError("top_logprobs" if is_chat else "logprobs", err_msg)
 
                 if top_logprobs < -1:
-                    err_msg = f"top_logprobs must be a non-negative value or -1; the current value is {top_logprobs}."
+                    err_msg = f"{'top_logprobs' if is_chat else 'logprobs'} must be a non-negative value or -1; the current value is {top_logprobs}."
                     api_server_logger.error(err_msg)
-                    raise ValueError("top_logprobs", err_msg)
-
-                if top_logprobs > max_logprobs:
-                    err_msg = f"Number of logprobs requested ({top_logprobs}) exceeds maximum allowed value ({max_logprobs})."
-                    api_server_logger.error(err_msg)
-                    raise ValueError("top_logprobs", err_msg)
+                    raise ValueError("top_logprobs" if is_chat else "logprobs", err_msg)
 
     def check_health(self, time_interval_threashold=30):
         """
