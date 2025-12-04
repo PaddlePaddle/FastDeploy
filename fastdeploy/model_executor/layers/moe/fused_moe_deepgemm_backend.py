@@ -169,12 +169,20 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             event,
         ) = self.ep_prefill_runner.dispatch(
             x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128,
-            num_worst_tokens = 0,
+            num_worst_tokens = 4096*16*0,
             event = event
         )
 
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
+
+        # tmp0 = ((recv_topk_idx >= 0).sum(axis=-1) > 0).sum().item()
+        # recv_x = (recv_x[0][:tmp0], recv_x[1][:tmp0])
+        # recv_topk_idx = recv_topk_idx[:tmp0]
+        # recv_topk_weights = recv_topk_weights[:tmp0]
+
+        # token_nums_this_rank = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)
+        # token_all_num = sum(token_nums_this_rank[1].numpy().tolist())
 
         token_all_num = sum(recv_num_tokens_per_expert_list)
 
