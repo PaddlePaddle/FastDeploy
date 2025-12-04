@@ -283,13 +283,8 @@ void MoeCombineKernel(const paddle::Tensor& ffn_out,
   typedef typename traits_::data_t data_t;
   auto stream = ffn_out.stream();
   const int threads = 1024;
-  int gridx = min(132 * 8, num_rows);
+  const int gridx = min(132 * 8, num_rows);
   const int num_experts_per_rank = top_k_indices.dims()[1];
-
-  char *compute_sms = getenv("COMPUTE_NUM_SMS");
-  if (compute_sms) {
-    gridx = std::stoi(compute_sms);
-  }
 
   combine_prmt_back_kernel<<<gridx, threads, 0, stream>>>(
       ffn_out.data<data_t>(),
@@ -931,13 +926,7 @@ void EPMoeDispatchFP8Kernel(const paddle::Tensor& input,
   auto stream = input.stream();
   auto place = input.place();
   // const int gridx = min(132 * 8, num_rows);
-  int gridx = 132 * 8;
-
-  char *compute_sms = getenv("COMPUTE_NUM_SMS");
-  if (compute_sms) {
-    gridx = std::stoi(compute_sms);
-  }
-
+  const int gridx = 132 * 8;
   DISPATCH_NUM_EXPERTS_PER_RANK(
       num_experts_per_rank,
       NUM_EXPERTS_PER_RANK,
