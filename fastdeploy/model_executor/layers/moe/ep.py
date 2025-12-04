@@ -504,6 +504,7 @@ class EPPrefillRunner(EPRunner):
     """
     EPPrefillRunner
     """
+    allocate_on_comm_stream = False
 
     def __init__(
         self,
@@ -532,6 +533,10 @@ class EPPrefillRunner(EPRunner):
             ep_group=ep_group,
             use_internode_ll_two_stage=use_internode_ll_two_stage,
         )
+    
+    def set_allocate_on_comm_stream(allocate_on_comm_stream: bool = False):
+        logger.info(f"set allocate_on_comm_stream to {allocate_on_comm_stream}, this will force Prefill dispatch's output tensor is allocated on communication stream")
+        EPPrefillRunner.allocate_on_comm_stream = allocate_on_comm_stream
 
     def dispatch(
         self,
@@ -554,7 +559,7 @@ class EPPrefillRunner(EPRunner):
             event,
         ) = buffer.get_dispatch_layout(topk_idx, self.num_experts,
                                        previous_event =  kwargs.get("previous_event", None),
-                                       allocate_on_comm_stream = True,
+                                       allocate_on_comm_stream = EPPrefillRunner.allocate_on_comm_stream,
                                        async_finish=self.ep_engine.async_finish,)
 
         x_scale_tensor = kwargs.get("x_scale_tensor", None)
@@ -569,7 +574,7 @@ class EPPrefillRunner(EPRunner):
             "topk_idx": topk_idx,
             "topk_weights": topk_weights,
             "expert_alignment": expert_alignment,
-            "allocate_on_comm_stream": True,
+            "allocate_on_comm_stream": EPPrefillRunner.allocate_on_comm_stream,
             "previous_event": event,
         }
         return buffer.dispatch(**dispatch_args)
@@ -592,7 +597,6 @@ class EPPrefillRunner(EPRunner):
             "async_finish": self.ep_engine.async_finish,
             "topk_weights": recv_topk_weights,
             "previous_event": event,
-            "allocate_on_comm_stream": False,
         }
         fused_moe_out, _, event = buffer.combine(**combine_args)
         return fused_moe_out, event
