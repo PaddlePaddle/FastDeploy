@@ -436,7 +436,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
 
         return logits
 
-    def empty_input_forward(self):
+    def empty_input_forward(self, forward_meta):
         """
         empty_input_forward
         """
@@ -448,7 +448,7 @@ class Ernie4_5_MTPForCausalLM(ModelForCasualLM):
             self.fd_config.model_config.moe_layer_start_index,
             self.fd_config.model_config.num_hidden_layers,
         ):
-            self.ernie.layers[i].mlp.fused_moe(fake_hidden_states)
+            self.ernie.layers[i].mlp.fused_moe(hidden_states=fake_hidden_states, forward_meta=forward_meta)
 
     def forward(
         self,

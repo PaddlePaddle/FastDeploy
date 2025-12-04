@@ -402,12 +402,8 @@ class TokenProcessor:
                             rank_id,
                             is_blocking,
                         )
-                    elif (
-                        self.cfg.parallel_config.enable_expert_parallel
-                        and self.cfg.parallel_config.data_parallel_size > 1
-                    ):
+                    elif self.cfg.parallel_config.data_parallel_size > 1:
                         get_output_ep(self.output_tokens, rank_id, is_blocking)
-
                     else:
                         get_output(self.output_tokens, rank_id, is_blocking)
 
@@ -749,7 +745,15 @@ class TokenProcessor:
                         result.outputs.token_ids.append(token_id)
 
                     task.output_token_ids.append(token_id)
-
+                    if (
+                        envs.ENABLE_V1_KVCACHE_SCHEDULER
+                        and self.cfg.cache_config.enable_prefix_caching
+                        and self.cfg.cache_config.enable_output_caching
+                    ):
+                        if (task.num_total_tokens - 1) % self.cfg.cache_config.block_size == 0:
+                            self.resource_manager.cache_output_tokens(
+                                task
+                            )  # when enable prefix caching, cache kv cache for output tokens
                     if self.use_logprobs:
                         if self.cfg.speculative_config.method:
                             result.outputs.logprob = float(scores[i, batch_token_index, 0])
