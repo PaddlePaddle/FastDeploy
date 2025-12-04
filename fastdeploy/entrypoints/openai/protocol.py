@@ -613,7 +613,7 @@ class ChatCompletionRequest(BaseModel):
     model: Optional[str] = "default"
     frequency_penalty: Optional[float] = Field(None, le=2, ge=-2)
     logprobs: Optional[bool] = False
-    top_logprobs: Optional[int] = 0
+    top_logprobs: Optional[int] = None
     prompt_logprobs: Optional[int] = None
     include_draft_logprobs: Optional[bool] = False
 

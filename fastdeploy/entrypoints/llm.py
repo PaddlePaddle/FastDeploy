@@ -351,6 +351,10 @@ class LLM:
 
             if current_sampling_params.logprobs is not None:
                 num_logprobs = current_sampling_params.logprobs
+                if not self.llm_engine.cfg.model_config.enable_logprob:
+                    raise ValueError(
+                        "logprobs is only supported if `enable_logprob` is set to true in startup config."
+                    )
                 if num_logprobs == -1 and ori_vocab_size > max_logprobs:
                     raise ValueError(
                         f"Number of logprobs(-1) requested ({ori_vocab_size}) exceeds maximum allowed value ({max_logprobs})."
@@ -360,6 +364,10 @@ class LLM:
                         f"Number of logprobs requested ({num_logprobs}) exceeds maximum allowed value ({max_logprobs})."
                     )
             if current_sampling_params.prompt_logprobs is not None:
+                if not self.llm_engine.cfg.model_config.enable_logprob:
+                    raise ValueError(
+                        "prompt_logprobs is only supported if `enable_logprob` is set to true in startup config."
+                    )
                 if self.llm_engine.cfg.cache_config.enable_prefix_caching:
                     raise ValueError("prompt_logprobs is not supported with prefix caching enabled.")
                 if kwargs.get("stream"):
@@ -403,19 +411,18 @@ class LLM:
                 llm_logger.warning("Empty logprob_token_ids in LogprobsLists")
                 return None
 
-            # exclude sampled token at index 0
-            available_topk = len(logprobs_lists.logprob_token_ids[0]) - 1
+            available_topk = len(logprobs_lists.logprob_token_ids[0])
             effective_topk_logprobs = min(topk_logprobs, available_topk)
 
-            if effective_topk_logprobs <= 0:
+            if effective_topk_logprobs < 0:
                 llm_logger.warning(
                     f"Invalid effective_topk_logprobs={effective_topk_logprobs}, "
                     f"available_topk={available_topk}, topk_logprobs={topk_logprobs}; returning empty result."
                 )
                 return None
 
-            # sliced 1 ~ (1 + effective_topk_logprobs)
-            sliced_logprobs_lists = logprobs_lists.slice_columns(1, 1 + effective_topk_logprobs)
+            # sliced 0 ~ effective_topk_logprobs+1
+            sliced_logprobs_lists = logprobs_lists.slice_columns(0, effective_topk_logprobs + 1)
             result = []
             for token_ids, logprobs in zip(sliced_logprobs_lists.logprob_token_ids, sliced_logprobs_lists.logprobs):
 
@@ -559,7 +566,7 @@ class LLM:
                     result = self.llm_engine.data_processor.process_response(result)
 
                     # filter logprobs
-                    if result.outputs.top_logprobs and topk_logprobs:
+                    if result.outputs.top_logprobs is not None and topk_logprobs is not None:
                         if topk_logprobs == -1:
                             topk_logprobs = self.llm_engine.cfg.model_config.ori_vocab_size
                         result.outputs.logprobs = self._build_sample_logprobs(
