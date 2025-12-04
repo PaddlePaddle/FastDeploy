@@ -1227,7 +1227,7 @@ class XPUModelRunner(ModelRunnerBase):
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
         # when there is data on other runner, the current runner is required to execute part of the model.
         if not self.not_need_stop() and not is_dummy_run:
-            self._execute_empty_input()
+            self._execute_empty_input(self.forward_meta)
             return None
 
         # 2. Padding inputs for cuda grph
@@ -1323,14 +1323,14 @@ class XPUModelRunner(ModelRunnerBase):
             destroy_kv_signal_sender(self.kv_signal_sender)
         return None
 
-    def _execute_empty_input(self) -> None:
+    def _execute_empty_input(self, forward_meta) -> None:
         """
         In certain scenarios, such as during EP,
         the runner needs to execute partial modules of the model without input data.
         This requires the model to implement the `empty_input_forward` method.
         """
         if hasattr(self.model, "empty_input_forward"):
-            self.model.empty_input_forward()
+            self.model.empty_input_forward(forward_meta)
         else:
             raise ValueError(f"{type(self.model)} has no attribute 'empty_input_forward")
 
