@@ -8,7 +8,7 @@ aiozmq
 openai>=1.93.0
 tqdm
 pynvml
-uvicorn==0.38.0
+uvicorn>=0.38.0
 fastapi
 paddleformers==0.3.1
 redis

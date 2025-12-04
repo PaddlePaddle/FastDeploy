@@ -175,6 +175,7 @@ class ResourceManagerV1(ResourceManager):
 
         self.using_extend_tables_req_id = set()
         self.reuse_block_num_map = dict()
+        self.abort_req_ids_set = set()
 
         # need block nums
         need_block_num_data = np.zeros([max_num_seqs], dtype=np.int32)

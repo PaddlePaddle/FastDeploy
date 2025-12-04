@@ -80,6 +80,8 @@ class MockResourceManager:
         self.stop_flags = [False]
         self.tasks_list = [MockTask()]
         self.to_be_rescheduled_request_id_set = set()
+        self.abort_req_ids_set = set()
+        self.req_dict = {}
 
     def info(self):
         return "Mock resource manager info"

@@ -62,7 +62,6 @@ from fastdeploy.entrypoints.openai.utils import (
 )
 from fastdeploy.envs import environment_variables
 from fastdeploy.metrics.metrics import get_filtered_metrics
-from fastdeploy.metrics.metrics_middleware import PrometheusMiddleware
 from fastdeploy.metrics.trace_util import (
     fd_start_span,
     inject_to_metadata,
@@ -258,9 +257,6 @@ env_api_key_func = environment_variables.get("FD_API_KEY")
 env_tokens = env_api_key_func() if env_api_key_func else []
 if tokens := [key for key in (args.api_key or env_tokens) if key]:
     app.add_middleware(AuthenticationMiddleware, tokens)
-
-# add middleware for http metrics
-app.add_middleware(PrometheusMiddleware)
 
 
 @asynccontextmanager

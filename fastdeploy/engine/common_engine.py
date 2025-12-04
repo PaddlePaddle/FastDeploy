@@ -643,6 +643,7 @@ class EngineService:
                     max_num_batched_tokens=self.cfg.scheduler_config.max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
+                tasks = [task for task in tasks if task.request_id not in self.resource_manager.abort_req_ids_set]
                 for task in tasks:
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
                 if len(tasks) == 0:
@@ -705,6 +706,7 @@ class EngineService:
                     max_num_batched_tokens=max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
+                tasks = [task for task in tasks if task.request_id not in self.resource_manager.abort_req_ids_set]
                 for task in tasks:
                     task.schedule_start_time = time.time()
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
@@ -914,22 +916,15 @@ class EngineService:
                     status_value = data.get("status", None)
                     if status_value is not None and status_value == RequestStatus.ABORT.value:
                         req_id = data["request_id"]
-                        batch_id = self.resource_manager.req_dict[req_id]
+                        self.llm_logger.info(f"Receive abort request, req_id: {req_id}")
                         abort_res = RequestOutput(
                             request_id=req_id,
                             finished=True,
                             error_code=499,
                             error_msg=f"Your request with request_id:{req_id} is aborted.",
                         )
-                        abort_task = self.resource_manager.tasks_list[batch_id]
-                        is_prefill = (
-                            abort_task.disaggregate_info is not None
-                            and abort_task.disaggregate_info["role"] == "prefill"
-                        )
-                        self.token_processor._recycle_resources(
-                            req_id, batch_id, abort_task, abort_res, is_prefill, True
-                        )
                         self.scheduler.put_results([abort_res])
+                        self.resource_manager.abort_req_ids_set.add(req_id)
                         continue
                     err_msg = None
                     try:
