@@ -341,24 +341,6 @@ class XPUModelRunner(ModelRunnerBase):
             position_ids.shape[0] + rope_3d_position_ids["position_ids_offset"][-1]
         )
         rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
-    def exist_decode(self):
-        """
-        单卡上的only decode判断
-        """
-        # 进入函数的已经不是空请求了
-        # # 空请求返回true，非空闲状态下的空请求，说明部分卡没有在计算而是在空跑
-        # if int(paddle.max(self.share_inputs["seq_lens_encoder"])) == 0 and int(paddle.max(self.share_inputs["seq_lens_decoder"])) == 0:
-        #     return 1
-        # if not self.not_need_stop():# 专家并行过程中，空的卡返回true
-        #     return 1
-        # 非空请求判断是否是decode only请求
-        if (
-            int(paddle.max(self.share_inputs["seq_lens_decoder"])) != 0
-            and int(paddle.max(self.share_inputs["seq_lens_encoder"])) == 0
-        ):
-            return 1
-        else:
-            return 0
 
     def only_decode(self):
         """
