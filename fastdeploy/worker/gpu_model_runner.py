@@ -2032,7 +2032,7 @@ class GPUModelRunner(ModelRunnerBase):
                 backend=backend,
             )
 
-        from fastdeploy.model_executor.models.paddleocr_vl import SiglipEncoder
+        from fastdeploy.model_executor.models.paddleocr_vl.siglip import SiglipEncoder
 
         SiglipEncoder._run_encoder_layer = apply_compile(SiglipEncoder._run_encoder_layer)
 
