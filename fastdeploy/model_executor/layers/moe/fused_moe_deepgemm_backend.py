@@ -16,16 +16,17 @@
 
 import paddle
 from paddle import nn
+from paddle.distributed.communication import deep_ep
 from paddleformers.utils.log import logger
 
 import fastdeploy
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import count_tokens_per_expert_func, deep_gemm
+from fastdeploy.worker.tbo import let_another_thread_run
 
 from .fused_moe_backend_base import MoEMethodBase
 from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
-from fastdeploy.worker.tbo import let_another_thread_run
-from paddle.distributed.communication import deep_ep
+
 
 class DeepGemmFusedMoeMethod(MoEMethodBase):
     """
@@ -153,7 +154,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         event = deep_ep.Buffer.capture()
         let_another_thread_run()
-        
+
         # 3. EP Dispatch
         (
             recv_x,
@@ -163,8 +164,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             handle,
             event,
         ) = self.ep_prefill_runner.dispatch(
-            x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128,
-            previous_event = event
+            x, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128, previous_event=event
         )
 
         if self.ep_prefill_runner.ep_engine.async_finish:
