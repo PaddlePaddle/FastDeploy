@@ -150,7 +150,7 @@ class ChatResponseProcessor:
                             image_output["outputs"]["num_image_tokens"] = count_tokens(all_tokens)
                             yield image_output
 
-                    self.data_processor.process_response_dict(
+                    await self.data_processor.process_response_dict(
                         response_dict=request_output,
                         stream=stream,
                         enable_thinking=enable_thinking,
@@ -171,7 +171,7 @@ class ChatResponseProcessor:
                     num_image_tokens = 0
                     for part in self._multipart_buffer:
                         if part["decode_type"] == 0:
-                            self.data_processor.process_response_dict(
+                            await self.data_processor.process_response_dict(
                                 response_dict=part["request_output"],
                                 stream=False,
                                 enable_thinking=enable_thinking,
