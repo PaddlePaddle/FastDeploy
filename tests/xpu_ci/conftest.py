@@ -291,6 +291,7 @@ def setup_ep_env():
         "XSHMEM_QP_NUM_PER_RANK": "32",
         "BKCL_RDMA_VERBS": "1",
         "MOE_FFN_USE_DENSE_INPUT": "1",
+        "DEEPEP_FORCE_SYNC": "1",
     }
 
     # 保存原始值
