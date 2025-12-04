@@ -988,7 +988,7 @@ class MTPProposer(Proposer):
                     self._get_self_hidden_states(hidden_states)
             else:
                 if hasattr(self.model, "empty_input_forward"):
-                    self.model.empty_input_forward()
+                    self.model.empty_input_forward(forward_meta=self.forward_meta)
 
     def _propose_xpu(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False):
         """
@@ -1078,7 +1078,7 @@ class MTPProposer(Proposer):
                     self._get_self_hidden_states(hidden_states)
             else:
                 if hasattr(self.model, "empty_input_forward"):
-                    self.model.empty_input_forward()
+                    self.model.empty_input_forward(self.forward_meta)
 
     def _get_self_hidden_states(self, hidden_states):
         target_hidden_states = eagle_get_self_hidden_states(

@@ -79,8 +79,8 @@ class Qwen3MoeBlock(nn.Layer):
             weight_dtype="float32",
         )
 
-    def forward(self, x):
-        return self.experts(x, self.gate)
+    def forward(self, x, forward_meta):
+        return self.experts(x, self.gate, forward_meta)
 
     def load_state_dict(self, state_dict):
         """ """
@@ -125,7 +125,7 @@ class Qwen3MLP(nn.Layer):
         self.up_gate_proj.load_state_dict(state_dict)
         self.down_proj.load_state_dict(state_dict)
 
-    def forward(self, x):
+    def forward(self, x, forward_meta):
         """ """
         gate_up_out = self.up_gate_proj(x)
         act_out = self.act_fn(gate_up_out)
@@ -204,7 +204,7 @@ class Qwen3DecoderLayer(nn.Layer):
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
 
-        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp(hidden_states, forward_meta)
 
         return hidden_states, residual
 
@@ -416,7 +416,7 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
 
         return logits
 
-    def empty_input_forward(self):
+    def empty_input_forward(self, forward_meta):
         """
         empty_input_forward
         """
@@ -428,7 +428,7 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
             self.fd_config.model_config.moe_layer_start_index,
             self.fd_config.model_config.num_hidden_layers,
         ):
-            self.model.layers[i].mlp.experts(fake_hidden_states, self.model.layers[i].mlp.gate)
+            self.model.layers[i].mlp.experts(fake_hidden_states, self.model.layers[i].mlp.gate, forward_meta)
 
     def forward(
         self,
