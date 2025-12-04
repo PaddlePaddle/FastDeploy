@@ -255,6 +255,22 @@ class Request:
         """
         return self.prompt_token_ids_len + len(self.output_token_ids)
 
+    def __getstate__(self):
+        """
+        Custom getstate method for pickle support.
+        Handles unpicklable attributes by filtering them from __dict__.
+        """
+        # Create a filtered dictionary without problematic attributes
+        filtered_dict = {}
+        for key, value in self.__dict__.items():
+            # Skip attributes that are known to contain unpicklable objects
+            if key == "async_process_futures":
+                filtered_dict[key] = []
+            else:
+                filtered_dict[key] = value
+
+        return filtered_dict
+
     def __eq__(self, other):
         """
         EQ operator.
