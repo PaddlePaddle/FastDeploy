@@ -142,7 +142,6 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         """
         Apply the EP prefill method.
         """
-
         gate_out = gate(x.cast("float32"))
 
         # 1. Select topk experts and weights
