@@ -8,6 +8,13 @@
 | baidu/ERNIE-4.5-21B-A3B-Thinking  | ernie-x1  |
 | baidu/ERNIE-4.5-VL-28B-A3B-Thinking  | ernie-45-vl-thinking  |
 
+## DeepSeek系列模型配套工具解释器
+| 模型名称          | 解析器名称       |
+|---------------|-------------|
+| unsloth/DeepSeek-V3.1-BF16  | deepseek  |
+| unsloth/DeepSeek-V3-0324-BF16  | deepseek  |
+| unsloth/DeepSeek-R1-BF16  | deepseek  |
+
 ## 快速开始
 
 ### 启动包含解析器的FastDeploy
@@ -92,6 +99,27 @@ curl -X POST http://0.0.0.0:8000/v1/chat/completions \
     ]
 }
 ```
+## 错误处理和格式不合法情况
+
+DeepSeek 工具解析器能够处理各种格式不合法或不完整的情况：
+
+### 协议不规范
+如果思考结束标签（`</think>`）和工具调用之间存在非空白字符：
+- **输入**: `<think>thinking</think>\n\nABC\n<｜tool▁calls▁begin｜>...`
+- **输出**: `tools_called=False`, `tool_calls=None`, `content=<完整输出>`
+- 当协议不规范时，工具调用不会被解析，整个输出作为 content 返回。
+
+### JSON 参数格式错误
+如果工具调用的参数包含无效的 JSON：
+- **输入**: `<｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{"location": "北京", "unit":}<｜tool▁call▁end｜>`
+- **输出**: 解析器会尝试使用 `partial_json_parser` 来恢复有效的 JSON。如果恢复失败，会返回空对象 `{}` 或原始文本。
+- 这确保了在流式输出过程中能够优雅地处理不完整的 JSON。
+
+### 缺少工具调用结束标签
+如果工具调用不完整（缺少结束标签）：
+- **输入**: `<｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{"location": "北京"`
+- **输出**: 在流式模式下，解析器会等待更多数据。在非流式模式下，会尝试提取可用的内容。
+
 ## 并行工具调用
 
 如果模型能够生成多个并行的工具调用，FastDeploy 会返回一个列表：

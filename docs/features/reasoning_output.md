@@ -11,6 +11,9 @@ Reasoning models return an additional `reasoning_content` field in their output,
 | baidu/ERNIE-4.5-VL-28B-A3B-Paddle | ernie-45-vl |    ✅    |  ❌  |"chat_template_kwargs":{"enable_thinking": true/false}|
 | baidu/ERNIE-4.5-21B-A3B-Thinking  | ernie-x1  |   ✅ Not supported for turning off   | ✅|❌|
 | baidu/ERNIE-4.5-VL-28B-A3B-Thinking  | ernie-45-vl-thinking  |   ✅ Not recommended to turn off   | ✅|"chat_template_kwargs": {"options": {"thinking_mode": "open/close"}}|
+| unsloth/DeepSeek-V3.1-BF16  | deepseek  | ❌ (thinking mode off by default)  | ✅|❌|
+| unsloth/DeepSeek-V3-0324-BF16  | deepseek  | ✅ (thinking mode on by default)  | ✅|❌|
+| unsloth/DeepSeek-R1-BF16  | deepseek  | ✅ (thinking mode on by default)  | ✅|❌|
 
 The reasoning model requires a specified parser to extract reasoning content. Referring to the `thinking switch parameters` of each model can turn off the model's thinking mode.
 
@@ -159,3 +162,31 @@ Model output example
 }
 ```
 More reference documentation related to tool calling usage：  [Tool Calling](./tool_calling.md)
+
+## Error Handling and Invalid Format
+
+The DeepSeek reasoning parser handles various invalid or incomplete format scenarios gracefully:
+
+### Missing Start Tag
+If the model output contains only the end tag without the start tag:
+- **Input**: `abc</think>xyz`
+- **Output**: `reasoning_content="abc"`, `content="xyz"`
+- The parser extracts content before the end tag as reasoning, and content after as reply.
+
+### Missing End Tag
+If the model output contains only the start tag without the end tag:
+- **Input**: `<think>abc`
+- **Output**: `reasoning_content="abc"`, `content=None`
+- The parser treats all content as reasoning when the end tag is missing.
+
+### No Reasoning Tags (Thinking Mode Off)
+When thinking mode is disabled (e.g., DeepSeek-V3.1 by default):
+- **Input**: `direct response`
+- **Output**: `reasoning_content=None`, `content="direct response"`
+- The parser treats the entire output as reply content.
+
+### Protocol Violation with Tool Calls
+If there is non-whitespace content between the reasoning end tag and tool calls:
+- **Input**: `<think>thinking</think>\n\nABC\n<｜tool▁calls▁begin｜>...`
+- **Output**: Tool calls are not parsed, entire output is returned as `content`
+- This ensures tool calls are only parsed when they immediately follow reasoning content.

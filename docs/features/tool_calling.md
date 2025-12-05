@@ -8,6 +8,13 @@ This document describes how to configure the server in FastDeploy to use the too
 | baidu/ERNIE-4.5-21B-A3B-Thinking  | ernie-x1  |
 | baidu/ERNIE-4.5-VL-28B-A3B-Thinking  | ernie-45-vl-thinking  |
 
+## Tool Call parser for DeepSeek series models
+| Model Name     | Parser Name       |
+|---------------|-------------|
+| unsloth/DeepSeek-V3.1-BF16  | deepseek  |
+| unsloth/DeepSeek-V3-0324-BF16  | deepseek  |
+| unsloth/DeepSeek-R1-BF16  | deepseek  |
+
 ## Quickstart
 
 ### Starting FastDeploy with Tool Calling Enabled.
@@ -89,6 +96,27 @@ The example output is as follows. It shows that the model's output of the though
     ]
 }
 ```
+
+## Error Handling and Invalid Format
+
+The DeepSeek tool parser handles various invalid or incomplete format scenarios:
+
+### Protocol Violation
+If there is non-whitespace content between the reasoning end tag (`</think>`) and tool calls:
+- **Input**: `<think>thinking</think>\n\nABC\n<｜tool▁calls▁begin｜>...`
+- **Output**: `tools_called=False`, `tool_calls=None`, `content=<entire_output>`
+- Tool calls are not parsed when protocol is violated. The entire output is returned as content.
+
+### Malformed JSON Arguments
+If the tool call arguments contain invalid JSON:
+- **Input**: `<｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{"location": "北京", "unit":}<｜tool▁call▁end｜>`
+- **Output**: The parser attempts to use `partial_json_parser` to recover valid JSON. If recovery fails, it returns an empty object `{}` or the raw text.
+- This ensures graceful handling of incomplete JSON during streaming.
+
+### Missing Tool Call End Tag
+If a tool call is incomplete (missing end tag):
+- **Input**: `<｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{"location": "北京"`
+- **Output**: In streaming mode, the parser waits for more data. In non-streaming mode, it attempts to extract what's available.
 
 ## Parallel Tool Calls
 If the model can generate parallel tool calls, FastDeploy will return a list:

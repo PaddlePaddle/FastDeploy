@@ -18,6 +18,7 @@ import unittest
 
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest, DeltaMessage
 from fastdeploy.reasoning import ReasoningParser, ReasoningParserManager
+from fastdeploy.reasoning.deepseek_reasoning_parser import DeepSeekReasoningParser
 from fastdeploy.reasoning.ernie_45_vl_thinking_reasoning_parser import (
     Ernie45VLThinkingReasoningParser,
 )
@@ -30,6 +31,7 @@ class DummyTokenizer:
 
     def __init__(self):
         self.vocab = {
+            "<think>": 99,
             "</think>": 100,
             "<tool_call>": 101,
             "</tool_call>": 102,
@@ -479,6 +481,217 @@ class TestErnieVLReasoningParser(unittest.TestCase):
         )
         self.assertEqual(reasoning, "reasoning")
         self.assertEqual(content, "\nactual response")
+
+
+class TestDeepSeekReasoningParser(unittest.TestCase):
+    def setUp(self):
+        self.tokenizer = DummyTokenizer()
+        self.parser = DeepSeekReasoningParser(tokenizer=self.tokenizer, model_name="deepseek-v3.1")
+        self.request = ChatCompletionRequest(
+            model="deepseek-v3.1", messages=[{"role": "user", "content": "test message"}]
+        )
+
+    # ---- Non-streaming parsing ----
+    def test_batch_standard_format(self):
+        """测试标准格式：<think>abc</think>xyz"""
+        text = "<think>abc</think>xyz"
+        reasoning, content = self.parser.extract_reasoning_content(text, self.request)
+        self.assertEqual(reasoning, "abc")
+        self.assertEqual(content, "xyz")
+
+    def test_batch_no_start_tag(self):
+        """测试缺少起始标签的格式：abc</think>xyz"""
+        text = "abc</think>xyz"
+        reasoning, content = self.parser.extract_reasoning_content(text, self.request)
+        self.assertEqual(reasoning, "abc")
+        self.assertEqual(content, "xyz")
+
+    def test_batch_no_reasoning_tags(self):
+        """测试无思考标签格式（思考开关关闭时）"""
+        text = "direct response"
+        reasoning, content = self.parser.extract_reasoning_content(text, self.request)
+        self.assertIsNone(reasoning)
+        self.assertEqual(content, "direct response")
+
+    def test_batch_only_start_tag(self):
+        """测试只有起始标签，没有结束标签"""
+        text = "<think>abc"
+        reasoning, content = self.parser.extract_reasoning_content(text, self.request)
+        self.assertEqual(reasoning, "abc")
+        self.assertIsNone(content)
+
+    def test_batch_reasoning_with_newline(self):
+        """测试包含换行符的思考内容"""
+        text = "<think>line1\nline2</think>response"
+        reasoning, content = self.parser.extract_reasoning_content(text, self.request)
+        self.assertEqual(reasoning, "line1\nline2")
+        self.assertEqual(content, "response")
+
+    def test_batch_empty_content(self):
+        """测试思考结束后没有回复内容"""
+        text = "<think>abc</think>"
+        reasoning, content = self.parser.extract_reasoning_content(text, self.request)
+        self.assertEqual(reasoning, "abc")
+        self.assertIsNone(content)
+
+    def test_batch_content_with_whitespace(self):
+        """测试思考结束后只有空白字符"""
+        text = "<think>abc</think>\n\n  "
+        reasoning, content = self.parser.extract_reasoning_content(text, self.request)
+        self.assertEqual(reasoning, "abc")
+        self.assertIsNone(content)
+
+    # ---- Streaming parsing ----
+    def test_streaming_reasoning_content(self):
+        """测试流式输出思考内容"""
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="",
+            current_text="a",
+            delta_text="a",
+            previous_token_ids=[],
+            current_token_ids=[200],
+            delta_token_ids=[200],
+        )
+        self.assertIsNotNone(msg)
+        self.assertEqual(msg.reasoning_content, "a")
+        self.assertIsNone(msg.content)
+
+    def test_streaming_reasoning_end_tag(self):
+        """测试流式输出遇到结束标签"""
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="abc",
+            current_text="abc</think>",
+            delta_text="</think>",
+            previous_token_ids=[200, 201, 202],
+            current_token_ids=[200, 201, 202, self.parser.think_end_token_id],
+            delta_token_ids=[self.parser.think_end_token_id],
+        )
+        self.assertIsNone(msg)  # 单个结束标签应该被忽略
+
+    def test_streaming_reasoning_to_content(self):
+        """测试从思考阶段转换到回复阶段"""
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="abc</think>",
+            current_text="abc</think>xyz",
+            delta_text="xyz",
+            previous_token_ids=[200, 201, 202, self.parser.think_end_token_id],
+            current_token_ids=[200, 201, 202, self.parser.think_end_token_id, 110, 120, 130],
+            delta_token_ids=[110, 120, 130],
+        )
+        self.assertIsNotNone(msg)
+        self.assertIsNone(msg.reasoning_content)
+        self.assertEqual(msg.content, "xyz")
+
+    def test_streaming_reasoning_and_content_in_delta(self):
+        """测试 delta 中同时包含思考和回复内容"""
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="",
+            current_text="<think>abc</think>xyz",
+            delta_text="<think>abc</think>xyz",
+            previous_token_ids=[],
+            current_token_ids=[
+                self.parser.think_start_token_id,
+                200,
+                201,
+                202,
+                self.parser.think_end_token_id,
+                110,
+                120,
+                130,
+            ],
+            delta_token_ids=[
+                self.parser.think_start_token_id,
+                200,
+                201,
+                202,
+                self.parser.think_end_token_id,
+                110,
+                120,
+                130,
+            ],
+        )
+        self.assertIsNotNone(msg)
+        self.assertEqual(msg.reasoning_content, "abc")
+        self.assertEqual(msg.content, "xyz")
+
+    def test_streaming_reasoning_start_tag(self):
+        """测试流式输出遇到开始标签"""
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="",
+            current_text="<think>abc",
+            delta_text="<think>abc",
+            previous_token_ids=[],
+            current_token_ids=[self.parser.think_start_token_id, 200, 201, 202],
+            delta_token_ids=[self.parser.think_start_token_id, 200, 201, 202],
+        )
+        self.assertIsNotNone(msg)
+        self.assertEqual(msg.reasoning_content, "abc")
+        self.assertIsNone(msg.content)
+
+    def test_streaming_no_reasoning_tags(self):
+        """测试流式输出无思考标签（思考开关关闭）"""
+        msg = self.parser.extract_reasoning_content_streaming(
+            previous_text="",
+            current_text="direct",
+            delta_text="direct",
+            previous_token_ids=[],
+            current_token_ids=[200],
+            delta_token_ids=[200],
+            output_stage="CONTENT_STAGE",
+        )
+        self.assertIsNotNone(msg)
+        self.assertIsNone(msg.reasoning_content)
+        self.assertEqual(msg.content, "direct")
+
+    # ---- Stage detection ----
+    def test_detect_output_stage_reasoning(self):
+        """测试检测思考阶段"""
+        prompt_token_ids = [self.parser.think_start_token_id]  # 包含 <think> 开始标记
+        stage = self.parser.detect_output_stage(prompt_token_ids)
+        self.assertEqual(stage, "REASONING_STAGE")
+
+    def test_detect_output_stage_content(self):
+        """测试检测回复阶段"""
+        prompt_token_ids = [
+            self.parser.think_start_token_id,
+            self.parser.think_end_token_id,
+        ]  # 包含 <think> 和 </think>
+        stage = self.parser.detect_output_stage(prompt_token_ids)
+        self.assertEqual(stage, "CONTENT_STAGE")
+
+    def test_detect_output_stage_no_tags(self):
+        """测试无标记时默认进入回复阶段"""
+        prompt_token_ids = [200, 201, 202]  # 无思考标记
+        stage = self.parser.detect_output_stage(prompt_token_ids)
+        self.assertEqual(stage, "CONTENT_STAGE")
+
+    # ---- Edge cases ----
+    def test_batch_multiple_end_tags(self):
+        """测试多个结束标签（只识别第一个）"""
+        text = "<think>abc</think>xyz</think>more"
+        reasoning, content = self.parser.extract_reasoning_content(text, self.request)
+        self.assertEqual(reasoning, "abc")
+        self.assertEqual(content, "xyz</think>more")
+
+    def test_is_reasoning_end(self):
+        """测试检查推理内容是否结束"""
+        input_ids = [200, 201, self.parser.think_end_token_id, 202]
+        result = self.parser.is_reasoning_end(input_ids)
+        self.assertTrue(result)
+
+        input_ids = [200, 201, 202]
+        result = self.parser.is_reasoning_end(input_ids)
+        self.assertFalse(result)
+
+    def test_extract_content_ids(self):
+        """测试提取 content token IDs"""
+        input_ids = [200, 201, self.parser.think_end_token_id, 202, 203]
+        result = self.parser.extract_content_ids(input_ids)
+        self.assertEqual(result, [202, 203])
+
+        input_ids = [200, 201, 202]
+        result = self.parser.extract_content_ids(input_ids)
+        self.assertEqual(result, [200, 201, 202])
 
 
 if __name__ == "__main__":

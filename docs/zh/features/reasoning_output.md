@@ -11,6 +11,9 @@
 | baidu/ERNIE-4.5-VL-28B-A3B-Paddle | ernie-45-vl |    ✅    |  ❌  |"chat_template_kwargs":{"enable_thinking": true/false}|
 | baidu/ERNIE-4.5-21B-A3B-Thinking  | ernie-x1  |   ✅不支持关思考  | ✅|❌|
 | baidu/ERNIE-4.5-VL-28B-A3B-Thinking  | ernie-45-vl-thinking  |   ✅不推荐关闭   | ✅|"chat_template_kwargs": {"options": {"thinking_mode": "open/close"}}|
+| unsloth/DeepSeek-V3.1-BF16  | deepseek  | ❌ (默认关闭思考模式)  | ✅|❌|
+| unsloth/DeepSeek-V3-0324-BF16  | deepseek  | ✅ (默认开启思考模式)  | ✅|❌|
+| unsloth/DeepSeek-R1-BF16  | deepseek  | ✅ (默认开启思考模式)  | ✅|❌|
 
 思考模型需要指定解析器,以便于对思考内容进行解析. 参考各个模型的 `思考开关控制参数` 可以关闭模型思考模式.
 
@@ -158,3 +161,31 @@ curl -X POST "http://0.0.0.0:8390/v1/chat/completions" \
 }
 ```
 更多工具调用相关的使用参考文档  [Tool Calling](./tool_calling.md)
+
+## 错误处理和格式不合法情况
+
+DeepSeek 推理解析器能够优雅地处理各种格式不合法或不完整的情况：
+
+### 缺少起始标签
+如果模型输出只包含结束标签而没有起始标签：
+- **输入**: `abc</think>xyz`
+- **输出**: `reasoning_content="abc"`, `content="xyz"`
+- 解析器会将结束标签之前的内容提取为思考内容，之后的内容提取为回复内容。
+
+### 缺少结束标签
+如果模型输出只包含起始标签而没有结束标签：
+- **输入**: `<think>abc`
+- **输出**: `reasoning_content="abc"`, `content=None`
+- 解析器会将所有内容视为思考内容。
+
+### 无思考标签（思考模式关闭）
+当思考模式被关闭时（例如 DeepSeek-V3.1 默认关闭）：
+- **输入**: `direct response`
+- **输出**: `reasoning_content=None`, `content="direct response"`
+- 解析器会将整个输出视为回复内容。
+
+### 协议不规范（工具调用前有非空白字符）
+如果思考结束标签和工具调用之间存在非空白字符：
+- **输入**: `<think>thinking</think>\n\nABC\n<｜tool▁calls▁begin｜>...`
+- **输出**: 工具调用不会被解析，整个输出作为 `content` 返回
+- 这确保了只有在工具调用紧跟在思考内容之后时才会被解析。
