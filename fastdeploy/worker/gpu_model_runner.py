@@ -275,11 +275,11 @@ class GPUModelRunner(ModelRunnerBase):
             token_num = self.share_inputs["ids_remove_padding"].shape[0]
 
             if token_num > chunk_size:
-                self.fd_config.parallel_config.moe_num_chunk = (token_num + chunk_size - 1) // chunk_size
+                self.forward_meta.moe_num_chunk = (token_num + chunk_size - 1) // chunk_size
             else:
-                self.fd_config.parallel_config.moe_num_chunk = 1
+                self.forward_meta.moe_num_chunk = 1
 
-            dist_status_obj.moe_num_chunk = self.fd_config.parallel_config.moe_num_chunk
+            dist_status_obj.moe_num_chunk = self.forward_meta.moe_num_chunk
 
         # only ep need to collect and sync distributed status
         if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
@@ -1450,7 +1450,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         if_only_decode = dist_status.if_only_decode
         if self.fd_config.parallel_config.enable_chunked_moe:
-            self.fd_config.parallel_config.max_moe_num_chunk = dist_status.max_moe_num_chunk
+            self.forward_meta.max_moe_num_chunk = dist_status.max_moe_num_chunk
 
         only_decode_use_cudagraph = self.use_cudagraph and if_only_decode
 
@@ -2204,7 +2204,7 @@ class GPUModelRunner(ModelRunnerBase):
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
         # when there is data on other runner, the current runner is required to execute part of the model.
         if not self.not_need_stop():
-            self._execute_empty_input()
+            self._execute_empty_input(self.forward_meta)
             return None
 
         # 2. Padding inputs for cuda graph
@@ -2459,12 +2459,12 @@ class GPUModelRunner(ModelRunnerBase):
 
         for i, (seq_len, prompt_len) in enumerate(zip(seq_lens_cpu, pooling_metadata.prompt_lens)):
             if not self.cache_config.enable_prefix_caching:
-                output = raw_pooler_output[i].data if int(seq_len) == int(prompt_len) else None
+                output = raw_pooler_output[0].data if int(seq_len) == int(prompt_len) else None
                 pooler_output.append(output)
             else:
                 current_seq_len_decoder = seq_lens_decoder_batch[i]
                 if int(current_seq_len_decoder) + int(seq_len) == int(prompt_len):
-                    output = raw_pooler_output[i].data
+                    output = raw_pooler_output[0].data
                 else:
                     output = None
                 pooler_output.append(output)
@@ -2475,14 +2475,14 @@ class GPUModelRunner(ModelRunnerBase):
 
         return pooler_output
 
-    def _execute_empty_input(self) -> None:
+    def _execute_empty_input(self, forward_meta) -> None:
         """
         In certain scenarios, such as during EP,
         the runner needs to execute partial modules of the model without input data.
         This requires the model to implement the `empty_input_forward` method.
         """
         if hasattr(self.model, "empty_input_forward"):
-            self.model.empty_input_forward()
+            self.model.empty_input_forward(forward_meta)
         else:
             raise ValueError(f"{type(self.model)} has no attribute 'empty_input_forward")
 

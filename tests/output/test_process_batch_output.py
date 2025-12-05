@@ -41,10 +41,16 @@ class MockConfig:
     class SchedulerConfig:
         name = "default"
 
+    class CacheConfig:
+        enable_prefix_caching = False
+        enable_output_caching = False
+        block_size = 64
+
     parallel_config = ParallelConfig()
     speculative_config = SpeculativeConfig()
     model_config = ModelConfig()
     scheduler_config = SchedulerConfig()
+    cache_config = CacheConfig()
 
 
 class MockTask:
