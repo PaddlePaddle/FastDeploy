@@ -38,7 +38,6 @@ from fastdeploy.config import (
     ModelConfig,
     ParallelConfig,
     PlasAttentionConfig,
-    RoutingReplayConfig,
     SpeculativeConfig,
     StructuredOutputsConfig,
 )
@@ -886,13 +885,6 @@ def parse_args():
         help="EPLB Configuration.",
     )
 
-    parser.add_argument(
-        "--routing_replay_config",
-        type=json.loads,
-        default=None,
-        help="Configation of Rollout Routing Replay.",
-    )
-
     args = parser.parse_args()
     return args
 
@@ -952,7 +944,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     eplb_config = EPLBConfig(args.eplb_config)
 
     structured_outputs_config: StructuredOutputsConfig = StructuredOutputsConfig(args=vars(args))
-    routing_replay_config = RoutingReplayConfig(args.routing_replay_config)
 
     # Note(tangbinhan): used for load_checkpoint
     model_config.pretrained_config.tensor_parallel_rank = parallel_config.tensor_parallel_rank
@@ -1012,7 +1003,6 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         plas_attention_config=plas_attention_config,
         structured_outputs_config=structured_outputs_config,
         eplb_config=eplb_config,
-        routing_replay_config=routing_replay_config,
     )
     update_fd_config_for_mm(fd_config)
     if fd_config.load_config.load_choices == "default_v1" and not v1_loader_support(fd_config):
