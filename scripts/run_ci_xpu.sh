@@ -445,6 +445,7 @@ export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
 export XSHMEM_QP_NUM_PER_RANK=32
 export BKCL_RDMA_VERBS=1
+export MOE_FFN_USE_DENSE_INPUT=1
 
 wget -q https://paddle-qa.bj.bcebos.com/xpu_third_party/xDeepEP.tar.gz
 tar -xzf xDeepEP.tar.gz
@@ -511,6 +512,7 @@ unset BKCL_PCIE_RING
 unset XSHMEM_MODE
 unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
+unset MOE_FFN_USE_DENSE_INPUT
 stop_processes >kill.log 2>&1
 
 if [ ${ep_online_exit_code} -ne 0 ]; then
@@ -540,6 +542,7 @@ export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
 export XSHMEM_QP_NUM_PER_RANK=32
 export BKCL_RDMA_VERBS=1
+export MOE_FFN_USE_DENSE_INPUT=1
 
 export port_num=$((8188 + XPU_ID * 100))
 # 启动服务
@@ -597,6 +600,7 @@ unset BKCL_PCIE_RING
 unset XSHMEM_MODE
 unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
+unset MOE_FFN_USE_DENSE_INPUT
 stop_processes >kill.log 2>&1
 
 if [ ${ep_online_exit_code} -ne 0 ]; then
@@ -627,6 +631,7 @@ export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
 export XSHMEM_QP_NUM_PER_RANK=32
 export BKCL_RDMA_VERBS=1
+export MOE_FFN_USE_DENSE_INPUT=1
 
 export port_num=$((8188 + XPU_ID * 100))
 # 启动服务
@@ -686,6 +691,7 @@ unset BKCL_PCIE_RING
 unset XSHMEM_MODE
 unset XSHMEM_QP_NUM_PER_RANK
 unset BKCL_RDMA_VERBS
+unset MOE_FFN_USE_DENSE_INPUT
 stop_processes >kill.log 2>&1
 
 if [ ${ep_online_exit_code} -ne 0 ]; then

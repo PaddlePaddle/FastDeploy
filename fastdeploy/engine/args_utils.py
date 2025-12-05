@@ -237,6 +237,10 @@ class EngineArgs:
     """
     Flag to enable prefix caching.
     """
+    enable_output_caching: bool = True
+    """
+    Flag to enable kv cache for output tokens, only valid in V1 scheduler.
+    """
 
     disable_custom_all_reduce: bool = False
     """
@@ -953,6 +957,13 @@ class EngineArgs:
             action=argparse.BooleanOptionalAction,
             default=EngineArgs.enable_prefix_caching,
             help="Flag to enable prefix caching.",
+        )
+
+        perf_group.add_argument(
+            "--enable-output-caching",
+            action=argparse.BooleanOptionalAction,
+            default=EngineArgs.enable_output_caching,
+            help="Flag to enable output caching.",
         )
 
         perf_group.add_argument(
