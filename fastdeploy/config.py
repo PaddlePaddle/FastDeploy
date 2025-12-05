@@ -1484,6 +1484,31 @@ class StructuredOutputsConfig:
         return json.dumps({key: value for key, value in self.__dict__.items()})
 
 
+class RoutingReplayConfig:
+    """Configuration for Routing Replay used in RL training"""
+
+    def __init__(self, args) -> None:
+        self.enable_routing_replay: bool = False
+        self.routing_store_type: str = "local"
+
+        # Local routing store
+        self.local_store_dir: str = "./routing_replay_output"
+
+        # RDMA routing store
+        # TODO: Add RDMA routing store configuration attributes here when the feature is implemented.
+
+        if args is not None:
+            for key, value in args.items():
+                if hasattr(self, key) and value != "None":
+                    setattr(self, key, value)
+
+    def to_json_string(self):
+        """
+        Convert routing replay config to json string.
+        """
+        return json.dumps({key: value for key, value in self.__dict__.items()})
+
+
 class FDConfig:
     """
     The configuration class which contains all fastdeploy-related configuration. This
@@ -1517,6 +1542,7 @@ class FDConfig:
         early_stop_config: Optional[Dict[str, Any]] = None,
         tool_parser: str = None,
         test_mode=False,
+        routing_replay_config: Optional[RoutingReplayConfig] = None,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
@@ -1533,6 +1559,7 @@ class FDConfig:
         self.plas_attention_config: Optional[PlasAttentionConfig] = plas_attention_config
         self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
         self.router_config: RouterConfig = router_config
+        self.routing_replay_config = routing_replay_config
 
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
