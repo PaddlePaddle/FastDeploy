@@ -104,7 +104,7 @@ class DeepSeekV3MLP(nn.Layer):
         self.up_gate_proj.load_state_dict(state_dict)
         self.down_proj.load_state_dict(state_dict)
 
-    def forward(self, x):
+    def forward(self, x, forward_meta=None):
         """ """
         gate_up_out = self.up_gate_proj(x)
         act_out = self.act_fn(gate_up_out)
@@ -187,10 +187,10 @@ class DeepSeekV3MoE(nn.Layer):
         self.experts.load_state_dict(state_dict)
         self.shared_experts.load_state_dict(state_dict)
 
-    def forward(self, hidden_states: paddle.Tensor):
+    def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta):
         """ """
         shared_experts_out = self.shared_experts(hidden_states)
-        moe_out = self.experts(hidden_states, self.gate)
+        moe_out = self.experts(hidden_states, self.gate, forward_meta)
         moe_out = moe_out + shared_experts_out
         # We do to TP all reduce after the sum of experts.
         if self.tp_size > 1:
@@ -341,6 +341,7 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         # NOTE: (changwenbin) qkv_a_proj horizontal fusion
         qkv_a_out = self.qkv_a_proj_with_mqa(hidden_states)
+
         query, compressed_kv, key_pe = qkv_a_out.split(
             [self.q_lora_rank, self.kv_lora_rank, self.qk_rope_head_dim], axis=-1
         )
@@ -399,6 +400,7 @@ class DeepseekV3MLAAttention(nn.Layer):
                     self.num_attention_heads_tp * (self.kv_lora_rank + self.qk_rope_head_dim),
                 ]
             )
+
             fmha_out_decode = self.mla_attn(
                 q=q_input,
                 k=None,
@@ -418,6 +420,7 @@ class DeepseekV3MLAAttention(nn.Layer):
                 .transpose([1, 0, 2])
                 .reshape([-1, self.num_attention_heads_tp * self.v_head_dim])
             )
+
             if fmha_out is None:
                 fmha_out = fmha_out_decode
             else:
@@ -514,7 +517,7 @@ class DeepSeekV3DecoderLayer(nn.Layer):
         hidden_states = self.self_attn(forward_meta, hidden_states, position_ids, mask_encoder_batch)
 
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
-        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp(hidden_states, forward_meta)
         return hidden_states, residual
 
 
@@ -674,7 +677,6 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             loaded_weight_name = loaded_weight_name.replace("deepseek_v3", "model")
-
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
                     continue
@@ -740,6 +742,20 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
             mask_encoder_batch,
         )
         return position_ids, mask_encoder_batch
+
+    def empty_input_forward(self, forward_meta):
+        """
+        empty_input_forward
+        """
+        fake_hidden_states = paddle.empty(
+            shape=[1, self.fd_config.model_config.hidden_size],
+            dtype=paddle.get_default_dtype(),
+        )
+        for i in range(
+            self.fd_config.model_config.first_k_dense_replace,
+            self.fd_config.model_config.num_hidden_layers,
+        ):
+            self.model.layers[i].mlp.experts(fake_hidden_states, self.model.layers[i].mlp.gate, forward_meta)
 
     def forward(
         self,
