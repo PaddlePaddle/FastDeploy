@@ -1712,6 +1712,7 @@ class GPUModelRunner(ModelRunnerBase):
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
+            min_tokens=self.share_inputs["min_dec_len"],
             prompt_lens=self.share_inputs["prompt_lens"],
         )
 
@@ -1812,6 +1813,7 @@ class GPUModelRunner(ModelRunnerBase):
             accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
             stop_token_ids=self.share_inputs["stop_seqs"],
             stop_seqs_len=self.share_inputs["stop_seqs_len"],
+            min_tokens=self.share_inputs["min_dec_len"],
             prompt_lens=self.share_inputs["prompt_lens"],
             mask_rollback=self.share_inputs["mask_rollback"],
         )
@@ -2254,6 +2256,7 @@ class GPUModelRunner(ModelRunnerBase):
                 accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
                 stop_token_ids=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
+                min_tokens=self.share_inputs["min_dec_len"],
                 prompt_lens=self.share_inputs["prompt_lens"],
             )
 
@@ -2359,6 +2362,7 @@ class GPUModelRunner(ModelRunnerBase):
                 accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
                 stop_token_ids=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
+                min_tokens=self.share_inputs["min_dec_len"],
                 prompt_lens=self.share_inputs["prompt_lens"],
                 mask_rollback=self.share_inputs["mask_rollback"],
                 prompt_logprobs_list=prompt_logprobs_list,

@@ -93,11 +93,24 @@ class Ernie4_5Processor(BaseDataProcessor):
             request.eos_token_ids = self.eos_token_ids
 
         # processing stop_sequences
+        stop_token_ids_final = []
+        if request.get("stop_token_ids") is not None:
+            stop_token_ids = request.get("stop_token_ids")
+            if isinstance(stop_token_ids, list) and len(stop_token_ids) > 0:
+                if isinstance(stop_token_ids[0], int):
+                    stop_token_ids_final.extend([[t] for t in stop_token_ids])
+                elif isinstance(stop_token_ids[0], list):
+                    stop_token_ids_final.extend(stop_token_ids)
+
         stop_sequences = request.get("stop", [])
-        if stop_sequences is not None and len(stop_sequences) != 0:
+        if stop_sequences:
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
-            request.set("stop_token_ids", stop_seqs)
-            request.set("stop_seqs_len", stop_seqs_len)
+            stop_token_ids_final.extend(stop_seqs)
+
+        if stop_token_ids_final:
+            stop_seqs_len = [len(seq) for seq in stop_token_ids_final]
+            request["stop_token_ids"] = stop_token_ids_final
+            request["stop_seqs_len"] = stop_seqs_len
 
         # processing bad_words
         bad_words = request.get("bad_words")
@@ -174,10 +187,23 @@ class Ernie4_5Processor(BaseDataProcessor):
             request["eos_token_ids"] = self.eos_token_ids
 
         # processing stop_sequences
+        stop_token_ids_final = []
+        if request.get("stop_token_ids") is not None:
+            stop_token_ids = request.get("stop_token_ids")
+            if isinstance(stop_token_ids, list) and len(stop_token_ids) > 0:
+                if isinstance(stop_token_ids[0], int):
+                    stop_token_ids_final.extend([[t] for t in stop_token_ids])
+                elif isinstance(stop_token_ids[0], list):
+                    stop_token_ids_final.extend(stop_token_ids)
+
         stop_sequences = request.get("stop", [])
         if stop_sequences:
             stop_seqs, stop_seqs_len = self.update_stop_seq(stop_sequences)
-            request["stop_token_ids"] = stop_seqs
+            stop_token_ids_final.extend(stop_seqs)
+
+        if stop_token_ids_final:
+            stop_seqs_len = [len(seq) for seq in stop_token_ids_final]
+            request["stop_token_ids"] = stop_token_ids_final
             request["stop_seqs_len"] = stop_seqs_len
 
         # processing bad_words
