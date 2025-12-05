@@ -212,13 +212,14 @@ class ResourceManagerV1(ResourceManager):
                         if time.time() - timestamp >= envs.FD_GET_FIRST_TOKEN_FROM_P_TIMEOUT:
                             need_recycle_request_ids.append(request_id)
                     for request_id in need_recycle_request_ids:
-                        llm_logger.error(
-                            f"Recycle block ids for request {request_id} forcefully, due to get first token from P timeout."
-                        )
                         del self.preallocated_requests_timestamp[request_id]
                         if request_id in self.requests:
                             request = self.requests[request_id]
                             self.pre_recycle_resource(request)
+                        llm_logger.error(
+                            f"Recycle block ids for request {request_id} forcefully, due to get first token from P timeout."
+                            f"after recycle: {self.info()}"
+                        )
                 time.sleep(10)
             except Exception as e:
                 llm_logger.error(f"Monitor recycle block ids in D error: {e}, {str(traceback.format_exc())}")
