@@ -45,22 +45,23 @@ class TestClampPromptLogprobs(unittest.TestCase):
         self.assertEqual(result[0][1].logprob, -2.5)
         self.assertEqual(result[0][2].logprob, -1.0)
 
-    def test_negative_inf_logprobs_raises_error(self):
-        """Test that logprobs containing -inf raises AttributeError"""
+    def test_negative_inf_logprobs_gets_clamped(self):
+        """Test that logprobs containing -inf get clamped to -9999.0"""
         logprob_dict = {
             1: Logprob(logprob=float("-inf"), rank=1, decoded_token="hello"),
             2: Logprob(logprob=-1.0, rank=2, decoded_token="world"),
         }
         prompt_logprobs = [logprob_dict]
 
-        # Since Logprob is a NamedTuple, its fields cannot be modified, should raise AttributeError
-        with self.assertRaises(AttributeError) as context:
-            clamp_prompt_logprobs(prompt_logprobs)
+        # Since Logprob is now a dataclass, its fields can be modified
+        result = clamp_prompt_logprobs(prompt_logprobs)
 
-        self.assertIn("can't set attribute", str(context.exception))
+        # The -inf value should be clamped to -9999.0
+        self.assertEqual(result[0][1].logprob, -9999.0)
+        self.assertEqual(result[0][2].logprob, -1.0)  # unchanged
 
-    def test_multiple_negative_inf_raises_error(self):
-        """Test that multiple -inf logprobs values raise AttributeError"""
+    def test_multiple_negative_inf_gets_clamped(self):
+        """Test that multiple -inf logprobs values get clamped to -9999.0"""
         logprob_dict = {
             1: Logprob(logprob=float("-inf"), rank=1, decoded_token="hello"),
             2: Logprob(logprob=float("-inf"), rank=2, decoded_token="world"),
@@ -68,9 +69,13 @@ class TestClampPromptLogprobs(unittest.TestCase):
         }
         prompt_logprobs = [logprob_dict]
 
-        # Since Logprob is a NamedTuple, its fields cannot be modified, should raise AttributeError
-        with self.assertRaises(AttributeError):
-            clamp_prompt_logprobs(prompt_logprobs)
+        # Since Logprob is now a dataclass, its fields can be modified
+        result = clamp_prompt_logprobs(prompt_logprobs)
+
+        # All -inf values should be clamped to -9999.0
+        self.assertEqual(result[0][1].logprob, -9999.0)
+        self.assertEqual(result[0][2].logprob, -9999.0)
+        self.assertEqual(result[0][3].logprob, -0.5)  # unchanged
 
     def test_none_dict_in_list(self):
         """Test case when list contains None"""
@@ -116,7 +121,7 @@ class TestClampPromptLogprobs(unittest.TestCase):
         self.assertEqual(result[0][4].logprob, -1.5)
 
     def test_return_same_object(self):
-        """Test that function returns the same object (in-place modification attempt)"""
+        """Test that function returns the same object (in-place modification)"""
         logprob_dict = {
             1: Logprob(logprob=-2.0, rank=1, decoded_token="hello"),
         }
@@ -124,7 +129,7 @@ class TestClampPromptLogprobs(unittest.TestCase):
 
         result = clamp_prompt_logprobs(prompt_logprobs)
 
-        # Should return the same object (function attempts in-place modification)
+        # Should return the same object (function performs in-place modification)
         self.assertIs(result, prompt_logprobs)
         self.assertIs(result[0], prompt_logprobs[0])
 

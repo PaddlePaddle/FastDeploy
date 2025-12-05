@@ -237,6 +237,10 @@ class EngineArgs:
     """
     Flag to enable prefix caching.
     """
+    enable_output_caching: bool = True
+    """
+    Flag to enable kv cache for output tokens, only valid in V1 scheduler.
+    """
 
     disable_custom_all_reduce: bool = False
     """
@@ -956,6 +960,13 @@ class EngineArgs:
         )
 
         perf_group.add_argument(
+            "--enable-output-caching",
+            action=argparse.BooleanOptionalAction,
+            default=EngineArgs.enable_output_caching,
+            help="Flag to enable output caching.",
+        )
+
+        perf_group.add_argument(
             "--enable-chunked-prefill",
             action="store_true",
             default=EngineArgs.enable_chunked_prefill,
@@ -1232,10 +1243,6 @@ class EngineArgs:
         """
         all_dict = asdict(self)
         model_cfg = ModelConfig(all_dict)
-
-        # XPU currently disable prefix cache for VL model
-        if current_platform.is_xpu() and (self.enable_mm or model_cfg.enable_mm):
-            self.enable_prefix_caching = False
 
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size

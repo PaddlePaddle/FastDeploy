@@ -85,7 +85,7 @@ class Glm4MoeMLP(nn.Layer):
             act_method=fd_config.model_config.hidden_act,
         )
 
-    def forward(self, x):
+    def forward(self, x, forward_meta=None):
         """ """
         gate_up_out = self.up_gate_proj(x)
         act_out = self.act_fn(gate_up_out)
@@ -161,9 +161,9 @@ class Glm4Moe(nn.Layer):
             reduce_results=False,
         )
 
-    def forward(self, x):
+    def forward(self, x, forward_meta):
         shared_experts_out = self.shared_experts(x)
-        out = self.experts(x, self.gate)
+        out = self.experts(x, self.gate, forward_meta)
         out = out + shared_experts_out
         # We do to TP all reduce after the sum of experts.
         if self.tensor_parallel_size > 1:
@@ -306,7 +306,10 @@ class Glm4MoeDecoderLayer(nn.Layer):
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
 
-        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp(
+            hidden_states,
+            forward_meta,
+        )
 
         return hidden_states, residual
 
@@ -494,7 +497,7 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
 
         return logits
 
-    def empty_input_forward(self):
+    def empty_input_forward(self, forward_meta):
         """
         empty_input_forward
         """
@@ -506,7 +509,7 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
             self.fd_config.model_config.first_k_dense_replace,
             self.fd_config.model_config.num_hidden_layers,
         ):
-            self.model.layers[i].mlp.experts(fake_hidden_states, self.model.layers[i].mlp.gate)
+            self.model.layers[i].mlp.experts(fake_hidden_states, self.model.layers[i].mlp.gate, forward_meta)
 
     def forward(
         self,

@@ -143,6 +143,10 @@ class ForwardMeta:
     # Flag of profile run
     is_dummy_or_profile_run: bool = False
 
+    # chunked MoE related
+    moe_num_chunk: int = 1
+    max_moe_num_chunk: int = 1
+
     def clear_caches(self):
         """Safely clean up the caches"""
         if self.caches:
