@@ -18,10 +18,11 @@ import threading
 import time
 from typing import Dict, List, Optional, Tuple
 
+from fastdeploy import envs
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.scheduler.data import ScheduledRequest, ScheduledResponse
 from fastdeploy.utils import scheduler_logger
-from fastdeploy import envs
+
 
 class LocalScheduler:
     """
