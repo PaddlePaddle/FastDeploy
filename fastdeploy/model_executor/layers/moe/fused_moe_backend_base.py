@@ -15,7 +15,6 @@
 """
 
 from abc import abstractmethod
-from typing import Callable
 
 import paddle
 from paddle import nn
@@ -164,7 +163,6 @@ class MoEMethodBase(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
-        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
@@ -177,7 +175,6 @@ class MoEMethodBase(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
-        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
@@ -190,7 +187,6 @@ class MoEMethodBase(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
-        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
@@ -202,7 +198,6 @@ class MoEMethodBase(QuantMethodBase):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
-        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
@@ -212,13 +207,13 @@ class MoEMethodBase(QuantMethodBase):
             if layer.fd_config.model_config.moe_phase.phase == "prefill":
                 if layer.fd_config.scheduler_config.splitwise_role == "mixed" and is_moe_start_layer:
                     self.ep_prefill_runner.clean_low_latency_buffer()
-                return self.apply_ep_prefill(layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
+                return self.apply_ep_prefill(layer, x, gate)
             else:
                 if layer.fd_config.scheduler_config.splitwise_role == "mixed" and is_moe_start_layer:
                     self.ep_decoder_runner.clean_low_latency_buffer()
-                return self.apply_ep_decode(layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
+                return self.apply_ep_decode(layer, x, gate)
         else:
-            return self.apply_tp(layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
+            return self.apply_tp(layer, x, gate)
 
 
 class UnquantizedFusedMoEMethod(MoEMethodBase):
