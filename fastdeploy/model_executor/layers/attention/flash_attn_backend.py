@@ -126,9 +126,6 @@ class FlashAttentionBackend(AttentionBackend):
 
         self.start_layer_index: int = fd_config.model_config.start_layer_index
 
-        if fd_config.parallel_config.expert_parallel_rank is None:
-            fd_config.parallel_config.expert_parallel_rank = 0
-
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
         if self.flash_attn_func is None:
