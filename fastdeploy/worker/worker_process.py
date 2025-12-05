@@ -422,19 +422,21 @@ class PaddleDisWorkerProc:
                     self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.fd_config.load_config.dynamic_load_weight and self.parallel_config.enable_expert_parallel:
                     self.model_weights_signal[0] = self._broadcast_model_weights_signal(
-                        src=0, group=self.parallel_config.ep_group
+                        src=self.parallel_config.ep_group.ranks[0], group=self.parallel_config.ep_group
                     )
             if self.fd_config.load_config.dynamic_load_weight and tp_size > 1:
                 self.model_weights_signal[0] = self._broadcast_model_weights_signal(
-                    src=0, group=self.parallel_config.tp_group
+                    src=self.parallel_config.ep_group.ranks[0], group=self.parallel_config.tp_group
                 )
 
             self.insert_step = False
             req_dicts = None
-            self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
+            if self.parallel_config.is_first_pp_rank:
+                # just pp0 set_heathy_signal now, to be fixed!
+                self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
 
             # The first worker detects whether there are tasks in the task queue
-            if tp_rank == 0:
+            if tp_rank == 0 and self.parallel_config.is_first_pp_rank:
                 if self.task_queue.num_tasks() > 0:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
@@ -444,7 +446,7 @@ class PaddleDisWorkerProc:
                         else:
                             self.exist_task_signal.value[0] = ExistTaskStatus.EXIST
 
-            if tp_size > 1:
+            if tp_size > 1 and self.parallel_config.is_first_pp_rank:
                 # Synchronize the signal for other workers
                 self._tp_barrier_wait()
 
@@ -468,12 +470,15 @@ class PaddleDisWorkerProc:
                         self.worker.model_runner,
                         self.parallel_config.engine_worker_queue_port,
                     )
-                    logger.info(f"current task queue data: {self.task_queue.num_tasks()}")
-                    self.task_queue.clear_data()
+                    if self.parallel_config.is_first_pp_rank:
+                        logger.info(f"current task queue data: {self.task_queue.num_tasks()}")
+                        self.task_queue.clear_data()
                     self.model_weights_signal[0] = ModelWeightsStatus.NORMAL
                     logger.info(f"Rank: {self.local_rank} has updated or cleared parameters.")
 
-            if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
+            if self.parallel_config.is_first_pp_rank and (
+                self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1
+            ):
                 logger.info(f"Rank: {self.local_rank} Detected new requests.")
                 self.insert_step = True
 
@@ -498,7 +503,7 @@ class PaddleDisWorkerProc:
                 self.worker.preprocess_new_task(req_dicts, num_running_requests)
 
             if (not self.parallel_config.use_ep) and (not self.worker.model_runner.not_need_stop()):
-                if self.ranks > 1:
+                if self.tp_size > 1:
                     self._tp_barrier_wait()
 
                 time.sleep(0.001)
@@ -507,7 +512,10 @@ class PaddleDisWorkerProc:
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
-            self.worker.execute_model(req_dicts, num_running_requests)
+            if self.parallel_config.pipeline_parallel_size > 1:
+                self.worker.execute_model_pp(req_dicts, num_running_requests)
+            else:
+                self.worker.execute_model(req_dicts, num_running_requests)
             self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
 
@@ -595,13 +603,14 @@ class PaddleDisWorkerProc:
         else:
             task_address = f"/dev/shm/fd_task_queue_{self.parallel_config.engine_worker_queue_port}.sock"
         logger.info(f"connect task queue address {task_address}")
-        self.task_queue = TaskQueue(
-            address=task_address,
-            is_server=False,
-            num_client=self.parallel_config.tensor_parallel_size,
-            client_id=self.parallel_config.tensor_parallel_rank,
-            local_data_parallel_id=self.parallel_config.local_data_parallel_id,
-        )
+        if self.parallel_config.is_first_pp_rank:
+            self.task_queue = TaskQueue(
+                address=task_address,
+                is_server=False,
+                num_client=self.parallel_config.tensor_parallel_size,
+                client_id=self.parallel_config.tensor_parallel_rank,
+                local_data_parallel_id=self.parallel_config.local_data_parallel_id,
+            )
 
     def load_model(self) -> None:
         """Load weights and create model"""
@@ -714,6 +723,12 @@ def parse_args():
         type=int,
         default=1,
         help="data parallel size",
+    )
+    parser.add_argument(
+        "--pipeline_parallel_size",
+        type=int,
+        default=1,
+        help="pipeline parallel size",
     )
     parser.add_argument(
         "--enable_expert_parallel",
@@ -904,7 +919,40 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     scheduler_config = SchedulerConfig(vars(args))
 
     parallel_config.tensor_parallel_rank = local_rank % parallel_config.tensor_parallel_size
-    parallel_config.data_parallel_rank = local_rank // parallel_config.tensor_parallel_size
+    parallel_config.data_parallel_rank = (
+        local_rank
+        % (parallel_config.tensor_parallel_size * parallel_config.data_parallel_size)
+        // parallel_config.tensor_parallel_size
+    )
+    if parallel_config.pipeline_parallel_size > 1:
+        parallel_config.pipeline_parallel_rank = local_rank // (
+            parallel_config.tensor_parallel_size * parallel_config.data_parallel_size
+        )
+    parallel_config.is_first_pp_rank = parallel_config.pipeline_parallel_rank == 0
+    parallel_config.is_last_pp_rank = (
+        parallel_config.pipeline_parallel_rank == parallel_config.pipeline_parallel_size - 1
+    )
+
+    num_layers_per_pp = (
+        model_config.num_hidden_layers + parallel_config.pipeline_parallel_size - 1
+    ) // parallel_config.pipeline_parallel_size
+    num_layers_first_pp = model_config.num_hidden_layers - (num_layers_per_pp) * (
+        parallel_config.pipeline_parallel_size - 1
+    )
+    model_config.num_layers_this_pp = num_layers_first_pp if parallel_config.is_first_pp_rank else num_layers_per_pp
+    model_config.start_layer_id = (
+        0
+        if parallel_config.is_first_pp_rank
+        else (num_layers_first_pp + num_layers_per_pp * (parallel_config.pipeline_parallel_rank - 1))
+    )
+    model_config.end_layer_id = (
+        num_layers_first_pp
+        if parallel_config.is_first_pp_rank
+        else (num_layers_first_pp + num_layers_per_pp * parallel_config.pipeline_parallel_rank)
+    )
+    logger.info(
+        f"num_layers_this_pp: {model_config.num_layers_this_pp}, start_layer_id: {model_config.start_layer_id}, end_layer_id: {model_config.end_layer_id}"
+    )
     # config for EP
     if parallel_config.expert_parallel_size > 1:
         expert_parallel_rank = int(local_rank % parallel_config.expert_parallel_size)
@@ -927,7 +975,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
         parallel_config.engine_worker_queue_port = parallel_config.engine_worker_queue_port[
             parallel_config.local_data_parallel_id
         ]
-    parallel_config.set_communicate_group()
+    parallel_config.set_communicate_group(local_rank)
 
     load_config = LoadConfig(vars(args))
 

@@ -146,7 +146,7 @@ class AppendAttentionBackend(AttentionBackend):
         self.num_heads: int = num_heads
         self.group_size: int = self.num_heads // self.kv_num_heads
         self.head_dim: int = fd_config.model_config.head_dim
-        self.num_layers: int = fd_config.model_config.num_hidden_layers
+        self.num_layers: int = fd_config.model_config.num_layers_this_pp
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 1024))
         self.encoder_block_shape_q: int = encoder_block_shape_q
         self.decoder_block_shape_q: int = decoder_block_shape_q

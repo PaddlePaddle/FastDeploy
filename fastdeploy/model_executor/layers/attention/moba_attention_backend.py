@@ -81,7 +81,7 @@ class PlasAttentionBackend(AttentionBackend):
         self.kv_num_heads = kv_num_heads
         self.num_heads = num_heads
         self.head_dim = fd_config.model_config.head_dim
-        self.num_layers: int = fd_config.model_config.num_hidden_layers
+        self.num_layers: int = fd_config.model_config.num_layers_this_pp
         self.attn_block_m = 128
         self.plas_block_size = fd_config.plas_attention_config.plas_block_size
         self.plas_encoder_top_k_left = int(fd_config.plas_attention_config.plas_encoder_top_k_left)

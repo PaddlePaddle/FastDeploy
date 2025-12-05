@@ -545,6 +545,8 @@ class ParallelConfig:
         self.tensor_parallel_size = 1  # TP degree
         self.expert_parallel_rank = 0  # EP rank ID
         self.expert_parallel_size = 1  # EP degree
+        self.pipeline_parallel_rank = 0  # PP rank ID
+        self.pipeline_parallel_size = 1  # PP degree
         self.data_parallel_size = 1  # DP degree
         self.enable_expert_parallel = False
         self.enable_chunked_moe = False
@@ -605,26 +607,52 @@ class ParallelConfig:
         )
         logger.info(f"use_sequence_parallel_moe: {self.use_sequence_parallel_moe}")
 
-    def set_communicate_group(self):
+    def set_communicate_group(self, local_rank: int = 0):
         # different tp group id
         # prevent different tp_groups using the same group_id
         tp_gid_offset = envs.FD_TP_GROUP_GID_OFFSET
-        dist.collective._set_custom_gid(self.data_parallel_rank + tp_gid_offset)
+        dt_size = self.data_parallel_size * self.tensor_parallel_size
+        dp_size = self.data_parallel_size * self.pipeline_parallel_size
+        dtp_size = self.data_parallel_size * self.tensor_parallel_size * self.pipeline_parallel_size
+        dist.collective._set_custom_gid(
+            self.data_parallel_rank * self.pipeline_parallel_size + self.pipeline_parallel_rank + tp_gid_offset
+        )
 
         self.tp_group = dist.new_group(
             range(
-                self.data_parallel_rank * self.tensor_parallel_size,
-                (self.data_parallel_rank + 1) * self.tensor_parallel_size,
+                (self.pipeline_parallel_rank * self.data_parallel_size + self.data_parallel_rank)
+                * self.tensor_parallel_size,
+                (self.pipeline_parallel_rank * self.data_parallel_size + self.data_parallel_rank + 1)
+                * self.tensor_parallel_size,
             )
         )
         dist.collective._set_custom_gid(None)
         # same ep group id
+        self.ep_group = None
         if self.enable_expert_parallel:
-            dist.collective._set_custom_gid(self.data_parallel_size + tp_gid_offset)
-            self.ep_group = dist.new_group(range(self.expert_parallel_size))
+            dist.collective._set_custom_gid(dp_size + self.pipeline_parallel_rank + tp_gid_offset)
+            self.ep_group = dist.new_group(
+                range(
+                    self.pipeline_parallel_rank * self.expert_parallel_size,
+                    (self.pipeline_parallel_rank + 1) * self.expert_parallel_size,
+                )
+            )
             dist.collective._set_custom_gid(None)
+
+        self.pp_group = None
+        if self.pipeline_parallel_size > 1:
+            dist.collective._set_custom_gid(
+                dp_size
+                + self.pipeline_parallel_size
+                + self.data_parallel_rank * self.tensor_parallel_size
+                + self.tensor_parallel_rank
+                + tp_gid_offset
+            )
+            self.pp_group = dist.new_group(range(local_rank % dt_size, dtp_size, dt_size))
+            dist.collective._set_custom_gid(None)
+
         logger.info(
-            f"data_parallel_size: {self.data_parallel_size}, tensor_parallel_size: {self.tensor_parallel_size}, expert_parallel_size: {self.expert_parallel_size}, data_parallel_rank: {self.data_parallel_rank}, tensor_parallel_rank: {self.tensor_parallel_rank}, expert_parallel_rank: {self.expert_parallel_rank}, tp_group: {self.tp_group}."
+            f"data_parallel_size: {self.data_parallel_size}, tensor_parallel_size: {self.tensor_parallel_size}, expert_parallel_size: {self.expert_parallel_size}, pipeline_parallel_size: {self.pipeline_parallel_size}, \ndata_parallel_rank: {self.data_parallel_rank}, tensor_parallel_rank: {self.tensor_parallel_rank}, expert_parallel_rank: {self.expert_parallel_rank}, pipeline_parallel_rank: {self.pipeline_parallel_rank}, \ntp_group: {self.tp_group}, \nep_group: {self.ep_group}, \nself.pp_group: {self.pp_group}."
         )
 
     def print(self):
@@ -1595,7 +1623,11 @@ class FDConfig:
         else:
             self.max_prefill_batch = self.scheduler_config.max_num_seqs
 
-        num_ranks = self.parallel_config.tensor_parallel_size * self.parallel_config.data_parallel_size
+        num_ranks = (
+            self.parallel_config.tensor_parallel_size
+            * self.parallel_config.data_parallel_size
+            * self.parallel_config.pipeline_parallel_size
+        )
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         if num_ranks > self.max_chips_per_node and self.load_config.load_strategy != "meta":
             self.worker_num_per_node = self.max_chips_per_node
