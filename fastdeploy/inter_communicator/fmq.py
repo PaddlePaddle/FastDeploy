@@ -16,7 +16,6 @@
 
 import asyncio
 import json
-import os
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -28,6 +27,7 @@ from typing import Any, Callable, Dict, Optional
 import zmq
 import zmq.asyncio
 
+from fastdeploy import envs
 from fastdeploy.utils import fmq_logger
 
 # ==========================
@@ -95,7 +95,7 @@ class EndpointManager:
 
     @classmethod
     def load_config(cls, _ignored_file_path: str = None):
-        cfg_str = os.getenv("FMQ_CONFIG_JSON", None)
+        cfg_str = envs.FMQ_CONFIG_JSON
         if cfg_str:
             try:
                 custom_cfg = json.loads(cfg_str)
