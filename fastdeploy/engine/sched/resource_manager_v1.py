@@ -661,7 +661,7 @@ class ResourceManagerV1(ResourceManager):
                     ) or (paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)):
                         break
                     if request.status == RequestStatus.WAITING:
-                        result = self._waiting_async_process(request)
+                        result = self.waiting_async_process(request)
                         if result is None:
                             error_reqs.append((request.request_id, request.error_message))
                             self.waiting.popleft()
@@ -768,7 +768,7 @@ class ResourceManagerV1(ResourceManager):
 
             return scheduled_reqs, error_reqs
 
-    def _waiting_async_process(self, request: Request) -> None:
+    def waiting_async_process(self, request: Request) -> None:
         """
         Check if async preprocessing is complete for a request.
         Args:
@@ -787,7 +787,7 @@ class ResourceManagerV1(ResourceManager):
         request.async_process_futures = []
         return False
 
-    def _apply_async_preprocess(self, request: Request) -> None:
+    def apply_async_preprocess(self, request: Request) -> None:
         request.async_process_futures.append(self.async_preprocess_pool.submit(self._download_features, request))
 
     def _has_features_info(self, task):
@@ -917,7 +917,7 @@ class ResourceManagerV1(ResourceManager):
 
     def add_request(self, request: Request) -> None:
         with self.lock:
-            self._apply_async_preprocess(request)
+            self.apply_async_preprocess(request)
             self.waiting.append(request)
             self.requests[request.request_id] = request
 
