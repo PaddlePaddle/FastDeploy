@@ -253,14 +253,20 @@ class FusedMoE(nn.Layer):
         )
 
     def weight_loader(
-        self, param, loaded_weight, expert_id, shard_id: Optional[str] = None, source: Optional[str] = None
+        self,
+        param,
+        loaded_weight,
+        expert_id,
+        shard_id: Optional[str] = None,
+        source: Optional[str] = None,
+        loaded_weight_name: Optional[str] = None,
     ):
         """
         source:Avoid redundant transpose of fused weights when weight_loader is called iteratively
         """
         if expert_id is None and shard_id is None:
             # MoE experts has been fused in disk
-            self._load_fused_experts_weight(param, loaded_weight)
+            self._load_fused_experts_weight(param, loaded_weight, loaded_weight_name)
             return
         if hasattr(param, "SHARD_ID_TO_SHARDED_DIM"):
             SHARD_ID_TO_SHARDED_DIM = param.SHARD_ID_TO_SHARDED_DIM
@@ -372,7 +378,7 @@ class FusedMoE(nn.Layer):
                 loaded_weight = loaded_weight.cast(expert_param.dtype)
         h2d_copy(dst=expert_param, src=loaded_weight)
 
-    def _load_fused_experts_weight(self, param, loaded_weight):
+    def _load_fused_experts_weight(self, param, loaded_weight, loaded_weight_name: Optional[str] = None):
         if self.tp_size > 1:
             dim = -1
             if isinstance(loaded_weight, (np.ndarray, paddle.Tensor)):
@@ -383,10 +389,75 @@ class FusedMoE(nn.Layer):
             shard_offset = self.tp_rank * block_size
             shard_size = (self.tp_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, dim, shard_offset, shard_size)
-        assert param.shape == loaded_weight.shape, (
-            f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-        )
-        h2d_copy(dst=param, src=loaded_weight)
+
+        if self.moe_quant_config.name() == "mxfp4":
+            assert loaded_weight_name is not None
+            weight = get_tensor(loaded_weight)
+            if "block" in loaded_weight_name:
+                if "up" in loaded_weight_name:
+                    weight = weight.reshape([self.num_experts, 2 * self.moe_intermediate_size, -1])
+                elif "down" in loaded_weight_name:
+                    weight = weight.reshape([self.num_experts, self.hidden_size, -1])
+                weight = paddle.nn.functional.pad(
+                    weight.cast("int32"),
+                    pad=[0, param.shape[-1] - weight.shape[-1], 0, param.shape[-2] - weight.shape[-2]],
+                    mode="constant",
+                    value=0,
+                ).cast("uint8")
+
+                if "up" in loaded_weight_name:
+                    gate_w, up_w = weight[:, ::2, :], weight[:, 1::2, :]
+                    param.copy_(paddle.concat([up_w, gate_w], axis=1), False)
+                else:
+                    param.copy_(weight, False)
+
+            elif "scale" in loaded_weight_name:
+                if "up" in loaded_weight_name:
+                    weight = weight.reshape([self.num_experts, 2 * self.moe_intermediate_size, -1])
+                elif "down" in loaded_weight_name:
+                    weight = weight.reshape([self.num_experts, self.hidden_size, -1])
+                weight = paddle.nn.functional.pad(
+                    weight.cast("int32"),
+                    pad=[0, param.shape[-1] - weight.shape[-1], 0, param.shape[-2] - weight.shape[-2]],
+                    mode="constant",
+                    value=0,
+                ).cast("uint8")
+
+                def _interleave_mxfp4_cutlass_sm90(w):
+                    w_shape = w.shape
+                    w_interleaved = w.reshape([w_shape[0], w_shape[1], (w_shape[2] // 4), 4])
+                    w_interleaved = w_interleaved.permute([0, 2, 1, 3])
+                    w_interleaved = w_interleaved.reshape([w_shape[0], w_shape[2] // 4, w_shape[1] * 4])
+                    return w_interleaved
+
+                if "up" in loaded_weight_name:
+                    gate_s, up_s = weight[:, ::2, :], weight[:, 1::2, :]
+                    up_gate_proj_scale = paddle.concat([up_s, gate_s], axis=1)
+                    up_gate_proj_scale_interleaved = _interleave_mxfp4_cutlass_sm90(up_gate_proj_scale)
+                    param.copy_(up_gate_proj_scale_interleaved, False)
+                else:
+                    down_proj_scale = weight
+                    down_proj_scale_interleaved = _interleave_mxfp4_cutlass_sm90(down_proj_scale)
+                    param.copy_(down_proj_scale_interleaved, False)
+
+            elif "bias" in loaded_weight_name:
+
+                weight = paddle.nn.functional.pad(
+                    weight, pad=[0, param.shape[-1] - weight.shape[-1]], mode="constant", value=0
+                )
+
+                if "up" in loaded_weight_name:
+                    gate_b, up_b = weight[:, ::2].cast("bfloat16"), weight[:, 1::2].cast("bfloat16")
+                    param.copy_(paddle.concat([up_b, gate_b], axis=-1), False)
+                else:
+                    param.copy_(weight.cast("bfloat16"), False)
+
+        else:
+            assert param.shape == loaded_weight.shape, (
+                f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+            )
+
+            h2d_copy(dst=param, src=loaded_weight)
 
         if hasattr(param, "tensor_track"):
             for i in range(self.num_local_experts):
