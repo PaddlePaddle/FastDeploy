@@ -266,7 +266,7 @@ def test_metrics_config(metrics_url):
     assert res.status_code == 200
 
 
-def send_request(url, payload, timeout=600):
+def send_request(url, payload, timeout=60):
     """
     发送请求到指定的URL，并返回响应结果。
     """

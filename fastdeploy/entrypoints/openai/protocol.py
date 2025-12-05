@@ -210,6 +210,7 @@ class ChatMessage(BaseModel):
     content: Optional[str] = None
     multimodal_content: Optional[List[Any]] = None
     reasoning_content: Optional[str] = None
+    audio_content: Optional[str] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
@@ -272,6 +273,7 @@ class DeltaMessage(BaseModel):
     role: Optional[str] = None
     content: Optional[str] = None
     multimodal_content: Optional[List[Any]] = None
+    audio_content: Optional[str] = None
     prompt_token_ids: Optional[List[int]] = None
     completion_token_ids: Optional[List[int]] = None
     reasoning_content: Optional[str] = None
@@ -611,7 +613,7 @@ class ChatCompletionRequest(BaseModel):
     model: Optional[str] = "default"
     frequency_penalty: Optional[float] = Field(None, le=2, ge=-2)
     logprobs: Optional[bool] = False
-    top_logprobs: Optional[int] = 0
+    top_logprobs: Optional[int] = None
     prompt_logprobs: Optional[int] = None
     include_draft_logprobs: Optional[bool] = False
 
@@ -920,6 +922,16 @@ class EmbeddingChatRequest(BaseModel):
     dimensions: Optional[int] = None
     user: Optional[str] = None
     truncate_prompt_tokens: Optional[Annotated[int, Field(ge=-1)]] = None
+
+    # --8<-- [start:chat-embedding-extra-params]
+    add_generation_prompt: bool = Field(
+        default=False,
+        description=(
+            "If true, the generation prompt will be added to the chat template. "
+            "This is a parameter used by chat template in tokenizer config of the "
+            "model."
+        ),
+    )
 
     add_special_tokens: bool = Field(
         default=False,

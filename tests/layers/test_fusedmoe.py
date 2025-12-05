@@ -432,6 +432,13 @@ gate_correction_bias_real_data = paddle.to_tensor(
 )
 
 
+class MockForwardMeta:
+    def __init__(self):
+        # chunked MoE related.
+        self.moe_num_chunk = 1
+        self.max_moe_num_chunk = 1
+
+
 class FuseMoEWrapper(paddle.nn.Layer):
     def __init__(
         self,
@@ -607,7 +614,9 @@ class TestFusedMoE(unittest.TestCase):
 
             def fake_model_run():
                 for j in range(num_layers):
-                    out = fused_moe[j % real_weight_layers].fused_moe(cache_hidden_states[idx], gating)
+                    out = fused_moe[j % real_weight_layers].fused_moe(
+                        cache_hidden_states[idx], gating, forward_meta=MockForwardMeta()
+                    )
 
                 return out
 
