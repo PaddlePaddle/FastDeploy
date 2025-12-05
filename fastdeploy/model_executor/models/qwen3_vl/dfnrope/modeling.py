@@ -1,7 +1,3 @@
-"""
-Qwen3 vision encoder implementation for FastDeploy.
-"""
-
 from __future__ import annotations
 
 from functools import partial
