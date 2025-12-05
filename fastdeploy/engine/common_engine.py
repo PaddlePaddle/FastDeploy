@@ -862,9 +862,14 @@ class EngineService:
                                 )
                     self.resource_manager.get_real_bsz()
                     for task in tasks:
-                        trace_print(LoggingEventName.RESOURCE_ALLOCATE_END, task.request_id, getattr(task, "user", ""))
-                        trace_print(LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", ""))
-                        trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
+                        if task.task_type == RequestType.PREFILL:
+                            trace_print(
+                                LoggingEventName.RESOURCE_ALLOCATE_END, task.request_id, getattr(task, "user", "")
+                            )
+                            trace_print(
+                                LoggingEventName.REQUEST_SCHEDULE_END, task.request_id, getattr(task, "user", "")
+                            )
+                            trace_print(LoggingEventName.INFERENCE_START, task.request_id, getattr(task, "user", ""))
                     self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
 
                 # 4. Response error tasks
