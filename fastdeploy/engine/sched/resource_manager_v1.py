@@ -213,9 +213,10 @@ class ResourceManagerV1(ResourceManager):
                             need_recycle_request_ids.append(request_id)
                     for request_id in need_recycle_request_ids:
                         del self.preallocated_requests_timestamp[request_id]
-                        if request_id in self.requests:
-                            request = self.requests[request_id]
-                            self.pre_recycle_resource(request)
+                for request_id in need_recycle_request_ids:
+                    if request_id in self.requests:
+                        request = self.requests[request_id]
+                        self.pre_recycle_resource(request)
                         llm_logger.error(
                             f"Recycle block ids for request {request_id} forcefully, due to get first token from P timeout."
                             f"after recycle: {self.info()}"
