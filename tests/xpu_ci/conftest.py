@@ -284,12 +284,13 @@ def setup_ep_env():
     """
     env_vars = {
         "BKCL_ENABLE_XDR": "1",
-        "BKCL_RDMA_NICS": "xgbe1,xgbe2,xgbe3,xgbe4",
+        "BKCL_RDMA_NICS": "eth1,eth1,eth2,eth2",
         "BKCL_TRACE_TOPO": "1",
         "BKCL_PCIE_RING": "1",
         "XSHMEM_MODE": "1",
         "XSHMEM_QP_NUM_PER_RANK": "32",
         "BKCL_RDMA_VERBS": "1",
+        "MOE_FFN_USE_DENSE_INPUT": "1",
     }
 
     # 保存原始值
