@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Tuple
 from fastdeploy.engine.request import Request, RequestOutput
 from fastdeploy.scheduler.data import ScheduledRequest, ScheduledResponse
 from fastdeploy.utils import scheduler_logger
-
+from fastdeploy import envs
 
 class LocalScheduler:
     """
@@ -253,12 +253,11 @@ class LocalScheduler:
             for request_id in batch_ids:
                 request = self.requests[request_id]
                 required_input_blocks = self.calc_required_blocks(request.prompt_tokens_ids_len, block_size)
-                current_prefill_tokens += request.prompt_tokens_ids_len
                 required_total_blocks += required_input_blocks + reserved_output_blocks
                 if required_total_blocks > available_blocks:
                     break
 
-                if self.enable_chunked_prefill:
+                if not envs.ENABLE_V1_KVCACHE_SCHEDULER and self.enable_chunked_prefill:
                     if request.prompt_tokens_ids_len > self.long_prefill_token_threshold:
                         # 长请求
                         long_partial_requests += 1
@@ -274,6 +273,7 @@ class LocalScheduler:
                         break
 
                 requests.append(request.raw)
+                current_prefill_tokens += request.prompt_tokens_ids_len
             self.ids_read_cursor += len(requests)
 
         if len(batch_ids) > 0 and len(requests) == 0:
