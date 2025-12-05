@@ -159,7 +159,6 @@ class Request:
         self.extend_block_tables = []
         # dp
         self.dp_rank = dp_rank
-        self.scheduler_recv_req_time = time.time()
         self.ic_req_data = ic_req_data
 
         self.async_process_futures = []
