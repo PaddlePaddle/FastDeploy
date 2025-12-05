@@ -977,7 +977,12 @@ class KVBatchLinear(nn.Layer):
     def process_weights_after_loading(self):
         if self.fd_config.load_config.dynamic_load_weight:
             return
-        w = self.kv_b_proj.weight.reshape(
+        w = (
+            self.kv_b_proj.weight.transpose([1, 0])
+            if self.fd_config.model_config.model_format == "torch"
+            else self.kv_b_proj.weight
+        )
+        w = w.reshape(
             [
                 self.kv_lora_rank,
                 self.num_heads_per_partition,
