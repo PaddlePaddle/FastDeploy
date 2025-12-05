@@ -81,8 +81,6 @@ def test_ep4tp4_online(xpu_env):
             "--disable-sequence-parallel-moe",
             "--gpu-memory-utilization",
             "0.9",
-            "--load-choices",
-            "default",
         ]
 
         # 启动服务器

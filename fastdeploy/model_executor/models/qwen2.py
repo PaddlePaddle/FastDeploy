@@ -89,7 +89,7 @@ class Qwen2MLP(nn.Layer):
         self.up_gate_proj.load_state_dict(state_dict)
         self.down_proj.load_state_dict(state_dict)
 
-    def forward(self, x):
+    def forward(self, x, forward_meta):
         """ """
         gate_up_out = self.up_gate_proj(x)
         act_out = self.act_fn(gate_up_out)
@@ -205,7 +205,7 @@ class Qwen2DecoderLayer(nn.Layer):
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
 
-        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp(hidden_states, forward_meta)
 
         return hidden_states, residual
 

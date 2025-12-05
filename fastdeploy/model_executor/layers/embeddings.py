@@ -135,6 +135,8 @@ class VocabParallelEmbedding(nn.Layer):
         self.tie_word_embeddings: bool = fd_config.model_config.tie_word_embeddings
         self.params_dtype: str = params_dtype
 
+        self.embedding_dim = embedding_dim
+
         self.general = general  # used for general Embedding
         self.num_embeddings = num_embeddings
         self.padding_size = padding_size
@@ -297,6 +299,8 @@ class VocabParallelEmbedding(nn.Layer):
         Returns:
             Tensor: Embedded tensor representation of the input IDs.
         """
+        if ids_remove_padding.shape[0] == 0:
+            return paddle.empty([0, self.embedding_dim], dtype=self.embeddings.weight.dtype)
         if self.column_cut:
             input_embedings = self.embeddings(ids_remove_padding)
             inputs_embeds_temp = []
