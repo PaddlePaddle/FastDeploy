@@ -482,13 +482,35 @@ class EngineWorkerQueue:
             raise RuntimeError("Only the server instance can provide the port.")
         return self.address[1]
 
-    def exist_tasks(self):
+    def exist_tasks(self) -> bool:
+        """
+        Check if there are tasks in the queue without acquiring lock.
+        
+        For single-node deployments (address="0.0.0.0"), uses shared memory signal (faster).
+        For multi-node deployments, uses inter-process communication.
+        
+        This method is more efficient than num_tasks() when you only need to know
+        whether tasks exist, as it doesn't require acquiring a lock.
+        
+        Returns:
+            bool: True if tasks exist in the queue, False otherwise.
+        """
         if self.is_single_node:
             return self.exist_tasks_intra_signal.value[0] == 1
         else:
             return self.exist_tasks_inter_signal.get() == 1
 
-    def set_exist_tasks(self, flag):
+    def set_exist_tasks(self, flag: bool) -> None:
+        """
+        Set the task existence flag to indicate whether tasks are available in the queue.
+
+        This method updates a shared signal that is checked by workers to determine if
+        tasks are available for processing. It is called when tasks are added to the queue
+        (set to True) or when all clients have read the tasks (set to False).
+
+        Args:
+            flag: True to indicate tasks exist in the queue, False to indicate no tasks.
+        """
         value = 1 if flag else 0
         if self.is_single_node:
             self.exist_tasks_intra_signal.value[0] = value
