@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+from typing import Callable
+
 import paddle
 from paddle import nn
 
@@ -48,6 +50,7 @@ class HpuMoEMethod(UnquantizedFusedMoEMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate_out: paddle.Tensor,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
@@ -59,6 +62,7 @@ class HpuMoEMethod(UnquantizedFusedMoEMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate_out: paddle.Tensor,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
@@ -70,6 +74,7 @@ class HpuMoEMethod(UnquantizedFusedMoEMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Paddle hpu Fused MoE.
@@ -142,6 +147,7 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate_out: paddle.Tensor,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
@@ -153,6 +159,7 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate_out: paddle.Tensor,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
@@ -164,6 +171,7 @@ class HpuTensorWiseFP8MoEMethod(HpuMoEMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Paddle hpu Fused MoE.
