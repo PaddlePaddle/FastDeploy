@@ -446,14 +446,18 @@ class EngineWorkerQueue:
 
             assert self.num_client == len(self.client_read_flag)
 
-        exist_tasks_intra_signal_data = np.zeros([1], dtype=np.int32)
-        self.exist_tasks_intra_signal = IPCSignal(
-            name="exist_tasks_intra_signal",
-            array=exist_tasks_intra_signal_data,
-            dtype=np.int32,
-            suffix=self.get_server_port() if is_server else address[1],
-            create=is_server,
-        )
+        # Only initialize shared memory for single-node deployments
+        if self.address[0] == "0.0.0.0":
+            exist_tasks_intra_signal_data = np.zeros([1], dtype=np.int32)
+            self.exist_tasks_intra_signal = IPCSignal(
+                name="exist_tasks_intra_signal",
+                array=exist_tasks_intra_signal_data,
+                dtype=np.int32,
+                suffix=self.get_server_port() if is_server else address[1],
+                create=is_server,
+            )
+        else:
+            self.exist_tasks_intra_signal = None
 
         if is_server:
             llm_logger.info("EngineWorkerQueue server started.")
@@ -478,14 +482,17 @@ class EngineWorkerQueue:
 
     def exist_tasks(self):
         if self.address[0] == "0.0.0.0":
-            return self.exist_tasks_intra_signal.value[0] == 1
+            if self.exist_tasks_intra_signal is not None:
+                return self.exist_tasks_intra_signal.value[0] == 1
+            return False
         else:
             return self.exist_tasks_inter_signal.get() == 1
 
     def set_exist_tasks(self, flag):
         value = 1 if flag else 0
         if self.address[0] == "0.0.0.0":
-            self.exist_tasks_intra_signal.value[0] = value
+            if self.exist_tasks_intra_signal is not None:
+                self.exist_tasks_intra_signal.value[0] = value
         else:
             self.exist_tasks_inter_signal.set(value)
 
