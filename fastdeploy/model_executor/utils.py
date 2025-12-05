@@ -264,7 +264,7 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
 
         output_dim = getattr(param, "output_dim", None)
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
-        if weight_need_transpose and loaded_weight.ndim == 2:
+        if weight_need_transpose:
             logger.info(f"[Torch] {param.name}.weight need transpose, from {loaded_weight.shape} to {param.shape}")
             loaded_weight = loaded_weight.transpose([1, 0])
         # Tensor parallelism splits the weight along the output_dim
