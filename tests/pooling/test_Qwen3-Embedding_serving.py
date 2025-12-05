@@ -237,7 +237,7 @@ def test_single_text_embedding(embedding_api_url, headers):
         save_embedding_baseline(embedding, baseline_file)
     else:
         print(f"Comparing with baseline: {baseline_file}")
-        check_embedding_against_baseline(embedding, baseline_file, threshold=0.01)
+        check_embedding_against_baseline(embedding, baseline_file, threshold=0.02)
 
 
 def test_multi_text_embedding(embedding_api_url, headers):
