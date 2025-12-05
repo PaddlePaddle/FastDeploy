@@ -81,6 +81,8 @@ def setup_and_run_server():
         "wint4",
         "--graph-optimization-config",
         '{"cudagraph_capture_sizes": [1]}',
+        "--guided-decoding-backend",
+        "auto",
     ]
 
     # Start subprocess in new process group
