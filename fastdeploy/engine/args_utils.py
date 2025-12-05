@@ -237,6 +237,10 @@ class EngineArgs:
     """
     Flag to enable prefix caching.
     """
+    enable_output_caching: bool = True
+    """
+    Flag to enable kv cache for output tokens, only valid in V1 scheduler.
+    """
 
     disable_custom_all_reduce: bool = False
     """
@@ -495,8 +499,6 @@ class EngineArgs:
         if not self.tokenizer:
             self.tokenizer = self.model
         if self.splitwise_role == "decode":
-            self.enable_prefix_caching = False
-        if self.speculative_config is not None:
             self.enable_prefix_caching = False
         if not current_platform.is_cuda() and not current_platform.is_xpu() and not current_platform.is_intel_hpu():
             self.enable_prefix_caching = False
@@ -953,6 +955,13 @@ class EngineArgs:
             action=argparse.BooleanOptionalAction,
             default=EngineArgs.enable_prefix_caching,
             help="Flag to enable prefix caching.",
+        )
+
+        perf_group.add_argument(
+            "--enable-output-caching",
+            action=argparse.BooleanOptionalAction,
+            default=EngineArgs.enable_output_caching,
+            help="Flag to enable output caching.",
         )
 
         perf_group.add_argument(

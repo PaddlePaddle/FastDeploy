@@ -295,6 +295,8 @@ class FlashAttentionBackend(AttentionBackend):
                 metadata.pre_cache_batch_ids,
                 metadata.pre_cache_tile_ids_per_batch,
                 metadata.pre_cache_num_blocks_cpu,
+                getattr(layer, "q_norm_weight", None),
+                getattr(layer, "k_norm_weight", None),
                 getattr(layer, "cache_k_scale", None),
                 getattr(layer, "cache_v_scale", None),
                 getattr(layer, "cache_k_out_scale", None),
@@ -304,6 +306,7 @@ class FlashAttentionBackend(AttentionBackend):
                 metadata.kv_signal_data_list[layer.layer_id],
                 metadata.kv_token_num_cpu[0].item(),
                 self.max_seq_len,
+                getattr(layer, "rms_norm_eps", 1e-6),
                 getattr(layer, "cache_quant_type_str", "none"),
                 self.rope_3d,
             )
