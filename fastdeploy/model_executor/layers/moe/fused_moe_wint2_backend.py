@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+from typing import Callable
+
 import paddle
 from paddle import nn
 
@@ -261,6 +263,7 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Use Wint2 Triton Fusedmoe compute Fused MoE.
@@ -287,6 +290,9 @@ class CutlassWint2FusedMoeMethod(Wint2MoeMethod):
             self.moe_quant_type,
             topk_only_mode=False,
         )
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_idx)
 
         ffn_out = fastdeploy.model_executor.ops.gpu.moe_expert_ffn_wint2(
             permute_input,
@@ -328,6 +334,7 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Use Wint2 Triton Fusedmoe compute Fused MoE.
@@ -342,6 +349,9 @@ class TritonWint2FusedMoeMethod(CutlassWint2FusedMoeMethod):
             True,  # apply_norm_weight,
             False,
         )
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_ids)
 
         num_tokens, K = x.shape
         E, _, N = layer.up_gate_proj_weight.shape

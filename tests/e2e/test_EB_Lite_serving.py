@@ -78,6 +78,8 @@ def setup_and_run_server():
         "wint4",
         "--graph-optimization-config",
         '{"cudagraph_capture_sizes": [1], "use_cudagraph":true}',
+        "--routing-replay-config",
+        '{"enable_routing_replay":true, "routing_store_type":"local", "local_store_dir":"./routing_replay_output"}',
     ]
 
     # Start subprocess in new process group
