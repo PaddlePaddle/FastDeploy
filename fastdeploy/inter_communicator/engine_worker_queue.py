@@ -482,7 +482,17 @@ class EngineWorkerQueue:
         else:
             return self.exist_tasks_inter_signal.get() == 1
 
-    def set_exist_tasks(self, flag):
+    def set_exist_tasks(self, flag: bool) -> None:
+        """
+        Set the task existence flag to indicate whether tasks are available in the queue.
+
+        This method updates a shared signal that is checked by workers to determine if
+        tasks are available for processing. It is called when tasks are added to the queue
+        (set to True) or when all clients have read the tasks (set to False).
+
+        Args:
+            flag: True to indicate tasks exist in the queue, False to indicate no tasks.
+        """
         value = 1 if flag else 0
         if self.address[0] == "0.0.0.0":
             self.exist_tasks_intra_signal.value[0] = value
