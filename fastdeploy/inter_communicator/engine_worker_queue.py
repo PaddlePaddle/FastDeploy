@@ -484,17 +484,14 @@ class EngineWorkerQueue:
 
     def exist_tasks(self):
         if self.is_single_node:
-            if self.exist_tasks_intra_signal is not None:
-                return self.exist_tasks_intra_signal.value[0] == 1
-            return False
+            return self.exist_tasks_intra_signal.value[0] == 1
         else:
             return self.exist_tasks_inter_signal.get() == 1
 
     def set_exist_tasks(self, flag):
         value = 1 if flag else 0
         if self.is_single_node:
-            if self.exist_tasks_intra_signal is not None:
-                self.exist_tasks_intra_signal.value[0] = value
+            self.exist_tasks_intra_signal.value[0] = value
         else:
             self.exist_tasks_inter_signal.set(value)
 
