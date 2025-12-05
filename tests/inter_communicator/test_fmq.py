@@ -25,10 +25,10 @@ from fastdeploy.inter_communicator.fmq import FMQ, Message
 cfg = {
     "ipc_root": "/dev/shm",
     "io_threads": 1,
-    "copy": True,
+    "copy": False,
     "endpoints": {
-        "test_queue": {"protocol": "ipc", "address": "/dev/shm/fmq_test_queue.ipc", "io_threads": 1, "copy": True},
-        "test_topic": {"protocol": "ipc", "address": "/dev/shm/fmq_test_topic.ipc", "io_threads": 1, "copy": True},
+        "test_queue": {"protocol": "ipc", "address": "/dev/shm/fmq_test_queue.ipc", "io_threads": 1, "copy": False},
+        "test_topic": {"protocol": "ipc", "address": "/dev/shm/fmq_test_topic.ipc", "io_threads": 1, "copy": False},
     },
 }
 os.environ["FMQ_CONFIG_JSON"] = json.dumps(cfg)
