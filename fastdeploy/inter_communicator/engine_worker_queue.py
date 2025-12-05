@@ -66,6 +66,8 @@ class EngineWorkerQueue:
         self.client_id: int = client_id
         self.local_data_parallel_size = local_data_parallel_size
         self.local_data_parallel_id = local_data_parallel_id
+        # Store whether this is a single-node deployment for consistent checking
+        self.is_single_node: bool = address[0] == "0.0.0.0"
 
         class QueueManager(BaseManager):
             """
@@ -447,7 +449,7 @@ class EngineWorkerQueue:
             assert self.num_client == len(self.client_read_flag)
 
         # Only initialize shared memory for single-node deployments
-        if self.address[0] == "0.0.0.0":
+        if self.is_single_node:
             exist_tasks_intra_signal_data = np.zeros([1], dtype=np.int32)
             self.exist_tasks_intra_signal = IPCSignal(
                 name="exist_tasks_intra_signal",
@@ -481,7 +483,7 @@ class EngineWorkerQueue:
         return self.address[1]
 
     def exist_tasks(self):
-        if self.address[0] == "0.0.0.0":
+        if self.is_single_node:
             if self.exist_tasks_intra_signal is not None:
                 return self.exist_tasks_intra_signal.value[0] == 1
             return False
@@ -490,7 +492,7 @@ class EngineWorkerQueue:
 
     def set_exist_tasks(self, flag):
         value = 1 if flag else 0
-        if self.address[0] == "0.0.0.0":
+        if self.is_single_node:
             if self.exist_tasks_intra_signal is not None:
                 self.exist_tasks_intra_signal.value[0] = value
         else:
