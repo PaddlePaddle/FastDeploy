@@ -462,6 +462,7 @@ class LLMEngine:
             f" --moba_attention_config '{self.cfg.moba_attention_config.to_json_string()}'"
             f" --attention_dp_time_out_iters {self.cfg.attention_dp_time_out_iters}"
             f" --eplb_config '{self.cfg.eplb_config.to_json_string()}'"
+            f" --routing_replay_config '{self.cfg.routing_replay_config.to_json_string()}'"
             f" --ips {ips}"
         )
 

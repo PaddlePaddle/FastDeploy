@@ -827,19 +827,26 @@ def download_from_bos(bos_client, bos_links, timeout=1):
     if not isinstance(bos_links, list):
         bos_links = [bos_links]
 
-    for link in bos_links:
-        try:
-            if link.startswith("bos://"):
-                link = link.replace("bos://", "")
+    total_feature = []
+    for single_link in bos_links:
+        if isinstance(single_link, str):
+            single_link = [single_link]
+        single_feature = []
+        for link in single_link:
+            try:
+                if link.startswith("bos://"):
+                    link = link.replace("bos://", "")
 
-            bucket_name = "/".join(link.split("/")[1:-1])
-            object_key = link.split("/")[-1]
+                bucket_name = "/".join(link.split("/")[1:-1])
+                object_key = link.split("/")[-1]
 
-            response = bos_client.get_object_as_string(bucket_name, object_key)
-            yield True, pickle.loads(response)
-        except Exception as e:
-            yield False, f"link {link} download error: {str(e)}"
-            break
+                response = bos_client.get_object_as_string(bucket_name, object_key)
+                single_feature.append(pickle.loads(response))
+            except Exception as e:
+                yield False, f"link {link} download error: {str(e)}"
+                break
+        total_feature.append(single_feature)
+    yield True, total_feature
 
 
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")
