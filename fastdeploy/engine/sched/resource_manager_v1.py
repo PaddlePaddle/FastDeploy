@@ -199,6 +199,30 @@ class ResourceManagerV1(ResourceManager):
 
         self.bos_client = None
         self.async_preprocess_pool = ThreadPoolExecutor(max_workers=4)
+        if self.config.scheduler_config.splitwise_role == "decode":
+            self.preallocated_requests_timestamp = {}
+            threading.Thread(target=self._monitor_recycle_block_ids_in_D, daemon=True).start()
+
+    def _monitor_recycle_block_ids_in_D(self):
+        while True:
+            try:
+                with self.lock:
+                    need_recycle_request_ids = []
+                    for request_id, timestamp in self.preallocated_requests_timestamp.items():
+                        if time.time() - timestamp >= envs.FD_GET_FIRST_TOKEN_FROM_P_TIMEOUT:
+                            need_recycle_request_ids.append(request_id)
+                    for request_id in need_recycle_request_ids:
+                        llm_logger.error(
+                            f"Recycle block ids for request {request_id} forcefully, due to get first token from P timeout."
+                        )
+                        del self.preallocated_requests_timestamp[request_id]
+                        if request_id in self.requests:
+                            request = self.requests[request_id]
+                            self.prerelease_resource(request)
+                time.sleep(10)
+            except Exception as e:
+                llm_logger.error(f"Monitor recycle block ids in D error: {e}, {str(traceback.format_exc())}")
+                time.sleep(10)
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
@@ -1014,6 +1038,7 @@ class ResourceManagerV1(ResourceManager):
             self.stop_flags[request.idx] = False
             self.requests[request.request_id] = request
             self.req_dict[request.request_id] = allocated_position
+            self.preallocated_requests_timestamp[request.request_id] = time.time()
         return True
 
     def has_resource_for_prefilled_req(self, request_id: str):
@@ -1039,6 +1064,8 @@ class ResourceManagerV1(ResourceManager):
 
         # update request and insert to running
         request.output_token_ids.append(request_output.outputs.token_ids[0])
+        if request.request_id in self.preallocated_requests_timestamp:
+            del self.preallocated_requests_timestamp[request.request_id]
         request.num_cached_tokens = request_output.num_cached_tokens
         if (
             self.config.speculative_config.method in ["mtp"]
