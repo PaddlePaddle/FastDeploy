@@ -384,6 +384,7 @@ class GPUModelRunner(ModelRunnerBase):
             "vit_position_ids_lst": [],
             "cu_seqlens": [0],
             "encoder_cache_info": [],
+            "feature_position_list": [],
         }
         rope_3d_position_ids = {
             "position_ids_idx": [],
@@ -491,6 +492,14 @@ class GPUModelRunner(ModelRunnerBase):
                             )
                         )
 
+                    multi_vision_inputs["feature_position_list"].extend(
+                        self._get_feature_positions(
+                            mm_positions=inputs["mm_positions"][request.num_image_start : request.num_image_end],
+                            prefill_start_index=request.prefill_start_index,
+                            prefill_end_index=request.prefill_end_index,
+                        )
+                    )
+
         if self.encoder_cache is not None:
             if len(multi_vision_inputs["images_lst"]) > 0 or len(multi_vision_inputs["encoder_cache_info"]) > 0:
                 image_features_output = None
@@ -507,11 +516,7 @@ class GPUModelRunner(ModelRunnerBase):
                         assert (
                             image_features_output is not None
                         ), f"image_features_output is None, images_lst length: {len(multi_vision_inputs['images_lst'])}"
-                        mm_token_lenght = (
-                            multi_vision_inputs["grid_thw_lst"][thw_idx][0]
-                            * multi_vision_inputs["grid_thw_lst"][thw_idx][1]
-                            * multi_vision_inputs["grid_thw_lst"][thw_idx][2]
-                        ) // 4
+                        mm_token_lenght = paddle.prod(multi_vision_inputs["grid_thw_lst"][thw_idx]) // 4
                         mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
 
                         # add feature to encoder cache
@@ -528,7 +533,22 @@ class GPUModelRunner(ModelRunnerBase):
                     f"merge_image_features length: {len(merge_image_features)}, features shape: {self.share_inputs['image_features'].shape}"
                 )
         elif len(multi_vision_inputs["images_lst"]) > 0:
-            self.share_inputs["image_features"] = self.extract_vision_features(multi_vision_inputs)
+            assert len(multi_vision_inputs["feature_position_list"]) == len(
+                multi_vision_inputs["grid_thw_lst"]
+            ), f"{multi_vision_inputs['feature_position_list']} != {multi_vision_inputs['grid_thw_lst']}"
+
+            merge_image_features, feature_idx, thw_idx = [], 0, 0
+            image_features_output = self.extract_vision_features(multi_vision_inputs)
+            for feature_position in multi_vision_inputs["feature_position_list"]:
+                mm_token_lenght = paddle.prod(multi_vision_inputs["grid_thw_lst"][thw_idx]) // 4
+                mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
+
+                feature_start = feature_position.offset
+                feature_end = feature_position.offset + feature_position.length
+                merge_image_features.append(mm_feature[feature_start:feature_end])
+                feature_idx += mm_token_lenght
+                thw_idx += 1
+            self.share_inputs["image_features"] = paddle.concat(merge_image_features, axis=0)
 
         if len(rope_3d_position_ids["position_ids_idx"]) > 0:
             packed_position_ids = paddle.to_tensor(
