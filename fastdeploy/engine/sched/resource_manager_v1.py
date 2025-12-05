@@ -654,9 +654,11 @@ class ResourceManagerV1(ResourceManager):
                         break
 
                     request = self.waiting[0]
-                    if (self._is_mm_request(request) and self.exist_mm_prefill(scheduled_reqs)) or (
-                        paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)
-                    ):
+                    if (
+                        not envs.FD_ENABLE_MAX_PREFILL
+                        and self._is_mm_request(request)
+                        and self.exist_mm_prefill(scheduled_reqs)
+                    ) or (paddle.is_compiled_with_xpu() and self.exist_prefill(scheduled_reqs)):
                         break
                     if request.status == RequestStatus.WAITING:
                         result = self._waiting_async_process(request)
