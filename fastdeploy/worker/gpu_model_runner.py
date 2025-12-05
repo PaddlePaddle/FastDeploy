@@ -2221,6 +2221,7 @@ class GPUModelRunner(ModelRunnerBase):
         # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
         # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
         # Then there is data on other runner, the current runner is required to execute part of the model.
+        # But not need to run the below code.
         if not self.not_need_stop():
             return None
 
