@@ -491,7 +491,7 @@ class PaddleDisWorkerProc:
                 req_ids = [req.request_id for req in req_dicts]
 
                 logger.info(
-                    f"Rank: {self.local_rank}, cur_max_bsz_index: {cur_max_bsz_index}, num_running_requests: {self.worker.get_num_running_request()}"
+                    f"Rank: {self.local_rank}, cur_max_bsz_index: {cur_max_bsz_index}, num_running_requests: {self.worker.get_num_running_request()} "
                     f"num_insert_requests: {len(req_dicts)}, req_ids: {req_ids}"
                 )
 

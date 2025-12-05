@@ -218,7 +218,7 @@ class ResourceManagerV1(ResourceManager):
                         del self.preallocated_requests_timestamp[request_id]
                         if request_id in self.requests:
                             request = self.requests[request_id]
-                            self.prerelease_resource(request)
+                            self.pre_recycle_resource(request)
                 time.sleep(10)
             except Exception as e:
                 llm_logger.error(f"Monitor recycle block ids in D error: {e}, {str(traceback.format_exc())}")
@@ -1136,6 +1136,7 @@ class ResourceManagerV1(ResourceManager):
                     del self.requests[req_id]
                     if req_id in self.req_dict:
                         del self.req_dict[req_id]
+            llm_logger.info(f"after recycle: {self.info()}")
         except Exception as e:
             llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")
         finally:
