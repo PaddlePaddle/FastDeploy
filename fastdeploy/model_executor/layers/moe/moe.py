@@ -21,7 +21,11 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
+from fastdeploy.distributed.communication import (
+    tensor_model_parallel_all_reduce,
+    tensor_model_parallel_all_reduce_custom,
+)
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import h2d_copy, slice_fn
 from fastdeploy.platforms import current_platform
@@ -163,6 +167,9 @@ class FusedMoE(nn.Layer):
             self.tp_size = 1
             self.tp_rank = 0
 
+        self.attn_tp_size = fd_config.parallel_config.tensor_parallel_size
+        self.attn_tp_rank = fd_config.parallel_config.tensor_parallel_rank
+
         assert (self.tp_size >= 1 and self.ep_size == 1) or (
             self.tp_size == 1 and self.ep_size > 1
         ), "MoE only support parallelism on TP or EP dimension."
@@ -258,10 +265,10 @@ class FusedMoE(nn.Layer):
         else:
             SHARD_ID_TO_SHARDED_DIM = {"gate": 0, "down": 1, "up": 0}
 
-        if not param._is_initialized():
-            param.initialize()
         if not (expert_id - self.expert_id_offset >= 0 and expert_id - self.expert_id_offset < self.num_local_experts):
             return
+        if not param._is_initialized():
+            param.initialize()
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
         if shard_id is None:
             # 1.gate up fused in disk
@@ -598,24 +605,24 @@ class FusedMoE(nn.Layer):
         Forward split allgather function.
         """
         token_num = x.shape[0]
-        token_num_per_rank = (token_num + self.tp_size - 1) // self.tp_size
+        token_num_per_rank = (token_num + self.attn_tp_size - 1) // self.attn_tp_size
         # AllGather will hang when the data shapes on multi-ranks are different!
         part_x = paddle.zeros(shape=[token_num_per_rank, x.shape[1]], dtype=x.dtype)
-        start_offset = self.tp_rank * token_num_per_rank
-        end_offset = (self.tp_rank + 1) * token_num_per_rank
+        start_offset = self.attn_tp_rank * token_num_per_rank
+        end_offset = (self.attn_tp_rank + 1) * token_num_per_rank
         if start_offset >= token_num:
             start_offset = token_num
         if end_offset > token_num:
             end_offset = token_num
         part_x[: (end_offset - start_offset), :] = x[start_offset:end_offset, :]
         out = self.quant_method.apply(self, part_x, gate)
-        multi_outs = paddle.zeros([token_num_per_rank * self.tp_size, x.shape[1]], dtype=x.dtype)
+        multi_outs = paddle.zeros([token_num_per_rank * self.attn_tp_size, x.shape[1]], dtype=x.dtype)
         paddle.distributed.all_gather(multi_outs, out, self.tp_group)
         out = multi_outs[:token_num, :]
 
         return out
 
-    def forward(self, x: paddle.Tensor, gate: nn.Layer):
+    def forward(self, x: paddle.Tensor, gate: nn.Layer, forward_meta: ForwardMeta):
         """
         Defines the forward computation of the moe layer.
 
@@ -629,21 +636,24 @@ class FusedMoE(nn.Layer):
         token_num = x.shape[0]
         if (
             self.ep_size > 1
-            and self.tp_size > 1
+            and self.attn_tp_size > 1
             and (not self.fd_config.parallel_config.use_sequence_parallel_moe)
-            and token_num >= self.tp_size
+            and token_num >= self.attn_tp_size
         ):
             out = self.forward_split_allgather(x, gate)
         elif self.fd_config.parallel_config.use_ep and self.fd_config.parallel_config.enable_chunked_moe:
-            out = self.forward_chunked_moe(x, gate)
+            out = self.forward_chunked_moe(x, gate, forward_meta)
         else:
             out = self.forward_normal(x, gate)
 
         if self.reduce_results and self.tp_size > 1:
-            out = tensor_model_parallel_all_reduce(out, self.tp_group)
+            if current_platform.is_intel_hpu():
+                tensor_model_parallel_all_reduce_custom(out)
+            else:
+                out = tensor_model_parallel_all_reduce(out, self.tp_group)
         return out
 
-    def forward_chunked_moe(self, x: paddle.Tensor, gate: nn.Layer):
+    def forward_chunked_moe(self, x: paddle.Tensor, gate: nn.Layer, forward_meta: ForwardMeta):
         """
         Split input to multi chunk to reduce the memory usage of moe.
 
@@ -662,11 +672,11 @@ class FusedMoE(nn.Layer):
         # input size that are less than a chunk, less than the max size data or empty input
         # need to be repeated until the max chunk data infer MOE finished.
         if token_num > chunk_size:  # chunked moe
-            x_split_list = paddle.tensor_split(x, self.fd_config.parallel_config.moe_num_chunk, axis=0)
-            out_split_list = [None] * self.fd_config.parallel_config.moe_num_chunk
+            x_split_list = paddle.tensor_split(x, forward_meta.moe_num_chunk, axis=0)
+            out_split_list = [None] * forward_meta.moe_num_chunk
 
-            for i in range(self.fd_config.parallel_config.max_moe_num_chunk):
-                if i < self.fd_config.parallel_config.moe_num_chunk:
+            for i in range(forward_meta.max_moe_num_chunk):
+                if i < forward_meta.moe_num_chunk:
                     out_split_list[i] = self.quant_method.apply(self, x_split_list[i], gate)
                 else:
                     # just need to use real data to infer max_moe_num_chunk times.
@@ -676,7 +686,7 @@ class FusedMoE(nn.Layer):
         else:
             # when only one chunk, just need to use real data to infer once.
             out = self.quant_method.apply(self, x, gate)
-            for i in range(self.fd_config.parallel_config.max_moe_num_chunk - 1):
+            for i in range(forward_meta.max_moe_num_chunk - 1):
                 self.quant_method.apply(self, fake_x, gate)
 
         return out

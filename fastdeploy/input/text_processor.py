@@ -547,6 +547,10 @@ class DataProcessor(BaseDataProcessor):
             "tools": getattr(request, "tools", None),
             "documents": getattr(request, "documents", None),
         }
+        if "add_generation_prompt" not in kwargs:
+            kwargs["add_generation_prompt"] = (
+                request.add_generation_prompt if request.add_generation_prompt is not None else True
+            )
         spliced_message = self.tokenizer.apply_chat_template(
             message_dict,
             tokenize=False,

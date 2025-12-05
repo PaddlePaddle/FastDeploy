@@ -229,8 +229,15 @@ class ModelConfig:
         self.think_end_id = args.get("think_end_id", -1)
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
-        if self.max_logprobs < -1:
+
+        num_max_logprobs = args.get("max_logprobs", None)
+        if num_max_logprobs is not None and num_max_logprobs < -1:
             raise ValueError(" The possible values for max_logprobs can't be less than -1 ")
+        if self.ori_vocab_size is not None and num_max_logprobs is not None:
+            if num_max_logprobs > self.ori_vocab_size:
+                raise ValueError(
+                    f" The possible values for max_logprobs can't be greater than the vocabulary size {self.ori_vocab_size}"
+                )
 
         self._post_init()
 
@@ -292,7 +299,7 @@ class ModelConfig:
             self.tensor_parallel_size = self.infer_model_mp_num
             del self.infer_model_mp_num
 
-        if hasattr(self, "num_hidden_layers"):
+        if hasattr(self, "num_hidden_layers") and self.runner != "pooling":
             if hasattr(self, "remove_tail_layer"):
                 if self.remove_tail_layer is True:
                     self.num_hidden_layers -= 1
@@ -538,12 +545,11 @@ class ParallelConfig:
         self.tensor_parallel_size = 1  # TP degree
         self.expert_parallel_rank = 0  # EP rank ID
         self.expert_parallel_size = 1  # EP degree
+        self.data_parallel_rank = 0  # DP rank ID
         self.data_parallel_size = 1  # DP degree
         self.enable_expert_parallel = False
         self.enable_chunked_moe = False
         self.chunked_moe_size = 256
-        self.max_moe_num_chunk = 1
-        self.moe_num_chunk = 1
 
         self.local_data_parallel_id = 0
         # Engine worker queue port
@@ -1106,7 +1112,6 @@ class LoadConfig:
         args,
     ):
         self.load_choices: Union[str, LoadChoices] = LoadChoices.DEFAULT.value
-        self.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
         self.dynamic_load_weight: bool = False
         self.load_strategy: Optional[Literal["ipc", "ipc_snapshot", "meta", "normal"]] = "normal"
         for key, value in args.items():
@@ -1223,6 +1228,7 @@ class CacheConfig:
         enc_dec_block_num (int): Number of encoder-decoder blocks.
         prealloc_dec_block_slot_num_threshold (int): Number of token slot threadshold to allocate next blocks for decoding.
         enable_prefix_caching (bool): Flag to enable prefix caching.
+        enable_output_caching (bool): Flag to enable kv cache output tokens, only works in V1 scheduler.
     """
 
     def __init__(self, args):
@@ -1237,7 +1243,7 @@ class CacheConfig:
             num_cpu_blocks (Optional[int]): Number of CPU blocks.
             kv_cache_ratio (float): Ratio for max block calculation.
             enc_dec_block_num (int): Number of encoder-decoder blocks.
-            prealloc_dec_block_slot_num_threshold (int): Number of token slot threadshold to allocate next blocks for decoding, used when ENABLE_V1_KVCACHE_SCHEDULER=1.
+            prealloc_dec_block_slot_num_threshold (int): Number of token slot threshold to allocate next blocks for decoding, used when ENABLE_V1_KVCACHE_SCHEDULER=1.
             enable_prefix_caching (bool): Enable prefix caching.
             max_encoder_cache(int): Maximum number of tokens in the encoder cache.
             max_processor_cache(int): Maximum number of bytes in the processor cache.
@@ -1263,6 +1269,7 @@ class CacheConfig:
         self.swap_space = None
         self.max_encoder_cache = None
         self.max_processor_cache = None
+        self.enable_output_caching = False
         self.disable_chunked_mm_input = False
         for key, value in args.items():
             if hasattr(self, key):
@@ -1579,7 +1586,11 @@ class FDConfig:
             self.max_prefill_batch = int(os.getenv("MAX_PREFILL_NUM", "3"))
             if current_platform.is_xpu():
                 self.max_prefill_batch = 1
-            if self.model_config is not None and self.model_config.enable_mm:
+            if (
+                int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 0
+                and self.model_config is not None
+                and self.model_config.enable_mm
+            ):
                 self.max_prefill_batch = 1  # TODO:当前多模prefill阶段只支持并行度为1,待优化
         else:
             self.max_prefill_batch = self.scheduler_config.max_num_seqs
@@ -1653,13 +1664,27 @@ class FDConfig:
 
         if (
             self.structured_outputs_config is not None
-            and self.structured_outputs_config.guided_decoding_backend == "auto"
+            and self.structured_outputs_config.guided_decoding_backend != "off"
         ):
             if current_platform.is_xpu() or self.speculative_config.method is not None:
                 logger.warning("Speculative Decoding and XPU currently do not support Guided decoding, set off.")
                 self.structured_outputs_config.guided_decoding_backend = "off"
-            else:
+            elif self.structured_outputs_config.guided_decoding_backend in ["auto", "xgrammar"]:
                 self.structured_outputs_config.guided_decoding_backend = "xgrammar"
+            elif self.structured_outputs_config.guided_decoding_backend == "guidance":
+                try:
+                    import llguidance.torch
+
+                    llguidance.torch
+                except ImportError:
+                    raise ImportError(
+                        "The 'llguidance' package is required for using guidance as the guided decoding backend. "
+                        "Please install it via the appropriate method."
+                    )
+            else:
+                raise NotImplementedError(
+                    f"Guided decoding backend '{self.structured_outputs_config.guided_decoding_backend}' is not implemented. [auto, xgrammar, guidance, off]"
+                )
 
         if self.model_config.enable_mm:
             if self.cache_config.max_encoder_cache is None or self.cache_config.max_encoder_cache < 0:
@@ -1683,9 +1708,9 @@ class FDConfig:
             logger.info(
                 "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
             )
-        if self.device_config is not None and self.device_config.device_type != "cuda":
+        if not current_platform.is_cuda():
             self.graph_opt_config.use_cudagraph = False
-            logger.info(f"CUDAGraph only support on GPU, current device type is {self.device_config.device_type}!")
+            logger.info("CUDAGraph currently only support on GPU!")
         if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
             if self.scheduler_config.max_num_seqs < self.parallel_config.tensor_parallel_size:
                 self.parallel_config.use_sequence_parallel_moe = False
@@ -1779,7 +1804,8 @@ class FDConfig:
                 "XGrammar",
                 "auto",
                 "off",
-            ], f"Only support xgrammar、auto guided decoding backend, but got {self.structured_outputs_config.guided_decoding_backend}."
+                "guidance",
+            ], f"Only support [auto, xgrammar, guidance, off] guided decoding backend, but got {self.structured_outputs_config.guided_decoding_backend}."
 
             if self.structured_outputs_config.guided_decoding_backend != "off":
                 # TODO: speculative decoding support guided_decoding
@@ -1863,7 +1889,11 @@ class FDConfig:
             engine_worker_queue_port = self.parallel_config.engine_worker_queue_port[
                 self.parallel_config.local_data_parallel_id
             ]
-        connector_port = self.cache_config.pd_comm_port[0] if self.cache_config.pd_comm_port else None
+        connector_port = (
+            self.cache_config.pd_comm_port[self.parallel_config.local_data_parallel_id]
+            if self.cache_config.pd_comm_port
+            else None
+        )
 
         self.disaggregate_info = {}
         if self.scheduler_config.splitwise_role != "mixed":
@@ -1888,6 +1918,7 @@ class FDConfig:
             logger.info(f"disaggregate_info: {self.disaggregate_info}")
 
         if self.router_config:
+            # the information for registering this server to router
             self.register_info = {
                 "role": self.scheduler_config.splitwise_role,
                 "host_ip": self.host_ip,
@@ -1897,6 +1928,7 @@ class FDConfig:
                 "engine_worker_queue_port": engine_worker_queue_port,
                 "device_ids": self.local_device_ids,
                 "transfer_protocol": self.cache_config.cache_transfer_protocol.split(","),
+                "tp_size": self.parallel_config.tensor_parallel_size,
             }
             logger.info(f"register_info: {self.register_info}")
 
