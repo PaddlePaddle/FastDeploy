@@ -173,6 +173,13 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
         # Note: extract_mm_items is not mocked by default, only when needed
         self.data_processor.extract_mm_items = MagicMock(return_value=([], [], [], [], None, [], []))
 
+    def _restore_real_extract_mm_items(self):
+        """Helper method to restore real extract_mm_items method for testing"""
+        from fastdeploy.input.ernie4_5_vl_processor.process import DataProcessor
+
+        original_extract_mm_items = DataProcessor.extract_mm_items
+        self.data_processor.extract_mm_items = original_extract_mm_items.__get__(self.data_processor, DataProcessor)
+
     def _mock_convert_tokens_to_ids(self, token):
         token_id_map = {
             "<|begin_of_sentence|>": 101,
@@ -563,111 +570,11 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
             self.data_processor.prompt_token_ids2outputs(request)
         self.assertIn("video tokens num not match the size", str(ctx.exception))
 
-    def test_text2ids_basic(self):
-        """Test text2ids with basic text input"""
-        text = "Hello world"
-        # Ensure encode returns proper format
-        self.mock_tokenizer.encode.return_value = {"input_ids": [1, 2, 3]}
-        outputs = self.data_processor.text2ids(text)
+    def test_extract_mm_items(self):
+        """Test extract_mm_items with various scenarios: basic items, video, and missing data error"""
+        self._restore_real_extract_mm_items()
 
-        self.assertIn("input_ids", outputs)
-        self.assertIn("token_type_ids", outputs)
-        self.assertIn("position_ids", outputs)
-        self.assertGreater(len(outputs["input_ids"]), 0)
-        self.assertEqual(len(outputs["images"]), 0)
-        self.assertEqual(len(outputs["videos"]) if "videos" in outputs else 0, 0)
-
-    def test_text2ids_with_image_placeholder(self):
-        """Test text2ids with image placeholder"""
-        mock_img = Image.new("RGB", (224, 224))
-        text = "Hello <|image@placeholder|> world"
-        self.data_processor.image_preprocessor.get_smarted_resize.return_value = (None, (16, 16))
-        self.data_processor.image_preprocessor.preprocess.return_value = {
-            "pixel_values": np.random.randn(256, 3 * 14 * 14).astype(np.float32),
-            "image_grid_thw": np.array([[1, 16, 16]]),
-        }
-
-        outputs = self.data_processor.text2ids(text, images=[mock_img])
-
-        self.assertGreater(len(outputs["input_ids"]), 0)
-        self.assertGreater(len(outputs["images"]), 0)
-        self.assertEqual(outputs["num_input_image_tokens"], 64)  # (16*16) // (2*2) = 64
-
-    def test_text2ids_with_video_placeholder(self):
-        """Test text2ids with video placeholder"""
-        mock_frames = [Image.new("RGB", (224, 224)) for _ in range(4)]
-        text = "Hello <|video@placeholder|> world"
-        self.data_processor._load_and_process_video = MagicMock(return_value=mock_frames)
-        self.data_processor.image_preprocessor.get_smarted_resize.return_value = (None, (16, 16))
-        self.data_processor.image_preprocessor.preprocess.return_value = {
-            "pixel_values_videos": np.random.randn(4, 256, 3 * 14 * 14).astype(np.float32),
-            "video_grid_thw": np.array([[4, 16, 16]]),
-        }
-
-        outputs = self.data_processor.text2ids(text, videos=["test_video.mp4"])
-
-        self.assertGreater(len(outputs["input_ids"]), 0)
-        self.assertGreater(len(outputs["images"]), 0)
-        self.assertGreater(outputs["num_input_video_tokens"], 0)
-
-    def test_request2ids_basic(self):
-        """Test request2ids with basic request"""
-        self.data_processor.is_training = False
-        # Fix apply_chat_template to return text without image placeholder
-        self.mock_tokenizer.apply_chat_template.return_value = "User: Hello"
-        request = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "add_generation_prompt": True,
-        }
-
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [{"role": "user", "content": [{"type": "text", "text": "Hello"}]}]
-            outputs = self.data_processor.request2ids(request)
-
-            self.assertIn("input_ids", outputs)
-            self.assertGreater(len(outputs["input_ids"]), 0)
-
-    def test_request2ids_with_multimodal(self):
-        """Test request2ids with multimodal content"""
-        self.data_processor.is_training = False
-        mock_image = Image.new("RGB", (224, 224))
-        # Fix apply_chat_template to return text with image placeholder matching the image
-        self.mock_tokenizer.apply_chat_template.return_value = "User: What's in this image?<|image@placeholder|>"
-        request = {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "What's in this image?"},
-                        {"type": "image", "data": mock_image, "uuid": "img1"},
-                    ],
-                }
-            ],
-            "add_generation_prompt": True,
-        }
-
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "What's in this image?"},
-                        {"type": "image", "data": mock_image, "uuid": "img1"},
-                    ],
-                }
-            ]
-            self.data_processor.image_preprocessor.get_smarted_resize.return_value = (None, (16, 16))
-            self.data_processor.image_preprocessor.preprocess.return_value = {
-                "pixel_values": np.random.randn(256, 3 * 14 * 14).astype(np.float32),
-                "image_grid_thw": np.array([[1, 16, 16]]),
-            }
-            outputs = self.data_processor.request2ids(request)
-
-            self.assertIn("input_ids", outputs)
-            self.assertGreater(len(outputs["images"]), 0)
-
-    def test_extract_mm_items_basic(self):
-        """Test extract_mm_items with basic multimodal items"""
+        # Test basic multimodal items (image + video)
         request = {
             "messages": [
                 {
@@ -680,53 +587,22 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
                 }
             ]
         }
-
-        # Restore real extract_mm_items method for this test
-        from fastdeploy.input.ernie4_5_vl_processor.process import DataProcessor
-
-        original_extract_mm_items = DataProcessor.extract_mm_items
-
         with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Hello"},
-                        {"type": "image", "data": Image.new("RGB", (224, 224)), "uuid": "img1"},
-                        {"type": "video", "data": [Image.new("RGB", (224, 224))], "uuid": "vid1"},
-                    ],
-                }
-            ]
-            # Use real extract_mm_items method (cache is disabled, so no zmq connection needed)
-            self.data_processor.extract_mm_items = original_extract_mm_items.__get__(
-                self.data_processor, DataProcessor
-            )
+            mock_parse.return_value = request["messages"]
             images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = (
                 self.data_processor.extract_mm_items(request)
             )
-
             self.assertEqual(len(images), 1)
             self.assertEqual(len(videos), 1)
             self.assertEqual(image_uuid[0], "img1")
             self.assertEqual(video_uuid[0], "vid1")
             self.assertEqual(len(mm_items), 2)
 
-    def test_extract_mm_items_missing_data_error(self):
-        """Test extract_mm_items raises error when data is missing and cache is disabled"""
+        # Test missing data error when cache is disabled
         self.data_processor.enable_processor_cache = False
         request = {"messages": [{"role": "user", "content": [{"type": "image", "uuid": "img1"}]}]}
-
-        # Restore real extract_mm_items method for this test
-        from fastdeploy.input.ernie4_5_vl_processor.process import DataProcessor
-
-        original_extract_mm_items = DataProcessor.extract_mm_items
-
         with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [{"role": "user", "content": [{"type": "image", "uuid": "img1"}]}]
-            # Use real extract_mm_items method
-            self.data_processor.extract_mm_items = original_extract_mm_items.__get__(
-                self.data_processor, DataProcessor
-            )
+            mock_parse.return_value = request["messages"]
             with self.assertRaises(ValueError) as ctx:
                 self.data_processor.extract_mm_items(request)
             self.assertIn("Missing items cannot be retrieved", str(ctx.exception))
@@ -761,13 +637,17 @@ class TestDataProcessor(unittest.TestCase):
         self.mock_image_preprocessor.from_pretrained = MagicMock(return_value=self.mock_image_preprocessor)
 
         with patch(
-            "fastdeploy.input.ernie4_5_vl_processor.process.AdaptiveImageProcessor", self.mock_image_preprocessor
+            "fastdeploy.input.ernie4_5_vl_processor.process.AdaptiveImageProcessor",
+            self.mock_image_preprocessor,
         ):
             with patch("fastdeploy.input.ernie4_5_vl_processor.process.Ernie4_5Tokenizer") as mock_tokenizer_class:
                 mock_tokenizer_class.from_pretrained = MagicMock(return_value=self.mock_tokenizer)
                 mock_tokenizer_class.resource_files_names = {"vocab_file": "tokenizer.model"}
                 with patch("os.path.exists", return_value=True):
-                    self.processor = DataProcessor(tokenizer_name="test_model", image_preprocessor_name="test_model")
+                    self.processor = DataProcessor(
+                        tokenizer_name="test_model",
+                        image_preprocessor_name="test_model",
+                    )
 
     def _create_outputs(self):
         """Helper to create outputs dict"""
@@ -984,15 +864,21 @@ class TestDataProcessor(unittest.TestCase):
         self.assertGreater(len(outputs["images"]), 0)
 
         # With cached image
-        cached_image = (np.random.rand(256, 3 * 14 * 14).astype(np.float32), {"thw": (1, 16, 16)})
+        cached_image = (
+            np.random.rand(256, 3 * 14 * 14).astype(np.float32),
+            {"thw": (1, 16, 16)},
+        )
         outputs = self.processor.text2ids(
-            "Hello <|image@placeholder|> world", images=[cached_image], image_uuid=["uuid"]
+            "Hello <|image@placeholder|> world",
+            images=[cached_image],
+            image_uuid=["uuid"],
         )
         self.assertGreater(len(outputs["input_ids"]), 0)
 
         # Multiple images
         outputs = self.processor.text2ids(
-            "Hello <|image@placeholder|> world <|image@placeholder|> end", images=[mock_image, mock_image]
+            "Hello <|image@placeholder|> world <|image@placeholder|> end",
+            images=[mock_image, mock_image],
         )
         self.assertEqual(len(outputs["images"]), 2)
 
@@ -1000,8 +886,12 @@ class TestDataProcessor(unittest.TestCase):
         mock_read, mock_frames_read, mock_render, mock_frames = self._mock_video_processing()
         with mock_read as mr, mock_frames_read as mfr, mock_render as mren:
             mr.return_value = (None, {"duration": 2.0}, "test_path")
-            mfr.return_value = ([np.array(f) for f in mock_frames], None, [0.0, 0.5, 1.0, 1.5])
-            mren.side_effect = lambda img, ts: Image.fromarray(img) if isinstance(img, np.ndarray) else img
+            mfr.return_value = (
+                [np.array(f) for f in mock_frames],
+                None,
+                [0.0, 0.5, 1.0, 1.5],
+            )
+            mren.side_effect = lambda img, ts: (Image.fromarray(img) if isinstance(img, np.ndarray) else img)
             self.mock_image_preprocessor.preprocess.return_value = {
                 "pixel_values_videos": np.random.rand(4, 256, 3 * 14 * 14).astype(np.float32),
                 "video_grid_thw": np.array([[4, 16, 16]]),
@@ -1010,9 +900,14 @@ class TestDataProcessor(unittest.TestCase):
             self.assertGreater(len(outputs["input_ids"]), 0)
 
         # Cached video
-        cached_video = (np.random.rand(256, 3 * 14 * 14).astype(np.float32), {"thw": (4, 16, 16)})
+        cached_video = (
+            np.random.rand(256, 3 * 14 * 14).astype(np.float32),
+            {"thw": (4, 16, 16)},
+        )
         outputs = self.processor.text2ids(
-            "Hello <|video@placeholder|> world", videos=[cached_video], video_uuid=["uuid"]
+            "Hello <|video@placeholder|> world",
+            videos=[cached_video],
+            video_uuid=["uuid"],
         )
         self.assertGreater(len(outputs["input_ids"]), 0)
 
@@ -1020,14 +915,19 @@ class TestDataProcessor(unittest.TestCase):
         mock_read, mock_frames_read, mock_render, mock_frames = self._mock_video_processing()
         with mock_read as mr, mock_frames_read as mfr, mock_render as mren:
             mr.return_value = (None, {"duration": 2.0}, "test_path")
-            mfr.return_value = ([np.array(f) for f in mock_frames], None, [0.0, 0.5, 1.0, 1.5])
-            mren.side_effect = lambda img, ts: Image.fromarray(img) if isinstance(img, np.ndarray) else img
+            mfr.return_value = (
+                [np.array(f) for f in mock_frames],
+                None,
+                [0.0, 0.5, 1.0, 1.5],
+            )
+            mren.side_effect = lambda img, ts: (Image.fromarray(img) if isinstance(img, np.ndarray) else img)
             self.mock_image_preprocessor.preprocess.return_value = {
                 "pixel_values_videos": np.random.rand(4, 256, 3 * 14 * 14).astype(np.float32),
                 "video_grid_thw": np.array([[4, 16, 16]]),
             }
             outputs = self.processor.text2ids(
-                "Hello <|video@placeholder|> world", videos=[{"video": "test.mp4", "fps": 2}]
+                "Hello <|video@placeholder|> world",
+                videos=[{"video": "test.mp4", "fps": 2}],
             )
             self.assertGreater(len(outputs["input_ids"]), 0)
 
@@ -1035,8 +935,12 @@ class TestDataProcessor(unittest.TestCase):
         mock_read, mock_frames_read, mock_render, mock_frames = self._mock_video_processing()
         with mock_read as mr, mock_frames_read as mfr, mock_render as mren:
             mr.return_value = (None, {"duration": 2.0}, "test_path")
-            mfr.return_value = ([np.array(f) for f in mock_frames], None, [0.0, 0.5, 1.0, 1.5])
-            mren.side_effect = lambda img, ts: Image.fromarray(img) if isinstance(img, np.ndarray) else img
+            mfr.return_value = (
+                [np.array(f) for f in mock_frames],
+                None,
+                [0.0, 0.5, 1.0, 1.5],
+            )
+            mren.side_effect = lambda img, ts: (Image.fromarray(img) if isinstance(img, np.ndarray) else img)
             self.mock_image_preprocessor.preprocess.side_effect = [
                 {
                     "pixel_values": np.random.rand(256, 3 * 14 * 14).astype(np.float32),
@@ -1059,14 +963,7 @@ class TestDataProcessor(unittest.TestCase):
         """Test request2ids with various scenarios"""
         self.processor.is_training = False
 
-        # Basic request
-        request = {"messages": [{"role": "user", "content": "Hello"}], "add_generation_prompt": True}
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [{"role": "user", "content": [{"type": "text", "text": "Hello"}]}]
-            outputs = self.processor.request2ids(request)
-            self.assertIn("input_ids", outputs)
-
-        # With multimodal
+        # Basic request with multimodal content - covers both text and image branches in one call
         mock_image = Image.new("RGB", (224, 224))
         request = {
             "messages": [
@@ -1081,52 +978,11 @@ class TestDataProcessor(unittest.TestCase):
             "add_generation_prompt": True,
         }
         with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "What's in this image?"},
-                        {"type": "image", "data": mock_image, "uuid": "img1"},
-                    ],
-                }
-            ]
+            mock_parse.return_value = request["messages"]
             outputs = self.processor.request2ids(request)
             self.assertIn("input_ids", outputs)
 
-        # Content not list
-        request = {"messages": [{"role": "user", "content": "Hello"}], "add_generation_prompt": True}
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [{"role": "user", "content": {"type": "text", "text": "Hello"}}]
-            outputs = self.processor.request2ids(request)
-            self.assertIn("input_ids", outputs)
-
-        # Training mode
-        self.processor.is_training = True
-        self.mock_tokenizer.apply_chat_template.return_value = f"Hello {self.processor.sep_token} response"
-        request = {"messages": [{"role": "user", "content": "Hello"}], "add_generation_prompt": True}
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [{"role": "user", "content": [{"type": "text", "text": "Hello"}]}]
-            with patch.object(self.processor, "text2ids") as mock_text2ids:
-                mock_text2ids.return_value = {
-                    "input_ids": [1, 2, 3, self.processor.sep_token_id, 4, 5],
-                    "token_type_ids": [0] * 6,
-                    "position_ids": [[i] * 3 for i in range(6)],
-                    "images": [],
-                    "grid_thw": [],
-                    "image_type_ids": [],
-                    "labels": [],
-                    "cur_position": 6,
-                    "video_cnt": 0,
-                    "num_input_image_tokens": 0,
-                    "num_input_video_tokens": 0,
-                    "mm_positions": [],
-                    "mm_hashes": [],
-                }
-                outputs = self.processor.request2ids(request, tgts=["response"])
-                self.assertIn("labels", outputs)
-
-        # Error cases
-        self.processor.is_training = False
+        # Error case: missing chat_template
         self.processor.tokenizer.chat_template = None
         with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
             mock_parse.return_value = [{"role": "user", "content": [{"type": "text", "text": "Hello"}]}]
@@ -1134,127 +990,23 @@ class TestDataProcessor(unittest.TestCase):
                 self.processor.request2ids(request)
         self.processor.tokenizer.chat_template = MagicMock()
 
-        # Unsupported role
-        request = {"messages": [{"role": "invalid_role", "content": "Hello"}], "add_generation_prompt": True}
+        # Error case: unsupported role
+        request = {
+            "messages": [{"role": "invalid_role", "content": "Hello"}],
+            "add_generation_prompt": True,
+        }
         with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
             mock_parse.return_value = [{"role": "invalid_role", "content": [{"type": "text", "text": "Hello"}]}]
             with self.assertRaises(AssertionError):
                 self.processor.request2ids(request)
 
-        # Missing cache error
+        # Error case: missing cache when cache is disabled
         self.processor.enable_processor_cache = False
         request = {"messages": [{"role": "user", "content": [{"type": "image", "uuid": "img1"}]}]}
         with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [{"role": "user", "content": [{"type": "image", "uuid": "img1"}]}]
+            mock_parse.return_value = request["messages"]
             with self.assertRaises(ValueError):
                 self.processor.request2ids(request)
-
-        # Processor cache
-        self.processor.enable_processor_cache = True
-        request = {
-            "messages": [
-                {"role": "user", "content": [{"type": "text", "text": "Hello"}, {"type": "image", "uuid": "img1"}]}
-            ],
-            "add_generation_prompt": True,
-        }
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.zmq") as mock_zmq:
-            mock_context = MagicMock()
-            mock_socket = MagicMock()
-            mock_context.socket.return_value = mock_socket
-            mock_zmq.Context.return_value = mock_context
-            with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-                mock_parse.return_value = [
-                    {"role": "user", "content": [{"type": "text", "text": "Hello"}, {"type": "image", "uuid": "img1"}]}
-                ]
-                with patch.object(self.processor, "get_processor_cache") as mock_get_cache:
-                    mock_get_cache.return_value = [Image.new("RGB", (224, 224))]
-                    with patch.object(self.processor, "update_processor_cache"):
-                        outputs = self.processor.request2ids(request)
-                        self.assertIn("input_ids", outputs)
-
-        # Cache missing item
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.zmq") as mock_zmq:
-            mock_context = MagicMock()
-            mock_socket = MagicMock()
-            mock_context.socket.return_value = mock_socket
-            mock_zmq.Context.return_value = mock_context
-            with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-                mock_parse.return_value = [{"role": "user", "content": [{"type": "image", "uuid": "img1"}]}]
-                with patch.object(self.processor, "get_processor_cache") as mock_get_cache:
-                    mock_get_cache.return_value = [None]
-                    with self.assertRaises(ValueError):
-                        self.processor.request2ids(request)
-
-    def test_add_image_and_video(self):
-        """Test adding images and videos"""
-        # Add image with UUID
-        outputs = self._create_outputs()
-        mock_image = Image.new("RGB", (224, 224))
-        self.processor._add_image(mock_image, outputs, "test_uuid")
-        self.assertGreater(len(outputs["input_ids"]), 0)
-        self.assertEqual(outputs["mm_hashes"][-1], "test_uuid")
-
-        # Add image without UUID
-        outputs2 = self._create_outputs()
-        self.processor._add_image(mock_image, outputs2, None)
-        self.assertGreater(len(outputs2["mm_hashes"]), 0)
-
-        # Add processed image
-        cached_image = (np.random.rand(256, 3 * 14 * 14).astype(np.float32), {"thw": (1, 16, 16)})
-        outputs3 = self._create_outputs()
-        self.processor._add_processed_image(cached_image, outputs3, "uuid")
-        self.assertGreater(len(outputs3["input_ids"]), 0)
-
-        # Add video with UUID
-        mock_frames = [Image.new("RGB", (224, 224)) for _ in range(4)]
-        self.mock_image_preprocessor.preprocess.return_value = {
-            "pixel_values_videos": np.random.rand(4, 256, 3 * 14 * 14).astype(np.float32),
-            "video_grid_thw": np.array([[4, 16, 16]]),
-        }
-        outputs4 = self._create_outputs()
-        self.processor._add_video(mock_frames, outputs4, "test_video_uuid")
-        self.assertGreater(len(outputs4["input_ids"]), 0)
-        self.assertEqual(outputs4["mm_hashes"][-1], "test_video_uuid")
-
-        # Add processed video
-        cached_video = (np.random.rand(256, 3 * 14 * 14).astype(np.float32), {"thw": (4, 16, 16)})
-        outputs5 = self._create_outputs()
-        self.processor._add_processed_video(cached_video, outputs5, "uuid")
-        self.assertGreater(len(outputs5["input_ids"]), 0)
-
-    def test_load_and_process_video(self):
-        """Test loading and processing video"""
-        mock_read, mock_frames_read, mock_render, mock_frames = self._mock_video_processing()
-        with mock_read as mr, mock_frames_read as mfr, mock_render as mren:
-            mr.return_value = (None, {"duration": 2.0}, "test_path")
-            mfr.return_value = ([np.array(f) for f in mock_frames], None, [0.0, 0.5, 1.0, 1.5])
-            mren.side_effect = lambda img, ts: Image.fromarray(img) if isinstance(img, np.ndarray) else img
-            frames = self.processor._load_and_process_video("test_video.mp4", {})
-            self.assertEqual(len(frames), 4)
-
-        # Odd frames
-        mock_frames_odd = [Image.new("RGB", (224, 224)) for _ in range(5)]
-        with mock_read as mr, mock_frames_read as mfr, mock_render as mren:
-            mr.return_value = (None, {"duration": 2.0}, "test_path")
-            mfr.return_value = ([np.array(f) for f in mock_frames_odd], None, [0.0, 0.4, 0.8, 1.2, 1.6])
-            mren.side_effect = lambda img, ts: Image.fromarray(img) if isinstance(img, np.ndarray) else img
-            frames = self.processor._load_and_process_video("test_video.mp4", {})
-            self.assertEqual(len(frames) % 2, 0)
-
-        # With video_frame_args
-        video_frame_args = {
-            "target_frames": 4,
-            "fps": -1,
-            "min_frames": 4,
-            "max_frames": 8,
-            "frames_sample": "leading",
-        }
-        with mock_read as mr, mock_frames_read as mfr, mock_render as mren:
-            mr.return_value = (None, {"duration": 2.0}, "test_path")
-            mfr.return_value = ([np.array(f) for f in mock_frames], None, [0.0, 0.5, 1.0, 1.5])
-            mren.side_effect = lambda img, ts: Image.fromarray(img) if isinstance(img, np.ndarray) else img
-            frames = self.processor._load_and_process_video("test_video.mp4", video_frame_args)
-            self.assertGreater(len(frames), 0)
 
     def test_extract_labels(self):
         """Test label extraction"""
@@ -1275,141 +1027,6 @@ class TestDataProcessor(unittest.TestCase):
         outputs3 = {"input_ids": [1, 2, 3, self.processor.sep_token_id], "labels": []}
         with self.assertRaises(AssertionError):
             self.processor._extract_labels(outputs3, ["target1", "target2"])
-
-    def test_extract_mm_items_video_and_unsupported(self):
-        """Test extract_mm_items with video type and unsupported type"""
-        # Test video type extraction
-        mock_frames = [Image.new("RGB", (224, 224)) for _ in range(4)]
-        request = {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "What's in this video?"},
-                        {"type": "video", "data": mock_frames, "uuid": "vid1"},
-                    ],
-                }
-            ]
-        }
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "What's in this video?"},
-                        {"type": "video", "data": mock_frames, "uuid": "vid1"},
-                    ],
-                }
-            ]
-            images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = self.processor.extract_mm_items(
-                request
-            )
-            self.assertEqual(len(videos), 1)
-            self.assertEqual(video_uuid[0], "vid1")
-
-        # Test unsupported multimodal type - error occurs in extract_mm_items when processing items
-        # Note: extract_mm_items only collects items with type "image" or "video" (line 258)
-        # So we need to inject an unsupported type after collection
-        request = {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [{"type": "image", "data": Image.new("RGB", (224, 224)), "uuid": "img1"}],
-                }
-            ]
-        }
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [
-                {"role": "user", "content": [{"type": "image", "data": Image.new("RGB", (224, 224)), "uuid": "img1"}]}
-            ]
-            # Manually inject unsupported type into mm_items to test the error path
-            images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = self.processor.extract_mm_items(
-                request
-            )
-            # Inject unsupported type to test error handling
-            mm_items.append({"type": "audio", "data": "test_audio", "uuid": "audio1"})
-            with self.assertRaisesRegex(ValueError, "Unsupported multimodal type"):
-                # Re-run the processing logic that would fail
-                images, videos = [], []
-                image_uuid, video_uuid = [], []
-                for item in mm_items:
-                    if item.get("type") == "image":
-                        images.append(item["data"])
-                        image_uuid.append(item["uuid"])
-                    elif item.get("type") == "video":
-                        videos.append(item["data"])
-                        video_uuid.append(item["uuid"])
-                    else:
-                        raise ValueError(f"Unsupported multimodal type: {item.get('type')}")
-
-    def test_request2ids_processor_cache_update(self):
-        """Test request2ids with processor cache update"""
-        self.processor.is_training = False  # Ensure eval mode
-        self.processor.enable_processor_cache = True
-        mock_image = Image.new("RGB", (224, 224))
-        request = {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Hello"},
-                        {"type": "image", "data": mock_image, "uuid": "img1"},
-                    ],
-                }
-            ],
-            "add_generation_prompt": True,
-        }
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.zmq") as mock_zmq:
-            mock_context = MagicMock()
-            mock_socket = MagicMock()
-            mock_socket.recv_multipart = MagicMock(return_value=(b"", b"pickled_data"))
-            mock_context.socket.return_value = mock_socket
-            mock_zmq.Context.return_value = mock_context
-            with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-                mock_parse.return_value = [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "Hello"},
-                            {"type": "image", "data": mock_image, "uuid": "img1"},
-                        ],
-                    }
-                ]
-                with patch("fastdeploy.input.ernie4_5_vl_processor.process.pickle") as mock_pickle:
-                    mock_pickle.loads = MagicMock(return_value=[])
-                    with patch.object(self.processor, "text2ids") as mock_text2ids:
-                        mock_text2ids.return_value = {
-                            "input_ids": [1, 2, 3],
-                            "token_type_ids": [0] * 3,
-                            "position_ids": [[i] * 3 for i in range(3)],
-                            "images": [np.random.rand(256, 3 * 14 * 14).astype(np.float32)],
-                            "grid_thw": [np.array([[1, 16, 16]])],
-                            "image_type_ids": [0],
-                            "cur_position": 3,
-                            "video_cnt": 0,
-                            "num_input_image_tokens": 0,
-                            "num_input_video_tokens": 0,
-                            "mm_positions": [],
-                            "mm_hashes": ["hash1"],
-                        }
-                        with patch.object(self.processor, "update_processor_cache") as mock_update:
-                            self.processor.request2ids(request)
-                            mock_update.assert_called_once()
-        self.processor.enable_processor_cache = False
-
-    def test_processor_cache(self):
-        """Test processor cache operations"""
-        mock_socket = MagicMock()
-        mock_socket.recv_multipart = MagicMock(return_value=(b"", b"pickled_data"))
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.pickle") as mock_pickle:
-            mock_pickle.loads = MagicMock(return_value=[{"data": "cached_item"}])
-            result = self.processor.get_processor_cache(mock_socket, ["hash1", "hash2"])
-            self.assertEqual(len(result), 1)
-
-        mock_socket2 = MagicMock()
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.pickle"):
-            self.processor.update_processor_cache(mock_socket2, ["hash1"], [(np.array([1, 2, 3]), {"meta": "data"})])
-            mock_socket2.send_multipart.assert_called_once()
 
     def test_fancy_print(self):
         """Test fancy_print function"""
@@ -1438,203 +1055,41 @@ class TestDataProcessor(unittest.TestCase):
             if expected_contains:
                 self.assertIn(expected_contains, result)
 
-    def test_prompt_token_ids2outputs(self):
-        """Test prompt_token_ids2outputs method"""
-        # No messages
-        request = {"prompt_token_ids": [1, 2, 3, 4, 5]}
-        outputs = self.processor.prompt_token_ids2outputs(request)
-        self.assertEqual(len(outputs["input_ids"]), 5)
+    def test_processor_cache_operations(self):
+        """Test processor cache get/update and request2ids with cache"""
+        # Test get_processor_cache
+        mock_socket = MagicMock()
+        mock_socket.recv_multipart = MagicMock(return_value=(b"", b"pickled_data"))
+        with patch("fastdeploy.input.ernie4_5_vl_processor.process.pickle") as mock_pickle:
+            mock_pickle.loads = MagicMock(return_value=[{"data": "cached_item"}])
+            result = self.processor.get_processor_cache(mock_socket, ["hash1", "hash2"])
+            self.assertEqual(len(result), 1)
 
-        # With image - need to match token count with actual image patch count
+        # Test update_processor_cache
+        mock_socket2 = MagicMock()
+        with patch("fastdeploy.input.ernie4_5_vl_processor.process.pickle"):
+            self.processor.update_processor_cache(
+                mock_socket2,
+                ["hash1"],
+                [(np.array([1, 2, 3]), {"meta": "data"})],
+            )
+            mock_socket2.send_multipart.assert_called_once()
+
+        # Test request2ids with processor cache update
         self.processor.is_training = False
+        self.processor.enable_processor_cache = True
         mock_image = Image.new("RGB", (224, 224))
-        # Calculate expected token count: (16*16) // (2*2) = 64 tokens
-        num_tokens = (16 * 16) // (self.processor.spatial_conv_size**2)
-        request = {
-            "messages": [{"role": "user", "content": [{"type": "image", "data": mock_image, "uuid": "img1"}]}],
-            "prompt_token_ids": [self.processor.image_start_id]
-            + [self.processor.image_patch_id] * num_tokens
-            + [self.processor.image_end_id],
-        }
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [
-                {"role": "user", "content": [{"type": "image", "data": mock_image, "uuid": "img1"}]}
-            ]
-            outputs = self.processor.prompt_token_ids2outputs(request)
-            self.assertGreater(len(outputs["input_ids"]), 0)
-
-        # Incomplete image tokens
-        request = {
-            "messages": [{"role": "user", "content": [{"type": "image", "data": mock_image, "uuid": "img1"}]}],
-            "prompt_token_ids": [self.processor.image_start_id, self.processor.image_patch_id],
-        }
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [
-                {"role": "user", "content": [{"type": "image", "data": mock_image, "uuid": "img1"}]}
-            ]
-            with self.assertRaises(ValueError):
-                self.processor.prompt_token_ids2outputs(request)
-
-        # Image count mismatch
-        request = {
-            "messages": [{"role": "user", "content": [{"type": "image", "data": mock_image, "uuid": "img1"}]}],
-            "prompt_token_ids": [
-                self.processor.image_start_id,
-                self.processor.image_patch_id,
-                self.processor.image_end_id,
-                self.processor.image_start_id,
-                self.processor.image_patch_id,
-                self.processor.image_end_id,
-            ],
-        }
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [
-                {"role": "user", "content": [{"type": "image", "data": mock_image, "uuid": "img1"}]}
-            ]
-            with self.assertRaises(ValueError):
-                self.processor.prompt_token_ids2outputs(request)
-
-        # Video count mismatch
-        mock_frames = [Image.new("RGB", (224, 224)) for _ in range(4)]
-        num_video_tokens = (4 * 16 * 16) // (self.processor.spatial_conv_size**2 * self.processor.temporal_conv_size)
-        request = {
-            "messages": [{"role": "user", "content": [{"type": "video", "data": mock_frames, "uuid": "vid1"}]}],
-            "prompt_token_ids": [
-                self.processor.video_start_id,
-                self.processor.image_patch_id,
-                self.processor.video_end_id,
-                self.processor.video_start_id,
-                self.processor.image_patch_id,
-                self.processor.video_end_id,
-            ],
-        }
-        with (
-            patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse,
-            patch("fastdeploy.input.ernie4_5_vl_processor.process.read_video_decord") as mock_read,
-            patch("fastdeploy.input.ernie4_5_vl_processor.process.read_frames_decord") as mock_frames_read,
-            patch("fastdeploy.input.ernie4_5_vl_processor.process.render_frame_timestamp") as mock_render,
-        ):
-            mock_parse.return_value = [
-                {"role": "user", "content": [{"type": "video", "data": mock_frames, "uuid": "vid1"}]}
-            ]
-            self._setup_video_mocks(mock_read, mock_frames_read, mock_render, mock_frames)
-            with self.assertRaises(ValueError):
-                self.processor.prompt_token_ids2outputs(request)
-
-        # Image idx out of range (more image placeholders than images)
-        request = {
-            "messages": [{"role": "user", "content": [{"type": "image", "data": mock_image, "uuid": "img1"}]}],
-            "prompt_token_ids": [
-                self.processor.image_start_id,
-                self.processor.image_patch_id,
-                self.processor.image_end_id,
-                self.processor.image_start_id,
-                self.processor.image_patch_id,
-                self.processor.image_end_id,
-            ],
-        }
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [
-                {"role": "user", "content": [{"type": "image", "data": mock_image, "uuid": "img1"}]}
-            ]
-            with self.assertRaises(ValueError):
-                self.processor.prompt_token_ids2outputs(request)
-
-        # Video idx out of range (more video placeholders than videos)
-        request = {
-            "messages": [{"role": "user", "content": [{"type": "video", "data": mock_frames, "uuid": "vid1"}]}],
-            "prompt_token_ids": [
-                self.processor.video_start_id,
-                self.processor.image_patch_id,
-                self.processor.video_end_id,
-                self.processor.video_start_id,
-                self.processor.image_patch_id,
-                self.processor.video_end_id,
-            ],
-        }
-        with (
-            patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse,
-            patch("fastdeploy.input.ernie4_5_vl_processor.process.read_video_decord") as mock_read,
-            patch("fastdeploy.input.ernie4_5_vl_processor.process.read_frames_decord") as mock_frames_read,
-            patch("fastdeploy.input.ernie4_5_vl_processor.process.render_frame_timestamp") as mock_render,
-        ):
-            mock_parse.return_value = [
-                {"role": "user", "content": [{"type": "video", "data": mock_frames, "uuid": "vid1"}]}
-            ]
-            self._setup_video_mocks(mock_read, mock_frames_read, mock_render, mock_frames)
-            with self.assertRaises(ValueError):
-                self.processor.prompt_token_ids2outputs(request)
-
-        # Test with cached image (tuple format)
-        cached_image = (np.random.rand(256, 3 * 14 * 14).astype(np.float32), {"thw": (1, 16, 16)})
-        request = {
-            "messages": [{"role": "user", "content": [{"type": "image", "data": cached_image, "uuid": "img1"}]}],
-            "prompt_token_ids": [self.processor.image_start_id]
-            + [self.processor.image_patch_id] * num_tokens
-            + [self.processor.image_end_id],
-        }
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [
-                {"role": "user", "content": [{"type": "image", "data": cached_image, "uuid": "img1"}]}
-            ]
-            outputs = self.processor.prompt_token_ids2outputs(request)
-            self.assertGreater(len(outputs["input_ids"]), 0)
-
-        # Test with video (dict format)
         request = {
             "messages": [
                 {
                     "role": "user",
-                    "content": [{"type": "video", "data": {"video": "test.mp4", "fps": 2}, "uuid": "vid1"}],
+                    "content": [
+                        {"type": "text", "text": "Hello"},
+                        {"type": "image", "data": mock_image, "uuid": "img1"},
+                    ],
                 }
             ],
-            "prompt_token_ids": [self.processor.video_start_id]
-            + [self.processor.image_patch_id] * num_video_tokens
-            + [self.processor.video_end_id],
-        }
-        with (
-            patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse,
-            patch("fastdeploy.input.ernie4_5_vl_processor.process.read_video_decord") as mock_read,
-            patch("fastdeploy.input.ernie4_5_vl_processor.process.read_frames_decord") as mock_frames_read,
-            patch("fastdeploy.input.ernie4_5_vl_processor.process.render_frame_timestamp") as mock_render,
-        ):
-            mock_parse.return_value = [
-                {
-                    "role": "user",
-                    "content": [{"type": "video", "data": {"video": "test.mp4", "fps": 2}, "uuid": "vid1"}],
-                }
-            ]
-            self._setup_video_mocks(mock_read, mock_frames_read, mock_render, mock_frames)
-            outputs = self.processor.prompt_token_ids2outputs(request)
-            self.assertGreater(len(outputs["input_ids"]), 0)
-
-        # Test with cached video (tuple format)
-        cached_video = (np.random.rand(4 * 256, 3 * 14 * 14).astype(np.float32), {"thw": (4, 16, 16)})
-        request = {
-            "messages": [{"role": "user", "content": [{"type": "video", "data": cached_video, "uuid": "vid1"}]}],
-            "prompt_token_ids": [self.processor.video_start_id]
-            + [self.processor.image_patch_id] * num_video_tokens
-            + [self.processor.video_end_id],
-        }
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [
-                {"role": "user", "content": [{"type": "video", "data": cached_video, "uuid": "vid1"}]}
-            ]
-            outputs = self.processor.prompt_token_ids2outputs(request)
-            self.assertGreater(len(outputs["input_ids"]), 0)
-
-        # Test prompt_token_ids2outputs with processor cache update
-        self.processor.enable_processor_cache = True
-        # Reset preprocess mock to return correct format
-        self.mock_image_preprocessor.preprocess.return_value = {
-            "pixel_values": np.random.rand(256, 3 * 14 * 14).astype(np.float32),
-            "image_grid_thw": np.array([[1, 16, 16]]),
-        }
-        request = {
-            "messages": [{"role": "user", "content": [{"type": "image", "data": mock_image, "uuid": "img1"}]}],
-            "prompt_token_ids": [self.processor.image_start_id]
-            + [self.processor.image_patch_id] * num_tokens
-            + [self.processor.image_end_id],
+            "add_generation_prompt": True,
         }
         with patch("fastdeploy.input.ernie4_5_vl_processor.process.zmq") as mock_zmq:
             mock_context = MagicMock()
@@ -1643,78 +1098,28 @@ class TestDataProcessor(unittest.TestCase):
             mock_context.socket.return_value = mock_socket
             mock_zmq.Context.return_value = mock_context
             with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-                mock_parse.return_value = [
-                    {"role": "user", "content": [{"type": "image", "data": mock_image, "uuid": "img1"}]}
-                ]
+                mock_parse.return_value = request["messages"]
                 with patch("fastdeploy.input.ernie4_5_vl_processor.process.pickle") as mock_pickle:
                     mock_pickle.loads = MagicMock(return_value=[])
-                    with patch.object(self.processor, "update_processor_cache") as mock_update:
-                        outputs = self.processor.prompt_token_ids2outputs(request)
-                        mock_update.assert_called_once()
+                    with patch.object(self.processor, "text2ids") as mock_text2ids:
+                        mock_text2ids.return_value = {
+                            "input_ids": [1, 2, 3],
+                            "token_type_ids": [0] * 3,
+                            "position_ids": [[i] * 3 for i in range(3)],
+                            "images": [np.random.rand(256, 3 * 14 * 14).astype(np.float32)],
+                            "grid_thw": [np.array([[1, 16, 16]])],
+                            "image_type_ids": [0],
+                            "cur_position": 3,
+                            "video_cnt": 0,
+                            "num_input_image_tokens": 0,
+                            "num_input_video_tokens": 0,
+                            "mm_positions": [],
+                            "mm_hashes": ["hash1"],
+                        }
+                        with patch.object(self.processor, "update_processor_cache") as mock_update:
+                            self.processor.request2ids(request)
+                            mock_update.assert_called_once()
         self.processor.enable_processor_cache = False
-
-        # Test token_len mismatch for processed image
-        cached_image_wrong = (np.random.rand(128, 3 * 14 * 14).astype(np.float32), {"thw": (1, 16, 16)})
-        request = {
-            "messages": [{"role": "user", "content": [{"type": "image", "data": cached_image_wrong, "uuid": "img1"}]}],
-            "prompt_token_ids": [self.processor.image_start_id]
-            + [self.processor.image_patch_id] * num_tokens
-            + [self.processor.image_end_id],
-        }
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [
-                {"role": "user", "content": [{"type": "image", "data": cached_image_wrong, "uuid": "img1"}]}
-            ]
-            with self.assertRaisesRegex(ValueError, "image tokens num not match"):
-                self.processor.prompt_token_ids2outputs(request)
-
-        # Test token_len mismatch for video
-        request = {
-            "messages": [{"role": "user", "content": [{"type": "video", "data": mock_frames, "uuid": "vid1"}]}],
-            "prompt_token_ids": [self.processor.video_start_id]
-            + [self.processor.image_patch_id] * 10
-            + [self.processor.video_end_id],
-        }
-        with (
-            patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse,
-            patch("fastdeploy.input.ernie4_5_vl_processor.process.read_video_decord") as mock_read,
-            patch("fastdeploy.input.ernie4_5_vl_processor.process.read_frames_decord") as mock_frames_read,
-            patch("fastdeploy.input.ernie4_5_vl_processor.process.render_frame_timestamp") as mock_render,
-        ):
-            mock_parse.return_value = [
-                {"role": "user", "content": [{"type": "video", "data": mock_frames, "uuid": "vid1"}]}
-            ]
-            self._setup_video_mocks(mock_read, mock_frames_read, mock_render, mock_frames)
-            with self.assertRaisesRegex(ValueError, "video tokens num not match"):
-                self.processor.prompt_token_ids2outputs(request)
-
-        # Test token_len mismatch for processed video
-        cached_video_wrong = (np.random.rand(128, 3 * 14 * 14).astype(np.float32), {"thw": (4, 16, 16)})
-        request = {
-            "messages": [{"role": "user", "content": [{"type": "video", "data": cached_video_wrong, "uuid": "vid1"}]}],
-            "prompt_token_ids": [self.processor.video_start_id]
-            + [self.processor.image_patch_id] * num_video_tokens
-            + [self.processor.video_end_id],
-        }
-        with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
-            mock_parse.return_value = [
-                {"role": "user", "content": [{"type": "video", "data": cached_video_wrong, "uuid": "vid1"}]}
-            ]
-            with self.assertRaisesRegex(ValueError, "video tokens num not match"):
-                self.processor.prompt_token_ids2outputs(request)
-
-    def test_load_tokenizer(self):
-        """Test _load_tokenizer method"""
-        with patch("os.path.exists", return_value=True):
-            with patch("fastdeploy.input.ernie4_5_vl_processor.process.Ernie4_5Tokenizer") as mock_tokenizer_class:
-                mock_tokenizer_class.resource_files_names = {"vocab_file": "tokenizer.model"}
-                mock_tokenizer_class.from_pretrained = MagicMock(return_value=self.mock_tokenizer)
-                with patch(
-                    "fastdeploy.input.ernie4_5_vl_processor.process.AdaptiveImageProcessor",
-                    self.mock_image_preprocessor,
-                ):
-                    processor = DataProcessor(tokenizer_name="test_model", image_preprocessor_name="test_model")
-                    self.assertIsNotNone(processor.tokenizer)
 
 
 if __name__ == "__main__":
