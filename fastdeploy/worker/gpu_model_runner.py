@@ -420,7 +420,7 @@ class GPUModelRunner(ModelRunnerBase):
                         ]
                     grid_thw_list = inputs["grid_thw"][request.num_image_start : request.num_image_end]
                     mm_hashes_list = inputs["mm_hashes"][request.num_image_start : request.num_image_end]
-                    mm_positions_list = self._update_mm_positions(
+                    feature_positions = self._get_feature_positions(
                         mm_positions=inputs["mm_positions"][request.num_image_start : request.num_image_end],
                         prefill_start_index=request.prefill_start_index,
                         prefill_end_index=request.prefill_end_index,
@@ -429,7 +429,7 @@ class GPUModelRunner(ModelRunnerBase):
 
                     logger.debug(
                         f"request {request.request_id} start process encoder info, image_start_idx: {image_start_idx} "
-                        f"grid_thw_list: {grid_thw_list}, mm_positions_list: {mm_positions_list}, mm_hashes_list: {mm_hashes_list}"
+                        f"grid_thw_list: {grid_thw_list}, feature_positions: {feature_positions}, mm_hashes_list: {mm_hashes_list}"
                     )
                     for i, mm_hash in enumerate(mm_hashes_list):
                         image_offset = np.prod(grid_thw_list[i])
@@ -437,10 +437,10 @@ class GPUModelRunner(ModelRunnerBase):
                             f"run idx {i} with mm_hash {mm_hash} image_offset: {image_offset} grid_thw: {grid_thw_list[i]}"
                         )
                         if mm_hash in self.encoder_cache:
-                            multi_vision_inputs["encoder_cache_info"].append((mm_hash, mm_positions_list[i], True))
+                            multi_vision_inputs["encoder_cache_info"].append((mm_hash, feature_positions[i], True))
                             continue
 
-                        multi_vision_inputs["encoder_cache_info"].append((mm_hash, mm_positions_list[i], False))
+                        multi_vision_inputs["encoder_cache_info"].append((mm_hash, feature_positions[i], False))
                         if envs.FD_ENABLE_MAX_PREFILL:
                             multi_vision_inputs["images_lst"].append(
                                 inputs["images"][image_start_idx : image_start_idx + image_offset].cuda()
@@ -494,24 +494,35 @@ class GPUModelRunner(ModelRunnerBase):
                     image_features_output = self.extract_vision_features(multi_vision_inputs)
 
                 logger.debug(f"encoder_cache_info: {multi_vision_inputs['encoder_cache_info']}")
-                merge_image_features, feature_idx = [], 0
-                for mm_hash, mm_positions, use_cache in multi_vision_inputs["encoder_cache_info"]:
+                merge_image_features, feature_idx, thw_idx = [], 0, 0
+                for mm_hash, feature_position, use_cache in multi_vision_inputs["encoder_cache_info"]:
                     if use_cache:
                         assert mm_hash in self.encoder_cache, f"{mm_hash} not in encoder cache"
-                        merge_image_features.append(self.encoder_cache[mm_hash][-mm_positions.length :].cuda())
+                        mm_feature = self.encoder_cache[mm_hash].cuda()
                     else:
                         assert (
                             image_features_output is not None
                         ), f"image_features_output is None, images_lst length: {len(multi_vision_inputs['images_lst'])}"
-                        mm_feature = image_features_output[feature_idx : feature_idx + mm_positions.length]
-                        merge_image_features.append(mm_feature)
+                        mm_token_lenght = (
+                            multi_vision_inputs["grid_thw_lst"][thw_idx][0]
+                            * multi_vision_inputs["grid_thw_lst"][thw_idx][1]
+                            * multi_vision_inputs["grid_thw_lst"][thw_idx][2]
+                        ) // 4
+                        mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
 
                         # add feature to encoder cache
                         self.encoder_cache[mm_hash] = mm_feature.detach().cpu()
-                        feature_idx += mm_positions.length
+                        feature_idx += mm_token_lenght
+                        thw_idx += 1
 
-                logger.debug(f"merge_image_features length: {len(merge_image_features)}")
+                    feature_start = feature_position.offset
+                    feature_end = feature_position.offset + feature_position.length
+                    merge_image_features.append(mm_feature[feature_start:feature_end])
+
                 self.share_inputs["image_features"] = paddle.concat(merge_image_features, axis=0)
+                logger.debug(
+                    f"merge_image_features length: {len(merge_image_features)}, features shape: {self.share_inputs['image_features'].shape}"
+                )
         elif len(multi_vision_inputs["images_lst"]) > 0:
             self.share_inputs["image_features"] = self.extract_vision_features(multi_vision_inputs)
 
@@ -527,20 +538,46 @@ class GPUModelRunner(ModelRunnerBase):
             for i, idx in enumerate(rope_3d_position_ids["position_ids_idx"]):
                 self.share_inputs["rope_emb"][idx : idx + 1, :] = rope_3d_lst[i]
 
-    def _update_mm_positions(
+    def _get_feature_positions(
         self, mm_positions: List[ImagePosition], prefill_start_index: int, prefill_end_index: int
     ):
         """
-        When the image is chunked, update the corresponding mm_positions(copy)
+        Filter and adjust ImagePosition objects that fall within the specified prefill range.
+
+        Args:
+            mm_positions: List of ImagePosition objects to filter
+            prefill_start_index: Start index of the prefill range
+            prefill_end_index: End index of the prefill range
+
+        Returns:
+            List of ImagePosition objects that are within or intersect with the prefill range
         """
-        mm_positions_list = copy.deepcopy(mm_positions)
-        if mm_positions_list[0].offset < prefill_start_index:
-            mm_positions_list[0].length = prefill_start_index - mm_positions_list[0].offset
-            mm_positions_list[0].offset = prefill_start_index
-        if mm_positions_list[-1].offset + mm_positions_list[-1].length > prefill_end_index:
-            mm_positions_list[-1].length = prefill_end_index - mm_positions_list[-1].offset
-        logger.debug(f"update mm_positions, befor positions: {mm_positions}, after positions: {mm_positions_list}")
-        return mm_positions_list
+        feature_positions = []
+        for position in mm_positions:
+            position_start = position.offset
+            position_end = position.offset + position.length
+            if position_end <= prefill_start_index or position_start >= prefill_end_index:
+                continue
+            elif position_start >= prefill_start_index and position_end <= prefill_end_index:
+                new_position = copy.deepcopy(position)
+                new_position.offset = 0
+                feature_positions.append(new_position)
+            else:
+                new_position = copy.deepcopy(position)
+                # Adjust offset if it starts before prefill_start_index
+                if position_start < prefill_start_index:
+                    new_position.offset = prefill_start_index - position_start
+                    new_position.length = min(position_end, prefill_end_index) - prefill_start_index
+                # Adjust length if it extends beyond prefill_end_index
+                elif position_end > prefill_end_index:
+                    new_position.offset = 0
+                    new_position.length = prefill_end_index - position_start
+                feature_positions.append(new_position)
+
+        logger.debug(
+            f"get feature_positions, original positions: {mm_positions}, filtered positions: {feature_positions}"
+        )
+        return feature_positions
 
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int = None):
         """
