@@ -219,7 +219,7 @@ class DeepEPEngine:
         ep_rank: int,
         splitwise_role: str,
         moe_phase: MoEPhase,
-        async_finish: bool = False,
+        async_finish: bool = True,
         group=None,
         use_internode_ll_two_stage: bool = False,
         top_k: int = 8,
@@ -275,6 +275,7 @@ class DeepEPEngine:
         topk_idx: paddle.Tensor,
         expertwise_scale,
         use_fp8: bool = False,
+        quant_group_size: int = 128,
     ):
         if self.deepep_engine is None:
             raise RuntimeError("DeepEP buffer not initialized!")
@@ -294,6 +295,7 @@ class DeepEPEngine:
             use_fp8=use_fp8,
             async_finish=False,
             return_recv_hook=True,
+            num_per_channel=quant_group_size,
         )
 
         return packed_recv_x, recv_expert_count, handle, dispatch_hook
@@ -429,17 +431,34 @@ class EPRunner:
                 tokens_per_expert_stats_list,
             ) = layer.redundant_table_manger.get_ep_rank_to_expert_id_list_by_layer(layer.layer_idx)
 
-            topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_redundant_topk_select(
-                gating_logits=gate_out,
-                expert_id_to_ep_rank_array=expert_id_to_ep_rank_array,
-                expert_in_rank_num_list=expert_in_rank_num_list,
-                tokens_per_expert_stats_list=tokens_per_expert_stats_list,
-                bias=layer.gate_correction_bias,
-                moe_topk=self.top_k,
-                apply_norm_weight=True,
-                enable_softmax_top_k_fused=False,
-                redundant_ep_rank_num_plus_one=layer.fd_config.model_config.redundant_experts_num + 1,
-            )
+            if layer.topk_method == "noaux_tc":
+                from .moe import get_moe_scores
+
+                score, topk_weights, topk_idx = get_moe_scores(
+                    gate_out,
+                    layer.n_group,
+                    layer.topk_group,
+                    layer.top_k,
+                    layer.routed_scaling_factor,
+                    layer.gate_correction_bias,
+                    getattr(layer, "renormalize", True),
+                    expert_id_to_ep_rank_array=expert_id_to_ep_rank_array,
+                    expert_in_rank_num_list=expert_in_rank_num_list,
+                    tokens_per_expert_stats_list=tokens_per_expert_stats_list,
+                    redundant_ep_rank_num_plus_one=layer.fd_config.model_config.redundant_experts_num + 1,
+                )
+            else:
+                topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_redundant_topk_select(
+                    gating_logits=gate_out,
+                    expert_id_to_ep_rank_array=expert_id_to_ep_rank_array,
+                    expert_in_rank_num_list=expert_in_rank_num_list,
+                    tokens_per_expert_stats_list=tokens_per_expert_stats_list,
+                    bias=layer.gate_correction_bias,
+                    moe_topk=self.top_k,
+                    apply_norm_weight=True,
+                    enable_softmax_top_k_fused=False,
+                    redundant_ep_rank_num_plus_one=layer.fd_config.model_config.redundant_experts_num + 1,
+                )
         else:
             if layer.topk_method == "noaux_tc":
                 from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
@@ -486,6 +505,8 @@ class EPPrefillRunner(EPRunner):
     EPPrefillRunner
     """
 
+    allocate_on_comm_stream = False
+
     def __init__(
         self,
         top_k: int,
@@ -514,6 +535,12 @@ class EPPrefillRunner(EPRunner):
             use_internode_ll_two_stage=use_internode_ll_two_stage,
         )
 
+    def set_allocate_on_comm_stream(allocate_on_comm_stream: bool = False):
+        logger.info(
+            f"set allocate_on_comm_stream to {allocate_on_comm_stream}, this will force Prefill dispatch's output tensor is allocated on communication stream"
+        )
+        EPPrefillRunner.allocate_on_comm_stream = allocate_on_comm_stream
+
     def dispatch(
         self,
         x: paddle.Tensor,
@@ -532,8 +559,14 @@ class EPPrefillRunner(EPRunner):
             num_tokens_per_rdma_rank,
             num_tokens_per_expert,
             is_token_in_rank,
-            _,
-        ) = buffer.get_dispatch_layout(topk_idx, self.num_experts)
+            event,
+        ) = buffer.get_dispatch_layout(
+            topk_idx,
+            self.num_experts,
+            previous_event=kwargs.get("previous_event", None),
+            allocate_on_comm_stream=EPPrefillRunner.allocate_on_comm_stream,
+            async_finish=self.ep_engine.async_finish,
+        )
 
         x_scale_tensor = kwargs.get("x_scale_tensor", None)
         dispatch_args = {
@@ -547,6 +580,8 @@ class EPPrefillRunner(EPRunner):
             "topk_idx": topk_idx,
             "topk_weights": topk_weights,
             "expert_alignment": expert_alignment,
+            "allocate_on_comm_stream": EPPrefillRunner.allocate_on_comm_stream,
+            "previous_event": event,
         }
         return buffer.dispatch(**dispatch_args)
 
@@ -555,6 +590,7 @@ class EPPrefillRunner(EPRunner):
         tmp_ffn_out: paddle.Tensor,
         handle: tuple,
         recv_topk_weights: paddle.Tensor,
+        event=None,
     ):
         buffer = self.ep_engine.deepep_engine
         if buffer is None:
@@ -566,9 +602,10 @@ class EPPrefillRunner(EPRunner):
             "config": self.ep_engine.ep_config,
             "async_finish": self.ep_engine.async_finish,
             "topk_weights": recv_topk_weights,
+            "previous_event": event,
         }
-        fused_moe_out, _, _ = buffer.combine(**combine_args)
-        return fused_moe_out
+        fused_moe_out, _, event = buffer.combine(**combine_args)
+        return fused_moe_out, event
 
 
 class EPDecoderRunner(EPRunner):
@@ -614,10 +651,11 @@ class EPDecoderRunner(EPRunner):
     ):
         expertwise_scale = kwargs.get("expertwise_scale", None)
         use_fp8 = kwargs.get("use_fp8", False)
+        quant_group_size = kwargs.get("quant_group_size", 128)
 
         if not self.use_internode_ll_two_stage:
             recv_hidden_states, recv_expert_count, handle, dispatch_hook = self.ep_engine.low_latency_dispatch(
-                x, topk_idx, expertwise_scale, use_fp8
+                x, topk_idx, expertwise_scale, use_fp8, quant_group_size
             )
         else:
             # just supports dispatch_use_fp8 = True now!

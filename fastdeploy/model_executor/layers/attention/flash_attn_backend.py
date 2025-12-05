@@ -171,20 +171,22 @@ class FlashAttentionBackend(AttentionBackend):
         """
         Calculate kv cache shape
         """
+        key_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
+        value_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
-            return (
+            key_cache_shape = [
                 max_num_blocks,
                 self.kv_num_heads,
                 self.block_size,
                 self.head_dim // 2,
-            )
-        else:
-            return (
+            ]
+            value_cache_shape = [
                 max_num_blocks,
                 self.kv_num_heads,
                 self.block_size,
-                self.head_dim,
-            )
+                self.head_dim // 2,
+            ]
+        return key_cache_shape, value_cache_shape
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         metadata = FlashAttentionMetadata()
@@ -211,7 +213,6 @@ class FlashAttentionBackend(AttentionBackend):
             self.decoder_block_shape_q,
             self.group_size,
             self.block_size,
-            self.speculate_max_draft_token_num + 1,
         )
 
         (
@@ -230,7 +231,7 @@ class FlashAttentionBackend(AttentionBackend):
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
         if self.pd_disaggregation_mode == "per_chunk":
-            if not self.keep_pd_step_flag:
+            if not self.keep_pd_step_flag and not forward_meta.is_dummy_or_profile_run:
                 init_kv_signal_per_query(
                     forward_meta.seq_lens_encoder,
                     forward_meta.seq_lens_this_time,
@@ -294,6 +295,8 @@ class FlashAttentionBackend(AttentionBackend):
                 metadata.pre_cache_batch_ids,
                 metadata.pre_cache_tile_ids_per_batch,
                 metadata.pre_cache_num_blocks_cpu,
+                getattr(layer, "q_norm_weight", None),
+                getattr(layer, "k_norm_weight", None),
                 getattr(layer, "cache_k_scale", None),
                 getattr(layer, "cache_v_scale", None),
                 getattr(layer, "cache_k_out_scale", None),
@@ -303,6 +306,7 @@ class FlashAttentionBackend(AttentionBackend):
                 metadata.kv_signal_data_list[layer.layer_id],
                 metadata.kv_token_num_cpu[0].item(),
                 self.max_seq_len,
+                getattr(layer, "rms_norm_eps", 1e-6),
                 getattr(layer, "cache_quant_type_str", "none"),
                 self.rope_3d,
             )

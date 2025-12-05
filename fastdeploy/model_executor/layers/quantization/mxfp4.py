@@ -342,7 +342,7 @@ class MXFP4MoeMethod(QuantMethodBase):
                 _,
                 topk_weights,
                 topk_idx,
-                _,
+                *_,
             ) = moe_expert_dispatch(
                 x,
                 router_out,

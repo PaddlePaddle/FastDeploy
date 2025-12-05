@@ -545,12 +545,14 @@ class DataProcessor(BaseDataProcessor):
             List[int]: ID sequences
         """
 
+        if "add_generation_prompt" not in kwargs:
+            kwargs["add_generation_prompt"] = request.get("add_generation_prompt", True)
+
         spliced_message = self.tokenizer.apply_chat_template(
             request,
             tokenize=False,
             split_special_tokens=False,
             add_special_tokens=False,
-            return_tensors="pd",
             **kwargs,
         )
         request["prompt_tokens"] = spliced_message
