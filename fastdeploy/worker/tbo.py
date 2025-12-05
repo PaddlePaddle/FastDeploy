@@ -91,7 +91,14 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta):
             setattr(res[i], key, GLOBAL_ATTN_BUFFERS[i][key])
 
         if forward_meta.attn_mask_offsets is not None:
-            res[i].attn_mask_offsets = forward_meta.attn_mask_offsets[start_token_id * 2 : end_token_id * 2]
+            mask_num = forward_meta.attn_mask_offsets.shape[0]
+            token_num = forward_meta.ids_remove_padding.shape[0]
+            if mask_num == token_num * 2:
+                res[i].attn_mask_offsets = forward_meta.attn_mask_offsets[start_token_id * 2 : end_token_id * 2]
+            elif mask_num == token_num:
+                res[i].attn_mask_offsets = forward_meta.attn_mask_offsets[start_token_id:end_token_id]
+            else:
+                assert False, "Invalid attn_mask_offsets shape"
 
         # This is to  adapt 5
         if hasattr(forward_meta, "hidden_states"):
