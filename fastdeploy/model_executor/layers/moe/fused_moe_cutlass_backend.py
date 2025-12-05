@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+from typing import Callable
+
 import paddle
 from paddle import nn
 from paddle.nn.quant import weight_quantize
@@ -105,6 +107,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
@@ -121,6 +124,10 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             handle,
             _,
         ) = self.ep_prefill_runner.dispatch(x, topk_idx, topk_weights)
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_idx)
+
         token_all_num = sum(recv_num_tokens_per_expert_list)
 
         # 3. Compute ffn
@@ -178,6 +185,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
@@ -186,6 +194,10 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         estimate_total_token_nums = gate_out.shape[0] * layer.top_k
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_idx)
+
         expertwise_scale = None
         if hasattr(layer, "up_gate_proj_in_scale_all_experts"):  # only use in w4a8
             expertwise_scale = getattr(layer, "up_gate_proj_in_scale_all_experts", None)
@@ -220,6 +232,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         layer: nn.Layer,
         x: paddle.Tensor,
         gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
@@ -276,6 +289,9 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 self.moe_quant_type,
                 topk_only_mode=False,
             )
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_idx)
 
         if self.moe_quant_type != "w4a8" and self.moe_quant_type != "w4afp8":
             # only w4a8 need expert_idx_per_token
