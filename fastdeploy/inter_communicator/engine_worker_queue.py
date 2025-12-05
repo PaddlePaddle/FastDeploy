@@ -66,6 +66,8 @@ class EngineWorkerQueue:
         self.client_id: int = client_id
         self.local_data_parallel_size = local_data_parallel_size
         self.local_data_parallel_id = local_data_parallel_id
+        # Store whether this is a single-node deployment for consistent checking
+        self.is_single_node: bool = address[0] == "0.0.0.0"
 
         class QueueManager(BaseManager):
             """
@@ -446,14 +448,18 @@ class EngineWorkerQueue:
 
             assert self.num_client == len(self.client_read_flag)
 
-        exist_tasks_intra_signal_data = np.zeros([1], dtype=np.int32)
-        self.exist_tasks_intra_signal = IPCSignal(
-            name="exist_tasks_intra_signal",
-            array=exist_tasks_intra_signal_data,
-            dtype=np.int32,
-            suffix=self.get_server_port() if is_server else address[1],
-            create=is_server,
-        )
+        # Only initialize shared memory for single-node deployments
+        if self.is_single_node:
+            exist_tasks_intra_signal_data = np.zeros([1], dtype=np.int32)
+            self.exist_tasks_intra_signal = IPCSignal(
+                name="exist_tasks_intra_signal",
+                array=exist_tasks_intra_signal_data,
+                dtype=np.int32,
+                suffix=self.get_server_port() if is_server else address[1],
+                create=is_server,
+            )
+        else:
+            self.exist_tasks_intra_signal = None
 
         if is_server:
             llm_logger.info("EngineWorkerQueue server started.")
@@ -489,7 +495,7 @@ class EngineWorkerQueue:
         Returns:
             bool: True if tasks exist in the queue, False otherwise.
         """
-        if self.address[0] == "0.0.0.0":
+        if self.is_single_node:
             return self.exist_tasks_intra_signal.value[0] == 1
         else:
             return self.exist_tasks_inter_signal.get() == 1
@@ -506,7 +512,7 @@ class EngineWorkerQueue:
             flag: True to indicate tasks exist in the queue, False to indicate no tasks.
         """
         value = 1 if flag else 0
-        if self.address[0] == "0.0.0.0":
+        if self.is_single_node:
             self.exist_tasks_intra_signal.value[0] = value
         else:
             self.exist_tasks_inter_signal.set(value)
