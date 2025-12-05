@@ -16,7 +16,9 @@
 
 from __future__ import annotations
 
+import copy
 import time
+import traceback
 from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from typing import Any, Dict, Generic, Optional, Union
@@ -29,7 +31,7 @@ from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import ToolCall
 from fastdeploy.utils import data_processor_logger
-from fastdeploy.worker.output import LogprobsLists, SampleLogprobs
+from fastdeploy.worker.output import LogprobsLists, PromptLogprobs, SampleLogprobs
 
 
 class RequestStatus(Enum):
@@ -70,6 +72,9 @@ class Request:
         pooling_params: Optional[PoolingParams] = None,
         preprocess_start_time: Optional[float] = None,
         preprocess_end_time: Optional[float] = None,
+        schedule_start_time: Optional[float] = None,
+        inference_start_time: Optional[float] = None,
+        llm_engine_recv_req_timestamp: Optional[float] = None,
         multimodal_inputs: Optional[dict] = None,
         multimodal_data: Optional[dict] = None,
         disable_chat_template: bool = False,
@@ -95,6 +100,8 @@ class Request:
         prefill_start_index: int = 0,
         prefill_end_index: int = 0,
         num_computed_tokens: int = 0,
+        # for internal adapter
+        ic_req_data: Optional[dict] = (None,),
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -113,6 +120,9 @@ class Request:
         self.arrival_time = arrival_time
         self.preprocess_start_time = preprocess_start_time
         self.preprocess_end_time = preprocess_end_time
+        self.schedule_start_time = schedule_start_time
+        self.inference_start_time = inference_start_time
+        self.llm_engine_recv_req_timestamp = llm_engine_recv_req_timestamp or time.time()
         self.disable_chat_template = disable_chat_template
         self.disaggregate_info = disaggregate_info
 
@@ -162,6 +172,11 @@ class Request:
         # dp
         self.dp_rank = dp_rank
         self.llm_engine_recv_req_timestamp = time.time()
+        self.ic_req_data = ic_req_data
+
+        self.async_process_futures = []
+        self.error_message = None
+        self.error_code = None
 
     @classmethod
     def from_dict(cls, d: dict):
@@ -172,6 +187,22 @@ class Request:
             pooling_params = PoolingParams.from_dict(d["pooling_params"])
         else:
             sampling_params = SamplingParams.from_dict(d)
+
+        if (
+            isinstance(d.get("multimodal_inputs"), dict)
+            and isinstance(d["multimodal_inputs"].get("mm_positions"), list)
+            and len(d["multimodal_inputs"]["mm_positions"]) > 0
+        ):
+            # if mm_positions is not of type ImagePosition, convert to ImagePosition
+            try:
+                for i, mm_pos in enumerate(d["multimodal_inputs"]["mm_positions"]):
+                    d["multimodal_inputs"]["mm_positions"][i] = (
+                        ImagePosition(**mm_pos) if not isinstance(mm_pos, ImagePosition) else mm_pos
+                    )
+            except Exception as e:
+                data_processor_logger.error(
+                    f"Convert mm_positions to ImagePosition error: {e}, {str(traceback.format_exc())}"
+                )
         return cls(
             request_id=d["request_id"],
             prompt=d.get("prompt"),
@@ -212,6 +243,9 @@ class Request:
             video_end=d.get("video_end", 0),
             audio_end=d.get("audio_end", 0),
             dp_rank=d.get("dp_rank", None),
+            ic_req_data=d.get("ic_req_data", None),
+            inference_start_time=d.get("inference_start_time"),
+            llm_engine_recv_req_timestamp=d.get("llm_engine_recv_req_timestamp"),
         )
 
     @property
@@ -231,6 +265,21 @@ class Request:
 
     def to_dict(self) -> dict:
         """convert Request into a serializable dict"""
+        multimodal_inputs = copy.deepcopy(self.multimodal_inputs)
+        if (
+            isinstance(multimodal_inputs, dict)
+            and isinstance(multimodal_inputs.get("mm_positions"), list)
+            and len(multimodal_inputs["mm_positions"]) > 0
+        ):
+            # if mm_positions is ImagePosition, convert to dict
+            try:
+                for i, mm_pos in enumerate(multimodal_inputs["mm_positions"]):
+                    multimodal_inputs["mm_positions"][i] = (
+                        asdict(mm_pos) if isinstance(mm_pos, ImagePosition) else mm_pos
+                    )
+            except Exception as e:
+                data_processor_logger.error(f"Convert ImagePosition to dict error: {e}, {str(traceback.format_exc())}")
+
         data = {
             "request_id": self.request_id,
             "prompt": self.prompt,
@@ -244,7 +293,7 @@ class Request:
             "arrival_time": self.arrival_time,
             "preprocess_start_time": self.preprocess_start_time,
             "preprocess_end_time": self.preprocess_end_time,
-            "multimodal_inputs": self.multimodal_inputs,
+            "multimodal_inputs": multimodal_inputs,
             "multimodal_data": self.multimodal_data,
             "disable_chat_template": self.disable_chat_template,
             "disaggregate_info": self.disaggregate_info,
@@ -262,6 +311,7 @@ class Request:
             "image_end": self.image_end,
             "video_end": self.video_end,
             "audio_end": self.audio_end,
+            "ic_req_data": self.ic_req_data,
         }
         add_params = [
             "guided_json",
@@ -293,7 +343,7 @@ class Request:
             setattr(self, key, value)
 
     def __repr__(self) -> str:
-        """Safe string representation that ignores private and None fields."""
+        """Sanitized repr without private or None fields."""
         try:
             if not envs.FD_DEBUG:
                 return f"Request(request_id={self.request_id})"
@@ -306,7 +356,7 @@ class Request:
                 ]
                 return f"Request({', '.join(non_none_fields)})"
         except Exception as e:
-            return f"<{self.__class__.__name__} repr failed: {e}>"
+            return f"<Request repr failed: {e}>"
 
 
 @dataclass(slots=True)
@@ -366,6 +416,7 @@ class CompletionOutput:
             f"send_idx={self.send_idx}, "
             f"text={self.text!r}, "
             f"token_ids={self.token_ids}, "
+            f"decode_type={self.decode_type}, "
             f"draft_token_ids={self.draft_token_ids}, "
             f"reasoning_content={self.reasoning_content!r}, "
             f"logprobs={self.logprobs}, "
@@ -463,6 +514,7 @@ class RequestOutput:
         request_id: str,
         prompt: Optional[str] = None,
         prompt_token_ids: Optional[list[int]] = None,
+        prompt_logprobs: Optional[PromptLogprobs] = None,
         output_type: Optional[int] = 3,
         outputs: CompletionOutput = None,
         finished: bool = False,
@@ -472,10 +524,14 @@ class RequestOutput:
         num_input_video_tokens: Optional[int] = 0,
         error_code: Optional[int] = 200,
         error_msg: Optional[str] = None,
+        # for internal adapter
+        ic_req_data: Optional[dict] = None,
+        prompt_token_ids_len: Optional[int] = 0,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
         self.prompt_token_ids = prompt_token_ids
+        self.prompt_logprobs = prompt_logprobs
         self.output_type = output_type
         self.outputs = outputs
         self.finished = finished
@@ -485,6 +541,8 @@ class RequestOutput:
         self.num_input_video_tokens = num_input_video_tokens
         self.error_code = error_code
         self.error_msg = error_msg
+        self.ic_req_data = ic_req_data
+        self.prompt_token_ids_len = prompt_token_ids_len
 
         if prompt_token_ids is None:
             self.prompt_token_ids = []
@@ -521,6 +579,7 @@ class RequestOutput:
             f"RequestOutput(request_id={self.request_id}, "
             f"prompt={self.prompt!r}, "
             f"prompt_token_ids={self.prompt_token_ids}, "
+            f"prompt_logprobs={self.prompt_logprobs}, "
             f"output_type={self.output_type}, "
             f"outputs={self.outputs}, "
             f"finished={self.finished}, "
@@ -546,6 +605,7 @@ class RequestOutput:
             "request_id": self.request_id,
             "prompt": self.prompt,
             "prompt_token_ids": self.prompt_token_ids,
+            "prompt_logprobs": self.prompt_logprobs,
             "output_type": self.output_type,
             "outputs": None if self.outputs is None else self.outputs.to_dict(),
             "metrics": None if self.metrics is None else self.metrics.to_dict(),
@@ -555,6 +615,8 @@ class RequestOutput:
             "num_input_video_tokens": self.num_input_video_tokens,
             "error_code": self.error_code,
             "error_msg": self.error_msg,
+            "ic_req_data": self.ic_req_data,
+            "prompt_token_ids_len": self.prompt_token_ids_len,
         }
 
 

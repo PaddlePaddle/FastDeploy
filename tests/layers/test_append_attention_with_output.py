@@ -479,7 +479,6 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
             12,
             (self.q_num_head + 2 * self.kv_num_head) // self.kv_num_head,
             self.blocksize,
-            speculate_max_draft_token_num + 1,
         )
 
         # Warm up

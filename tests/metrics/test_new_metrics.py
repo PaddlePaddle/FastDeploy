@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -43,13 +59,12 @@ class TestCoverageFix(unittest.TestCase):
         self.mock_split_connector = MagicMock()
         self.mock_resource_manager = MagicMock()
 
-        with patch("fastdeploy.output.token_processor.IPCSignal"):
-            self.processor = TokenProcessor(
-                cfg=self.mock_cfg,
-                cached_generated_tokens=self.mock_cached_generated_tokens,
-                engine_worker_queue=self.mock_engine_worker_queue,
-                split_connector=self.mock_split_connector,
-            )
+        self.processor = TokenProcessor(
+            cfg=self.mock_cfg,
+            cached_generated_tokens=self.mock_cached_generated_tokens,
+            engine_worker_queue=self.mock_engine_worker_queue,
+            split_connector=self.mock_split_connector,
+        )
         self.processor.resource_manager = self.mock_resource_manager
 
     # 使用 patch 来模拟 token_processor 模块中引用的 main_process_metrics

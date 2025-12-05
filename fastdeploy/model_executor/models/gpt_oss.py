@@ -121,10 +121,11 @@ class GptOssMoe(nn.Layer):
             weight_key_map=weight_key_map,
             with_bias=True,
             activation="swigluoai",
+            model_format="",
         )
 
-    def forward(self, hidden_states: paddle.Tensor):
-        expert_output = self.experts(hidden_states, self.router)
+    def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta):
+        expert_output = self.experts(hidden_states, self.router, forward_meta)
         return expert_output
 
 
@@ -172,7 +173,7 @@ class GptOssDecoderLayer(nn.Layer):
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
 
-        hidden_states = self.mlp(hidden_states)
+        hidden_states = self.mlp(hidden_states, forward_meta)
         return hidden_states, residual
 
 
@@ -270,7 +271,7 @@ class GptOssForCausalLM(ModelForCasualLM):
             ("down_proj_bias", "down_proj_bias", None, None),
         ]
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:

@@ -4,6 +4,8 @@ import socket
 import subprocess
 import time
 
+import requests
+
 # Read ports from environment variables; use default values if not set
 FD_API_PORT = int(os.getenv("FD_API_PORT", 8188))
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8133))
@@ -24,6 +26,17 @@ def is_port_open(host: str, port: int, timeout=1.0):
             return True
     except Exception:
         return False
+
+
+def _clean_cuda_process():
+    """
+    Kill processes that are using CUDA devices.
+    NOTE: Do not call this function directly, use the `clean` function instead.
+    """
+    try:
+        subprocess.run("fuser -k /dev/nvidia*", shell=True, timeout=5)
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+        pass
 
 
 def kill_process_on_port(port: int):
@@ -79,18 +92,79 @@ def kill_process_on_port(port: int):
         pass
 
 
-def clean_ports():
+def clean_ports(ports=None):
     """
-    Kill all processes occupying the ports listed in PORTS_TO_CLEAN.
+    Kill all processes occupying the ports
     """
-    print(f"Cleaning ports: {PORTS_TO_CLEAN}")
-    for port in PORTS_TO_CLEAN:
+    if ports is None:
+        ports = PORTS_TO_CLEAN
+
+    print(f"Cleaning ports: {ports}")
+    for port in ports:
         kill_process_on_port(port)
 
     # Double check and retry if ports are still in use
     time.sleep(2)
-    for port in PORTS_TO_CLEAN:
+    for port in ports:
         if is_port_open("127.0.0.1", port, timeout=0.1):
             print(f"Port {port} still in use, retrying cleanup...")
             kill_process_on_port(port)
             time.sleep(1)
+
+
+def clean(ports=None):
+    """
+    Clean up resources used during testing.
+    """
+    clean_ports(ports)
+
+    # Clean CUDA devices before and after tests.
+    # NOTE: It is dangerous to use this flag on development machines, as it may kill other processes
+    clean_cuda = int(os.getenv("CLEAN_CUDA", "0")) == 1
+    if clean_cuda:
+        _clean_cuda_process()
+
+
+def check_service_health(base_url: str, timeout: int = 3) -> bool:
+    """
+    Check the health status of a service.
+
+    Args:
+        base_url (str): The base URL of the service, e.g. "http://127.0.0.1:8080"
+        timeout (int): Request timeout in seconds.
+
+    Returns:
+        bool: True if the service is healthy, False otherwise.
+    """
+    if not base_url.startswith("http"):
+        base_url = f"http://{base_url}"
+    url = f"{base_url.rstrip('/')}/health"
+    try:
+        resp = requests.get(url, timeout=timeout)
+        if resp.status_code == 200:
+            return True
+        else:
+            return False
+    except Exception:
+        return False
+
+
+def get_registered_number(router_url) -> dict:
+    """
+    Get the registered model counts by type from the router.
+
+    Args:
+        router_url (str): The base URL of the router, e.g. "http://localhost:8080".
+
+    Returns:
+        dict: A dictionary containing registered model counts with keys "mixed", "prefill", and "decode".
+    """
+    if not router_url.startswith("http"):
+        router_url = f"http://{router_url}"
+
+    try:
+        response = requests.get(f"{router_url}/registered_number", timeout=60)
+        registered_numbers = response.json()
+        return registered_numbers
+    except Exception:
+        return {"mixed": 0, "prefill": 0, "decode": 0}

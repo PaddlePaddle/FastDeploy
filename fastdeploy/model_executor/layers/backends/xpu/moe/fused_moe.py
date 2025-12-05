@@ -17,7 +17,6 @@
 import paddle
 from paddle import nn
 
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
 from fastdeploy.model_executor.layers.quantization.weight_only import WeightOnlyConfig
 from fastdeploy.model_executor.layers.utils import get_tensor
@@ -95,7 +94,7 @@ class XPUMoEMethod(MoEMethodBase):
                 {
                     "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0},
                     "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
-                    "weight_need_transpose": extra_weight_attrs.get("model_format") == "torch",
+                    "weight_need_transpose": not extra_weight_attrs.get("model_format") == "torch",
                     "tensor_track": TensorTracker(shape=layer.up_gate_proj_weight.shape, output_dim=False),
                 },
             )
@@ -104,7 +103,7 @@ class XPUMoEMethod(MoEMethodBase):
                 {
                     "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0},
                     "weight_loader": extra_weight_attrs.get("weight_loader", default_weight_loader(layer.fd_config)),
-                    "weight_need_transpose": extra_weight_attrs.get("model_format") == "torch",
+                    "weight_need_transpose": not extra_weight_attrs.get("model_format") == "torch",
                     "tensor_track": TensorTracker(shape=layer.down_proj_weight.shape, output_dim=True),
                 },
             )
@@ -126,7 +125,6 @@ class XPUMoEMethod(MoEMethodBase):
                         "weight_loader": extra_weight_attrs.get(
                             "weight_loader", default_weight_loader(layer.fd_config)
                         ),
-                        "model_format": extra_weight_attrs.get("model_format", ""),
                     },
                 )
                 set_weight_attrs(
@@ -135,7 +133,6 @@ class XPUMoEMethod(MoEMethodBase):
                         "weight_loader": extra_weight_attrs.get(
                             "weight_loader", default_weight_loader(layer.fd_config)
                         ),
-                        "model_format": extra_weight_attrs.get("model_format", ""),
                     },
                 )
             if self.moe_quant_type in ["weight_only_int8", "weight_only_int4"]:
@@ -257,8 +254,6 @@ class XPUMoEMethod(MoEMethodBase):
             layer.top_k,
             False,  # moe group, used in deepseek
         )
-        if layer.reduce_results and layer.tp_size > 1:
-            fused_moe_out = tensor_model_parallel_all_reduce(fused_moe_out)
 
         return fused_moe_out
 
@@ -316,8 +311,6 @@ class XPUMoEMethod(MoEMethodBase):
             permute_indices_per_token.shape[1],
         )
 
-        if layer.reduce_results and layer.tp_size > 1:
-            tmp_ffn_out = tensor_model_parallel_all_reduce(tmp_ffn_out)
         return tmp_ffn_out
 
     def apply_tp(

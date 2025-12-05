@@ -105,7 +105,8 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
                 moe_quant_type = fd_config.quant_config.moe_quant_type
 
         if moe_quant_type == "tensor_wise_fp8" or (
-            moe_quant_type == "block_wise_fp8" and fd_config.model_config.is_quantized
+            moe_quant_type == "block_wise_fp8"
+            and (fd_config.model_config.is_quantized or fd_config.model_config.is_moe_quantized)
         ):
             weight_key_map = {
                 "gate_correction_bias_key": f"{prefix}.moe_statics.e_score_correction_bias",
@@ -166,17 +167,11 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
             skip_quant=True,
             weight_dtype="float32",
             weight_key="weight" if moe_tag == "Text" else "weight_1",
+            model_format="",
         )
 
-        # TODO(hehongyu): remove this after fix model network
-        setattr(
-            self.gate.weight,
-            "weight_need_transpose",
-            False,
-        )
-
-    def forward(self, hidden_states: paddle.Tensor):
-        out = self.experts(hidden_states, self.gate)
+    def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta):
+        out = self.experts(hidden_states, self.gate, forward_meta)
         return out
 
     def load_state_dict(self, state_dict):
@@ -275,7 +270,7 @@ class Ernie4_5_VLMoE(nn.Layer):
         if self.num_shared_experts > 0:
             self.shared_experts.load_state_dict(state_dict)
 
-    def forward(self, hidden_states: paddle.Tensor, vl_moe_meta: VLMoEMeta):
+    def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta, vl_moe_meta: VLMoEMeta):
         if self.num_shared_experts > 0:
             shared_experts_out = self.shared_experts(hidden_states)
         hidden_states, text_input, image_input = text_image_gather_scatter(
@@ -287,8 +282,8 @@ class Ernie4_5_VLMoE(nn.Layer):
             vl_moe_meta.image_index,
             True,
         )
-        text_out = self.text_fused_moe(text_input)
-        image_out = self.image_fused_moe(image_input)
+        text_out = self.text_fused_moe(text_input, forward_meta)
+        image_out = self.image_fused_moe(image_input, forward_meta)
         hidden_states, _, _ = text_image_gather_scatter(
             hidden_states,
             text_out,
@@ -353,12 +348,17 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
                 prefix=f"{prefix}.mlp",
             )
 
+        norm_dtype = None
+        if fd_config.model_config.architectures[0] == "Ernie4_5_VLMoeForProcessRewardModel":
+            norm_dtype = "float32"
+
         self.input_layernorm = RMSNorm(
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.input_layernorm",
             layer_id=layer_id,
+            dtype=norm_dtype,
         )
 
         self.post_attention_layernorm = RMSNorm(
@@ -367,6 +367,7 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
             eps=fd_config.model_config.rms_norm_eps,
             prefix=f"{prefix}.post_attention_layernorm",
             layer_id=layer_id,
+            dtype=norm_dtype,
         )
 
     def load_state_dict(self, state_dict):
@@ -394,9 +395,9 @@ class Ernie4_5_VLDecoderLayer(nn.Layer):
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
 
         if isinstance(self.mlp, Ernie4_5_VLMoE):
-            hidden_states = self.mlp(hidden_states, vl_moe_meta)
+            hidden_states = self.mlp(hidden_states, forward_meta, vl_moe_meta)
         else:
-            hidden_states = self.mlp(hidden_states)
+            hidden_states = self.mlp(hidden_states, forward_meta)
 
         return hidden_states, residual
 
@@ -547,7 +548,6 @@ class Ernie4_5_VLModel(nn.Layer):
             )
 
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
-
         return out
 
 
@@ -576,10 +576,11 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         self.ernie = Ernie4_5_VLModel(fd_config=fd_config)
 
         # Persistent buffers for CUDA graphs.
-        self._input_embeddings = paddle.zeros(
-            [fd_config.model_config.max_model_len, fd_config.model_config.hidden_size],
-            dtype=fd_config.model_config.dtype,
-        )
+        if fd_config.graph_opt_config.use_cudagraph:
+            self._decoder_input_embeddings = paddle.zeros(
+                [fd_config.graph_opt_config.max_capture_size, fd_config.model_config.hidden_size],
+                dtype=fd_config.model_config.dtype,
+            )
 
         self.ori_vocab_size = fd_config.model_config.ori_vocab_size
 
@@ -683,7 +684,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
         all_param_mapping = general_params_mapping + text_expert_params_mapping + image_expert_params_mapping
 
         params_dict = dict(self.named_parameters())
-        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()))
+        process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         expert_id = None
         shard_id = None
         for loaded_weight_name, loaded_weight in weights_iterator:
@@ -724,10 +725,9 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             )
             process_weights_after_loading_fn(model_sublayer_name, param)
         if self.tie_word_embeddings:
-            # because we use lazy guard and is not initialized by default
-            if not self.lm_head.linear.weight._is_initialized():
-                self.lm_head.linear.weight.initialize()
-            self.lm_head.load_state_dict({self.lm_head.weight_key: self.ernie.embed_tokens.embeddings.weight})
+            self.lm_head.linear.weight.set_value(
+                self.ernie.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
+            )
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
@@ -754,7 +754,7 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
 
         return logits
 
-    def empty_input_forward(self):
+    def empty_input_forward(self, forward_meta):
         """
         empty_input_forward
         """
@@ -766,8 +766,8 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             self.fd_config.model_config.moe_layer_start_index,
             self.fd_config.model_config.num_hidden_layers,
         ):
-            self.ernie.layers[i].mlp.text_fused_moe(fake_hidden_states)
-            self.ernie.layers[i].mlp.image_fused_moe(fake_hidden_states)
+            self.ernie.layers[i].mlp.text_fused_moe(fake_hidden_states, forward_meta)
+            self.ernie.layers[i].mlp.image_fused_moe(fake_hidden_states, forward_meta)
 
     def get_input_embeddings(
         self,
@@ -792,10 +792,13 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             image_features=image_features,
             image_token_num=vl_moe_meta.num_image_patch_id.item(),
         )
-        self._input_embeddings.copy_(input_embeddings, False)
+
+        if forward_meta.step_use_cudagraph:
+            self._decoder_input_embeddings.copy_(input_embeddings, False)
+            input_embeddings = self._decoder_input_embeddings
 
         hidden_states = self.ernie(
-            input_embeddings=self._input_embeddings,
+            input_embeddings=input_embeddings,
             ids_remove_padding=ids_remove_padding,
             forward_meta=forward_meta,
             vl_moe_meta=vl_moe_meta,

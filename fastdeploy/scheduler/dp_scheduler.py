@@ -61,6 +61,7 @@ class DPLocalScheduler(LocalScheduler):
             self.scheduler_logger.info(f"Scheduler has received some finished responses: {finished_responses}")
 
         with self.mutex:
+            self.batch_responses_per_step.append([response.raw for response in responses])
             for response in responses:
                 if response.request_id not in self.responses:
                     self.responses[response.request_id] = [response]
@@ -206,10 +207,10 @@ class DPScheduler:
             splitwise_role,
         )
 
-    def start(self, dp_rank: int, request_queues: List[Queue], result_queue: Queue):
+    def start(self, dp_rank: int, request_queues: List[Queue], result_queues: Queue):
         self.dp_rank = dp_rank
         self.request_queues = request_queues
-        self.result_queue = result_queue
+        self.result_queues = result_queues
         self.scheduler_logger = get_logger("dpscheduler", f"dp_scheduler_rank{self.dp_rank}.log")
         self._scheduler.scheduler_logger = self.scheduler_logger
         threading.Thread(target=self._put_requests_to_local).start()
@@ -235,7 +236,7 @@ class DPScheduler:
             results = self._scheduler.get_results()
             if len(results) == 0:
                 continue
-            self.result_queue.put(results)
+            self.result_queues[self.dp_rank].put(results)
 
     def get_requests(
         self,
@@ -256,4 +257,4 @@ class DPScheduler:
         self._scheduler.put_results(results)
 
     def get_results(self) -> Dict[str, List[RequestOutput]]:
-        return self.result_queue.get()
+        return self.result_queues[self.dp_rank].get()
