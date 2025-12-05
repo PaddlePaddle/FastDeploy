@@ -165,7 +165,6 @@ class FlashAttentionBackend(AttentionBackend):
         Calculate kv cache shape
         """
         key_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
-        value_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
             key_cache_shape = [
                 max_num_blocks,
@@ -173,7 +172,7 @@ class FlashAttentionBackend(AttentionBackend):
                 self.block_size,
                 self.head_dim // 2,
             ]
-            value_cache_shape = key_cache_shape
+        value_cache_shape = key_cache_shape
         return key_cache_shape, value_cache_shape
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
