@@ -336,6 +336,9 @@ class ModelConfig:
             elif "dtype" in self.model_config:
                 self.model_format = "paddle"
                 logger.info("The model format is Paddle")
+            elif "model_type" in self.model_config and self.model_config["model_type"] == "gpt_oss":
+                self.model_format = "torch"
+                logger.info("The model format is Hugging Face")
             else:
                 raise ValueError(
                     "Unknown model format. Please ensure your config.json contains "

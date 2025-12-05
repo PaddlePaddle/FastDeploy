@@ -1,0 +1,405 @@
+"""
+# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
+import importlib
+import importlib.util
+from enum import Enum
+from typing import Optional
+
+import paddle
+from paddle import nn
+
+from fastdeploy import envs
+from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch
+from fastdeploy.model_executor.utils import set_weight_attrs
+from fastdeploy.platforms import current_platform
+from fastdeploy.utils import get_logger
+
+from ..moe import FusedMoE
+from .quant_base import QuantConfigBase, QuantMethodBase
+
+paddle.compat.enable_torch_proxy()
+import torch
+from torch.nn import functional as F
+
+logger = get_logger("config", "config.log")
+
+
+class Mxfp4Backend(Enum):
+    NONE = 0
+
+    # FlashInfer Backend
+    SM90_FI_MXFP4_BF16 = 1
+
+    # Triton Backend
+    TRITON = 2
+
+
+def check_device_capability(num):
+    if paddle.is_compiled_with_cuda():
+        device = paddle.device.get_device()
+        major, minor = paddle.device.cuda.get_device_capability(device)
+        return major * 10 + minor >= num
+    else:
+        return False
+
+
+def has_flashinfer():
+    return importlib.util.find_spec("flashinfer") is not None
+
+
+def round_up(a, b):
+    return ((a + b - 1) // b) * b
+
+
+def get_mxfp4_backend():
+    if current_platform.is_cuda():
+        if check_device_capability(90) and has_flashinfer() and envs.FD_USE_FLASHINFER_MOE_MXFP4_BF16:
+            logger.info("FastDeploy Using FlashInfer MXFP4 BF16 backend for SM90 in MoE")
+            return Mxfp4Backend.SM90_FI_MXFP4_BF16
+        else:
+            logger.info("FastDeploy Using Triton backend in MoE")
+            return Mxfp4Backend.TRITON
+    else:
+        raise NotImplementedError
+
+
+class MXFP4Config(QuantConfigBase):
+    """Base class for quantization configs."""
+
+    def __init__(self, is_checkpoint_bf16: bool = False):
+        super().__init__()
+        self.is_checkpoint_bf16 = is_checkpoint_bf16
+
+    def name(self) -> str:
+        return "mxfp4"
+
+    @classmethod
+    def from_config(cls, config: dict) -> "MXFP4Config":
+        is_checkpoint_bf16 = not config.get("is_quantized", False)
+        return cls(is_checkpoint_bf16)
+
+    def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
+        if isinstance(layer, FusedMoE):
+            return MXFP4MoeMethod(self)
+        else:
+            raise NotImplementedError
+
+
+class MXFP4MoeMethod(QuantMethodBase):
+    def __init__(
+        self,
+        quant_config: MXFP4Config,
+    ) -> None:
+        super().__init__()
+        self.quant_config = quant_config
+        self.mxfp4_backend = get_mxfp4_backend()
+
+    def create_weights(self, layer, **extra_weight_attrs):
+
+        block_size = 32
+
+        intermediate_size_pad = layer.moe_intermediate_size
+        hidden_size_pad = layer.hidden_size
+
+        if self.mxfp4_backend == Mxfp4Backend.SM90_FI_MXFP4_BF16:
+            intermediate_size_pad = round_up(intermediate_size_pad, 128)
+            hidden_size_pad = round_up(hidden_size_pad, 128)
+        else:
+            intermediate_size_pad = round_up(intermediate_size_pad, 64)
+
+        self.intermediate_size_pad = intermediate_size_pad
+        self.hidden_size_pad = hidden_size_pad
+        self.num_experts = layer.num_local_experts
+
+        self.up_gate_proj_weight_shape = [
+            self.num_experts,
+            intermediate_size_pad * 2,
+            hidden_size_pad // 2,  # uint8
+        ]
+
+        self.down_proj_weight_shape = [
+            self.num_experts,
+            hidden_size_pad,
+            intermediate_size_pad // 2,  # uint8
+        ]
+
+        self.up_gate_proj_scale_shape = [
+            self.num_experts,
+            intermediate_size_pad * 2,
+            hidden_size_pad // block_size,
+        ]
+
+        self.down_proj_scale_shape = [
+            self.num_experts,
+            hidden_size_pad,
+            intermediate_size_pad // block_size,
+        ]
+
+        self.weight_dtype = "uint8"
+
+        setattr(
+            layer,
+            "up_gate_proj_weight",
+            layer.create_parameter(
+                shape=self.up_gate_proj_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+        setattr(
+            layer,
+            "down_proj_weight",
+            layer.create_parameter(
+                shape=self.down_proj_weight_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+
+        setattr(
+            layer,
+            "up_gate_proj_scale",
+            layer.create_parameter(
+                shape=self.up_gate_proj_scale_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+
+        setattr(
+            layer,
+            "down_proj_scale",
+            layer.create_parameter(
+                shape=self.down_proj_scale_shape,
+                dtype=self.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            ),
+        )
+
+        extra_weight_attrs["weight_need_transpose"] = not extra_weight_attrs.get("model_format") == "torch"
+
+        set_weight_attrs(layer.up_gate_proj_weight, extra_weight_attrs)
+        set_weight_attrs(layer.down_proj_weight, extra_weight_attrs)
+
+        set_weight_attrs(layer.up_gate_proj_scale, extra_weight_attrs)
+        set_weight_attrs(layer.down_proj_scale, extra_weight_attrs)
+
+        if layer.with_bias:
+            layer.up_gate_proj_bias = layer.create_parameter(
+                shape=[self.num_experts, intermediate_size_pad * 2],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            layer.down_proj_bias = layer.create_parameter(
+                shape=[self.num_experts, hidden_size_pad],
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            set_weight_attrs(
+                layer.up_gate_proj_bias,
+                extra_weight_attrs,
+            )
+            set_weight_attrs(
+                layer.down_proj_bias,
+                extra_weight_attrs,
+            )
+
+        if layer.activation == "swigluoai":
+            gemm1_alpha = layer.create_parameter(
+                shape=[self.num_experts],
+                dtype="float32",
+                default_initializer=paddle.nn.initializer.Constant(1.702),
+            )
+            gemm1_alpha.initialize()
+            setattr(layer, "gemm1_alpha", gemm1_alpha)
+
+            gemm1_beta = layer.create_parameter(
+                shape=[self.num_experts],
+                dtype="float32",
+                default_initializer=paddle.nn.initializer.Constant(1.0),
+            )
+            gemm1_beta.initialize()
+            setattr(layer, "gemm1_beta", gemm1_beta)
+
+            gemm1_clamp_limit = layer.create_parameter(
+                shape=[self.num_experts],
+                dtype="float32",
+                default_initializer=paddle.nn.initializer.Constant(7.0),
+            )
+            gemm1_clamp_limit.initialize()
+            setattr(layer, "gemm1_clamp_limit", gemm1_clamp_limit)
+
+    def process_weights_after_loading(self, layer) -> None:
+        return
+        block_size = 32
+        if self.mxfp4_backend == Mxfp4Backend.SM90_FI_MXFP4_BF16:
+            assert (
+                layer.up_gate_proj_weight.dim() == 3
+                and layer.up_gate_proj_weight.shape[0] == self.num_experts
+                and layer.up_gate_proj_weight.shape[1] == self.intermediate_size_pad * 2
+                and layer.up_gate_proj_weight.shape[2] == self.hidden_size_pad // 2
+            )
+            assert (
+                layer.up_gate_proj_scale.dim() == 3
+                and layer.up_gate_proj_scale.shape[0] == self.num_experts
+                and layer.up_gate_proj_scale.shape[1] == self.intermediate_size_pad * 2
+                and layer.up_gate_proj_scale.shape[2] == self.hidden_size_pad // block_size
+            )
+            assert (
+                layer.down_proj_weight.dim() == 3
+                and layer.down_proj_weight.shape[0] == self.num_experts
+                and layer.down_proj_weight.shape[1] == self.hidden_size_pad
+                and layer.down_proj_weight.shape[2] == self.intermediate_size_pad // 2
+            )
+            assert (
+                layer.down_proj_scale.dim() == 3
+                and layer.down_proj_scale.shape[0] == self.num_experts
+                and layer.down_proj_scale.shape[1] == self.hidden_size_pad
+                and layer.down_proj_scale.shape[2] == self.intermediate_size_pad // block_size
+            )
+            if layer.with_bias:
+                assert (
+                    layer.up_gate_proj_bias.dim() == 2
+                    and layer.up_gate_proj_bias.shape[0] == self.num_experts
+                    and layer.up_gate_proj_bias.shape[1] == self.intermediate_size_pad * 2
+                )
+                assert (
+                    layer.down_proj_bias.dim() == 2
+                    and layer.down_proj_bias.shape[0] == self.num_experts
+                    and layer.down_proj_bias.shape[1] == self.hidden_size_pad
+                )
+
+            gate_w, up_w = layer.up_gate_proj_weight[:, ::2, :], layer.up_gate_proj_weight[:, 1::2, :]
+            gate_b, up_b = layer.up_gate_proj_bias[:, ::2].cast("bfloat16"), layer.up_gate_proj_bias[:, 1::2].cast(
+                "bfloat16"
+            )
+            gate_s, up_s = layer.up_gate_proj_scale[:, ::2, :], layer.up_gate_proj_scale[:, 1::2, :]
+
+            layer.up_gate_proj_weight.copy_(paddle.concat([up_w, gate_w], axis=1), False)
+            layer.up_gate_proj_bias.copy_(paddle.concat([up_b, gate_b], axis=-1), False)
+
+            def _interleave_mxfp4_cutlass_sm90(w):
+                w_shape = w.shape
+                w_interleaved = w.reshape([w_shape[0], w_shape[1], (w_shape[2] // 4), 4])
+                w_interleaved = w_interleaved.permute([0, 2, 1, 3])
+                w_interleaved = w_interleaved.reshape([w_shape[0], w_shape[2] // 4, w_shape[1] * 4])
+                return w_interleaved
+
+            up_gate_proj_scale = paddle.concat([up_s, gate_s], axis=1)
+            up_gate_proj_scale_interleaved = _interleave_mxfp4_cutlass_sm90(up_gate_proj_scale)
+
+            down_proj_scale = layer.down_proj_scale
+            down_proj_scale_interleaved = _interleave_mxfp4_cutlass_sm90(down_proj_scale)
+
+            layer.up_gate_proj_scale.copy_(up_gate_proj_scale_interleaved, False)
+            layer.down_proj_scale.copy_(down_proj_scale_interleaved, False)
+        else:
+            raise ValueError(f"Unsupported backend: {self.mxfp4_backend}")
+
+    def compute_routing(self, router_logits: paddle.Tensor, top_k: int):
+        """
+        Compute routing weights and selected experts from router logits.
+
+        Args:
+            router_logits (torch.Tensor): Router logits of shape [batch_size, num_experts]
+            top_k (int): Number of experts to route to per token
+
+        Returns:
+            tuple[torch.Tensor, torch.Tensor]: A tuple containing:
+                - routing_weights: Expert weights of shape [batch_size, top_k]
+                - selected_experts: Expert indices of shape [batch_size, top_k]
+        """
+        routing_weights = F.softmax(router_logits, dim=1, dtype=torch.float)
+        routing_weights, selected_experts = torch.topk(routing_weights, top_k, dim=-1)
+        routing_weights /= routing_weights.sum(dim=-1, keepdim=True)
+        routing_weights = routing_weights.float()
+        return routing_weights, selected_experts
+
+    def apply(self, layer: nn.Layer, x: paddle.Tensor, router: nn.Layer) -> paddle.Tensor:
+        router_out = router(x.cast("float32"))
+
+        if self.mxfp4_backend == Mxfp4Backend.SM90_FI_MXFP4_BF16:
+
+            (
+                _,
+                _,
+                _,
+                topk_weights,
+                topk_idx,
+                _,
+            ) = moe_expert_dispatch(
+                x,
+                router_out,
+                layer.gate_correction_bias,
+                (
+                    layer.up_gate_proj_in_scale if hasattr(layer, "up_gate_proj_in_scale") else None
+                ),  # if set, permute_input will be int8_t
+                layer.top_k,
+                False,
+                self.quant_config.name(),
+                topk_only_mode=False,
+            )
+            topk_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True)
+
+            quant_scales = [
+                layer.up_gate_proj_scale,
+                layer.down_proj_scale,
+            ]
+            extra_kwargs = dict(
+                use_w4_group_scaling=True,
+                fc1_expert_weights=layer.up_gate_proj_weight,
+                fc2_expert_weights=layer.down_proj_weight,
+            )
+
+            from flashinfer.fused_moe import (
+                cutlass_fused_moe as flashinfer_cutlass_fused_moe,
+            )
+
+            x = paddle.nn.functional.pad(x, pad=[0, self.hidden_size_pad - x.shape[-1]], mode="constant", value=0)
+
+            output = paddle.zeros_like(x, dtype="bfloat16")
+
+            _ = flashinfer_cutlass_fused_moe(
+                input=x,
+                token_selected_experts=topk_idx,
+                token_final_scales=topk_weights,
+                output_dtype=torch.bfloat16,
+                output=output,
+                quant_scales=quant_scales,
+                fc1_expert_biases=layer.up_gate_proj_bias,
+                fc2_expert_biases=layer.down_proj_bias,
+                swiglu_alpha=layer.gemm1_alpha,
+                swiglu_beta=layer.gemm1_beta,
+                swiglu_limit=layer.gemm1_clamp_limit,
+                # tp_size=self.moe.tp_size,
+                # tp_rank=self.moe.tp_rank,
+                # ep_size=self.moe.ep_size,
+                # ep_rank=self.moe.ep_rank,
+                tune_max_num_tokens=8192,
+                **extra_kwargs,
+            )
+
+            return output[..., : layer.hidden_size]
+
+    def process_loaded_weights(self, layer, weights):
+        """Process the weight after loading.
+
+        This can be used for example, to transpose weights for computation.
+        """
+        return

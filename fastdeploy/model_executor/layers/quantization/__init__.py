@@ -33,6 +33,7 @@ QUANTIZATION_METHODS: List[str] = [
     "mix_quant",
     "tensor_wise_fp8",
     "kvcache",
+    "mxfp4",
 ]
 
 
@@ -99,6 +100,8 @@ def _get_offline_quant_config_name(quantization_config, is_torch_weight, is_v1_l
         has_block_size = "weight_block_size" in quantization_config
         if quant_method == "fp8" and has_block_size:
             quant_config_name = "block_wise_fp8"
+        elif quant_method == "mxfp4":
+            quant_config_name = "mxfp4"
         else:
             raise ValueError("Torch weight offline quantization only supports block-wise FP8.")
     else:
@@ -116,6 +119,7 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
     from .block_wise_fp8 import BlockWiseFP8Config
     from .kv_cache import KvCacheQuantConfig
     from .mix_quant import MixQuantConfig
+    from .mxfp4 import MXFP4Config
     from .tensor_wise_fp8 import TensorWiseFP8Config
     from .w4a8 import W4A8Config
     from .w4afp8 import W4AFP8Config
@@ -137,6 +141,7 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
         "tensor_wise_fp8": TensorWiseFP8Config,
         "kvcache": KvCacheQuantConfig,
         "mix_quant": MixQuantConfig,
+        "mxfp4": MXFP4Config,
     }
 
     return method_to_config[quantization]

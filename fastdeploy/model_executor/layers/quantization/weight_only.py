@@ -253,7 +253,7 @@ class WeightOnlyLinearMethod(QuantMethodBase):
         else:
             if isinstance(self, MacheteWeightOnlyLinearMethod):
                 # Using group scale for machete, group size is 128
-                weight_scale_shape = [(layer.weight_shape[0] + 127) // 128, layer.weight_shape[1]]
+                weight_scale_shape = [(layer.weight_shape[0] + 63) // 64, layer.weight_shape[1]]
                 if self.quant_config.name() == "wint4":
                     layer.weight_shape[0] //= 8
                 else:
@@ -313,7 +313,7 @@ class WeightOnlyLinearMethod(QuantMethodBase):
                 w=layer.weight,
                 atype=layer._dtype,
                 quant_type="uint4b8" if self.quant_config.name() == "wint4" else "uint8b128",
-                group_size=128,
+                group_size=64,
             )
         else:
             quanted_weight_tensor, weight_scale_tensor = weight_quantize(
@@ -417,7 +417,7 @@ class MacheteWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             w=weight,
             atype=layer._dtype,
             quant_type="uint4b8" if self.quant_config.name() == "wint4" else "uint8b128",
-            group_size=128,
+            group_size=64,
         )
         layer.weight.set_value(quanted_weight_tensor)
         layer.weight_scale.set_value(weight_scale_tensor.astype(paddle.get_default_dtype()))
@@ -430,7 +430,7 @@ class MacheteWeightOnlyLinearMethod(WeightOnlyLinearMethod):
             w_prepack=layer.weight,
             w_g_s=layer.weight_scale,
             weight_dtype="uint4b8" if self.quant_config.name() == "wint4" else "uint8b128",
-            group_size=128,
+            group_size=64,
         )
         if layer.with_bias:
             linear_out = paddle.add(linear_out, layer.bias)

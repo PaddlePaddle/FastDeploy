@@ -30,7 +30,7 @@ from fastdeploy.model_executor.utils import (
 )
 from fastdeploy.platforms import current_platform
 
-from .utils import _set_var_distributed, divide, get_tensor
+from .utils import _set_var_distributed, divide, get_tensor, modules_to_convert
 
 
 class UnquantizedLinearMethod(QuantMethodBase):
@@ -156,7 +156,7 @@ class LinearBase(nn.Layer):
             self.output_size,
         ]
 
-        if fd_config.quant_config and not skip_quant:
+        if fd_config.quant_config and not skip_quant and modules_to_convert(prefix, self.fd_config):
             self.quant_method = fd_config.quant_config.get_quant_method(self)
         else:
             self.quant_method: Optional[QuantMethodBase] = UnquantizedLinearMethod()
@@ -589,7 +589,7 @@ class QKVParallelLinear(ColumnParallelLinear):
     QKVParallelLinear Layer.
     """
 
-    def __init__(self, fd_config, prefix, with_bias=False, add_bias=True):
+    def __init__(self, fd_config, prefix, with_bias=False, add_bias=True, skip_quant=False):
         """
         Initialize the QKV Linear layer with given parameters.
 
@@ -623,6 +623,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             output_size=output_size,
             with_bias=with_bias,
             add_bias=add_bias,
+            skip_quant=skip_quant,
         )
 
     def _get_shard_size_mapping(self, loaded_shard_id: str, head_dim: int):
