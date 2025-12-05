@@ -549,7 +549,7 @@ class EngineWorkerQueue:
         all_client_read: bool = np.sum(self.client_read_flag) == self.num_client
         if all_client_read:
             self.tasks[:] = list()
-        self.set_exist_tasks(False)
+            self.set_exist_tasks(False)
         self.lock.release()
         llm_logger.debug(f"get_tasks: tasks={tasks}")
         return tasks, all_client_read
