@@ -787,7 +787,7 @@ class LLMEngine:
                 if self.worker_init_status.get("finished", False):
                     break
                 if match := re.search(
-                    r"Loading (?:fastsafetensors |safetensors )?checkpoint shards:\s*(\d+)",
+                    r"Loading (?:safetensors )?checkpoint shards:\s*(\d+)",
                     line,
                 ):
                     self.worker_init_status["weight_loadding"] = eval(match.group(1)) * 1.0 / 100

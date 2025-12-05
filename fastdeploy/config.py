@@ -1116,7 +1116,6 @@ class LoadConfig:
         args,
     ):
         self.load_choices: Union[str, LoadChoices] = LoadChoices.DEFAULT.value
-        self.use_fastsafetensor = int(envs.FD_USE_FASTSAFETENSOR) == 1
         self.dynamic_load_weight: bool = False
         self.load_strategy: Optional[Literal["ipc", "ipc_snapshot", "meta", "normal"]] = "normal"
         for key, value in args.items():
@@ -1233,6 +1232,7 @@ class CacheConfig:
         enc_dec_block_num (int): Number of encoder-decoder blocks.
         prealloc_dec_block_slot_num_threshold (int): Number of token slot threadshold to allocate next blocks for decoding.
         enable_prefix_caching (bool): Flag to enable prefix caching.
+        enable_output_caching (bool): Flag to enable kv cache output tokens, only works in V1 scheduler.
     """
 
     def __init__(self, args):
@@ -1247,7 +1247,7 @@ class CacheConfig:
             num_cpu_blocks (Optional[int]): Number of CPU blocks.
             kv_cache_ratio (float): Ratio for max block calculation.
             enc_dec_block_num (int): Number of encoder-decoder blocks.
-            prealloc_dec_block_slot_num_threshold (int): Number of token slot threadshold to allocate next blocks for decoding, used when ENABLE_V1_KVCACHE_SCHEDULER=1.
+            prealloc_dec_block_slot_num_threshold (int): Number of token slot threshold to allocate next blocks for decoding, used when ENABLE_V1_KVCACHE_SCHEDULER=1.
             enable_prefix_caching (bool): Enable prefix caching.
             max_encoder_cache(int): Maximum number of tokens in the encoder cache.
             max_processor_cache(int): Maximum number of bytes in the processor cache.
@@ -1273,6 +1273,7 @@ class CacheConfig:
         self.swap_space = None
         self.max_encoder_cache = None
         self.max_processor_cache = None
+        self.enable_output_caching = False
         self.disable_chunked_mm_input = False
         for key, value in args.items():
             if hasattr(self, key):
@@ -1888,7 +1889,11 @@ class FDConfig:
         engine_worker_queue_port = self.parallel_config.engine_worker_queue_port[
             self.parallel_config.local_data_parallel_id
         ]
-        connector_port = self.cache_config.pd_comm_port[0] if self.cache_config.pd_comm_port else None
+        connector_port = (
+            self.cache_config.pd_comm_port[self.parallel_config.local_data_parallel_id]
+            if self.cache_config.pd_comm_port
+            else None
+        )
 
         self.disaggregate_info = {}
         if self.scheduler_config.splitwise_role != "mixed":
