@@ -208,7 +208,6 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
 
     def test_min_tokens_allows_stop(self):
         """Test that stopping is allowed when step_idx >= min_tokens"""
-        # 场景：stop sequence 匹配，且 step_idx >= min_tokens，应该停止
         accept_tokens = paddle.to_tensor(
             [[4, 5, 0, 0, 0]],
             dtype="int64",
