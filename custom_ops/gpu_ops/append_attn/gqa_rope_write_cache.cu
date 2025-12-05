@@ -1163,9 +1163,6 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
   meta_data.block_size = block_size;
   meta_data.batch_size = seq_lens_this_time.dims()[0];
 
-  phi::GPUContext *dev_ctx = static_cast<phi::GPUContext *>(
-      phi::DeviceContextPool::Instance().Get(qkv.place()));
-
   auto stream = qkv.stream();
   paddle::Tensor qkv_out = GetEmptyTensor(qkv.dims(), qkv.dtype(), qkv.place());
   paddle::Tensor q = GetEmptyTensor(
