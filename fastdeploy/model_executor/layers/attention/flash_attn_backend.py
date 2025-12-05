@@ -66,10 +66,7 @@ class FlashAttentionMetadata(AttentionMetadata):
     rotary_embs: Optional[paddle.Tensor] = None
     block_tables: Optional[paddle.Tensor] = None
 
-    cu_seqlens_q: paddle.Tensor = None
     cu_seqlens_k: paddle.Tensor = None
-    max_seqlen_q: int = 0
-    max_seqlen_k: int = 0
 
     pre_cache_batch_ids = None
     pre_cache_tile_ids_per_batch = None
@@ -190,9 +187,6 @@ class FlashAttentionBackend(AttentionBackend):
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         metadata = FlashAttentionMetadata()
-        metadata.cu_seqlens_q = forward_meta.cu_seqlens_q
-        metadata.rotary_embs = forward_meta.rotary_embs
-        metadata.block_tables = forward_meta.block_tables
         get_block_shape_and_split_kv_block(
             forward_meta.seq_lens_encoder,
             forward_meta.seq_lens_decoder,
@@ -281,14 +275,14 @@ class FlashAttentionBackend(AttentionBackend):
                 qkv,
                 forward_meta.caches[2 * layer.layer_id],
                 forward_meta.caches[2 * layer.layer_id + 1],
-                metadata.cu_seqlens_q,
+                forward_meta.cu_seqlens_q,
                 metadata.cu_seqlens_k,
-                metadata.rotary_embs,
+                forward_meta.rotary_embs,
                 forward_meta.seq_lens_this_time,
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
                 forward_meta.batch_id_per_token,
-                metadata.block_tables,
+                forward_meta.block_tables,
                 forward_meta.kv_batch_ids,
                 forward_meta.kv_tile_ids_per_batch,
                 forward_meta.kv_num_blocks_x_cpu,
@@ -315,7 +309,7 @@ class FlashAttentionBackend(AttentionBackend):
                 q,
                 k,
                 v,
-                metadata.cu_seqlens_q,
+                forward_meta.cu_seqlens_q,
                 metadata.cu_seqlens_k,
                 max_seqlen_q=forward_meta.max_len_tensor_cpu[0],
                 max_seqlen_k=forward_meta.max_len_tensor_cpu[3],
@@ -332,7 +326,7 @@ class FlashAttentionBackend(AttentionBackend):
             forward_meta.seq_lens_this_time,
             forward_meta.batch_id_per_token,
             forward_meta.cu_seqlens_q,
-            metadata.block_tables,
+            forward_meta.block_tables,
             forward_meta.encoder_batch_ids,
             forward_meta.encoder_tile_ids_per_batch,
             forward_meta.encoder_num_blocks_x_cpu,
@@ -343,7 +337,7 @@ class FlashAttentionBackend(AttentionBackend):
             forward_meta.decoder_tile_ids_per_batch,  # from buffer
             forward_meta.decoder_num_blocks_cpu,
             metadata.max_len_tensor_cpu_decoder,
-            metadata.rotary_embs,
+            forward_meta.rotary_embs,
             forward_meta.attn_mask,
             layer.qkv_bias,
             layer.qkv_scale,
