@@ -15,12 +15,12 @@ from fastdeploy.input.utils import IDS_TYPE_FLAG
 
 class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
     def setUp(self):
-        # 鍒涘缓 Ernie4_5Processor 瀹炰緥鐨勬ā鎷熷璞?
+        # Create mock object for Ernie4_5Processor instance
         with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None) as mock_init:
             self.processor = Ernie4_5_VLProcessor("model_path")
             mock_init.side_effect = lambda *args, **kwargs: print(f"__init__ called with {args}, {kwargs}")
 
-        # 璁剧疆蹇呰鐨勫睘鎬?
+        # Set necessary attributes
         self.processor.tokenizer = MagicMock()
         self.processor.tokenizer.eos_token_id = 1
         self.processor.decode_status = {}
@@ -33,7 +33,7 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
         self.processor.ernie4_5_processor = MagicMock()
         self.processor.pack_outputs = MagicMock()
 
-        # 妯℃嫙 ids2tokens 鏂规硶
+        # Mock ids2tokens method
         def mock_ids2tokens(token_ids, task_id):
             self.processor.decode_status[task_id] = "mock_decode_status"
             return "delta_text", [2, 3], "previous_texts"
@@ -51,13 +51,13 @@ class TestErnie4_5_vl_ProcessorProcessResponseDictStreaming(unittest.TestCase):
 
         self.processor._apply_default_parameters = mock_apply_default_parameters
 
-        # 妯℃嫙鎺ㄧ悊瑙ｆ瀽鍣?
+        # Mock reasoning parser
         self.mock_reasoning_parser = MagicMock()
         self.mock_reasoning_parser.__class__.__name__ = "ErnieX1ReasoningParser"
         # self.mock_reasoning_parser.extract_reasoning_content_streaming.return_value = ("reasoning", "text")
         self.processor.reasoning_parser = self.mock_reasoning_parser
 
-        # 妯℃嫙宸ュ叿瑙ｆ瀽鍣?
+        # Mock tool parser
         self.mock_tool_parser = MagicMock()
         self.mock_tool_parser.extract_tool_calls_streaming.return_value = None
         self.mock_tool_parser_obj = MagicMock()
