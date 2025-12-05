@@ -44,6 +44,13 @@ if "nvidia graphics device" in paddle.device.cuda.get_device_name().lower():
     os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
 
 
+class MockForwardMeta:
+    def __init__(self):
+        # chunked MoE related.
+        self.moe_num_chunk = 1
+        self.max_moe_num_chunk = 1
+
+
 class FFNWrapper(paddle.nn.Layer):
     def __init__(self, model_config: ModelConfig):
         super().__init__()
@@ -134,7 +141,7 @@ class TestFusedMoE(unittest.TestCase):
         init_distributed_environment()
 
         ffn = FFNWrapper(self.model_config)
-
+        forward_meta = MockForwardMeta()
         moe_cuda_graphs = [None] * 100
         cache_hidden_states = [None] * 100
         test_token_nums = [10, 20, 40, 60, 80, 100, 128, 160, 192, 256, 4096, 4096 * 4]
@@ -147,7 +154,7 @@ class TestFusedMoE(unittest.TestCase):
 
             num_layers = self.num_layers
             for _ in range(num_layers):
-                out = ffn.ffn(cache_hidden_states[idx])
+                out = ffn.ffn(cache_hidden_states[idx], forward_meta=forward_meta)
 
             moe_cuda_graphs[idx].capture_end()
 

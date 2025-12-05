@@ -210,6 +210,7 @@ def rebuild_padding_v3_1(
     return output_data
 
 
+from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.linear import QKVParallelLinear, RowParallelLinear
 from fastdeploy.model_executor.ops.intel_hpu import fused_mlp
 
@@ -259,10 +260,21 @@ def fused_self_atten_forward(
     return atten_out
 
 
-def fused_mlp_forward(self, x):
-    """ """
+def fused_mlp_forward(
+    self,
+    hidden_states: paddle.Tensor,
+    forward_meta: Optional[ForwardMeta] = None,
+):
+    """
+    The forward function for the MLP (Multi-Layer Perceptron) layer.
+    Args:
+        hidden_states (paddle.Tensor): The input tensor to the MLP layer.
+        forward_meta (Optional[ForwardMeta]): Optional metadata for the forward pass.
+    Returns:
+        paddle.Tensor: The output tensor after applying the MLP layer and (optionally) all-reduce.
+    """
     out = fused_mlp(
-        x,
+        hidden_states,
         self.up_gate_proj.weight,
         None,
         self.down_proj.weight,
@@ -1361,14 +1373,14 @@ class HPUModelRunner(ModelRunnerBase):
             self.prof.step()
         return None
 
-    def _execute_empty_input(self) -> None:
+    def _execute_empty_input(self, forward_meta) -> None:
         """
         In certain scenarios, such as during EP,
         the runner needs to execute partial modules of the model without input data.
         This requires the model to implement the `empty_input_forward` method.
         """
         if hasattr(self.model, "empty_input_forward"):
-            self.model.empty_input_forward()
+            self.model.empty_input_forward(forward_meta)
         else:
             raise ValueError(f"{type(self.model)} has no attribute 'empty_input_forward")
 
