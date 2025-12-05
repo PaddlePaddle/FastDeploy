@@ -610,9 +610,11 @@ class ParallelConfig:
         # different tp group id
         # prevent different tp_groups using the same group_id
         tp_gid_offset = envs.FD_TP_GROUP_GID_OFFSET
-        dt_size = self.data_parallel_size * self.tensor_parallel_size
-        dp_size = self.data_parallel_size * self.pipeline_parallel_size
-        dtp_size = self.data_parallel_size * self.tensor_parallel_size * self.pipeline_parallel_size
+        data_tensor_parallel_size = self.data_parallel_size * self.tensor_parallel_size
+        data_pipeline_parllel_size = self.data_parallel_size * self.pipeline_parallel_size
+        data_tensor_pipeline_parallel_size = (
+            self.data_parallel_size * self.tensor_parallel_size * self.pipeline_parallel_size
+        )
         dist.collective._set_custom_gid(
             self.data_parallel_rank * self.pipeline_parallel_size + self.pipeline_parallel_rank + tp_gid_offset
         )
@@ -629,7 +631,7 @@ class ParallelConfig:
         # same ep group id
         self.ep_group = None
         if self.enable_expert_parallel:
-            dist.collective._set_custom_gid(dp_size + self.pipeline_parallel_rank + tp_gid_offset)
+            dist.collective._set_custom_gid(data_pipeline_parllel_size + self.pipeline_parallel_rank + tp_gid_offset)
             self.ep_group = dist.new_group(
                 range(
                     self.pipeline_parallel_rank * self.expert_parallel_size,
@@ -641,13 +643,19 @@ class ParallelConfig:
         self.pp_group = None
         if self.pipeline_parallel_size > 1:
             dist.collective._set_custom_gid(
-                dp_size
+                data_pipeline_parllel_size
                 + self.pipeline_parallel_size
                 + self.data_parallel_rank * self.tensor_parallel_size
                 + self.tensor_parallel_rank
                 + tp_gid_offset
             )
-            self.pp_group = dist.new_group(range(local_rank % dt_size, dtp_size, dt_size))
+            self.pp_group = dist.new_group(
+                range(
+                    local_rank % data_tensor_parallel_size,
+                    data_tensor_pipeline_parallel_size,
+                    data_tensor_parallel_size,
+                )
+            )
             dist.collective._set_custom_gid(None)
 
         logger.info(
