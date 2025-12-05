@@ -908,8 +908,6 @@ class GraphOptimizationConfig:
         """
         # Shape [1, 2, 4, 8, 16, ... 120, 128]
         draft_capture_sizes = [1, 2, 4] + [8 * i for i in range(1, 17)]
-        if self.enable_expert_parallel:
-            draft_capture_sizes = [0] + draft_capture_sizes
         # Shape [128, 144, ... 240, 256]
         draft_capture_sizes += [16 * i for i in range(9, 17)]
         # Shape [256, 288, ... 992, 1024]
@@ -1551,6 +1549,9 @@ class FDConfig:
         if self.graph_opt_config.cudagraph_capture_sizes is None:
             self.graph_opt_config._set_cudagraph_sizes(max_capture_size=max_capture_shape)
         self.graph_opt_config.init_with_cudagrpah_size(max_capture_size=max_capture_shape)
+
+        if self.parallel_config.use_ep:
+            self.graph_opt_config.cudagraph_capture_sizes = [0] + self.graph_opt_config.cudagraph_capture_sizes
 
         self.tokenizer = tokenizer
         self.ips = ips
