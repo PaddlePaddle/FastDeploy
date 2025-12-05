@@ -66,8 +66,6 @@ class AsyncOutputProcessor:
         we fall back to the original dict and ensure ``outputs.text`` exists to
         avoid cascading failures.
         """
-        if self.data_processor is None:
-            return response_dict
 
         try:
             processed = self.data_processor.process_response_dict(
@@ -220,7 +218,6 @@ class EngineServiceClient:
             if elapsed_time % 10 == 0:  # Log every 10 seconds
                 llm_logger.info(f"Waiting for workers to load models... ({elapsed_time}s)")
 
-        llm_logger.error(f"Engine failed to start within {max_wait_time} seconds")
         return False
 
     def shutdown(self):
@@ -287,6 +284,7 @@ class AsyncLLM(EngineServiceClient):
         super().__init__(cfg, pid)
         self.cfg = cfg
         self.running = True
+        self._prompt_metadata: Dict[str, Dict[str, Any]] = {}
 
         self.input_processor = InputPreprocessor(
             cfg.model_config,
@@ -410,6 +408,13 @@ class AsyncLLM(EngineServiceClient):
 
             request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
 
+            # Cache prompt metadata for later enrichment of async responses
+            req_id = request.get("request_id")
+            self._prompt_metadata[req_id] = {
+                "prompt_token_ids": request.get("prompt_token_ids"),
+                "prompt_tokens": request.get("prompt_tokens"),
+            }
+
             if not is_preprocessed:
                 request["preprocess_start_time"] = arrival_time
                 input_ids_len = request["prompt_token_ids_len"]
@@ -471,9 +476,9 @@ class AsyncLLM(EngineServiceClient):
         enable_thinking = kwargs.pop("enable_thinking", False)
 
         if isinstance(prompt, dict):
+            num_choices = prompt.get("n")
             stream = prompt.get("stream", True)
             include_stop_str_in_output = prompt.get("include_stop_str_in_output", False)
-            num_choices = prompt.get("n")
 
         # Ensure ZMQ client and connection manager are initialized in current process
         if (
@@ -518,6 +523,8 @@ class AsyncLLM(EngineServiceClient):
 
                 for response_item in response_list:
                     if isinstance(response_item, dict) and "request_id" in response_item:
+                        req_id = response_item.get("request_id")
+
                         # First, use output_processor to post-process the raw dict
                         if hasattr(self, "output_processor"):
                             processed_output = self.output_processor._process_output(
@@ -528,8 +535,17 @@ class AsyncLLM(EngineServiceClient):
                             )
                         else:
                             processed_output = response_item
+
                         # Then convert processed dict to RequestOutput
                         request_output = RequestOutput.from_dict(processed_output)
+
+                        # Enrich outputs with prompt metadata on the first packet
+                        if req_id:
+                            prompt_meta = self._prompt_metadata.get(req_id)
+                            if prompt_meta is not None and request_output.outputs.send_idx == 0:
+                                request_output.prompt_token_ids = prompt_meta.get("prompt_token_ids")
+                                request_output.prompt = prompt_meta.get("prompt_tokens")
+                                self._prompt_metadata.pop(req_id, None)
 
                         if request_output.finished:
                             remaining -= 1
