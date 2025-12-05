@@ -309,7 +309,7 @@ def test_multi_text_embedding(embedding_api_url, headers):
             print(f"\n--- Comparing embedding {idx}: '{payload['input'][idx]}' ---")
             mean_abs_diff = compare_embeddings(current_emb, baseline_emb, threshold=0.05)
 
-            if mean_abs_diff >= 0.01:
+            if mean_abs_diff >= 0.05:
                 # Save current batch for debugging
                 temp_file = f"{baseline_file}.current"
                 print("temp_file", temp_file)
