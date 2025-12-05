@@ -906,8 +906,8 @@ class GraphOptimizationConfig:
         Calculate a series of candidate capture sizes,
         and then extract a portion of them as the capture list for the CUDA graph based on user input.
         """
-        # Shape [1, 2, 4, 8, 16, ... 120, 128]
-        draft_capture_sizes = [1, 2, 4] + [8 * i for i in range(1, 17)]
+        # Shape [0, 1, 2, 4, 8, 16, ... 120, 128]
+        draft_capture_sizes = [0, 1, 2, 4] + [8 * i for i in range(1, 17)]
         # Shape [128, 144, ... 240, 256]
         draft_capture_sizes += [16 * i for i in range(9, 17)]
         # Shape [256, 288, ... 992, 1024]

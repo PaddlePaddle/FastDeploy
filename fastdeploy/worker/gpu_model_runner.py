@@ -1003,10 +1003,13 @@ class GPUModelRunner(ModelRunnerBase):
         """
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
         max_dec_len = expected_decode_len + 1
-        input_length = min(
-            num_tokens // (1 if capture_prefill else batch_size),
-            self.model_config.max_model_len - max_dec_len,
-        )
+        if batch_size == 0:
+            input_length = 1
+        else:
+            input_length = min(
+                num_tokens // (1 if capture_prefill else batch_size),
+                self.model_config.max_model_len - max_dec_len,
+            )
 
         # NOTE(wanglongzhi): When the full length is too large, DeepEP's buffer size will not be enough to cause the result to appear nan.
         # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
@@ -2198,13 +2201,6 @@ class GPUModelRunner(ModelRunnerBase):
         for proc in self.sampling_metadata.logits_processors:
             proc.update_state(self.share_inputs)
 
-        # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
-        # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
-        # when there is data on other runner, the current runner is required to execute part of the model.
-        if not self.not_need_stop():
-            self._execute_empty_input(self.forward_meta)
-            return None
-
         # 2. Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
 
@@ -2220,6 +2216,13 @@ class GPUModelRunner(ModelRunnerBase):
                 self.forward_meta.ids_remove_padding,
                 self.forward_meta,
             )
+
+        # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
+        # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
+        # Then there is data on other runner, the current runner is required to execute part of the model.
+        if not self.not_need_stop():
+            return None
+
         if self.use_cudagraph:
             model_output = model_output[: self.real_token_num]
 
