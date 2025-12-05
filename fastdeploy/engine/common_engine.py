@@ -701,7 +701,7 @@ class EngineService:
                 tasks = self.scheduler.get_requests(
                     available_blocks=available_blocks,
                     block_size=self.cfg.cache_config.block_size,
-                    reserved_output_blocks=self.cfg.cache_config.enc_dec_block_num,
+                    reserved_output_blocks=0,  # self.cfg.cache_config.enc_dec_block_num
                     max_num_batched_tokens=max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
