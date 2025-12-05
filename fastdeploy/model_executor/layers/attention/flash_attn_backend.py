@@ -63,9 +63,6 @@ class FlashAttentionMetadata(AttentionMetadata):
     FlashAttentionMetadata
     """
 
-    rotary_embs: Optional[paddle.Tensor] = None
-    block_tables: Optional[paddle.Tensor] = None
-
     cu_seqlens_k: paddle.Tensor = None
 
     pre_cache_batch_ids = None
