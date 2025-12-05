@@ -149,6 +149,8 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
         self.mock_tokenizer.convert_tokens_to_ids.side_effect = self._mock_convert_tokens_to_ids
         self.mock_tokenizer.chat_template = "mock_template"
         self.mock_tokenizer.apply_chat_template.return_value = "User: Hello<|image@placeholder|>"
+        # Mock encode method for _add_text
+        self.mock_tokenizer.encode = MagicMock(return_value={"input_ids": [1, 2, 3]})
 
         def mock_load_tokenizer(dp_instance):
             dp_instance.tokenizer = self.mock_tokenizer
@@ -168,6 +170,7 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
         self.data_processor.video_end_id = 1005
         self.data_processor.role_prefixes = {"user": "User: ", "assistant": "Assistant: "}
         self.data_processor.enable_processor_cache = False
+        # Note: extract_mm_items is not mocked by default, only when needed
         self.data_processor.extract_mm_items = MagicMock(return_value=([], [], [], [], None, [], []))
 
     def _mock_convert_tokens_to_ids(self, token):
@@ -196,7 +199,7 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
         self.assertEqual(
             outputs["input_ids"],
             test_prompt_token_ids,
-            f"input_ids 涓嶅尮閰嶏細瀹為檯{outputs['input_ids']}锛岄鏈焄{test_prompt_token_ids}]",
+            f"input_ids mismatch: actual {outputs['input_ids']}, expected {test_prompt_token_ids}",
         )
 
         self.assertEqual(outputs["token_type_ids"], [IDS_TYPE_FLAG["text"]] * prompt_len)
@@ -563,6 +566,8 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
     def test_text2ids_basic(self):
         """Test text2ids with basic text input"""
         text = "Hello world"
+        # Ensure encode returns proper format
+        self.mock_tokenizer.encode.return_value = {"input_ids": [1, 2, 3]}
         outputs = self.data_processor.text2ids(text)
 
         self.assertIn("input_ids", outputs)
@@ -608,6 +613,8 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
     def test_request2ids_basic(self):
         """Test request2ids with basic request"""
         self.data_processor.is_training = False
+        # Fix apply_chat_template to return text without image placeholder
+        self.mock_tokenizer.apply_chat_template.return_value = "User: Hello"
         request = {
             "messages": [{"role": "user", "content": "Hello"}],
             "add_generation_prompt": True,
@@ -624,6 +631,8 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
         """Test request2ids with multimodal content"""
         self.data_processor.is_training = False
         mock_image = Image.new("RGB", (224, 224))
+        # Fix apply_chat_template to return text with image placeholder matching the image
+        self.mock_tokenizer.apply_chat_template.return_value = "User: What's in this image?<|image@placeholder|>"
         request = {
             "messages": [
                 {
@@ -672,6 +681,11 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
             ]
         }
 
+        # Restore real extract_mm_items method for this test
+        from fastdeploy.input.ernie4_5_vl_processor.process import DataProcessor
+
+        original_extract_mm_items = DataProcessor.extract_mm_items
+
         with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
             mock_parse.return_value = [
                 {
@@ -683,6 +697,10 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
                     ],
                 }
             ]
+            # Use real extract_mm_items method (cache is disabled, so no zmq connection needed)
+            self.data_processor.extract_mm_items = original_extract_mm_items.__get__(
+                self.data_processor, DataProcessor
+            )
             images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = (
                 self.data_processor.extract_mm_items(request)
             )
@@ -698,8 +716,17 @@ class TestDataProcessorTargetMethods(unittest.TestCase):
         self.data_processor.enable_processor_cache = False
         request = {"messages": [{"role": "user", "content": [{"type": "image", "uuid": "img1"}]}]}
 
+        # Restore real extract_mm_items method for this test
+        from fastdeploy.input.ernie4_5_vl_processor.process import DataProcessor
+
+        original_extract_mm_items = DataProcessor.extract_mm_items
+
         with patch("fastdeploy.input.ernie4_5_vl_processor.process.parse_chat_messages") as mock_parse:
             mock_parse.return_value = [{"role": "user", "content": [{"type": "image", "uuid": "img1"}]}]
+            # Use real extract_mm_items method
+            self.data_processor.extract_mm_items = original_extract_mm_items.__get__(
+                self.data_processor, DataProcessor
+            )
             with self.assertRaises(ValueError) as ctx:
                 self.data_processor.extract_mm_items(request)
             self.assertIn("Missing items cannot be retrieved", str(ctx.exception))
