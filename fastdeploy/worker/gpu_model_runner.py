@@ -419,10 +419,12 @@ class GPUModelRunner(ModelRunnerBase):
                 inputs = request.multimodal_inputs
                 if self.encoder_cache is not None:
                     if envs.FD_ENABLE_MAX_PREFILL:
-                        vit_seqlen_list = inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
-                        vit_position_ids_list = inputs["vit_position_ids"][
-                            request.num_image_start : request.num_image_end
-                        ]
+                        if "vit_seqlen" in inputs:
+                            vit_seqlen_list = inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
+                        if "vit_position_ids" in inputs:
+                            vit_position_ids_list = inputs["vit_position_ids"][
+                                request.num_image_start : request.num_image_end
+                            ]
                     grid_thw_list = inputs["grid_thw"][request.num_image_start : request.num_image_end]
                     mm_hashes_list = inputs["mm_hashes"][request.num_image_start : request.num_image_end]
                     feature_positions = self._get_feature_positions(
@@ -2764,7 +2766,7 @@ class GPUModelRunner(ModelRunnerBase):
         assert len(vision_inputs["images_lst"]) > 0, "at least one image needed"
 
         grid_thw = paddle.to_tensor(vision_inputs["grid_thw_lst"], dtype=paddle.int64)
-        images = paddle.concat(vision_inputs["images_lst"])
+        images = paddle.concat(vision_inputs["images_lst"]).cast("bfloat16")
         with paddle.amp.auto_cast(
             True,
             custom_black_list=self.amp_black,
