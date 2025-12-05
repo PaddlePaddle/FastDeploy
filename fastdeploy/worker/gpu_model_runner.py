@@ -1004,6 +1004,7 @@ class GPUModelRunner(ModelRunnerBase):
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
         max_dec_len = expected_decode_len + 1
         if batch_size == 0:
+            # Note(ZKK): divided by 0 is invalid, here we give a input_length = 1
             input_length = 1
         else:
             input_length = min(
