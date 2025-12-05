@@ -46,7 +46,7 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta):
 
     res = [forward_meta] * split_num
 
-    if real_bs < split_num:
+    if real_bs < split_num or forward_meta.ids_remove_padding.shape[0] == 0:
         return res
 
     mc_bs = (real_bs + split_num - 1) // split_num
