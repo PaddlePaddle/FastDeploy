@@ -933,7 +933,7 @@ class EmbeddingChatRequest(BaseModel):
     )
 
     add_special_tokens: bool = Field(
-        default=False,
+        default=True,
         description=(
             "If true, special tokens (e.g. BOS) will be added to the prompt "
             "on top of what is added by the chat template. "
